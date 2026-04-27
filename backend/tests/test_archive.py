@@ -1,9 +1,10 @@
 import os
 import zipfile
 import pytest
+import asyncio
 from pathlib import Path
 
-from services.archive import extract_backup
+from services.archive import extract_backup, extract_backup_async
 from services.exceptions import InvalidArchiveError, ArchiveSizeExceededError, ArchiveFileCountExceededError
 
 def test_extract_backup_success(tmp_path):
@@ -18,13 +19,13 @@ def test_extract_backup_success(tmp_path):
     
     # Check only files are returned, not directories
     assert len(extracted_files) == 2
-    assert any(f.endswith("test.eml") for f in extracted_files)
-    assert any(f.endswith("test2.eml") for f in extracted_files)
-    assert not any(f.endswith("folder/") for f in extracted_files)
+    assert any(f.name == "test.eml" for f in extracted_files)
+    assert any(f.name == "test2.eml" for f in extracted_files)
+    assert not any(f.name == "folder" for f in extracted_files)
     
     for f in extracted_files:
-        assert os.path.exists(f)
-        assert os.path.isfile(f)
+        assert f.exists()
+        assert f.is_file()
 
 def test_extract_backup_file_not_found(tmp_path):
     with pytest.raises(InvalidArchiveError, match="Failed to extract archive"):
@@ -58,12 +59,11 @@ def test_extract_backup_malformed_path(tmp_path):
     extracted_files = extract_backup(zip_path, out_dir)
     
     assert len(extracted_files) == 1
-    # zipfile.extract automatically strips the unsafe parts
-    assert "malformed.eml" in extracted_files[0]
-    assert ".." not in extracted_files[0]
+    assert extracted_files[0].name == "malformed.eml"
+    assert ".." not in str(extracted_files[0])
     for f in extracted_files:
-        assert os.path.exists(f)
-        assert os.path.isfile(f)
+        assert f.exists()
+        assert f.is_file()
 
 def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
     import services.archive
@@ -77,4 +77,16 @@ def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
         
     with pytest.raises(ArchiveFileCountExceededError, match="Archive exceeds maximum allowed file count"):
         extract_backup(zip_path, tmp_path / "output")
+
+def test_extract_backup_async(tmp_path):
+    zip_path = tmp_path / "test_async.zip"
+    with zipfile.ZipFile(zip_path, 'w') as z:
+        z.writestr("test.eml", b"Subject: Test Email")
+        
+    out_dir = tmp_path / "output"
+    extracted_files = asyncio.run(extract_backup_async(zip_path, out_dir))
+    
+    assert len(extracted_files) == 1
+    assert extracted_files[0].name == "test.eml"
+    assert extracted_files[0].exists()
 
