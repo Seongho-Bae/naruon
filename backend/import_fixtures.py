@@ -45,6 +45,7 @@ async def main():
 
             email_obj = Email(
                 message_id=parsed["message_id"],
+                thread_id=parsed["thread_id"],
                 sender=parsed["sender"],
                 recipients=parsed["recipients"],
                 subject=parsed["subject"],
