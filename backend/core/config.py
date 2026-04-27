@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     # Email Client Settings
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
     IMAP_SERVER: str = "imap.gmail.com"
     IMAP_PORT: int = 993
     

@@ -3,9 +3,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.session import get_db
 from db.models import Email
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/emails")
 
@@ -65,16 +68,17 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 class SendEmailRequest(BaseModel):
-    to: str
+    to: EmailStr
     subject: str
     body: str
 
 @router.post("/send")
-async def send_email_endpoint(request: SendEmailRequest):
+async def send_email_endpoint(request: SendEmailRequest, user_id: str | None = None): # TODO: Add authentication
     try:
         success = await send_email(request.to, request.subject, request.body)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to send email")
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error sending email: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="An internal error occurred while sending the email")

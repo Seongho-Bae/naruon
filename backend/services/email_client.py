@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def send_email(to_address: str, subject: str, body: str) -> bool:
     """Sends an email using SMTP."""
     message = EmailMessage()
-    message["From"] = "me@example.com" # TODO: get from config or auth
+    message["From"] = getattr(settings, "SMTP_USERNAME", None) or "me@example.com" # TODO: get from config or auth
     message["To"] = to_address
     message["Subject"] = subject
     message.set_content(body)
@@ -33,6 +33,7 @@ async def send_email(to_address: str, subject: str, body: str) -> bool:
         #     # password=...
         # )
         # For now, just pretend we sent it to pass the test locally without creds.
+        # This is intentionally mocked for development.
         logger.info(f"Simulating sending email to {to_address}")
         return True
     except Exception as e:
