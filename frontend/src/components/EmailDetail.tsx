@@ -37,6 +37,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [sendStatus, setSendStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [instruction, setInstruction] = useState('reply politely');
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
+
   useEffect(() => {
     if (!emailId) return;
     
@@ -132,6 +135,29 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     }
   };
 
+  const handleSyncCalendar = async () => {
+    if (!llmData || !llmData.todos.length) return;
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      const res = await fetch(`${API_URL}/api/calendar/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          todos: llmData.todos,
+          user_token: { token: 'mock' } // Mock token as required by API
+        })
+      });
+      if (!res.ok) throw new Error("Failed to sync");
+      const data = await res.json();
+      setSyncStatus({ type: 'success', message: `Synced ${data.synced} events!` });
+    } catch (err) {
+      setSyncStatus({ type: 'error', message: 'Error syncing to calendar.' });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   if (!emailId) {
     return (
       <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
@@ -214,6 +240,23 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               <p className="text-sm text-red-500">Failed to extract action items</p>
             ) : (
               <p className="text-sm text-muted-foreground italic">Extracting action items...</p>
+            )}
+            
+            {llmData && llmData.todos.length > 0 && (
+              <div className="mt-4 flex items-center justify-between">
+                <Button 
+                  size="sm" 
+                  onClick={handleSyncCalendar} 
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? "Syncing..." : "Sync to Calendar"}
+                </Button>
+                {syncStatus && (
+                  <span className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {syncStatus.message}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

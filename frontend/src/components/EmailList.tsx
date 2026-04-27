@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/ca
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 interface EmailItem {
   id: number;
@@ -17,71 +19,104 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+
+  const fetchEmails = async (query = "") => {
+    setLoading(true);
+    setError(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      if (query.trim() === "") {
+        const res = await fetch(`${apiUrl}/api/emails`);
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        setEmails(data.emails || []);
+      } else {
+        setIsSearching(true);
+        const res = await fetch(`${apiUrl}/api/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query }),
+        });
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const data = await res.json();
+        setEmails(data.results || []);
+      }
+    } catch (err) {
+      console.error("Error fetching emails:", err);
+      setError("Failed to load emails.");
+    } finally {
+      setLoading(false);
+      setIsSearching(false);
+    }
+  };
 
   useEffect(() => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-    fetch(`${apiUrl}/api/emails`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
-      .then(data => {
-        setEmails(data.emails || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        console.error("Error fetching emails:", err);
-        setError("Failed to load emails.");
-        setLoading(false);
-      });
+    fetchEmails();
   }, []);
-
-  if (loading) {
-    return <div className="p-4 text-sm text-muted-foreground">Loading emails...</div>;
-  }
-
-  if (error) {
-    return <div className="p-4 text-sm text-red-500">{error}</div>;
-  }
 
   return (
     <div className="h-full flex flex-col border-r bg-background w-full">
-      <div className="p-4 border-b">
+      <div className="p-4 border-b flex flex-col gap-4">
         <h2 className="font-semibold text-lg tracking-tight">Inbox</h2>
+        <form 
+          onSubmit={(e: React.FormEvent) => {
+            e.preventDefault();
+            fetchEmails(searchQuery);
+          }}
+          className="flex gap-2"
+        >
+          <Input 
+            placeholder="Search emails..." 
+            value={searchQuery}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+          />
+          <Button type="submit" disabled={isSearching || loading}>
+            {isSearching ? "Searching..." : "Search"}
+          </Button>
+        </form>
       </div>
       <ScrollArea className="flex-1 w-full">
         <div className="flex flex-col gap-2 p-4">
-          {emails.length === 0 && !error && <div className="text-sm text-muted-foreground">No emails found.</div>}
-          {emails.map(email => (
-            <button 
-              key={email.id} 
-              onClick={() => onSelectEmail(email.id)}
-              className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent"
-            >
-              <div className="flex w-full flex-col gap-1">
-                <div className="flex items-center">
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading emails...</div>
+          ) : error ? (
+            <div className="text-sm text-red-500">{error}</div>
+          ) : emails.length === 0 ? (
+            <div className="text-sm text-muted-foreground">No emails found.</div>
+          ) : (
+            emails.map((email: EmailItem) => (
+              <button 
+                key={email.id} 
+                onClick={() => onSelectEmail(email.id)}
+                className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent"
+              >
+                <div className="flex w-full flex-col gap-1">
+                  <div className="flex items-center">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                      </Avatar>
+                      <div className="font-semibold truncate max-w-[120px]">{email.sender}</div>
+                    </div>
+                    <div className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                      {new Date(email.date).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="text-xs font-medium truncate w-full">{email.subject || '(No Subject)'}</div>
+                </div>
+                <div className="line-clamp-2 text-xs text-muted-foreground w-full">
+                  {email.snippet}
+                </div>
+                {email.unread && (
                   <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
-                    </Avatar>
-                    <div className="font-semibold truncate max-w-[120px]">{email.sender}</div>
+                    <Badge variant="default" className="text-[10px]">New</Badge>
                   </div>
-                  <div className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
-                    {new Date(email.date).toLocaleDateString()}
-                  </div>
-                </div>
-                <div className="text-xs font-medium truncate w-full">{email.subject || '(No Subject)'}</div>
-              </div>
-              <div className="line-clamp-2 text-xs text-muted-foreground w-full">
-                {email.snippet}
-              </div>
-              {email.unread && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="default" className="text-[10px]">New</Badge>
-                </div>
-              )}
-            </button>
-          ))}
+                )}
+              </button>
+            ))
+          )}
         </div>
       </ScrollArea>
     </div>
