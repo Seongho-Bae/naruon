@@ -17,3 +17,7 @@ def test_email_config():
 def test_openai_config():
     from core.config import settings
     assert hasattr(settings, "OPENAI_API_KEY")
+
+def test_google_calendar_config():
+    from core.config import settings
+    assert hasattr(settings, "GOOGLE_CLIENT_ID")
