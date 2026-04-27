@@ -5,6 +5,7 @@ from db.session import get_db
 from db.models import Email
 from pydantic import BaseModel
 import datetime
+from services.email_client import send_email
 
 router = APIRouter(prefix="/api/emails")
 
@@ -62,3 +63,18 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
         date=email.date,
         body=email.body,
     )
+
+class SendEmailRequest(BaseModel):
+    to: str
+    subject: str
+    body: str
+
+@router.post("/send")
+async def send_email_endpoint(request: SendEmailRequest):
+    try:
+        success = await send_email(request.to, request.subject, request.body)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to send email")
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
