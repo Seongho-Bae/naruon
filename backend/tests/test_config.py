@@ -21,3 +21,4 @@ def test_openai_config():
 def test_google_calendar_config():
     from core.config import settings
     assert hasattr(settings, "GOOGLE_CLIENT_ID")
+    assert hasattr(settings, "GOOGLE_CLIENT_SECRET")
