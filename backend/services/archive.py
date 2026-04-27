@@ -1,12 +1,56 @@
 import zipfile
-import os
-from typing import List
+from pathlib import Path
+from typing import List, Union
 
-def extract_backup(zip_path: str, output_dir: str) -> List[str]:
-    os.makedirs(output_dir, exist_ok=True)
+from .exceptions import InvalidArchiveError, ArchiveSizeExceededError
+
+MAX_EXTRACT_SIZE = 10 * 1024 * 1024 * 1024  # 10 GB
+
+def extract_backup(zip_path: Union[str, Path], output_dir: Union[str, Path]) -> List[str]:
+    """
+    Extracts a zip archive to the specified output directory.
+    
+    WARNING: This function performs blocking I/O operations. When called from
+    an async web layer (e.g. FastAPI), it must be executed in a thread pool using
+    `fastapi.concurrency.run_in_threadpool` or `asyncio.to_thread()`.
+    
+    Args:
+        zip_path: The path to the zip archive to extract.
+        output_dir: The directory where the contents should be extracted.
+        
+    Returns:
+        A list of string paths to the extracted files (excluding directories).
+        
+    Raises:
+        InvalidArchiveError: If the zip file is not found or corrupted.
+        ArchiveSizeExceededError: If the uncompressed size exceeds the maximum allowed limit.
+    """
+    zip_path = Path(zip_path)
+    output_dir = Path(output_dir)
+    
+    output_dir.mkdir(parents=True, exist_ok=True)
     extracted_paths = []
-    with zipfile.ZipFile(zip_path, 'r') as z:
-        z.extractall(output_dir)
-        for name in z.namelist():
-            extracted_paths.append(os.path.join(output_dir, name))
+    
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as z:
+            total_size = 0
+            
+            # Check for zip bomb
+            for info in z.infolist():
+                total_size += info.file_size
+                if total_size > MAX_EXTRACT_SIZE:
+                    raise ArchiveSizeExceededError(f"Archive exceeds maximum allowed extraction size of {MAX_EXTRACT_SIZE} bytes.")
+            
+            # Extract files
+            z.extractall(output_dir)
+            
+            for info in z.infolist():
+                if not info.is_dir():
+                    # Resolve to absolute or relative path string
+                    extracted_path = output_dir / info.filename
+                    extracted_paths.append(str(extracted_path))
+                    
+    except (zipfile.BadZipFile, FileNotFoundError) as e:
+        raise InvalidArchiveError(f"Failed to extract archive: {e}") from e
+        
     return extracted_paths
