@@ -13,16 +13,22 @@ interface EmailItem {
 export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => void }) {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/emails')
-      .then(res => res.json())
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    fetch(`${apiUrl}/api/emails`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json();
+      })
       .then(data => {
         setEmails(data.emails || []);
         setLoading(false);
       })
       .catch(err => {
         console.error("Error fetching emails:", err);
+        setError("Failed to load emails.");
         setLoading(false);
       });
   }, []);
@@ -31,10 +37,14 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
     return <div className="p-4 text-sm text-muted-foreground">Loading emails...</div>;
   }
 
+  if (error) {
+    return <div className="p-4 text-sm text-red-500">{error}</div>;
+  }
+
   return (
     <ScrollArea className="h-full w-full border-r">
       <div className="p-4 space-y-4">
-        {emails.length === 0 && <div className="text-sm text-muted-foreground">No emails found.</div>}
+        {emails.length === 0 && !error && <div className="text-sm text-muted-foreground">No emails found.</div>}
         {emails.map(email => (
           <Card key={email.id} className="cursor-pointer hover:bg-accent transition-colors" onClick={() => onSelectEmail(email.id)}>
             <CardHeader className="p-4">

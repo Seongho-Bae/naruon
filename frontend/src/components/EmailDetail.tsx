@@ -18,6 +18,7 @@ interface LlmData {
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
+  const [llmError, setLlmError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setLoading(true);
       setEmail(null);
       setLlmData(null);
+      setLlmError(null);
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -39,16 +41,20 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         if (!isMounted) return;
         setEmail(emailJson);
 
-        const llmRes = await fetch(`${apiUrl}/api/llm/summarize`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email_body: emailJson.body })
-        });
-        if (!llmRes.ok) throw new Error("Failed to generate summary");
-        const llmJson = await llmRes.json();
-        
-        if (!isMounted) return;
-        setLlmData(llmJson);
+        try {
+          const llmRes = await fetch(`${apiUrl}/api/llm/summarize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email_body: emailJson.body })
+          });
+          if (!llmRes.ok) throw new Error("Failed to generate summary");
+          const llmJson = await llmRes.json();
+          if (!isMounted) return;
+          setLlmData(llmJson);
+        } catch (llmErr) {
+          console.error("Error generating LLM summary:", llmErr);
+          if (isMounted) setLlmError("Failed to generate summary");
+        }
       } catch (err) {
         console.error("Error fetching email details:", err);
       } finally {
@@ -101,6 +107,8 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         <CardContent>
           {llmData ? (
             <p className="text-sm">{llmData.summary}</p>
+          ) : llmError ? (
+            <p className="text-sm text-red-500">{llmError}</p>
           ) : (
             <p className="text-sm text-muted-foreground italic">Generating summary...</p>
           )}
@@ -121,6 +129,8 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             ) : (
               <p className="text-sm text-muted-foreground">No TODOs found.</p>
             )
+          ) : llmError ? (
+            <p className="text-sm text-red-500">Failed to extract TODOs</p>
           ) : (
             <p className="text-sm text-muted-foreground italic">Extracting TODOs...</p>
           )}
