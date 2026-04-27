@@ -21,3 +21,7 @@ class EmailParseError(Exception):
 class EmbeddingGenerationError(Exception):
     """Raised when embedding generation fails."""
     pass
+
+class CalendarServiceError(Exception):
+    """Raised when a calendar operation fails."""
+    pass
