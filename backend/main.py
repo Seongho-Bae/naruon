@@ -2,11 +2,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.search import router as search_router
 from api.llm import router as llm_router
+from api.calendar import router as calendar_router
 
 app = FastAPI(title="AI Email Client API")
 
 app.include_router(search_router)
 app.include_router(llm_router)
+app.include_router(calendar_router)
 
 app.add_middleware(
     CORSMiddleware,
