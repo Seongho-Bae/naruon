@@ -4,6 +4,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 
+import { Checkbox } from "@/components/ui/checkbox";
+
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   if (!emailId) {
     return (
@@ -59,11 +61,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             </div>
             <ul className="list-none space-y-2 text-sm">
               <li className="flex items-start gap-2 rounded-md border p-3">
-                <input type="checkbox" className="mt-1" />
+                <Checkbox className="mt-1" />
                 <span className="font-medium">Review the backend API documentation</span>
               </li>
               <li className="flex items-start gap-2 rounded-md border p-3">
-                <input type="checkbox" className="mt-1" />
+                <Checkbox className="mt-1" />
                 <span className="font-medium">Prepare frontend UI components for integration</span>
               </li>
             </ul>
