@@ -11,6 +11,7 @@ class Email(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     sender: Mapped[str] = mapped_column(String)
+    recipients: Mapped[str] = mapped_column(String, nullable=True)
     subject: Mapped[str] = mapped_column(String, nullable=True)
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     body: Mapped[str] = mapped_column(Text)
