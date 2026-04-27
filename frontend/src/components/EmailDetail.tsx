@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EmailData {
   id: number;
@@ -68,7 +71,14 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   }, [emailId]);
 
   if (!emailId) {
-    return <div className="flex items-center justify-center h-full text-muted-foreground">Select an email to view details</div>;
+    return (
+      <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
+        <div className="max-w-sm">
+          <h2 className="text-lg font-medium text-foreground">No email selected</h2>
+          <p className="text-sm">Select an email from the list on the left to view its details, summary, and extracted tasks.</p>
+        </div>
+      </div>
+    );
   }
 
   if (loading) {
@@ -80,62 +90,81 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   }
 
   return (
-    <div className="p-6 h-full flex flex-col gap-6 overflow-y-auto">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">{email.subject || '(No Subject)'}</h2>
-        <p className="text-muted-foreground">{email.sender} - {new Date(email.date).toLocaleString()}</p>
+    <div className="flex h-full flex-col">
+      <div className="flex items-start p-6">
+        <div className="flex items-start gap-4 text-sm w-full">
+          <Avatar className="h-10 w-10">
+            <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+          </Avatar>
+          <div className="grid gap-1 flex-1">
+            <div className="font-semibold text-base">{email.subject || '(No Subject)'}</div>
+            <div className="line-clamp-1 text-xs">
+              <span className="text-muted-foreground">{email.sender}</span>
+            </div>
+            <div className="line-clamp-1 text-xs text-muted-foreground">
+              Reply-To: {email.sender}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground whitespace-nowrap">
+            {new Date(email.date).toLocaleString()}
+          </div>
+        </div>
       </div>
       <Separator />
-      
-      {/* Actual Body */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Original Content</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="whitespace-pre-wrap text-sm text-muted-foreground overflow-x-auto max-h-64 overflow-y-auto">
-            {email.body}
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-6 p-6">
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">AI Summary</h3>
+              <Badge variant="secondary" className="text-[10px]">Generated</Badge>
+            </div>
+            <div className="rounded-md bg-muted/50 p-4 text-sm">
+              {llmData ? (
+                <p className="text-sm">{llmData.summary}</p>
+              ) : llmError ? (
+                <p className="text-sm text-red-500">{llmError}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Generating summary...</p>
+              )}
+            </div>
           </div>
-        </CardContent>
-      </Card>
-      
-      {/* AI Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">AI Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {llmData ? (
-            <p className="text-sm">{llmData.summary}</p>
-          ) : llmError ? (
-            <p className="text-sm text-red-500">{llmError}</p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">Generating summary...</p>
-          )}
-        </CardContent>
-      </Card>
-      
-      {/* AI TODOs */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Extracted TODOs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {llmData ? (
-            llmData.todos.length > 0 ? (
-              <ul className="list-disc pl-5 text-sm space-y-1">
-                {llmData.todos.map((todo, idx) => <li key={idx}>{todo}</li>)}
-              </ul>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Extracted Action Items</h3>
+              <Badge variant="secondary" className="text-[10px]">{llmData?.todos.length || 0} Tasks</Badge>
+            </div>
+            {llmData ? (
+              llmData.todos.length > 0 ? (
+                <ul className="list-none space-y-2 text-sm">
+                  {llmData.todos.map((todo, idx) => (
+                    <li key={idx} className="flex items-start gap-2 rounded-md border p-3">
+                      <Checkbox className="mt-1" />
+                      <span className="font-medium">{todo}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-muted-foreground">No action items found.</p>
+              )
+            ) : llmError ? (
+              <p className="text-sm text-red-500">Failed to extract action items</p>
             ) : (
-              <p className="text-sm text-muted-foreground">No TODOs found.</p>
-            )
-          ) : llmError ? (
-            <p className="text-sm text-red-500">Failed to extract TODOs</p>
-          ) : (
-            <p className="text-sm text-muted-foreground italic">Extracting TODOs...</p>
-          )}
-        </CardContent>
-      </Card>
+              <p className="text-sm text-muted-foreground italic">Extracting action items...</p>
+            )}
+          </div>
+
+          <Separator />
+          
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Original Message</h3>
+            <div className="text-sm whitespace-pre-wrap">
+              {email.body}
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
@@ -12,25 +13,24 @@ export default function Home() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-full">
-        {/* Left pane: Email List */}
-        <div className="w-1/4 min-w-[250px]">
+      <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch">
+        <ResizablePanel defaultSize={25} minSize={20}>
           <EmailList onSelectEmail={setSelectedEmail} />
-        </div>
-        
-        {/* Middle pane: Email Detail */}
-        <div className="w-2/4 border-r bg-background">
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={50} minSize={30}>
           <EmailDetail emailId={selectedEmail} />
-        </div>
-        
-        {/* Right pane: Network Graph */}
-        <div className="w-1/4 min-w-[300px] p-4 flex flex-col bg-muted/20">
-          <h3 className="font-semibold mb-4">Network Graph</h3>
-          <div className="flex-1 border rounded-lg overflow-hidden bg-background">
-            <NetworkGraph />
+        </ResizablePanel>
+        <ResizableHandle withHandle />
+        <ResizablePanel defaultSize={25} minSize={20}>
+          <div className="h-full flex flex-col p-4 bg-muted/20">
+            <h3 className="font-semibold mb-4 text-sm uppercase text-muted-foreground tracking-wider">Network Graph</h3>
+            <div className="flex-1 border rounded-lg bg-background overflow-hidden">
+              <NetworkGraph />
+            </div>
           </div>
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </DashboardLayout>
   );
 }

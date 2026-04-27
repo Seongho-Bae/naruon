@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 
 interface EmailItem {
   id: number;
@@ -8,6 +10,7 @@ interface EmailItem {
   sender: string;
   date: string;
   snippet: string;
+  unread?: boolean;
 }
 
 export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => void }) {
@@ -42,19 +45,45 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
   }
 
   return (
-    <ScrollArea className="h-full w-full border-r">
-      <div className="p-4 space-y-4">
-        {emails.length === 0 && !error && <div className="text-sm text-muted-foreground">No emails found.</div>}
-        {emails.map(email => (
-          <Card key={email.id} className="cursor-pointer hover:bg-accent transition-colors" onClick={() => onSelectEmail(email.id)}>
-            <CardHeader className="p-4">
-              <CardTitle className="text-sm font-medium">{email.subject || '(No Subject)'}</CardTitle>
-              <CardDescription className="text-xs truncate">{email.sender}</CardDescription>
-              <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{email.snippet}</p>
-            </CardHeader>
-          </Card>
-        ))}
+    <div className="h-full flex flex-col border-r bg-background w-full">
+      <div className="p-4 border-b">
+        <h2 className="font-semibold text-lg tracking-tight">Inbox</h2>
       </div>
-    </ScrollArea>
+      <ScrollArea className="flex-1 w-full">
+        <div className="flex flex-col gap-2 p-4">
+          {emails.length === 0 && !error && <div className="text-sm text-muted-foreground">No emails found.</div>}
+          {emails.map(email => (
+            <button 
+              key={email.id} 
+              onClick={() => onSelectEmail(email.id)}
+              className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent"
+            >
+              <div className="flex w-full flex-col gap-1">
+                <div className="flex items-center">
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                    </Avatar>
+                    <div className="font-semibold truncate max-w-[120px]">{email.sender}</div>
+                  </div>
+                  <div className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(email.date).toLocaleDateString()}
+                  </div>
+                </div>
+                <div className="text-xs font-medium truncate w-full">{email.subject || '(No Subject)'}</div>
+              </div>
+              <div className="line-clamp-2 text-xs text-muted-foreground w-full">
+                {email.snippet}
+              </div>
+              {email.unread && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="default" className="text-[10px]">New</Badge>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      </ScrollArea>
+    </div>
   );
 }
