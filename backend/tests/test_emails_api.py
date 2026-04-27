@@ -75,3 +75,22 @@ async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Em
     response = await client.get(f"/api/emails/{sample_email.id}")
     assert response.status_code == 200
     assert response.json()["id"] == sample_email.id
+
+
+from unittest.mock import patch
+
+@patch("api.emails.send_email", return_value=True)
+def test_send_email_endpoint(mock_send_email):
+    from main import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    
+    response = client.post("/api/emails/send", json={
+        "to": "test@example.com",
+        "subject": "Re: Test",
+        "body": "This is a reply."
+    })
+    
+    assert response.status_code == 200
+    assert response.json() == {"status": "success"}
+    mock_send_email.assert_called_once_with("test@example.com", "Re: Test", "This is a reply.")
