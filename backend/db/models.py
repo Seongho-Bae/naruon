@@ -1,5 +1,5 @@
-from sqlalchemy.orm import declarative_base, Mapped, mapped_column
-from sqlalchemy import String, DateTime, Text
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
+from sqlalchemy import String, DateTime, Text, ForeignKey
 from pgvector.sqlalchemy import Vector
 import datetime
 
@@ -16,3 +16,15 @@ class Email(Base):
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     body: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
+    attachments: Mapped[list["Attachment"]] = relationship(back_populates="email", cascade="all, delete-orphan")
+
+class Attachment(Base):
+    __tablename__ = "attachments"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email_id: Mapped[int] = mapped_column(ForeignKey("emails.id"))
+    filename: Mapped[str] = mapped_column(String)
+    content: Mapped[str] = mapped_column(Text)
+    embedding = mapped_column(Vector(1536))
+    
+    email: Mapped["Email"] = relationship(back_populates="attachments")

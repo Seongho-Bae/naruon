@@ -14,6 +14,7 @@ class EmailData(TypedDict):
     subject: str
     date: datetime.datetime
     body: str
+    attachments: list[dict]
 
 def _sanitize_nul(text: str) -> str:
     """Removes NUL characters from strings, which are invalid in PostgreSQL text fields."""
@@ -35,12 +36,21 @@ def parse_eml(file_path: str | Path) -> EmailData:
         
     plain_body = ""
     html_body = ""
+    attachments = []
     
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
+            filename = part.get_filename()
             # Skip attachments
-            if part.get_filename():
+            if filename:
+                if content_type == "text/plain":
+                    part_content = part.get_content()
+                    if isinstance(part_content, str):
+                        attachments.append({
+                            "filename": _sanitize_nul(filename),
+                            "content": _sanitize_nul(part_content)
+                        })
                 continue
                 
             if content_type == "text/plain":
@@ -79,5 +89,6 @@ def parse_eml(file_path: str | Path) -> EmailData:
         "recipients": _sanitize_nul(msg.get("To", "")),
         "subject": _sanitize_nul(msg.get("Subject", "")),
         "date": parsed_date,
-        "body": _sanitize_nul(body)
+        "body": _sanitize_nul(body),
+        "attachments": attachments
     }
