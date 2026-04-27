@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { DashboardLayout } from '@/components/DashboardLayout';
 import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
-import NetworkGraph from '@/components/NetworkGraph';
+import dynamic from 'next/dynamic';
+const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
