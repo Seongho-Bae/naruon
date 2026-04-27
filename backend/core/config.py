@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str | None = None
     IMAP_SERVER: str = "imap.gmail.com"
     IMAP_PORT: int = 993
+    POP3_SERVER: str = "pop.gmail.com"
+    POP3_PORT: int = 995
     
     # OAuth Settings
     OAUTH_CLIENT_ID: str | None = None
