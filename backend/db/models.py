@@ -33,3 +33,28 @@ class Attachment(Base):
     embedding = mapped_column(Vector(1536))
 
     email: Mapped["Email"] = relationship(back_populates="attachments")
+
+
+class TenantConfig(Base):
+    __tablename__ = "tenant_configs"
+    
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    
+    # Email settings
+    smtp_server: Mapped[str | None] = mapped_column(String, nullable=True)
+    smtp_port: Mapped[int | None] = mapped_column(nullable=True)
+    smtp_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    imap_server: Mapped[str | None] = mapped_column(String, nullable=True)
+    imap_port: Mapped[int | None] = mapped_column(nullable=True)
+    pop3_server: Mapped[str | None] = mapped_column(String, nullable=True)
+    pop3_port: Mapped[int | None] = mapped_column(nullable=True)
+    
+    # OAuth and Third Party Settings
+    oauth_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    oauth_client_secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    oauth_redirect_uri: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    openai_api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_client_secret: Mapped[str | None] = mapped_column(String, nullable=True)
