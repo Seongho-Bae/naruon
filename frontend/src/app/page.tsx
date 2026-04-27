@@ -1,4 +1,8 @@
-import NetworkGraph from '@/components/NetworkGraph';
+'use client';
+
+import dynamic from 'next/dynamic';
+
+const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
 export default function Home() {
   return (
