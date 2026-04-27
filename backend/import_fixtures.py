@@ -43,6 +43,16 @@ async def main():
                 print(f"Failed to generate embedding for {eml_file}: {e}")
                 continue
 
+            # simplified thread extraction logic
+            thread_id = parsed["message_id"]
+            refs_str = parsed.get("references")
+            if refs_str:
+                refs = str(refs_str).split()
+                if refs:
+                    thread_id = refs[0]
+            elif parsed.get("in_reply_to"):
+                thread_id = str(parsed.get("in_reply_to"))
+
             email_obj = Email(
                 message_id=parsed["message_id"],
                 sender=parsed["sender"],
@@ -50,7 +60,8 @@ async def main():
                 subject=parsed["subject"],
                 date=parsed["date"],
                 body=parsed["body"],
-                embedding=body_emb
+                embedding=body_emb,
+                thread_id=thread_id,
             )
 
             # Generate embeddings for attachments
