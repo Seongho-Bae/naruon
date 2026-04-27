@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 
 interface EmailData {
   id: number;
@@ -20,6 +21,8 @@ interface LlmData {
   todos: string[];
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
@@ -29,6 +32,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [draft, setDraft] = useState<string>('');
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  
+  const [draftError, setDraftError] = useState<string | null>(null);
+  const [sendStatus, setSendStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [instruction, setInstruction] = useState('reply politely');
 
   useEffect(() => {
     if (!emailId) return;
@@ -41,10 +48,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setLlmData(null);
       setLlmError(null);
       setDraft('');
+      setDraftError(null);
+      setSendStatus(null);
 
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-        const emailRes = await fetch(`${apiUrl}/api/emails/${emailId}`);
+        const emailRes = await fetch(`${API_URL}/api/emails/${emailId}`);
         if (!emailRes.ok) throw new Error("Failed to fetch email details");
         const emailJson = await emailRes.json();
         
@@ -52,7 +60,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         setEmail(emailJson);
 
         try {
-          const llmRes = await fetch(`${apiUrl}/api/llm/summarize`, {
+          const llmRes = await fetch(`${API_URL}/api/llm/summarize`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email_body: emailJson.body })
@@ -80,20 +88,20 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const handleDraftReply = async () => {
     if (!email) return;
     setIsDrafting(true);
-    setDraft('');
+    setDraftError(null);
+    setSendStatus(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/api/llm/draft`, {
+      const res = await fetch(`${API_URL}/api/llm/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_body: email.body, instruction: 'reply politely' })
+        body: JSON.stringify({ email_body: email.body, instruction })
       });
       if (!res.ok) throw new Error("Failed to generate draft");
       const data = await res.json();
       setDraft(data.draft || '');
     } catch (err) {
       console.error("Error drafting reply:", err);
-      setDraft("Error generating draft.");
+      setDraftError("Error generating draft.");
     } finally {
       setIsDrafting(false);
     }
@@ -102,9 +110,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const handleSendReply = async () => {
     if (!email || !draft) return;
     setIsSending(true);
+    setSendStatus(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const res = await fetch(`${apiUrl}/api/emails/send`, {
+      const res = await fetch(`${API_URL}/api/emails/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,11 +122,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         })
       });
       if (!res.ok) throw new Error("Failed to send email");
-      alert("Reply sent successfully!");
+      setSendStatus({ type: 'success', message: 'Reply sent successfully!' });
       setDraft('');
     } catch (err) {
       console.error("Error sending email:", err);
-      alert("Error sending reply.");
+      setSendStatus({ type: 'error', message: 'Error sending reply.' });
     } finally {
       setIsSending(false);
     }
@@ -221,11 +229,19 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
           <Separator />
 
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Reply</h3>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
+              <div className="space-y-1.5 flex-1 max-w-sm">
+                <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Reply</h3>
+                <Input
+                  value={instruction}
+                  onChange={(e) => setInstruction(e.target.value)}
+                  placeholder="e.g. reply politely"
+                  className="h-8 text-xs"
+                />
+              </div>
               <Button 
                 onClick={handleDraftReply} 
-                disabled={isDrafting}
+                disabled={isDrafting || !instruction}
                 variant="outline"
                 size="sm"
               >
@@ -233,6 +249,8 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               </Button>
             </div>
             
+            {draftError && <p className="text-sm text-red-500">{draftError}</p>}
+
             <Textarea 
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -240,14 +258,32 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               className="min-h-[150px]"
             />
             
-            <div className="flex justify-end">
-              <Button 
-                onClick={handleSendReply} 
-                disabled={isSending || !draft}
-                size="sm"
-              >
-                {isSending ? "Sending..." : "Send Reply"}
-              </Button>
+            <div className="flex items-center justify-between">
+              <div>
+                {sendStatus && (
+                  <p className={`text-sm ${sendStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {sendStatus.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {draft && (
+                  <Button 
+                    onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }} 
+                    variant="ghost"
+                    size="sm"
+                  >
+                    Clear
+                  </Button>
+                )}
+                <Button 
+                  onClick={handleSendReply} 
+                  disabled={isSending || !draft}
+                  size="sm"
+                >
+                  {isSending ? "Sending..." : "Send Reply"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
