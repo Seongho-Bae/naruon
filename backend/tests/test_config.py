@@ -13,3 +13,7 @@ def test_email_config():
     assert hasattr(settings, "OAUTH_CLIENT_ID")
     assert hasattr(settings, "OAUTH_CLIENT_SECRET")
     assert hasattr(settings, "OAUTH_REDIRECT_URI")
+
+def test_openai_config():
+    from core.config import settings
+    assert hasattr(settings, "OPENAI_API_KEY")

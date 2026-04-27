@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     OAUTH_CLIENT_SECRET: SecretStr | None = None
     OAUTH_REDIRECT_URI: str | None = None
     
+    # OpenAI Settings
+    OPENAI_API_KEY: SecretStr | None = None
+    
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
