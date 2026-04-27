@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     # OpenAI Settings
     OPENAI_API_KEY: SecretStr | None = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_MODEL: str = "gpt-4o"
     
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
