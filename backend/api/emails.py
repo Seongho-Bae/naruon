@@ -19,6 +19,7 @@ class EmailListItem(BaseModel):
     sender: str
     date: datetime.datetime
     snippet: str
+    thread_id: str | None
 
 
 class EmailDetailResponse(BaseModel):
@@ -29,6 +30,7 @@ class EmailDetailResponse(BaseModel):
     subject: str | None
     date: datetime.datetime
     body: str
+    thread_id: str | None
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
