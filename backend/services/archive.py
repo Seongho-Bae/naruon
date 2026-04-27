@@ -2,9 +2,10 @@ import zipfile
 from pathlib import Path
 from typing import List, Union
 
-from .exceptions import InvalidArchiveError, ArchiveSizeExceededError
+from .exceptions import InvalidArchiveError, ArchiveSizeExceededError, ArchiveFileCountExceededError
 
 MAX_EXTRACT_SIZE = 10 * 1024 * 1024 * 1024  # 10 GB
+MAX_FILE_COUNT = 100000
 
 def extract_backup(zip_path: Union[str, Path], output_dir: Union[str, Path]) -> List[str]:
     """
@@ -34,20 +35,22 @@ def extract_backup(zip_path: Union[str, Path], output_dir: Union[str, Path]) -> 
     try:
         with zipfile.ZipFile(zip_path, 'r') as z:
             total_size = 0
+            file_count = 0
             
-            # Check for zip bomb
+            # Check for zip bomb and file count limit
             for info in z.infolist():
                 total_size += info.file_size
                 if total_size > MAX_EXTRACT_SIZE:
                     raise ArchiveSizeExceededError(f"Archive exceeds maximum allowed extraction size of {MAX_EXTRACT_SIZE} bytes.")
+                
+                file_count += 1
+                if file_count > MAX_FILE_COUNT:
+                    raise ArchiveFileCountExceededError(f"Archive exceeds maximum allowed file count of {MAX_FILE_COUNT}.")
             
-            # Extract files
-            z.extractall(output_dir)
-            
+            # Extract files securely
             for info in z.infolist():
                 if not info.is_dir():
-                    # Resolve to absolute or relative path string
-                    extracted_path = output_dir / info.filename
+                    extracted_path = z.extract(info, output_dir)
                     extracted_paths.append(str(extracted_path))
                     
     except (zipfile.BadZipFile, FileNotFoundError) as e:

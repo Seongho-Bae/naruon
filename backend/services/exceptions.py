@@ -9,3 +9,7 @@ class InvalidArchiveError(ArchiveError):
 class ArchiveSizeExceededError(ArchiveError):
     """Raised when an archive exceeds the maximum allowed extracted size."""
     pass
+
+class ArchiveFileCountExceededError(ArchiveError):
+    """Raised when an archive exceeds the maximum allowed number of files."""
+    pass
