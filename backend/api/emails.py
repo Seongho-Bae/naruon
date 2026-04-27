@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api/emails")
 
 class EmailListItem(BaseModel):
     id: int
+    thread_id: str | None = None
     subject: str | None
     sender: str
     date: datetime.datetime
@@ -24,6 +25,7 @@ class EmailListItem(BaseModel):
 class EmailDetailResponse(BaseModel):
     id: int
     message_id: str
+    thread_id: str | None = None
     sender: str
     recipients: str | None
     subject: str | None
@@ -43,6 +45,7 @@ async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
         items.append(
             EmailListItem(
                 id=email.id,
+                thread_id=email.thread_id,
                 subject=email.subject,
                 sender=email.sender,
                 date=email.date,
@@ -62,6 +65,7 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
     return EmailDetailResponse(
         id=email.id,
         message_id=email.message_id,
+        thread_id=email.thread_id,
         sender=email.sender,
         recipients=email.recipients,
         subject=email.subject,

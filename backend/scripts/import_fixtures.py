@@ -50,6 +50,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             
             stmt = insert(Email).values(
                 message_id=email_data["message_id"],
+                thread_id=email_data["thread_id"],
                 sender=email_data["sender"],
                 recipients=email_data["recipients"],
                 subject=email_data["subject"],
@@ -63,6 +64,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             stmt = stmt.on_conflict_do_update(
                 index_elements=['message_id'],
                 set_=dict(
+                    thread_id=stmt.excluded.thread_id,
                     sender=stmt.excluded.sender,
                     recipients=stmt.excluded.recipients,
                     subject=stmt.excluded.subject,

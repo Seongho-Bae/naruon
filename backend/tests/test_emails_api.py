@@ -40,6 +40,7 @@ def sample_email():
     return Email(
         id=1,
         message_id="msg123",
+        thread_id="thread123",
         sender="test@example.com",
         recipients="user@example.com",
         subject="Test Subject",
