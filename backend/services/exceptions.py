@@ -13,3 +13,7 @@ class ArchiveSizeExceededError(ArchiveError):
 class ArchiveFileCountExceededError(ArchiveError):
     """Raised when an archive exceeds the maximum allowed number of files."""
     pass
+
+class EmailParseError(Exception):
+    """Raised when an email file cannot be read or parsed."""
+    pass
