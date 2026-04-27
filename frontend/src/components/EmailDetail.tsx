@@ -4,6 +4,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 
 interface EmailData {
   id: number;
@@ -24,6 +26,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [llmError, setLlmError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [draft, setDraft] = useState<string>('');
+  const [isDrafting, setIsDrafting] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+
   useEffect(() => {
     if (!emailId) return;
     
@@ -34,6 +40,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setEmail(null);
       setLlmData(null);
       setLlmError(null);
+      setDraft('');
 
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -69,6 +76,53 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
     return () => { isMounted = false; };
   }, [emailId]);
+
+  const handleDraftReply = async () => {
+    if (!email) return;
+    setIsDrafting(true);
+    setDraft('');
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/llm/draft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email_body: email.body, instruction: 'reply politely' })
+      });
+      if (!res.ok) throw new Error("Failed to generate draft");
+      const data = await res.json();
+      setDraft(data.draft || '');
+    } catch (err) {
+      console.error("Error drafting reply:", err);
+      setDraft("Error generating draft.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!email || !draft) return;
+    setIsSending(true);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/emails/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: email.sender,
+          subject: email.subject?.startsWith('Re:') ? email.subject : `Re: ${email.subject || ''}`,
+          body: draft
+        })
+      });
+      if (!res.ok) throw new Error("Failed to send email");
+      alert("Reply sent successfully!");
+      setDraft('');
+    } catch (err) {
+      console.error("Error sending email:", err);
+      alert("Error sending reply.");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   if (!emailId) {
     return (
@@ -161,6 +215,39 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Original Message</h3>
             <div className="text-sm whitespace-pre-wrap">
               {email.body}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Reply</h3>
+              <Button 
+                onClick={handleDraftReply} 
+                disabled={isDrafting}
+                variant="outline"
+                size="sm"
+              >
+                {isDrafting ? "Drafting..." : "Draft Reply with AI"}
+              </Button>
+            </div>
+            
+            <Textarea 
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Your reply..."
+              className="min-h-[150px]"
+            />
+            
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleSendReply} 
+                disabled={isSending || !draft}
+                size="sm"
+              >
+                {isSending ? "Sending..." : "Send Reply"}
+              </Button>
             </div>
           </div>
         </div>
