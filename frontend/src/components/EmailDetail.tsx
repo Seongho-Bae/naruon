@@ -14,6 +14,7 @@ interface EmailData {
   sender: string;
   body: string;
   date: string;
+  thread_id?: string;
 }
 
 interface LlmData {
@@ -25,6 +26,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
+  const [threadEmails, setThreadEmails] = useState<EmailData[]>([]);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
   const [llmError, setLlmError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -61,6 +63,20 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         
         if (!isMounted) return;
         setEmail(emailJson);
+
+        if (emailJson.thread_id) {
+          try {
+            const threadRes = await fetch(`${API_URL}/api/emails/thread/${emailJson.thread_id}`);
+            if (threadRes.ok) {
+              const threadJson = await threadRes.json();
+              if (isMounted) setThreadEmails(threadJson.thread || []);
+            }
+          } catch (err) {
+            console.error("Error fetching thread:", err);
+          }
+        } else {
+          if (isMounted) setThreadEmails([emailJson]);
+        }
 
         try {
           const llmRes = await fetch(`${API_URL}/api/llm/summarize`, {
@@ -263,9 +279,17 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
           <Separator />
           
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Original Message</h3>
-            <div className="text-sm whitespace-pre-wrap">
-              {email.body}
+            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Conversation History</h3>
+            <div className="space-y-4">
+              {(threadEmails.length > 0 ? threadEmails : [email]).map((msg) => (
+                <div key={msg.id} className="rounded-lg border p-4 bg-card text-card-foreground">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium text-sm">{msg.sender}</span>
+                    <span className="text-xs text-muted-foreground">{new Date(msg.date).toLocaleString()}</span>
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap">{msg.body}</div>
+                </div>
+              ))}
             </div>
           </div>
 
