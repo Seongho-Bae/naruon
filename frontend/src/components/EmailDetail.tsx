@@ -14,6 +14,7 @@ interface EmailData {
   sender: string;
   body: string;
   date: string;
+  thread_id?: string;
 }
 
 interface LlmData {

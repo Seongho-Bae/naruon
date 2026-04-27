@@ -13,6 +13,7 @@ interface EmailItem {
   date: string;
   snippet: string;
   unread?: boolean;
+  thread_id?: string;
 }
 
 export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => void }) {
