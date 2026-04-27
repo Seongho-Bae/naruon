@@ -12,6 +12,8 @@ class EmailData(TypedDict):
     sender: str
     recipients: str
     subject: str
+    in_reply_to: str | None
+    references: str | None
     date: datetime.datetime
     body: str
     attachments: list[dict]
@@ -88,6 +90,8 @@ def parse_eml(file_path: str | Path) -> EmailData:
         "sender": _sanitize_nul(msg.get("From", "")),
         "recipients": _sanitize_nul(msg.get("To", "")),
         "subject": _sanitize_nul(msg.get("Subject", "")),
+        "in_reply_to": _sanitize_nul(msg.get("In-Reply-To", "")) if msg.get("In-Reply-To") else None,
+        "references": _sanitize_nul(msg.get("References", "")) if msg.get("References") else None,
         "date": parsed_date,
         "body": _sanitize_nul(body),
         "attachments": attachments
