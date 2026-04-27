@@ -6,13 +6,13 @@ import { Network } from 'vis-network';
 interface Node {
   id: number | string;
   label: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface Edge {
   from: number | string;
   to: number | string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface NetworkData {
@@ -27,7 +27,6 @@ export default function NetworkGraph() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsLoading(true);
     fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/network/graph`)
       .then((res) => {
         if (!res.ok) {
