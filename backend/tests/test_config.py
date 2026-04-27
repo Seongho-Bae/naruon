@@ -8,6 +8,7 @@ from core.config import settings
 def test_global_config():
     assert hasattr(settings, "DATABASE_URL")
     assert hasattr(settings, "DEBUG")
+    assert hasattr(settings, "ENCRYPTION_KEY")
 
 def test_openai_config():
     from core.config import settings

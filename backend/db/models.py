@@ -1,9 +1,48 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from sqlalchemy import String, DateTime, Text, ForeignKey
+from sqlalchemy.types import TypeDecorator
+from cryptography.fernet import Fernet
+from core.config import settings
 from pgvector.sqlalchemy import Vector
 import datetime
 
 Base = declarative_base()
+
+FALLBACK_KEY = b'f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0='
+
+def get_fernet() -> Fernet:
+    if settings.ENCRYPTION_KEY:
+        key = settings.ENCRYPTION_KEY.get_secret_value().encode()
+        try:
+            return Fernet(key)
+        except ValueError:
+            return Fernet(key)
+    else:
+        return Fernet(FALLBACK_KEY)
+
+class EncryptedString(TypeDecorator):
+    """
+    Encrypts string values before saving to the database and decrypts them when retrieving.
+    Uses Fernet symmetric encryption.
+    """
+    impl = String
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            f = get_fernet()
+            return f.encrypt(value.encode('utf-8')).decode('utf-8')
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None:
+            f = get_fernet()
+            try:
+                return f.decrypt(value.encode('utf-8')).decode('utf-8')
+            except Exception:
+                return value
+        return value
+
 
 
 class Email(Base):
@@ -52,9 +91,18 @@ class TenantConfig(Base):
     
     # OAuth and Third Party Settings
     oauth_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    oauth_client_secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    oauth_client_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     oauth_redirect_uri: Mapped[str | None] = mapped_column(String, nullable=True)
     
-    openai_api_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    openai_api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     google_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    google_client_secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    google_client_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+
+    def __repr__(self) -> str:
+        return (
+            f"<TenantConfig(id={self.id}, user_id='{self.user_id}', "
+            f"smtp_server='{self.smtp_server}', imap_server='{self.imap_server}', "
+            f"has_oauth_secret={self.oauth_client_secret is not None}, "
+            f"has_openai_key={self.openai_api_key is not None}, "
+            f"has_google_secret={self.google_client_secret is not None})>"
+        )
