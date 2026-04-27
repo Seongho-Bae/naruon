@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.llm_service import extract_todos_and_summary, draft_reply, ExtractionResult
 
@@ -13,9 +13,15 @@ class DraftRequest(BaseModel):
 
 @router.post("/summarize", response_model=ExtractionResult)
 async def summarize_endpoint(request: SummarizeRequest):
-    return await extract_todos_and_summary(request.email_body)
+    try:
+        return await extract_todos_and_summary(request.email_body)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/draft")
 async def draft_endpoint(request: DraftRequest):
-    reply = await draft_reply(request.email_body, request.instruction)
-    return {"draft": reply}
+    try:
+        reply = await draft_reply(request.email_body, request.instruction)
+        return {"draft": reply}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
