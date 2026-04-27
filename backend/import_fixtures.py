@@ -6,6 +6,7 @@ from db.session import AsyncSessionLocal
 from db.models import Email, Attachment
 from services.email_parser import parse_eml
 from services.embedding import generate_embeddings
+from services.threading_service import assign_thread_id
 from sqlalchemy import select
 
 async def main():
@@ -42,12 +43,17 @@ async def main():
             except Exception as e:
                 print(f"Failed to generate embedding for {eml_file}: {e}")
                 continue
+                
+            thread_id = await assign_thread_id(session, parsed)
 
             email_obj = Email(
                 message_id=parsed["message_id"],
                 sender=parsed["sender"],
                 recipients=parsed["recipients"],
                 subject=parsed["subject"],
+                in_reply_to=parsed.get("in_reply_to"),
+                references=parsed.get("references"),
+                thread_id=thread_id,
                 date=parsed["date"],
                 body=parsed["body"],
                 embedding=body_emb

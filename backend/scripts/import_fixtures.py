@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from services.archive import extract_backup_async
 from services.email_parser import parse_eml
 from services.embedding import chunk_text, generate_embeddings
+from services.threading_service import assign_thread_id
 from db.session import AsyncSessionLocal
 from db.models import Email
 
@@ -45,11 +46,16 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     logger.error(f"Failed to generate embedding for {email_data['message_id']}: {e}")
             
             # Upsert into database
+            thread_id = await assign_thread_id(session, email_data)
+            
             stmt = insert(Email).values(
                 message_id=email_data["message_id"],
                 sender=email_data["sender"],
                 recipients=email_data["recipients"],
                 subject=email_data["subject"],
+                in_reply_to=email_data.get("in_reply_to"),
+                references=email_data.get("references"),
+                thread_id=thread_id,
                 date=email_data["date"],
                 body=email_data["body"],
                 embedding=embedding
@@ -60,6 +66,9 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     sender=stmt.excluded.sender,
                     recipients=stmt.excluded.recipients,
                     subject=stmt.excluded.subject,
+                    in_reply_to=stmt.excluded.in_reply_to,
+                    references=stmt.excluded.references,
+                    thread_id=stmt.excluded.thread_id,
                     date=stmt.excluded.date,
                     body=stmt.excluded.body,
                     embedding=stmt.excluded.embedding

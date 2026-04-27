@@ -19,7 +19,7 @@ class EmailListItem(BaseModel):
     sender: str
     date: datetime.datetime
     snippet: str
-
+    thread_id: str | None = None
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -29,6 +29,7 @@ class EmailDetailResponse(BaseModel):
     subject: str | None
     date: datetime.datetime
     body: str
+    thread_id: str | None = None
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -46,6 +47,7 @@ async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
                 sender=email.sender,
                 date=email.date,
                 snippet=snippet,
+                thread_id=email.thread_id,
             )
         )
     return {"emails": items}
@@ -65,12 +67,15 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
         subject=email.subject,
         date=email.date,
         body=email.body,
+        thread_id=email.thread_id,
     )
 
 class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
+    in_reply_to: str | None = None
+    references: str | None = None
 
 @router.post("/send")
 async def send_email_endpoint(request: SendEmailRequest, user_id: str | None = None): # TODO: Add authentication
