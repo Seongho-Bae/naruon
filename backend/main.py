@@ -5,9 +5,11 @@ from api.search import router as search_router
 from api.llm import router as llm_router
 from api.calendar import router as calendar_router
 from api.network import router as network_router
+from api.emails import router as emails_router
 from services.imap_worker import ImapSyncWorker
 
 imap_worker = ImapSyncWorker()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -15,12 +17,14 @@ async def lifespan(app: FastAPI):
     yield
     await imap_worker.stop()
 
+
 app = FastAPI(title="AI Email Client API", lifespan=lifespan)
 
 app.include_router(search_router)
 app.include_router(llm_router)
 app.include_router(calendar_router)
 app.include_router(network_router)
+app.include_router(emails_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,6 +33,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 @app.get("/")
 def read_root() -> dict[str, str]:
