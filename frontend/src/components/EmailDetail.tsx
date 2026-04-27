@@ -1,38 +1,91 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   if (!emailId) {
-    return <div className="flex items-center justify-center h-full text-muted-foreground">Select an email to view details</div>;
+    return (
+      <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
+        <div className="max-w-sm">
+          <h2 className="text-lg font-medium text-foreground">No email selected</h2>
+          <p className="text-sm">Select an email from the list on the left to view its details, summary, and extracted tasks.</p>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6 h-full flex flex-col gap-6 overflow-y-auto">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight">Email Details (ID: {emailId})</h2>
-        <p className="text-muted-foreground">sender@example.com</p>
+    <div className="flex h-full flex-col">
+      <div className="flex items-start p-6">
+        <div className="flex items-start gap-4 text-sm">
+          <Avatar className="h-10 w-10">
+            <AvatarFallback>AL</AvatarFallback>
+          </Avatar>
+          <div className="grid gap-1">
+            <div className="font-semibold text-base">Project Update</div>
+            <div className="line-clamp-1 text-xs">
+              <span className="font-medium">Alice</span>
+              <span className="text-muted-foreground"> (alice@example.com)</span>
+            </div>
+            <div className="line-clamp-1 text-xs text-muted-foreground">
+              Reply-To: alice@example.com
+            </div>
+          </div>
+        </div>
+        <div className="ml-auto text-xs text-muted-foreground">
+          Oct 22, 2026, 10:42 AM
+        </div>
       </div>
       <Separator />
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p>This is a generated summary of the email content.</p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Extracted TODOs</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ul className="list-disc pl-5">
-            <li>Action item 1</li>
-            <li>Action item 2</li>
-          </ul>
-        </CardContent>
-      </Card>
+      <ScrollArea className="flex-1">
+        <div className="flex flex-col gap-6 p-6">
+          
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">AI Summary</h3>
+              <Badge variant="secondary" className="text-[10px]">Generated</Badge>
+            </div>
+            <div className="rounded-md bg-muted/50 p-4 text-sm">
+              Alice has shared the latest project update. The backend API is complete and testing will commence next week. We need to focus on integrating the new UI components.
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Extracted Action Items</h3>
+              <Badge variant="secondary" className="text-[10px]">2 Tasks</Badge>
+            </div>
+            <ul className="list-none space-y-2 text-sm">
+              <li className="flex items-start gap-2 rounded-md border p-3">
+                <input type="checkbox" className="mt-1" />
+                <span className="font-medium">Review the backend API documentation</span>
+              </li>
+              <li className="flex items-start gap-2 rounded-md border p-3">
+                <input type="checkbox" className="mt-1" />
+                <span className="font-medium">Prepare frontend UI components for integration</span>
+              </li>
+            </ul>
+          </div>
+
+          <Separator />
+          
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Original Message</h3>
+            <div className="text-sm whitespace-pre-wrap">
+              Hi team,
+
+              Here is the latest update on the new feature. The backend API has been merged successfully.
+
+              Please review the backend API documentation by tomorrow. We also need someone to prepare the frontend UI components for integration so we can start wiring things up.
+
+              Thanks,
+              Alice
+            </div>
+          </div>
+        </div>
+      </ScrollArea>
     </div>
   );
 }
