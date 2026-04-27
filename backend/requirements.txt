@@ -10,5 +10,5 @@ asyncpg==0.29.0
 pgvector==0.2.4
 pytest-asyncio
 openai==1.12.0
-langchain-text-splitters==0.0.1
+langchain-text-splitters==1.1.2
 tiktoken==0.6.0
