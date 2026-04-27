@@ -17,3 +17,7 @@ class ArchiveFileCountExceededError(ArchiveError):
 class EmailParseError(Exception):
     """Raised when an email file cannot be read or parsed."""
     pass
+
+class EmbeddingGenerationError(Exception):
+    """Raised when embedding generation fails."""
+    pass

@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from api.search import router as search_router
 
 app = FastAPI(title="AI Email Client API")
+
+app.include_router(search_router)
 
 app.add_middleware(
     CORSMiddleware,
