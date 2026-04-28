@@ -21,6 +21,7 @@ class EmailListItem(BaseModel):
     sender: str
     date: datetime.datetime
     snippet: str
+    reply_count: int | None = None
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -35,11 +36,26 @@ class EmailDetailResponse(BaseModel):
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
 async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Email).order_by(Email.date.desc()).limit(limit))
+    result = await db.execute(select(Email).order_by(Email.date.desc()).limit(limit * 3))
     emails = result.scalars().all()
 
-    items = []
+    grouped = {}
+    reply_counts = {}
     for email in emails:
+        group_key = email.thread_id if email.thread_id else email.message_id
+        if group_key not in grouped:
+            grouped[group_key] = email
+            reply_counts[group_key] = 1
+        else:
+            reply_counts[group_key] += 1
+            if email.date > grouped[group_key].date:
+                grouped[group_key] = email
+
+    sorted_groups = sorted(grouped.values(), key=lambda x: x.date, reverse=True)[:limit]
+
+    items = []
+    for email in sorted_groups:
+        group_key = email.thread_id if email.thread_id else email.message_id
         snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
             EmailListItem(
@@ -49,6 +65,7 @@ async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
                 date=email.date,
                 snippet=snippet,
                 thread_id=email.thread_id,
+                reply_count=reply_counts[group_key],
             )
         )
     return {"emails": items}

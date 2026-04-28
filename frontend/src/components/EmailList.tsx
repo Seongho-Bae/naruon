@@ -14,6 +14,7 @@ interface EmailItem {
   snippet: string;
   unread?: boolean;
   thread_id?: string;
+  reply_count?: number;
 }
 
 export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => void }) {
@@ -105,7 +106,14 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
                       {new Date(email.date).toLocaleDateString()}
                     </div>
                   </div>
-                  <div className="text-xs font-medium truncate w-full">{email.subject || '(No Subject)'}</div>
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="text-xs font-medium truncate flex-1">{email.subject || '(No Subject)'}</div>
+                    {email.reply_count && email.reply_count > 1 && (
+                      <Badge variant="secondary" className="text-[10px] leading-none px-1 py-0 h-4 whitespace-nowrap">
+                        {email.reply_count} msgs
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="line-clamp-2 text-xs text-muted-foreground w-full">
                   {email.snippet}

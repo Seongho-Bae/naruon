@@ -65,10 +65,8 @@ class Email(Base):
     subject: Mapped[str | None] = mapped_column(String, nullable=True)
     in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     references: Mapped[str | None] = mapped_column(String, nullable=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     body: Mapped[str] = mapped_column(Text)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     embedding = mapped_column(Vector(1536))
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
