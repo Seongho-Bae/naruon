@@ -10,20 +10,14 @@ from core.exceptions import LLMServiceError
 
 @pytest.fixture
 def mock_openai():
-    with patch("services.llm_service._get_client") as mock_get_client:
+    with patch("services.llm_service.AsyncOpenAI") as mock_async_openai:
         # Mock the AsyncOpenAI client instance
         mock_client_instance = MagicMock()
-        mock_get_client.return_value = mock_client_instance
+        mock_async_openai.return_value = mock_client_instance
         yield mock_client_instance
 
 
-@pytest.fixture(autouse=True)
-def reset_client():
-    # Reset the global client in llm_service before each test
-    import services.llm_service
-
-    services.llm_service._client = None
-    yield
+# Removed reset_client fixture
 
 
 @pytest.mark.asyncio

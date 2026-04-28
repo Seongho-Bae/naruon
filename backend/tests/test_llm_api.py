@@ -1,3 +1,4 @@
+import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from main import app
@@ -11,17 +12,18 @@ class MockSession:
     async def scalar(self, stmt):
         return MockTenantConfig()
 
-async def override_get_db():
-    yield MockSession()
-
-app.dependency_overrides[get_db] = override_get_db
-
-client = TestClient(app)
-
+@pytest.fixture
+def client():
+    async def override_get_db():
+        yield MockSession()
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
 
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
-def test_llm_endpoints_exist(mock_draft, mock_extract):
+def test_llm_endpoints_exist(mock_draft, mock_extract, client):
     from services.llm_service import ExtractionResult
 
     mock_extract.return_value = ExtractionResult(
@@ -37,9 +39,8 @@ def test_llm_endpoints_exist(mock_draft, mock_extract):
     assert resp1.status_code == 200
     assert resp2.status_code == 200
 
-
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
-def test_summarize_endpoint(mock_extract):
+def test_summarize_endpoint(mock_extract, client):
     from services.llm_service import ExtractionResult
 
     mock_extract.return_value = ExtractionResult(
@@ -50,9 +51,8 @@ def test_summarize_endpoint(mock_extract):
     assert resp.status_code == 200
     assert resp.json() == {"summary": "Test summary", "todos": ["Task 1"]}
 
-
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
-def test_draft_endpoint(mock_draft):
+def test_draft_endpoint(mock_draft, client):
     mock_draft.return_value = "This is a draft reply."
 
     resp = client.post(
@@ -61,3 +61,4 @@ def test_draft_endpoint(mock_draft):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
+

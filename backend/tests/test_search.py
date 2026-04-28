@@ -19,12 +19,16 @@ class MockResult:
         return [MockRow(1, "Test Subject", "test@test.com", "Test Body", 1.0)]
 
 
+class MockTenantConfig:
+    def __init__(self):
+        self.openai_api_key = "test-key"
+
 class MockSession:
     async def execute(self, stmt):
         return MockResult()
     
     async def scalar(self, stmt):
-        return None
+        return MockTenantConfig()
 
 
 async def override_get_db():

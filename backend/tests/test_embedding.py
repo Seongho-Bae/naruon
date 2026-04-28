@@ -15,8 +15,10 @@ def test_chunk_text():
 @pytest.mark.asyncio
 async def test_generate_embeddings_success():
     with patch(
-        "services.embedding._openai_client", new_callable=AsyncMock
-    ) as mock_client:
+        "services.embedding.AsyncOpenAI"
+    ) as mock_async_openai:
+        mock_client = mock_async_openai.return_value
+        mock_client.embeddings.create = AsyncMock()
         mock_response = AsyncMock()
         mock_data_1 = AsyncMock()
         mock_data_1.embedding = [0.1, 0.2, 0.3]
@@ -37,9 +39,10 @@ async def test_generate_embeddings_success():
 @pytest.mark.asyncio
 async def test_generate_embeddings_api_error():
     with patch(
-        "services.embedding._openai_client", new_callable=AsyncMock
-    ) as mock_client:
-        mock_client.embeddings.create.side_effect = openai.OpenAIError("API error")
+        "services.embedding.AsyncOpenAI"
+    ) as mock_async_openai:
+        mock_client = mock_async_openai.return_value
+        mock_client.embeddings.create = AsyncMock(side_effect=openai.OpenAIError("API error"))
 
         with patch("services.embedding.settings") as mock_settings:
             mock_settings.OPENAI_EMBEDDING_MODEL = "test-model"

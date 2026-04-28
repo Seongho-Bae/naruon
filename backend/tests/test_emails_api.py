@@ -14,6 +14,12 @@ async def client():
         yield ac
 
 
+class MockTenantConfig:
+    def __init__(self):
+        self.smtp_server = "smtp.example.com"
+        self.smtp_port = 587
+        self.smtp_username = "testuser"
+
 class MockSession:
     def __init__(self, items):
         self.items = items
@@ -35,7 +41,7 @@ class MockSession:
         return MockResult(self.items)
 
     async def scalar(self, query):
-        return None
+        return MockTenantConfig()
 
 
 @pytest.fixture
@@ -102,5 +108,5 @@ def test_send_email_endpoint(mock_send_email):
     assert response.status_code == 200
     assert response.json() == {"status": "success"}
     mock_send_email.assert_called_once_with(
-        "test@example.com", "Re: Test", "This is a reply."
+        "test@example.com", "Re: Test", "This is a reply.", smtp_server="smtp.example.com", smtp_port=587, smtp_username="testuser"
     )
