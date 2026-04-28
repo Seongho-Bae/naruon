@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
+from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
 
@@ -14,11 +15,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/emails")
 
 
+def canonical_thread_key(email: Email) -> str:
+    return (
+        normalize_message_id(email.thread_id)
+        or normalize_message_id(email.message_id)
+        or email.message_id
+    )
+
+
+def thread_lookup_values(thread_id: str) -> list[str]:
+    normalized = normalize_message_id(thread_id) or thread_id
+    return list({thread_id, normalized, f"<{normalized}>"})
+
+
 class EmailListItem(BaseModel):
     id: int
     thread_id: str | None = None
     subject: str | None
     sender: str
+    reply_to: str | None = None
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
@@ -28,6 +43,7 @@ class EmailDetailResponse(BaseModel):
     message_id: str
     thread_id: str | None = None
     sender: str
+    reply_to: str | None = None
     recipients: str | None
     subject: str | None
     date: datetime.datetime
@@ -38,13 +54,14 @@ class EmailDetailResponse(BaseModel):
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
 async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Email).order_by(Email.date.desc()).limit(limit * 3))
+    result = await db.execute(select(Email).order_by(Email.date.desc()))
     emails = result.scalars().all()
+    emails = sorted(emails, key=lambda item: item.date)
 
     grouped = {}
     reply_counts = {}
     for email in emails:
-        group_key = email.thread_id if email.thread_id else email.message_id
+        group_key = canonical_thread_key(email)
         if group_key not in grouped:
             grouped[group_key] = email
             reply_counts[group_key] = 1
@@ -57,16 +74,17 @@ async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
 
     items = []
     for email in sorted_groups:
-        group_key = email.thread_id if email.thread_id else email.message_id
+        group_key = canonical_thread_key(email)
         snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
             EmailListItem(
                 id=email.id,
                 subject=email.subject,
                 sender=email.sender,
+                reply_to=email.reply_to,
                 date=email.date,
                 snippet=snippet,
-                thread_id=email.thread_id,
+                thread_id=group_key,
                 reply_count=reply_counts[group_key],
             )
         )
@@ -83,22 +101,27 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
         id=email.id,
         message_id=email.message_id,
         sender=email.sender,
+        reply_to=email.reply_to,
         recipients=email.recipients,
         subject=email.subject,
         date=email.date,
         body=email.body,
-        thread_id=email.thread_id,
+        thread_id=canonical_thread_key(email),
         in_reply_to=email.in_reply_to,
         references=email.references,
     )
 
 
-@router.get("/thread/{thread_id}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
 async def get_email_thread(thread_id: str, db: AsyncSession = Depends(get_db)):
+    lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
-        select(Email).where(Email.thread_id == thread_id).order_by(Email.date.asc())
+        select(Email)
+        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
+    emails = sorted(emails, key=lambda item: item.date)
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
 
@@ -109,11 +132,12 @@ async def get_email_thread(thread_id: str, db: AsyncSession = Depends(get_db)):
                 id=email.id,
                 message_id=email.message_id,
                 sender=email.sender,
+                reply_to=email.reply_to,
                 recipients=email.recipients,
                 subject=email.subject,
                 date=email.date,
                 body=email.body,
-                thread_id=email.thread_id,
+                thread_id=canonical_thread_key(email),
                 in_reply_to=email.in_reply_to,
                 references=email.references,
             )
@@ -147,17 +171,21 @@ async def send_email_endpoint(
         smtp_port = tenant_config.smtp_port
         smtp_username = tenant_config.smtp_username
         
-        success = await send_email(
+        send_result = await send_email(
             request.to, 
             request.subject, 
             request.body,
             smtp_server=smtp_server,
             smtp_port=smtp_port,
-            smtp_username=smtp_username
+            smtp_username=smtp_username,
+            in_reply_to=request.in_reply_to,
+            references=request.references,
         )
-        if not success:
+        if not send_result:
             raise HTTPException(status_code=500, detail="Failed to send email")
-        return {"status": "success"}
+        return send_result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error sending email: {e}", exc_info=True)
         raise HTTPException(

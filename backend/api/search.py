@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+import datetime
+import logging
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, union_all
 from db.session import get_db
@@ -8,23 +10,44 @@ from services.embedding import generate_embeddings
 from api.auth import get_current_user
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 
 
 class SearchRequest(BaseModel):
     query: str
-    limit: int = 10
+    limit: int = Field(default=10, ge=1, le=50)
 
 
 class SearchResultItem(BaseModel):
     id: int
     subject: str | None
     sender: str
+    date: datetime.datetime
     snippet: str
+    thread_id: str | None = None
+    reply_count: int = 1
     score: float
 
 
 class SearchResponse(BaseModel):
     results: list[SearchResultItem]
+
+
+def thread_group_key():
+    return func.btrim(func.coalesce(Email.thread_id, Email.message_id), "<>")
+
+
+def build_reply_counts_subquery():
+    group_key = thread_group_key()
+    return (
+        select(
+            group_key.label("thread_key"),
+            func.count(Email.id).label("reply_count"),
+        )
+        .select_from(Email)
+        .group_by(group_key)
+        .subquery("thread_counts")
+    )
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -52,13 +75,21 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
+        reply_counts = build_reply_counts_subquery()
 
-        stmt_email = select(
-            Email.id,
-            Email.subject,
-            Email.sender,
-            Email.body.label("content"),
-            hybrid_score_email.label("score"),
+        stmt_email = (
+            select(
+                Email.id,
+                Email.subject,
+                Email.sender,
+                Email.date,
+                thread_group_key().label("thread_id"),
+                reply_counts.c.reply_count,
+                Email.body.label("content"),
+                hybrid_score_email.label("score"),
+            )
+            .select_from(Email)
+            .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
         )
 
         fts_score_att = func.ts_rank_cd(
@@ -73,11 +104,15 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                 Email.id,
                 Email.subject,
                 Email.sender,
+                Email.date,
+                thread_group_key().label("thread_id"),
+                reply_counts.c.reply_count,
                 Attachment.content.label("content"),
                 hybrid_score_att.label("score"),
             )
             .select_from(Attachment)
             .join(Email, Attachment.email_id == Email.id)
+            .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
         )
 
         combined = union_all(stmt_email, stmt_att).cte("combined_search")
@@ -87,6 +122,9 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                 combined.c.id,
                 combined.c.subject,
                 combined.c.sender,
+                combined.c.date,
+                combined.c.thread_id,
+                combined.c.reply_count,
                 combined.c.content,
                 combined.c.score,
             )
@@ -117,7 +155,10 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                     id=row.id,
                     subject=row.subject,
                     sender=row.sender,
+                    date=row.date,
                     snippet=snippet,
+                    thread_id=row.thread_id,
+                    reply_count=row.reply_count or 1,
                     score=float(score) if score is not None else 0.0,
                 )
             )
@@ -126,8 +167,8 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                 break
 
         return SearchResponse(results=search_results)
+    except HTTPException:
+        raise
     except Exception as e:
-        import traceback
-
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Search failed", exc_info=True)
+        raise HTTPException(status_code=500, detail="Search failed") from e

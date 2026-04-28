@@ -1,3 +1,4 @@
+import datetime
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
@@ -12,6 +13,9 @@ class MockRow:
         self.sender = sender
         self.content = content
         self.score = score
+        self.date = datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc)
+        self.thread_id = "thread-123"
+        self.reply_count = 2
 
 
 class MockResult:
@@ -60,3 +64,17 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
     assert len(data["results"]) == 1
     assert data["results"][0]["id"] == 1
     assert data["results"][0]["subject"] == "Test Subject"
+    assert data["results"][0]["date"] == "2026-04-27T10:00:00Z"
+    assert data["results"][0]["thread_id"] == "thread-123"
+    assert data["results"][0]["reply_count"] == 2
+
+
+def test_search_reply_counts_group_by_coalesced_thread_key():
+    from api.search import build_reply_counts_subquery
+
+    subquery = build_reply_counts_subquery()
+    sql = str(subquery.select()).lower()
+
+    assert "btrim(coalesce(emails.thread_id, emails.message_id)" in sql
+    assert "count(emails.id)" in sql
+    assert "group by btrim(coalesce(emails.thread_id, emails.message_id)" in sql

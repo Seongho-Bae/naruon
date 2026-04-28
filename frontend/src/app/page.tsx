@@ -15,7 +15,7 @@ export default function Home() {
     <DashboardLayout>
       <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch">
         <ResizablePanel defaultSize={25} minSize={20}>
-          <EmailList onSelectEmail={setSelectedEmail} />
+          <EmailList onSelectEmail={setSelectedEmail} selectedEmailId={selectedEmail} />
         </ResizablePanel>
         <ResizableHandle withHandle />
         <ResizablePanel defaultSize={50} minSize={30}>

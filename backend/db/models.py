@@ -61,6 +61,7 @@ class Email(Base):
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
+    reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
     subject: Mapped[str | None] = mapped_column(String, nullable=True)
     in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -13,6 +13,7 @@ class EmailData(TypedDict):
     message_id: str
     thread_id: str | None
     sender: str
+    reply_to: str | None
     recipients: str
     subject: str
     in_reply_to: str | None
@@ -117,6 +118,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
         "message_id": message_id,
         "thread_id": thread_id,
         "sender": _sanitize_nul(msg.get("From", "")),
+        "reply_to": _sanitize_nul(msg.get("Reply-To", "")) if msg.get("Reply-To") else None,
         "recipients": _sanitize_nul(msg.get("To", "")),
         "subject": _sanitize_nul(msg.get("Subject", "")),
         "in_reply_to": _sanitize_nul(msg.get("In-Reply-To", "")) if msg.get("In-Reply-To") else None,
