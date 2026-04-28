@@ -1,5 +1,9 @@
 import base64
+import logging
+from email.message import EmailMessage
 from typing import TypedDict
+
+logger = logging.getLogger(__name__)
 
 
 def generate_oauth2_string(user: str, access_token: str) -> bytes:
@@ -8,11 +12,9 @@ def generate_oauth2_string(user: str, access_token: str) -> bytes:
     return base64.b64encode(auth_string.encode("utf-8"))
 
 
-import aiosmtplib
-from email.message import EmailMessage
-import logging
-
-logger = logging.getLogger(__name__)
+def _sanitize_log_value(value: str) -> str:
+    """Remove CR/LF characters from user-provided values before logging."""
+    return value.replace("\r", " ").replace("\n", " ")
 
 
 class SendEmailResult(TypedDict):
@@ -42,17 +44,18 @@ def build_email_message(
 
 
 async def send_email(
-    to_address: str, 
-    subject: str, 
-    body: str, 
-    smtp_server: str | None = None, 
-    smtp_port: int | None = None, 
+    to_address: str,
+    subject: str,
+    body: str,
+    smtp_server: str | None = None,
+    smtp_port: int | None = None,
     smtp_username: str | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
 ) -> SendEmailResult:
     """Sends an email using SMTP."""
-    message = build_email_message(
+    safe_to_address = _sanitize_log_value(to_address)
+    build_email_message(
         to_address=to_address,
         subject=subject,
         body=body,
@@ -75,7 +78,7 @@ async def send_email(
         # )
         # For now, just pretend we sent it to pass the test locally without creds.
         # This is intentionally mocked for development.
-        logger.info("Simulating sending email to %s", to_address)
+        logger.info("Simulating sending email to %s", safe_to_address)
         return {"status": "simulated", "simulated": True}
     except Exception as e:
         raise Exception(f"Failed to send email: {e}")
