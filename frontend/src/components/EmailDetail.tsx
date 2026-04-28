@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { MessagesSquare } from "lucide-react";
 
 interface EmailData {
   id: number;
@@ -286,7 +287,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Conversation History</h3>
-              <Badge variant="secondary" className="text-[10px]">{threadEmails.length > 0 ? threadEmails.length : 1} msgs</Badge>
+              <Badge variant="secondary" className="text-[10px] flex items-center gap-1">
+                <MessagesSquare className="w-3 h-3" />
+                {threadEmails.length > 0 ? threadEmails.length : 1} msgs
+              </Badge>
             </div>
             <div className="space-y-4">
               {(threadEmails.length > 0 ? threadEmails : [email]).map((msg) => (

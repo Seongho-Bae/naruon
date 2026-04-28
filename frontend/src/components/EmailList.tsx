@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { MessagesSquare } from "lucide-react";
 
 interface EmailItem {
   id: number;
@@ -109,7 +110,8 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
                   <div className="flex items-center gap-2 w-full">
                     <div className="text-xs font-medium truncate flex-1">{email.subject || '(No Subject)'}</div>
                     {email.reply_count && email.reply_count > 1 && (
-                      <Badge variant="secondary" className="text-[10px] leading-none px-1 py-0 h-4 whitespace-nowrap">
+                      <Badge variant="secondary" className="text-[10px] leading-none px-1 py-0 h-4 whitespace-nowrap flex items-center gap-1">
+                        <MessagesSquare className="w-3 h-3" />
                         {email.reply_count} msgs
                       </Badge>
                     )}
