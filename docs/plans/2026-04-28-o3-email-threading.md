@@ -32,3 +32,4 @@ We need to implement conversation threading so that replies are grouped together
 - **File:** `frontend/src/components/EmailList.tsx` and `frontend/src/components/EmailDetail.tsx`
 - **Action:** Update `EmailItem` and `EmailData` interfaces to include the new fields. Group emails by `thread_id` in the list view. Update `EmailDetail` to send `in_reply_to` and `references` when replying.
 - **Verification:** Run frontend tests/build to ensure no type errors.
+
