@@ -5,10 +5,16 @@ from cryptography.fernet import Fernet
 from core.config import settings
 from pgvector.sqlalchemy import Vector
 import datetime
+import hashlib
+import base64
+import logging
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-FALLBACK_KEY = b'f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0='
+FALLBACK_KEY = b"f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0="
+
 
 def get_fernet() -> Fernet:
     if settings.ENCRYPTION_KEY:
@@ -16,33 +22,36 @@ def get_fernet() -> Fernet:
         try:
             return Fernet(key)
         except ValueError:
-            return Fernet(key)
+            key_b64 = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
+            return Fernet(key_b64)
     else:
         return Fernet(FALLBACK_KEY)
+
 
 class EncryptedString(TypeDecorator):
     """
     Encrypts string values before saving to the database and decrypts them when retrieving.
     Uses Fernet symmetric encryption.
     """
+
     impl = String
     cache_ok = True
 
     def process_bind_param(self, value, dialect):
         if value is not None:
             f = get_fernet()
-            return f.encrypt(value.encode('utf-8')).decode('utf-8')
+            return f.encrypt(value.encode("utf-8")).decode("utf-8")
         return value
 
     def process_result_value(self, value, dialect):
         if value is not None:
             f = get_fernet()
             try:
-                return f.decrypt(value.encode('utf-8')).decode('utf-8')
+                return f.decrypt(value.encode("utf-8")).decode("utf-8")
             except Exception:
+                logger.warning("Failed to decrypt field in EncryptedString")
                 return value
         return value
-
 
 
 class Email(Base):
@@ -76,10 +85,10 @@ class Attachment(Base):
 
 class TenantConfig(Base):
     __tablename__ = "tenant_configs"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    
+
     # Email settings
     smtp_server: Mapped[str | None] = mapped_column(String, nullable=True)
     smtp_port: Mapped[int | None] = mapped_column(nullable=True)
@@ -88,15 +97,19 @@ class TenantConfig(Base):
     imap_port: Mapped[int | None] = mapped_column(nullable=True)
     pop3_server: Mapped[str | None] = mapped_column(String, nullable=True)
     pop3_port: Mapped[int | None] = mapped_column(nullable=True)
-    
+
     # OAuth and Third Party Settings
     oauth_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    oauth_client_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    oauth_client_secret: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
     oauth_redirect_uri: Mapped[str | None] = mapped_column(String, nullable=True)
-    
+
     openai_api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     google_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    google_client_secret: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    google_client_secret: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
 
     def __repr__(self) -> str:
         return (

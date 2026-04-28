@@ -53,6 +53,7 @@ SECRET_FIELDS = {"oauth_client_secret", "openai_api_key", "google_client_secret"
 async def create_or_update_config(
     config: TenantConfigCreate, db: AsyncSession = Depends(get_db)
 ):
+    # TODO: Add authentication dependency to prevent IDOR (e.g. Depends(get_current_user))
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == config.user_id)
     )
@@ -78,6 +79,7 @@ async def create_or_update_config(
 
 @router.get("", response_model=TenantConfigResponse)
 async def get_config(user_id: str, db: AsyncSession = Depends(get_db)):
+    # TODO: Add authentication dependency to prevent IDOR (e.g. Depends(get_current_user))
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == user_id)
     )
@@ -86,14 +88,10 @@ async def get_config(user_id: str, db: AsyncSession = Depends(get_db)):
     if not db_config:
         return TenantConfigResponse(user_id=user_id)
 
-    response_data = {
-        column.name: getattr(db_config, column.name)
-        for column in TenantConfig.__table__.columns
-        if column.name != "id"
-    }
+    response = TenantConfigResponse.model_validate(db_config)
 
     for secret_field in SECRET_FIELDS:
-        if response_data.get(secret_field):
-            response_data[secret_field] = "********"
+        if getattr(response, secret_field):
+            setattr(response, secret_field, "********")
 
-    return TenantConfigResponse(**response_data)
+    return response
