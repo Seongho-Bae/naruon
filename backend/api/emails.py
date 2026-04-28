@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.session import get_db
-from db.models import Email
+from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
@@ -74,23 +74,27 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/thread/{thread_id}", response_model=dict[str, list[EmailDetailResponse]])
 async def get_email_thread(thread_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Email).where(Email.thread_id == thread_id).order_by(Email.date.asc()))
+    result = await db.execute(
+        select(Email).where(Email.thread_id == thread_id).order_by(Email.date.asc())
+    )
     emails = result.scalars().all()
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
-    
+
     items = []
     for email in emails:
-        items.append(EmailDetailResponse(
-            id=email.id,
-            message_id=email.message_id,
-            sender=email.sender,
-            recipients=email.recipients,
-            subject=email.subject,
-            date=email.date,
-            body=email.body,
-            thread_id=email.thread_id
-        ))
+        items.append(
+            EmailDetailResponse(
+                id=email.id,
+                message_id=email.message_id,
+                sender=email.sender,
+                recipients=email.recipients,
+                subject=email.subject,
+                date=email.date,
+                body=email.body,
+                thread_id=email.thread_id,
+            )
+        )
     return {"thread": items}
 
 
@@ -99,13 +103,34 @@ class SendEmailRequest(BaseModel):
     subject: str
     body: str
 
+
 @router.post("/send")
-async def send_email_endpoint(request: SendEmailRequest, user_id: str | None = None): # TODO: Add authentication
+async def send_email_endpoint(
+    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db)
+):  # TODO: Add authentication
     try:
-        success = await send_email(request.to, request.subject, request.body)
+        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == (user_id or "default")))
+        
+        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+            raise HTTPException(status_code=400, detail="SMTP is not configured")
+            
+        smtp_server = tenant_config.smtp_server
+        smtp_port = tenant_config.smtp_port
+        smtp_username = tenant_config.smtp_username
+        
+        success = await send_email(
+            request.to, 
+            request.subject, 
+            request.body,
+            smtp_server=smtp_server,
+            smtp_port=smtp_port,
+            smtp_username=smtp_username
+        )
         if not success:
             raise HTTPException(status_code=500, detail="Failed to send email")
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error sending email: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An internal error occurred while sending the email")
+        raise HTTPException(
+            status_code=500, detail="An internal error occurred while sending the email"
+        )

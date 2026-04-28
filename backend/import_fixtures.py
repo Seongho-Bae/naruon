@@ -8,6 +8,7 @@ from services.email_parser import parse_eml
 from services.embedding import generate_embeddings
 from sqlalchemy import select
 
+
 async def main():
     fixtures_dir = Path(__file__).parent / "tests" / "fixtures"
     if not fixtures_dir.exists():
@@ -66,20 +67,29 @@ async def main():
 
             # Generate embeddings for attachments
             for att in parsed.get("attachments", []):
-                att_text = att["content"] if att["content"].strip() else "Empty attachment"
+                att_text = (
+                    att["content"] if att["content"].strip() else "Empty attachment"
+                )
                 try:
                     att_emb = (await generate_embeddings([att_text]))[0]
-                    email_obj.attachments.append(Attachment(
-                        filename=att["filename"],
-                        content=att["content"],
-                        embedding=att_emb
-                    ))
+                    email_obj.attachments.append(
+                        Attachment(
+                            filename=att["filename"],
+                            content=att["content"],
+                            embedding=att_emb,
+                        )
+                    )
                 except Exception as e:
-                    print(f"Failed to generate embedding for attachment {att['filename']}: {e}")
+                    print(
+                        f"Failed to generate embedding for attachment {att['filename']}: {e}"
+                    )
 
             session.add(email_obj)
             await session.commit()
-            print(f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments.")
+            print(
+                f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
+            )
+
 
 if __name__ == "__main__":
     asyncio.run(main())

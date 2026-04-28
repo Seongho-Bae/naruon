@@ -5,9 +5,11 @@ from services.exceptions import CalendarServiceError
 
 router = APIRouter(prefix="/api/calendar")
 
+
 class SyncRequest(BaseModel):
     todos: list[str]
     user_token: dict
+
 
 @router.post("/sync")
 async def sync_todos(request: SyncRequest):
