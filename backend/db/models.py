@@ -59,7 +59,7 @@ class Email(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
     subject: Mapped[str | None] = mapped_column(String, nullable=True)

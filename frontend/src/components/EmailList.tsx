@@ -13,7 +13,7 @@ interface EmailItem {
   date: string;
   snippet: string;
   unread?: boolean;
-  thread_id?: string;
+  thread_id?: string; // O3: email threading support
   reply_count?: number;
 }
 

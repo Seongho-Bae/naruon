@@ -14,7 +14,10 @@ interface EmailData {
   sender: string;
   body: string;
   date: string;
-  thread_id?: string;
+  thread_id?: string; // O3: email threading support
+  message_id?: string;
+  in_reply_to?: string;
+  references?: string;
 }
 
 interface LlmData {
@@ -137,7 +140,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         body: JSON.stringify({
           to: email.sender,
           subject: email.subject?.startsWith('Re:') ? email.subject : `Re: ${email.subject || ''}`,
-          body: draft
+          body: draft,
+          in_reply_to: email.message_id,
+          references: email.references ? `${email.references} ${email.message_id}` : email.message_id
         })
       });
       if (!res.ok) throw new Error("Failed to send email");

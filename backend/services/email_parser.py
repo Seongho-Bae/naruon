@@ -96,7 +96,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
     
     # Extract thread_id
     thread_id = None
-    references = msg.get("References")
+    references = msg.get("References") # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
     
     if references:

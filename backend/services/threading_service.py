@@ -10,6 +10,7 @@ async def assign_thread_id(session: AsyncSession, email_data: EmailData) -> str:
     Determine the thread_id for a new email based on in_reply_to and references.
     If no existing match is found, generate a new thread_id.
     """
+    # O3: email threading support
     in_reply_to = email_data.get("in_reply_to")
     references_str = email_data.get("references")
     

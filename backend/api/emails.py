@@ -32,6 +32,8 @@ class EmailDetailResponse(BaseModel):
     subject: str | None
     date: datetime.datetime
     body: str
+    in_reply_to: str | None = None
+    references: str | None = None
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -86,6 +88,8 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
         date=email.date,
         body=email.body,
         thread_id=email.thread_id,
+        in_reply_to=email.in_reply_to,
+        references=email.references,
     )
 
 
@@ -110,6 +114,8 @@ async def get_email_thread(thread_id: str, db: AsyncSession = Depends(get_db)):
                 date=email.date,
                 body=email.body,
                 thread_id=email.thread_id,
+                in_reply_to=email.in_reply_to,
+                references=email.references,
             )
         )
     return {"thread": items}
@@ -119,7 +125,7 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None
+    in_reply_to: str | None = None # O3: email threading support
     references: str | None = None
 
 
