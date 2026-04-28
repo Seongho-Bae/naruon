@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.session import get_db
 from db.models import Email
+from api.auth import get_current_user
 import re
 
 router = APIRouter(prefix="/api/network")
@@ -35,9 +36,13 @@ def extract_emails(text: str | None) -> list[str]:
 
 @router.get("/graph", response_model=GraphResponse)
 async def get_network_graph(
-    limit: int = 500, user_id: str | None = None, db: AsyncSession = Depends(get_db)
+    limit: int = 500, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
 ):
-    # TODO: Add authentication and filter by user_id once implemented
+    if user_id and user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_user_id = user_id or current_user
+
+    # TODO: filter by target_user_id once Email model has user_id
     result = await db.execute(select(Email.sender, Email.recipients).limit(limit))
     rows = result.fetchall()
 

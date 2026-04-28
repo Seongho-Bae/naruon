@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
 import logging
+from api.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +108,14 @@ class SendEmailRequest(BaseModel):
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db)
-):  # TODO: Add authentication
+    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+):
+    if user_id and user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_user_id = user_id or current_user
+
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == (user_id or "default")))
+        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
         
         if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
             raise HTTPException(status_code=400, detail="SMTP is not configured")

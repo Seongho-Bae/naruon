@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel, ConfigDict
@@ -6,6 +6,7 @@ from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
+from api.auth import get_current_user
 
 router = APIRouter(prefix="/api/config")
 
@@ -51,9 +52,13 @@ SECRET_FIELDS = {"oauth_client_secret", "openai_api_key", "google_client_secret"
 
 @router.post("")
 async def create_or_update_config(
-    config: TenantConfigCreate, db: AsyncSession = Depends(get_db)
+    config: TenantConfigCreate, 
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)
 ):
-    # TODO: Add authentication dependency to prevent IDOR (e.g. Depends(get_current_user))
+    if config.user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == config.user_id)
     )
@@ -78,8 +83,14 @@ async def create_or_update_config(
 
 
 @router.get("", response_model=TenantConfigResponse)
-async def get_config(user_id: str, db: AsyncSession = Depends(get_db)):
-    # TODO: Add authentication dependency to prevent IDOR (e.g. Depends(get_current_user))
+async def get_config(
+    user_id: str, 
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user)
+):
+    if user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == user_id)
     )

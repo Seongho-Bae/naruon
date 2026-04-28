@@ -7,6 +7,7 @@ from db.models import Email, Attachment
 from services.email_parser import parse_eml
 from services.embedding import generate_embeddings
 from services.threading_service import assign_thread_id
+import os
 from sqlalchemy import select
 
 
@@ -40,7 +41,8 @@ async def main():
             # Generate embedding for the body
             body_text = parsed["body"] if parsed["body"].strip() else "Empty body"
             try:
-                body_emb = (await generate_embeddings([body_text]))[0]
+                openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+                body_emb = (await generate_embeddings([body_text], openai_api_key=openai_api_key))[0]
             except Exception as e:
                 print(f"Failed to generate embedding for {eml_file}: {e}")
                 continue
@@ -59,13 +61,11 @@ async def main():
 
             email_obj = Email(
                 message_id=parsed["message_id"],
-                thread_id=parsed["thread_id"],
                 sender=parsed["sender"],
                 recipients=parsed["recipients"],
                 subject=parsed["subject"],
                 in_reply_to=parsed.get("in_reply_to"),
                 references=parsed.get("references"),
-                thread_id=thread_id,
                 date=parsed["date"],
                 body=parsed["body"],
                 embedding=body_emb,
@@ -78,7 +78,8 @@ async def main():
                     att["content"] if att["content"].strip() else "Empty attachment"
                 )
                 try:
-                    att_emb = (await generate_embeddings([att_text]))[0]
+                    openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+                    att_emb = (await generate_embeddings([att_text], openai_api_key=openai_api_key))[0]
                     email_obj.attachments.append(
                         Attachment(
                             filename=att["filename"],
