@@ -279,7 +279,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
           <Separator />
           
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Conversation History</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Conversation History</h3>
+              <Badge variant="secondary" className="text-[10px]">{threadEmails.length > 0 ? threadEmails.length : 1} msgs</Badge>
+            </div>
             <div className="space-y-4">
               {(threadEmails.length > 0 ? threadEmails : [email]).map((msg) => (
                 <div key={msg.id} className="rounded-lg border p-4 bg-card text-card-foreground">
