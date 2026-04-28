@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from scripts.import_fixtures import process_zip_file
 
+
 @pytest.mark.asyncio
 async def test_process_zip_file():
     with patch("scripts.import_fixtures.extract_backup_async") as mock_extract:

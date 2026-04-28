@@ -6,6 +6,7 @@ from api.llm import router as llm_router
 from api.calendar import router as calendar_router
 from api.network import router as network_router
 from api.emails import router as emails_router
+from api.tenant_config import router as tenant_config_router
 from services.imap_worker import ImapSyncWorker
 
 imap_worker = ImapSyncWorker()
@@ -25,6 +26,7 @@ app.include_router(llm_router)
 app.include_router(calendar_router)
 app.include_router(network_router)
 app.include_router(emails_router)
+app.include_router(tenant_config_router)
 
 app.add_middleware(
     CORSMiddleware,

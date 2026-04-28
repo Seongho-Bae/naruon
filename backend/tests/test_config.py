@@ -5,20 +5,15 @@ os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test
 
 from core.config import settings
 
-def test_email_config():
-    assert hasattr(settings, "SMTP_SERVER")
-    assert hasattr(settings, "SMTP_PORT")
-    assert hasattr(settings, "IMAP_SERVER")
-    assert hasattr(settings, "IMAP_PORT")
-    assert hasattr(settings, "OAUTH_CLIENT_ID")
-    assert hasattr(settings, "OAUTH_CLIENT_SECRET")
-    assert hasattr(settings, "OAUTH_REDIRECT_URI")
+
+def test_global_config():
+    assert hasattr(settings, "DATABASE_URL")
+    assert hasattr(settings, "DEBUG")
+    assert hasattr(settings, "ENCRYPTION_KEY")
+
 
 def test_openai_config():
     from core.config import settings
-    assert hasattr(settings, "OPENAI_API_KEY")
 
-def test_google_calendar_config():
-    from core.config import settings
-    assert hasattr(settings, "GOOGLE_CLIENT_ID")
-    assert hasattr(settings, "GOOGLE_CLIENT_SECRET")
+    assert hasattr(settings, "OPENAI_EMBEDDING_MODEL")
+    assert hasattr(settings, "OPENAI_MODEL")

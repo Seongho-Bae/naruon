@@ -5,6 +5,7 @@ import pytest
 from services.email_parser import parse_eml
 from services.exceptions import EmailParseError
 
+
 def test_parse_eml_basic():
     eml_content = b"""Message-ID: <123@test.com>
 From: test@test.com\x00
@@ -22,11 +23,12 @@ This is a test email.\x00"""
         parsed = parse_eml(temp_path)
         assert parsed["message_id"] == "<123@test.com>"
         assert parsed["sender"] == "test@test.com"  # NUL removed
-        assert parsed["subject"] == "HelloWorld"    # NUL removed
+        assert parsed["subject"] == "HelloWorld"  # NUL removed
         assert "This is a test email." in parsed["body"]
         assert "\x00" not in parsed["body"]
     finally:
         os.unlink(temp_path)
+
 
 def test_parse_eml_multipart_html_fallback():
     eml_content = b"""Message-ID: <multi@test.com>
@@ -51,6 +53,7 @@ Content-Type: text/html; charset="utf-8"
         assert "<p>This is HTML content</p>" in parsed["body"]
     finally:
         os.unlink(temp_path)
+
 
 def test_parse_eml_missing_and_malformed_date():
     eml_content1 = b"""Message-ID: <nodate@test.com>
@@ -85,6 +88,7 @@ Test."""
     finally:
         os.unlink(temp_path1)
         os.unlink(temp_path2)
+
 
 def test_parse_eml_io_error():
     with pytest.raises(EmailParseError):

@@ -15,42 +15,47 @@ from services.email_parser import parse_eml
 from services.embedding import chunk_text, generate_embeddings
 from services.threading_service import assign_thread_id
 from db.session import AsyncSessionLocal
-from db.models import Email
+from db.models import Email, TenantConfig
+from sqlalchemy import select
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 async def process_zip_file(zip_path: str | Path, session: AsyncSession):
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(f"Extracting {zip_path}...")
         extracted_files = await extract_backup_async(zip_path, temp_dir)
-        
+
         for file_path in extracted_files:
-            if not str(file_path).endswith('.eml'):
+            if not str(file_path).endswith(".eml"):
                 continue
-            
+
             try:
                 email_data = parse_eml(file_path)
             except Exception as e:
                 logger.error(f"Failed to parse {file_path}: {e}")
                 continue
-            
+
             chunks = chunk_text(email_data["body"])
             embedding = None
             if chunks:
                 try:
-                    embeddings = await generate_embeddings([chunks[0]])
+                    tenant_config = await session.scalar(select(TenantConfig).where(TenantConfig.user_id == "default"))
+                    api_key = (tenant_config.openai_api_key if tenant_config and tenant_config.openai_api_key else os.getenv("OPENAI_API_KEY")) or ""
+                    embeddings = await generate_embeddings([chunks[0]], api_key)
                     if embeddings:
                         embedding = embeddings[0]
                 except Exception as e:
-                    logger.error(f"Failed to generate embedding for {email_data['message_id']}: {e}")
-            
+                    logger.error(
+                        f"Failed to generate embedding for {email_data['message_id']}: {e}"
+                    )
+
             # Upsert into database
             thread_id = await assign_thread_id(session, email_data)
             
             stmt = insert(Email).values(
                 message_id=email_data["message_id"],
-                thread_id=email_data["thread_id"],
                 sender=email_data["sender"],
                 recipients=email_data["recipients"],
                 subject=email_data["subject"],
@@ -59,12 +64,11 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 thread_id=thread_id,
                 date=email_data["date"],
                 body=email_data["body"],
-                embedding=embedding
+                embedding=embedding,
             )
             stmt = stmt.on_conflict_do_update(
-                index_elements=['message_id'],
+                index_elements=["message_id"],
                 set_=dict(
-                    thread_id=stmt.excluded.thread_id,
                     sender=stmt.excluded.sender,
                     recipients=stmt.excluded.recipients,
                     subject=stmt.excluded.subject,
@@ -73,25 +77,27 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     thread_id=stmt.excluded.thread_id,
                     date=stmt.excluded.date,
                     body=stmt.excluded.body,
-                    embedding=stmt.excluded.embedding
-                )
+                    embedding=stmt.excluded.embedding,
+                ),
             )
             await session.execute(stmt)
-            
+
         await session.commit()
         logger.info(f"Finished processing {zip_path}")
+
 
 async def main():
     root_dir = Path(__file__).resolve().parent.parent.parent
     fixtures_dir = root_dir / "secret_fixtures"
-    
+
     if not fixtures_dir.exists():
         logger.error(f"Fixtures directory {fixtures_dir} does not exist.")
         return
-        
+
     async with AsyncSessionLocal() as session:
         for zip_file in fixtures_dir.glob("*.zip"):
             await process_zip_file(zip_file, session)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
