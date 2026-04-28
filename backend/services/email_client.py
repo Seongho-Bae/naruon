@@ -43,7 +43,8 @@ async def send_email(
         # )
         # For now, just pretend we sent it to pass the test locally without creds.
         # This is intentionally mocked for development.
-        logger.info(f"Simulating sending email to {to_address}")
+        safe_to_address = to_address.replace("\r", "").replace("\n", "")
+        logger.info("Simulating sending email to %s", safe_to_address)
         return True
     except Exception as e:
         raise Exception(f"Failed to send email: {e}")
