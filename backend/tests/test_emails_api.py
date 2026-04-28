@@ -87,6 +87,16 @@ async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Em
     assert response.json()["id"] == sample_email.id
 
 
+@pytest.mark.asyncio
+async def test_get_email_thread(client: AsyncClient, db_session, sample_email: Email):
+    response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert "thread" in data
+    assert len(data["thread"]) == 1
+    assert data["thread"][0]["id"] == sample_email.id
+
+
 from unittest.mock import patch
 
 
