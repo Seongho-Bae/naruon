@@ -4,6 +4,7 @@ from httpx import AsyncClient, ASGITransport
 from db.models import Email
 from main import app
 import datetime
+from unittest.mock import patch
 
 
 @pytest_asyncio.fixture
@@ -247,7 +248,26 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
     assert response.json()["thread"][0]["thread_id"] == "root/part@example.com"
 
 
-from unittest.mock import patch
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path",
+    ["/api/emails?limit=10", "/api/emails/1", "/api/emails/thread/thread123"],
+)
+async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path: str):
+    from api.emails import get_current_user as emails_get_current_user
+
+    calls = []
+
+    async def auth_override():
+        calls.append("hit")
+        return "authorized-user"
+
+    app.dependency_overrides[emails_get_current_user] = auth_override
+
+    response = await client.get(path)
+
+    assert response.status_code == 200
+    assert calls == ["hit"]
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

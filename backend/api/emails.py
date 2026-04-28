@@ -53,7 +53,11 @@ class EmailDetailResponse(BaseModel):
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
-async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
+async def get_emails(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     result = await db.execute(select(Email).order_by(Email.date.desc()))
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
@@ -92,7 +96,11 @@ async def get_emails(limit: int = 50, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{email_id}", response_model=EmailDetailResponse)
-async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
+async def get_email(
+    email_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     result = await db.execute(select(Email).where(Email.id == email_id))
     email = result.scalar_one_or_none()
     if not email:
@@ -113,7 +121,11 @@ async def get_email(email_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
-async def get_email_thread(thread_id: str, db: AsyncSession = Depends(get_db)):
+async def get_email_thread(
+    thread_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
