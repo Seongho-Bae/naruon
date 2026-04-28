@@ -15,22 +15,21 @@ router = APIRouter(prefix="/api/emails")
 
 class EmailListItem(BaseModel):
     id: int
+    thread_id: str | None = None
     subject: str | None
     sender: str
     date: datetime.datetime
     snippet: str
-    thread_id: str | None = None
-
 
 class EmailDetailResponse(BaseModel):
     id: int
     message_id: str
+    thread_id: str | None = None
     sender: str
     recipients: str | None
     subject: str | None
     date: datetime.datetime
     body: str
-    thread_id: str | None = None
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -102,6 +101,8 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
+    in_reply_to: str | None = None
+    references: str | None = None
 
 
 @router.post("/send")

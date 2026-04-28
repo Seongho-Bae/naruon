@@ -13,8 +13,10 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from services.archive import extract_backup_async
 from services.email_parser import parse_eml
 from services.embedding import chunk_text, generate_embeddings
+from services.threading_service import assign_thread_id
 from db.session import AsyncSessionLocal
-from db.models import Email
+from db.models import Email, TenantConfig
+from sqlalchemy import select
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -39,7 +41,9 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             embedding = None
             if chunks:
                 try:
-                    embeddings = await generate_embeddings([chunks[0]])
+                    tenant_config = await session.scalar(select(TenantConfig).where(TenantConfig.user_id == "default"))
+                    api_key = (tenant_config.openai_api_key if tenant_config and tenant_config.openai_api_key else os.getenv("OPENAI_API_KEY")) or ""
+                    embeddings = await generate_embeddings([chunks[0]], api_key)
                     if embeddings:
                         embedding = embeddings[0]
                 except Exception as e:
@@ -48,11 +52,16 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     )
 
             # Upsert into database
+            thread_id = await assign_thread_id(session, email_data)
+            
             stmt = insert(Email).values(
                 message_id=email_data["message_id"],
                 sender=email_data["sender"],
                 recipients=email_data["recipients"],
                 subject=email_data["subject"],
+                in_reply_to=email_data.get("in_reply_to"),
+                references=email_data.get("references"),
+                thread_id=thread_id,
                 date=email_data["date"],
                 body=email_data["body"],
                 embedding=embedding,
@@ -63,6 +72,9 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     sender=stmt.excluded.sender,
                     recipients=stmt.excluded.recipients,
                     subject=stmt.excluded.subject,
+                    in_reply_to=stmt.excluded.in_reply_to,
+                    references=stmt.excluded.references,
+                    thread_id=stmt.excluded.thread_id,
                     date=stmt.excluded.date,
                     body=stmt.excluded.body,
                     embedding=stmt.excluded.embedding,

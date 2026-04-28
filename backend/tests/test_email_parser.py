@@ -93,3 +93,43 @@ Test."""
 def test_parse_eml_io_error():
     with pytest.raises(EmailParseError):
         parse_eml("/path/to/nonexistent/file.eml")
+
+def test_parse_eml_thread_id():
+    # 1. Has References
+    eml1 = b"""Message-ID: <msg1@test.com>
+References: <ref1@test.com> <ref2@test.com>
+From: test@test.com
+To: user@test.com
+Subject: Test
+
+Test"""
+    # 2. No References, has In-Reply-To
+    eml2 = b"""Message-ID: <msg2@test.com>
+In-Reply-To: <ref3@test.com>
+From: test@test.com
+To: user@test.com
+Subject: Test
+
+Test"""
+    # 3. Neither -> use Message-ID
+    eml3 = b"""Message-ID: <msg3@test.com>
+From: test@test.com
+To: user@test.com
+Subject: Test
+
+Test"""
+
+    for i, content in enumerate([eml1, eml2, eml3]):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+            f.write(content)
+            temp_path = f.name
+        try:
+            parsed = parse_eml(temp_path)
+            if i == 0:
+                assert parsed["thread_id"] == "<ref1@test.com>"
+            elif i == 1:
+                assert parsed["thread_id"] == "<ref3@test.com>"
+            elif i == 2:
+                assert parsed["thread_id"] == "<msg3@test.com>"
+        finally:
+            os.unlink(temp_path)

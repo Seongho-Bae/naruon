@@ -59,9 +59,13 @@ class Email(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender: Mapped[str] = mapped_column(String)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
     subject: Mapped[str | None] = mapped_column(String, nullable=True)
+    in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
+    references: Mapped[str | None] = mapped_column(String, nullable=True)
+    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     body: Mapped[str] = mapped_column(Text)
     thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)

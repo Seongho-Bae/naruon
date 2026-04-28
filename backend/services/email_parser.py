@@ -11,9 +11,12 @@ class EmailData(TypedDict):
     """Parsed email data structure."""
 
     message_id: str
+    thread_id: str | None
     sender: str
     recipients: str
     subject: str
+    in_reply_to: str | None
+    references: str | None
     date: datetime.datetime
     body: str
     attachments: list[dict]
@@ -88,12 +91,36 @@ def parse_eml(file_path: str | Path) -> EmailData:
 
     if not parsed_date:
         parsed_date = datetime.datetime.now(datetime.timezone.utc)
+        
+    message_id = _sanitize_nul(msg.get("Message-ID", ""))
+    
+    # Extract thread_id
+    thread_id = None
+    references = msg.get("References")
+    in_reply_to = msg.get("In-Reply-To")
+    
+    if references:
+        # Get the first reference as the root thread ID
+        refs = references.split()
+        if refs:
+            thread_id = _sanitize_nul(refs[0])
+    
+    if not thread_id and in_reply_to:
+        in_reply_to_list = in_reply_to.split()
+        if in_reply_to_list:
+            thread_id = _sanitize_nul(in_reply_to_list[0])
+            
+    if not thread_id:
+        thread_id = message_id
 
     return {
-        "message_id": _sanitize_nul(msg.get("Message-ID", "")),
+        "message_id": message_id,
+        "thread_id": thread_id,
         "sender": _sanitize_nul(msg.get("From", "")),
         "recipients": _sanitize_nul(msg.get("To", "")),
         "subject": _sanitize_nul(msg.get("Subject", "")),
+        "in_reply_to": _sanitize_nul(msg.get("In-Reply-To", "")) if msg.get("In-Reply-To") else None,
+        "references": _sanitize_nul(msg.get("References", "")) if msg.get("References") else None,
         "date": parsed_date,
         "body": _sanitize_nul(body),
         "attachments": attachments,
