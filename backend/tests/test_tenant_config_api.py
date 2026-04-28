@@ -45,13 +45,13 @@ def test_tenant_config_endpoint(client, mock_db):
         "smtp_server": "smtp.example.com",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post("/api/config", json=post_payload)
+    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "test_user"})
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
     assert "test_user" in mock_db.objects
 
-    get_response = client.get("/api/config", params={"user_id": "test_user"})
+    get_response = client.get("/api/config", params={"user_id": "test_user"}, headers={"X-User-Id": "test_user"})
     assert get_response.status_code == 200
     data = get_response.json()
     assert data["user_id"] == "test_user"

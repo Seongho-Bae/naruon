@@ -5,6 +5,7 @@ from sqlalchemy import select
 from fastapi import Depends
 from db.session import get_db
 from db.models import TenantConfig
+from api.auth import get_current_user
 from services.llm_service import (
     extract_todos_and_summary,
     draft_reply,
@@ -25,10 +26,13 @@ class DraftRequest(BaseModel):
 
 
 @router.post("/summarize", response_model=ExtractionResult)
-async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db)):
-    # TODO: Add Depends(get_current_user)
+async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+    if user_id and user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_user_id = user_id or current_user
+
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == (user_id or "default")))
+        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
             
@@ -47,10 +51,13 @@ async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = No
 
 
 @router.post("/draft")
-async def draft_endpoint(request: DraftRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db)):
-    # TODO: Add Depends(get_current_user)
+async def draft_endpoint(request: DraftRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+    if user_id and user_id != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_user_id = user_id or current_user
+
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == (user_id or "default")))
+        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
             
