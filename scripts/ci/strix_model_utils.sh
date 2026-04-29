@@ -75,15 +75,18 @@ normalize_model() {
 		return 0
 	fi
 
+	if is_vertex_resource_path "$model"; then
+		local provider
+		provider="$(sanitize_provider_name "vertex_ai")" || return $?
+		printf '%s/%s\n' "$provider" "$(extract_vertex_model_id "$model")"
+		return 0
+	fi
+
 	local provider="${DEFAULT_PROVIDER:-}"
 	if [ -z "$provider" ]; then
 		provider="vertex_ai"
 	fi
-
-	if is_vertex_resource_path "$model"; then
-		printf '%s/%s\n' "$provider" "$(extract_vertex_model_id "$model")"
-		return 0
-	fi
+	provider="$(sanitize_provider_name "$provider")" || return $?
 
 	case "$model" in
 	projects/* | models/* | publishers/*)

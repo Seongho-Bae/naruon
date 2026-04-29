@@ -34,7 +34,9 @@ class SearchResponse(BaseModel):
 
 
 def thread_group_key():
-    return func.btrim(func.coalesce(Email.thread_id, Email.message_id), "<>")
+    normalized_thread_id = func.nullif(func.btrim(func.btrim(Email.thread_id), "<>"), "")
+    normalized_message_id = func.nullif(func.btrim(func.btrim(Email.message_id), "<>"), "")
+    return func.coalesce(normalized_thread_id, normalized_message_id)
 
 
 def build_reply_counts_subquery():

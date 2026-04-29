@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -45,12 +45,17 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const threadRequestIdRef = useRef(0);
 
   const fetchThread = useCallback(async (currentEmail: EmailData) => {
+    const requestId = threadRequestIdRef.current + 1;
+    threadRequestIdRef.current = requestId;
+    const isLatestThreadRequest = () => requestId === threadRequestIdRef.current;
+
     setThreadError(null);
 
     if (!currentEmail.thread_id) {
-      setThreadEmails([currentEmail]);
+      if (isLatestThreadRequest()) setThreadEmails([currentEmail]);
       return;
     }
 
@@ -59,13 +64,15 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       const threadRes = await fetch(buildThreadUrl(API_URL, currentEmail.thread_id));
       if (!threadRes.ok) throw new Error("Failed to fetch thread");
       const threadJson = await threadRes.json();
+      if (!isLatestThreadRequest()) return;
       setThreadEmails(threadJson.thread || []);
     } catch (err) {
+      if (!isLatestThreadRequest()) return;
       console.error("Error fetching thread:", err);
       setThreadError("Conversation could not load.");
       setThreadEmails([currentEmail]);
     } finally {
-      setThreadLoading(false);
+      if (isLatestThreadRequest()) setThreadLoading(false);
     }
   }, []);
 
@@ -75,6 +82,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     let isMounted = true;
 
     const fetchData = async () => {
+      threadRequestIdRef.current += 1;
       setLoading(true);
       setEmail(null);
       setThreadEmails([]);

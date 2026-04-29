@@ -54,6 +54,10 @@ class MockSession:
 
 
 class LimitAwareMockSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.last_limit_value = None
+
     async def execute(self, query):
         class MockResult:
             def __init__(self, rows):
@@ -70,6 +74,7 @@ class LimitAwareMockSession(MockSession):
 
         limit_clause = getattr(query, "_limit_clause", None)
         limit_value = getattr(limit_clause, "value", None)
+        self.last_limit_value = limit_value
         rows = self.items[:limit_value] if limit_value else self.items
         return MockResult(rows)
 
@@ -152,6 +157,29 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     data = response.json()["emails"]
     assert [item["thread_id"] for item in data] == ["hot-thread", "second-thread"]
     assert data[0]["reply_count"] == 6
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [0, -1])
+async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit: int):
+    response = await client.get(f"/api/emails?limit={limit}")
+
+    assert response.status_code == 422
+    assert "limit" in response.text
+
+
+@pytest.mark.asyncio
+async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+    from db.session import get_db
+
+    session = LimitAwareMockSession(db_session.items)
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    assert session.last_limit_value is not None
+    assert session.last_limit_value >= 10
 
 
 @pytest.mark.asyncio
@@ -326,3 +354,24 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
     assert response.status_code == 400
     assert response.json() == {"detail": "SMTP is not configured"}
+
+
+@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
+def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
+    from main import app
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/emails/send",
+        json={
+            "to": "test@example.com",
+            "subject": "Re: Test",
+            "body": "This is a reply.",
+        },
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Failed to send email"}
+    mock_send_email.assert_called_once()

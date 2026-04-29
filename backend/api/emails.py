@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
 from db.session import get_db
@@ -54,11 +54,14 @@ class EmailDetailResponse(BaseModel):
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
 async def get_emails(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    result = await db.execute(select(Email).order_by(Email.date.desc()))
+    candidate_window = min(max(limit * 10, 200), 2000)
+    result = await db.execute(
+        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+    )
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
 
@@ -193,7 +196,7 @@ async def send_email_endpoint(
             in_reply_to=request.in_reply_to,
             references=request.references,
         )
-        if not send_result:
+        if send_result.get("status") not in {"sent", "simulated"}:
             raise HTTPException(status_code=500, detail="Failed to send email")
         return send_result
     except HTTPException:

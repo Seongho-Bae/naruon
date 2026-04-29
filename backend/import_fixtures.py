@@ -73,7 +73,12 @@ async def import_eml_file(session, eml_file: Path) -> bool:
             print(f"Failed to generate embedding for attachment {att['filename']}: {e}")
 
     session.add(email_obj)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        print(f"Failed to commit {eml_file}: {e}")
+        return False
     print(f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments.")
     return True
 

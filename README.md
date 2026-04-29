@@ -6,10 +6,10 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 
 ```bash
 cp .env.example .env
-docker compose up -d --build
+POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
 docker compose exec backend python import_fixtures.py
 curl -s http://localhost:8000/api/emails
-open http://localhost:3000
+python3 -m webbrowser http://localhost:3000
 ```
 
 What you should see: the fixture import loads a three-message `Quarterly plan` conversation. `/api/emails` returns one threaded inbox item with `reply_count` greater than 1, and the frontend shows conversation history oldest to newest.

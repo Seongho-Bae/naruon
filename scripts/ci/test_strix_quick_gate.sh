@@ -3315,6 +3315,36 @@ assert_vertex_extract() {
 	fi
 }
 
+assert_normalized_model() {
+	local label="$1" model="$2" default_provider="$3" expected="$4"
+	local actual rc old_default_provider="${DEFAULT_PROVIDER-__UNSET__}"
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	DEFAULT_PROVIDER="$default_provider"
+	set +e
+	actual="$(normalize_model "$model")"
+	rc=$?
+	set -e
+
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	if [ "$rc" -ne 0 ]; then
+		record_failure "normalize_model($label) rc=$rc model='$model'"
+		return
+	fi
+	if [ "$actual" != "$expected" ]; then
+		record_failure "normalize_model($label): got '$actual' want '$expected'"
+	fi
+}
+
 # Valid paths — should return 0
 assert_vertex_path "models/<id>" "models/gemini-2.5-pro" 0
 assert_vertex_path "publishers/<p>/models/<id>" "publishers/google/models/gemini-2.5-pro" 0
@@ -3341,6 +3371,14 @@ assert_vertex_extract "projects/…/publishers/…/models/<id>" "projects/my-pro
 # extract_vertex_model_id — non-vertex paths return as-is
 assert_vertex_extract "non-vertex-passthrough" "deepseek/models/deepseek-r1" "deepseek/models/deepseek-r1"
 assert_vertex_extract "plain-model-passthrough" "gemini-2.5-pro" "gemini-2.5-pro"
+
+# Explicit Vertex resource paths must remain Vertex models even when the default
+# provider points at a non-Vertex provider.
+assert_normalized_model \
+	"vertex-resource-ignores-nonvertex-default-provider" \
+	"projects/my-proj/locations/us-central1/publishers/google/models/gemini-2.5-pro" \
+	"anthropic" \
+	"vertex_ai/gemini-2.5-pro"
 
 # Whitespace in paths — must be rejected (SAST word-splitting guard)
 assert_vertex_path "space-in-project" "projects/my proj/locations/us/models/foo" 1
