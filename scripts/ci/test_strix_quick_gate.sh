@@ -507,6 +507,37 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	gemini-timeout-fallback-success)
+		case "${STRIX_LLM:-}" in
+		gemini/timeout-fallback-primary)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+			;;
+		gemini/fallback-one)
+			echo "scan ok after gemini fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini timeout fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 39
+			;;
+		esac
+		;;
+	gemini-zero-findings-timeout-fallback-fails)
+		case "${STRIX_LLM:-}" in
+		gemini/zero-timeout-primary|gemini/fallback-one)
+			echo "Vulnerabilities 0"
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+			;;
+		*)
+			echo "Error: gemini zero-finding fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 40
+			;;
+		esac
+		;;
 	service-unavailable-no-llm-marker-nonrecoverable)
 		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
 		echo 'target application high demand response'
@@ -1435,12 +1466,12 @@ EOF
 		printf '%s' "$llm_api_base_source" >"$llm_api_base_file"
 		env_cmd+=(LLM_API_BASE_FILE="$llm_api_base_file")
 	fi
-	# Only export STRIX_VERTEX_FALLBACK_MODELS when a non-empty value is
-	# provided so that the gate's ${STRIX_VERTEX_FALLBACK_MODELS+x} check
-	# correctly distinguishes "unset → use defaults" from "set to empty →
-	# disable fallbacks".
+	# Only export fallback variables when a non-empty value is provided so the
+	# gate's ${VAR+x} checks correctly distinguish "unset → use defaults" from
+	# "set to empty → disable fallbacks".
 	if [ -n "$fallback_models" ]; then
 		env_cmd+=(STRIX_VERTEX_FALLBACK_MODELS="$fallback_models")
+		env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$fallback_models")
 	fi
 	if [ -n "$custom_source_dirs" ]; then
 		env_cmd+=(STRIX_SOURCE_DIRS="$custom_source_dirs")
@@ -2200,6 +2231,40 @@ run_gate_case "gemini-timeout-retry-same-model-success" \
 	"__DEFAULT__" \
 	"" \
 	"1"
+
+run_gate_case "gemini-timeout-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
+	"gemini/zero-timeout-primary" \
+	"gemini/fallback-one" \
+	"1" \
+	"Configured model and fallback models were unavailable." \
+	"2" \
+	"gemini/zero-timeout-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
 run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
 	"custom/service-unavailable-primary" \

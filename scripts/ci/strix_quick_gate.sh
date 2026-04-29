@@ -1125,6 +1125,37 @@ is_vertex_model() {
 	esac
 }
 
+is_gemini_model() {
+	case "$1" in
+	gemini/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+fallback_models_raw_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
+		else
+			printf '%s\n' "$STRIX_VERTEX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		printf '%s\n' "${STRIX_GEMINI_FALLBACK_MODELS:-}"
+		return 0
+	fi
+
+	printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -1882,8 +1913,10 @@ is_hallucinated_endpoint_finding() {
 	return 0
 }
 
-is_vertex_retryable_error() {
-	if is_vertex_not_found_error; then
+is_model_retryable_error() {
+	local model="$1"
+
+	if is_vertex_model "$model" && is_vertex_not_found_error; then
 		return 0
 	fi
 
@@ -1939,21 +1972,12 @@ run_current_target_scan() {
 		;;
 	esac
 
-	if ! is_vertex_model "$PRIMARY_MODEL"; then
+	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
 	fi
 
-	if ! is_vertex_retryable_error; then
-		echo "Strix quick scan failed with a non-recoverable error." >&2
-		return 1
-	fi
-
-	if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
-		FALLBACK_MODELS_RAW="vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
-	else
-		FALLBACK_MODELS_RAW="$STRIX_VERTEX_FALLBACK_MODELS"
-	fi
+	FALLBACK_MODELS_RAW="$(fallback_models_raw_for_model "$PRIMARY_MODEL")"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\r'/ }"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\n'/ }"
 	read -r -a FALLBACK_MODELS <<<"$FALLBACK_MODELS_RAW"
@@ -1969,7 +1993,11 @@ run_current_target_scan() {
 		fi
 
 		fallback_tried=1
-		echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		if is_vertex_model "$PRIMARY_MODEL"; then
+			echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		else
+			echo "Primary model unavailable; retrying with fallback '$candidate'."
+		fi
 		if run_strix_with_transient_retry "$candidate"; then
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
@@ -1989,13 +2017,13 @@ run_current_target_scan() {
 			;;
 		esac
 
-		if ! is_vertex_retryable_error; then
+		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2
 			return 1
 		fi
 		done
 
-	if should_allow_pull_request_infra_zero_finding_bypass; then
+	if is_vertex_model "$PRIMARY_MODEL" && should_allow_pull_request_infra_zero_finding_bypass; then
 		return 0
 	fi
 
@@ -2007,7 +2035,11 @@ run_current_target_scan() {
 		fi
 	fi
 
-	echo "Configured Vertex model and fallback models were unavailable." >&2
+	if is_vertex_model "$PRIMARY_MODEL"; then
+		echo "Configured Vertex model and fallback models were unavailable." >&2
+	else
+		echo "Configured model and fallback models were unavailable." >&2
+	fi
 	return 1
 }
 

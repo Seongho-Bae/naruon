@@ -209,7 +209,8 @@ jobs:
           GEMINI_LOCATION: GLOBAL
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
           LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
-          STRIX_VERTEX_FALLBACK_MODELS: "gemini/gemini-pro-3.1-preview"
+          STRIX_GEMINI_FALLBACK_MODELS: "gemini/gemini-2.5-flash gemini/gemini-2.5-pro"
+          STRIX_VERTEX_FALLBACK_MODELS: "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
           STRIX_TARGET_PATH: ./
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: ${{ github.event_name == 'push' && 'low' || 'minimal' }}
