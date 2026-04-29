@@ -20,6 +20,29 @@ interface NetworkData {
   edges: Edge[];
 }
 
+function textOnlyTooltip(value: unknown): HTMLElement {
+  const tooltip = document.createElement('div');
+  tooltip.textContent = value == null ? '' : String(value);
+  return tooltip;
+}
+
+function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
+  const sanitized = { ...item };
+
+  if (Object.prototype.hasOwnProperty.call(item, 'title')) {
+    sanitized.title = textOnlyTooltip(item.title);
+  }
+
+  return sanitized;
+}
+
+function sanitizeNetworkData(data: NetworkData): NetworkData {
+  return {
+    nodes: data.nodes.map(sanitizeGraphItem),
+    edges: data.edges.map(sanitizeGraphItem),
+  };
+}
+
 export default function NetworkGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<NetworkData>({ nodes: [], edges: [] });
@@ -35,7 +58,7 @@ export default function NetworkGraph() {
         return res.json();
       })
       .then((json: NetworkData) => {
-        setData(json);
+        setData(sanitizeNetworkData(json));
         setError(null);
       })
       .catch((err) => {
