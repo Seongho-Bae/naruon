@@ -37,6 +37,9 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     environment:
+      # NEXT_PUBLIC_API_URL is baked into browser-side client code. Keep this
+      # host-reachable URL for local Compose; http://backend:8000 is only
+      # resolvable inside the Docker network, not from the user's browser.
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
       - backend

@@ -35,4 +35,7 @@ def test_readme_uses_cross_platform_browser_command():
     readme = (REPO_ROOT / "README.md").read_text()
 
     assert "open http://localhost:3000" not in readme
-    assert "python3 -m webbrowser http://localhost:3000" in readme
+    assert (
+        "python -m webbrowser http://localhost:3000" in readme
+        or "python3 -m webbrowser http://localhost:3000" in readme
+    )

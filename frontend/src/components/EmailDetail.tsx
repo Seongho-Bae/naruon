@@ -55,7 +55,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setThreadError(null);
 
     if (!currentEmail.thread_id) {
-      if (isLatestThreadRequest()) setThreadEmails([currentEmail]);
+      if (isLatestThreadRequest()) {
+        setThreadLoading(false);
+        setThreadEmails([currentEmail]);
+      }
       return;
     }
 

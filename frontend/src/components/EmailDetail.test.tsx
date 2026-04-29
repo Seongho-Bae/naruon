@@ -58,7 +58,7 @@ type Deferred<T> = {
 type TestEmail = {
   id: number;
   message_id: string;
-  thread_id: string;
+  thread_id: string | null;
   sender: string;
   recipients: string;
   subject: string;
@@ -216,5 +216,82 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("Thread B sibling body");
     expect(container.textContent).toContain("2 msgs");
     expect(container.textContent).not.toContain("Thread A stale sibling body");
+  });
+
+  it("clears conversation loading when the latest email has no thread", async () => {
+    const threadedEmail: TestEmail = {
+      id: 1,
+      message_id: "<threaded@example.com>",
+      thread_id: "thread-a",
+      sender: "threaded@example.com",
+      recipients: "user@example.com",
+      subject: "Threaded",
+      date: "2026-04-27T10:00:00Z",
+      body: "Threaded body",
+    };
+    const standaloneEmail: TestEmail = {
+      id: 3,
+      message_id: "<standalone@example.com>",
+      thread_id: null,
+      sender: "standalone@example.com",
+      recipients: "user@example.com",
+      subject: "Standalone",
+      date: "2026-04-27T12:00:00Z",
+      body: "Standalone body",
+    };
+
+    const threadedEmailResponse = deferred<ReturnType<typeof jsonResponse>>();
+    const threadResponse = deferred<ReturnType<typeof jsonResponse>>();
+    const standaloneEmailResponse = deferred<ReturnType<typeof jsonResponse>>();
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/1")) return threadedEmailResponse.promise;
+      if (url.endsWith("/api/emails/3")) return standaloneEmailResponse.promise;
+      if (url.endsWith("/api/emails/thread/thread-a")) return threadResponse.promise;
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={1} />);
+    });
+
+    await act(async () => {
+      threadedEmailResponse.resolve(jsonResponse(threadedEmail));
+      await threadedEmailResponse.promise;
+      await Promise.resolve();
+    });
+
+    await waitForCondition(() =>
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).endsWith("/api/emails/thread/thread-a"),
+      ),
+    );
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={3} />);
+    });
+
+    await act(async () => {
+      standaloneEmailResponse.resolve(jsonResponse(standaloneEmail));
+      await standaloneEmailResponse.promise;
+      await Promise.resolve();
+    });
+
+    await waitForCondition(() =>
+      container?.textContent?.includes("Standalone body") ?? false,
+    );
+
+    expect(container.textContent).toContain("Standalone body");
+    expect(container.textContent).toContain("1 msgs");
+    expect(container.textContent).not.toContain("Loading conversation...");
   });
 });
