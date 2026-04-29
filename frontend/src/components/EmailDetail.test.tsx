@@ -345,6 +345,7 @@ describe("EmailDetail", () => {
     );
 
     expect(container.textContent).toContain("판단 포인트");
+    expect(container.textContent).toContain("4개 점검");
     expect(container.textContent).toContain("대화 흐름 2건");
     expect(container.textContent).toContain("실행 항목 2개");
     expect(container.textContent).toContain("회신 대상 확인");

@@ -25,9 +25,7 @@ interface LlmData {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-/**
- * Builds the Naruon review checklist from the currently selected email context.
- */
+/** Builds the Naruon review checklist from the selected email context. */
 function buildDecisionPoints(
   email: EmailData,
   conversationMessages: EmailData[],
@@ -52,6 +50,7 @@ function buildDecisionPoints(
   return points;
 }
 
+/** Renders the selected email, conversation context, and reply actions. */
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   const decisionPointsHeadingId = useId();
   const [email, setEmail] = useState<EmailData | null>(null);
@@ -304,7 +303,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-xl bg-chart-3/10 text-chart-3" aria-hidden="true">◎</span>
               <h3 id={decisionPointsHeadingId} className="text-sm font-black text-chart-3">판단 포인트</h3>
-              <Badge variant="secondary" className="border border-chart-3/10 bg-chart-3/10 text-[10px] text-chart-3">{decisionPoints.length} Checks</Badge>
+              <Badge variant="secondary" className="border border-chart-3/10 bg-chart-3/10 text-[10px] text-chart-3">{decisionPoints.length}개 점검</Badge>
             </div>
             <ul className="space-y-2 text-sm" aria-labelledby={decisionPointsHeadingId}>
               {decisionPoints.map((point) => (
