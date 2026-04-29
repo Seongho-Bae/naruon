@@ -351,9 +351,12 @@ describe("EmailDetail", () => {
 
     const decisionHeading = Array.from(container.querySelectorAll("h3"))
       .find((heading) => heading.textContent === "판단 포인트");
-    const decisionList = container.querySelector<HTMLUListElement>("ul[aria-labelledby]");
 
     expect(decisionHeading?.id).toBeTruthy();
+    const decisionList = decisionHeading?.id
+      ? container.querySelector<HTMLUListElement>(`ul[aria-labelledby="${decisionHeading.id}"]`)
+      : null;
+
     expect(decisionHeading?.className).toContain("text-chart-3");
     expect(decisionList?.getAttribute("aria-labelledby")).toBe(decisionHeading?.id);
     expect(decisionList?.children).toHaveLength(4);

@@ -25,6 +25,9 @@ interface LlmData {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+/**
+ * Builds the Naruon review checklist from the currently selected email context.
+ */
 function buildDecisionPoints(
   email: EmailData,
   conversationMessages: EmailData[],
