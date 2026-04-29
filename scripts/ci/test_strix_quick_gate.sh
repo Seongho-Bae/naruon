@@ -424,6 +424,37 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	vertex-primary-api-connection-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				exit 1
+			fi
+			echo "scan ok after same-model api connection retry"
+			exit 0
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: fallback should not be needed for API connection retry scenario" >&2
+			exit 36
+			;;
+		*)
+			echo "Error: API connection retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 36
+			;;
+		esac
+		;;
+	server-disconnect-no-llm-marker-nonrecoverable)
+		echo "ConnectionError: Server disconnected without sending a response."
+		exit 1
+		;;
 	vertex-all-ratelimited)
 		echo "Penetration test failed: LLM request failed: RateLimitError"
 		exit 1
@@ -2040,6 +2071,28 @@ run_gate_case "vertex-primary-ratelimit-retry-same-model-success" \
 	"__DEFAULT__" \
 	"" \
 	"1"
+
+run_gate_case "vertex-primary-api-connection-retry-same-model-success" \
+	"gemini/retry-api-connection-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model api connection retry" \
+	"2" \
+	"gemini/retry-api-connection-primary|gemini/retry-api-connection-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "server-disconnect-no-llm-marker-nonrecoverable" \
+	"vertex_ai/app-server-disconnect-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"vertex_ai/app-server-disconnect-primary" \
+	"<unset>"
 
 # Bug 11: Timeout should move directly to fallback instead of retrying the same model.
 run_gate_case "vertex-primary-timeout-retry-same-model-success" \
