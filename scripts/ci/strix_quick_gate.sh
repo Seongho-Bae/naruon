@@ -1358,11 +1358,22 @@ is_llm_api_connection_error() {
 	return 1
 }
 
+is_llm_service_unavailable_error() {
+	if grep -Eiq 'litellm(\.exceptions)?\.ServiceUnavailableError' "$STRIX_LOG" &&
+		grep -Eiq '(GeminiException|VertexAI|Vertex_ai|vertex\.ai|openai|anthropic|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
+		grep -Eiq '("status"[[:space:]]*:[[:space:]]*"UNAVAILABLE"|(^|[^0-9])503([^0-9]|$)|high demand|Service Unavailable)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 ## Determines whether the last strix failure is a transient error eligible
 ## for same-model retry (up to STRIX_TRANSIENT_RETRY_PER_MODEL times).
-## Three error families qualify:
+## Four error families qualify:
 ##   - RateLimit / RESOURCE_EXHAUSTED / HTTP 429
 ##   - litellm API connection failures with LLM-provider evidence
+##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
 ## Timeouts remain infrastructure errors for guard logic, but the caller should
 ## move directly to fallback model evaluation instead of spending the remaining
@@ -1372,6 +1383,9 @@ is_transient_same_model_retry_error() {
 		return 1
 	fi
 	if is_llm_api_connection_error; then
+		return 0
+	fi
+	if is_llm_service_unavailable_error; then
 		return 0
 	fi
 	if is_rate_limit_error; then
@@ -1411,6 +1425,8 @@ run_strix_with_transient_retry() {
 			retry_reason="rate limit"
 		elif is_llm_api_connection_error; then
 			retry_reason="LLM API connection"
+		elif is_llm_service_unavailable_error; then
+			retry_reason="LLM service unavailable"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
@@ -1558,6 +1574,10 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_llm_api_connection_error; then
+		return 0
+	fi
+
+	if is_llm_service_unavailable_error; then
 		return 0
 	fi
 
@@ -1884,6 +1904,10 @@ is_vertex_retryable_error() {
 	fi
 
 	if is_llm_api_connection_error; then
+		return 0
+	fi
+
+	if is_llm_service_unavailable_error; then
 		return 0
 	fi
 

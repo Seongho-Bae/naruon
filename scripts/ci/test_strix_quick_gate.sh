@@ -451,6 +451,34 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	gemini-high-demand-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-high-demand-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo 'litellm.ServiceUnavailableError: GeminiException - {"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}'
+				exit 1
+			fi
+			echo "scan ok after same-model high-demand retry"
+			exit 0
+			;;
+		*)
+			echo "Error: high-demand retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 37
+			;;
+		esac
+		;;
+	service-unavailable-no-llm-marker-nonrecoverable)
+		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
+		echo 'target application high demand response'
+		exit 1
+		;;
 	server-disconnect-no-llm-marker-nonrecoverable)
 		echo "ConnectionError: Server disconnected without sending a response."
 		exit 1
@@ -2081,6 +2109,32 @@ run_gate_case "vertex-primary-api-connection-retry-same-model-success" \
 	"gemini/retry-api-connection-primary|gemini/retry-api-connection-primary" \
 	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-high-demand-retry-same-model-success" \
+	"gemini/retry-high-demand-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model high-demand retry" \
+	"2" \
+	"gemini/retry-high-demand-primary|gemini/retry-high-demand-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
+	"custom/service-unavailable-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"custom/service-unavailable-primary" \
+	"https://example.invalid" \
+	"custom" \
 	"__DEFAULT__" \
 	"" \
 	"1"
