@@ -50,7 +50,6 @@ PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
-PR_SCA_VERIFICATION_STATE="unknown"
 
 # shellcheck disable=SC2317,SC2329  # invoked from cleanup trap
 publish_artifact_reports() {
@@ -517,57 +516,46 @@ PY
 }
 
 authoritative_sca_checks_passed_for_pr_head() {
-	PR_SCA_VERIFICATION_STATE="unknown"
-
 	if [ "${STRIX_TEST_PR_SCA_STATUS_OVERRIDE+x}" = x ]; then
 		case "$(trim_whitespace "$STRIX_TEST_PR_SCA_STATUS_OVERRIDE")" in
 		passed)
-			PR_SCA_VERIFICATION_STATE="passed"
 			return 0
 			;;
 		unverified | failed | "")
-			PR_SCA_VERIFICATION_STATE="unverified"
 			return 1
 			;;
 		error)
-			PR_SCA_VERIFICATION_STATE="error"
 			echo "Unable to verify authoritative SCA checks for this pull request head; failing closed." >&2
 			return 1
 			;;
 		esac
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unsupported STRIX_TEST_PR_SCA_STATUS_OVERRIDE value; failing closed." >&2
 		return 1
 	fi
 
 	if ! is_pull_request_event; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to verify authoritative SCA checks outside a pull request context; failing closed." >&2
 		return 1
 	fi
 
 	local head_sha pr_number repository gh_token workflow_runs_json verification_result
 	if ! head_sha="$(load_pull_request_head_sha)"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to determine pull request head SHA for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 	if ! pr_number="$(load_pull_request_number)"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to determine pull request identity for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
 	repository="$(trim_whitespace "${GITHUB_REPOSITORY:-}")"
 	if [ -z "$repository" ]; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "GITHUB_REPOSITORY is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
 	gh_token="$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")"
 	if [ -z "$gh_token" ]; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "GitHub token is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
@@ -575,7 +563,6 @@ authoritative_sca_checks_passed_for_pr_head() {
 	if ! workflow_runs_json="$(GH_TOKEN="$gh_token" gh api \
 		-H "Accept: application/vnd.github+json" \
 		"repos/$repository/actions/runs?head_sha=$head_sha&event=pull_request&per_page=100")"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to query authoritative SCA workflow runs for this pull request head; failing closed." >&2
 		return 1
 	fi
@@ -630,24 +617,20 @@ for required_path, run in latest.items():
 
 print("passed")
 PY
-	)"; then
-		PR_SCA_VERIFICATION_STATE="error"
+		)"; then
 		echo "Unable to evaluate authoritative SCA workflow results for this pull request head; failing closed." >&2
 		return 1
 	fi
 
 	case "$verification_result" in
 	passed)
-		PR_SCA_VERIFICATION_STATE="passed"
 		return 0
 		;;
 	missing | unverified)
-		PR_SCA_VERIFICATION_STATE="unverified"
 		return 1
 		;;
 	esac
 
-	PR_SCA_VERIFICATION_STATE="error"
 	echo "Unexpected authoritative SCA verification result '$verification_result'; failing closed." >&2
 	return 1
 }
@@ -1260,6 +1243,11 @@ for key in (
     "GOOGLE_APPLICATION_CREDENTIALS",
     "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
     "VERTEX_LOCATION",
+    "GEMINI_LOCATION",
+    "LLM_TIMEOUT",
+    "STRIX_MEMORY_COMPRESSOR_TIMEOUT",
+    "STRIX_REASONING_EFFORT",
+    "STRIX_LLM_MAX_RETRIES",
     "GOOGLE_CLOUD_PROJECT",
     "GCP_PROJECT",
     "GCLOUD_PROJECT",

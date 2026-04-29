@@ -90,6 +90,7 @@ run_gate_case() {
 	local call_log="$tmp_dir/calls.log"
 	local api_base_log="$tmp_dir/api_base.log"
 	local target_log="$tmp_dir/target.log"
+	local runtime_env_log="$tmp_dir/runtime_env.log"
 	local state_file="$tmp_dir/state.log"
 	local strix_llm_file="$tmp_dir/strix_llm.txt"
 	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
@@ -116,6 +117,15 @@ set -euo pipefail
 
 printf '%s\n' "${STRIX_LLM:-}" >> "${FAKE_STRIX_CALL_LOG:?}"
 printf '%s\n' "${LLM_API_BASE:-<unset>}" >> "${FAKE_STRIX_API_BASE_LOG:?}"
+if [ -n "${FAKE_STRIX_RUNTIME_ENV_LOG:-}" ]; then
+	printf 'LLM_TIMEOUT=%s;STRIX_MEMORY_COMPRESSOR_TIMEOUT=%s;STRIX_REASONING_EFFORT=%s;STRIX_LLM_MAX_RETRIES=%s;GEMINI_LOCATION=%s;UNRELATED_SECRET=%s\n' \
+		"${LLM_TIMEOUT:-<unset>}" \
+		"${STRIX_MEMORY_COMPRESSOR_TIMEOUT:-<unset>}" \
+		"${STRIX_REASONING_EFFORT:-<unset>}" \
+		"${STRIX_LLM_MAX_RETRIES:-<unset>}" \
+		"${GEMINI_LOCATION:-<unset>}" \
+		"${UNRELATED_SECRET:-<unset>}" >> "${FAKE_STRIX_RUNTIME_ENV_LOG:?}"
+fi
 
 target_path=""
 while [ "$#" -gt 0 ]; do
@@ -130,7 +140,7 @@ printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
 
 case "${FAKE_STRIX_SCENARIO:?}" in
-	success|vertex-primary-success-timing-message)
+	success|runtime-env-forwarding|vertex-primary-success-timing-message)
 		echo "scan ok"
 		exit 0
 		;;
@@ -1368,6 +1378,7 @@ EOF
 		FAKE_STRIX_CALL_LOG="$call_log"
 		FAKE_STRIX_API_BASE_LOG="$api_base_log"
 		FAKE_STRIX_TARGET_LOG="$target_log"
+		FAKE_STRIX_RUNTIME_ENV_LOG="$runtime_env_log"
 		STRIX_LLM_DEFAULT_PROVIDER="$default_provider"
 		FAKE_STRIX_STATE_FILE="$state_file"
 		STRIX_TRANSIENT_RETRY_PER_MODEL="$transient_retry_per_model"
@@ -1378,6 +1389,16 @@ EOF
 		STRIX_REPORTS_DIR="$repo_root_dir/strix_runs"
 		STRIX_TARGET_PATH="$effective_target_path"
 	)
+	if [ "$scenario" = "runtime-env-forwarding" ]; then
+		env_cmd+=(
+			LLM_TIMEOUT="90"
+			STRIX_MEMORY_COMPRESSOR_TIMEOUT="10"
+			STRIX_REASONING_EFFORT="minimal"
+			STRIX_LLM_MAX_RETRIES="1"
+			GEMINI_LOCATION="GLOBAL"
+			UNRELATED_SECRET="should-not-forward"
+		)
+	fi
 	printf '%s' "$initial_model" >"$strix_llm_file"
 	env_cmd+=(STRIX_LLM_FILE="$strix_llm_file")
 	printf '%s' 'dummy' >"$llm_api_key_file"
@@ -1480,6 +1501,13 @@ EOF
 		fi
 
 		assert_equals "$expected_api_base_sequence" "$actual_api_base_sequence" "scenario=$scenario LLM_API_BASE sequence"
+	fi
+
+	if [ "$scenario" = "runtime-env-forwarding" ]; then
+		assert_file_contains \
+			"$runtime_env_log" \
+			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;UNRELATED_SECRET=<unset>" \
+			"scenario=$scenario runtime env forwarding"
 	fi
 
 	rm -rf "$tmp_dir"
@@ -1906,6 +1934,17 @@ run_gate_case "success" \
 	"1" \
 	"vertex_ai/ready-primary" \
 	"<unset>"
+
+run_gate_case "runtime-env-forwarding" \
+	"gemini/gemini-pro-3.1-preview" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"gemini/gemini-pro-3.1-preview" \
+	"<unset>" \
+	"gemini" \
+	""
 
 run_gate_case "vertex-primary-notfound-fallback-success" \
 	"vertex_ai/missing-primary" \
