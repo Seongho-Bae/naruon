@@ -206,7 +206,7 @@ jobs:
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
           STRIX_LLM_DEFAULT_PROVIDER: gemini
-          GEMINI_LOCATION: global
+          GEMINI_LOCATION: GLOBAL
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
           LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
           STRIX_VERTEX_FALLBACK_MODELS: "gemini/gemini-pro-3.1-preview"
