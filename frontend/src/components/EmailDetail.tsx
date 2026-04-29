@@ -209,34 +209,35 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
   if (!emailId) {
     return (
-      <div className="flex h-full items-center justify-center p-8 text-center text-muted-foreground">
-        <div className="max-w-sm">
-          <h2 className="text-lg font-medium text-foreground">No email selected</h2>
-          <p className="text-sm">Select an email from the list on the left to view its details, summary, and extracted tasks.</p>
+      <div className="flex h-full items-center justify-center bg-gradient-to-br from-card via-background to-primary/5 p-8 text-center text-muted-foreground">
+        <div className="max-w-md rounded-3xl border border-primary/15 bg-card p-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">✦</div>
+          <h2 className="text-xl font-black tracking-tight text-foreground">메일을 선택하세요</h2>
+          <p className="mt-2 text-sm leading-6">왼쪽 받은편지함에서 메일을 선택하면 Naruon이 요약, 판단 포인트, 실행 항목을 연결합니다.</p>
         </div>
       </div>
     );
   }
 
   if (loading) {
-    return <div role="status" aria-live="polite" className="flex items-center justify-center h-full text-muted-foreground">Loading details...</div>;
+    return <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-card text-muted-foreground">Loading details...</div>;
   }
 
   if (!email || detailError) {
-    return <div role="alert" className="flex items-center justify-center h-full text-muted-foreground text-red-500">{detailError || 'Error loading email'}</div>;
+    return <div role="alert" className="flex h-full items-center justify-center bg-card text-red-500">{detailError || 'Error loading email'}</div>;
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-start p-6">
-        <div className="flex items-start gap-4 text-sm w-full">
-          <Avatar className="h-10 w-10">
+    <div className="flex h-full flex-col bg-card">
+      <div className="flex items-start bg-gradient-to-br from-card via-card to-primary/5 p-6">
+        <div className="flex w-full items-start gap-4 text-sm">
+          <Avatar className="h-11 w-11 border border-primary/10 bg-primary/10 text-primary shadow-sm">
             <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
-          <div className="grid gap-1 flex-1">
-            <div className="font-semibold text-base">{email.subject || '(No Subject)'}</div>
+          <div className="grid min-w-0 flex-1 gap-1">
+            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{email.subject || '(No Subject)'}</div>
             <div className="line-clamp-1 text-xs">
               <span className="text-muted-foreground">{email.sender}</span>
             </div>
@@ -244,21 +245,22 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               Reply-To: {email.reply_to || email.sender}
             </div>
           </div>
-          <div className="text-xs text-muted-foreground whitespace-nowrap">
+          <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
             {formatEmailDate(email.date)}
           </div>
         </div>
       </div>
       <Separator />
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-6 p-6">
+        <div className="flex flex-col gap-6 bg-background/50 p-6">
           
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">AI Summary</h3>
-              <Badge variant="secondary" className="text-[10px]">Generated</Badge>
+              <span className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">✦</span>
+              <h3 className="text-sm font-black text-primary">맥락 종합</h3>
+              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI Generated</Badge>
             </div>
-            <div className="rounded-md bg-muted/50 p-4 text-sm">
+            <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
               {llmData ? (
                 <p className="text-sm">{llmData.summary}</p>
               ) : llmError ? (
@@ -269,18 +271,19 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 rounded-2xl border border-emerald-500/20 bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Extracted Action Items</h3>
-              <Badge variant="secondary" className="text-[10px]">{llmData?.todos.length || 0} Tasks</Badge>
+              <span className="grid size-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600" aria-hidden="true">✓</span>
+              <h3 className="text-sm font-black text-emerald-700">실행 항목</h3>
+              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0} Tasks</Badge>
             </div>
             {llmData ? (
               llmData.todos.length > 0 ? (
                 <ul className="list-none space-y-2 text-sm">
                   {llmData.todos.map((todo, idx) => (
-                    <li key={idx} className="flex items-start gap-2 rounded-md border p-3">
+                    <li key={idx} className="flex items-start gap-3 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3">
                       <Checkbox id={`todo-${idx}`} className="mt-1" />
-                      <label htmlFor={`todo-${idx}`} className="font-medium">{todo}</label>
+                      <label htmlFor={`todo-${idx}`} className="font-semibold leading-5 text-foreground">{todo}</label>
                     </li>
                   ))}
                 </ul>
@@ -299,8 +302,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                   size="sm" 
                   onClick={handleSyncCalendar} 
                   disabled={isSyncing}
+                  className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                 >
-                  {isSyncing ? "Syncing..." : "Sync to Calendar"}
+                  {isSyncing ? "동기화 중" : "캘린더 반영"}
                 </Button>
                 {syncStatus && (
                   <span className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
@@ -313,10 +317,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
           <Separator />
           
-          <div className="space-y-4">
+          <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold uppercase text-muted-foreground tracking-wider">Conversation History</h3>
-              <Badge variant="secondary" className="text-[10px] flex items-center gap-1">
+              <h3 className="text-sm font-black text-foreground">대화 흐름</h3>
+              <Badge variant="secondary" className="text-[10px] flex items-center gap-1 border border-primary/10 bg-primary/10 text-primary">
                 <MessagesSquare className="w-3 h-3" />
                 {conversationMessages.length} msgs
               </Badge>
@@ -331,13 +335,13 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             )}
             <div className="space-y-4">
               {conversationMessages.map((msg) => (
-                <div key={msg.id} className={`rounded-lg border p-4 bg-card text-card-foreground ${msg.id === email.id ? 'border-primary' : ''}`} aria-current={msg.id === email.id ? "true" : undefined}>
+                <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-sm">{msg.sender}</span>
                     <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
                   </div>
-                  {msg.id === email.id && <Badge variant="outline" className="mb-2 text-[10px]">Selected message</Badge>}
-                  <div className="text-sm whitespace-pre-wrap">{msg.body}</div>
+                  {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">Selected message</Badge>}
+                  <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
                 </div>
               ))}
             </div>
@@ -345,10 +349,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
           <Separator />
 
-          <div className="space-y-4">
+          <div className="space-y-4 rounded-2xl border border-purple-500/20 bg-card p-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
-                <h3 className="text-sm font-semibold text-primary uppercase tracking-wider">Reply</h3>
+                <h3 className="text-sm font-black text-purple-700">답장 실행</h3>
                 <label htmlFor="reply-instruction" className="sr-only">AI reply instruction</label>
                 <Input
                   id="reply-instruction"
@@ -356,7 +360,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="e.g. reply politely"
-                  className="h-8 text-xs"
+                  className="h-10 rounded-xl border-purple-500/20 bg-purple-500/5 text-xs"
                 />
               </div>
               <Button 
@@ -364,8 +368,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                 disabled={isDrafting || !instruction}
                 variant="outline"
                 size="sm"
+                className="h-10 rounded-xl border-purple-500/30 px-4 text-purple-700 hover:bg-purple-500/10"
               >
-                {isDrafting ? "Drafting..." : "Draft Reply with AI"}
+                {isDrafting ? "초안 작성 중" : "AI 답장 초안"}
               </Button>
             </div>
             
@@ -378,7 +383,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Your reply..."
-              className="min-h-[150px]"
+              className="min-h-[150px] rounded-2xl border-purple-500/20 bg-background/70"
             />
             
             <div className="flex items-center justify-between">
@@ -395,16 +400,18 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                     onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }} 
                     variant="ghost"
                     size="sm"
+                    className="h-9 rounded-xl"
                   >
-                    Clear
+                    지우기
                   </Button>
                 )}
                 <Button 
                   onClick={handleSendReply} 
                   disabled={isSending || !draft}
                   size="sm"
+                  className="h-9 rounded-xl px-4"
                 >
-                  {isSending ? "Sending..." : "Send Reply"}
+                  {isSending ? "전송 중" : "답장 보내기"}
                 </Button>
               </div>
             </div>
