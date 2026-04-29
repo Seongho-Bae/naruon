@@ -1363,11 +1363,17 @@ is_llm_service_unavailable_error() {
 ##   - litellm API connection failures with LLM-provider evidence
 ##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Timeouts remain infrastructure errors for guard logic, but the caller should
-## move directly to fallback model evaluation instead of spending the remaining
-## budget retrying the same slow model.
+## Vertex timeouts remain infrastructure errors for guard logic, but the caller
+## should move directly to fallback model evaluation instead of spending the
+## remaining budget retrying the same slow model. Non-Vertex models have no
+## provider-specific fallback path in this gate, so LLM timeouts are retried on
+## the same model before being treated as non-recoverable.
 is_transient_same_model_retry_error() {
+	local model="${1-}"
 	if is_timeout_error; then
+		if [ -n "$model" ] && ! is_vertex_model "$model"; then
+			return 0
+		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
@@ -1404,7 +1410,7 @@ run_strix_with_transient_retry() {
 			return 1
 		fi
 
-		if ! is_transient_same_model_retry_error; then
+		if ! is_transient_same_model_retry_error "$model"; then
 			return 1
 		fi
 
@@ -1415,6 +1421,8 @@ run_strix_with_transient_retry() {
 			retry_reason="LLM API connection"
 		elif is_llm_service_unavailable_error; then
 			retry_reason="LLM service unavailable"
+		elif is_timeout_error; then
+			retry_reason="LLM timeout"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi

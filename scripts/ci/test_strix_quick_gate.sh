@@ -484,6 +484,29 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	gemini-timeout-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-timeout-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo "Error: litellm.Timeout: Connection timed out after None seconds."
+				exit 1
+			fi
+			echo "scan ok after same-model timeout retry"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini timeout retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 38
+			;;
+		esac
+		;;
 	service-unavailable-no-llm-marker-nonrecoverable)
 		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
 		echo 'target application high demand response'
@@ -2159,6 +2182,19 @@ run_gate_case "gemini-high-demand-retry-same-model-success" \
 	"scan ok after same-model high-demand retry" \
 	"2" \
 	"gemini/retry-high-demand-primary|gemini/retry-high-demand-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-timeout-retry-same-model-success" \
+	"gemini/retry-timeout-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model timeout retry" \
+	"2" \
+	"gemini/retry-timeout-primary|gemini/retry-timeout-primary" \
 	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
