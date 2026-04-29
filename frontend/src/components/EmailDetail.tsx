@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -25,7 +25,32 @@ interface LlmData {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+function buildDecisionPoints(
+  email: EmailData,
+  conversationMessages: EmailData[],
+  llmData: LlmData | null,
+) {
+  const points: string[] = [];
+
+  if (conversationMessages.length > 1) {
+    points.push(`대화 흐름 ${conversationMessages.length}건 기준으로 최신 맥락 확인`);
+  }
+
+  if (llmData?.todos.length) {
+    points.push(`실행 항목 ${llmData.todos.length}개를 일정과 담당자 기준으로 검토`);
+  }
+
+  if (email.reply_to && email.reply_to !== email.sender) {
+    points.push(`회신 대상 확인: ${email.reply_to}`);
+  }
+
+  points.push('AI 요약과 원문을 비교해 누락된 리스크 점검');
+
+  return points;
+}
+
 export function EmailDetail({ emailId }: { emailId: number | null }) {
+  const decisionPointsHeadingId = useId();
   const [email, setEmail] = useState<EmailData | null>(null);
   const [threadEmails, setThreadEmails] = useState<EmailData[]>([]);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
@@ -228,6 +253,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
+  const decisionPoints = buildDecisionPoints(email, conversationMessages, llmData);
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -269,6 +295,22 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                 <p className="text-sm text-muted-foreground italic">Generating summary...</p>
               )}
             </div>
+          </div>
+
+          <div className="space-y-3 rounded-2xl border border-chart-3/20 bg-gradient-to-br from-card via-card to-chart-3/5 p-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="grid size-8 place-items-center rounded-xl bg-chart-3/10 text-chart-3" aria-hidden="true">◎</span>
+              <h3 id={decisionPointsHeadingId} className="text-sm font-black text-chart-3">판단 포인트</h3>
+              <Badge variant="secondary" className="border border-chart-3/10 bg-chart-3/10 text-[10px] text-chart-3">{decisionPoints.length} Checks</Badge>
+            </div>
+            <ul className="space-y-2 text-sm" aria-labelledby={decisionPointsHeadingId}>
+              {decisionPoints.map((point) => (
+                <li key={point} className="flex items-start gap-3 rounded-xl border border-chart-3/15 bg-chart-3/5 p-3 text-foreground">
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-chart-3/10 text-xs font-bold text-chart-3" aria-hidden="true">!</span>
+                  <span className="leading-5">{point}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div className="space-y-2 rounded-2xl border border-emerald-500/20 bg-card p-4 shadow-sm">

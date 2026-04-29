@@ -60,6 +60,7 @@ type TestEmail = {
   message_id: string;
   thread_id: string | null;
   sender: string;
+  reply_to?: string | null;
   recipients: string;
   subject: string;
   date: string;
@@ -293,5 +294,68 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("Standalone body");
     expect(container.textContent).toContain("1 msgs");
     expect(container.textContent).not.toContain("Loading conversation...");
+  });
+
+  it("renders Naruon decision points from thread, reply, and action context", async () => {
+    const selectedEmail: TestEmail = {
+      id: 4,
+      message_id: "<decision@example.com>",
+      thread_id: "decision-thread",
+      sender: "pm@example.com",
+      reply_to: "product-owner@example.com",
+      recipients: "user@example.com",
+      subject: "Q2 launch decision",
+      date: "2026-04-27T12:00:00Z",
+      body: "Please confirm the launch plan and risks.",
+    };
+    const previousMessage: TestEmail = {
+      ...selectedEmail,
+      id: 5,
+      message_id: "<decision-previous@example.com>",
+      reply_to: null,
+      body: "Earlier context for the launch decision.",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/4")) return Promise.resolve(jsonResponse(selectedEmail));
+      if (url.endsWith("/api/emails/thread/decision-thread")) {
+        return Promise.resolve(jsonResponse({ thread: [previousMessage, selectedEmail] }));
+      }
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({
+          summary: "Launch timing and resource risk need review.",
+          todos: ["Confirm resource plan", "Share campaign timing"],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={4} />);
+    });
+
+    await waitForCondition(() =>
+      container?.textContent?.includes("판단 포인트") ?? false,
+    );
+
+    expect(container.textContent).toContain("판단 포인트");
+    expect(container.textContent).toContain("대화 흐름 2건");
+    expect(container.textContent).toContain("실행 항목 2개");
+    expect(container.textContent).toContain("회신 대상 확인");
+
+    const decisionHeading = Array.from(container.querySelectorAll("h3"))
+      .find((heading) => heading.textContent === "판단 포인트");
+    const decisionList = container.querySelector<HTMLUListElement>("ul[aria-labelledby]");
+
+    expect(decisionHeading?.id).toBeTruthy();
+    expect(decisionHeading?.className).toContain("text-chart-3");
+    expect(decisionList?.getAttribute("aria-labelledby")).toBe(decisionHeading?.id);
+    expect(decisionList?.children).toHaveLength(4);
   });
 });
