@@ -1,56 +1,74 @@
 import uuid
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from db.models import Email
 from services.email_parser import EmailData
+
+
+def normalize_message_id(value: str | None) -> str | None:
+    """Return the canonical persisted form for a Message-ID-like header."""
+    if value is None:
+        return None
+
+    normalized = str(value).strip().strip("<>").strip()
+    return normalized or None
+
+
+def extract_reference_ids(value: str | None) -> list[str]:
+    """Extract canonical message IDs from a References header in header order."""
+    if not value:
+        return []
+
+    refs = re.findall(r"<([^>]+)>", str(value))
+    if not refs:
+        refs = str(value).split()
+
+    normalized_refs: list[str] = []
+    for ref in refs:
+        normalized = normalize_message_id(ref)
+        if normalized and normalized not in normalized_refs:
+            normalized_refs.append(normalized)
+    return normalized_refs
+
+
+async def _find_existing_thread_id(session: AsyncSession, message_id: str) -> str | None:
+    bracketed = f"<{message_id}>"
+    result = await session.execute(
+        select(Email.thread_id).where(
+            or_(Email.message_id == message_id, Email.message_id == bracketed)
+        )
+    )
+    return result.scalar_one_or_none()
 
 async def assign_thread_id(session: AsyncSession, email_data: EmailData) -> str:
     """
     Determine the thread_id for a new email based on in_reply_to and references.
     If no existing match is found, generate a new thread_id.
     """
-    # O3: email threading support
-    in_reply_to = email_data.get("in_reply_to")
-    references_str = email_data.get("references")
-    
-    # 1. Try to find the parent email using in_reply_to
+    in_reply_to = normalize_message_id(email_data.get("in_reply_to"))
+    references = extract_reference_ids(email_data.get("references"))
+
+    existing_candidates = []
     if in_reply_to:
-        # Some headers have brackets like <msg-id>
-        in_reply_to_clean = in_reply_to.strip("<>")
-        query = select(Email.thread_id).where(Email.message_id == in_reply_to_clean)
-        result = await session.execute(query)
-        thread_id = result.scalar_one_or_none()
-        if thread_id:
-            return thread_id
-            
-        # Also try matching exact string if it didn't have brackets or we stripped them but the DB has brackets
-        query = select(Email.thread_id).where(Email.message_id == in_reply_to)
-        result = await session.execute(query)
-        thread_id = result.scalar_one_or_none()
-        if thread_id:
-            return thread_id
+        existing_candidates.append(in_reply_to)
+    existing_candidates.extend(ref for ref in references if ref not in existing_candidates)
 
-    # 2. Try to find any email from the references
-    if references_str:
-        # Extract message IDs from references string (usually space-separated, sometimes with <>)
-        refs = re.findall(r'<([^>]+)>', references_str)
-        if not refs:
-            refs = references_str.split()
-            
-        for ref in refs:
-            ref_clean = ref.strip("<>")
-            # Try both stripped and unstripped
-            query = select(Email.thread_id).where((Email.message_id == ref_clean) | (Email.message_id == ref))
-            result = await session.execute(query)
-            thread_id = result.scalar_one_or_none()
-            if thread_id:
-                return thread_id
+    for candidate in existing_candidates:
+        thread_id = await _find_existing_thread_id(session, candidate)
+        if thread_id:
+            return normalize_message_id(thread_id) or thread_id
 
-    # 3. No match found, generate a new thread_id
-    # We can use the message_id if available, otherwise a UUID
-    msg_id = email_data.get("message_id")
+    # If the parent/root has not been imported yet, use the oldest known ancestor
+    # as the deterministic thread root so later imports converge on one thread.
+    if references:
+        return references[0]
+
+    if in_reply_to:
+        return in_reply_to
+
+    msg_id = normalize_message_id(email_data.get("message_id"))
     if msg_id:
-        return msg_id.strip("<>")
-    
+        return msg_id
+
     return uuid.uuid4().hex

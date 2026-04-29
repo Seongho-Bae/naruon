@@ -1,24 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MessagesSquare } from "lucide-react";
+import { formatEmailDate } from "@/lib/email-threading";
 
 interface EmailItem {
   id: number;
   subject: string | null;
   sender: string;
-  date: string;
+  date?: string;
   snippet: string;
   unread?: boolean;
   thread_id?: string; // O3: email threading support
   reply_count?: number;
 }
 
-export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => void }) {
+export function EmailList({
+  onSelectEmail,
+  selectedEmailId,
+}: {
+  onSelectEmail: (id: number) => void;
+  selectedEmailId?: number | null;
+}) {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +62,7 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial inbox fetch synchronizes client state with the backend.
     fetchEmails();
   }, []);
 
@@ -70,7 +77,10 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
           }}
           className="flex gap-2"
         >
+          <label htmlFor="email-search" className="sr-only">Search emails</label>
           <Input 
+            id="email-search"
+            aria-label="Search emails"
             placeholder="Search emails..." 
             value={searchQuery}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
@@ -83,17 +93,21 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
       <ScrollArea className="flex-1 w-full">
         <div className="flex flex-col gap-2 p-4">
           {loading ? (
-            <div className="text-sm text-muted-foreground">Loading emails...</div>
+            <div role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading emails...</div>
           ) : error ? (
-            <div className="text-sm text-red-500">{error}</div>
+            <div role="alert" className="text-sm text-red-500">{error}</div>
           ) : emails.length === 0 ? (
             <div className="text-sm text-muted-foreground">No emails found.</div>
           ) : (
-            emails.map((email: EmailItem) => (
+            emails.map((email: EmailItem) => {
+              const selected = selectedEmailId === email.id;
+
+              return (
               <button 
                 key={email.id} 
                 onClick={() => onSelectEmail(email.id)}
-                className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent"
+                aria-current={selected ? "true" : undefined}
+                className={`flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-all hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected ? 'border-primary bg-accent' : ''}`}
               >
                 <div className="flex w-full flex-col gap-1">
                   <div className="flex items-center">
@@ -104,7 +118,7 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
                       <div className="font-semibold truncate max-w-[120px]">{email.sender}</div>
                     </div>
                     <div className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
-                      {new Date(email.date).toLocaleDateString()}
+                      {formatEmailDate(email.date)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 w-full">
@@ -126,7 +140,8 @@ export function EmailList({ onSelectEmail }: { onSelectEmail: (id: number) => vo
                   </div>
                 )}
               </button>
-            ))
+              );
+            })
           )}
         </div>
       </ScrollArea>

@@ -424,6 +424,65 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	vertex-primary-api-connection-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				exit 1
+			fi
+			echo "scan ok after same-model api connection retry"
+			exit 0
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: fallback should not be needed for API connection retry scenario" >&2
+			exit 36
+			;;
+		*)
+			echo "Error: API connection retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 36
+			;;
+		esac
+		;;
+	gemini-high-demand-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-high-demand-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo 'litellm.ServiceUnavailableError: GeminiException - {"error":{"code":503,"message":"This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.","status":"UNAVAILABLE"}}'
+				exit 1
+			fi
+			echo "scan ok after same-model high-demand retry"
+			exit 0
+			;;
+		*)
+			echo "Error: high-demand retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 37
+			;;
+		esac
+		;;
+	service-unavailable-no-llm-marker-nonrecoverable)
+		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
+		echo 'target application high demand response'
+		exit 1
+		;;
+	server-disconnect-no-llm-marker-nonrecoverable)
+		echo "ConnectionError: Server disconnected without sending a response."
+		exit 1
+		;;
 	vertex-all-ratelimited)
 		echo "Penetration test failed: LLM request failed: RateLimitError"
 		exit 1
@@ -2041,6 +2100,54 @@ run_gate_case "vertex-primary-ratelimit-retry-same-model-success" \
 	"" \
 	"1"
 
+run_gate_case "vertex-primary-api-connection-retry-same-model-success" \
+	"gemini/retry-api-connection-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model api connection retry" \
+	"2" \
+	"gemini/retry-api-connection-primary|gemini/retry-api-connection-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-high-demand-retry-same-model-success" \
+	"gemini/retry-high-demand-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model high-demand retry" \
+	"2" \
+	"gemini/retry-high-demand-primary|gemini/retry-high-demand-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
+	"custom/service-unavailable-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"custom/service-unavailable-primary" \
+	"https://example.invalid" \
+	"custom" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "server-disconnect-no-llm-marker-nonrecoverable" \
+	"vertex_ai/app-server-disconnect-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"vertex_ai/app-server-disconnect-primary" \
+	"<unset>"
+
 # Bug 11: Timeout should move directly to fallback instead of retrying the same model.
 run_gate_case "vertex-primary-timeout-retry-same-model-success" \
 	"vertex_ai/retry-timeout-primary" \
@@ -3315,6 +3422,36 @@ assert_vertex_extract() {
 	fi
 }
 
+assert_normalized_model() {
+	local label="$1" model="$2" default_provider="$3" expected="$4"
+	local actual rc old_default_provider="${DEFAULT_PROVIDER-__UNSET__}"
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	DEFAULT_PROVIDER="$default_provider"
+	set +e
+	actual="$(normalize_model "$model")"
+	rc=$?
+	set -e
+
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	if [ "$rc" -ne 0 ]; then
+		record_failure "normalize_model($label) rc=$rc model='$model'"
+		return
+	fi
+	if [ "$actual" != "$expected" ]; then
+		record_failure "normalize_model($label): got '$actual' want '$expected'"
+	fi
+}
+
 # Valid paths — should return 0
 assert_vertex_path "models/<id>" "models/gemini-2.5-pro" 0
 assert_vertex_path "publishers/<p>/models/<id>" "publishers/google/models/gemini-2.5-pro" 0
@@ -3341,6 +3478,14 @@ assert_vertex_extract "projects/…/publishers/…/models/<id>" "projects/my-pro
 # extract_vertex_model_id — non-vertex paths return as-is
 assert_vertex_extract "non-vertex-passthrough" "deepseek/models/deepseek-r1" "deepseek/models/deepseek-r1"
 assert_vertex_extract "plain-model-passthrough" "gemini-2.5-pro" "gemini-2.5-pro"
+
+# Explicit Vertex resource paths must remain Vertex models even when the default
+# provider points at a non-Vertex provider.
+assert_normalized_model \
+	"vertex-resource-ignores-nonvertex-default-provider" \
+	"projects/my-proj/locations/us-central1/publishers/google/models/gemini-2.5-pro" \
+	"anthropic" \
+	"vertex_ai/gemini-2.5-pro"
 
 # Whitespace in paths — must be rejected (SAST word-splitting guard)
 assert_vertex_path "space-in-project" "projects/my proj/locations/us/models/foo" 1
