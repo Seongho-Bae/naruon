@@ -2,15 +2,15 @@ name: Strix Security Scan
 
 on:
   push:
-    branches: [main]
-  pull_request:
+    branches: [master]
+  pull_request_target:
   schedule:
     # Weekly scan on protected branches (Mondays at 03:00 UTC).
     - cron: '0 3 * * 1'
   workflow_dispatch:
 
 concurrency:
-  group: strix-${{ github.workflow }}-${{ github.ref }}
+  group: strix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # cancel-in-progress deliberately disabled: an attacker could force-push
   # a benign commit to cancel an in-progress scan of a malicious commit.
   cancel-in-progress: false
@@ -32,8 +32,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          # For pull_request_target, keep the working tree on trusted base code.
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
           persist-credentials: false
           fetch-depth: 0
+
+      - name: Fetch pull request head for trusted scan
+        if: github.event_name == 'pull_request_target'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags --prune origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
+          git cat-file -e "$PR_HEAD_SHA^{commit}"
+          fetched_head_sha="$(git rev-parse "refs/remotes/pull/${PR_NUMBER}/head")"
+          test "$fetched_head_sha" = "$PR_HEAD_SHA"
 
       - name: Self-test Strix gate script
         run: bash ./scripts/ci/test_strix_quick_gate.sh
@@ -95,7 +108,7 @@ jobs:
               exit 1
             fi
             echo 'can_run=false' >> "$GITHUB_OUTPUT"
-            echo 'Skipping Strix on pull_request because the configured model requires GCP_SA_KEY.'
+            echo 'Skipping Strix on pull_request_target because the configured model requires GCP_SA_KEY.'
           else
             echo 'can_run=true' >> "$GITHUB_OUTPUT"
           fi
@@ -218,14 +231,15 @@ jobs:
           STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
-          STRIX_PROCESS_TIMEOUT_SECONDS: ${{ github.event_name == 'pull_request' && '1200' || '2400' }}
+          STRIX_PROCESS_TIMEOUT_SECONDS: ${{ github.event_name == 'pull_request_target' && '1200' || '2400' }}
           STRIX_TOTAL_TIMEOUT_SECONDS: 3000
           STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 20
-          STRIX_DISABLE_PR_SCOPING: ${{ github.event_name == 'pull_request' && '0' || '1' }}
-          GH_TOKEN: ${{ github.event_name == 'pull_request' && github.token || '' }}
-          PR_NUMBER: ${{ github.event_name == 'pull_request' && github.event.pull_request.number || '' }}
-          PR_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
-          PR_HEAD_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || '' }}
+          STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
+          STRIX_DISABLE_PR_SCOPING: ${{ github.event_name == 'pull_request_target' && '0' || '1' }}
+          GH_TOKEN: ${{ github.event_name == 'pull_request_target' && github.token || '' }}
+          PR_NUMBER: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || '' }}
+          PR_BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || '' }}
         run: bash ./scripts/ci/strix_quick_gate.sh
 
       - name: Upload Strix reports artifact
