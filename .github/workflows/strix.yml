@@ -29,11 +29,19 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout
+      - name: Checkout trusted pull request base
+        if: github.event_name == 'pull_request_target'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # For pull_request_target, keep the working tree on trusted base code.
-          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Checkout current trusted ref
+        if: github.event_name != 'pull_request_target'
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
           persist-credentials: false
           fetch-depth: 0
 

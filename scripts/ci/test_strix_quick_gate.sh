@@ -55,6 +55,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
+	assert_file_contains "$workflow_file" "Checkout trusted pull request base" "strix workflow names trusted PR checkout"
+	assert_file_contains "$workflow_file" "ref: \${{ github.event.pull_request.base.sha }}" "strix workflow pins PR checkout to base SHA"
 	assert_file_contains "$workflow_file" "Fetch pull request head for trusted scan" "strix workflow fetches PR head without checkout"
 	assert_file_contains "$workflow_file" "refs/remotes/pull" "strix workflow verifies fetched PR head ref"
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
