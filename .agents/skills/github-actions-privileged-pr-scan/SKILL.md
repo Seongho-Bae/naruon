@@ -33,6 +33,9 @@ metadata/blob read errors.
 - Add regression tests for trigger choice, trusted workspace materialization,
   absence of `actions/checkout`, PR-head blob copy, lookup failure, and severity
   threshold behavior.
+- When publishing GitHub issue/PR evidence from shell, pass Markdown bodies via a
+  single-quoted heredoc (`--body "$(cat <<'EOF' ... EOF)"`) so backticked text
+  such as `actions/checkout` is not executed by the shell before `gh` receives it.
 
 ## Common mistake
 
