@@ -11,10 +11,10 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
   evidence only when current-head blocking findings, warnings, and failures are
   fixed, rebutted with evidence, or superseded. Authoritative current-head
   `Review skipped` evidence satisfies the robot-review gate when applicable.
-- GitHub rulesets should use `required_approving_review_count=0` so GitHub does
+- GitHub rulesets must use `required_approving_review_count=0` so GitHub does
   not require a human `APPROVED` review when robot-review policy applies.
-- GitHub rulesets should keep `required_review_thread_resolution=true`.
-- No bypass actors should be configured for routine delivery.
+- GitHub rulesets must keep `required_review_thread_resolution=true`.
+- Bypass actors must not be configured for routine delivery.
 - Security workflows and scanners are required gates, not optional paths.
 
 ## Evidence commands
