@@ -1373,6 +1373,14 @@ EOS
 		echo "Error: unexpected configured max-size batch layout attempt $attempt ($target_path)" >&2
 		exit 54
 		;;
+	pr-changed-scope-includes-ci-dependency)
+		if [ -f "$target_path/scripts/ci/strix_quick_gate.sh" ] && [ -f "$target_path/scripts/ci/strix_model_utils.sh" ]; then
+			echo "scan ok with CI support dependency"
+			exit 0
+		fi
+		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
+		exit 55
+		;;
 	pr-changed-scope-rebalanced)
 		if [ -z "$target_path" ]; then
 			echo "Error: target path missing" >&2
@@ -3502,6 +3510,27 @@ run_gate_case "pr-changed-scope-max-batches" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
 	"" \
 	"2"
+
+run_gate_case "pr-changed-scope-includes-ci-dependency" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with CI support dependency" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"scripts/ci/strix_quick_gate.sh"
 
 run_gate_case "pr-changed-scope-rebalanced" \
 	"vertex_ai/gemini-2.5-flash" \

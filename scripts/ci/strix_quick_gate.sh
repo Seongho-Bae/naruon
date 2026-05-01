@@ -949,10 +949,54 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	copy_scope_support_file() {
+		local relative_path="$1"
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request scan support file is unavailable: $relative_path" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_required_scope_support_files() {
+		local include_strix_model_utils=0
+		local changed_file relative_path
+		for changed_file in "$@"; do
+			relative_path="$(normalize_changed_file_path "$changed_file")" || return 2
+			case "$relative_path" in
+			scripts/ci/strix_quick_gate.sh | scripts/ci/test_strix_quick_gate.sh)
+				include_strix_model_utils=1
+				;;
+			esac
+		done
+
+		if [ "$include_strix_model_utils" -eq 1 ]; then
+			copy_scope_support_file "scripts/ci/strix_model_utils.sh" || return 2
+		fi
+	}
+
 	local changed_file
 	for changed_file in "$@"; do
 		copy_changed_file_into_scope "$changed_file" || return 2
 	done
+	copy_required_scope_support_files "$@" || return 2
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
