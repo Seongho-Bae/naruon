@@ -51,6 +51,7 @@ PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
+TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
 # shellcheck disable=SC2317,SC2329  # invoked from cleanup trap
 publish_artifact_reports() {
@@ -472,6 +473,12 @@ path_is_within_allowed_scope() {
 		;;
 	esac
 
+	return 1
+}
+
+path_is_within_generated_pr_scope() {
+	local resolved_target="$1"
+
 	local scope_dir
 	for scope_dir in "${PULL_REQUEST_SCOPE_DIRS[@]}"; do
 		scope_dir="$({ CDPATH='' && cd -P -- "$scope_dir" && pwd -P; })"
@@ -507,7 +514,7 @@ PY
 		return 2
 	}
 	if ! path_is_within_allowed_scope "$resolved_target"; then
-		echo "ERROR: STRIX_TARGET_PATH '$raw_target' must stay within the repository or generated PR scope directories." >&2
+		echo "ERROR: STRIX_TARGET_PATH '$raw_target' must stay within the repository." >&2
 		return 2
 	fi
 	if [ ! -e "$resolved_target" ]; then
@@ -519,6 +526,47 @@ PY
 		return 2
 	fi
 	printf '%s\n' "$resolved_target"
+}
+
+resolve_internal_pr_scope_target_path() {
+	local raw_target="$1"
+	local resolved_target
+	resolved_target="$({
+		python3 - "$raw_target" <<'PY'
+from pathlib import Path
+import sys
+
+raw_target = sys.argv[1]
+target_path = Path(raw_target)
+resolved = target_path.resolve(strict=False)
+print(resolved)
+PY
+	})" || {
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to a valid path." >&2
+		return 2
+	}
+	if ! path_is_within_generated_pr_scope "$resolved_target"; then
+		echo "ERROR: internal PR scope target '$raw_target' must stay within generated PR scope directories." >&2
+		return 2
+	fi
+	if [ ! -e "$resolved_target" ]; then
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to an existing directory." >&2
+		return 2
+	fi
+	if [ ! -d "$resolved_target" ] || [ -L "$resolved_target" ]; then
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to a real directory." >&2
+		return 2
+	fi
+	printf '%s\n' "$resolved_target"
+}
+
+resolve_current_target_path() {
+	local raw_target="$1"
+	if [ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -eq 1 ]; then
+		resolve_internal_pr_scope_target_path "$raw_target"
+		return $?
+	fi
+	resolve_scan_target_path "$raw_target"
 }
 
 SCAN_MODE="$(trim_whitespace "$RAW_SCAN_MODE")"
@@ -901,10 +949,54 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	copy_scope_support_file() {
+		local relative_path="$1"
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request scan support file is unavailable: $relative_path" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_required_scope_support_files() {
+		local include_strix_model_utils=0
+		local changed_file relative_path
+		for changed_file in "$@"; do
+			relative_path="$(normalize_changed_file_path "$changed_file")" || return 2
+			case "$relative_path" in
+			scripts/ci/strix_quick_gate.sh | scripts/ci/test_strix_quick_gate.sh)
+				include_strix_model_utils=1
+				;;
+			esac
+		done
+
+		if [ "$include_strix_model_utils" -eq 1 ]; then
+			copy_scope_support_file "scripts/ci/strix_model_utils.sh" || return 2
+		fi
+	}
+
 	local changed_file
 	for changed_file in "$@"; do
 		copy_changed_file_into_scope "$changed_file" || return 2
 	done
+	copy_required_scope_support_files "$@" || return 2
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
@@ -912,6 +1004,7 @@ prepare_pull_request_scan_scope() {
 	if ! is_pull_request_event; then
 		return 0
 	fi
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
 	local load_changed_files_rc=0
 	load_pull_request_changed_files || load_changed_files_rc=$?
@@ -988,6 +1081,7 @@ PY
 			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
 			if [ "$build_scope_rc" -eq 0 ]; then
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 				PULL_REQUEST_SCOPE_FILE_BATCHES=()
 				return 0
@@ -997,12 +1091,14 @@ PY
 		local narrowed_target=""
 		if narrowed_target="$(derive_pull_request_full_target_path "${CHANGED_FILES[@]}")" && [ "$narrowed_target" != "./" ] && ! target_path_is_top_level_scope "$narrowed_target"; then
 			TARGET_PATH="$narrowed_target"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 			printf "Using narrowed target path %s for pull request Strix scan with %s scannable changed file(s).\n" "$narrowed_target" "$total_files" >&2
 		else
 			local build_scope_rc=0
 			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
 			if [ "$build_scope_rc" -eq 0 ]; then
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 				printf "Using bounded changed-file scope for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 			elif pull_request_head_blob_required; then
 				return 2
@@ -1013,9 +1109,20 @@ PY
 		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
 	fi
-	PULL_REQUEST_SCOPE_FILE_BATCHES=("$(printf '%s\n' "${CHANGED_FILES[@]}")")
+	PULL_REQUEST_SCOPE_FILE_BATCHES=()
+	local batch_start=0
+	while [ "$batch_start" -lt "$total_files" ]; do
+		local batch_files=("${CHANGED_FILES[@]:batch_start:STRIX_PR_SCOPE_MAX_FILES_PER_BATCH}")
+		PULL_REQUEST_SCOPE_FILE_BATCHES+=("$(printf '%s\n' "${batch_files[@]}")")
+		batch_start=$((batch_start + STRIX_PR_SCOPE_MAX_FILES_PER_BATCH))
+	done
 	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
 	printf ".\n" >&2
+	if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 1 ]; then
+		printf "Split pull request Strix scan into %s batch(es) of at most %s file(s).\n" \
+			"${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" \
+			"$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
+	fi
 	return 0
 }
 
@@ -1044,7 +1151,7 @@ extract_vulnerability_locations() {
 	local resolved_scan_target=""
 	local narrowed_workspace_prefix=""
 
-	if resolved_scan_target="$(resolve_scan_target_path "$TARGET_PATH" 2>/dev/null)"; then
+	if resolved_scan_target="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"; then
 		if [ "$resolved_scan_target" != "$REPO_ROOT" ]; then
 			narrowed_workspace_prefix="/workspace/$(basename "$resolved_scan_target")/"
 		fi
@@ -1408,7 +1515,7 @@ run_strix_once() {
 	if ! llm_api_base_value="$(resolved_llm_api_base_for_model "$model")"; then
 		return 1
 	fi
-	if ! resolved_target_path="$(resolve_scan_target_path "$TARGET_PATH")"; then
+	if ! resolved_target_path="$(resolve_current_target_path "$TARGET_PATH")"; then
 		return 1
 	fi
 	local start_epoch
@@ -2233,6 +2340,8 @@ run_pull_request_batch_files() {
 	local total_batches="$2"
 	local batch_files_text="$3"
 	local -a batch_files=()
+	local previous_target_path="$TARGET_PATH"
+	local previous_target_is_internal="$TARGET_PATH_IS_INTERNAL_PR_SCOPE"
 	mapfile -t batch_files <<<"$batch_files_text"
 	if [ "${#batch_files[@]}" -eq 0 ]; then
 		echo "ERROR: pull request Strix batch '$batch_label' has no files to scan." >&2
@@ -2243,9 +2352,12 @@ run_pull_request_batch_files() {
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
 	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 		return 1
 	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
 
 	run_current_target_scan
@@ -2253,6 +2365,8 @@ run_pull_request_batch_files() {
 	if [ "$batch_rc" -eq 0 ]; then
 		capture_preexisting_report_dirs
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 		return 0
 	fi
 
@@ -2267,17 +2381,25 @@ run_pull_request_batch_files() {
 		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
 		if ! run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half"; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+			TARGET_PATH="$previous_target_path"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 			return 1
 		fi
 		if ! run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half"; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+			TARGET_PATH="$previous_target_path"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 			return 1
 		fi
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 		return 0
 	fi
 
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+	TARGET_PATH="$previous_target_path"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 	return 1
 }
 
