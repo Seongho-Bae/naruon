@@ -60,7 +60,10 @@ async def get_emails(
 ):
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
-        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+        select(Email)
+        .where(Email.user_id == current_user)
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
     )
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
@@ -104,7 +107,9 @@ async def get_email(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    result = await db.execute(select(Email).where(Email.id == email_id))
+    result = await db.execute(
+        select(Email).where(Email.id == email_id, Email.user_id == current_user)
+    )
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -132,7 +137,10 @@ async def get_email_thread(
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
-        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .where(
+            Email.user_id == current_user,
+            or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)),
+        )
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()

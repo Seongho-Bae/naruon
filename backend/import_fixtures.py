@@ -21,7 +21,7 @@ async def generate_fixture_embedding(text: str) -> list[float]:
     return (await generate_embeddings([text], openai_api_key=openai_api_key))[0]
 
 
-async def import_eml_file(session, eml_file: Path) -> bool:
+async def import_eml_file(session, eml_file: Path, user_id: str = "default") -> bool:
     try:
         parsed = parse_eml(eml_file)
     except Exception as e:
@@ -29,7 +29,10 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         return False
 
     existing = await session.execute(
-        select(Email).where(Email.message_id == parsed["message_id"])
+        select(Email).where(
+            Email.user_id == user_id,
+            Email.message_id == parsed["message_id"],
+        )
     )
     if existing.scalar_one_or_none():
         print(f"Email {parsed['message_id']} already exists, skipping.")
@@ -42,9 +45,10 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         print(f"Failed to generate embedding for {eml_file}: {e}")
         return False
 
-    thread_id = await assign_thread_id(session, parsed)
+    thread_id = await assign_thread_id(session, parsed, user_id=user_id)
 
     email_obj = Email(
+        user_id=user_id,
         message_id=parsed["message_id"],
         sender=parsed["sender"],
         reply_to=parsed.get("reply_to"),
@@ -94,9 +98,11 @@ async def main():
         print(f"No .eml files found in {fixtures_dir}.")
         return
 
+    user_id = os.environ.get("EMAIL_IMPORT_USER_ID", "default")
+
     async with AsyncSessionLocal() as session:
         for eml_file in eml_files:
-            await import_eml_file(session, eml_file)
+            await import_eml_file(session, eml_file, user_id=user_id)
 
 
 if __name__ == "__main__":

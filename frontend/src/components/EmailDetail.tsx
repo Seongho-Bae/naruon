@@ -24,6 +24,17 @@ interface LlmData {
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const UNSAFE_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+
+/**
+ * Normalizes untrusted API, email, and LLM strings before React renders them as
+ * text nodes. React still provides the HTML escaping boundary; this helper keeps
+ * non-printable control bytes out of the DOM and documents that these values
+ * must never be passed to innerHTML sinks.
+ */
+function sanitizeTextContent(value: string | number | null | undefined): string {
+  return String(value ?? '').replace(UNSAFE_CONTROL_CHARACTERS, '�');
+}
 
 /** Builds the Naruon review checklist from the selected email context. */
 function buildDecisionPoints(
@@ -42,7 +53,7 @@ function buildDecisionPoints(
   }
 
   if (email.reply_to && email.reply_to !== email.sender) {
-    points.push(`회신 대상 확인: ${email.reply_to}`);
+    points.push(`회신 대상 확인: ${sanitizeTextContent(email.reply_to)}`);
   }
 
   points.push('AI 요약과 원문을 비교해 누락된 리스크 점검');
@@ -256,21 +267,24 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
   const conversationMessages = getConversationMessages(email, threadEmails);
   const decisionPoints = buildDecisionPoints(email, conversationMessages, llmData);
+  const emailSender = sanitizeTextContent(email.sender);
+  const replyTo = sanitizeTextContent(email.reply_to || email.sender);
+  const emailSubject = sanitizeTextContent(email.subject || '(No Subject)');
 
   return (
     <div className="flex h-full flex-col bg-card">
       <div className="flex items-start bg-gradient-to-br from-card via-card to-primary/5 p-6">
         <div className="flex w-full items-start gap-4 text-sm">
           <Avatar className="h-11 w-11 border border-primary/10 bg-primary/10 text-primary shadow-sm">
-            <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+            <AvatarFallback>{emailSender ? emailSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
-            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{email.subject || '(No Subject)'}</div>
+            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{emailSubject}</div>
             <div className="line-clamp-1 text-xs">
-              <span className="text-muted-foreground">{email.sender}</span>
+              <span className="text-muted-foreground">{emailSender}</span>
             </div>
             <div className="line-clamp-1 text-xs text-muted-foreground">
-              Reply-To: {email.reply_to || email.sender}
+              Reply-To: {replyTo}
             </div>
           </div>
           <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
@@ -290,7 +304,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             </div>
             <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
               {llmData ? (
-                <p className="text-sm">{llmData.summary}</p>
+                <p className="text-sm">{sanitizeTextContent(llmData.summary)}</p>
               ) : llmError ? (
                 <p className="text-sm text-red-500">{llmError}</p>
               ) : (
@@ -309,7 +323,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               {decisionPoints.map((point) => (
                 <li key={point} className="flex items-start gap-3 rounded-xl border border-chart-3/15 bg-chart-3/5 p-3 text-foreground">
                   <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-chart-3/10 text-xs font-bold text-chart-3" aria-hidden="true">!</span>
-                  <span className="leading-5">{point}</span>
+                  <span className="leading-5">{sanitizeTextContent(point)}</span>
                 </li>
               ))}
             </ul>
@@ -327,7 +341,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                   {llmData.todos.map((todo, idx) => (
                     <li key={idx} className="flex items-start gap-3 rounded-xl border border-emerald-500/15 bg-emerald-500/5 p-3">
                       <Checkbox id={`todo-${idx}`} className="mt-1" />
-                      <label htmlFor={`todo-${idx}`} className="font-semibold leading-5 text-foreground">{todo}</label>
+                      <label htmlFor={`todo-${idx}`} className="font-semibold leading-5 text-foreground">{sanitizeTextContent(todo)}</label>
                     </li>
                   ))}
                 </ul>
@@ -373,7 +387,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading conversation...</p>}
             {threadError && (
               <div role="alert" className="flex items-center gap-3 text-sm text-red-500">
-                <span>{threadError}</span>
+                <span>{sanitizeTextContent(threadError)}</span>
                 <Button size="sm" variant="outline" onClick={() => fetchThread(email)}>Retry</Button>
               </div>
             )}
@@ -381,11 +395,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               {conversationMessages.map((msg) => (
                 <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm">{msg.sender}</span>
+                    <span className="font-medium text-sm">{sanitizeTextContent(msg.sender)}</span>
                     <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">Selected message</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap">{sanitizeTextContent(msg.body)}</div>
                 </div>
               ))}
             </div>
@@ -418,7 +432,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               </Button>
             </div>
             
-            {draftError && <p role="alert" className="text-sm text-red-500">{draftError}</p>}
+            {draftError && <p role="alert" className="text-sm text-red-500">{sanitizeTextContent(draftError)}</p>}
 
             <label htmlFor="reply-draft" className="sr-only">Reply draft</label>
             <Textarea 
@@ -434,7 +448,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               <div>
                 {sendStatus && (
                   <p role={sendStatus.type === 'error' ? 'alert' : 'status'} aria-live="polite" className={`text-sm ${sendStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {sendStatus.message}
+                    {sanitizeTextContent(sendStatus.message)}
                   </p>
                 )}
               </div>

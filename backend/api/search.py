@@ -39,17 +39,20 @@ def thread_group_key():
     return func.coalesce(normalized_thread_id, normalized_message_id)
 
 
-def build_reply_counts_subquery():
+def build_reply_counts_subquery(user_id: str | None = None):
     group_key = thread_group_key()
-    return (
+    statement = (
         select(
             group_key.label("thread_key"),
             func.count(Email.id).label("reply_count"),
         )
         .select_from(Email)
-        .group_by(group_key)
-        .subquery("thread_counts")
     )
+
+    if user_id is not None:
+        statement = statement.where(Email.user_id == user_id)
+
+    return statement.group_by(group_key).subquery("thread_counts")
 
 
 @router.post("/search", response_model=SearchResponse)
@@ -77,7 +80,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
-        reply_counts = build_reply_counts_subquery()
+        reply_counts = build_reply_counts_subquery(target_user_id)
 
         stmt_email = (
             select(
@@ -92,6 +95,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             )
             .select_from(Email)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
+            .where(Email.user_id == target_user_id)
         )
 
         fts_score_att = func.ts_rank_cd(
@@ -115,6 +119,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             .select_from(Attachment)
             .join(Email, Attachment.email_id == Email.id)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
+            .where(Email.user_id == target_user_id)
         )
 
         combined = union_all(stmt_email, stmt_att).cte("combined_search")

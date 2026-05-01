@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 async def process_zip_file(zip_path: str | Path, session: AsyncSession):
+    user_id = os.getenv("EMAIL_IMPORT_USER_ID", "default")
     with tempfile.TemporaryDirectory() as temp_dir:
         logger.info(f"Extracting {zip_path}...")
         extracted_files = await extract_backup_async(zip_path, temp_dir)
@@ -41,7 +42,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             embedding = None
             if chunks:
                 try:
-                    tenant_config = await session.scalar(select(TenantConfig).where(TenantConfig.user_id == "default"))
+                    tenant_config = await session.scalar(select(TenantConfig).where(TenantConfig.user_id == user_id))
                     api_key = (tenant_config.openai_api_key if tenant_config and tenant_config.openai_api_key else os.getenv("OPENAI_API_KEY")) or ""
                     embeddings = await generate_embeddings([chunks[0]], api_key)
                     if embeddings:
@@ -52,9 +53,10 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     )
 
             # Upsert into database
-            thread_id = await assign_thread_id(session, email_data)
+            thread_id = await assign_thread_id(session, email_data, user_id=user_id)
             
             stmt = insert(Email).values(
+                user_id=user_id,
                 message_id=email_data["message_id"],
                 sender=email_data["sender"],
                 reply_to=email_data.get("reply_to"),
@@ -68,8 +70,9 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 embedding=embedding,
             )
             stmt = stmt.on_conflict_do_update(
-                index_elements=["message_id"],
+                index_elements=["user_id", "message_id"],
                 set_=dict(
+                    user_id=stmt.excluded.user_id,
                     sender=stmt.excluded.sender,
                     reply_to=stmt.excluded.reply_to,
                     recipients=stmt.excluded.recipients,

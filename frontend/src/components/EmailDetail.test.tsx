@@ -362,4 +362,49 @@ describe("EmailDetail", () => {
     expect(decisionList?.getAttribute("aria-labelledby")).toBe(decisionHeading?.id);
     expect(decisionList?.children).toHaveLength(4);
   });
+
+  it("renders untrusted email and LLM content as inert text", async () => {
+    const selectedEmail: TestEmail = {
+      id: 6,
+      message_id: "<xss@example.com>",
+      thread_id: "xss-thread",
+      sender: "<img src=x onerror=alert('sender')>\u0000@example.com",
+      recipients: "user@example.com",
+      subject: "<img src=x onerror=alert('subject')>\u0000",
+      date: "2026-04-27T12:00:00Z",
+      body: "<script>alert('body')</script>\u0000",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/6")) return Promise.resolve(jsonResponse(selectedEmail));
+      if (url.endsWith("/api/emails/thread/xss-thread")) {
+        return Promise.resolve(jsonResponse({ thread: [selectedEmail] }));
+      }
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({
+          summary: "<svg onload=alert('summary')>\u0000",
+          todos: ["<img src=x onerror=alert('todo')>\u0000"],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={6} />);
+    });
+
+    await waitForCondition(() =>
+      container?.textContent?.includes("<img src=x onerror=alert('subject')>") ?? false,
+    );
+
+    expect(container.querySelector("img, script")).toBeNull();
+    expect(container.textContent).toContain("<script>alert('body')</script>");
+    expect(container.textContent).not.toContain("\u0000");
+  });
 });

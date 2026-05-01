@@ -76,7 +76,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses dummy header auth and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added.
+This repo still uses dummy `X-User-Id` header auth for local development, but email rows now persist an owner in `emails.user_id`. Email detail, thread, inbox, search, network graph, import, and threading lookups are scoped to the current user; production deployments must replace dummy header auth with a trusted identity boundary.
 
 ## Verification used for this hardening pass
 

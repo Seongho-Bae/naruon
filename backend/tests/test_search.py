@@ -80,3 +80,13 @@ def test_search_reply_counts_group_by_coalesced_thread_key():
     assert "coalesce(emails.thread_id, emails.message_id)" not in sql
     assert "count(emails.id)" in sql
     assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
+
+
+def test_search_reply_counts_can_be_scoped_by_current_user():
+    from api.search import build_reply_counts_subquery
+
+    subquery = build_reply_counts_subquery("alice")
+    sql = str(subquery.select()).lower()
+
+    assert "emails.user_id" in sql
+    assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql

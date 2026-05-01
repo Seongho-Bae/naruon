@@ -42,8 +42,11 @@ async def get_network_graph(
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
-    # TODO: filter by target_user_id once Email model has user_id
-    result = await db.execute(select(Email.sender, Email.recipients).limit(limit))
+    result = await db.execute(
+        select(Email.sender, Email.recipients)
+        .where(Email.user_id == target_user_id)
+        .limit(limit)
+    )
     rows = result.fetchall()
 
     nodes_set = set()

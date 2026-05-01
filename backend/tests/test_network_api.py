@@ -18,8 +18,10 @@ class MockResult:
 class MockSession:
     def __init__(self, rows):
         self.rows = rows
+        self.executed_sql = []
 
     async def execute(self, query):
+        self.executed_sql.append(str(query).lower())
         return MockResult(self.rows)
 
 
@@ -132,3 +134,16 @@ def test_network_endpoint_query_params():
         data = response.json()
         assert len(data["nodes"]) == 2
         assert len(data["edges"]) == 1
+
+
+def test_network_endpoint_filters_graph_query_by_current_user():
+    session = MockSession([("alice@example.com", "bob@example.com")])
+
+    async def override_get_db():
+        yield session
+
+    with patch.dict(app.dependency_overrides, {get_db: override_get_db}):
+        response = client.get("/api/network/graph", headers={"X-User-Id": "alice"})
+
+    assert response.status_code == 200
+    assert any("emails.user_id" in sql for sql in session.executed_sql)

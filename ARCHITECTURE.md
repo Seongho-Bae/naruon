@@ -23,18 +23,24 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The current `emails` table does not have an owner/mailbox key. Email and
-search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+Email rows are scoped by `emails.user_id`, and email detail, thread, inbox,
+search, network graph, import, and threading lookups filter through the current
+authenticated user. Cross-user direct object references return 404 for email
+detail and thread routes, which avoids disclosing whether another user's email
+ID or thread exists.
+
+Local development still uses dummy `X-User-Id` header authentication. Production
+deployments must terminate real authentication before the FastAPI app or replace
+`backend/api/auth.py` with a verified identity provider; the ownership filters
+only protect the boundary once `current_user` is trustworthy.
 
 ## Local deployment boundary
 
 `docker-compose.yml` provides the blessed local stack: Postgres with pgvector,
 FastAPI backend, and Next.js frontend. The backend bootstrap script creates the
 `vector` extension, metadata-defined tables for fresh local databases, and
-idempotent threading-column backfills for existing local databases. There is no
-Alembic migration history in this repo yet.
+idempotent owner/threading-column backfills for existing local databases. There
+is no Alembic migration history in this repo yet.
 
 ## Send boundary
 

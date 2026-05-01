@@ -79,6 +79,27 @@ class LimitAwareMockSession(MockSession):
         return MockResult(rows)
 
 
+class OwnerAwareMockSession(LimitAwareMockSession):
+    def __init__(self, items, current_user: str, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.current_user = current_user
+        self.executed_sql: list[str] = []
+
+    async def execute(self, query):
+        self.executed_sql.append(str(query).lower())
+        original_items = self.items
+        if "emails.user_id" in self.executed_sql[-1]:
+            self.items = [
+                item
+                for item in self.items
+                if getattr(item, "user_id", None) == self.current_user
+            ]
+        try:
+            return await super().execute(query)
+        finally:
+            self.items = original_items
+
+
 @pytest.fixture
 def sample_email():
     return Email(
@@ -274,6 +295,97 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
 
     assert response.status_code == 200
     assert response.json()["thread"][0]["thread_id"] == "root/part@example.com"
+
+
+def owned_email(email_id: int, owner: str, thread_id: str = "shared-thread") -> Email:
+    email = Email(
+        id=email_id,
+        message_id=f"msg-{email_id}@example.com",
+        thread_id=thread_id,
+        sender=f"sender-{email_id}@example.com",
+        recipients=f"{owner}@example.com",
+        subject=f"Owner {owner}",
+        date=datetime.datetime(2026, 4, 27, 10, email_id, tzinfo=datetime.timezone.utc),
+        body=f"Body for {owner}",
+    )
+    email.user_id = owner
+    return email
+
+
+def override_email_user(user_id: str):
+    async def _override():
+        return user_id
+
+    return _override
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_returns_404_for_other_user(client: AsyncClient):
+    from db.session import get_db
+    from api.emails import get_current_user as emails_get_current_user
+
+    session = OwnerAwareMockSession([owned_email(7, "bob")], current_user="alice")
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[emails_get_current_user] = override_email_user("alice")
+
+    response = await client.get("/api/emails/7")
+
+    assert response.status_code == 404
+    assert any("emails.user_id" in sql for sql in session.executed_sql)
+
+
+@pytest.mark.asyncio
+async def test_get_emails_lists_only_current_user_threads(client: AsyncClient):
+    from db.session import get_db
+    from api.emails import get_current_user as emails_get_current_user
+
+    alice_email = owned_email(1, "alice", thread_id="alice-thread")
+    bob_email = owned_email(2, "bob", thread_id="bob-thread")
+    session = OwnerAwareMockSession([bob_email, alice_email], current_user="alice")
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[emails_get_current_user] = override_email_user("alice")
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    data = response.json()["emails"]
+    assert [item["id"] for item in data] == [alice_email.id]
+    assert any("emails.user_id" in sql for sql in session.executed_sql)
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_excludes_other_user_messages(client: AsyncClient):
+    from db.session import get_db
+    from api.emails import get_current_user as emails_get_current_user
+
+    alice_email = owned_email(1, "alice")
+    bob_email = owned_email(2, "bob")
+    session = OwnerAwareMockSession([alice_email, bob_email], current_user="alice")
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[emails_get_current_user] = override_email_user("alice")
+
+    response = await client.get("/api/emails/thread/shared-thread")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["thread"]] == [alice_email.id]
+    assert any("emails.user_id" in sql for sql in session.executed_sql)
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_returns_404_when_thread_belongs_only_to_other_user(
+    client: AsyncClient,
+):
+    from db.session import get_db
+    from api.emails import get_current_user as emails_get_current_user
+
+    session = OwnerAwareMockSession([owned_email(2, "bob")], current_user="alice")
+    app.dependency_overrides[get_db] = lambda: session
+    app.dependency_overrides[emails_get_current_user] = override_email_user("alice")
+
+    response = await client.get("/api/emails/thread/shared-thread")
+
+    assert response.status_code == 404
+    assert any("emails.user_id" in sql for sql in session.executed_sql)
 
 
 @pytest.mark.asyncio
