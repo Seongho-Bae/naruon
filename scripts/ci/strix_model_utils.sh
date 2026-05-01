@@ -103,3 +103,21 @@ normalize_model() {
 		;;
 	esac
 }
+
+model_requires_vertex_auth() {
+	local model normalized_model
+	model="$(trim_whitespace "${1-}")"
+	if [ -z "$model" ]; then
+		return 1
+	fi
+
+	normalized_model="$(normalize_model "$model")" || return $?
+	case "$normalized_model" in
+	vertex_ai/* | vertex_ai_beta/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}

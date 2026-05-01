@@ -40,6 +40,44 @@ assert_file_contains() {
 	fi
 }
 
+assert_file_not_contains() {
+	local file_path="$1"
+	local needle="$2"
+	local message="$3"
+
+	if grep -Fq -- "$needle" "$file_path"; then
+		record_failure "$message (unexpected '$needle')"
+	fi
+}
+
+assert_strix_workflow_pr_trigger_hardened() {
+	local workflow_file="$REPO_ROOT/.github/workflows/strix.yml"
+
+	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
+	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
+	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
+	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE_SHA" "strix workflow pins trusted workspace SHA"
+	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE=\$trusted_workspace" "strix workflow exports a trusted workspace path"
+	assert_file_contains "$workflow_file" "git -C \"\$TRUSTED_WORKSPACE\"" "strix workflow runs git only inside trusted workspace"
+	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE_TEST\"" "strix workflow self-test executes trusted temp script"
+	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE\"" "strix workflow executes trusted temp gate script"
+	assert_file_contains "$workflow_file" "Collect Strix reports for artifact upload" "strix workflow preserves reports from trusted workspace"
+	assert_file_contains "$workflow_file" ". \"\$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh\"" "strix workflow reuses trusted model auth helpers"
+	assert_file_contains "$workflow_file" "model_requires_vertex_auth \"\$strix_llm\"" "strix workflow delegates Vertex auth detection"
+	assert_file_not_contains "$workflow_file" "actions/checkout" "strix workflow avoids checkout in privileged context"
+	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/test_strix_quick_gate.sh" "strix workflow avoids direct repo self-test execution on privileged trigger"
+	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
+	assert_file_contains "$workflow_file" "Fetch pull request head for trusted scan" "strix workflow fetches PR head without checkout"
+	assert_file_contains "$workflow_file" "refs/remotes/pull" "strix workflow verifies fetched PR head ref"
+	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
+	assert_file_contains "$workflow_file" "[ \"\$GITHUB_EVENT_NAME\" = \"pull_request_target\" ]" "strix workflow fails closed when PR target secrets are missing"
+	assert_file_contains "$workflow_file" "Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event" "strix workflow fails closed when PR target model auth is missing"
+	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
+		record_failure "strix workflow must not expose secrets on pull_request events"
+	fi
+	assert_file_not_contains "$workflow_file" "github.event_name == 'pull_request'" "strix workflow should not retain pull_request-only expressions"
+}
+
 run_gate_case() {
 	local scenario="$1"
 	local initial_model="$2"
@@ -632,6 +670,14 @@ EOS
 		echo "╰──────────────────────────────────────────────────────────────────────────────╯"
 		echo "Penetration test failed: simulated inline medium finding"
 		exit 2
+		;;
+	medium-vuln-default-threshold)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-medium-default/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-medium-default/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: MEDIUM
+EOS
+		echo "Penetration test failed: simulated medium finding"
+		exit 1
 		;;
 	critical-vuln-at-threshold)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-critical/vulnerabilities"
@@ -1453,6 +1499,19 @@ EOF
 			UNRELATED_SECRET="should-not-forward"
 		)
 	fi
+	if [ "$min_fail_severity" = "__UNSET__" ]; then
+		local next_env_cmd=()
+		local env_pair
+		for env_pair in "${env_cmd[@]}"; do
+			case "$env_pair" in
+			STRIX_FAIL_ON_MIN_SEVERITY=*)
+				continue
+				;;
+			esac
+			next_env_cmd+=("$env_pair")
+		done
+		env_cmd=("${next_env_cmd[@]}")
+	fi
 	printf '%s' "$initial_model" >"$strix_llm_file"
 	env_cmd+=(STRIX_LLM_FILE="$strix_llm_file")
 	printf '%s' 'dummy' >"$llm_api_key_file"
@@ -1563,6 +1622,391 @@ EOF
 			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;UNRELATED_SECRET=<unset>" \
 			"scenario=$scenario runtime env forwarding"
 	fi
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_head_scope_case() {
+	local case_name="$1"
+	local changed_file="$2"
+	local base_content="$3"
+	local head_content="$4"
+	local disable_pr_scoping="${5-0}"
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+scoped_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+if [ ! -f "$scoped_file" ]; then
+	echo "Error: PR head scoped file missing ($scoped_file)" >&2
+	exit 61
+fi
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$scoped_file"; then
+	echo "Error: PR head scoped file did not contain head content" >&2
+	cat -- "$scoped_file" >&2
+	exit 62
+fi
+if [ -n "${FAKE_STRIX_UNEXPECTED_BASE_CONTENT:-}" ] && grep -Fq -- "$FAKE_STRIX_UNEXPECTED_BASE_CONTENT" "$scoped_file"; then
+	echo "Error: PR head scoped file leaked base checkout content" >&2
+	cat -- "$scoped_file" >&2
+	exit 63
+fi
+echo "scan ok with PR head content"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		if [ "$base_content" != "__ABSENT__" ]; then
+			mkdir -p "$(dirname -- "$changed_file")"
+			printf '%s\n' "$base_content" >"$changed_file"
+		fi
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		mkdir -p "$(dirname -- "$changed_file")"
+		printf '%s\n' "$head_content" >"$changed_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	local unexpected_base_content=""
+	if [ "$base_content" != "__ABSENT__" ]; then
+		unexpected_base_content="$base_content"
+	fi
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="$head_content" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTENT="$unexpected_base_content" \
+			STRIX_DISABLE_PR_SCOPING="$disable_pr_scoping" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=$case_name exit code"
+	assert_file_contains "$output_log" "scan ok with PR head content" "case=$case_name output"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
+	local case_name="$1"
+	local changed_file="$2"
+	local base_content="$3"
+	local head_content="$4"
+	local fake_git_fail_command="$5"
+	local disable_pr_scoping="${6-0}"
+	local expected_exit="1"
+	if [ "$fake_git_fail_command" = "ls-tree" ] || [ "$fake_git_fail_command" = "diff" ] || [ "$disable_pr_scoping" = "1" ]; then
+		expected_exit="2"
+	fi
+	local expected_message="pull request changed file could not be read from PR head; failing closed"
+	if [ "$fake_git_fail_command" = "diff" ]; then
+		expected_message="pull request changed file list could not be read; failing closed"
+	fi
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local real_git
+	real_git="$(command -v git)"
+	local fake_git="$bin_dir/git"
+	cat >"$fake_git" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${1:-}" = "show" ]; then
+	printf 'PARTIAL_PR_HEAD_BLOB_SHOULD_BE_DISCARDED'
+	exit 1
+fi
+if [ "${1:-}" = "${FAKE_GIT_FAIL_COMMAND:-}" ]; then
+	printf 'FAILED_PR_HEAD_LOOKUP_SHOULD_FAIL_CLOSED'
+	exit 1
+fi
+exec "${REAL_GIT_PATH:?}" "$@"
+EOF
+	chmod +x "$fake_git"
+
+	local fake_strix="$bin_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run after a PR-head blob failure" >&2
+exit 64
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		if [ "$base_content" != "__ABSENT__" ]; then
+			mkdir -p "$(dirname -- "$changed_file")"
+			printf '%s\n' "$base_content" >"$changed_file"
+		fi
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		mkdir -p "$(dirname -- "$changed_file")"
+		printf '%s\n' "$head_content" >"$changed_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			REAL_GIT_PATH="$real_git" \
+			FAKE_GIT_FAIL_COMMAND="$fake_git_fail_command" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="$disable_pr_scoping" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "$expected_exit" "$rc" "case=$case_name PR-head blob failure exits closed"
+	assert_file_contains "$output_log" "$expected_message" "case=$case_name PR-head failure output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=$case_name PR-head blob failure must not invoke Strix"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_irregular_head_entry_fails_closed_case() {
+	local case_name="$1"
+	local changed_file="$2"
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run after an irregular PR-head entry" >&2
+exit 66
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		mkdir -p "$(dirname -- "$changed_file")"
+		printf '%s\n' 'BASE_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		rm -f -- "$changed_file"
+		ln -s ../outside-secret "$changed_file"
+		git add .
+		git commit -qm 'head symlink commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=$case_name irregular PR-head entry exits closed"
+	assert_file_contains "$output_log" "pull request changed file is not a regular PR-head file; failing closed" "case=$case_name output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=$case_name irregular PR-head entry must not invoke Strix"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_rejects_unsafe_changed_path_case() {
+	local case_name="$1"
+	local changed_file="$2"
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local event_payload_file="$tmp_dir/github_event.json"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run for unsafe changed paths" >&2
+exit 65
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	cat >"$event_payload_file" <<'EOF'
+{
+  "pull_request": {
+    "base": {"sha": "base-sha"},
+    "head": {"sha": "head-sha"}
+  }
+}
+EOF
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u STRIX_TEST_PR_SCA_STATUS_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			GITHUB_EVENT_PATH="$event_payload_file" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=$case_name unsafe changed path exits closed"
+	assert_file_contains "$output_log" "pull request changed file path is unsafe" "case=$case_name unsafe path output"
+	assert_file_not_contains "$output_log" "No scannable changed files" "case=$case_name must not skip unsafe path"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=$case_name unsafe changed path must not invoke Strix"
 
 	rm -rf "$tmp_dir"
 }
@@ -1979,6 +2423,101 @@ EOF
 
 	rm -rf "$tmp_dir"
 }
+
+assert_strix_workflow_pr_trigger_hardened
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-modified-file-uses-head-blob" \
+	"src/app.py" \
+	"BASE_CONTENT_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_CONTENT_SHOULD_BE_SCANNED"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-added-file-uses-head-blob" \
+	"src/new_module.py" \
+	"__ABSENT__" \
+	"HEAD_ONLY_NEW_FILE_SHOULD_BE_SCANNED"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-source-file-with-space-uses-head-blob" \
+	"src/unsafe name.py" \
+	"BASE_CONTENT_WITH_SPACE_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_CONTENT_WITH_SPACE_SHOULD_BE_SCANNED"
+
+run_pull_request_target_rejects_unsafe_changed_path_case \
+	"pull-request-target-parent-directory-changed-path-fails-closed" \
+	"../outside.py"
+
+run_pull_request_target_rejects_unsafe_changed_path_case \
+	"pull-request-target-pathspec-changed-path-fails-closed" \
+	":(glob)src/**"
+
+run_pull_request_target_rejects_unsafe_changed_path_case \
+	"pull-request-target-trailing-space-changed-path-fails-closed" \
+	"src/evil.py "
+
+run_pull_request_target_rejects_unsafe_changed_path_case \
+	"pull-request-target-leading-space-changed-path-fails-closed" \
+	" src/evil.py"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-disabled-pr-scoping-nested-file-uses-head-blob" \
+	"backend/app/existing.py" \
+	"BASE_NESTED_CONTENT_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_NESTED_CONTENT_SHOULD_BE_SCANNED" \
+	"1"
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case \
+	"pull-request-target-added-file-pr-head-blob-read-failure" \
+	"src/new_module.py" \
+	"__ABSENT__" \
+	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
+	"show"
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case \
+	"pull-request-target-modified-file-pr-head-blob-read-failure" \
+	"src/existing.py" \
+	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_HEAD_READ_FAILURE" \
+	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
+	"show"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-head-entry-fails-closed" \
+	"src/app.py"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-readme-head-entry-fails-closed" \
+	"README.md"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-test-head-entry-fails-closed" \
+	"tests/app_test.py"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-infra-head-entry-fails-closed" \
+	"infra/deploy.sh"
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case \
+	"pull-request-target-modified-file-pr-head-tree-lookup-failure" \
+	"src/existing.py" \
+	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_HEAD_LOOKUP_FAILURE" \
+	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
+	"ls-tree"
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case \
+	"pull-request-target-changed-file-list-diff-failure" \
+	"src/existing.py" \
+	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_DIFF_FAILURE" \
+	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
+	"diff"
+
+run_pull_request_target_aborts_on_pr_head_blob_failure_case \
+	"pull-request-target-disabled-pr-scope-pr-head-blob-read-failure" \
+	"src/existing.py" \
+	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_DISABLED_SCOPE_HEAD_FAILURE" \
+	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
+	"show" \
+	"1"
 
 run_gate_case "success" \
 	"vertex_ai/ready-primary" \
@@ -2443,6 +2982,20 @@ run_gate_case "inline-medium-below-threshold" \
 	"1" \
 	"vertex_ai/inline-medium-primary" \
 	"<unset>"
+
+run_gate_case "medium-vuln-default-threshold" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"__UNSET__"
 
 # Infrastructure error guard: below-threshold findings must NOT pass when the
 # strix log contains evidence of infrastructure-level errors (timeout,
@@ -3529,6 +4082,7 @@ run_missing_config_case "whitespace-only-llm-api-key" "vertex_ai/ready-primary" 
 # The gate script cannot be sourced directly (it has top-level side effects),
 # so the shared helper script exposes the pure model/path functions directly.
 # shellcheck source=scripts/ci/strix_model_utils.sh
+# shellcheck disable=SC1091  # source path is repo-local; local lint may omit -x
 . "$REPO_ROOT/scripts/ci/strix_model_utils.sh"
 
 assert_vertex_path() {
@@ -3592,6 +4146,30 @@ assert_normalized_model() {
 	fi
 }
 
+assert_model_requires_vertex_auth() {
+	local label="$1" model="$2" default_provider="$3" expected_rc="$4"
+	local rc old_default_provider="${DEFAULT_PROVIDER-__UNSET__}"
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	DEFAULT_PROVIDER="$default_provider"
+	set +e
+	model_requires_vertex_auth "$model"
+	rc=$?
+	set -e
+
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	assert_equals "$expected_rc" "$rc" "model_requires_vertex_auth($label)"
+}
+
 # Valid paths — should return 0
 assert_vertex_path "models/<id>" "models/gemini-2.5-pro" 0
 assert_vertex_path "publishers/<p>/models/<id>" "publishers/google/models/gemini-2.5-pro" 0
@@ -3626,6 +4204,12 @@ assert_normalized_model \
 	"projects/my-proj/locations/us-central1/publishers/google/models/gemini-2.5-pro" \
 	"anthropic" \
 	"vertex_ai/gemini-2.5-pro"
+
+assert_model_requires_vertex_auth "explicit-vertex" "vertex_ai/gemini-2.5-pro" "gemini" "0"
+assert_model_requires_vertex_auth "explicit-vertex-beta" "vertex_ai_beta/gemini-2.5-pro" "gemini" "0"
+assert_model_requires_vertex_auth "vertex-resource-path" "projects/my-proj/locations/us-central1/models/gemini-2.5-pro" "anthropic" "0"
+assert_model_requires_vertex_auth "implicit-vertex-default" "gemini-2.5-pro" "vertex_ai" "0"
+assert_model_requires_vertex_auth "nonvertex-provider" "gemini/gemini-2.5-pro" "gemini" "1"
 
 # Whitespace in paths — must be rejected (SAST word-splitting guard)
 assert_vertex_path "space-in-project" "projects/my proj/locations/us/models/foo" 1
