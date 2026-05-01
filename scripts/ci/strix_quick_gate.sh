@@ -31,11 +31,12 @@ DEFAULT_PROVIDER=""
 LLM_API_BASE_FILE="${LLM_API_BASE_FILE:-}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
-STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-HIGH}"
+STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
 RUN_START_EPOCH="$(date +%s)"
 PREEXISTING_REPORT_DIRS=()
 REPO_NAME="${REPO_ROOT##*/}"
 # shellcheck source=scripts/ci/strix_model_utils.sh
+# shellcheck disable=SC1091  # source path is repo-local; local lint may omit -x
 . "$SCRIPT_DIR/strix_model_utils.sh"
 # Sticky flag: once ANY attempt encounters an infrastructure error (rate limit,
 # LLM connection failure, mid-stream fallback, etc.), this flag stays 1 for
@@ -156,23 +157,145 @@ normalize_changed_file_path() {
 	local changed_file="$1"
 	python3 - "$REPO_ROOT" "$changed_file" <<'PY'
 from pathlib import Path
+import posixpath
+import re
 import sys
 
 repo_root = Path(sys.argv[1]).resolve(strict=True)
-relative_path = Path(sys.argv[2].strip())
-relative_path_str = sys.argv[2].strip()
+relative_path_str = sys.argv[2]
 if "\n" in relative_path_str or "\r" in relative_path_str:
     raise SystemExit(1)
+if not relative_path_str:
+    raise SystemExit(1)
+if relative_path_str != relative_path_str.strip():
+    raise SystemExit(1)
+if "\x00" in relative_path_str:
+    raise SystemExit(1)
+if "\\" in relative_path_str:
+    raise SystemExit(1)
+normalized = posixpath.normpath(relative_path_str)
+if normalized in (".", "") or normalized.startswith("../") or normalized == "..":
+    raise SystemExit(1)
+if not re.fullmatch(r"[A-Za-z0-9_./ -]+", normalized):
+    raise SystemExit(1)
+relative_path = Path(normalized)
 if relative_path.is_absolute():
     raise SystemExit(1)
 if any(part in ('', '.', '..') for part in relative_path.parts):
     raise SystemExit(1)
-src_path = (repo_root / relative_path).resolve(strict=False)
-if not src_path.exists():
-    raise SystemExit(1)
-relative = src_path.relative_to(repo_root)
-print(relative.as_posix())
+candidate = (repo_root / relative_path).resolve(strict=False)
+candidate.relative_to(repo_root)
+print(relative_path.as_posix())
 PY
+}
+
+pull_request_head_blob_required() {
+	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]
+}
+
+pr_head_regular_file_mode() {
+	local relative_path="$1"
+	local head_sha tree_output line_count metadata tree_path mode object_type _object_hash
+	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+	if [ -z "$head_sha" ]; then
+		return 2
+	fi
+	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+		return 2
+	fi
+	if ! tree_output="$(git ls-tree "$head_sha" -- "$relative_path")"; then
+		return 2
+	fi
+	if [ -z "$tree_output" ]; then
+		return 1
+	fi
+	line_count="$(printf '%s\n' "$tree_output" | wc -l | tr -d ' ')"
+	if [ "$line_count" != "1" ]; then
+		return 2
+	fi
+	IFS=$'\t' read -r metadata tree_path <<<"$tree_output"
+	# shellcheck disable=SC2086 # metadata is exactly git ls-tree's mode/type/object tuple.
+	read -r mode object_type _object_hash <<<"$metadata"
+	if [ "$tree_path" != "$relative_path" ]; then
+		return 2
+	fi
+	if [ "$object_type" != "blob" ]; then
+		return 1
+	fi
+	case "$mode" in
+	100644 | 100755)
+		printf '%s\n' "$mode"
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+changed_file_exists_for_scan() {
+	local relative_path="$1"
+	if pull_request_head_blob_required; then
+		local mode_rc=0
+		pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
+		case "$mode_rc" in
+		0)
+			return 0
+			;;
+		1)
+			return 1
+			;;
+		*)
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $relative_path" >&2
+			return 2
+			;;
+		esac
+	fi
+	if [ -f "$REPO_ROOT/$relative_path" ] && [ ! -L "$REPO_ROOT/$relative_path" ]; then
+		return 0
+	fi
+	if [ -z "$(trim_whitespace "${PR_HEAD_SHA:-}")" ]; then
+		return 1
+	fi
+	local mode_rc=0
+	pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
+	case "$mode_rc" in
+	0)
+		return 0
+		;;
+	2)
+		return 2
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+copy_pr_head_blob_to_file() {
+	local relative_path="$1"
+	local dst_path="$2"
+	local head_sha mode mode_rc tmp_dst
+	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+	mode_rc=0
+	mode="$(pr_head_regular_file_mode "$relative_path")" || mode_rc=$?
+	if [ "$mode_rc" -ne 0 ]; then
+		return 2
+	fi
+	tmp_dst="$(mktemp "$(dirname -- "$dst_path")/.pr-head.XXXXXX")" || return 2
+	if ! git show "$head_sha:$relative_path" >"$tmp_dst"; then
+		rm -f -- "$tmp_dst"
+		return 2
+	fi
+	if ! mv -- "$tmp_dst" "$dst_path"; then
+		rm -f -- "$tmp_dst"
+		return 2
+	fi
+	if [ "$mode" = "100755" ]; then
+		chmod 755 "$dst_path" || return 2
+	else
+		chmod 644 "$dst_path" || return 2
+	fi
 }
 
 is_supported_source_file() {
@@ -404,7 +527,6 @@ load_pull_request_changed_files() {
 
 	if [ "${STRIX_TEST_CHANGED_FILES_OVERRIDE+x}" = x ]; then
 		while IFS= read -r changed_file; do
-			changed_file="$(trim_whitespace "$changed_file")"
 			if [ -n "$changed_file" ]; then
 				CHANGED_FILES+=("$changed_file")
 			fi
@@ -441,23 +563,43 @@ PY
 		head_sha="$(printf '%s' "$pr_shas" | sed -n '2p')"
 	fi
 	if [ -z "$base_sha" ] || [ -z "$head_sha" ]; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request base/head metadata is unavailable; failing closed." >&2
+			return 2
+		fi
 		return 1
 	fi
 	if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request base commit could not be read; failing closed: $base_sha" >&2
+			return 2
+		fi
 		return 1
 	fi
 	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request head commit could not be read; failing closed: $head_sha" >&2
+			return 2
+		fi
+		return 1
+	fi
+
+	local changed_files_output
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha")"; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+			return 2
+		fi
 		return 1
 	fi
 
 	while IFS= read -r changed_file; do
-		changed_file="$(trim_whitespace "$changed_file")"
 		if [ -n "$changed_file" ]; then
 			CHANGED_FILES+=("$changed_file")
 		fi
-	done < <(git diff --name-only "$base_sha...$head_sha")
+	done <<<"$changed_files_output"
 
-	[ "${#CHANGED_FILES[@]}" -gt 0 ]
+	return 0
 }
 
 load_pull_request_head_sha() {
@@ -638,38 +780,50 @@ PY
 is_scannable_changed_file() {
 	local changed_file="$1"
 	local normalized_changed_file
-	changed_file="$(trim_whitespace "$changed_file")"
 	if [ -z "$changed_file" ]; then
 		return 1
 	fi
-	if [[ "$changed_file" == *.md || "$changed_file" == *.txt ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */src/test/* || "$changed_file" == tests/* || "$changed_file" == */tests/* ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */__tests__/* || "$changed_file" == *.test.ts || "$changed_file" == *.test.tsx || "$changed_file" == *.spec.ts || "$changed_file" == *.spec.tsx ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == pnpm-lock.yaml || "$changed_file" == package-lock.json || "$changed_file" == yarn.lock || "$changed_file" == uv.lock ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == infra/* ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */ ]]; then
-		return 1
-	fi
 	if ! normalized_changed_file="$(normalize_changed_file_path "$changed_file")"; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
+			return 2
+		fi
 		return 1
 	fi
-	if ! is_supported_source_file "$changed_file"; then
+	if [[ "$normalized_changed_file" == *.md || "$normalized_changed_file" == *.txt ]]; then
 		return 1
 	fi
-	if [ ! -f "$REPO_ROOT/$normalized_changed_file" ] || [ -L "$REPO_ROOT/$normalized_changed_file" ]; then
+	if [[ "$normalized_changed_file" == */src/test/* || "$normalized_changed_file" == tests/* || "$normalized_changed_file" == */tests/* ]]; then
 		return 1
 	fi
-	return 0
+	if [[ "$normalized_changed_file" == */__tests__/* || "$normalized_changed_file" == *.test.ts || "$normalized_changed_file" == *.test.tsx || "$normalized_changed_file" == *.spec.ts || "$normalized_changed_file" == *.spec.tsx ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == pnpm-lock.yaml || "$normalized_changed_file" == package-lock.json || "$normalized_changed_file" == yarn.lock || "$normalized_changed_file" == uv.lock ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == infra/* ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == */ ]]; then
+		return 1
+	fi
+	if ! is_supported_source_file "$normalized_changed_file"; then
+		return 1
+	fi
+	local exists_rc=0
+	changed_file_exists_for_scan "$normalized_changed_file" || exists_rc=$?
+	case "$exists_rc" in
+	0)
+		return 0
+		;;
+	2)
+		return 2
+		;;
+	*)
+		return 1
+		;;
+	esac
 }
 
 build_pull_request_scope_dir() {
@@ -685,26 +839,38 @@ build_pull_request_scope_dir() {
 			echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
 			return 2
 		}
-		mapfile -t _paths < <(
-			python3 - "$REPO_ROOT" "$scope_dir" "$relative_path" <<'PY'
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
 from pathlib import Path
 import sys
 
-repo_root = Path(sys.argv[1]).resolve(strict=True)
-scope_root = Path(sys.argv[2]).resolve(strict=True)
-relative_path = Path(sys.argv[3])
-src_path = (repo_root / relative_path).resolve(strict=False)
-if not src_path.exists():
-    raise SystemExit(1)
-src_path.relative_to(repo_root)
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
 dst_path = scope_root / relative_path
-print(src_path)
 print(dst_path)
 PY
-		)
-		local src_path="${_paths[0]}"
-		local dst_path="${_paths[1]}"
+		)"
 		mkdir -p -- "$(dirname -- "$dst_path")"
+		local copy_rc=1
+		local head_sha_for_copy
+		head_sha_for_copy="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+		if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && git cat-file -e "$head_sha_for_copy^{commit}" 2>/dev/null; }; then
+			copy_rc=0
+			copy_pr_head_blob_to_file "$relative_path" "$dst_path" || copy_rc=$?
+		fi
+		if [ "$copy_rc" -eq 0 ]; then
+			return 0
+		fi
+		if pull_request_head_blob_required || [ "$copy_rc" -eq 2 ]; then
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $changed_file" >&2
+			return 2
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request changed file is unavailable in both PR head and checkout: $changed_file" >&2
+			return 2
+		fi
 		cp -- "$src_path" "$dst_path"
 	}
 
@@ -720,15 +886,28 @@ prepare_pull_request_scan_scope() {
 		return 0
 	fi
 
-	if ! load_pull_request_changed_files; then
+	local load_changed_files_rc=0
+	load_pull_request_changed_files || load_changed_files_rc=$?
+	case "$load_changed_files_rc" in
+	0)
+		;;
+	2)
+		return 2
+		;;
+	*)
 		return 0
-	fi
+		;;
+	esac
 
 	local scoped_changed_files=()
 	local changed_file
 	for changed_file in "${CHANGED_FILES[@]}"; do
-		if is_scannable_changed_file "$changed_file"; then
+		local scannable_rc=0
+		is_scannable_changed_file "$changed_file" || scannable_rc=$?
+		if [ "$scannable_rc" -eq 0 ]; then
 			scoped_changed_files+=("$changed_file")
+		elif [ "$scannable_rc" -eq 2 ]; then
+			return 2
 		fi
 	done
 
@@ -777,15 +956,32 @@ PY
 		[ -n "$candidate" ]
 	}
 	if [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
+		if pull_request_head_blob_required; then
+			local build_scope_rc=0
+			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+			if [ "$build_scope_rc" -eq 0 ]; then
+				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+				PULL_REQUEST_SCOPE_FILE_BATCHES=()
+				return 0
+			fi
+			return 2
+		fi
 		local narrowed_target=""
 		if narrowed_target="$(derive_pull_request_full_target_path "${CHANGED_FILES[@]}")" && [ "$narrowed_target" != "./" ] && ! target_path_is_top_level_scope "$narrowed_target"; then
 			TARGET_PATH="$narrowed_target"
 			printf "Using narrowed target path %s for pull request Strix scan with %s scannable changed file(s).\n" "$narrowed_target" "$total_files" >&2
-		elif build_pull_request_scope_dir "${CHANGED_FILES[@]}"; then
-			TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
-			printf "Using bounded changed-file scope for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 		else
-			printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			local build_scope_rc=0
+			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+			if [ "$build_scope_rc" -eq 0 ]; then
+				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				printf "Using bounded changed-file scope for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			elif pull_request_head_blob_required; then
+				return 2
+			else
+				printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			fi
 		fi
 		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
@@ -2018,7 +2214,10 @@ run_pull_request_batch_files() {
 
 	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	build_pull_request_scope_dir "${batch_files[@]}"
+	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
+		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		return 1
+	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
 
