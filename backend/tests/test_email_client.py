@@ -1,6 +1,7 @@
 import base64
 import logging
 import pytest
+from services.mail_endpoint_policy import MailEndpointValidationError
 from services.email_client import (
     _sanitize_log_value,
     build_email_message,
@@ -53,3 +54,16 @@ def test_log_value_sanitizer_removes_crlf():
         _sanitize_log_value("victim@example.com\r\nINFO forged@example.com")
         == "victim@example.com  INFO forged@example.com"
     )
+
+
+@pytest.mark.asyncio
+async def test_send_email_rejects_private_smtp_host_before_simulated_send():
+    with pytest.raises(MailEndpointValidationError, match="not allowed"):
+        await send_email(
+            to_address="victim@example.com",
+            subject="Test",
+            body="Body",
+            smtp_server="127.0.0.1",
+            smtp_port=587,
+            smtp_username="sender@example.com",
+        )

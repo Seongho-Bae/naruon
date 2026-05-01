@@ -4,6 +4,11 @@ import poplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
 from db.models import TenantConfig
+from services.mail_endpoint_policy import (
+    MailEndpointValidationError,
+    assert_safe_mail_endpoint,
+    resolve_safe_mail_endpoint,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -68,20 +73,31 @@ class Pop3SyncWorker:
         async with semaphore:
             pop3_server = str(config.pop3_server)
             pop3_port = int(config.pop3_port)  # type: ignore
+            try:
+                endpoint = resolve_safe_mail_endpoint(pop3_server, pop3_port, service="pop3")
+            except MailEndpointValidationError as exc:
+                logger.warning("Skipping unsafe POP3 endpoint for user %s: %s", config.user_id, exc)
+                return
+
             logger.info(
                 f"Connecting to POP3 server {pop3_server}:{pop3_port} for user {config.user_id}"
             )
             try:
                 # We use asyncio.to_thread for synchronous poplib
-                await asyncio.to_thread(self._do_pop3_sync, config)
+                await asyncio.to_thread(self._do_pop3_sync, config, endpoint.connection_host)
                 logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
             except Exception as e:
                 logger.error(f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}")
 
-    def _do_pop3_sync(self, config: TenantConfig):
+    def _do_pop3_sync(self, config: TenantConfig, connection_host: str | None = None):
         pop3_server = str(config.pop3_server)
         pop3_port = int(config.pop3_port)  # type: ignore
-        pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
+        if connection_host is None:
+            endpoint = resolve_safe_mail_endpoint(pop3_server, pop3_port, service="pop3")
+            connection_host = endpoint.connection_host
+        else:
+            assert_safe_mail_endpoint(connection_host, pop3_port, service="pop3", resolve=False)
+        pop3_client = poplib.POP3_SSL(connection_host, pop3_port)
         try:
             # Note: Real implementation would use OAuth or password.
             # pop3_client.user(config.pop3_username)

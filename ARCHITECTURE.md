@@ -49,6 +49,12 @@ message payload. Local/dev behavior is explicit: missing SMTP config returns a
 400, and simulated send results are marked with `simulated: true` rather than
 described as real delivery.
 
+Tenant-configured SMTP, IMAP, and POP3 endpoints are validated before storage
+and again immediately before outbound use. The shared mail endpoint policy
+allows only service-appropriate mail ports and rejects loopback, private,
+link-local, unresolved, or otherwise non-public addresses so tenant settings
+cannot drive backend workers toward internal network targets.
+
 ## CI security boundary
 
 The Strix workflow treats pull request code as untrusted whenever repository

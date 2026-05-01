@@ -3,6 +3,9 @@ from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
 
+
+PUBLIC_RESOLVER_RESULTS = [(2, 1, 6, "", ("93.184.216.34", 587))]
+
 # Mock async DB session
 class MockResult:
     def __init__(self, obj):
@@ -60,3 +63,86 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["smtp_server"] == "smtp.example.com"
     assert data["google_client_secret"] is None
 
+
+@pytest.mark.parametrize(
+    ("field", "host", "port_field", "port"),
+    [
+        ("smtp_server", "127.0.0.1", "smtp_port", 587),
+        ("smtp_server", "localhost", "smtp_port", 587),
+        ("smtp_server", "::1", "smtp_port", 587),
+        ("imap_server", "10.0.0.1", "imap_port", 993),
+        ("pop3_server", "169.254.169.254", "pop3_port", 995),
+    ],
+)
+def test_tenant_config_rejects_private_mail_hosts(
+    client,
+    field,
+    host,
+    port_field,
+    port,
+):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            field: host,
+            port_field: port,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "not allowed" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("field", "host", "port_field", "port"),
+    [
+        ("smtp_server", "smtp.example.com", "smtp_port", 0),
+        ("smtp_server", "smtp.example.com", "smtp_port", 70000),
+        ("imap_server", "imap.example.com", "imap_port", 22),
+        ("pop3_server", "pop3.example.com", "pop3_port", 587),
+    ],
+)
+def test_tenant_config_rejects_invalid_mail_ports(
+    client,
+    field,
+    host,
+    port_field,
+    port,
+):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            field: host,
+            port_field: port,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "port" in response.json()["detail"]
+
+
+def test_tenant_config_accepts_resolvable_public_mail_hosts(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.mail_endpoint_policy.socket.getaddrinfo",
+        lambda *args, **kwargs: PUBLIC_RESOLVER_RESULTS,
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 587,
+            "imap_server": "imap.example.com",
+            "imap_port": 993,
+            "pop3_server": "pop3.example.com",
+            "pop3_port": 995,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 200

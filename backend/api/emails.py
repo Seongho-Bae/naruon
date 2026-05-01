@@ -6,6 +6,7 @@ from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
+from services.mail_endpoint_policy import MailEndpointValidationError
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
@@ -209,6 +210,8 @@ async def send_email_endpoint(
         return send_result
     except HTTPException:
         raise
+    except MailEndpointValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Error sending email: {e}", exc_info=True)
         raise HTTPException(

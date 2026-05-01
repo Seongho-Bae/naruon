@@ -7,6 +7,7 @@ from typing import Optional
 from db.models import TenantConfig
 from db.session import get_db
 from api.auth import get_current_user
+from services.mail_endpoint_policy import MailEndpointValidationError, validate_mail_endpoints
 
 router = APIRouter(prefix="/api/config")
 
@@ -48,6 +49,14 @@ class TenantConfigResponse(BaseModel):
 
 
 SECRET_FIELDS = {"oauth_client_secret", "openai_api_key", "google_client_secret"}
+MAIL_CONFIG_FIELDS = {
+    "smtp_server",
+    "smtp_port",
+    "imap_server",
+    "imap_port",
+    "pop3_server",
+    "pop3_port",
+}
 
 
 @router.post("")
@@ -65,6 +74,17 @@ async def create_or_update_config(
     db_config = result.scalar_one_or_none()
 
     config_data = config.model_dump(exclude_unset=True)
+
+    effective_mail_config = {
+        key: getattr(db_config, key, None) for key in MAIL_CONFIG_FIELDS
+    }
+    effective_mail_config.update(
+        {key: value for key, value in config_data.items() if key in MAIL_CONFIG_FIELDS}
+    )
+    try:
+        validate_mail_endpoints(effective_mail_config)
+    except MailEndpointValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if db_config:
         for key, value in config_data.items():

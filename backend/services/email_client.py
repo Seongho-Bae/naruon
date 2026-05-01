@@ -3,6 +3,8 @@ import logging
 from email.message import EmailMessage
 from typing import TypedDict
 
+from services.mail_endpoint_policy import assert_safe_mail_endpoint
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,6 +56,9 @@ async def send_email(
     references: str | None = None,
 ) -> SendEmailResult:
     """Sends an email using SMTP."""
+    if smtp_server is not None or smtp_port is not None:
+        assert_safe_mail_endpoint(smtp_server, smtp_port, service="smtp")
+
     safe_to_address = _sanitize_log_value(to_address)
     build_email_message(
         to_address=to_address,

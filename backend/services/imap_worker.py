@@ -4,6 +4,7 @@ import aioimaplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
 from db.models import TenantConfig
+from services.mail_endpoint_policy import MailEndpointValidationError, resolve_safe_mail_endpoint
 
 logger = logging.getLogger(__name__)
 
@@ -68,11 +69,16 @@ class ImapSyncWorker:
         # Already verified not None in caller
         imap_server = str(config.imap_server)
         imap_port = int(config.imap_port)  # type: ignore
-        
+        try:
+            endpoint = resolve_safe_mail_endpoint(imap_server, imap_port, service="imap")
+        except MailEndpointValidationError as exc:
+            logger.warning("Skipping unsafe IMAP endpoint for user %s: %s", config.user_id, exc)
+            return
+
         logger.info(
             f"Connecting to IMAP server {imap_server}:{imap_port} for user {config.user_id}"
         )
-        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
+        imap_client = aioimaplib.IMAP4_SSL(endpoint.connection_host, imap_port)
 
         try:
             await imap_client.wait_hello_from_server()
