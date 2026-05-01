@@ -1013,9 +1013,20 @@ PY
 		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
 	fi
-	PULL_REQUEST_SCOPE_FILE_BATCHES=("$(printf '%s\n' "${CHANGED_FILES[@]}")")
+	PULL_REQUEST_SCOPE_FILE_BATCHES=()
+	local batch_start=0
+	while [ "$batch_start" -lt "$total_files" ]; do
+		local batch_files=("${CHANGED_FILES[@]:batch_start:STRIX_PR_SCOPE_MAX_FILES_PER_BATCH}")
+		PULL_REQUEST_SCOPE_FILE_BATCHES+=("$(printf '%s\n' "${batch_files[@]}")")
+		batch_start=$((batch_start + STRIX_PR_SCOPE_MAX_FILES_PER_BATCH))
+	done
 	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
 	printf ".\n" >&2
+	if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 1 ]; then
+		printf "Split pull request Strix scan into %s batch(es) of at most %s file(s).\n" \
+			"${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" \
+			"$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
+	fi
 	return 0
 }
 

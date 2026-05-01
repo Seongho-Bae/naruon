@@ -54,7 +54,10 @@ or execute pull request branch scripts in the privileged Strix job.
 
 The gate fails closed when a changed PR-head blob cannot be validated or copied;
 it must never fall back to scanning trusted-base content for a modified PR path.
-Strix remains a required Medium-or-higher gate, while third-party LLM/provider
-warnings are tracked separately unless they make the scan incomplete.
+Pull request scans split scoped changed files into small bounded batches before
+the timeout-driven rebalance path, so large PRs do not spend the whole required
+check budget on one oversized Strix invocation. Strix remains a required
+Medium-or-higher gate, while third-party LLM/provider warnings are tracked
+separately unless they make the scan incomplete.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.

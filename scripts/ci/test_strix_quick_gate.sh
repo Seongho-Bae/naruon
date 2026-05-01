@@ -72,6 +72,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
 	assert_file_contains "$workflow_file" "[ \"\$GITHUB_EVENT_NAME\" = \"pull_request_target\" ]" "strix workflow fails closed when PR target secrets are missing"
 	assert_file_contains "$workflow_file" "Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event" "strix workflow fails closed when PR target model auth is missing"
+	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 4" "strix workflow caps PR batches to avoid timeout-only rebalancing"
 	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
 		record_failure "strix workflow must not expose secrets on pull_request events"
 	fi
@@ -1302,6 +1303,39 @@ EOS
 		fi
 		echo "Error: unexpected batch attempt $attempt" >&2
 		exit 50
+		;;
+	pr-changed-scope-max-batches)
+		attempt="0"
+		if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+			attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+		fi
+		attempt="$((attempt + 1))"
+		echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
+		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
+			echo "Error: PR changed-file scope was not split by STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
+			exit 53
+		fi
+		if [ "$attempt" -eq 1 ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
+		   [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
+		   [ ! -e "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
+			echo "scan ok with first configured max-size batch"
+			exit 0
+		fi
+		if [ "$attempt" -eq 2 ] && \
+		   [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
+		   [ ! -e "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
+		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
+			echo "scan ok with second configured max-size batch"
+			exit 0
+		fi
+		echo "Error: unexpected configured max-size batch layout attempt $attempt ($target_path)" >&2
+		exit 54
 		;;
 	pr-changed-scope-rebalanced)
 		if [ -z "$target_path" ]; then
@@ -3352,6 +3386,29 @@ run_gate_case "pr-changed-scope-batched" \
 	"0" \
 	"pull_request" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java'
+
+run_gate_case "pr-changed-scope-max-batches" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Running pull request Strix batch 2/2." \
+	"2" \
+	"openai/gpt-4o-mini|openai/gpt-4o-mini" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
+	"" \
+	"2"
 
 run_gate_case "pr-changed-scope-rebalanced" \
 	"vertex_ai/gemini-2.5-flash" \
