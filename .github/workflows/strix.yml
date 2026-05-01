@@ -107,15 +107,22 @@ jobs:
           STRIX_LLM: ${{ secrets.STRIX_LLM }}
           DEFAULT_PROVIDER: gemini
         run: |
-          strix_llm="$(printf '%s' "$STRIX_LLM" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
+          strix_llm="$(trim_whitespace "$STRIX_LLM")"
           requires_vertex_auth='false'
-          if [ -z "$strix_llm" ] || [[ "$strix_llm" != */* ]]; then
-            if [ "$DEFAULT_PROVIDER" = 'vertex_ai' ]; then
-              requires_vertex_auth='true'
-            fi
-          elif [[ "$strix_llm" == vertex_ai/* ]]; then
+          model_auth_rc=0
+          model_requires_vertex_auth "$strix_llm" || model_auth_rc=$?
+          case "$model_auth_rc" in
+          0)
             requires_vertex_auth='true'
-          fi
+            ;;
+          1)
+            ;;
+          *)
+            echo '::error::Unable to classify Strix model authentication requirements; failing closed.'
+            exit "$model_auth_rc"
+            ;;
+          esac
 
           if [ "$requires_vertex_auth" = 'true' ] && [ "${{ steps.gcp_gate.outputs.has_gcp }}" != 'true' ]; then
             if [ "$GITHUB_EVENT_NAME" = 'push' ] || [ "$GITHUB_EVENT_NAME" = 'schedule' ] || [ "$GITHUB_EVENT_NAME" = 'pull_request_target' ]; then

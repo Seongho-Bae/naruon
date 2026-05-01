@@ -62,6 +62,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE_TEST\"" "strix workflow self-test executes trusted temp script"
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE\"" "strix workflow executes trusted temp gate script"
 	assert_file_contains "$workflow_file" "Collect Strix reports for artifact upload" "strix workflow preserves reports from trusted workspace"
+	assert_file_contains "$workflow_file" ". \"\$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh\"" "strix workflow reuses trusted model auth helpers"
+	assert_file_contains "$workflow_file" "model_requires_vertex_auth \"\$strix_llm\"" "strix workflow delegates Vertex auth detection"
 	assert_file_not_contains "$workflow_file" "actions/checkout" "strix workflow avoids checkout in privileged context"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/test_strix_quick_gate.sh" "strix workflow avoids direct repo self-test execution on privileged trigger"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
@@ -1801,6 +1803,90 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_irregular_head_entry_fails_closed_case() {
+	local case_name="$1"
+	local changed_file="$2"
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run after an irregular PR-head entry" >&2
+exit 66
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		mkdir -p "$(dirname -- "$changed_file")"
+		printf '%s\n' 'BASE_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		rm -f -- "$changed_file"
+		ln -s ../outside-secret "$changed_file"
+		git add .
+		git commit -qm 'head symlink commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=$case_name irregular PR-head entry exits closed"
+	assert_file_contains "$output_log" "pull request changed file is not a regular PR-head file; failing closed" "case=$case_name output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=$case_name irregular PR-head entry must not invoke Strix"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_rejects_unsafe_changed_path_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -2340,6 +2426,22 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_HEAD_READ_FAILURE" \
 	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
 	"show"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-head-entry-fails-closed" \
+	"src/app.py"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-readme-head-entry-fails-closed" \
+	"README.md"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-test-head-entry-fails-closed" \
+	"tests/app_test.py"
+
+run_pull_request_target_irregular_head_entry_fails_closed_case \
+	"pull-request-target-symlink-infra-head-entry-fails-closed" \
+	"infra/deploy.sh"
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-modified-file-pr-head-tree-lookup-failure" \
@@ -3943,6 +4045,30 @@ assert_normalized_model() {
 	fi
 }
 
+assert_model_requires_vertex_auth() {
+	local label="$1" model="$2" default_provider="$3" expected_rc="$4"
+	local rc old_default_provider="${DEFAULT_PROVIDER-__UNSET__}"
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	DEFAULT_PROVIDER="$default_provider"
+	set +e
+	model_requires_vertex_auth "$model"
+	rc=$?
+	set -e
+
+	if [ "$old_default_provider" = "__UNSET__" ]; then
+		unset DEFAULT_PROVIDER
+	else
+		DEFAULT_PROVIDER="$old_default_provider"
+	fi
+
+	assert_equals "$expected_rc" "$rc" "model_requires_vertex_auth($label)"
+}
+
 # Valid paths — should return 0
 assert_vertex_path "models/<id>" "models/gemini-2.5-pro" 0
 assert_vertex_path "publishers/<p>/models/<id>" "publishers/google/models/gemini-2.5-pro" 0
@@ -3977,6 +4103,12 @@ assert_normalized_model \
 	"projects/my-proj/locations/us-central1/publishers/google/models/gemini-2.5-pro" \
 	"anthropic" \
 	"vertex_ai/gemini-2.5-pro"
+
+assert_model_requires_vertex_auth "explicit-vertex" "vertex_ai/gemini-2.5-pro" "gemini" "0"
+assert_model_requires_vertex_auth "explicit-vertex-beta" "vertex_ai_beta/gemini-2.5-pro" "gemini" "0"
+assert_model_requires_vertex_auth "vertex-resource-path" "projects/my-proj/locations/us-central1/models/gemini-2.5-pro" "anthropic" "0"
+assert_model_requires_vertex_auth "implicit-vertex-default" "gemini-2.5-pro" "vertex_ai" "0"
+assert_model_requires_vertex_auth "nonvertex-provider" "gemini/gemini-2.5-pro" "gemini" "1"
 
 # Whitespace in paths — must be rejected (SAST word-splitting guard)
 assert_vertex_path "space-in-project" "projects/my proj/locations/us/models/foo" 1

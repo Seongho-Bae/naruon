@@ -220,7 +220,7 @@ pr_head_regular_file_mode() {
 		return 2
 	fi
 	if [ "$object_type" != "blob" ]; then
-		return 1
+		return 3
 	fi
 	case "$mode" in
 	100644 | 100755)
@@ -228,7 +228,7 @@ pr_head_regular_file_mode() {
 		return 0
 		;;
 	*)
-		return 1
+		return 3
 		;;
 	esac
 }
@@ -244,6 +244,10 @@ changed_file_exists_for_scan() {
 			;;
 		1)
 			return 1
+			;;
+		3)
+			echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $relative_path" >&2
+			return 2
 			;;
 		*)
 			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $relative_path" >&2
@@ -264,6 +268,10 @@ changed_file_exists_for_scan() {
 		return 0
 		;;
 	2)
+		return 2
+		;;
+	3)
+		echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $relative_path" >&2
 		return 2
 		;;
 	*)
@@ -789,6 +797,25 @@ is_scannable_changed_file() {
 			return 2
 		fi
 		return 1
+	fi
+	if pull_request_head_blob_required; then
+		local mode_rc=0
+		pr_head_regular_file_mode "$normalized_changed_file" >/dev/null || mode_rc=$?
+		case "$mode_rc" in
+		0)
+			;;
+		1)
+			return 1
+			;;
+		3)
+			echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $normalized_changed_file" >&2
+			return 2
+			;;
+		*)
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $normalized_changed_file" >&2
+			return 2
+			;;
+		esac
 	fi
 	if [[ "$normalized_changed_file" == *.md || "$normalized_changed_file" == *.txt ]]; then
 		return 1
