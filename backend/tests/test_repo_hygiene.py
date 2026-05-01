@@ -31,6 +31,20 @@ def test_env_example_documents_required_postgres_password():
     assert "postgres:change-me-local-only@" in env_example
 
 
+def test_compose_requires_encryption_key_for_secret_fields():
+    compose = (REPO_ROOT / "docker-compose.yml").read_text()
+
+    assert "ENCRYPTION_KEY:" in compose
+    assert "${ENCRYPTION_KEY:?Set ENCRYPTION_KEY" in compose
+
+
+def test_readme_documents_encryption_key_generation():
+    readme = (REPO_ROOT / "README.md").read_text()
+
+    assert "ENCRYPTION_KEY" in readme
+    assert "Fernet.generate_key" in readme
+
+
 def test_readme_uses_cross_platform_browser_command():
     readme = (REPO_ROOT / "README.md").read_text()
 

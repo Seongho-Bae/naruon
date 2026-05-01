@@ -6,12 +6,14 @@ FastAPI service for email ingestion, search, AI summaries, calendar sync, and th
 
 ```bash
 python3 -m pip install -r requirements.txt
+export ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 python3 scripts/bootstrap_db.py
 python3 -m pytest -q
 uvicorn main:app --reload
 ```
 
 Set `DATABASE_URL` in `.env` or use the default `postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email`.
+Set `ENCRYPTION_KEY` before creating or reading encrypted tenant secrets. Keep this Fernet-compatible key stable for existing data; key rotation requires re-encrypting stored `TenantConfig` secret fields.
 
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fixtures.py` uses zero-vector embeddings so the local threading proof path does not need network access.
 

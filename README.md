@@ -6,6 +6,7 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 
 ```bash
 cp .env.example .env
+export ENCRYPTION_KEY="$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
 POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
 docker compose exec backend python import_fixtures.py
 curl -s http://localhost:8000/api/emails
@@ -16,6 +17,8 @@ What you should see: the fixture import loads a three-message `Quarterly plan` c
 
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is set. With the default empty key it writes local zero-vector embeddings so the threading proof path works offline.
 
+`ENCRYPTION_KEY` is required before writing encrypted tenant secrets. Generate a Fernet-compatible key once per environment and keep it stable for existing data; rotating it requires re-encrypting any stored `TenantConfig` secrets.
+
 ## Manual development path
 
 Backend:
@@ -23,6 +26,7 @@ Backend:
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
+export ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 python3 scripts/bootstrap_db.py
 python3 -m pytest -q
 uvicorn main:app --reload

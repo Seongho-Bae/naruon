@@ -1,7 +1,20 @@
+from pathlib import Path
+
 import pytest
+from cryptography.fernet import Fernet
+from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
+from db import models
 from db.models import TenantConfig
+
+
+TEST_ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))
+
+
+@pytest.fixture(autouse=True)
+def configured_test_encryption_key(monkeypatch):
+    monkeypatch.setattr(models.settings, "ENCRYPTION_KEY", TEST_ENCRYPTION_KEY)
 
 
 @pytest.fixture
@@ -41,3 +54,16 @@ def test_tenant_config_model_encryption(db_session):
     repr_str = repr(saved_config)
     assert "test_key2" not in repr_str
     assert "has_openai_key=True" in repr_str
+
+
+def test_encrypted_string_fails_closed_without_encryption_key(monkeypatch):
+    monkeypatch.setattr(models.settings, "ENCRYPTION_KEY", None)
+
+    with pytest.raises(RuntimeError, match="ENCRYPTION_KEY"):
+        models.get_fernet()
+
+
+def test_models_do_not_define_a_hardcoded_fallback_key():
+    source = Path(__file__).resolve().parents[1] / "db" / "models.py"
+
+    assert "FALLBACK_KEY" not in source.read_text()
