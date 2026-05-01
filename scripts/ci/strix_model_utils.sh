@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Helper functions shared by the Strix CI gate and its self-test harness.
+# Keep this dependency explicit so PR-scoped Strix scans include the full gate harness.
 
 trim_whitespace() {
 	local value="${1-}"
