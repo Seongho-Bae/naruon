@@ -853,6 +853,40 @@ is_scannable_changed_file() {
 	esac
 }
 
+pull_request_scope_context_files() {
+	local needs_backend_python=0
+	local changed_file normalized_changed_file
+	for changed_file in "$@"; do
+		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+		case "$normalized_changed_file" in
+		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+			needs_backend_python=1
+			;;
+		esac
+	done
+
+	if [ "$needs_backend_python" -eq 1 ]; then
+		cat <<'EOF'
+backend/requirements.txt
+backend/api/__init__.py
+backend/api/auth.py
+backend/core/__init__.py
+backend/core/config.py
+backend/core/exceptions.py
+backend/db/__init__.py
+backend/db/models.py
+backend/db/session.py
+backend/services/__init__.py
+backend/services/archive.py
+backend/services/email_client.py
+backend/services/email_parser.py
+backend/services/embedding.py
+backend/services/exceptions.py
+backend/services/threading_service.py
+EOF
+	fi
+}
+
 build_pull_request_scope_dir() {
 	local scope_dir
 	scope_dir="$(mktemp -d "${TMPDIR:-/tmp}/strix-pr-scope.XXXXXX")"
@@ -901,10 +935,53 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	copy_trusted_context_file_into_scope() {
+		local context_file="$1"
+		local relative_path
+		relative_path="$(normalize_changed_file_path "$context_file")" || {
+			echo "ERROR: pull request context file path is unsafe: $context_file" >&2
+			return 2
+		}
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -e "$src_path" ]; then
+			return 0
+		fi
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request trusted context file is not a regular checkout file: $context_file" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		cp -- "$src_path" "$dst_path"
+	}
+
 	local changed_file
 	for changed_file in "$@"; do
 		copy_changed_file_into_scope "$changed_file" || return 2
 	done
+	local context_files_text=""
+	context_files_text="$(pull_request_scope_context_files "$@")" || return 2
+	if [ -n "$context_files_text" ]; then
+		local context_file
+		while IFS= read -r context_file; do
+			[ -n "$context_file" ] || continue
+			copy_trusted_context_file_into_scope "$context_file" || return 2
+		done <<<"$context_files_text"
+	fi
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
