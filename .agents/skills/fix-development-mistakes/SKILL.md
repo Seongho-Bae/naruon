@@ -1,39 +1,63 @@
-<skill_content name="fix-development-mistakes">
-# Skill: fix-development-mistakes
+---
+name: fix-development-mistakes
+description: >-
+  Use when linter errors, dependency downgrades, security vulnerabilities, file
+  overwrites, merge conflicts, or merge-gate misdiagnoses occur during
+  development and need root-cause repair.
+---
 
 # Fix Development Mistakes
 
 ## Overview
 
-A skill to fix linter errors, dependency downgrades, security vulnerabilities, file overwrites, and other mistakes that occur during development. This ensures root causes are traced and fixed properly without human intervention.
+Fix linter errors, dependency downgrades, security vulnerabilities, file
+overwrites, and other mistakes that occur during development. The goal is to
+trace the root cause and fix it properly without waiting for human intervention.
 
 ## When to use
 
 Use this skill when:
+
 - Dependabot or code scanning alerts report a vulnerability.
-- A subagent overwrites a file instead of appending to it (e.g. `exceptions.py` or `requirements.txt`).
-- A linter or static analyzer throws an error (e.g., `mypy`, `flake8`, `ruff`).
-- Merge conflicts result in accidental loss of code or unintended dependency downgrades.
+- A subagent overwrites a file instead of appending to it, such as
+  `exceptions.py` or `requirements.txt`.
+- A linter or static analyzer throws an error, such as `mypy`, `flake8`, or
+  `ruff`.
+- Merge conflicts result in accidental loss of code or unintended dependency
+  downgrades.
+- Merge gates, CodeRabbit/robot review, GitHub approval, or stale required
+  status contexts are misdiagnosed; use `github-robot-review-gate`.
 
 ## Workflow
 
-### 1. Root Cause Analysis
-- **Identify the error:** Read the error message, warning, or security alert.
-- **Trace back:** Check git logs or `git diff` to see what introduced the error.
-- **Understand why:** Did a subagent misunderstand a prompt? Did a package conflict force a downgrade? Was a security patch reverted?
+### 1. Root cause analysis
 
-### 2. Formulate the Fix
-- **File overwrites:** Use `git checkout origin/master -- <file>` to restore the original content, then append the new changes safely using the `edit` or `write` tool.
-- **Dependency issues:** Pin dependencies to secure versions. Resolve conflicts by upgrading the conflicting package rather than downgrading the patched package.
-- **Linter errors:** Add missing type hints, fix indentation, add docstrings, or suppress the warning ONLY if the rule is intentionally violated and commented.
+- Identify the exact error, warning, or security alert.
+- Trace back through git history or `git diff` to see what introduced it.
+- Understand whether the source is a prompt misunderstanding, package conflict,
+  reverted security patch, stale ruleset, or environment mismatch.
 
-### 3. Execution & Verification
-- Execute the fix using appropriate tools (`edit`, `write`, `bash`).
-- Run the test suite and the linter locally.
-- Confirm the warning, error, or vulnerability is resolved.
+### 2. Formulate the fix
 
-### 4. Commit and Push
-- Commit the change with a descriptive message starting with `fix: `.
-- Example: `fix: restore exceptions.py overwritten by subagent` or `fix: upgrade pytest to 9.0.3 to resolve CVE-2025-71176`.
-- Push directly if on a feature branch, or create a PR if on master.
-</skill_content>
+- File overwrites: restore the original content from the correct base, then add
+  the intended changes narrowly.
+- Dependency issues: pin secure versions and resolve conflicts by upgrading the
+  conflicting package rather than downgrading a patched package.
+- Linter errors: add missing type hints, fix indentation, add docstrings, or use
+  a narrow documented suppression only when the rule is intentionally violated.
+- Merge-gate issues: collect ruleset/check/review evidence before changing code
+  or repository settings.
+
+### 3. Execute and verify
+
+- Apply the smallest targeted fix.
+- Run the relevant test suite and linter locally.
+- Confirm the warning, error, vulnerability, or gate blocker is resolved.
+
+### 4. Commit and push
+
+- Commit with a descriptive message starting with the `fix:` prefix.
+- Example: `fix: restore exceptions.py overwritten by subagent`.
+- Example: `fix: upgrade pytest to resolve CVE-2025-71176`.
+- Push to the feature branch only after verification and PR-continuity checks,
+  or create a PR if on `master`.

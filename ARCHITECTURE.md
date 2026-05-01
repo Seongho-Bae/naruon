@@ -56,3 +56,5 @@ The gate fails closed when a changed PR-head blob cannot be validated or copied;
 it must never fall back to scanning trusted-base content for a modified PR path.
 Strix remains a required Medium-or-higher gate, while third-party LLM/provider
 warnings are tracked separately unless they make the scan incomplete.
+Merge-gate governance for Strix, CodeRabbit, and required review evidence is
+documented in `docs/development/merge-gate-policy.md`.
