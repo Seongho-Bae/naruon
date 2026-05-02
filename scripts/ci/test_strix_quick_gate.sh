@@ -147,6 +147,8 @@ run_gate_case() {
 	local test_pr_sca_status_override="${24-}"
 	local current_pr_number="${25-}"
 	local authoritative_sca_runs_json="${26-}"
+	local gemini_fallback_models="${27-__SAME_AS_FALLBACK_MODELS__}"
+	local generic_fallback_models="${28-}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -556,6 +558,60 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		*)
 			echo "Error: high-demand retry path unexpected (${STRIX_LLM:-})" >&2
 			exit 37
+			;;
+		esac
+		;;
+	gemini-timeout-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-timeout-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
+				echo "LLM CONNECTION FAILED"
+				echo "Error: litellm.Timeout: Connection timed out after None seconds."
+				exit 1
+			fi
+			echo "scan ok after same-model timeout retry"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini timeout retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 38
+			;;
+		esac
+		;;
+	gemini-timeout-fallback-success|gemini-generic-fallback-success)
+		case "${STRIX_LLM:-}" in
+		gemini/timeout-fallback-primary)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+			;;
+		gemini/fallback-one)
+			echo "scan ok after gemini fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini timeout fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 39
+			;;
+		esac
+		;;
+	gemini-zero-findings-timeout-fallback-fails)
+		case "${STRIX_LLM:-}" in
+		gemini/zero-timeout-primary|gemini/fallback-one)
+			echo "Vulnerabilities 0"
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+			;;
+		*)
+			echo "Error: gemini zero-finding fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 40
 			;;
 		esac
 		;;
@@ -1314,6 +1370,26 @@ EOS
 		echo "scan ok with bounded changed-file scope"
 		exit 0
 		;;
+	pr-python-scope-context)
+		if [ ! -f "$target_path/backend/api/emails.py" ]; then
+			echo "Error: changed backend file missing from scoped target ($target_path)" >&2
+			exit 57
+		fi
+		if [ ! -f "$target_path/backend/core/config.py" ]; then
+			echo "Error: backend core config context missing from scoped target ($target_path)" >&2
+			exit 58
+		fi
+		if [ ! -f "$target_path/backend/db/session.py" ]; then
+			echo "Error: backend db session context missing from scoped target ($target_path)" >&2
+			exit 59
+		fi
+		if [ ! -f "$target_path/backend/services/exceptions.py" ]; then
+			echo "Error: backend service exceptions context missing from scoped target ($target_path)" >&2
+			exit 60
+		fi
+		echo "scan ok with python dependency scope"
+		exit 0
+		;;
 	pr-changed-scope-batched)
 		attempt="0"
 		if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
@@ -1491,6 +1567,24 @@ EOF
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/node_modules/fake-pkg/index.js"
 	elif [ "$scenario" = "pr-changed-scope-bounded" ]; then
 		echo 'class Unrelated {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
+	elif [ "$scenario" = "pr-python-scope-context" ]; then
+		mkdir -p "$repo_root_dir/backend/api" "$repo_root_dir/backend/core" "$repo_root_dir/backend/db" "$repo_root_dir/backend/services"
+		touch "$repo_root_dir/backend/api/__init__.py"
+		touch "$repo_root_dir/backend/core/__init__.py"
+		touch "$repo_root_dir/backend/db/__init__.py"
+		touch "$repo_root_dir/backend/services/__init__.py"
+		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
+		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
+		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
+		echo 'engine = object()' >"$repo_root_dir/backend/db/session.py"
+		echo 'class Email: pass' >"$repo_root_dir/backend/db/models.py"
+		echo 'class ServiceError(Exception): pass' >"$repo_root_dir/backend/services/exceptions.py"
+		echo 'async def extract_backup_async(*args): return []' >"$repo_root_dir/backend/services/archive.py"
+		echo 'def parse_eml(*args): return {}' >"$repo_root_dir/backend/services/email_parser.py"
+		echo 'async def generate_embeddings(*args): return []' >"$repo_root_dir/backend/services/embedding.py"
+		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
+		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
+		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
 	fi
 
 	set +e
@@ -1549,12 +1643,28 @@ EOF
 		printf '%s' "$llm_api_base_source" >"$llm_api_base_file"
 		env_cmd+=(LLM_API_BASE_FILE="$llm_api_base_file")
 	fi
-	# Only export STRIX_VERTEX_FALLBACK_MODELS when a non-empty value is
-	# provided so that the gate's ${STRIX_VERTEX_FALLBACK_MODELS+x} check
-	# correctly distinguishes "unset → use defaults" from "set to empty →
-	# disable fallbacks".
+	# Only export fallback variables when a non-empty value is provided so the
+	# gate's ${VAR+x} checks correctly distinguish "unset → use defaults" from
+	# "set to empty → disable fallbacks".
 	if [ -n "$fallback_models" ]; then
 		env_cmd+=(STRIX_VERTEX_FALLBACK_MODELS="$fallback_models")
+	fi
+	case "$gemini_fallback_models" in
+	__SAME_AS_FALLBACK_MODELS__)
+		if [ -n "$fallback_models" ]; then
+			env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$fallback_models")
+		fi
+		;;
+	__UNSET__)
+		;;
+	*)
+		if [ -n "$gemini_fallback_models" ]; then
+			env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$gemini_fallback_models")
+		fi
+		;;
+	esac
+	if [ -n "$generic_fallback_models" ]; then
+		env_cmd+=(STRIX_FALLBACK_MODELS="$generic_fallback_models")
 	fi
 	if [ -n "$custom_source_dirs" ]; then
 		env_cmd+=(STRIX_SOURCE_DIRS="$custom_source_dirs")
@@ -1591,7 +1701,14 @@ EOF
 	fi
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE "${env_cmd[@]}" \
+		env \
+			-u GITHUB_EVENT_NAME \
+			-u GITHUB_EVENT_PATH \
+			-u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			-u STRIX_VERTEX_FALLBACK_MODELS \
+			-u STRIX_GEMINI_FALLBACK_MODELS \
+			-u STRIX_FALLBACK_MODELS \
+			"${env_cmd[@]}" \
 			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
 	)
 	local rc=$?
@@ -1763,6 +1880,113 @@ EOF
 
 	assert_equals "0" "$rc" "case=$case_name exit code"
 	assert_file_contains "$output_log" "scan ok with PR head content" "case=$case_name output"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_trusted_context_scope_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/api/emails.py"
+	local context_file="backend/core/config.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+context_file="$target_path/${FAKE_STRIX_EXPECTED_CONTEXT_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
+	echo "Error: PR head changed file content was not scanned" >&2
+	cat -- "$changed_file" >&2
+	exit 65
+fi
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_TRUSTED_CONTEXT:?}" "$context_file"; then
+	echo "Error: trusted backend context content missing" >&2
+	cat -- "$context_file" >&2
+	exit 66
+fi
+if grep -Fq -- "${FAKE_STRIX_UNTRUSTED_CONTEXT:?}" "$context_file"; then
+	echo "Error: PR head context leaked into trusted context scope" >&2
+	cat -- "$context_file" >&2
+	exit 67
+fi
+echo "scan ok with trusted backend context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$context_file")"
+		printf '%s\n' 'BASE_CHANGED_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED' >"$context_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_TRUSTED_CONTEXT="TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNTRUSTED_CONTEXT="UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-trusted-checkout exit code"
+	assert_file_contains "$output_log" "scan ok with trusted backend context" "case=pull-request-target-backend-context-uses-trusted-checkout output"
 
 	rm -rf "$tmp_dir"
 }
@@ -2547,6 +2771,8 @@ run_pull_request_target_head_scope_case \
 	"HEAD_NESTED_CONTENT_SHOULD_BE_SCANNED" \
 	"1"
 
+run_pull_request_target_trusted_context_scope_case
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
 	"src/new_module.py" \
@@ -2837,6 +3063,82 @@ run_gate_case "gemini-high-demand-retry-same-model-success" \
 	"__DEFAULT__" \
 	"" \
 	"1"
+
+run_gate_case "gemini-timeout-retry-same-model-success" \
+	"gemini/retry-timeout-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model timeout retry" \
+	"2" \
+	"gemini/retry-timeout-primary|gemini/retry-timeout-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-timeout-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case "gemini-generic-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"gemini/fallback-one gemini/fallback-two"
+
+run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
+	"gemini/zero-timeout-primary" \
+	"gemini/fallback-one" \
+	"1" \
+	"Configured model and fallback models were unavailable." \
+	"2" \
+	"gemini/zero-timeout-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
 run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
 	"custom/service-unavailable-primary" \
@@ -3466,6 +3768,27 @@ run_gate_case "pr-changed-scope-bounded" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-python-scope-context" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with python dependency scope" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/emails.py"
 
 run_gate_case "pr-changed-scope-batched" \
 	"openai/gpt-4o-mini" \

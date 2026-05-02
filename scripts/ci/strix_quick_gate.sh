@@ -901,6 +901,40 @@ is_scannable_changed_file() {
 	esac
 }
 
+pull_request_scope_context_files() {
+	local needs_backend_python=0
+	local changed_file normalized_changed_file
+	for changed_file in "$@"; do
+		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+		case "$normalized_changed_file" in
+		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+			needs_backend_python=1
+			;;
+		esac
+	done
+
+	if [ "$needs_backend_python" -eq 1 ]; then
+		cat <<'EOF'
+backend/requirements.txt
+backend/api/__init__.py
+backend/api/auth.py
+backend/core/__init__.py
+backend/core/config.py
+backend/core/exceptions.py
+backend/db/__init__.py
+backend/db/models.py
+backend/db/session.py
+backend/services/__init__.py
+backend/services/archive.py
+backend/services/email_client.py
+backend/services/email_parser.py
+backend/services/embedding.py
+backend/services/exceptions.py
+backend/services/threading_service.py
+EOF
+	fi
+}
+
 build_pull_request_scope_dir() {
 	local scope_dir
 	scope_dir="$(mktemp -d "${TMPDIR:-/tmp}/strix-pr-scope.XXXXXX")"
@@ -946,6 +980,40 @@ PY
 			echo "ERROR: pull request changed file is unavailable in both PR head and checkout: $changed_file" >&2
 			return 2
 		fi
+		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_trusted_context_file_into_scope() {
+		local context_file="$1"
+		local relative_path
+		relative_path="$(normalize_changed_file_path "$context_file")" || {
+			echo "ERROR: pull request context file path is unsafe: $context_file" >&2
+			return 2
+		}
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -e "$src_path" ]; then
+			return 0
+		fi
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request trusted context file is not a regular checkout file: $context_file" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
 		cp -- "$src_path" "$dst_path"
 	}
 
@@ -996,6 +1064,15 @@ PY
 	for changed_file in "$@"; do
 		copy_changed_file_into_scope "$changed_file" || return 2
 	done
+	local context_files_text=""
+	context_files_text="$(pull_request_scope_context_files "$@")" || return 2
+	if [ -n "$context_files_text" ]; then
+		local context_file
+		while IFS= read -r context_file; do
+			[ -n "$context_file" ] || continue
+			copy_trusted_context_file_into_scope "$context_file" || return 2
+		done <<<"$context_files_text"
+	fi
 	copy_required_scope_support_files "$@" || return 2
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
@@ -1455,6 +1532,61 @@ is_vertex_model() {
 	esac
 }
 
+is_gemini_model() {
+	case "$1" in
+	gemini/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+fallback_models_raw_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
+		else
+			printf '%s\n' "$STRIX_VERTEX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "$STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+		fi
+		return 0
+	fi
+
+	printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+}
+
+fallback_models_config_name_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		printf '%s\n' "STRIX_VERTEX_FALLBACK_MODELS"
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS or STRIX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	printf '%s\n' "STRIX_FALLBACK_MODELS"
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -1693,11 +1825,17 @@ is_llm_service_unavailable_error() {
 ##   - litellm API connection failures with LLM-provider evidence
 ##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Timeouts remain infrastructure errors for guard logic, but the caller should
-## move directly to fallback model evaluation instead of spending the remaining
-## budget retrying the same slow model.
+## Vertex timeouts remain infrastructure errors for guard logic, but the caller
+## should move directly to fallback model evaluation instead of spending the
+## remaining budget retrying the same slow model. Non-Vertex models have no
+## provider-specific fallback path in this gate, so LLM timeouts are retried on
+## the same model before being treated as non-recoverable.
 is_transient_same_model_retry_error() {
+	local model="${1-}"
 	if is_timeout_error; then
+		if [ -n "$model" ] && ! is_vertex_model "$model"; then
+			return 0
+		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
@@ -1734,7 +1872,7 @@ run_strix_with_transient_retry() {
 			return 1
 		fi
 
-		if ! is_transient_same_model_retry_error; then
+		if ! is_transient_same_model_retry_error "$model"; then
 			return 1
 		fi
 
@@ -1745,6 +1883,8 @@ run_strix_with_transient_retry() {
 			retry_reason="LLM API connection"
 		elif is_llm_service_unavailable_error; then
 			retry_reason="LLM service unavailable"
+		elif is_timeout_error; then
+			retry_reason="LLM timeout"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
@@ -2204,8 +2344,10 @@ is_hallucinated_endpoint_finding() {
 	return 0
 }
 
-is_vertex_retryable_error() {
-	if is_vertex_not_found_error; then
+is_model_retryable_error() {
+	local model="$1"
+
+	if is_vertex_model "$model" && is_vertex_not_found_error; then
 		return 0
 	fi
 
@@ -2261,21 +2403,12 @@ run_current_target_scan() {
 		;;
 	esac
 
-	if ! is_vertex_model "$PRIMARY_MODEL"; then
+	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
 	fi
 
-	if ! is_vertex_retryable_error; then
-		echo "Strix quick scan failed with a non-recoverable error." >&2
-		return 1
-	fi
-
-	if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
-		FALLBACK_MODELS_RAW="vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
-	else
-		FALLBACK_MODELS_RAW="$STRIX_VERTEX_FALLBACK_MODELS"
-	fi
+	FALLBACK_MODELS_RAW="$(fallback_models_raw_for_model "$PRIMARY_MODEL")"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\r'/ }"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\n'/ }"
 	read -r -a FALLBACK_MODELS <<<"$FALLBACK_MODELS_RAW"
@@ -2291,7 +2424,11 @@ run_current_target_scan() {
 		fi
 
 		fallback_tried=1
-		echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		if is_vertex_model "$PRIMARY_MODEL"; then
+			echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		else
+			echo "Primary model unavailable; retrying with fallback '$candidate'."
+		fi
 		if run_strix_with_transient_retry "$candidate"; then
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
@@ -2311,25 +2448,31 @@ run_current_target_scan() {
 			;;
 		esac
 
-		if ! is_vertex_retryable_error; then
+		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2
 			return 1
 		fi
 		done
 
-	if should_allow_pull_request_infra_zero_finding_bypass; then
+	if is_vertex_model "$PRIMARY_MODEL" && should_allow_pull_request_infra_zero_finding_bypass; then
 		return 0
 	fi
 
 	if [ "$fallback_tried" -eq 0 ]; then
+		local fallback_config_name
+		fallback_config_name="$(fallback_models_config_name_for_model "$PRIMARY_MODEL")"
 		if [ "${#FALLBACK_MODELS[@]}" -eq 0 ]; then
-			echo "ERROR: No fallback models configured (STRIX_VERTEX_FALLBACK_MODELS is empty). Configure distinct models." >&2
+			echo "ERROR: No fallback models configured ($fallback_config_name is empty). Configure distinct models." >&2
 		else
-			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in STRIX_VERTEX_FALLBACK_MODELS." >&2
+			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
 	fi
 
-	echo "Configured Vertex model and fallback models were unavailable." >&2
+	if is_vertex_model "$PRIMARY_MODEL"; then
+		echo "Configured Vertex model and fallback models were unavailable." >&2
+	else
+		echo "Configured model and fallback models were unavailable." >&2
+	fi
 	return 1
 }
 
