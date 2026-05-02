@@ -147,6 +147,8 @@ run_gate_case() {
 	local test_pr_sca_status_override="${24-}"
 	local current_pr_number="${25-}"
 	local authoritative_sca_runs_json="${26-}"
+	local gemini_fallback_models="${27-__SAME_AS_FALLBACK_MODELS__}"
+	local generic_fallback_models="${28-}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -582,7 +584,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	gemini-timeout-fallback-success)
+	gemini-timeout-fallback-success|gemini-generic-fallback-success)
 		case "${STRIX_LLM:-}" in
 		gemini/timeout-fallback-primary)
 			echo "LLM CONNECTION FAILED"
@@ -1646,7 +1648,23 @@ EOF
 	# "set to empty → disable fallbacks".
 	if [ -n "$fallback_models" ]; then
 		env_cmd+=(STRIX_VERTEX_FALLBACK_MODELS="$fallback_models")
-		env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$fallback_models")
+	fi
+	case "$gemini_fallback_models" in
+	__SAME_AS_FALLBACK_MODELS__)
+		if [ -n "$fallback_models" ]; then
+			env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$fallback_models")
+		fi
+		;;
+	__UNSET__)
+		;;
+	*)
+		if [ -n "$gemini_fallback_models" ]; then
+			env_cmd+=(STRIX_GEMINI_FALLBACK_MODELS="$gemini_fallback_models")
+		fi
+		;;
+	esac
+	if [ -n "$generic_fallback_models" ]; then
+		env_cmd+=(STRIX_FALLBACK_MODELS="$generic_fallback_models")
 	fi
 	if [ -n "$custom_source_dirs" ]; then
 		env_cmd+=(STRIX_SOURCE_DIRS="$custom_source_dirs")
@@ -1683,7 +1701,14 @@ EOF
 	fi
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE "${env_cmd[@]}" \
+		env \
+			-u GITHUB_EVENT_NAME \
+			-u GITHUB_EVENT_PATH \
+			-u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			-u STRIX_VERTEX_FALLBACK_MODELS \
+			-u STRIX_GEMINI_FALLBACK_MODELS \
+			-u STRIX_FALLBACK_MODELS \
+			"${env_cmd[@]}" \
 			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
 	)
 	local rc=$?
@@ -3064,6 +3089,35 @@ run_gate_case "gemini-timeout-fallback-success" \
 	"__DEFAULT__" \
 	"" \
 	"1"
+
+run_gate_case "gemini-generic-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"gemini/fallback-one gemini/fallback-two"
 
 run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
 	"gemini/zero-timeout-primary" \

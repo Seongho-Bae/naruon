@@ -1556,11 +1556,35 @@ fallback_models_raw_for_model() {
 	fi
 
 	if is_gemini_model "$model"; then
-		printf '%s\n' "${STRIX_GEMINI_FALLBACK_MODELS:-}"
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "$STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+		fi
 		return 0
 	fi
 
 	printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+}
+
+fallback_models_config_name_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		printf '%s\n' "STRIX_VERTEX_FALLBACK_MODELS"
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS or STRIX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	printf '%s\n' "STRIX_FALLBACK_MODELS"
 }
 
 resolved_llm_api_base_for_model() {
@@ -2435,10 +2459,12 @@ run_current_target_scan() {
 	fi
 
 	if [ "$fallback_tried" -eq 0 ]; then
+		local fallback_config_name
+		fallback_config_name="$(fallback_models_config_name_for_model "$PRIMARY_MODEL")"
 		if [ "${#FALLBACK_MODELS[@]}" -eq 0 ]; then
-			echo "ERROR: No fallback models configured (STRIX_VERTEX_FALLBACK_MODELS is empty). Configure distinct models." >&2
+			echo "ERROR: No fallback models configured ($fallback_config_name is empty). Configure distinct models." >&2
 		else
-			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in STRIX_VERTEX_FALLBACK_MODELS." >&2
+			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
 	fi
 
