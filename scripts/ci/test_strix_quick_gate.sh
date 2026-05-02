@@ -2748,6 +2748,12 @@ run_pull_request_target_head_scope_case \
 	"BASE_CONTENT_WITH_SPACE_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_CONTENT_WITH_SPACE_SHOULD_BE_SCANNED"
 
+run_pull_request_target_head_scope_case \
+	"pull-request-target-next-route-bracket-path-uses-head-blob" \
+	"frontend/src/app/api/backend/[...path]/route.ts" \
+	"BASE_BRACKET_ROUTE_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_BRACKET_ROUTE_SHOULD_BE_SCANNED"
+
 run_pull_request_target_rejects_unsafe_changed_path_case \
 	"pull-request-target-parent-directory-changed-path-fails-closed" \
 	"../outside.py"
