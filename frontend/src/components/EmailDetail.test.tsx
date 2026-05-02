@@ -98,6 +98,12 @@ async function waitForCondition(condition: () => boolean) {
   }
 }
 
+function backendPathFromInput(input: RequestInfo | URL): string {
+  const url = String(input);
+  if (!url.startsWith("/api/backend?")) return url;
+  return new URL(url, "http://localhost").searchParams.get("path") ?? url;
+}
+
 describe("EmailDetail", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -152,7 +158,7 @@ describe("EmailDetail", () => {
     const threadBResponse = deferred<ReturnType<typeof jsonResponse>>();
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
+        const url = backendPathFromInput(input);
         if (url.endsWith("/api/emails/1")) return emailAResponse.promise;
         if (url.endsWith("/api/emails/2")) return emailBResponse.promise;
         if (url.endsWith("/api/emails/thread/thread-a")) return threadAResponse.promise;
@@ -189,7 +195,7 @@ describe("EmailDetail", () => {
 
     await waitForCondition(() =>
       fetchMock.mock.calls.some(([input]) =>
-        String(input).endsWith("/api/emails/thread/thread-b"),
+        backendPathFromInput(input).endsWith("/api/emails/thread/thread-b"),
       ),
     );
 
@@ -203,7 +209,7 @@ describe("EmailDetail", () => {
     );
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain(
-      "/api/backend/api/emails/thread/thread-b",
+      "/api/backend?path=%2Fapi%2Femails%2Fthread%2Fthread-b",
     );
     expect(container.textContent).toContain("Thread B sibling body");
     expect(container.textContent).toContain("2 msgs");
@@ -246,7 +252,7 @@ describe("EmailDetail", () => {
     const standaloneEmailResponse = deferred<ReturnType<typeof jsonResponse>>();
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = backendPathFromInput(input);
       if (url.endsWith("/api/emails/1")) return threadedEmailResponse.promise;
       if (url.endsWith("/api/emails/3")) return standaloneEmailResponse.promise;
       if (url.endsWith("/api/emails/thread/thread-a")) return threadResponse.promise;
@@ -273,7 +279,7 @@ describe("EmailDetail", () => {
 
     await waitForCondition(() =>
       fetchMock.mock.calls.some(([input]) =>
-        String(input).endsWith("/api/emails/thread/thread-a"),
+        backendPathFromInput(input).endsWith("/api/emails/thread/thread-a"),
       ),
     );
 
@@ -317,7 +323,7 @@ describe("EmailDetail", () => {
     };
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = backendPathFromInput(input);
       if (url.endsWith("/api/emails/4")) return Promise.resolve(jsonResponse(selectedEmail));
       if (url.endsWith("/api/emails/thread/decision-thread")) {
         return Promise.resolve(jsonResponse({ thread: [previousMessage, selectedEmail] }));
@@ -376,7 +382,7 @@ describe("EmailDetail", () => {
     };
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
+      const url = backendPathFromInput(input);
       if (url.endsWith("/api/emails/6")) return Promise.resolve(jsonResponse(selectedEmail));
       if (url.endsWith("/api/emails/thread/xss-thread")) {
         return Promise.resolve(jsonResponse({ thread: [selectedEmail] }));

@@ -9,9 +9,9 @@ describe("apiFetch", () => {
   });
 
   it("routes backend API paths through the same-origin proxy", () => {
-    expect(backendApiUrl("/api/emails")).toBe("/api/backend/api/emails");
+    expect(backendApiUrl("/api/emails")).toBe("/api/backend?path=%2Fapi%2Femails");
     expect(backendApiUrl("api/network/graph")).toBe(
-      "/api/backend/api/network/graph",
+      "/api/backend?path=%2Fapi%2Fnetwork%2Fgraph",
     );
   });
 
@@ -19,23 +19,23 @@ describe("apiFetch", () => {
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await apiFetch("/api/backend/api/emails");
+    await apiFetch(backendApiUrl("/api/emails"));
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/backend/api/emails");
+    expect(fetchMock).toHaveBeenCalledWith("/api/backend?path=%2Fapi%2Femails");
   });
 
   it("preserves caller headers without adding browser-side authentication", async () => {
     const fetchMock = vi.fn(() => Promise.resolve({ ok: true }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await apiFetch("/api/backend/api/search", {
+    await apiFetch(backendApiUrl("/api/search"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: "demo" }),
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/backend/api/search",
+      "/api/backend?path=%2Fapi%2Fsearch",
       {
         method: "POST",
         headers: {

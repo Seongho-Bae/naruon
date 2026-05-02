@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildBackendUrl, buildProxyHeaders, proxyBackendRequest } from "./api-proxy";
+import {
+  buildBackendUrl,
+  buildProxyHeaders,
+  pathSegmentsFromProxyPath,
+  proxyBackendRequest,
+} from "./api-proxy";
 
 
 describe("API proxy helpers", () => {
@@ -34,6 +39,18 @@ describe("API proxy helpers", () => {
     expect(headers.get("Authorization")).toBe("Bearer signed-server-token");
     expect(headers.has("Cookie")).toBe(false);
     expect(headers.get("Content-Type")).toBe("application/json");
+  });
+
+  it("normalizes query-provided backend paths without allowing traversal", () => {
+    expect(pathSegmentsFromProxyPath("/api/emails/thread/thread-b")).toEqual([
+      "api",
+      "emails",
+      "thread",
+      "thread-b",
+    ]);
+    expect(pathSegmentsFromProxyPath(null)).toBeNull();
+    expect(pathSegmentsFromProxyPath("../api/emails")).toBeNull();
+    expect(pathSegmentsFromProxyPath("/api/../secrets")).toBeNull();
   });
 
   it("does not expose the shared-token proxy unless local demo mode is explicit", async () => {

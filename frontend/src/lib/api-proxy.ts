@@ -70,6 +70,19 @@ export function buildProxyHeaders(
 }
 
 
+export function pathSegmentsFromProxyPath(path: string | null): string[] | null {
+  if (!path?.startsWith("/")) return null;
+  if (path.includes("\0") || path.includes("\\")) return null;
+
+  const segments = path.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  if (segments.some((segment) => segment === "." || segment === "..")) {
+    return null;
+  }
+  return segments;
+}
+
+
 function responseHeaders(upstreamHeaders: Headers): Headers {
   const headers = new Headers();
   upstreamHeaders.forEach((value, key) => {
@@ -84,6 +97,7 @@ function responseHeaders(upstreamHeaders: Headers): Headers {
 export async function proxyBackendRequest(
   request: Request,
   pathSegments: string[],
+  searchOverride?: string,
 ): Promise<Response> {
   if (!sharedTokenProxyEnabled()) {
     return new Response("Shared-token backend API proxy is disabled", {
@@ -110,7 +124,7 @@ export async function proxyBackendRequest(
   }
 
   const upstreamResponse = await fetch(
-    buildBackendUrl(pathSegments, requestUrl.search),
+    buildBackendUrl(pathSegments, searchOverride ?? requestUrl.search),
     init,
   );
   return new Response(upstreamResponse.body, {

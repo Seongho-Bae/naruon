@@ -3,7 +3,8 @@ export const BACKEND_PROXY_PREFIX = "/api/backend";
 
 export function backendApiUrl(path: string): string {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${BACKEND_PROXY_PREFIX}${normalizedPath}`;
+  const params = new URLSearchParams({ path: normalizedPath });
+  return `${BACKEND_PROXY_PREFIX}?${params.toString()}`;
 }
 
 
