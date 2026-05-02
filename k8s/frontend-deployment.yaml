@@ -21,5 +21,7 @@ spec:
         ports:
         - containerPort: 3000
         env:
-        - name: NEXT_PUBLIC_API_URL
-          value: "/api"
+        - name: API_INTERNAL_URL
+          value: "http://backend:8000"
+        - name: API_PROXY_ALLOW_SHARED_TOKEN
+          value: "false"

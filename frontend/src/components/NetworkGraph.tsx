@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network';
 
+import { apiFetch, backendApiUrl } from '@/lib/api-client';
+
 interface Node {
   id: number | string;
   label: string;
@@ -50,7 +52,7 @@ export default function NetworkGraph() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/network/graph`)
+    apiFetch(backendApiUrl('/api/network/graph'))
       .then((res) => {
         if (!res.ok) {
           throw new Error('Failed to fetch network graph data');

@@ -23,3 +23,8 @@ spec:
         env:
         - name: DATABASE_URL
           value: "postgresql+asyncpg://postgres:postgres@postgres-db:5432/ai_email"
+        - name: AUTH_TOKEN_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ai-email-client-secrets
+              key: auth-token-secret

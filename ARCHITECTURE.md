@@ -29,10 +29,11 @@ authenticated user. Cross-user direct object references return 404 for email
 detail and thread routes, which avoids disclosing whether another user's email
 ID or thread exists.
 
-Local development still uses dummy `X-User-Id` header authentication. Production
-deployments must terminate real authentication before the FastAPI app or replace
-`backend/api/auth.py` with a verified identity provider; the ownership filters
-only protect the boundary once `current_user` is trustworthy.
+The backend requires HMAC-signed bearer tokens and derives `current_user` from
+the verified token subject instead of trusting client-supplied owner headers.
+Local development can mint short-lived tokens with `scripts/create_auth_token.py`;
+production deployments should replace local token issuance with a verified
+identity provider while preserving the same authenticated-user boundary.
 
 ## Local deployment boundary
 

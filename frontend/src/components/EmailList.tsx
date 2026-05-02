@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Mail, MessagesSquare, Search, Sparkles } from "lucide-react";
+import { apiFetch, backendApiUrl } from "@/lib/api-client";
 import { formatEmailDate } from "@/lib/email-threading";
 
 interface EmailItem {
@@ -35,15 +36,14 @@ export function EmailList({
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       if (query.trim() === "") {
-        const res = await fetch(`${apiUrl}/api/emails`);
+        const res = await apiFetch(backendApiUrl("/api/emails"));
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         setEmails(data.emails || []);
       } else {
         setIsSearching(true);
-        const res = await fetch(`${apiUrl}/api/search`, {
+        const res = await apiFetch(backendApiUrl("/api/search"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query }),

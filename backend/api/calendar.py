@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from api.auth import get_current_user
 from services.calendar_service import create_calendar_event
 from services.exceptions import CalendarServiceError
 
@@ -12,7 +13,9 @@ class SyncRequest(BaseModel):
 
 
 @router.post("/sync")
-async def sync_todos(request: SyncRequest):
+async def sync_todos(
+    request: SyncRequest, current_user: str = Depends(get_current_user)
+):
     try:
         results = []
         for todo in request.todos:

@@ -7,9 +7,12 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 ```bash
 cp .env.example .env
 export ENCRYPTION_KEY="$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+export AUTH_TOKEN_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+export API_AUTH_TOKEN="$(python3 scripts/create_auth_token.py test_user)"
+export API_PROXY_ALLOW_SHARED_TOKEN=true
 POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
 docker compose exec backend python import_fixtures.py
-curl -s http://localhost:8000/api/emails
+curl -s -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
@@ -18,6 +21,8 @@ What you should see: the fixture import loads a three-message `Quarterly plan` c
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is set. With the default empty key it writes local zero-vector embeddings so the threading proof path works offline.
 
 `ENCRYPTION_KEY` is required before writing encrypted tenant secrets. Generate a Fernet-compatible key once per environment and keep it stable for existing data; rotating it requires re-encrypting any stored `TenantConfig` secrets.
+
+`AUTH_TOKEN_SECRET` is required for API authentication. API clients must send a signed bearer token whose subject is the current user. For local development, `scripts/create_auth_token.py` generates `API_AUTH_TOKEN`; the Next.js frontend keeps it server-side and only enables the shared-token `/api/backend/...` proxy when `API_PROXY_ALLOW_SHARED_TOKEN=true` is set explicitly for local demo use. Production deployments should replace this helper with the deployment identity provider's token issuance path instead of enabling the shared-token proxy.
 
 ## Manual development path
 
@@ -54,14 +59,15 @@ npm run dev
 ## API smoke examples
 
 ```bash
-curl -s http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
-curl -s http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
+curl -s -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
+curl -s -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
 
 # Requires a tenant OpenAI key because search generates a query embedding.
-curl -s -X POST http://localhost:8000/api/search -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
+curl -s -X POST http://localhost:8000/api/search -H "Authorization: Bearer $API_AUTH_TOKEN" -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
 
 # Send remains honest in local/dev mode: if SMTP is not configured, the API returns 400.
 curl -s -X POST http://localhost:8000/api/emails/send \
+  -H "Authorization: Bearer $API_AUTH_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"to":"alice@example.com","subject":"Re: Quarterly plan","body":"Thanks","in_reply_to":"<thread-reply-2@example.com>","references":"<thread-root@example.com> <thread-reply-1@example.com> <thread-reply-2@example.com>"}'
 ```
@@ -80,7 +86,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses dummy `X-User-Id` header auth for local development, but email rows now persist an owner in `emails.user_id`. Email detail, thread, inbox, search, network graph, import, and threading lookups are scoped to the current user; production deployments must replace dummy header auth with a trusted identity boundary.
+The backend requires signed bearer-token authentication, and email rows persist an owner in `emails.user_id`. Email detail, thread, inbox, search, network graph, calendar sync, import, and threading lookups are scoped to the authenticated token subject; production deployments must issue these tokens from a trusted identity boundary rather than the local helper.
 
 ## Verification used for this hardening pass
 

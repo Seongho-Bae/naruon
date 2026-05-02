@@ -12,7 +12,7 @@ npm run build
 npm run dev
 ```
 
-Open <http://localhost:3000>. The app expects the backend at `NEXT_PUBLIC_API_URL`, defaulting to <http://localhost:8000>.
+Open <http://localhost:3000>. Browser requests use the same-origin `/api/backend/...` proxy. Set server-side `API_INTERNAL_URL` when the frontend server should reach a backend other than <http://localhost:8000>. For local demos only, set `API_PROXY_ALLOW_SHARED_TOKEN=true` and `API_AUTH_TOKEN` to a signed local token; production should use per-user authentication rather than the shared-token proxy.
 
 ## Threading UI contract
 

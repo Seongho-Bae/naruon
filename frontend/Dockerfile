@@ -8,7 +8,7 @@ RUN npm ci
 COPY frontend ./
 
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV API_INTERNAL_URL=http://localhost:8000
 
 EXPOSE 3000
 
