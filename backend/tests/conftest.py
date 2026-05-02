@@ -1,4 +1,8 @@
+import os
+
 import pytest
+
+os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://localhost:5432/test_db")
 
 from api.auth import get_current_user
 from main import app

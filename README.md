@@ -20,6 +20,8 @@ What you should see: the fixture import loads a three-message `Quarterly plan` c
 
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is set. With the default empty key it writes local zero-vector embeddings so the threading proof path works offline.
 
+`DATABASE_URL` is required and has no hardcoded credential fallback. Point it at a database credential issued by your local environment, Compose `.env`, Kubernetes Secret, or deployment secret manager.
+
 `ENCRYPTION_KEY` is required before writing encrypted tenant secrets. Generate a Fernet-compatible key once per environment and keep it stable for existing data; rotating it requires re-encrypting any stored `TenantConfig` secrets.
 
 `AUTH_TOKEN_SECRET` is required for API authentication. API clients must send a signed bearer token whose subject is the current user. For local development, `scripts/create_auth_token.py` generates `API_AUTH_TOKEN`; the Next.js frontend keeps it server-side and only enables the shared-token `/api/backend/...` proxy when `API_PROXY_ALLOW_SHARED_TOKEN=true` is set explicitly for local demo use. Production deployments should replace this helper with the deployment identity provider's token issuance path instead of enabling the shared-token proxy.
@@ -31,6 +33,7 @@ Backend:
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
+export DATABASE_URL="postgresql+asyncpg://<user>:<password>@localhost:5432/ai_email"
 export ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 python3 scripts/bootstrap_db.py
 python3 -m pytest -q

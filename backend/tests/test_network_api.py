@@ -155,6 +155,19 @@ def test_network_endpoint_query_params():
         assert len(data["edges"]) == 1
 
 
+def test_network_endpoint_rejects_excessive_limit_before_query():
+    session = MockSession([("alice@example.com", "bob@example.com")])
+
+    async def override_get_db():
+        yield session
+
+    with patch.dict(app.dependency_overrides, {get_db: override_get_db}):
+        response = client.get("/api/network/graph?limit=999999999")
+
+    assert response.status_code == 422
+    assert session.executed_sql == []
+
+
 def test_network_endpoint_filters_graph_query_by_current_user():
     session = MockSession([("alice@example.com", "bob@example.com")])
 

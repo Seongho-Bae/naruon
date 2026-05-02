@@ -1,9 +1,12 @@
 import os
 
 # Set required environment variables before importing settings
-os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test_db"
+os.environ["DATABASE_URL"] = "postgresql+asyncpg://localhost:5432/test_db"
 
-from core.config import settings
+import pytest
+from pydantic import ValidationError
+
+from core.config import Settings, settings
 
 
 def test_global_config():
@@ -17,3 +20,23 @@ def test_openai_config():
 
     assert hasattr(settings, "OPENAI_EMBEDDING_MODEL")
     assert hasattr(settings, "OPENAI_MODEL")
+
+
+def test_database_url_is_required_without_env_or_env_file(monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_database_url_rejects_default_postgres_credentials():
+    username = "postgres"
+    password = "postgres"
+
+    with pytest.raises(ValidationError, match="default PostgreSQL credentials"):
+        Settings(
+            _env_file=None,
+            DATABASE_URL=(
+                f"postgresql+asyncpg://{username}:{password}@localhost:5432/ai_email"
+            ),
+        )

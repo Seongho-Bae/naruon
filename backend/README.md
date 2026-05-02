@@ -6,6 +6,7 @@ FastAPI service for email ingestion, search, AI summaries, calendar sync, and th
 
 ```bash
 python3 -m pip install -r requirements.txt
+export DATABASE_URL="postgresql+asyncpg://<user>:<password>@localhost:5432/ai_email"
 export ENCRYPTION_KEY="$(python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
 export AUTH_TOKEN_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 export API_AUTH_TOKEN="$(python3 ../scripts/create_auth_token.py test_user)"
@@ -14,7 +15,7 @@ python3 -m pytest -q
 uvicorn main:app --reload
 ```
 
-Set `DATABASE_URL` in `.env` or use the default `postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email`.
+Set `DATABASE_URL` in `.env`, your shell, Docker Compose, Kubernetes Secret, or a deployment secret manager. The backend refuses to start without an explicit value and rejects the insecure `postgres:postgres` default credential pair. The sample Kubernetes deployment reads this from `ai-email-client-secrets` key `database-url`.
 Set `ENCRYPTION_KEY` before creating or reading encrypted tenant secrets. Keep this Fernet-compatible key stable for existing data; key rotation requires re-encrypting stored `TenantConfig` secret fields.
 Set `AUTH_TOKEN_SECRET` before serving protected API routes. Local smoke requests should send `Authorization: Bearer $API_AUTH_TOKEN`; production should issue equivalent signed bearer credentials from a real identity provider.
 
