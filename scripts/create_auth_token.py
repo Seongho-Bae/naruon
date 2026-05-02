@@ -4,32 +4,27 @@
 from __future__ import annotations
 
 import argparse
-import base64
-import hashlib
-import hmac
-import json
+import datetime
 import os
 import sys
-import time
+import uuid
 
-
-def base64url_encode(data: bytes) -> str:
-    """Return unpadded base64url text for token segments."""
-    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+import jwt
 
 
 def create_token(user_id: str, secret: str, ttl_seconds: int) -> str:
-    """Create an HMAC-signed token compatible with backend.api.auth."""
-    payload = json.dumps(
-        {"sub": user_id, "exp": int(time.time()) + ttl_seconds},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    encoded_payload = base64url_encode(payload)
-    signature = hmac.new(
-        secret.encode(), encoded_payload.encode(), hashlib.sha256
-    ).digest()
-    return f"{encoded_payload}.{base64url_encode(signature)}"
+    """Create a PyJWT HMAC-signed token compatible with backend.api.auth."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return jwt.encode(
+        {
+            "sub": user_id,
+            "iat": now,
+            "exp": now + datetime.timedelta(seconds=ttl_seconds),
+            "jti": uuid.uuid4().hex,
+        },
+        secret,
+        algorithm="HS256",
+    )
 
 
 def parse_args() -> argparse.Namespace:

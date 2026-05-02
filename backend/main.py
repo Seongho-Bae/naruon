@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.search import router as search_router
+from api.auth import router as auth_router
 from api.llm import router as llm_router
 from api.calendar import router as calendar_router
 from api.network import router as network_router
@@ -21,6 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Email Client API", lifespan=lifespan)
 
+app.include_router(auth_router)
 app.include_router(search_router)
 app.include_router(llm_router)
 app.include_router(calendar_router)

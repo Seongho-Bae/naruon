@@ -19,18 +19,27 @@ class MockRow:
 
 
 class MockResult:
+    def __init__(self, rows=None):
+        self.rows = rows or [
+            MockRow(1, "Test Subject", "test@test.com", "Test Body", 1.0)
+        ]
+
     def all(self):
-        return [MockRow(1, "Test Subject", "test@test.com", "Test Body", 1.0)]
+        return self.rows
 
 
 class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
 
+
 class MockSession:
+    def __init__(self, rows=None):
+        self.rows = rows
+
     async def execute(self, stmt):
-        return MockResult()
-    
+        return MockResult(self.rows)
+
     async def scalar(self, stmt):
         return MockTenantConfig()
 
@@ -90,3 +99,30 @@ def test_search_reply_counts_can_be_scoped_by_current_user():
 
     assert "emails.user_id" in sql
     assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+def test_search_endpoint_returns_server_sanitized_snippet(mock_generate_embeddings):
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+    raw_body = (
+        "Preview <svg onload=alert(1)>payload</svg>"
+        "<script>alert(document.cookie)</script>"
+    )
+    session = MockSession([MockRow(7, "XSS", "attacker@test.com", raw_body, 1.0)])
+
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        response = TestClient(app).post("/api/search", json={"query": "Preview"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    snippet = response.json()["results"][0]["snippet"]
+    assert "Preview" in snippet
+    assert "<svg" not in snippet.lower()
+    assert "onload" not in snippet.lower()
+    assert "<script" not in snippet.lower()
+    assert "document.cookie" not in snippet

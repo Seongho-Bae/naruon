@@ -17,9 +17,10 @@ async def client():
 
 class MockTenantConfig:
     def __init__(self):
-        self.smtp_server = "smtp.example.com"
+        self.smtp_server = "93.184.216.34"
         self.smtp_port = 587
         self.smtp_username = "testuser"
+
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -149,7 +150,9 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
             sender="hot@example.com",
             recipients="user@example.com",
             subject="Hot thread",
-            date=datetime.datetime(2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc),
+            date=datetime.datetime(
+                2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc
+            ),
             body=f"Hot body {index}",
         )
         for index in range(6)
@@ -190,7 +193,9 @@ async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit:
 
 
 @pytest.mark.asyncio
-async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+async def test_get_emails_bounds_database_candidate_window(
+    client: AsyncClient, db_session
+):
     from db.session import get_db
 
     session = LimitAwareMockSession(db_session.items)
@@ -204,7 +209,9 @@ async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncClient, db_session):
+async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
+    client: AsyncClient, db_session
+):
     root = Email(
         id=1,
         message_id="<root@example.com>",
@@ -245,6 +252,40 @@ async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Em
 
 
 @pytest.mark.asyncio
+async def test_get_email_by_id_returns_server_sanitized_body(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.body = (
+        "Hello <img src=x onerror=\"alert('xss')\">"
+        "<script>alert(document.cookie)</script>"
+    )
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 200
+    body = response.json()["body"]
+    assert "Hello" in body
+    assert "<script" not in body.lower()
+    assert "onerror" not in body.lower()
+    assert "document.cookie" not in body
+
+
+@pytest.mark.asyncio
+async def test_get_emails_uses_server_sanitized_snippet(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.body = "Preview <svg onload=alert(1)>payload</svg>"
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    snippet = response.json()["emails"][0]["snippet"]
+    assert "Preview" in snippet
+    assert "<svg" not in snippet.lower()
+    assert "onload" not in snippet.lower()
+
+
+@pytest.mark.asyncio
 async def test_get_email_thread(client: AsyncClient, db_session, sample_email: Email):
     response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
     assert response.status_code == 200
@@ -255,7 +296,9 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
 
 
 @pytest.mark.asyncio
-async def test_get_email_thread_returns_chronological_order(client: AsyncClient, db_session):
+async def test_get_email_thread_returns_chronological_order(
+    client: AsyncClient, db_session
+):
     newer = Email(
         id=2,
         message_id="newer-msg",
@@ -434,7 +477,7 @@ def test_send_email_endpoint(mock_send_email):
         "test@example.com",
         "Re: Test",
         "This is a reply.",
-        smtp_server="smtp.example.com",
+        smtp_server="93.184.216.34",
         smtp_port=587,
         smtp_username="testuser",
         in_reply_to="<parent@example.com>",
@@ -497,6 +540,91 @@ def test_send_email_endpoint_rejects_unsafe_legacy_smtp_config(sample_email):
 
     assert response.status_code == 400
     assert "not allowed" in response.json()["detail"]
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_validates_unsafe_smtp_before_send(
+    mock_send_email, sample_email
+):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    class UnsafeTenantConfig:
+        smtp_server = "169.254.169.254"
+        smtp_port = 587
+        smtp_username = "testuser"
+
+    async def unsafe_smtp_db():
+        yield MockSession([sample_email], tenant_config=UnsafeTenantConfig())
+
+    app.dependency_overrides[get_db] = unsafe_smtp_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "not allowed" in response.json()["detail"]
+    mock_send_email.assert_not_called()
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_uses_resolver_pinned_smtp_address(
+    mock_send_email,
+    sample_email,
+    monkeypatch,
+):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    class HostnameTenantConfig:
+        smtp_server = "smtp.example.com"
+        smtp_port = 587
+        smtp_username = "testuser"
+
+    monkeypatch.setattr(
+        "services.mail_endpoint_policy.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("93.184.216.34", 587))],
+    )
+
+    async def hostname_smtp_db():
+        yield MockSession([sample_email], tenant_config=HostnameTenantConfig())
+
+    app.dependency_overrides[get_db] = hostname_smtp_db
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    mock_send_email.assert_called_once_with(
+        "test@example.com",
+        "Re: Test",
+        "This is a reply.",
+        smtp_server="93.184.216.34",
+        smtp_port=587,
+        smtp_username="testuser",
+        in_reply_to=None,
+        references=None,
+    )
 
 
 @patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})

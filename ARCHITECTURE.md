@@ -29,11 +29,19 @@ authenticated user. Cross-user direct object references return 404 for email
 detail and thread routes, which avoids disclosing whether another user's email
 ID or thread exists.
 
-The backend requires HMAC-signed bearer tokens and derives `current_user` from
-the verified token subject instead of trusting client-supplied owner headers.
+The backend requires PyJWT HMAC-signed bearer tokens and derives `current_user`
+from the verified token subject instead of trusting client-supplied owner
+headers. Tokens include a `jti` identifier that can be denied through the
+server-side `revoked_auth_tokens` blocklist table before natural expiration;
+`POST /api/auth/revoke` stores the current token ID in that blocklist.
 Local development can mint short-lived tokens with `scripts/create_auth_token.py`;
 production deployments should replace local token issuance with a verified
 identity provider while preserving the same authenticated-user boundary.
+
+Email body content crosses an untrusted ingestion boundary. The parser strips
+active HTML before storage, and email/search API responses sanitize again before
+returning detail, thread, inbox, or search snippets so legacy raw rows cannot
+become a stored-XSS source for clients.
 
 ## Local deployment boundary
 
@@ -52,9 +60,11 @@ described as real delivery.
 
 Tenant-configured SMTP, IMAP, and POP3 endpoints are validated before storage
 and again immediately before outbound use. The shared mail endpoint policy
-allows only service-appropriate mail ports and rejects loopback, private,
-link-local, unresolved, or otherwise non-public addresses so tenant settings
-cannot drive backend workers toward internal network targets.
+allows only service-appropriate mail ports (SMTP is limited to 25, 465, and
+587) and rejects loopback, private, link-local, unresolved, or otherwise
+non-public addresses so tenant settings cannot drive backend workers toward
+internal network targets. Outbound send uses the resolver-pinned public address
+from validation rather than re-resolving the tenant-controlled hostname.
 
 ## CI security boundary
 

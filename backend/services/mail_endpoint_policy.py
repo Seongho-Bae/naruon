@@ -22,7 +22,7 @@ class SafeMailEndpoint:
 
 
 MAIL_PORTS_BY_SERVICE = {
-    "smtp": {25, 465, 587, 2525},
+    "smtp": {25, 465, 587},
     "imap": {143, 993},
     "pop3": {110, 995},
 }
@@ -59,7 +59,9 @@ def resolve_safe_mail_endpoint(
     if host is None and port is None:
         return SafeMailEndpoint(host="", port=None, addresses=())
     if port is not None and host is None:
-        raise MailEndpointValidationError(f"{service} host is required when port is set")
+        raise MailEndpointValidationError(
+            f"{service} host is required when port is set"
+        )
 
     normalized_host = _normalize_mail_host(host, service)
     if port is not None:
@@ -100,10 +102,19 @@ def _normalize_mail_host(host: str | None, service: str) -> str:
         raise MailEndpointValidationError(f"{service} host is required")
     if normalized.startswith("[") and normalized.endswith("]"):
         normalized = normalized[1:-1]
-    if "://" in normalized or "/" in normalized or "\\" in normalized or "@" in normalized:
-        raise MailEndpointValidationError(f"{service} host must be a hostname or IP address")
+    if (
+        "://" in normalized
+        or "/" in normalized
+        or "\\" in normalized
+        or "@" in normalized
+    ):
+        raise MailEndpointValidationError(
+            f"{service} host must be a hostname or IP address"
+        )
     if "%" in normalized:
-        raise MailEndpointValidationError(f"{service} host must not include an interface scope")
+        raise MailEndpointValidationError(
+            f"{service} host must not include an interface scope"
+        )
     if normalized.endswith("."):
         normalized = normalized[:-1]
     return normalized
@@ -134,7 +145,9 @@ def _resolve_public_addresses(host: str, port: int, service: str) -> tuple[str, 
     try:
         resolved_addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
-        raise MailEndpointValidationError(f"{service} host could not be resolved") from exc
+        raise MailEndpointValidationError(
+            f"{service} host could not be resolved"
+        ) from exc
 
     if not resolved_addresses:
         raise MailEndpointValidationError(f"{service} host could not be resolved")
@@ -145,13 +158,17 @@ def _resolve_public_addresses(host: str, port: int, service: str) -> tuple[str, 
         try:
             address = ipaddress.ip_address(address_text)
         except ValueError as exc:
-            raise MailEndpointValidationError(f"{service} host resolved to an invalid address") from exc
+            raise MailEndpointValidationError(
+                f"{service} host resolved to an invalid address"
+            ) from exc
         _assert_address_is_public(address, service)
         if address_text not in public_addresses:
             public_addresses.append(address_text)
     return tuple(public_addresses)
 
 
-def _assert_address_is_public(address: ipaddress.IPv4Address | ipaddress.IPv6Address, service: str) -> None:
+def _assert_address_is_public(
+    address: ipaddress.IPv4Address | ipaddress.IPv6Address, service: str
+) -> None:
     if not address.is_global:
         raise MailEndpointValidationError(f"{service} host is not allowed")

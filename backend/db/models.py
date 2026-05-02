@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
+
 def get_fernet() -> Fernet:
     if not settings.ENCRYPTION_KEY:
         raise RuntimeError("ENCRYPTION_KEY is required for encrypted database fields")
@@ -66,7 +67,9 @@ class Email(Base):
         server_default="default",
     )
     message_id: Mapped[str] = mapped_column(String, index=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
+    thread_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )  # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -129,3 +132,21 @@ class TenantConfig(Base):
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"
         )
+
+
+class RevokedAuthToken(Base):
+    """Server-side blocklist entry for revoked JWT access tokens."""
+
+    __tablename__ = "revoked_auth_tokens"
+
+    jti: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    revoked_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )

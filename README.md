@@ -8,6 +8,7 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 cp .env.example .env
 export ENCRYPTION_KEY="$(python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
 export AUTH_TOKEN_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+python3 -m pip install "PyJWT==2.12.0"
 export API_AUTH_TOKEN="$(python3 scripts/create_auth_token.py test_user)"
 export API_PROXY_ALLOW_SHARED_TOKEN=true
 POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
@@ -24,7 +25,7 @@ The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is s
 
 `ENCRYPTION_KEY` is required before writing encrypted tenant secrets. Generate a Fernet-compatible key once per environment and keep it stable for existing data; rotating it requires re-encrypting any stored `TenantConfig` secrets.
 
-`AUTH_TOKEN_SECRET` is required for API authentication. API clients must send a signed bearer token whose subject is the current user. For local development, `scripts/create_auth_token.py` generates `API_AUTH_TOKEN`; the Next.js frontend keeps it server-side and only enables the shared-token `/api/backend/...` proxy when `API_PROXY_ALLOW_SHARED_TOKEN=true` is set explicitly for local demo use. Production deployments should replace this helper with the deployment identity provider's token issuance path instead of enabling the shared-token proxy.
+`AUTH_TOKEN_SECRET` is required for API authentication. API clients must send a PyJWT-signed bearer token whose subject is the current user and whose `jti` can be blocklisted server-side through `POST /api/auth/revoke`. For local development, `scripts/create_auth_token.py` generates `API_AUTH_TOKEN`; the Next.js frontend keeps it server-side and only enables the shared-token `/api/backend/...` proxy when `API_PROXY_ALLOW_SHARED_TOKEN=true` is set explicitly for local demo use. Production deployments should replace this helper with the deployment identity provider's token issuance path instead of enabling the shared-token proxy.
 
 ## Manual development path
 
@@ -55,15 +56,19 @@ npm run dev
 
 - Canonical thread IDs are assigned in `backend/services/threading_service.py`.
 - Parser output preserves raw `Message-ID`, `In-Reply-To`, `References`, and `Reply-To` headers.
+- Parsed and API-returned email bodies are sanitized server-side as plain text before storage or JSON responses, including inbox, detail, thread, and search snippets.
 - Importers persist the canonical service-assigned `thread_id`; they do not recompute their own thread IDs.
 - Replies include `In-Reply-To` and `References` headers in the send payload.
-- Development sends are explicit simulations unless a real SMTP path is wired.
+- Tenant SMTP endpoints must resolve to public addresses and use standard SMTP ports 25, 465, or 587; development sends are explicit simulations unless a real SMTP path is wired.
 
 ## API smoke examples
 
 ```bash
 curl -s -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
 curl -s -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
+
+# Revoke the current local token by storing its JWT jti until expiration.
+curl -s -X POST -H "Authorization: Bearer $API_AUTH_TOKEN" http://localhost:8000/api/auth/revoke
 
 # Requires a tenant OpenAI key because search generates a query embedding.
 curl -s -X POST http://localhost:8000/api/search -H "Authorization: Bearer $API_AUTH_TOKEN" -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
@@ -101,4 +106,4 @@ cd backend && python3 -m pytest -q
 cd frontend && npm test && npm run lint && npm run build
 ```
 
-Known local warnings: backend tests emit dependency/toolchain deprecation warnings from Starlette multipart and compiled SWIG metadata. They are not caused by threading code.
+Known local warnings: backend tests emit dependency/toolchain deprecation warnings from Starlette multipart and compiled SWIG metadata (`SwigPy*` / `swigvarlink`). They are not caused by threading code.

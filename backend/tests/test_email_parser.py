@@ -50,9 +50,35 @@ Content-Type: text/html; charset="utf-8"
 
     try:
         parsed = parse_eml(temp_path)
-        assert "<p>This is HTML content</p>" in parsed["body"]
+        assert "This is HTML content" in parsed["body"]
+        assert "<p>" not in parsed["body"]
     finally:
         os.unlink(temp_path)
+
+
+def test_parse_eml_sanitizes_html_body_before_storage():
+    eml_content = b"""Message-ID: <xss@test.com>
+From: attacker@test.com
+To: recipient@test.com
+Subject: HTML XSS
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+Content-Type: text/html; charset="utf-8"
+
+<p>Hello</p><img src=x onerror="alert('xss')"><script>alert(document.cookie)</script>"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+    finally:
+        os.unlink(temp_path)
+
+    assert "Hello" in parsed["body"]
+    assert "<script" not in parsed["body"].lower()
+    assert "onerror" not in parsed["body"].lower()
+    assert "document.cookie" not in parsed["body"]
 
 
 def test_parse_eml_missing_and_malformed_date():
@@ -93,6 +119,7 @@ Test."""
 def test_parse_eml_io_error():
     with pytest.raises(EmailParseError):
         parse_eml("/path/to/nonexistent/file.eml")
+
 
 def test_parse_eml_thread_id():
     # 1. Has References

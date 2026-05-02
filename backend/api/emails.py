@@ -6,7 +6,11 @@ from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
-from services.mail_endpoint_policy import MailEndpointValidationError
+from services.email_sanitizer import sanitize_email_body
+from services.mail_endpoint_policy import (
+    MailEndpointValidationError,
+    resolve_safe_mail_endpoint,
+)
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
@@ -38,6 +42,7 @@ class EmailListItem(BaseModel):
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
+
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -86,7 +91,12 @@ async def get_emails(
     items = []
     for email in sorted_groups:
         group_key = canonical_thread_key(email)
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
+        sanitized_body = sanitize_email_body(email.body)
+        snippet = (
+            sanitized_body[:100] + "..."
+            if len(sanitized_body) > 100
+            else sanitized_body
+        )
         items.append(
             EmailListItem(
                 id=email.id,
@@ -122,14 +132,16 @@ async def get_email(
         recipients=email.recipients,
         subject=email.subject,
         date=email.date,
-        body=email.body,
+        body=sanitize_email_body(email.body),
         thread_id=canonical_thread_key(email),
         in_reply_to=email.in_reply_to,
         references=email.references,
     )
 
 
-@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get(
+    "/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]]
+)
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
@@ -140,7 +152,9 @@ async def get_email_thread(
         select(Email)
         .where(
             Email.user_id == current_user,
-            or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)),
+            or_(
+                Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
+            ),
         )
         .order_by(Email.date.asc())
     )
@@ -160,7 +174,7 @@ async def get_email_thread(
                 recipients=email.recipients,
                 subject=email.subject,
                 date=email.date,
-                body=email.body,
+                body=sanitize_email_body(email.body),
                 thread_id=canonical_thread_key(email),
                 in_reply_to=email.in_reply_to,
                 references=email.references,
@@ -173,34 +187,49 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None # O3: email threading support
+    in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
 
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+    request: SendEmailRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
-        
-        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
+
+        if (
+            not tenant_config
+            or not tenant_config.smtp_server
+            or not tenant_config.smtp_port
+            or not tenant_config.smtp_username
+        ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
-            
+
         smtp_server = tenant_config.smtp_server
         smtp_port = tenant_config.smtp_port
         smtp_username = tenant_config.smtp_username
-        
+        safe_smtp_endpoint = resolve_safe_mail_endpoint(
+            smtp_server,
+            smtp_port,
+            service="smtp",
+        )
+
         send_result = await send_email(
-            request.to, 
-            request.subject, 
+            request.to,
+            request.subject,
             request.body,
-            smtp_server=smtp_server,
-            smtp_port=smtp_port,
+            smtp_server=safe_smtp_endpoint.connection_host,
+            smtp_port=safe_smtp_endpoint.port,
             smtp_username=smtp_username,
             in_reply_to=request.in_reply_to,
             references=request.references,

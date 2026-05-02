@@ -1,9 +1,4 @@
-import base64
-import hashlib
-import hmac
-import json
-import time
-
+from api.auth import create_user_token
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
@@ -37,18 +32,8 @@ def get_override(rows):
     return override_get_db
 
 
-def signed_bearer_token(user_id: str, secret: str = "test-auth-secret") -> str:
-    payload = json.dumps(
-        {"sub": user_id, "exp": int(time.time()) + 3600},
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode()
-    encoded_payload = base64.urlsafe_b64encode(payload).decode().rstrip("=")
-    signature = hmac.new(
-        secret.encode(), encoded_payload.encode(), hashlib.sha256
-    ).digest()
-    encoded_signature = base64.urlsafe_b64encode(signature).decode().rstrip("=")
-    return f"Bearer {encoded_payload}.{encoded_signature}"
+def signed_bearer_token(user_id: str) -> str:
+    return f"Bearer {create_user_token(user_id)}"
 
 
 def test_network_endpoint_exists():
@@ -202,7 +187,10 @@ def test_network_endpoint_uses_signed_token_not_x_user_id_for_authorization():
 
     with patch.dict(
         app.dependency_overrides, {get_db: override_get_db}, clear=True
-    ), patch.dict("os.environ", {"AUTH_TOKEN_SECRET": "test-auth-secret"}):
+    ), patch.dict(
+        "os.environ",
+        {"AUTH_TOKEN_SECRET": "test-auth-secret-with-at-least-32-bytes"},
+    ):
         response = client.get(
             "/api/network/graph?user_id=bob",
             headers={

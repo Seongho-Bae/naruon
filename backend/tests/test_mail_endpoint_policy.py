@@ -7,8 +7,9 @@ from services.mail_endpoint_policy import (
     assert_safe_mail_endpoint,
 )
 
-
-PUBLIC_RESOLVER_RESULTS = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 587))]
+PUBLIC_RESOLVER_RESULTS = [
+    (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", 587))
+]
 
 
 @pytest.mark.parametrize(
@@ -20,13 +21,17 @@ def test_mail_endpoint_policy_rejects_loopback_private_and_link_local_hosts(host
         assert_safe_mail_endpoint(host, 587, service="smtp")
 
 
-@pytest.mark.parametrize("port", [0, 1, 22, 80, 70000])
+@pytest.mark.parametrize("port", [0, 1, 22, 80, 2525, 70000])
 def test_mail_endpoint_policy_rejects_non_mail_smtp_ports(port):
     with pytest.raises(MailEndpointValidationError, match="port"):
-        assert_safe_mail_endpoint("smtp.example.com", port, service="smtp", resolve=False)
+        assert_safe_mail_endpoint(
+            "smtp.example.com", port, service="smtp", resolve=False
+        )
 
 
-def test_mail_endpoint_policy_rejects_public_hostname_that_resolves_private(monkeypatch):
+def test_mail_endpoint_policy_rejects_public_hostname_that_resolves_private(
+    monkeypatch,
+):
     monkeypatch.setattr(
         socket,
         "getaddrinfo",
