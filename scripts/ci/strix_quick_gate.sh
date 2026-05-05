@@ -31,11 +31,12 @@ DEFAULT_PROVIDER=""
 LLM_API_BASE_FILE="${LLM_API_BASE_FILE:-}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
-STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-HIGH}"
+STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
 RUN_START_EPOCH="$(date +%s)"
 PREEXISTING_REPORT_DIRS=()
 REPO_NAME="${REPO_ROOT##*/}"
 # shellcheck source=scripts/ci/strix_model_utils.sh
+# shellcheck disable=SC1091  # source path is repo-local; local lint may omit -x
 . "$SCRIPT_DIR/strix_model_utils.sh"
 # Sticky flag: once ANY attempt encounters an infrastructure error (rate limit,
 # LLM connection failure, mid-stream fallback, etc.), this flag stays 1 for
@@ -50,7 +51,7 @@ PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
-PR_SCA_VERIFICATION_STATE="unknown"
+TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
 # shellcheck disable=SC2317,SC2329  # invoked from cleanup trap
 publish_artifact_reports() {
@@ -157,23 +158,153 @@ normalize_changed_file_path() {
 	local changed_file="$1"
 	python3 - "$REPO_ROOT" "$changed_file" <<'PY'
 from pathlib import Path
+import posixpath
+import re
 import sys
 
 repo_root = Path(sys.argv[1]).resolve(strict=True)
-relative_path = Path(sys.argv[2].strip())
-relative_path_str = sys.argv[2].strip()
+relative_path_str = sys.argv[2]
 if "\n" in relative_path_str or "\r" in relative_path_str:
     raise SystemExit(1)
+if not relative_path_str:
+    raise SystemExit(1)
+if relative_path_str != relative_path_str.strip():
+    raise SystemExit(1)
+if "\x00" in relative_path_str:
+    raise SystemExit(1)
+if "\\" in relative_path_str:
+    raise SystemExit(1)
+normalized = posixpath.normpath(relative_path_str)
+if normalized in (".", "") or normalized.startswith("../") or normalized == "..":
+    raise SystemExit(1)
+if not re.fullmatch(r"[A-Za-z0-9_./ -]+", normalized):
+    raise SystemExit(1)
+relative_path = Path(normalized)
 if relative_path.is_absolute():
     raise SystemExit(1)
 if any(part in ('', '.', '..') for part in relative_path.parts):
     raise SystemExit(1)
-src_path = (repo_root / relative_path).resolve(strict=False)
-if not src_path.exists():
-    raise SystemExit(1)
-relative = src_path.relative_to(repo_root)
-print(relative.as_posix())
+candidate = (repo_root / relative_path).resolve(strict=False)
+candidate.relative_to(repo_root)
+print(relative_path.as_posix())
 PY
+}
+
+pull_request_head_blob_required() {
+	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]
+}
+
+pr_head_regular_file_mode() {
+	local relative_path="$1"
+	local head_sha tree_output line_count metadata tree_path mode object_type _object_hash
+	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+	if [ -z "$head_sha" ]; then
+		return 2
+	fi
+	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+		return 2
+	fi
+	if ! tree_output="$(git ls-tree "$head_sha" -- "$relative_path")"; then
+		return 2
+	fi
+	if [ -z "$tree_output" ]; then
+		return 1
+	fi
+	line_count="$(printf '%s\n' "$tree_output" | wc -l | tr -d ' ')"
+	if [ "$line_count" != "1" ]; then
+		return 2
+	fi
+	IFS=$'\t' read -r metadata tree_path <<<"$tree_output"
+	# shellcheck disable=SC2086 # metadata is exactly git ls-tree's mode/type/object tuple.
+	read -r mode object_type _object_hash <<<"$metadata"
+	if [ "$tree_path" != "$relative_path" ]; then
+		return 2
+	fi
+	if [ "$object_type" != "blob" ]; then
+		return 3
+	fi
+	case "$mode" in
+	100644 | 100755)
+		printf '%s\n' "$mode"
+		return 0
+		;;
+	*)
+		return 3
+		;;
+	esac
+}
+
+changed_file_exists_for_scan() {
+	local relative_path="$1"
+	if pull_request_head_blob_required; then
+		local mode_rc=0
+		pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
+		case "$mode_rc" in
+		0)
+			return 0
+			;;
+		1)
+			return 1
+			;;
+		3)
+			echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $relative_path" >&2
+			return 2
+			;;
+		*)
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $relative_path" >&2
+			return 2
+			;;
+		esac
+	fi
+	if [ -f "$REPO_ROOT/$relative_path" ] && [ ! -L "$REPO_ROOT/$relative_path" ]; then
+		return 0
+	fi
+	if [ -z "$(trim_whitespace "${PR_HEAD_SHA:-}")" ]; then
+		return 1
+	fi
+	local mode_rc=0
+	pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
+	case "$mode_rc" in
+	0)
+		return 0
+		;;
+	2)
+		return 2
+		;;
+	3)
+		echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $relative_path" >&2
+		return 2
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+copy_pr_head_blob_to_file() {
+	local relative_path="$1"
+	local dst_path="$2"
+	local head_sha mode mode_rc tmp_dst
+	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+	mode_rc=0
+	mode="$(pr_head_regular_file_mode "$relative_path")" || mode_rc=$?
+	if [ "$mode_rc" -ne 0 ]; then
+		return 2
+	fi
+	tmp_dst="$(mktemp "$(dirname -- "$dst_path")/.pr-head.XXXXXX")" || return 2
+	if ! git show "$head_sha:$relative_path" >"$tmp_dst"; then
+		rm -f -- "$tmp_dst"
+		return 2
+	fi
+	if ! mv -- "$tmp_dst" "$dst_path"; then
+		rm -f -- "$tmp_dst"
+		return 2
+	fi
+	if [ "$mode" = "100755" ]; then
+		chmod 755 "$dst_path" || return 2
+	else
+		chmod 644 "$dst_path" || return 2
+	fi
 }
 
 is_supported_source_file() {
@@ -342,6 +473,12 @@ path_is_within_allowed_scope() {
 		;;
 	esac
 
+	return 1
+}
+
+path_is_within_generated_pr_scope() {
+	local resolved_target="$1"
+
 	local scope_dir
 	for scope_dir in "${PULL_REQUEST_SCOPE_DIRS[@]}"; do
 		scope_dir="$({ CDPATH='' && cd -P -- "$scope_dir" && pwd -P; })"
@@ -377,7 +514,7 @@ PY
 		return 2
 	}
 	if ! path_is_within_allowed_scope "$resolved_target"; then
-		echo "ERROR: STRIX_TARGET_PATH '$raw_target' must stay within the repository or generated PR scope directories." >&2
+		echo "ERROR: STRIX_TARGET_PATH '$raw_target' must stay within the repository." >&2
 		return 2
 	fi
 	if [ ! -e "$resolved_target" ]; then
@@ -389,6 +526,47 @@ PY
 		return 2
 	fi
 	printf '%s\n' "$resolved_target"
+}
+
+resolve_internal_pr_scope_target_path() {
+	local raw_target="$1"
+	local resolved_target
+	resolved_target="$({
+		python3 - "$raw_target" <<'PY'
+from pathlib import Path
+import sys
+
+raw_target = sys.argv[1]
+target_path = Path(raw_target)
+resolved = target_path.resolve(strict=False)
+print(resolved)
+PY
+	})" || {
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to a valid path." >&2
+		return 2
+	}
+	if ! path_is_within_generated_pr_scope "$resolved_target"; then
+		echo "ERROR: internal PR scope target '$raw_target' must stay within generated PR scope directories." >&2
+		return 2
+	fi
+	if [ ! -e "$resolved_target" ]; then
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to an existing directory." >&2
+		return 2
+	fi
+	if [ ! -d "$resolved_target" ] || [ -L "$resolved_target" ]; then
+		echo "ERROR: internal PR scope target '$raw_target' must resolve to a real directory." >&2
+		return 2
+	fi
+	printf '%s\n' "$resolved_target"
+}
+
+resolve_current_target_path() {
+	local raw_target="$1"
+	if [ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -eq 1 ]; then
+		resolve_internal_pr_scope_target_path "$raw_target"
+		return $?
+	fi
+	resolve_scan_target_path "$raw_target"
 }
 
 SCAN_MODE="$(trim_whitespace "$RAW_SCAN_MODE")"
@@ -405,7 +583,6 @@ load_pull_request_changed_files() {
 
 	if [ "${STRIX_TEST_CHANGED_FILES_OVERRIDE+x}" = x ]; then
 		while IFS= read -r changed_file; do
-			changed_file="$(trim_whitespace "$changed_file")"
 			if [ -n "$changed_file" ]; then
 				CHANGED_FILES+=("$changed_file")
 			fi
@@ -442,23 +619,43 @@ PY
 		head_sha="$(printf '%s' "$pr_shas" | sed -n '2p')"
 	fi
 	if [ -z "$base_sha" ] || [ -z "$head_sha" ]; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request base/head metadata is unavailable; failing closed." >&2
+			return 2
+		fi
 		return 1
 	fi
 	if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request base commit could not be read; failing closed: $base_sha" >&2
+			return 2
+		fi
 		return 1
 	fi
 	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request head commit could not be read; failing closed: $head_sha" >&2
+			return 2
+		fi
+		return 1
+	fi
+
+	local changed_files_output
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha")"; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+			return 2
+		fi
 		return 1
 	fi
 
 	while IFS= read -r changed_file; do
-		changed_file="$(trim_whitespace "$changed_file")"
 		if [ -n "$changed_file" ]; then
 			CHANGED_FILES+=("$changed_file")
 		fi
-	done < <(git diff --name-only "$base_sha...$head_sha")
+	done <<<"$changed_files_output"
 
-	[ "${#CHANGED_FILES[@]}" -gt 0 ]
+	return 0
 }
 
 load_pull_request_head_sha() {
@@ -517,57 +714,46 @@ PY
 }
 
 authoritative_sca_checks_passed_for_pr_head() {
-	PR_SCA_VERIFICATION_STATE="unknown"
-
 	if [ "${STRIX_TEST_PR_SCA_STATUS_OVERRIDE+x}" = x ]; then
 		case "$(trim_whitespace "$STRIX_TEST_PR_SCA_STATUS_OVERRIDE")" in
 		passed)
-			PR_SCA_VERIFICATION_STATE="passed"
 			return 0
 			;;
 		unverified | failed | "")
-			PR_SCA_VERIFICATION_STATE="unverified"
 			return 1
 			;;
 		error)
-			PR_SCA_VERIFICATION_STATE="error"
 			echo "Unable to verify authoritative SCA checks for this pull request head; failing closed." >&2
 			return 1
 			;;
 		esac
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unsupported STRIX_TEST_PR_SCA_STATUS_OVERRIDE value; failing closed." >&2
 		return 1
 	fi
 
 	if ! is_pull_request_event; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to verify authoritative SCA checks outside a pull request context; failing closed." >&2
 		return 1
 	fi
 
 	local head_sha pr_number repository gh_token workflow_runs_json verification_result
 	if ! head_sha="$(load_pull_request_head_sha)"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to determine pull request head SHA for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 	if ! pr_number="$(load_pull_request_number)"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to determine pull request identity for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
 	repository="$(trim_whitespace "${GITHUB_REPOSITORY:-}")"
 	if [ -z "$repository" ]; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "GITHUB_REPOSITORY is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
 	gh_token="$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")"
 	if [ -z "$gh_token" ]; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "GitHub token is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
@@ -575,7 +761,6 @@ authoritative_sca_checks_passed_for_pr_head() {
 	if ! workflow_runs_json="$(GH_TOKEN="$gh_token" gh api \
 		-H "Accept: application/vnd.github+json" \
 		"repos/$repository/actions/runs?head_sha=$head_sha&event=pull_request&per_page=100")"; then
-		PR_SCA_VERIFICATION_STATE="error"
 		echo "Unable to query authoritative SCA workflow runs for this pull request head; failing closed." >&2
 		return 1
 	fi
@@ -630,24 +815,20 @@ for required_path, run in latest.items():
 
 print("passed")
 PY
-	)"; then
-		PR_SCA_VERIFICATION_STATE="error"
+		)"; then
 		echo "Unable to evaluate authoritative SCA workflow results for this pull request head; failing closed." >&2
 		return 1
 	fi
 
 	case "$verification_result" in
 	passed)
-		PR_SCA_VERIFICATION_STATE="passed"
 		return 0
 		;;
 	missing | unverified)
-		PR_SCA_VERIFICATION_STATE="unverified"
 		return 1
 		;;
 	esac
 
-	PR_SCA_VERIFICATION_STATE="error"
 	echo "Unexpected authoritative SCA verification result '$verification_result'; failing closed." >&2
 	return 1
 }
@@ -655,38 +836,103 @@ PY
 is_scannable_changed_file() {
 	local changed_file="$1"
 	local normalized_changed_file
-	changed_file="$(trim_whitespace "$changed_file")"
 	if [ -z "$changed_file" ]; then
 		return 1
 	fi
-	if [[ "$changed_file" == *.md || "$changed_file" == *.txt ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */src/test/* || "$changed_file" == tests/* || "$changed_file" == */tests/* ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */__tests__/* || "$changed_file" == *.test.ts || "$changed_file" == *.test.tsx || "$changed_file" == *.spec.ts || "$changed_file" == *.spec.tsx ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == pnpm-lock.yaml || "$changed_file" == package-lock.json || "$changed_file" == yarn.lock || "$changed_file" == uv.lock ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == infra/* ]]; then
-		return 1
-	fi
-	if [[ "$changed_file" == */ ]]; then
-		return 1
-	fi
 	if ! normalized_changed_file="$(normalize_changed_file_path "$changed_file")"; then
+		if pull_request_head_blob_required; then
+			echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
+			return 2
+		fi
 		return 1
 	fi
-	if ! is_supported_source_file "$changed_file"; then
+	if pull_request_head_blob_required; then
+		local mode_rc=0
+		pr_head_regular_file_mode "$normalized_changed_file" >/dev/null || mode_rc=$?
+		case "$mode_rc" in
+		0)
+			;;
+		1)
+			return 1
+			;;
+		3)
+			echo "ERROR: pull request changed file is not a regular PR-head file; failing closed: $normalized_changed_file" >&2
+			return 2
+			;;
+		*)
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $normalized_changed_file" >&2
+			return 2
+			;;
+		esac
+	fi
+	if [[ "$normalized_changed_file" == *.md || "$normalized_changed_file" == *.txt ]]; then
 		return 1
 	fi
-	if [ ! -f "$REPO_ROOT/$normalized_changed_file" ] || [ -L "$REPO_ROOT/$normalized_changed_file" ]; then
+	if [[ "$normalized_changed_file" == */src/test/* || "$normalized_changed_file" == tests/* || "$normalized_changed_file" == */tests/* ]]; then
 		return 1
 	fi
-	return 0
+	if [[ "$normalized_changed_file" == */__tests__/* || "$normalized_changed_file" == *.test.ts || "$normalized_changed_file" == *.test.tsx || "$normalized_changed_file" == *.spec.ts || "$normalized_changed_file" == *.spec.tsx ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == pnpm-lock.yaml || "$normalized_changed_file" == package-lock.json || "$normalized_changed_file" == yarn.lock || "$normalized_changed_file" == uv.lock ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == infra/* ]]; then
+		return 1
+	fi
+	if [[ "$normalized_changed_file" == */ ]]; then
+		return 1
+	fi
+	if ! is_supported_source_file "$normalized_changed_file"; then
+		return 1
+	fi
+	local exists_rc=0
+	changed_file_exists_for_scan "$normalized_changed_file" || exists_rc=$?
+	case "$exists_rc" in
+	0)
+		return 0
+		;;
+	2)
+		return 2
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+pull_request_scope_context_files() {
+	local needs_backend_python=0
+	local changed_file normalized_changed_file
+	for changed_file in "$@"; do
+		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+		case "$normalized_changed_file" in
+		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+			needs_backend_python=1
+			;;
+		esac
+	done
+
+	if [ "$needs_backend_python" -eq 1 ]; then
+		cat <<'EOF'
+backend/requirements.txt
+backend/api/__init__.py
+backend/api/auth.py
+backend/core/__init__.py
+backend/core/config.py
+backend/core/exceptions.py
+backend/db/__init__.py
+backend/db/models.py
+backend/db/session.py
+backend/services/__init__.py
+backend/services/archive.py
+backend/services/email_client.py
+backend/services/email_parser.py
+backend/services/embedding.py
+backend/services/exceptions.py
+backend/services/threading_service.py
+EOF
+	fi
 }
 
 build_pull_request_scope_dir() {
@@ -702,33 +948,132 @@ build_pull_request_scope_dir() {
 			echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
 			return 2
 		}
-		mapfile -t _paths < <(
-			python3 - "$REPO_ROOT" "$scope_dir" "$relative_path" <<'PY'
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
 from pathlib import Path
 import sys
 
-repo_root = Path(sys.argv[1]).resolve(strict=True)
-scope_root = Path(sys.argv[2]).resolve(strict=True)
-relative_path = Path(sys.argv[3])
-src_path = (repo_root / relative_path).resolve(strict=False)
-if not src_path.exists():
-    raise SystemExit(1)
-src_path.relative_to(repo_root)
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
 dst_path = scope_root / relative_path
-print(src_path)
 print(dst_path)
 PY
-		)
-		local src_path="${_paths[0]}"
-		local dst_path="${_paths[1]}"
+		)"
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		local copy_rc=1
+		local head_sha_for_copy
+		head_sha_for_copy="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+		if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && git cat-file -e "$head_sha_for_copy^{commit}" 2>/dev/null; }; then
+			copy_rc=0
+			copy_pr_head_blob_to_file "$relative_path" "$dst_path" || copy_rc=$?
+		fi
+		if [ "$copy_rc" -eq 0 ]; then
+			return 0
+		fi
+		if pull_request_head_blob_required || [ "$copy_rc" -eq 2 ]; then
+			echo "ERROR: pull request changed file could not be read from PR head; failing closed: $changed_file" >&2
+			return 2
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request changed file is unavailable in both PR head and checkout: $changed_file" >&2
+			return 2
+		fi
+		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_trusted_context_file_into_scope() {
+		local context_file="$1"
+		local relative_path
+		relative_path="$(normalize_changed_file_path "$context_file")" || {
+			echo "ERROR: pull request context file path is unsafe: $context_file" >&2
+			return 2
+		}
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -e "$src_path" ]; then
+			return 0
+		fi
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request trusted context file is not a regular checkout file: $context_file" >&2
+			return 2
+		fi
 		mkdir -p -- "$(dirname -- "$dst_path")"
 		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_scope_support_file() {
+		local relative_path="$1"
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		if [ -e "$dst_path" ]; then
+			return 0
+		fi
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: pull request scan support file is unavailable: $relative_path" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		cp -- "$src_path" "$dst_path"
+	}
+
+	copy_required_scope_support_files() {
+		local include_strix_model_utils=0
+		local changed_file relative_path
+		for changed_file in "$@"; do
+			relative_path="$(normalize_changed_file_path "$changed_file")" || return 2
+			case "$relative_path" in
+			scripts/ci/strix_quick_gate.sh | scripts/ci/test_strix_quick_gate.sh)
+				include_strix_model_utils=1
+				;;
+			esac
+		done
+
+		if [ "$include_strix_model_utils" -eq 1 ]; then
+			copy_scope_support_file "scripts/ci/strix_model_utils.sh" || return 2
+		fi
 	}
 
 	local changed_file
 	for changed_file in "$@"; do
 		copy_changed_file_into_scope "$changed_file" || return 2
 	done
+	local context_files_text=""
+	context_files_text="$(pull_request_scope_context_files "$@")" || return 2
+	if [ -n "$context_files_text" ]; then
+		local context_file
+		while IFS= read -r context_file; do
+			[ -n "$context_file" ] || continue
+			copy_trusted_context_file_into_scope "$context_file" || return 2
+		done <<<"$context_files_text"
+	fi
+	copy_required_scope_support_files "$@" || return 2
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
@@ -736,16 +1081,30 @@ prepare_pull_request_scan_scope() {
 	if ! is_pull_request_event; then
 		return 0
 	fi
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
-	if ! load_pull_request_changed_files; then
+	local load_changed_files_rc=0
+	load_pull_request_changed_files || load_changed_files_rc=$?
+	case "$load_changed_files_rc" in
+	0)
+		;;
+	2)
+		return 2
+		;;
+	*)
 		return 0
-	fi
+		;;
+	esac
 
 	local scoped_changed_files=()
 	local changed_file
 	for changed_file in "${CHANGED_FILES[@]}"; do
-		if is_scannable_changed_file "$changed_file"; then
+		local scannable_rc=0
+		is_scannable_changed_file "$changed_file" || scannable_rc=$?
+		if [ "$scannable_rc" -eq 0 ]; then
 			scoped_changed_files+=("$changed_file")
+		elif [ "$scannable_rc" -eq 2 ]; then
+			return 2
 		fi
 	done
 
@@ -794,22 +1153,53 @@ PY
 		[ -n "$candidate" ]
 	}
 	if [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
+		if pull_request_head_blob_required; then
+			local build_scope_rc=0
+			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+			if [ "$build_scope_rc" -eq 0 ]; then
+				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
+				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+				PULL_REQUEST_SCOPE_FILE_BATCHES=()
+				return 0
+			fi
+			return 2
+		fi
 		local narrowed_target=""
 		if narrowed_target="$(derive_pull_request_full_target_path "${CHANGED_FILES[@]}")" && [ "$narrowed_target" != "./" ] && ! target_path_is_top_level_scope "$narrowed_target"; then
 			TARGET_PATH="$narrowed_target"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 			printf "Using narrowed target path %s for pull request Strix scan with %s scannable changed file(s).\n" "$narrowed_target" "$total_files" >&2
-		elif build_pull_request_scope_dir "${CHANGED_FILES[@]}"; then
-			TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
-			printf "Using bounded changed-file scope for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 		else
-			printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			local build_scope_rc=0
+			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+			if [ "$build_scope_rc" -eq 0 ]; then
+				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
+				printf "Using bounded changed-file scope for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			elif pull_request_head_blob_required; then
+				return 2
+			else
+				printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+			fi
 		fi
 		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
 	fi
-	PULL_REQUEST_SCOPE_FILE_BATCHES=("$(printf '%s\n' "${CHANGED_FILES[@]}")")
+	PULL_REQUEST_SCOPE_FILE_BATCHES=()
+	local batch_start=0
+	while [ "$batch_start" -lt "$total_files" ]; do
+		local batch_files=("${CHANGED_FILES[@]:batch_start:STRIX_PR_SCOPE_MAX_FILES_PER_BATCH}")
+		PULL_REQUEST_SCOPE_FILE_BATCHES+=("$(printf '%s\n' "${batch_files[@]}")")
+		batch_start=$((batch_start + STRIX_PR_SCOPE_MAX_FILES_PER_BATCH))
+	done
 	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
 	printf ".\n" >&2
+	if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 1 ]; then
+		printf "Split pull request Strix scan into %s batch(es) of at most %s file(s).\n" \
+			"${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" \
+			"$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
+	fi
 	return 0
 }
 
@@ -838,7 +1228,7 @@ extract_vulnerability_locations() {
 	local resolved_scan_target=""
 	local narrowed_workspace_prefix=""
 
-	if resolved_scan_target="$(resolve_scan_target_path "$TARGET_PATH" 2>/dev/null)"; then
+	if resolved_scan_target="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"; then
 		if [ "$resolved_scan_target" != "$REPO_ROOT" ]; then
 			narrowed_workspace_prefix="/workspace/$(basename "$resolved_scan_target")/"
 		fi
@@ -1142,6 +1532,61 @@ is_vertex_model() {
 	esac
 }
 
+is_gemini_model() {
+	case "$1" in
+	gemini/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+fallback_models_raw_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
+		else
+			printf '%s\n' "$STRIX_VERTEX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "$STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+		fi
+		return 0
+	fi
+
+	printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+}
+
+fallback_models_config_name_for_model() {
+	local model="$1"
+
+	if is_vertex_model "$model"; then
+		printf '%s\n' "STRIX_VERTEX_FALLBACK_MODELS"
+		return 0
+	fi
+
+	if is_gemini_model "$model"; then
+		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS or STRIX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	printf '%s\n' "STRIX_FALLBACK_MODELS"
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -1202,7 +1647,7 @@ run_strix_once() {
 	if ! llm_api_base_value="$(resolved_llm_api_base_for_model "$model")"; then
 		return 1
 	fi
-	if ! resolved_target_path="$(resolve_scan_target_path "$TARGET_PATH")"; then
+	if ! resolved_target_path="$(resolve_current_target_path "$TARGET_PATH")"; then
 		return 1
 	fi
 	local start_epoch
@@ -1260,6 +1705,11 @@ for key in (
     "GOOGLE_APPLICATION_CREDENTIALS",
     "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
     "VERTEX_LOCATION",
+    "GEMINI_LOCATION",
+    "LLM_TIMEOUT",
+    "STRIX_MEMORY_COMPRESSOR_TIMEOUT",
+    "STRIX_REASONING_EFFORT",
+    "STRIX_LLM_MAX_RETRIES",
     "GOOGLE_CLOUD_PROJECT",
     "GCP_PROJECT",
     "GCLOUD_PROJECT",
@@ -1349,17 +1799,50 @@ PY
 	return 1
 }
 
+is_llm_api_connection_error() {
+	if grep -Eiq 'litellm(\.exceptions)?\.APIConnectionError' "$STRIX_LOG" &&
+		grep -Eiq '(GeminiException|Server disconnected without sending a response|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
+is_llm_service_unavailable_error() {
+	if grep -Eiq 'litellm(\.exceptions)?\.ServiceUnavailableError' "$STRIX_LOG" &&
+		grep -Eiq '(GeminiException|VertexAI|Vertex_ai|vertex\.ai|openai|anthropic|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
+		grep -Eiq '("status"[[:space:]]*:[[:space:]]*"UNAVAILABLE"|(^|[^0-9])503([^0-9]|$)|high demand|Service Unavailable)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 ## Determines whether the last strix failure is a transient error eligible
 ## for same-model retry (up to STRIX_TRANSIENT_RETRY_PER_MODEL times).
-## Two error families qualify:
+## Four error families qualify:
 ##   - RateLimit / RESOURCE_EXHAUSTED / HTTP 429
+##   - litellm API connection failures with LLM-provider evidence
+##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Timeouts remain infrastructure errors for guard logic, but the caller should
-## move directly to fallback model evaluation instead of spending the remaining
-## budget retrying the same slow model.
+## Vertex timeouts remain infrastructure errors for guard logic, but the caller
+## should move directly to fallback model evaluation instead of spending the
+## remaining budget retrying the same slow model. Non-Vertex models have no
+## provider-specific fallback path in this gate, so LLM timeouts are retried on
+## the same model before being treated as non-recoverable.
 is_transient_same_model_retry_error() {
+	local model="${1-}"
 	if is_timeout_error; then
+		if [ -n "$model" ] && ! is_vertex_model "$model"; then
+			return 0
+		fi
 		return 1
+	fi
+	if is_llm_api_connection_error; then
+		return 0
+	fi
+	if is_llm_service_unavailable_error; then
+		return 0
 	fi
 	if is_rate_limit_error; then
 		return 0
@@ -1389,13 +1872,19 @@ run_strix_with_transient_retry() {
 			return 1
 		fi
 
-		if ! is_transient_same_model_retry_error; then
+		if ! is_transient_same_model_retry_error "$model"; then
 			return 1
 		fi
 
 		local retry_reason="transient error"
 		if is_rate_limit_error; then
 			retry_reason="rate limit"
+		elif is_llm_api_connection_error; then
+			retry_reason="LLM API connection"
+		elif is_llm_service_unavailable_error; then
+			retry_reason="LLM service unavailable"
+		elif is_timeout_error; then
+			retry_reason="LLM timeout"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
@@ -1539,6 +2028,14 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_midstream_fallback_error; then
+		return 0
+	fi
+
+	if is_llm_api_connection_error; then
+		return 0
+	fi
+
+	if is_llm_service_unavailable_error; then
 		return 0
 	fi
 
@@ -1847,8 +2344,10 @@ is_hallucinated_endpoint_finding() {
 	return 0
 }
 
-is_vertex_retryable_error() {
-	if is_vertex_not_found_error; then
+is_model_retryable_error() {
+	local model="$1"
+
+	if is_vertex_model "$model" && is_vertex_not_found_error; then
 		return 0
 	fi
 
@@ -1861,6 +2360,14 @@ is_vertex_retryable_error() {
 	fi
 
 	if is_midstream_fallback_error; then
+		return 0
+	fi
+
+	if is_llm_api_connection_error; then
+		return 0
+	fi
+
+	if is_llm_service_unavailable_error; then
 		return 0
 	fi
 
@@ -1896,21 +2403,12 @@ run_current_target_scan() {
 		;;
 	esac
 
-	if ! is_vertex_model "$PRIMARY_MODEL"; then
+	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
 	fi
 
-	if ! is_vertex_retryable_error; then
-		echo "Strix quick scan failed with a non-recoverable error." >&2
-		return 1
-	fi
-
-	if [ -z "${STRIX_VERTEX_FALLBACK_MODELS+x}" ]; then
-		FALLBACK_MODELS_RAW="vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
-	else
-		FALLBACK_MODELS_RAW="$STRIX_VERTEX_FALLBACK_MODELS"
-	fi
+	FALLBACK_MODELS_RAW="$(fallback_models_raw_for_model "$PRIMARY_MODEL")"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\r'/ }"
 	FALLBACK_MODELS_RAW="${FALLBACK_MODELS_RAW//$'\n'/ }"
 	read -r -a FALLBACK_MODELS <<<"$FALLBACK_MODELS_RAW"
@@ -1926,7 +2424,11 @@ run_current_target_scan() {
 		fi
 
 		fallback_tried=1
-		echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		if is_vertex_model "$PRIMARY_MODEL"; then
+			echo "Primary Vertex model unavailable; retrying with fallback '$candidate'."
+		else
+			echo "Primary model unavailable; retrying with fallback '$candidate'."
+		fi
 		if run_strix_with_transient_retry "$candidate"; then
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
@@ -1946,25 +2448,31 @@ run_current_target_scan() {
 			;;
 		esac
 
-		if ! is_vertex_retryable_error; then
+		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2
 			return 1
 		fi
 		done
 
-	if should_allow_pull_request_infra_zero_finding_bypass; then
+	if is_vertex_model "$PRIMARY_MODEL" && should_allow_pull_request_infra_zero_finding_bypass; then
 		return 0
 	fi
 
 	if [ "$fallback_tried" -eq 0 ]; then
+		local fallback_config_name
+		fallback_config_name="$(fallback_models_config_name_for_model "$PRIMARY_MODEL")"
 		if [ "${#FALLBACK_MODELS[@]}" -eq 0 ]; then
-			echo "ERROR: No fallback models configured (STRIX_VERTEX_FALLBACK_MODELS is empty). Configure distinct models." >&2
+			echo "ERROR: No fallback models configured ($fallback_config_name is empty). Configure distinct models." >&2
 		else
-			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in STRIX_VERTEX_FALLBACK_MODELS." >&2
+			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
 	fi
 
-	echo "Configured Vertex model and fallback models were unavailable." >&2
+	if is_vertex_model "$PRIMARY_MODEL"; then
+		echo "Configured Vertex model and fallback models were unavailable." >&2
+	else
+		echo "Configured model and fallback models were unavailable." >&2
+	fi
 	return 1
 }
 
@@ -1975,6 +2483,8 @@ run_pull_request_batch_files() {
 	local total_batches="$2"
 	local batch_files_text="$3"
 	local -a batch_files=()
+	local previous_target_path="$TARGET_PATH"
+	local previous_target_is_internal="$TARGET_PATH_IS_INTERNAL_PR_SCOPE"
 	mapfile -t batch_files <<<"$batch_files_text"
 	if [ "${#batch_files[@]}" -eq 0 ]; then
 		echo "ERROR: pull request Strix batch '$batch_label' has no files to scan." >&2
@@ -1983,8 +2493,14 @@ run_pull_request_batch_files() {
 
 	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	build_pull_request_scope_dir "${batch_files[@]}"
+	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
+		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
+		return 1
+	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
 
 	run_current_target_scan
@@ -1992,6 +2508,8 @@ run_pull_request_batch_files() {
 	if [ "$batch_rc" -eq 0 ]; then
 		capture_preexisting_report_dirs
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 		return 0
 	fi
 
@@ -2006,17 +2524,25 @@ run_pull_request_batch_files() {
 		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
 		if ! run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half"; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+			TARGET_PATH="$previous_target_path"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 			return 1
 		fi
 		if ! run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half"; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+			TARGET_PATH="$previous_target_path"
+			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 			return 1
 		fi
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+		TARGET_PATH="$previous_target_path"
+		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 		return 0
 	fi
 
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
+	TARGET_PATH="$previous_target_path"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
 	return 1
 }
 

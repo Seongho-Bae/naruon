@@ -22,6 +22,29 @@ interface NetworkData {
   edges: Edge[];
 }
 
+function textOnlyTooltip(value: unknown): HTMLElement {
+  const tooltip = document.createElement('div');
+  tooltip.textContent = value == null ? '' : String(value);
+  return tooltip;
+}
+
+function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
+  const sanitized = { ...item };
+
+  if (Object.prototype.hasOwnProperty.call(item, 'title')) {
+    sanitized.title = textOnlyTooltip(item.title);
+  }
+
+  return sanitized;
+}
+
+function sanitizeNetworkData(data: NetworkData): NetworkData {
+  return {
+    nodes: data.nodes.map(sanitizeGraphItem),
+    edges: data.edges.map(sanitizeGraphItem),
+  };
+}
+
 export default function NetworkGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [data, setData] = useState<NetworkData>({ nodes: [], edges: [] });
@@ -39,12 +62,12 @@ export default function NetworkGraph() {
         return res.json();
       })
       .then((json: NetworkData) => {
-        setData(json);
+        setData(sanitizeNetworkData(json));
         setError(null);
       })
       .catch((err) => {
         console.error(err);
-        setError('Failed to load network graph data.');
+        setError('관계 그래프를 불러오지 못했습니다.');
       })
       .finally(() => {
         setIsLoading(false);
@@ -76,12 +99,12 @@ export default function NetworkGraph() {
   }, [data]);
 
   if (isLoading) {
-    return <div className="flex h-full min-h-[420px] items-center justify-center text-sm text-muted-foreground"><RefreshCw className="mr-2 size-4 animate-spin" aria-hidden="true" />관계 그래프를 불러오는 중입니다...</div>;
+    return <div role="status" aria-live="polite" className="flex h-full min-h-[520px] w-full items-center justify-center text-sm text-muted-foreground"><RefreshCw className="mr-2 size-4 animate-spin" aria-hidden="true" />관계 그래프를 불러오는 중입니다...</div>;
   }
 
   if (error) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center p-6 text-center">
+      <div role="alert" className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center">
         <div className="max-w-xs rounded-2xl border border-destructive/20 bg-destructive/5 p-5 text-sm text-destructive">
           <Share2 className="mx-auto mb-3 size-8" aria-hidden="true" />
           <p className="font-medium">관계 그래프를 불러오지 못했습니다.</p>
@@ -94,7 +117,7 @@ export default function NetworkGraph() {
 
   if (data.nodes.length === 0) {
     return (
-      <div className="flex h-full min-h-[420px] items-center justify-center p-6 text-center text-sm text-muted-foreground">
+      <div className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center text-sm text-muted-foreground">
         <div className="max-w-xs rounded-2xl border border-dashed bg-muted/30 p-5">
           <Share2 className="mx-auto mb-3 size-8 text-primary/60" aria-hidden="true" />
           <p className="font-medium text-foreground">아직 연결 데이터가 없습니다.</p>
@@ -104,5 +127,20 @@ export default function NetworkGraph() {
     );
   }
 
-  return <div ref={containerRef} className="h-full min-h-[420px] w-full" role="img" aria-label={`관계 그래프. 노드 ${data.nodes.length}개, 연결 ${data.edges.length}개가 표시됩니다.`} />;
+  return (
+    <div className="flex h-full min-h-[520px] flex-col">
+      <div className="border-b border-border bg-card/80 p-4">
+        <h4 className="text-sm font-black text-foreground">관계 이해</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          노드 {data.nodes.length}개와 연결 {data.edges.length}개가 선택한 스레드 맥락에 연결되어 있습니다.
+        </p>
+      </div>
+      <div
+        ref={containerRef}
+        role="img"
+        aria-label={`관계 그래프. 노드 ${data.nodes.length}개, 연결 ${data.edges.length}개가 표시됩니다.`}
+        className="min-h-0 flex-1 bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
+      />
+    </div>
+  );
 }

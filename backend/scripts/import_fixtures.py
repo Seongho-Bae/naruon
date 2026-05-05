@@ -57,6 +57,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             stmt = insert(Email).values(
                 message_id=email_data["message_id"],
                 sender=email_data["sender"],
+                reply_to=email_data.get("reply_to"),
                 recipients=email_data["recipients"],
                 subject=email_data["subject"],
                 in_reply_to=email_data.get("in_reply_to"),
@@ -70,6 +71,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 index_elements=["message_id"],
                 set_=dict(
                     sender=stmt.excluded.sender,
+                    reply_to=stmt.excluded.reply_to,
                     recipients=stmt.excluded.recipients,
                     subject=stmt.excluded.subject,
                     in_reply_to=stmt.excluded.in_reply_to,

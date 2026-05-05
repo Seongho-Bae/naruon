@@ -66,7 +66,7 @@ export default function Home() {
       <div className="h-full overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
         <div className="h-full md:hidden">
           {selectedEmail === null ? (
-            <EmailList onSelectEmail={setSelectedEmail} selectedEmail={selectedEmail} />
+            <EmailList onSelectEmail={setSelectedEmail} selectedEmailId={selectedEmail} />
           ) : (
             <div className="flex h-full flex-col">
               <div className="flex min-h-14 items-center gap-2 border-b bg-card px-3">
@@ -88,7 +88,7 @@ export default function Home() {
         <div className="hidden h-full md:block">
           <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch">
             <ResizablePanel defaultSize={34} minSize={28} maxSize={42}>
-              <EmailList onSelectEmail={setSelectedEmail} selectedEmail={selectedEmail} />
+              <EmailList onSelectEmail={setSelectedEmail} selectedEmailId={selectedEmail} />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={66} minSize={48}>

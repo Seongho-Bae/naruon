@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Sparkles,
   Star,
+  Target,
   Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -32,6 +33,14 @@ const globalNavItems = [
   { label: 'AI 허브', icon: Sparkles },
   { label: '보안', icon: ShieldCheck },
   { label: '설정', icon: Settings },
+];
+
+const workspaceItems = [
+  { label: '받은편지함', description: '우선순위 메일', icon: Inbox, active: true },
+  { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Sparkles },
+  { label: '판단 포인트', description: '의사결정 기준', icon: Target },
+  { label: '실행 항목', description: '다음 행동 추적', icon: Archive },
+  { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays },
 ];
 
 const mailboxItems = [
@@ -78,13 +87,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <a
-        href="#workspace-main"
+        href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary focus:shadow-lg focus:outline-none focus:ring-3 focus:ring-ring/40"
       >
-        본문으로 건너뛰기
+        Skip to main content
       </a>
 
-      <header className="flex h-16 shrink-0 items-center gap-4 border-b border-border/80 bg-card/95 px-4 shadow-[0_1px_20px_rgba(15,23,42,0.04)] backdrop-blur-xl lg:px-6">
+      <header aria-label="Naruon workspace header" className="flex h-16 shrink-0 items-center gap-4 border-b border-border/80 bg-card/95 px-4 shadow-[0_1px_20px_rgba(15,23,42,0.04)] backdrop-blur-xl lg:px-6">
         <div className="flex min-w-[180px] items-center gap-3">
           <NaruonMark idSuffix="gnb" />
           <div className="leading-tight">
@@ -137,12 +146,29 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       </header>
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside aria-label="메일 폴더" className="hidden w-[236px] shrink-0 flex-col border-r border-border/80 bg-card/75 px-4 py-4 lg:flex">
+        <aside aria-label="Naruon workspace sidebar" className="hidden w-[236px] shrink-0 flex-col border-r border-border/80 bg-card/75 px-4 py-4 lg:flex">
+          <div className="mb-4 flex items-center gap-3">
+            <NaruonMark className="size-8" idSuffix="sidebar" />
+            <div>
+              <p className="text-lg font-black tracking-tight text-[#0B132B]">Naruon</p>
+              <p className="text-[11px] text-muted-foreground">AI Email Workspace</p>
+            </div>
+          </div>
+
           <Button className="mb-4 h-11 rounded-xl text-sm shadow-[0_12px_24px_rgba(37,99,235,0.18)]" type="button">
             <Mail className="mr-1 size-4" aria-hidden="true" />새 메일
           </Button>
 
-          <nav aria-label="메일 폴더" className="space-y-1">
+          <nav aria-label="Naruon workspace sections" className="space-y-1">
+            <div className="mb-4 rounded-2xl border border-primary/15 bg-primary/5 p-3 shadow-sm">
+              <p className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">이메일, 일정, 관계와 결정을 하나의 맥락으로 연결합니다.</p>
+            </div>
+
+            <div className="sr-only">
+              {workspaceItems.map(({ label, description }) => `${label} ${description}`).join(' ')}
+            </div>
+
             <div className="space-y-1">
               <p className="px-2 pb-2 text-xs font-bold text-[#0B132B]">메일</p>
               {mailboxItems.map(({ label, count, icon: Icon, active, badge }) => (
@@ -183,7 +209,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main id="workspace-main" className="min-w-0 flex-1 overflow-hidden p-3 md:p-4">
+        <main id="main-content" className="min-w-0 flex-1 overflow-hidden p-3 md:p-4">
           {children}
         </main>
       </div>

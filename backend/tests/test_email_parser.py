@@ -133,3 +133,23 @@ Test"""
                 assert parsed["thread_id"] == "<msg3@test.com>"
         finally:
             os.unlink(temp_path)
+
+
+def test_parse_eml_extracts_reply_to_header():
+    eml_content = b"""Message-ID: <reply-to@test.com>
+From: Sender Name <sender@test.com>
+Reply-To: Reply Target <reply-target@test.com>
+To: user@test.com
+Subject: Reply-To Test
+
+Test"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["reply_to"] == "Reply Target <reply-target@test.com>"
+    finally:
+        os.unlink(temp_path)
