@@ -6,9 +6,9 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 
 ```bash
 cp .env.example .env
-POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
+POSTGRES_PASSWORD=change-me-local-only API_AUTH_BEARER_TOKEN=change-me-local-token docker compose up -d --build
 docker compose exec backend python import_fixtures.py
-curl -s http://localhost:8000/api/emails
+curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
@@ -50,14 +50,15 @@ npm run dev
 ## API smoke examples
 
 ```bash
-curl -s http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
-curl -s http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
+curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
+curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
 
 # Requires a tenant OpenAI key because search generates a query embedding.
-curl -s -X POST http://localhost:8000/api/search -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
+curl -s -X POST http://localhost:8000/api/search -H 'Authorization: Bearer change-me-local-token' -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
 
 # Send remains honest in local/dev mode: if SMTP is not configured, the API returns 400.
 curl -s -X POST http://localhost:8000/api/emails/send \
+  -H 'Authorization: Bearer change-me-local-token' \
   -H 'content-type: application/json' \
   -d '{"to":"alice@example.com","subject":"Re: Quarterly plan","body":"Thanks","in_reply_to":"<thread-reply-2@example.com>","references":"<thread-root@example.com> <thread-reply-1@example.com> <thread-reply-2@example.com>"}'
 ```
@@ -76,7 +77,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses dummy header auth and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added.
+This repo uses configured single-principal bearer authentication and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added. Configure `API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the backend, and set `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public frontend variables are visible to users.
 
 ## Verification used for this hardening pass
 

@@ -23,10 +23,16 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The current `emails` table does not have an owner/mailbox key. Email and
-search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+Protected backend routes use configured single-principal bearer authentication;
+deployments must provide `API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN`
+or `API_AUTH_BEARER_TOKEN_FILE`, and missing authentication configuration fails
+closed. The backend does not trust request-controlled identity headers.
+
+The current `emails` table does not have an owner/mailbox key. Email and search
+behavior should therefore be treated as single-user local-development behavior
+under the configured authenticated principal. Multi-user production safety
+requires a schema migration that adds mailbox ownership and applies that filter
+to every email/search query.
 
 ## Local deployment boundary
 

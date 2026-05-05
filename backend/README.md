@@ -13,6 +13,8 @@ uvicorn main:app --reload
 
 Set `DATABASE_URL` in `.env` or use the default `postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email`.
 
+Protected API routes require configured bearer authentication. Set `API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE`; requests must include `Authorization: Bearer <token>`. Missing auth configuration fails closed instead of falling back to a dummy user.
+
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fixtures.py` uses zero-vector embeddings so the local threading proof path does not need network access.
 
 ## Threading endpoints

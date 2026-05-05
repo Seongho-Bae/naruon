@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
+from tests.conftest import TEST_AUTH_HEADERS
 
 # Mock async DB session
 class MockResult:
@@ -34,7 +35,7 @@ def client(mock_db):
         yield mock_db
     
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
+    with TestClient(app, headers=TEST_AUTH_HEADERS) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -45,13 +46,21 @@ def test_tenant_config_endpoint(client, mock_db):
         "smtp_server": "smtp.example.com",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "attacker"})
+    response = client.post(
+        "/api/config",
+        json=post_payload,
+        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+    )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
     assert "default" in mock_db.objects
 
-    get_response = client.get("/api/config", params={"user_id": "default"}, headers={"X-User-Id": "attacker"})
+    get_response = client.get(
+        "/api/config",
+        params={"user_id": "default"},
+        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+    )
     assert get_response.status_code == 200
     data = get_response.json()
     assert data["user_id"] == "default"
@@ -62,6 +71,10 @@ def test_tenant_config_endpoint(client, mock_db):
 
 
 def test_tenant_config_rejects_user_id_impersonation(client):
-    response = client.get("/api/config", params={"user_id": "attacker"}, headers={"X-User-Id": "attacker"})
+    response = client.get(
+        "/api/config",
+        params={"user_id": "attacker"},
+        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+    )
 
     assert response.status_code == 403

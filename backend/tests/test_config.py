@@ -12,6 +12,12 @@ def test_global_config():
     assert hasattr(settings, "ENCRYPTION_KEY")
 
 
+def test_api_auth_config():
+    assert hasattr(settings, "API_AUTH_USER_ID")
+    assert hasattr(settings, "API_AUTH_BEARER_TOKEN")
+    assert hasattr(settings, "API_AUTH_BEARER_TOKEN_FILE")
+
+
 def test_openai_config():
     from core.config import settings
 

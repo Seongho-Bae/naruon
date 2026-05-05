@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from main import app
 from db.session import get_db
+from tests.conftest import TEST_AUTH_HEADERS
 
 
 class MockRow:
@@ -56,7 +57,7 @@ def mock_session():
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
+    with TestClient(app, headers=TEST_AUTH_HEADERS) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -85,7 +86,7 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_search_ignores_x_user_id_header_for_local_single_user(mock_generate_embeddings, mock_session):
+async def test_search_uses_authenticated_user_not_x_user_id_header(mock_generate_embeddings, mock_session):
     from api.auth import get_current_user
     from api.search import SearchRequest, hybrid_search
 
@@ -94,7 +95,7 @@ async def test_search_ignores_x_user_id_header_for_local_single_user(mock_genera
     response = await hybrid_search(
         SearchRequest(query="test query"),
         db=mock_session,
-        current_user=await get_current_user(),
+        current_user="default",
     )
 
     assert "x_user_id" not in inspect.signature(get_current_user).parameters
@@ -104,11 +105,10 @@ async def test_search_ignores_x_user_id_header_for_local_single_user(mock_genera
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_search_rejects_user_id_impersonation_with_fixed_local_user(
+async def test_search_rejects_user_id_impersonation_with_authenticated_user(
     mock_generate_embeddings, mock_session
 ):
     from fastapi import HTTPException
-    from api.auth import get_current_user
     from api.search import SearchRequest, hybrid_search
 
     mock_generate_embeddings.return_value = [[0.1] * 1536]
@@ -118,7 +118,7 @@ async def test_search_rejects_user_id_impersonation_with_fixed_local_user(
             SearchRequest(query="test query"),
             user_id="attacker",
             db=mock_session,
-            current_user=await get_current_user(),
+            current_user="default",
         )
 
     assert exc_info.value.status_code == 403

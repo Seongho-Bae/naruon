@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { MessagesSquare } from "lucide-react";
+import { API_URL, apiFetch } from "@/lib/api-client";
 import {
   buildReplyPayload,
   formatEmailDate,
@@ -23,7 +24,6 @@ interface LlmData {
   todos: string[];
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const THREAD_WARNING = '스레드 전체를 불러오지 못해 선택한 메일만 표시합니다.';
 const THREAD_ID_MAX_LENGTH = 512;
 const THREAD_ID_UNSAFE_CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
@@ -101,7 +101,7 @@ export function EmailDetail({
         return;
       }
 
-      const threadRes = await fetch(threadUrl);
+      const threadRes = await apiFetch(threadUrl);
       if (!threadRes.ok) throw new Error("Failed to fetch thread");
       const threadJson = await threadRes.json();
       if (!isLatestThreadRequest()) return;
@@ -135,7 +135,7 @@ export function EmailDetail({
       setSendStatus(null);
 
       try {
-        const emailRes = await fetch(`${API_URL}/api/emails/${emailId}`);
+        const emailRes = await apiFetch(`${API_URL}/api/emails/${emailId}`);
         if (!emailRes.ok) throw new Error("Failed to fetch email details");
         const emailJson = await emailRes.json();
 
@@ -144,7 +144,7 @@ export function EmailDetail({
         await fetchThread(emailJson);
 
         try {
-          const llmRes = await fetch(`${API_URL}/api/llm/summarize`, {
+          const llmRes = await apiFetch(`${API_URL}/api/llm/summarize`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email_body: emailJson.body })
@@ -176,7 +176,7 @@ export function EmailDetail({
     setDraftError(null);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/llm/draft`, {
+      const res = await apiFetch(`${API_URL}/api/llm/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email_body: email.body, instruction })
@@ -197,7 +197,7 @@ export function EmailDetail({
     setIsSending(true);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/emails/send`, {
+      const res = await apiFetch(`${API_URL}/api/emails/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildReplyPayload(email, draft))
@@ -225,7 +225,7 @@ export function EmailDetail({
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/calendar/sync`, {
+      const res = await apiFetch(`${API_URL}/api/calendar/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Inbox, Mail, MessagesSquare, Paperclip, RefreshCw, Search, Sparkles, Star } from "lucide-react";
+import { API_URL, apiFetch } from "@/lib/api-client";
 import { formatEmailDate, sanitizeEmailText } from "@/lib/email-threading";
 
 interface EmailItem {
@@ -58,7 +59,6 @@ export function EmailList({
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       const validatedSearch = validateSearchQuery(query);
       if (validatedSearch.error) {
         setEmails([]);
@@ -67,13 +67,13 @@ export function EmailList({
       }
 
       if (validatedSearch.query === "") {
-        const res = await fetch(`${apiUrl}/api/emails`);
+        const res = await apiFetch(`${API_URL}/api/emails`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         setEmails(data.emails || []);
       } else {
         setIsSearching(true);
-        const res = await fetch(`${apiUrl}/api/search`, {
+        const res = await apiFetch(`${API_URL}/api/search`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: validatedSearch.query }),

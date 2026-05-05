@@ -3,8 +3,9 @@ from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
 from unittest.mock import patch
+from tests.conftest import TEST_AUTH_HEADERS
 
-client = TestClient(app)
+client = TestClient(app, headers=TEST_AUTH_HEADERS)
 
 
 class MockResult:
@@ -127,7 +128,10 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=default", headers={"X-User-Id": "attacker"})
+        response = client.get(
+            "/api/network/graph?limit=10&user_id=default",
+            headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2
@@ -145,6 +149,9 @@ def test_network_endpoint_rejects_user_id_impersonation():
             )
         },
     ):
-        response = client.get("/api/network/graph?user_id=attacker", headers={"X-User-Id": "attacker"})
+        response = client.get(
+            "/api/network/graph?user_id=attacker",
+            headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        )
 
         assert response.status_code == 403

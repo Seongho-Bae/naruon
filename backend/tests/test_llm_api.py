@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
+from tests.conftest import TEST_AUTH_HEADERS
 
 class MockTenantConfig:
     def __init__(self):
@@ -17,7 +18,7 @@ def client():
     async def override_get_db():
         yield MockSession()
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
+    with TestClient(app, headers=TEST_AUTH_HEADERS) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -61,4 +62,3 @@ def test_draft_endpoint(mock_draft, client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
-

@@ -6,6 +6,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email"
     DEBUG: bool = False
     ENCRYPTION_KEY: SecretStr | None = None
+    API_AUTH_USER_ID: str | None = None
+    API_AUTH_BEARER_TOKEN: SecretStr | None = None
+    API_AUTH_BEARER_TOKEN_FILE: str | None = None
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"

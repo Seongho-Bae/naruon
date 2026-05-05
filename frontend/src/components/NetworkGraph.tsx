@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network';
 import { RefreshCw, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { API_URL, apiFetch } from '@/lib/api-client';
 
 interface Node {
   id: number | string;
@@ -54,7 +55,7 @@ export default function NetworkGraph() {
   const loadGraph = () => {
     setIsLoading(true);
     setError(null);
-    fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/network/graph`)
+    apiFetch(`${API_URL}/api/network/graph`)
       .then((res) => {
         if (!res.ok) {
           throw new Error('Failed to fetch network graph data');

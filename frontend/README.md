@@ -12,7 +12,7 @@ npm run build
 npm run dev
 ```
 
-Open <http://localhost:3000>. The app expects the backend at `NEXT_PUBLIC_API_URL`, defaulting to <http://localhost:8000>.
+Open <http://localhost:3000>. The app expects the backend at `NEXT_PUBLIC_API_URL`, defaulting to <http://localhost:8000>. For local browser development against protected backend routes, set `NEXT_PUBLIC_API_AUTH_TOKEN` to the same local token as the backend `API_AUTH_BEARER_TOKEN`; do not use public frontend tokens as a production authentication boundary.
 
 ## Threading UI contract
 
