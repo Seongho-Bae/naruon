@@ -18,6 +18,28 @@ interface EmailItem {
   reply_count?: number;
 }
 
+const SEARCH_QUERY_MAX_LENGTH = 512;
+const UNSAFE_SEARCH_CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const SEARCH_QUERY_CONTROL_ERROR = "검색어에 사용할 수 없는 문자가 포함되어 있습니다.";
+const SEARCH_QUERY_LENGTH_ERROR = "검색어는 512자 이하로 입력하세요.";
+
+function normalizeSearchQuery(query: string): string {
+  return query.trim().replace(/[\t\n\r ]+/g, " ");
+}
+
+export function validateSearchQuery(query: string): { query: string; error: string | null } {
+  if (UNSAFE_SEARCH_CONTROL_CHARS.test(query)) {
+    return { query: "", error: SEARCH_QUERY_CONTROL_ERROR };
+  }
+
+  const normalizedQuery = normalizeSearchQuery(query);
+  if (normalizedQuery.length > SEARCH_QUERY_MAX_LENGTH) {
+    return { query: "", error: SEARCH_QUERY_LENGTH_ERROR };
+  }
+
+  return { query: normalizedQuery, error: null };
+}
+
 export function EmailList({
   onSelectEmail,
   selectedEmailId,
@@ -37,7 +59,14 @@ export function EmailList({
     setError(null);
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      if (query.trim() === "") {
+      const validatedSearch = validateSearchQuery(query);
+      if (validatedSearch.error) {
+        setEmails([]);
+        setError(validatedSearch.error);
+        return;
+      }
+
+      if (validatedSearch.query === "") {
         const res = await fetch(`${apiUrl}/api/emails`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
@@ -47,7 +76,7 @@ export function EmailList({
         const res = await fetch(`${apiUrl}/api/search`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
+          body: JSON.stringify({ query: validatedSearch.query }),
         });
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
@@ -127,7 +156,7 @@ export function EmailList({
           ) : error ? (
             <div role="alert" className="rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
               <p className="font-medium">메일을 불러오지 못했습니다.</p>
-              <p className="mt-1 text-xs text-destructive/80">API 서버 연결을 확인한 뒤 다시 시도하세요.</p>
+              <p className="mt-1 text-xs text-destructive/80">{error}</p>
               <Button className="mt-3" type="button" variant="outline" size="sm" onClick={() => fetchEmails(searchQuery)}>다시 시도</Button>
             </div>
           ) : emails.length === 0 ? (

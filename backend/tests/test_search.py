@@ -2,6 +2,7 @@ import datetime
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from main import app
 from db.session import get_db
 
@@ -67,6 +68,28 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
     assert data["results"][0]["date"] == "2026-04-27T10:00:00Z"
     assert data["results"][0]["thread_id"] == "thread-123"
     assert data["results"][0]["reply_count"] == 2
+
+
+def test_search_request_normalizes_whitespace_before_use():
+    from api.search import SearchRequest
+
+    request = SearchRequest(query="  quarterly\n   roadmap\t  ")
+
+    assert request.query == "quarterly roadmap"
+
+
+def test_search_request_rejects_control_characters_before_use():
+    from api.search import SearchRequest
+
+    with pytest.raises(ValidationError):
+        SearchRequest(query="invoice\x00 OR 1=1")
+
+
+def test_search_request_rejects_overlong_queries_before_use():
+    from api.search import SearchRequest
+
+    with pytest.raises(ValidationError):
+        SearchRequest(query="a" * 513)
 
 
 def test_search_reply_counts_group_by_coalesced_thread_key():

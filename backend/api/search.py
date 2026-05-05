@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 import datetime
 import logging
-from pydantic import BaseModel, Field
+import re
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, union_all
+from sqlalchemy import bindparam, select, func, union_all
 from db.session import get_db
 from db.models import Email, Attachment, TenantConfig
 from services.embedding import generate_embeddings
@@ -11,11 +12,27 @@ from api.auth import get_current_user
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+SEARCH_QUERY_MAX_LENGTH = 512
+UNSAFE_SEARCH_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 class SearchRequest(BaseModel):
-    query: str
+    query: str = Field(min_length=1, max_length=SEARCH_QUERY_MAX_LENGTH)
     limit: int = Field(default=10, ge=1, le=50)
+
+    @field_validator("query")
+    @classmethod
+    def normalize_and_validate_query(cls, value: str) -> str:
+        if UNSAFE_SEARCH_CONTROL_CHARS.search(value):
+            raise ValueError("query contains unsafe control characters")
+
+        normalized_query = re.sub(r"[\t\n\r ]+", " ", value.strip())
+        if not normalized_query:
+            raise ValueError("query must contain non-whitespace text")
+        if len(normalized_query) > SEARCH_QUERY_MAX_LENGTH:
+            raise ValueError("query must be 512 characters or fewer")
+
+        return normalized_query
 
 
 class SearchResultItem(BaseModel):
@@ -68,12 +85,17 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         
         openai_api_key = tenant_config.openai_api_key
         
-        embeddings = await generate_embeddings([request.query], openai_api_key)
+        search_query = request.query
+        search_query_param = bindparam("search_query", search_query)
+
+        embeddings = await generate_embeddings([search_query], openai_api_key)
         query_embedding = embeddings[0]
 
         fts_score_email = func.ts_rank_cd(
             func.to_tsvector("english", Email.body),
-            func.plainto_tsquery("english", request.query),
+            # SQLAlchemy sends search_query_param as a bound parameter; never
+            # concatenate user-controlled search text into SQL.
+            func.plainto_tsquery("english", search_query_param),
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
@@ -96,7 +118,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
 
         fts_score_att = func.ts_rank_cd(
             func.to_tsvector("english", Attachment.content),
-            func.plainto_tsquery("english", request.query),
+            func.plainto_tsquery("english", search_query_param),
         )
         vector_distance_att = Attachment.embedding.cosine_distance(query_embedding)
         hybrid_score_att = fts_score_att - vector_distance_att
