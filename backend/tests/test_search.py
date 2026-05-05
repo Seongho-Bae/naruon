@@ -1,8 +1,12 @@
 import datetime
-import pytest
+import inspect
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
+
 from main import app
 from db.session import get_db
 
@@ -29,15 +33,24 @@ class MockTenantConfig:
         self.openai_api_key = "test-key"
 
 class MockSession:
+    def __init__(self):
+        self.scalar_params = []
+
     async def execute(self, stmt):
         return MockResult()
     
     async def scalar(self, stmt):
+        self.scalar_params.append(stmt.compile().params)
         return MockTenantConfig()
 
 
 async def override_get_db():
     yield MockSession()
+
+
+@pytest.fixture
+def mock_session():
+    return MockSession()
 
 
 @pytest.fixture
@@ -68,6 +81,81 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
     assert data["results"][0]["date"] == "2026-04-27T10:00:00Z"
     assert data["results"][0]["thread_id"] == "thread-123"
     assert data["results"][0]["reply_count"] == 2
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_search_ignores_x_user_id_header_for_local_single_user(mock_generate_embeddings, mock_session):
+    from api.auth import get_current_user
+    from api.search import SearchRequest, hybrid_search
+
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+
+    response = await hybrid_search(
+        SearchRequest(query="test query"),
+        db=mock_session,
+        current_user=await get_current_user(),
+    )
+
+    assert "x_user_id" not in inspect.signature(get_current_user).parameters
+    assert len(response.results) == 1
+    assert mock_session.scalar_params[0]["user_id_1"] == "default"
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_search_rejects_user_id_impersonation_with_fixed_local_user(
+    mock_generate_embeddings, mock_session
+):
+    from fastapi import HTTPException
+    from api.auth import get_current_user
+    from api.search import SearchRequest, hybrid_search
+
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+
+    with pytest.raises(HTTPException) as exc_info:
+        await hybrid_search(
+            SearchRequest(query="test query"),
+            user_id="attacker",
+            db=mock_session,
+            current_user=await get_current_user(),
+        )
+
+    assert exc_info.value.status_code == 403
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+@pytest.mark.asyncio
+async def test_search_escapes_snippet_content_before_response(mock_generate_embeddings):
+    from api.search import SearchRequest, hybrid_search
+
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+
+    class XssMockResult(MockResult):
+        def all(self):
+            return [
+                MockRow(
+                    1,
+                    "Test Subject",
+                    "test@test.com",
+                    '<script>alert("x")</script>&',
+                    1.0,
+                )
+            ]
+
+    class XssMockSession(MockSession):
+        async def execute(self, stmt):
+            return XssMockResult()
+
+    response = await hybrid_search(
+        SearchRequest(query="test query"),
+        db=cast(Any, XssMockSession()),
+        current_user="default",
+    )
+
+    snippet = response.results[0].snippet
+    assert "<script>" not in snippet
+    assert snippet == "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;"
 
 
 def test_search_request_normalizes_whitespace_before_use():

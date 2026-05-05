@@ -1,9 +1,11 @@
-from fastapi import Header
+LOCAL_DEVELOPMENT_USER_ID = "default"
 
-async def get_current_user(x_user_id: str | None = Header(None, alias="X-User-Id")) -> str:
+
+async def get_current_user() -> str:
     """
-    Dummy authentication dependency.
-    Extracts the user ID from the X-User-Id header.
-    Defaults to "default" if not provided.
+    Local-development authentication dependency.
+
+    Until real authentication exists, the backend runs as a fixed single local
+    user. Do not trust request-controlled identity headers such as X-User-Id.
     """
-    return x_user_id or "default"
+    return LOCAL_DEVELOPMENT_USER_ID

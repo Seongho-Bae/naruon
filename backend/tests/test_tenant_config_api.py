@@ -16,7 +16,7 @@ class MockAsyncSession:
         self.objects = {}
 
     async def execute(self, query):
-        return MockResult(self.objects.get("test_user"))
+        return MockResult(self.objects.get("default"))
 
     def add(self, obj):
         self.objects[obj.user_id] = obj
@@ -40,23 +40,28 @@ def client(mock_db):
 
 def test_tenant_config_endpoint(client, mock_db):
     post_payload = {
-        "user_id": "test_user",
+        "user_id": "default",
         "openai_api_key": "sk-123",
         "smtp_server": "smtp.example.com",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "test_user"})
+    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "attacker"})
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
-    assert "test_user" in mock_db.objects
+    assert "default" in mock_db.objects
 
-    get_response = client.get("/api/config", params={"user_id": "test_user"}, headers={"X-User-Id": "test_user"})
+    get_response = client.get("/api/config", params={"user_id": "default"}, headers={"X-User-Id": "attacker"})
     assert get_response.status_code == 200
     data = get_response.json()
-    assert data["user_id"] == "test_user"
+    assert data["user_id"] == "default"
     assert data["openai_api_key"] == "********"
     assert data["oauth_client_secret"] == "********"
     assert data["smtp_server"] == "smtp.example.com"
     assert data["google_client_secret"] is None
 
+
+def test_tenant_config_rejects_user_id_impersonation(client):
+    response = client.get("/api/config", params={"user_id": "attacker"}, headers={"X-User-Id": "attacker"})
+
+    assert response.status_code == 403

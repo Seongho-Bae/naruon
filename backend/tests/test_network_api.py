@@ -127,8 +127,24 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"})
+        response = client.get("/api/network/graph?limit=10&user_id=default", headers={"X-User-Id": "attacker"})
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2
         assert len(data["edges"]) == 1
+
+
+def test_network_endpoint_rejects_user_id_impersonation():
+    with patch.dict(
+        app.dependency_overrides,
+        {
+            get_db: get_override(
+                [
+                    ("alice@example.com", "bob@example.com"),
+                ]
+            )
+        },
+    ):
+        response = client.get("/api/network/graph?user_id=attacker", headers={"X-User-Id": "attacker"})
+
+        assert response.status_code == 403

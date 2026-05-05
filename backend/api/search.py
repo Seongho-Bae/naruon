@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
 import datetime
+import html
 import logging
 import re
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import bindparam, select, func, union_all
@@ -173,6 +174,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                 if len(snippet_source) > 200
                 else snippet_source
             )
+            safe_snippet = html.escape(snippet, quote=True)
 
             search_results.append(
                 SearchResultItem(
@@ -180,7 +182,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                     subject=row.subject,
                     sender=row.sender,
                     date=row.date,
-                    snippet=snippet,
+                    snippet=safe_snippet,
                     thread_id=row.thread_id,
                     reply_count=row.reply_count or 1,
                     score=float(score) if score is not None else 0.0,
