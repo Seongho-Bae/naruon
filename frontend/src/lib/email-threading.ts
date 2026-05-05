@@ -27,6 +27,72 @@ const HTML_ENTITY_MAP: Record<string, string> = {
   quot: '"',
   apos: "'",
 };
+const EXECUTABLE_HTML_TAGS = new Set(["script", "style", "template"]);
+
+function isHtmlNameCharacter(value: string): boolean {
+  const codePoint = value.codePointAt(0);
+  if (codePoint === undefined) return false;
+
+  return (
+    (codePoint >= 48 && codePoint <= 57) ||
+    (codePoint >= 65 && codePoint <= 90) ||
+    (codePoint >= 97 && codePoint <= 122) ||
+    value === ":" ||
+    value === "-"
+  );
+}
+
+function readHtmlTagName(rawTag: string): string {
+  let index = rawTag.startsWith("/") ? 1 : 0;
+
+  while (rawTag[index] === " " || rawTag[index] === "\t" || rawTag[index] === "\n") {
+    index += 1;
+  }
+
+  const startIndex = index;
+  while (index < rawTag.length && isHtmlNameCharacter(rawTag[index])) {
+    index += 1;
+  }
+
+  return rawTag.slice(startIndex, index).toLowerCase();
+}
+
+function stripHtmlMarkup(value: string): string {
+  let result = "";
+  let index = 0;
+  let blockedTag: string | null = null;
+
+  while (index < value.length) {
+    const character = value[index];
+
+    if (character !== "<") {
+      if (!blockedTag) result += character;
+      index += 1;
+      continue;
+    }
+
+    const tagEndIndex = value.indexOf(">", index + 1);
+    const rawTag = value.slice(index + 1, tagEndIndex === -1 ? value.length : tagEndIndex).trim();
+    const tagName = readHtmlTagName(rawTag);
+    const isClosingTag = rawTag.startsWith("/");
+
+    if (blockedTag) {
+      if (isClosingTag && tagName === blockedTag) blockedTag = null;
+      if (tagEndIndex === -1) break;
+      index = tagEndIndex + 1;
+      continue;
+    }
+
+    if (!isClosingTag && EXECUTABLE_HTML_TAGS.has(tagName)) {
+      blockedTag = tagName;
+    }
+
+    if (tagEndIndex === -1) break;
+    index = tagEndIndex + 1;
+  }
+
+  return result;
+}
 
 function decodeHtmlEntities(value: string): string {
   return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, rawName: string) => {
@@ -54,11 +120,7 @@ export function sanitizeEmailText(value?: string | null): string {
   if (!value) return "";
 
   const decodedText = decodeHtmlEntities(value);
-  const withoutExecutableBlocks = decodedText.replace(
-    /<\s*(script|style|template)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
-    "",
-  );
-  const withoutTags = withoutExecutableBlocks.replace(/<[^>]*>/g, "");
+  const withoutTags = stripHtmlMarkup(decodedText);
 
   return withoutTags
     .replace(/\u0000/g, "")

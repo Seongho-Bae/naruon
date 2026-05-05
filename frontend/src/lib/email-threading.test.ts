@@ -106,4 +106,8 @@ describe("email threading UI helpers", () => {
       "Hello&#999999999999;",
     );
   });
+
+  it("drops unterminated executable blocks from email text", () => {
+    expect(sanitizeEmailText("Safe intro<script>alert(1)")).toBe("Safe intro");
+  });
 });
