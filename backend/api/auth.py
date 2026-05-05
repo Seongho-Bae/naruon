@@ -1,13 +1,47 @@
 from pathlib import Path
 from secrets import compare_digest
+from stat import S_ISREG
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from core.config import settings
 
-
 bearer_scheme = HTTPBearer(auto_error=False)
+MAX_BEARER_TOKEN_FILE_BYTES = 10 * 1024
+
+
+def _auth_config_error() -> HTTPException:
+    """Return a generic authentication configuration error."""
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Authentication is not configured",
+    )
+
+
+def _read_bearer_token_file(token_file: str) -> str | None:
+    """Read a small regular-file bearer token without unbounded memory use."""
+    token_path = Path(token_file)
+    try:
+        token_stat = token_path.stat()
+        if not S_ISREG(token_stat.st_mode):
+            raise _auth_config_error()
+        if token_stat.st_size > MAX_BEARER_TOKEN_FILE_BYTES:
+            raise _auth_config_error()
+        with token_path.open("rb") as token_handle:
+            token = token_handle.read(MAX_BEARER_TOKEN_FILE_BYTES + 1)
+    except HTTPException:
+        raise
+    except OSError as exc:
+        raise _auth_config_error() from exc
+
+    if len(token) > MAX_BEARER_TOKEN_FILE_BYTES:
+        raise _auth_config_error()
+    try:
+        decoded_token = token.decode("utf-8")
+    except UnicodeError as exc:
+        raise _auth_config_error() from exc
+    return decoded_token.strip() or None
 
 
 def _configured_bearer_token() -> str | None:
@@ -17,14 +51,7 @@ def _configured_bearer_token() -> str | None:
         return token or None
 
     if settings.API_AUTH_BEARER_TOKEN_FILE:
-        try:
-            token = Path(settings.API_AUTH_BEARER_TOKEN_FILE).read_text(encoding="utf-8").strip()
-        except OSError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Authentication is not configured",
-            ) from exc
-        return token or None
+        return _read_bearer_token_file(settings.API_AUTH_BEARER_TOKEN_FILE)
 
     return None
 

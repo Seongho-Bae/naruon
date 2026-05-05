@@ -16,14 +16,14 @@ def reset_auth_settings(monkeypatch):
     monkeypatch.setattr(settings, "API_AUTH_BEARER_TOKEN_FILE", None, raising=False)
 
 
-def build_auth_client() -> TestClient:
+def build_auth_client(*, raise_server_exceptions: bool = True) -> TestClient:
     auth_app = FastAPI()
 
     @auth_app.get("/protected")
     async def protected(current_user: str = Depends(get_current_user)):
         return {"user_id": current_user}
 
-    return TestClient(auth_app)
+    return TestClient(auth_app, raise_server_exceptions=raise_server_exceptions)
 
 
 def configure_token(user_id: str = "default", token: str = "test-token") -> None:
@@ -96,3 +96,45 @@ def test_get_current_user_reads_bearer_token_from_configured_file(tmp_path: Path
 
     assert response.status_code == 200
     assert response.json() == {"user_id": "file-user"}
+
+
+def test_get_current_user_rejects_oversized_bearer_token_file(tmp_path: Path):
+    token_file = tmp_path / "api-token"
+    token_file.write_text("x" * ((10 * 1024) + 1), encoding="utf-8")
+    settings.API_AUTH_USER_ID = "file-user"
+    settings.API_AUTH_BEARER_TOKEN = None
+    settings.API_AUTH_BEARER_TOKEN_FILE = str(token_file)
+    client = build_auth_client()
+
+    response = client.get("/protected", headers={"Authorization": "Bearer file-token"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is not configured"}
+
+
+def test_get_current_user_rejects_non_regular_bearer_token_file(tmp_path: Path):
+    token_dir = tmp_path / "api-token-dir"
+    token_dir.mkdir()
+    settings.API_AUTH_USER_ID = "file-user"
+    settings.API_AUTH_BEARER_TOKEN = None
+    settings.API_AUTH_BEARER_TOKEN_FILE = str(token_dir)
+    client = build_auth_client()
+
+    response = client.get("/protected", headers={"Authorization": "Bearer file-token"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is not configured"}
+
+
+def test_get_current_user_rejects_invalid_utf8_bearer_token_file(tmp_path: Path):
+    token_file = tmp_path / "api-token"
+    token_file.write_bytes(b"\xff\xfe")
+    settings.API_AUTH_USER_ID = "file-user"
+    settings.API_AUTH_BEARER_TOKEN = None
+    settings.API_AUTH_BEARER_TOKEN_FILE = str(token_file)
+    client = build_auth_client(raise_server_exceptions=False)
+
+    response = client.get("/protected", headers={"Authorization": "Bearer file-token"})
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "Authentication is not configured"}

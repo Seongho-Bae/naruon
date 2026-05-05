@@ -77,7 +77,13 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo uses configured single-principal bearer authentication and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added. Configure `API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the backend, and set `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public frontend variables are visible to users.
+This repo uses configured single-principal bearer authentication and does not
+persist an owner/mailbox key on email rows. Treat local data as single-user
+development data until a mailbox ownership migration is added. Configure
+`API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the backend; token
+files must be regular files no larger than 10 KiB. Set
+`NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public
+frontend variables are visible to users.
 
 ## Verification used for this hardening pass
 
