@@ -334,4 +334,43 @@ describe("EmailDetail", () => {
     expect(container.textContent).not.toContain("<svg");
     expect(container.textContent).not.toContain("alert(");
   });
+
+  it("does not request a conversation URL when the thread id contains control characters", async () => {
+    const malformedThreadEmail: TestEmail = {
+      id: 11,
+      message_id: "<malformed@example.com>",
+      thread_id: "thread-a\u0000/evil",
+      sender: "safety@example.com",
+      recipients: "user@example.com",
+      subject: "Malformed thread",
+      date: "2026-04-27T12:00:00Z",
+      body: "Fallback body",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/11")) return Promise.resolve(jsonResponse(malformedThreadEmail));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={11} />);
+    });
+
+    await waitForCondition(() => container?.textContent?.includes("Fallback body") ?? false);
+
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).not.toContain(
+      "http://localhost:8000/api/emails/thread/thread-a%00%2Fevil",
+    );
+    expect(container.textContent).toContain("스레드 전체를 불러오지 못해 선택한 메일만 표시합니다.");
+    expect(container.textContent).toContain("Fallback body");
+  });
 });

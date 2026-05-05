@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { MessagesSquare } from "lucide-react";
 import {
-  buildThreadUrl,
   buildReplyPayload,
   formatEmailDate,
   getConversationMessages,
@@ -26,6 +25,30 @@ interface LlmData {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const THREAD_WARNING = '스레드 전체를 불러오지 못해 선택한 메일만 표시합니다.';
+const THREAD_ID_MAX_LENGTH = 512;
+const THREAD_ID_UNSAFE_CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
+
+function sanitizeEmailDetailText(value?: string | null): string {
+  // Security: email headers and bodies are attacker-controlled. Keep the
+  // component-level rendering path explicitly text-only before React escapes it.
+  return sanitizeEmailText(value);
+}
+
+function buildSafeEmailDetailThreadUrl(apiUrl: string, threadId: string): string | null {
+  const normalizedThreadId = threadId.trim();
+
+  if (
+    !normalizedThreadId ||
+    normalizedThreadId.length > THREAD_ID_MAX_LENGTH ||
+    THREAD_ID_UNSAFE_CONTROL_CHARS.test(normalizedThreadId)
+  ) {
+    return null;
+  }
+
+  // Security: encode the thread id as one path segment so attacker input cannot
+  // become a host, scheme, query string, fragment, or sibling API path.
+  return `${apiUrl}/api/emails/thread/${encodeURIComponent(normalizedThreadId)}`;
+}
 
 export function EmailDetail({
   emailId,
@@ -70,7 +93,15 @@ export function EmailDetail({
 
     setThreadLoading(true);
     try {
-      const threadRes = await fetch(buildThreadUrl(API_URL, currentEmail.thread_id));
+      const threadUrl = buildSafeEmailDetailThreadUrl(API_URL, currentEmail.thread_id);
+      if (!threadUrl) {
+        if (!isLatestThreadRequest()) return;
+        setThreadError(THREAD_WARNING);
+        setThreadEmails([currentEmail]);
+        return;
+      }
+
+      const threadRes = await fetch(threadUrl);
       if (!threadRes.ok) throw new Error("Failed to fetch thread");
       const threadJson = await threadRes.json();
       if (!isLatestThreadRequest()) return;
@@ -233,9 +264,9 @@ export function EmailDetail({
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
-  const senderText = sanitizeEmailText(email.sender);
-  const subjectText = sanitizeEmailText(email.subject) || '(제목 없음)';
-  const replyToText = sanitizeEmailText(email.reply_to || email.sender);
+  const senderText = sanitizeEmailDetailText(email.sender);
+  const subjectText = sanitizeEmailDetailText(email.subject) || '(제목 없음)';
+  const replyToText = sanitizeEmailDetailText(email.reply_to || email.sender);
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -378,8 +409,8 @@ export function EmailDetail({
             )}
             <div className="space-y-4">
               {conversationMessages.map((msg) => {
-                const messageSenderText = sanitizeEmailText(msg.sender);
-                const messageBodyText = sanitizeEmailText(msg.body);
+                const messageSenderText = sanitizeEmailDetailText(msg.sender);
+                const messageBodyText = sanitizeEmailDetailText(msg.body);
 
                 return (
                   <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
