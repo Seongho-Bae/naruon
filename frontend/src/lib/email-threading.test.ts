@@ -1,3 +1,4 @@
+/* @vitest-environment jsdom */
 import { describe, expect, it } from "vitest";
 
 import {
@@ -103,11 +104,34 @@ describe("email threading UI helpers", () => {
 
   it("normalizes encoded executable tags and invalid numeric entities", () => {
     expect(sanitizeEmailText("&lt;img src=x onerror=alert(1)&gt;Hello&#999999999999;")).toBe(
-      "Hello&#999999999999;",
+      "Hello�",
     );
   });
 
   it("drops unterminated executable blocks from email text", () => {
     expect(sanitizeEmailText("Safe intro<script>alert(1)")).toBe("Safe intro");
+  });
+
+  it("removes malformed HTML and attribute-based XSS payload content", () => {
+    const payloads = [
+      "<%00script>alert('XSS');</script>",
+      "<!--<script>alert('XSS');</script>-->",
+      "<iframe><srcdoc='<script>alert(\"XSS\")</script>'></iframe>",
+    ];
+
+    for (const payload of payloads) {
+      const sanitizedText = sanitizeEmailText(payload);
+
+      expect(sanitizedText).not.toMatch(/[<>]/);
+      expect(sanitizedText.toLowerCase()).not.toContain("script");
+      expect(sanitizedText.toLowerCase()).not.toContain("srcdoc");
+      expect(sanitizedText.toLowerCase()).not.toContain("alert");
+    }
+  });
+
+  it("does not decode double-encoded tags back into raw markup", () => {
+    expect(
+      sanitizeEmailText("&amp;lt;img src=x onerror=alert(1)&amp;gt;Hello &amp;amp; team"),
+    ).toBe("&lt;img src=x onerror=alert(1)&gt;Hello & team");
   });
 });
