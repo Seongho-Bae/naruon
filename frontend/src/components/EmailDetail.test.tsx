@@ -294,4 +294,44 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("1 msgs");
     expect(container.textContent).not.toContain("Loading conversation...");
   });
+
+  it("normalizes untrusted email header and body text before display", async () => {
+    const maliciousEmail: TestEmail = {
+      id: 10,
+      message_id: "<malicious@example.com>",
+      thread_id: null,
+      sender: "<img src=x onerror=alert(1)>Mallory",
+      recipients: "user@example.com",
+      subject: "&lt;svg onload=alert(2)&gt;Quarterly plan",
+      date: "2026-04-27T12:00:00Z",
+      body: "<script>alert(3)</script>Hello team",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/10")) return Promise.resolve(jsonResponse(maliciousEmail));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={10} />);
+    });
+
+    await waitForCondition(() => container?.textContent?.includes("Hello team") ?? false);
+
+    expect(container.textContent).toContain("Mallory");
+    expect(container.textContent).toContain("Quarterly plan");
+    expect(container.textContent).toContain("Hello team");
+    expect(container.textContent).not.toContain("<img");
+    expect(container.textContent).not.toContain("<svg");
+    expect(container.textContent).not.toContain("alert(");
+  });
 });

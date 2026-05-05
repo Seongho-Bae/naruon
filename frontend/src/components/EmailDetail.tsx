@@ -13,6 +13,7 @@ import {
   buildReplyPayload,
   formatEmailDate,
   getConversationMessages,
+  sanitizeEmailText,
   type ThreadEmailData,
 } from "@/lib/email-threading";
 
@@ -232,25 +233,28 @@ export function EmailDetail({
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
+  const senderText = sanitizeEmailText(email.sender);
+  const subjectText = sanitizeEmailText(email.subject) || '(제목 없음)';
+  const replyToText = sanitizeEmailText(email.reply_to || email.sender);
 
   return (
     <div className="flex h-full flex-col bg-card">
       <div className="border-b bg-background/70 p-4 md:p-6">
         <div className="flex items-start gap-4 text-sm w-full">
           <Avatar className="h-10 w-10 border border-primary/10 bg-primary/10 text-primary">
-            <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+            <AvatarFallback>{senderText ? senderText.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="break-words text-xl font-black tracking-tight text-[#0B132B] md:text-2xl">{email.subject || '(제목 없음)'}</h1>
+              <h1 className="break-words text-xl font-black tracking-tight text-[#0B132B] md:text-2xl">{subjectText}</h1>
               <Badge variant="destructive" className="bg-red-50 text-red-600">중요</Badge>
               <Badge variant="secondary" className="text-primary">고객사</Badge>
             </div>
             <div className="line-clamp-1 text-xs">
-              <span className="text-muted-foreground">{email.sender}</span>
+              <span className="text-muted-foreground">{senderText}</span>
             </div>
             <div className="line-clamp-1 text-xs text-muted-foreground">
-              회신 주소: {email.reply_to || email.sender}
+              회신 주소: {replyToText}
             </div>
           </div>
           <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
@@ -373,16 +377,21 @@ export function EmailDetail({
               </div>
             )}
             <div className="space-y-4">
-              {conversationMessages.map((msg) => (
-                <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm">{msg.sender}</span>
-                    <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
+              {conversationMessages.map((msg) => {
+                const messageSenderText = sanitizeEmailText(msg.sender);
+                const messageBodyText = sanitizeEmailText(msg.body);
+
+                return (
+                  <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium text-sm">{messageSenderText}</span>
+                      <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
+                    </div>
+                    {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">Selected message</Badge>}
+                    <div className="text-sm leading-6 whitespace-pre-wrap">{messageBodyText}</div>
                   </div>
-                  {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">Selected message</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

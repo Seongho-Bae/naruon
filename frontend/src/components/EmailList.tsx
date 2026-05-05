@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Inbox, Mail, MessagesSquare, Paperclip, RefreshCw, Search, Sparkles, Star } from "lucide-react";
-import { formatEmailDate } from "@/lib/email-threading";
+import { formatEmailDate, sanitizeEmailText } from "@/lib/email-threading";
 
 interface EmailItem {
   id: number;
@@ -139,6 +139,9 @@ export function EmailList({
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
+              const senderText = sanitizeEmailText(email.sender);
+              const subjectText = sanitizeEmailText(email.subject) || '(제목 없음)';
+              const snippetText = sanitizeEmailText(email.snippet);
 
               return (
                 <button
@@ -155,16 +158,16 @@ export function EmailList({
                       </span>
                       <div className="flex min-w-0 items-center gap-2">
                         <Avatar className="h-8 w-8 border border-primary/10 bg-primary/10 text-primary">
-                          <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                          <AvatarFallback>{senderText ? senderText.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
                         </Avatar>
-                        <div className="max-w-[140px] truncate font-bold text-foreground">{email.sender}</div>
+                        <div className="max-w-[140px] truncate font-bold text-foreground">{senderText}</div>
                       </div>
                       <div className="ml-auto max-w-24 truncate text-right text-xs text-muted-foreground">
                         {formatEmailDate(email.date)}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 w-full">
-                      <div className="truncate text-sm font-bold flex-1 text-[#0B132B]">{email.subject || '(제목 없음)'}</div>
+                      <div className="truncate text-sm font-bold flex-1 text-[#0B132B]">{subjectText}</div>
                       <Badge variant="outline" className="hidden text-[10px] sm:inline-flex">고객</Badge>
                       {email.reply_count && email.reply_count > 1 && (
                         <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
@@ -175,7 +178,7 @@ export function EmailList({
                     </div>
                   </div>
                   <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
-                    {email.snippet}
+                    {snippetText}
                   </div>
                   <div className="flex items-center gap-2">
                     {email.unread && <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>}

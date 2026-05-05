@@ -5,6 +5,7 @@ import {
   buildReplyPayload,
   formatEmailDate,
   getConversationMessages,
+  sanitizeEmailText,
 } from "./email-threading";
 
 const baseEmail = {
@@ -91,6 +92,18 @@ describe("email threading UI helpers", () => {
   it("encodes reserved characters in thread URLs", () => {
     expect(buildThreadUrl("http://localhost:8000", "root/part?x@example.com")).toBe(
       "http://localhost:8000/api/emails/thread/root%2Fpart%3Fx%40example.com",
+    );
+  });
+
+  it("strips HTML and script content from email text before display", () => {
+    expect(
+      sanitizeEmailText("<img src=x onerror=alert(1)>Hello<script>alert(2)</script>&amp; team"),
+    ).toBe("Hello& team");
+  });
+
+  it("normalizes encoded executable tags and invalid numeric entities", () => {
+    expect(sanitizeEmailText("&lt;img src=x onerror=alert(1)&gt;Hello&#999999999999;")).toBe(
+      "Hello&#999999999999;",
     );
   });
 });

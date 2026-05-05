@@ -19,6 +19,55 @@ export interface ReplyPayload {
   references?: string;
 }
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  amp: "&",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  quot: '"',
+  apos: "'",
+};
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, rawName: string) => {
+    const name = rawName.toLowerCase();
+
+    if (name.startsWith("#x")) {
+      const codePoint = Number.parseInt(name.slice(2), 16);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    }
+
+    if (name.startsWith("#")) {
+      const codePoint = Number.parseInt(name.slice(1), 10);
+      return Number.isInteger(codePoint) && codePoint >= 0 && codePoint <= 0x10ffff
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    }
+
+    return HTML_ENTITY_MAP[name] ?? entity;
+  });
+}
+
+export function sanitizeEmailText(value?: string | null): string {
+  if (!value) return "";
+
+  const decodedText = decodeHtmlEntities(value);
+  const withoutExecutableBlocks = decodedText.replace(
+    /<\s*(script|style|template)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi,
+    "",
+  );
+  const withoutTags = withoutExecutableBlocks.replace(/<[^>]*>/g, "");
+
+  return withoutTags
+    .replace(/\u0000/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[\t ]+\n/g, "\n")
+    .replace(/[\t ]{2,}/g, " ")
+    .trim();
+}
+
 function extractMailbox(value: string): string {
   const angleMatch = value.match(/<([^>]+)>/);
   return (angleMatch?.[1] ?? value).trim();
