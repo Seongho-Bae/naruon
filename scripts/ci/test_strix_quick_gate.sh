@@ -1379,9 +1379,21 @@ EOS
 			echo "Error: backend core config context missing from scoped target ($target_path)" >&2
 			exit 58
 		fi
+		if [ ! -f "$target_path/backend/core/auth_tokens.py" ]; then
+			echo "Error: backend auth token context missing from scoped target ($target_path)" >&2
+			exit 61
+		fi
+		if [ ! -f "$target_path/backend/core/network_targets.py" ]; then
+			echo "Error: backend network target context missing from scoped target ($target_path)" >&2
+			exit 62
+		fi
 		if [ ! -f "$target_path/backend/db/session.py" ]; then
 			echo "Error: backend db session context missing from scoped target ($target_path)" >&2
 			exit 59
+		fi
+		if [ ! -f "$target_path/backend/services/email_sanitizer.py" ]; then
+			echo "Error: backend email sanitizer context missing from scoped target ($target_path)" >&2
+			exit 63
 		fi
 		if [ ! -f "$target_path/backend/services/exceptions.py" ]; then
 			echo "Error: backend service exceptions context missing from scoped target ($target_path)" >&2
@@ -1574,13 +1586,16 @@ EOF
 		touch "$repo_root_dir/backend/db/__init__.py"
 		touch "$repo_root_dir/backend/services/__init__.py"
 		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
+		echo 'def verified_signed_subject(*args): return "user"' >"$repo_root_dir/backend/core/auth_tokens.py"
 		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
 		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
+		echo 'def validate_mail_server_target(*args): return None' >"$repo_root_dir/backend/core/network_targets.py"
 		echo 'engine = object()' >"$repo_root_dir/backend/db/session.py"
 		echo 'class Email: pass' >"$repo_root_dir/backend/db/models.py"
 		echo 'class ServiceError(Exception): pass' >"$repo_root_dir/backend/services/exceptions.py"
 		echo 'async def extract_backup_async(*args): return []' >"$repo_root_dir/backend/services/archive.py"
 		echo 'def parse_eml(*args): return {}' >"$repo_root_dir/backend/services/email_parser.py"
+		echo 'def sanitize_email_body_text(value): return value or ""' >"$repo_root_dir/backend/services/email_sanitizer.py"
 		echo 'async def generate_embeddings(*args): return []' >"$repo_root_dir/backend/services/embedding.py"
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"

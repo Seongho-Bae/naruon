@@ -922,6 +922,7 @@ backend/core/__init__.py
 backend/core/auth_tokens.py
 backend/core/config.py
 backend/core/exceptions.py
+backend/core/network_targets.py
 backend/db/__init__.py
 backend/db/models.py
 backend/db/session.py
@@ -929,6 +930,7 @@ backend/services/__init__.py
 backend/services/archive.py
 backend/services/email_client.py
 backend/services/email_parser.py
+backend/services/email_sanitizer.py
 backend/services/embedding.py
 backend/services/exceptions.py
 backend/services/threading_service.py
