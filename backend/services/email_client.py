@@ -64,20 +64,9 @@ async def send_email(
         references=references,
     )
 
-    # Note: Real implementation would use OAuth or password.
-    # This is a skeleton.
+    # Real SMTP delivery is intentionally disabled in this skeleton. Callers must
+    # validate configured mail targets before any future network send is enabled.
     try:
-        # Example using aiosmtplib
-        # await aiosmtplib.send(
-        #     message,
-        #     hostname=settings.SMTP_SERVER,
-        #     port=settings.SMTP_PORT,
-        #     use_tls=True,
-        #     # username=...,
-        #     # password=...
-        # )
-        # For now, just pretend we sent it to pass the test locally without creds.
-        # This is intentionally mocked for development.
         logger.info("Simulating sending email to %s", safe_to_address)
         return {"status": "simulated", "simulated": True}
     except Exception as e:

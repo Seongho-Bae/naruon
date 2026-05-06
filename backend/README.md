@@ -34,8 +34,22 @@ For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fi
 - `GET /api/emails` returns inbox items grouped by `thread_id` with `reply_count`.
 - `GET /api/emails/{id}` returns message details including `thread_id`, `message_id`, `in_reply_to`, `references`, and `reply_to`.
 - `GET /api/emails/thread/{thread_id}` returns the conversation oldest to newest.
-- `POST /api/emails/send` accepts `in_reply_to` and `references` and returns either real send status or explicit simulation status.
-  It rejects blank message content and applies a database-backed per-authenticated-principal send rate limit.
+- `POST /api/emails/send` accepts `in_reply_to` and `references` and
+  returns either real send status or explicit simulation status. It rejects
+  blank message content, blocks unsafe tenant SMTP targets before send
+  orchestration, and applies a database-backed per-authenticated-principal
+  send rate limit.
+
+## Tenant mail target safety
+
+Tenant-configured SMTP, IMAP, and POP3 destinations are accepted only as bare
+hosts with service-specific mail ports (`25`, `465`, `587`, `2525` for SMTP;
+`143`, `993` for IMAP; `110`, `995` for POP3). The backend resolves hostnames
+before use and rejects any destination that resolves to loopback, private,
+link-local, multicast, unspecified, reserved, or otherwise non-public
+addresses. The same guard runs when `/api/config` persists mail settings and
+before send/sync orchestration. IMAP and POP3 sync remain simulated until real
+network use can pin validated DNS results without a second hostname lookup.
 
 ## Schema bootstrap and backfill
 

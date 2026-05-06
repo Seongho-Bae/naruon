@@ -20,10 +20,15 @@ async def client():
 
 
 class MockTenantConfig:
-    def __init__(self):
-        self.smtp_server = "smtp.example.com"
-        self.smtp_port = 587
-        self.smtp_username = "testuser"
+    def __init__(
+        self,
+        smtp_server: str = "8.8.8.8",
+        smtp_port: int = 587,
+        smtp_username: str = "testuser",
+    ):
+        self.smtp_server = smtp_server
+        self.smtp_port = smtp_port
+        self.smtp_username = smtp_username
 
 
 _DEFAULT_TENANT_CONFIG = object()
@@ -392,12 +397,45 @@ async def test_send_email_endpoint(mock_send_email):
         "test@example.com",
         "Re: Test",
         "This is a reply.",
-        smtp_server="smtp.example.com",
+        smtp_server="8.8.8.8",
         smtp_port=587,
         smtp_username="testuser",
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )
+
+
+@pytest.mark.parametrize(
+    ("smtp_server", "smtp_port"),
+    [
+        ("127.0.0.1", 587),
+        ("10.0.0.1", 587),
+        ("169.254.169.254", 587),
+        ("http://127.0.0.1", 587),
+        ("8.8.8.8", 80),
+    ],
+)
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+@pytest.mark.asyncio
+async def test_send_email_endpoint_rejects_unsafe_smtp_targets(
+    mock_send_email, client: AsyncClient, db_session, smtp_server: str, smtp_port: int
+):
+    db_session.tenant_config = MockTenantConfig(
+        smtp_server=smtp_server, smtp_port=smtp_port
+    )
+
+    response = await client.post(
+        "/api/emails/send",
+        json={
+            "to": "test@example.com",
+            "subject": "Re: Test",
+            "body": "This is a reply.",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "SMTP server is not allowed"}
+    mock_send_email.assert_not_called()
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

@@ -98,7 +98,11 @@ Configure `DATABASE_URL`, `ENCRYPTION_KEY`, and `API_AUTH_SIGNING_SECRET` or
 `API_AUTH_SIGNING_SECRET_FILE` on the backend; secret files must be regular
 files no larger than 10 KiB. Bearer tokens must be signed with that secret,
 carry a non-expired `sub` claim, and are rate-limited on `/api/emails/send` per
-authenticated subject through the shared database-backed limiter. Set
+authenticated subject through the shared database-backed limiter. Tenant mail
+hosts for SMTP/IMAP/POP3 must be bare hosts on service-specific mail ports and
+must resolve only to globally routable addresses; private, loopback, link-local,
+multicast, unspecified, and reserved destinations are rejected before storage or
+send/sync orchestration. Set
 `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public
 frontend variables are visible to users.
 

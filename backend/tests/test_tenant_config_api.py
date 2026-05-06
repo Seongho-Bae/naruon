@@ -54,7 +54,8 @@ async def test_tenant_config_endpoint(client: AsyncClient, mock_db):
     post_payload = {
         "user_id": "default",
         "openai_api_key": "sk-123",
-        "smtp_server": "smtp.example.com",
+        "smtp_server": "8.8.8.8",
+        "smtp_port": 587,
         "oauth_client_secret": "secret-456",
     }
     response = await client.post(
@@ -77,7 +78,8 @@ async def test_tenant_config_endpoint(client: AsyncClient, mock_db):
     assert data["user_id"] == "default"
     assert data["openai_api_key"] == "********"
     assert data["oauth_client_secret"] == "********"
-    assert data["smtp_server"] == "smtp.example.com"
+    assert data["smtp_server"] == "8.8.8.8"
+    assert data["smtp_port"] == 587
     assert data["google_client_secret"] is None
 
 
@@ -90,3 +92,27 @@ async def test_tenant_config_rejects_user_id_impersonation(client: AsyncClient):
     )
 
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "mail_settings",
+    [
+        {"smtp_server": "127.0.0.1", "smtp_port": 587},
+        {"imap_server": "10.0.0.1", "imap_port": 993},
+        {"pop3_server": "169.254.169.254", "pop3_port": 995},
+        {"smtp_server": "8.8.8.8", "smtp_port": 80},
+        {"smtp_server": "http://127.0.0.1", "smtp_port": 587},
+    ],
+)
+async def test_tenant_config_rejects_unsafe_mail_server_targets(
+    client: AsyncClient, mock_db, mail_settings: dict[str, object]
+):
+    response = await client.post(
+        "/api/config",
+        json={"user_id": "default", **mail_settings},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "Mail server target is not allowed"}
+    assert "default" not in mock_db.objects

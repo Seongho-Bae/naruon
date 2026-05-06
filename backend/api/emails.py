@@ -11,15 +11,14 @@ from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
 from core.config import settings
+from core.network_targets import MailTargetValidationError, validate_mail_server_target
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/emails")
 
 
-async def enforce_email_send_rate_limit(
-    db: AsyncSession, current_user: str
-) -> None:
+async def enforce_email_send_rate_limit(db: AsyncSession, current_user: str) -> None:
     """Limit outbound email sends per authenticated user in a DB-backed window."""
     max_per_window = settings.EMAIL_SEND_MAX_PER_WINDOW
     window_seconds = settings.EMAIL_SEND_RATE_LIMIT_WINDOW_SECONDS
@@ -255,8 +254,13 @@ async def send_email_endpoint(
         ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
 
-        smtp_server = tenant_config.smtp_server
-        smtp_port = tenant_config.smtp_port
+        try:
+            smtp_server, smtp_port = validate_mail_server_target(
+                tenant_config.smtp_server, tenant_config.smtp_port, "smtp"
+            )
+        except MailTargetValidationError:
+            raise HTTPException(status_code=400, detail="SMTP server is not allowed")
+
         smtp_username = tenant_config.smtp_username
 
         send_result = await send_email(

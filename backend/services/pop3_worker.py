@@ -1,9 +1,11 @@
 import asyncio
 import logging
-import poplib
+
 from sqlalchemy import select
-from db.session import AsyncSessionLocal
+
+from core.network_targets import MailTargetValidationError, validate_mail_server_target
 from db.models import TenantConfig
+from db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -52,40 +54,35 @@ class Pop3SyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            configs = await session.execute(select(TenantConfig).where(TenantConfig.pop3_server.isnot(None)))
-            
+            configs = await session.execute(
+                select(TenantConfig).where(TenantConfig.pop3_server.isnot(None))
+            )
+
         semaphore = asyncio.Semaphore(10)
         tasks = []
         for config in configs.scalars():
             if not config.pop3_server or not config.pop3_port:
                 continue
             tasks.append(self._sync_tenant(config, semaphore))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _sync_tenant(self, config: TenantConfig, semaphore: asyncio.Semaphore):
         async with semaphore:
-            pop3_server = str(config.pop3_server)
-            pop3_port = int(config.pop3_port)  # type: ignore
-            logger.info(
-                f"Connecting to POP3 server {pop3_server}:{pop3_port} for user {config.user_id}"
-            )
             try:
-                # We use asyncio.to_thread for synchronous poplib
-                await asyncio.to_thread(self._do_pop3_sync, config)
-                logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
-            except Exception as e:
-                logger.error(f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}")
-
-    def _do_pop3_sync(self, config: TenantConfig):
-        pop3_server = str(config.pop3_server)
-        pop3_port = int(config.pop3_port)  # type: ignore
-        pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
-        try:
-            # Note: Real implementation would use OAuth or password.
-            # pop3_client.user(config.pop3_username)
-            # pop3_client.pass_(config.pop3_password)
-            pass
-        finally:
-            pop3_client.quit()
+                pop3_server, pop3_port = validate_mail_server_target(
+                    config.pop3_server, config.pop3_port, "pop3"
+                )
+            except MailTargetValidationError:
+                logger.warning(
+                    "Skipping unsafe POP3 server for user %s", config.user_id
+                )
+                return
+            logger.info(
+                "Validated POP3 server %s:%s for user %s; sync is simulated until "
+                "real sync can pin DNS results safely.",
+                pop3_server,
+                pop3_port,
+                config.user_id,
+            )

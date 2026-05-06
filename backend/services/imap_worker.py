@@ -1,9 +1,11 @@
 import asyncio
 import logging
-import aioimaplib
+
 from sqlalchemy import select
-from db.session import AsyncSessionLocal
+
+from core.network_targets import MailTargetValidationError, validate_mail_server_target
 from db.models import TenantConfig
+from db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -53,38 +55,32 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            configs = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
-            
+            configs = await session.execute(
+                select(TenantConfig).where(TenantConfig.imap_server.isnot(None))
+            )
+
         tasks = []
         for config in configs.scalars():
             if not config.imap_server or not config.imap_port:
                 continue
             tasks.append(self._sync_tenant(config))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _sync_tenant(self, config: TenantConfig):
-        # Already verified not None in caller
-        imap_server = str(config.imap_server)
-        imap_port = int(config.imap_port)  # type: ignore
-        
-        logger.info(
-            f"Connecting to IMAP server {imap_server}:{imap_port} for user {config.user_id}"
-        )
-        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
-
         try:
-            await imap_client.wait_hello_from_server()
-            logger.info(f"Successfully connected to IMAP server for user {config.user_id}.")
+            imap_server, imap_port = validate_mail_server_target(
+                config.imap_server, config.imap_port, "imap"
+            )
+        except MailTargetValidationError:
+            logger.warning("Skipping unsafe IMAP server for user %s", config.user_id)
+            return
 
-            # Actual sync logic will be added here later
-
-        except Exception as e:
-            logger.error(f"Failed to connect or sync with IMAP server for user {config.user_id}: {e}")
-        finally:
-            try:
-                if hasattr(imap_client, "protocol") and imap_client.protocol:
-                    await imap_client.logout()
-            except Exception as logout_err:
-                logger.warning(f"Error during IMAP logout for user {config.user_id}: {logout_err}")
+        logger.info(
+            "Validated IMAP server %s:%s for user %s; sync is simulated until "
+            "real sync can pin DNS results safely.",
+            imap_server,
+            imap_port,
+            config.user_id,
+        )

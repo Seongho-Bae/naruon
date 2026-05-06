@@ -57,7 +57,13 @@ described as real delivery. `/api/emails/send` rejects blank subject/body values
 and applies a database-backed per-authenticated-principal sliding-window rate
 limit before SMTP config lookup so horizontal workers share the same 429 guard.
 Old send-attempt rows are pruned during enforcement to keep the limiter table
-bounded.
+bounded. Tenant-configured SMTP, IMAP, and POP3 destinations are validated as
+bare mail hosts with service-specific mail port allowlists and DNS resolution
+that must produce only globally routable addresses. Loopback, private,
+link-local, multicast, unspecified, and reserved addresses are rejected at
+configuration write time and before send/sync orchestration. IMAP and POP3 sync
+remain simulated until real network use can pin validated DNS results without a
+second hostname lookup.
 
 ## CI security boundary
 
