@@ -28,11 +28,15 @@ deployments must provide `API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN`
 or `API_AUTH_BEARER_TOKEN_FILE`, and missing authentication configuration fails
 closed. The backend does not trust request-controlled identity headers.
 
-The current `emails` table does not have an owner/mailbox key. Email and search
-behavior should therefore be treated as single-user local-development behavior
-under the configured authenticated principal. Multi-user production safety
-requires a schema migration that adds mailbox ownership and applies that filter
-to every email/search query.
+The `emails` table persists a required `user_id` owner key. Email list,
+detail, thread, search, attachment-search, network graph, and reply-count query
+paths filter by the authenticated principal from bearer-token authentication;
+request-controlled identity headers are ignored. Existing local databases are
+backfilled by `backend/scripts/bootstrap_db.py` with the configured
+`API_AUTH_USER_ID` (or the local `default` fallback) before the column is made
+non-null and indexed. Message IDs are unique per owner via
+`(user_id, message_id)`, and fixture upserts use that same composite key so one
+principal cannot reassign another principal's imported message.
 
 ## Local deployment boundary
 

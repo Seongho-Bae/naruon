@@ -1,21 +1,24 @@
-import pytest
-from fastapi.testclient import TestClient
-from main import app
-from unittest.mock import patch, AsyncMock
-from services.exceptions import CalendarServiceError
+from unittest.mock import AsyncMock, patch
 
-client = TestClient(app)
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from main import app
+from services.exceptions import CalendarServiceError
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_success(mock_create):
-    # Setup mock
+@pytest.mark.asyncio
+async def test_calendar_sync_endpoint_success(mock_create):
     mock_create.return_value = {"id": "123", "summary": "Test todo"}
 
-    response = client.post(
-        "/api/calendar/sync",
-        json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
-    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/calendar/sync",
+            json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
+        )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -26,13 +29,17 @@ def test_calendar_sync_endpoint_success(mock_create):
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_error(mock_create):
+@pytest.mark.asyncio
+async def test_calendar_sync_endpoint_error(mock_create):
     mock_create.side_effect = CalendarServiceError("Mocked error")
 
-    response = client.post(
-        "/api/calendar/sync",
-        json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
-    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/calendar/sync",
+            json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
+        )
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Mocked error"}

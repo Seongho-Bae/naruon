@@ -4,7 +4,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from main import app
@@ -33,13 +33,14 @@ class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
 
+
 class MockSession:
     def __init__(self):
         self.scalar_params = []
 
     async def execute(self, stmt):
         return MockResult()
-    
+
     async def scalar(self, stmt):
         self.scalar_params.append(stmt.compile().params)
         return MockTenantConfig()
@@ -54,19 +55,19 @@ def mock_session():
     return MockSession()
 
 
-@pytest.fixture
-def client():
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers=TEST_AUTH_HEADERS) as c:
-        yield c
-    app.dependency_overrides.clear()
-
-
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
-def test_search_endpoint_success(mock_generate_embeddings, client):
+@pytest.mark.asyncio
+async def test_search_endpoint_success(mock_generate_embeddings):
     mock_generate_embeddings.return_value = [[0.1] * 1536]
 
-    response = client.post("/api/search", json={"query": "test query"})
+    app.dependency_overrides[get_db] = override_get_db
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_AUTH_HEADERS,
+    ) as client:
+        response = await client.post("/api/search", json={"query": "test query"})
+    app.dependency_overrides.clear()
     if response.status_code != 200:
         import traceback
 
@@ -86,7 +87,9 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
 @pytest.mark.asyncio
-async def test_search_uses_authenticated_user_not_x_user_id_header(mock_generate_embeddings, mock_session):
+async def test_search_uses_authenticated_user_not_x_user_id_header(
+    mock_generate_embeddings, mock_session
+):
     from api.auth import get_current_user
     from api.search import SearchRequest, hybrid_search
 

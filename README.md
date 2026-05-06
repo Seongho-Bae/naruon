@@ -77,11 +77,18 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo uses configured single-principal bearer authentication and does not
-persist an owner/mailbox key on email rows. Treat local data as single-user
-development data until a mailbox ownership migration is added. Configure
-`API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the backend; token
-files must be regular files no larger than 10 KiB. Set
+This repo uses configured single-principal bearer authentication and persists a
+required `emails.user_id` owner key. Email list, detail, thread, search,
+reply-count, attachment-search, and network graph queries scope rows to the
+authenticated principal; request-controlled identity headers are ignored. Fresh
+local databases create the column from metadata, while `scripts/bootstrap_db.py`
+backfills existing rows to the configured `API_AUTH_USER_ID` (or the local
+`default` fallback) before enforcing `NOT NULL` and `ix_emails_user_id`.
+Message IDs are unique per owner via `(user_id, message_id)`, and fixture
+upserts use that same composite key so one principal cannot reassign another
+principal's imported message.
+Configure `API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the
+backend; token files must be regular files no larger than 10 KiB. Set
 `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public
 frontend variables are visible to users.
 
@@ -95,4 +102,9 @@ cd backend && python3 -m pytest -q
 cd frontend && npm test && npm run lint && npm run build
 ```
 
-Known local warnings: backend tests emit dependency/toolchain deprecation warnings from Starlette multipart and compiled SWIG metadata. They are not caused by threading code.
+Known local warnings: backend tests emit dependency/toolchain deprecation
+warnings from Starlette multipart and compiled SWIG metadata. A globally shared
+Python environment can also emit a `requests` dependency warning when an
+unrelated `chardet` install is outside Requests' optional supported range.
+These are environment/toolchain warnings, not ownership or threading-code
+warnings.

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from db.session import AsyncSessionLocal
 from db.models import Email, Attachment
+from core.config import settings
 from services.email_parser import parse_eml
 from services.embedding import generate_embeddings
 from services.threading_service import assign_thread_id
@@ -11,6 +12,10 @@ import os
 from sqlalchemy import select
 
 EMBEDDING_DIMENSION = 1536
+
+
+def fixture_email_owner_id() -> str:
+    return (settings.API_AUTH_USER_ID or "default").strip() or "default"
 
 
 async def generate_fixture_embedding(text: str) -> list[float]:
@@ -28,8 +33,12 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         print(f"Failed to parse {eml_file}: {e}")
         return False
 
+    owner_id = fixture_email_owner_id()
     existing = await session.execute(
-        select(Email).where(Email.message_id == parsed["message_id"])
+        select(Email).where(
+            Email.user_id == owner_id,
+            Email.message_id == parsed["message_id"],
+        )
     )
     if existing.scalar_one_or_none():
         print(f"Email {parsed['message_id']} already exists, skipping.")
@@ -42,9 +51,10 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         print(f"Failed to generate embedding for {eml_file}: {e}")
         return False
 
-    thread_id = await assign_thread_id(session, parsed)
+    thread_id = await assign_thread_id(session, parsed, user_id=owner_id)
 
     email_obj = Email(
+        user_id=owner_id,
         message_id=parsed["message_id"],
         sender=parsed["sender"],
         reply_to=parsed.get("reply_to"),
@@ -79,7 +89,9 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         await session.rollback()
         print(f"Failed to commit {eml_file}: {e}")
         return False
-    print(f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments.")
+    print(
+        f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
+    )
     return True
 
 

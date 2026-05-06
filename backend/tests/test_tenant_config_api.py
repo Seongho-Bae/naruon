@@ -1,16 +1,19 @@
 import pytest
-from fastapi.testclient import TestClient
-from main import app
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+
 from db.session import get_db
+from main import app
 from tests.conftest import TEST_AUTH_HEADERS
 
-# Mock async DB session
+
 class MockResult:
     def __init__(self, obj):
         self.obj = obj
 
     def scalar_one_or_none(self):
         return self.obj
+
 
 class MockAsyncSession:
     def __init__(self):
@@ -25,28 +28,36 @@ class MockAsyncSession:
     async def commit(self):
         pass
 
+
 @pytest.fixture
 def mock_db():
     return MockAsyncSession()
 
-@pytest.fixture
-def client(mock_db):
+
+@pytest_asyncio.fixture
+async def client(mock_db):
     async def override_get_db():
         yield mock_db
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers=TEST_AUTH_HEADERS) as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_AUTH_HEADERS,
+    ) as c:
         yield c
     app.dependency_overrides.clear()
 
-def test_tenant_config_endpoint(client, mock_db):
+
+@pytest.mark.asyncio
+async def test_tenant_config_endpoint(client: AsyncClient, mock_db):
     post_payload = {
         "user_id": "default",
         "openai_api_key": "sk-123",
         "smtp_server": "smtp.example.com",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post(
+    response = await client.post(
         "/api/config",
         json=post_payload,
         headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
@@ -56,7 +67,7 @@ def test_tenant_config_endpoint(client, mock_db):
 
     assert "default" in mock_db.objects
 
-    get_response = client.get(
+    get_response = await client.get(
         "/api/config",
         params={"user_id": "default"},
         headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
@@ -70,8 +81,9 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["google_client_secret"] is None
 
 
-def test_tenant_config_rejects_user_id_impersonation(client):
-    response = client.get(
+@pytest.mark.asyncio
+async def test_tenant_config_rejects_user_id_impersonation(client: AsyncClient):
+    response = await client.get(
         "/api/config",
         params={"user_id": "attacker"},
         headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},

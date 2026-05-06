@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
-from sqlalchemy import String, DateTime, Text, ForeignKey
+from sqlalchemy import String, DateTime, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.types import TypeDecorator
 from cryptography.fernet import Fernet
 from core.config import settings
@@ -56,10 +56,16 @@ class EncryptedString(TypeDecorator):
 
 class Email(Base):
     __tablename__ = "emails"
+    __table_args__ = (
+        UniqueConstraint("user_id", "message_id", name="uq_emails_user_id_message_id"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    message_id: Mapped[str] = mapped_column(String, index=True)
+    thread_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )  # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)

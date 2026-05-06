@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
+from collections.abc import Sequence
 from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
@@ -28,6 +29,16 @@ def thread_lookup_values(thread_id: str) -> list[str]:
     return list({thread_id, normalized, f"<{normalized}>"})
 
 
+def email_belongs_to_user(email: Email, current_user: str) -> bool:
+    """Return whether a loaded email belongs to the authenticated principal."""
+    return email.user_id == current_user
+
+
+def visible_emails_for_user(emails: Sequence[Email], current_user: str) -> list[Email]:
+    """Filter loaded rows as a defense-in-depth guard for object authorization."""
+    return [email for email in emails if email_belongs_to_user(email, current_user)]
+
+
 class EmailListItem(BaseModel):
     id: int
     thread_id: str | None = None
@@ -37,6 +48,7 @@ class EmailListItem(BaseModel):
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
+
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -60,9 +72,12 @@ async def get_emails(
 ):
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
-        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+        select(Email)
+        .where(Email.user_id == current_user)
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
     )
-    emails = result.scalars().all()
+    emails = visible_emails_for_user(result.scalars().all(), current_user)
     emails = sorted(emails, key=lambda item: item.date)
 
     grouped = {}
@@ -104,9 +119,11 @@ async def get_email(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    result = await db.execute(select(Email).where(Email.id == email_id))
+    result = await db.execute(
+        select(Email).where(Email.id == email_id, Email.user_id == current_user)
+    )
     email = result.scalar_one_or_none()
-    if not email:
+    if not email or not email_belongs_to_user(email, current_user):
         raise HTTPException(status_code=404, detail="Email not found")
     return EmailDetailResponse(
         id=email.id,
@@ -123,7 +140,9 @@ async def get_email(
     )
 
 
-@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get(
+    "/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]]
+)
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
@@ -132,10 +151,15 @@ async def get_email_thread(
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
-        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .where(
+            Email.user_id == current_user,
+            or_(
+                Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
+            ),
+        )
         .order_by(Email.date.asc())
     )
-    emails = result.scalars().all()
+    emails = visible_emails_for_user(result.scalars().all(), current_user)
     emails = sorted(emails, key=lambda item: item.date)
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
@@ -164,31 +188,41 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None # O3: email threading support
+    in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
 
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+    request: SendEmailRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
-        
-        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
+
+        if (
+            not tenant_config
+            or not tenant_config.smtp_server
+            or not tenant_config.smtp_port
+            or not tenant_config.smtp_username
+        ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
-            
+
         smtp_server = tenant_config.smtp_server
         smtp_port = tenant_config.smtp_port
         smtp_username = tenant_config.smtp_username
-        
+
         send_result = await send_email(
-            request.to, 
-            request.subject, 
+            request.to,
+            request.subject,
             request.body,
             smtp_server=smtp_server,
             smtp_port=smtp_port,

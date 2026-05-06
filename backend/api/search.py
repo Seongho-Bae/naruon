@@ -52,26 +52,33 @@ class SearchResponse(BaseModel):
 
 
 def thread_group_key():
-    normalized_thread_id = func.nullif(func.btrim(func.btrim(Email.thread_id), "<>"), "")
-    normalized_message_id = func.nullif(func.btrim(func.btrim(Email.message_id), "<>"), "")
+    normalized_thread_id = func.nullif(
+        func.btrim(func.btrim(Email.thread_id), "<>"), ""
+    )
+    normalized_message_id = func.nullif(
+        func.btrim(func.btrim(Email.message_id), "<>"), ""
+    )
     return func.coalesce(normalized_thread_id, normalized_message_id)
 
 
-def build_reply_counts_subquery():
+def build_reply_counts_subquery(user_id: str | None = None):
     group_key = thread_group_key()
-    return (
-        select(
-            group_key.label("thread_key"),
-            func.count(Email.id).label("reply_count"),
-        )
-        .select_from(Email)
-        .group_by(group_key)
-        .subquery("thread_counts")
-    )
+    stmt = select(
+        group_key.label("thread_key"),
+        func.count(Email.id).label("reply_count"),
+    ).select_from(Email)
+    if user_id is not None:
+        stmt = stmt.where(Email.user_id == user_id)
+    return stmt.group_by(group_key).subquery("thread_counts")
 
 
 @router.post("/search", response_model=SearchResponse)
-async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def hybrid_search(
+    request: SearchRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
@@ -80,12 +87,14 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         return SearchResponse(results=[])
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-        
+
         openai_api_key = tenant_config.openai_api_key
-        
+
         search_query = request.query
         search_query_param = bindparam("search_query", search_query)
 
@@ -100,7 +109,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
-        reply_counts = build_reply_counts_subquery()
+        reply_counts = build_reply_counts_subquery(target_user_id)
 
         stmt_email = (
             select(
@@ -114,6 +123,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
                 hybrid_score_email.label("score"),
             )
             .select_from(Email)
+            .where(Email.user_id == target_user_id)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
         )
 
@@ -137,6 +147,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             )
             .select_from(Attachment)
             .join(Email, Attachment.email_id == Email.id)
+            .where(Email.user_id == target_user_id)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
         )
 

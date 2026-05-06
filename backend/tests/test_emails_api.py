@@ -6,13 +6,15 @@ from main import app
 import datetime
 from unittest.mock import patch
 
-from tests.conftest import TEST_AUTH_HEADERS
+from tests.conftest import TEST_AUTH_HEADERS, TEST_AUTH_USER_ID
 
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test", headers=TEST_AUTH_HEADERS
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_AUTH_HEADERS,
     ) as ac:
         yield ac
 
@@ -22,6 +24,7 @@ class MockTenantConfig:
         self.smtp_server = "smtp.example.com"
         self.smtp_port = 587
         self.smtp_username = "testuser"
+
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -83,7 +86,7 @@ class LimitAwareMockSession(MockSession):
 
 @pytest.fixture
 def sample_email():
-    return Email(
+    email = Email(
         id=1,
         message_id="msg123",
         thread_id="thread123",
@@ -94,6 +97,8 @@ def sample_email():
         date=datetime.datetime.now(datetime.timezone.utc),
         body="This is a test email body.",
     )
+    email.user_id = TEST_AUTH_USER_ID
+    return email
 
 
 @pytest.fixture
@@ -125,18 +130,22 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     hot_thread = [
         Email(
             id=index + 1,
+            user_id=TEST_AUTH_USER_ID,
             message_id=f"hot-{index}",
             thread_id="hot-thread",
             sender="hot@example.com",
             recipients="user@example.com",
             subject="Hot thread",
-            date=datetime.datetime(2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc),
+            date=datetime.datetime(
+                2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc
+            ),
             body=f"Hot body {index}",
         )
         for index in range(6)
     ]
     second_thread = Email(
         id=99,
+        user_id=TEST_AUTH_USER_ID,
         message_id="second-thread-root",
         thread_id="second-thread",
         sender="second@example.com",
@@ -171,7 +180,9 @@ async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit:
 
 
 @pytest.mark.asyncio
-async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+async def test_get_emails_bounds_database_candidate_window(
+    client: AsyncClient, db_session
+):
     from db.session import get_db
 
     session = LimitAwareMockSession(db_session.items)
@@ -185,9 +196,12 @@ async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncClient, db_session):
+async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
+    client: AsyncClient, db_session
+):
     root = Email(
         id=1,
+        user_id=TEST_AUTH_USER_ID,
         message_id="<root@example.com>",
         thread_id="<root@example.com>",
         sender="root@example.com",
@@ -198,6 +212,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncCl
     )
     reply = Email(
         id=2,
+        user_id=TEST_AUTH_USER_ID,
         message_id="<reply@example.com>",
         thread_id="root@example.com",
         sender="reply@example.com",
@@ -218,11 +233,46 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncCl
 
 
 @pytest.mark.asyncio
+async def test_get_emails_hides_rows_owned_by_another_user(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    foreign_email = Email(
+        id=2,
+        user_id="other-user",
+        message_id="foreign-msg",
+        thread_id="foreign-thread",
+        sender="foreign@example.com",
+        recipients="user@example.com",
+        subject="Foreign thread",
+        date=datetime.datetime(2026, 4, 27, 12, 0, tzinfo=datetime.timezone.utc),
+        body="Foreign body",
+    )
+    db_session.items = [foreign_email, sample_email]
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()["emails"]] == [sample_email.id]
+
+
+@pytest.mark.asyncio
 async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Email):
     response = await client.get(f"/api/emails/{sample_email.id}")
     assert response.status_code == 200
     assert response.json()["id"] == sample_email.id
     assert response.json()["reply_to"] == "reply@example.com"
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_hides_email_owned_by_another_user(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.user_id = "other-user"
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Email not found"}
 
 
 @pytest.mark.asyncio
@@ -236,9 +286,24 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
 
 
 @pytest.mark.asyncio
-async def test_get_email_thread_returns_chronological_order(client: AsyncClient, db_session):
+async def test_get_email_thread_hides_thread_owned_by_another_user(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.user_id = "other-user"
+
+    response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Thread not found"}
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_returns_chronological_order(
+    client: AsyncClient, db_session
+):
     newer = Email(
         id=2,
+        user_id=TEST_AUTH_USER_ID,
         message_id="newer-msg",
         thread_id="thread123",
         sender="newer@example.com",
@@ -249,6 +314,7 @@ async def test_get_email_thread_returns_chronological_order(client: AsyncClient,
     )
     older = Email(
         id=1,
+        user_id=TEST_AUTH_USER_ID,
         message_id="older-msg",
         thread_id="thread123",
         sender="older@example.com",
@@ -290,7 +356,7 @@ async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path:
 
     async def auth_override():
         calls.append("hit")
-        return "authorized-user"
+        return TEST_AUTH_USER_ID
 
     app.dependency_overrides[emails_get_current_user] = auth_override
 
@@ -301,22 +367,25 @@ async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path:
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
-def test_send_email_endpoint(mock_send_email):
+@pytest.mark.asyncio
+async def test_send_email_endpoint(mock_send_email):
     from main import app
-    from fastapi.testclient import TestClient
 
-    client = TestClient(app, headers=TEST_AUTH_HEADERS)
-
-    response = client.post(
-        "/api/emails/send",
-        json={
-            "to": "test@example.com",
-            "subject": "Re: Test",
-            "body": "This is a reply.",
-            "in_reply_to": "<parent@example.com>",
-            "references": "<root@example.com> <parent@example.com>",
-        },
-    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_AUTH_HEADERS,
+    ) as client:
+        response = await client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+                "in_reply_to": "<parent@example.com>",
+                "references": "<root@example.com> <parent@example.com>",
+            },
+        )
 
     assert response.status_code == 200
     assert response.json() == {"status": "simulated", "simulated": True}
@@ -332,9 +401,9 @@ def test_send_email_endpoint(mock_send_email):
     )
 
 
-def test_send_email_endpoint_preserves_configuration_error(sample_email):
+@pytest.mark.asyncio
+async def test_send_email_endpoint_preserves_configuration_error(sample_email):
     from main import app
-    from fastapi.testclient import TestClient
     from db.session import get_db
 
     async def missing_smtp_db():
@@ -342,15 +411,19 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
     app.dependency_overrides[get_db] = missing_smtp_db
     try:
-        client = TestClient(app, headers=TEST_AUTH_HEADERS)
-        response = client.post(
-            "/api/emails/send",
-            json={
-                "to": "test@example.com",
-                "subject": "Re: Test",
-                "body": "This is a reply.",
-            },
-        )
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers=TEST_AUTH_HEADERS,
+        ) as client:
+            response = await client.post(
+                "/api/emails/send",
+                json={
+                    "to": "test@example.com",
+                    "subject": "Re: Test",
+                    "body": "This is a reply.",
+                },
+            )
     finally:
         app.dependency_overrides.clear()
 
@@ -359,20 +432,23 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
 
 @patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
-def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
+@pytest.mark.asyncio
+async def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
     from main import app
-    from fastapi.testclient import TestClient
 
-    client = TestClient(app, headers=TEST_AUTH_HEADERS)
-
-    response = client.post(
-        "/api/emails/send",
-        json={
-            "to": "test@example.com",
-            "subject": "Re: Test",
-            "body": "This is a reply.",
-        },
-    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+        headers=TEST_AUTH_HEADERS,
+    ) as client:
+        response = await client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
 
     assert response.status_code == 500
     assert response.json() == {"detail": "Failed to send email"}
