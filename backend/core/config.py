@@ -3,9 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email"
+    DATABASE_URL: str
     DEBUG: bool = False
-    ENCRYPTION_KEY: SecretStr | None = None
+    ENCRYPTION_KEY: SecretStr
     API_AUTH_USER_ID: str | None = None
     API_AUTH_BEARER_TOKEN: SecretStr | None = None
     API_AUTH_BEARER_TOKEN_FILE: str | None = None
@@ -17,4 +17,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

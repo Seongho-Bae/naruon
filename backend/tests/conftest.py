@@ -1,5 +1,12 @@
+import os
+
 import pytest
 from pydantic import SecretStr
+
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+)
+os.environ.setdefault("ENCRYPTION_KEY", "test-encryption-key")
 
 from core.config import settings
 

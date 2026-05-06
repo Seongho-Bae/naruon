@@ -6,7 +6,7 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 
 ```bash
 cp .env.example .env
-POSTGRES_PASSWORD=change-me-local-only API_AUTH_BEARER_TOKEN=change-me-local-token docker compose up -d --build
+POSTGRES_PASSWORD=change-me-local-only ENCRYPTION_KEY=change-me-local-encryption-key API_AUTH_BEARER_TOKEN=change-me-local-token docker compose up -d --build
 docker compose exec backend python import_fixtures.py
 curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
@@ -87,10 +87,10 @@ backfills existing rows to the configured `API_AUTH_USER_ID` (or the local
 Message IDs are unique per owner via `(user_id, message_id)`, and fixture
 upserts use that same composite key so one principal cannot reassign another
 principal's imported message.
-Configure `API_AUTH_BEARER_TOKEN` or `API_AUTH_BEARER_TOKEN_FILE` on the
-backend; token files must be regular files no larger than 10 KiB. Set
-`NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public
-frontend variables are visible to users.
+Configure `DATABASE_URL`, `ENCRYPTION_KEY`, and `API_AUTH_BEARER_TOKEN` or
+`API_AUTH_BEARER_TOKEN_FILE` on the backend; token files must be regular files
+no larger than 10 KiB. Set `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser
+development because public frontend variables are visible to users.
 
 ## Verification used for this hardening pass
 

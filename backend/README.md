@@ -11,7 +11,12 @@ python3 -m pytest -q
 uvicorn main:app --reload
 ```
 
-Set `DATABASE_URL` in `.env` or use the default `postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email`.
+Set `DATABASE_URL` in `.env`; the backend fails fast when the database URL is
+missing so deployments never fall back to hardcoded credentials.
+
+Encrypted database fields require `ENCRYPTION_KEY`. The key is mandatory and
+must come from local `.env`, a mounted secret, or a managed secret store; the
+backend does not include a fallback encryption key.
 
 Protected API routes require configured bearer authentication. Set
 `API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN` or
