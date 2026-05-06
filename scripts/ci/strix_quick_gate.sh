@@ -983,6 +983,18 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	pull_request_changed_file_matches() {
+		local context_relative_path="$1"
+		local changed_file normalized_changed_file
+		for changed_file in "${CHANGED_FILES[@]}"; do
+			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+			if [ "$normalized_changed_file" = "$context_relative_path" ]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+
 	copy_trusted_context_file_into_scope() {
 		local context_file="$1"
 		local relative_path
@@ -1004,6 +1016,25 @@ PY
 		)"
 		if [ -e "$dst_path" ]; then
 			return 0
+		fi
+		local context_is_changed_rc=0
+		pull_request_changed_file_matches "$relative_path" || context_is_changed_rc=$?
+		if [ "$context_is_changed_rc" -eq 2 ]; then
+			return 2
+		fi
+		if [ "$context_is_changed_rc" -eq 0 ]; then
+			local head_sha_for_context
+			head_sha_for_context="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+			if pull_request_head_blob_required || { [ -n "$head_sha_for_context" ] && git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; }; then
+				mkdir -p -- "$(dirname -- "$dst_path")"
+				local context_copy_rc=0
+				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || context_copy_rc=$?
+				if [ "$context_copy_rc" -eq 0 ]; then
+					return 0
+				fi
+				echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+				return 2
+			fi
 		fi
 		local src_path="$REPO_ROOT/$relative_path"
 		if [ ! -e "$src_path" ]; then
