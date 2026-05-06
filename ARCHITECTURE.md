@@ -51,7 +51,10 @@ Alembic migration history in this repo yet.
 ## Send boundary
 
 Outbound replies preserve `In-Reply-To` and `References` headers in the built
-message payload. Local/dev behavior is explicit: missing SMTP config returns a
+message payload after email body text is converted to inert text-only content;
+active HTML, script/style payloads, tags, and attributes are stripped in the
+shared backend sanitizer before outbound message construction or parsed inbound
+body persistence. Local/dev behavior is explicit: missing SMTP config returns a
 400, and simulated send results are marked with `simulated: true` rather than
 described as real delivery. `/api/emails/send` rejects blank subject/body values
 and applies a database-backed per-authenticated-principal sliding-window rate

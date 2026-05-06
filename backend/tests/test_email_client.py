@@ -32,6 +32,25 @@ def test_build_email_message_sets_reply_headers():
     assert message["To"] == "test@example.com"
 
 
+def test_build_email_message_strips_html_payloads_from_body():
+    message = build_email_message(
+        to_address="test@example.com",
+        subject="XSS Test",
+        body="Hello <img src=x onerror=alert('xss')><script>alert('xss')</script> team",
+        from_address="sender@example.com",
+    )
+
+    body = message.get_content()
+
+    assert "Hello" in body
+    assert "team" in body
+    assert "<" not in body
+    assert ">" not in body
+    assert "onerror" not in body.lower()
+    assert "script" not in body.lower()
+    assert "alert" not in body.lower()
+
+
 @pytest.mark.asyncio
 async def test_send_email_logs_sanitized_recipient(caplog):
     caplog.set_level(logging.INFO, logger="services.email_client")

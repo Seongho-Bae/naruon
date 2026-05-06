@@ -3,6 +3,8 @@ import logging
 from email.message import EmailMessage
 from typing import TypedDict
 
+from .email_sanitizer import sanitize_email_body_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,7 +41,7 @@ def build_email_message(
         message["In-Reply-To"] = in_reply_to
     if references:
         message["References"] = references
-    message.set_content(body)
+    message.set_content(sanitize_email_body_text(body))
     return message
 
 
