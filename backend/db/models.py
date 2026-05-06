@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
-from sqlalchemy import String, DateTime, Text, ForeignKey, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.types import TypeDecorator
 from cryptography.fernet import Fernet
 from core.config import settings
@@ -124,3 +124,16 @@ class TenantConfig(Base):
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"
         )
+
+
+class EmailSendAttempt(Base):
+    __tablename__ = "email_send_attempts"
+    __table_args__ = (
+        Index("ix_email_send_attempts_user_attempted_at", "user_id", "attempted_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    attempted_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), index=True
+    )

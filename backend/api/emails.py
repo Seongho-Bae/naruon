@@ -1,19 +1,53 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import delete, func, or_, select, text
 from collections.abc import Sequence
 from db.session import get_db
-from db.models import Email, TenantConfig
-from pydantic import BaseModel, EmailStr
+from db.models import Email, EmailSendAttempt, TenantConfig
+from pydantic import BaseModel, EmailStr, Field, field_validator
 import datetime
 from services.email_client import send_email
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/emails")
+
+
+async def enforce_email_send_rate_limit(
+    db: AsyncSession, current_user: str
+) -> None:
+    """Limit outbound email sends per authenticated user in a DB-backed window."""
+    max_per_window = settings.EMAIL_SEND_MAX_PER_WINDOW
+    window_seconds = settings.EMAIL_SEND_RATE_LIMIT_WINDOW_SECONDS
+    if max_per_window <= 0 or window_seconds <= 0:
+        return
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    window_start = now - datetime.timedelta(seconds=window_seconds)
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtext(:lock_key))"),
+        {"lock_key": f"email-send-rate-limit:{current_user}"},
+    )
+    await db.execute(
+        delete(EmailSendAttempt).where(EmailSendAttempt.attempted_at < window_start)
+    )
+    attempts_in_window = await db.scalar(
+        select(func.count())
+        .select_from(EmailSendAttempt)
+        .where(
+            EmailSendAttempt.user_id == current_user,
+            EmailSendAttempt.attempted_at >= window_start,
+        )
+    )
+    if (attempts_in_window or 0) >= max_per_window:
+        raise HTTPException(status_code=429, detail="Email send rate limit exceeded")
+
+    db.add(EmailSendAttempt(user_id=current_user, attempted_at=now))
+    await db.commit()
 
 
 def canonical_thread_key(email: Email) -> str:
@@ -186,26 +220,31 @@ async def get_email_thread(
 
 class SendEmailRequest(BaseModel):
     to: EmailStr
-    subject: str
-    body: str
+    subject: str = Field(min_length=1, max_length=180)
+    body: str = Field(min_length=1, max_length=20_000)
     in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
+
+    @field_validator("subject", "body")
+    @classmethod
+    def reject_blank_text(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Field must not be blank")
+        return stripped
 
 
 @router.post("/send")
 async def send_email_endpoint(
     request: SendEmailRequest,
-    user_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    if user_id and user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    await enforce_email_send_rate_limit(db, current_user)
 
     try:
         tenant_config = await db.scalar(
-            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+            select(TenantConfig).where(TenantConfig.user_id == current_user)
         )
 
         if (

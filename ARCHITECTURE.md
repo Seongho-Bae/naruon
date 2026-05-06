@@ -23,10 +23,12 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-Protected backend routes use configured single-principal bearer authentication;
-deployments must provide `API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN`
-or `API_AUTH_BEARER_TOKEN_FILE`, and missing authentication configuration fails
-closed. The backend does not trust request-controlled identity headers.
+Protected backend routes use signed subject-bearing bearer authentication;
+deployments must provide `API_AUTH_SIGNING_SECRET` or
+`API_AUTH_SIGNING_SECRET_FILE`, and missing authentication configuration fails
+closed. Bearer tokens must have a valid HMAC signature, a non-expired `exp`
+claim, and a `sub` claim that becomes the authenticated principal. The backend
+does not trust request-controlled identity headers.
 
 The `emails` table persists a required `user_id` owner key. Email list,
 detail, thread, search, attachment-search, network graph, and reply-count query
@@ -51,7 +53,11 @@ Alembic migration history in this repo yet.
 Outbound replies preserve `In-Reply-To` and `References` headers in the built
 message payload. Local/dev behavior is explicit: missing SMTP config returns a
 400, and simulated send results are marked with `simulated: true` rather than
-described as real delivery.
+described as real delivery. `/api/emails/send` rejects blank subject/body values
+and applies a database-backed per-authenticated-principal sliding-window rate
+limit before SMTP config lookup so horizontal workers share the same 429 guard.
+Old send-attempt rows are pruned during enforcement to keep the limiter table
+bounded.
 
 ## CI security boundary
 

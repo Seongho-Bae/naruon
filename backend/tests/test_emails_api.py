@@ -29,6 +29,20 @@ class MockTenantConfig:
 _DEFAULT_TENANT_CONFIG = object()
 
 
+class MockResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
+
+    def scalar_one_or_none(self):
+        return self.rows[0] if self.rows else None
+
+
 class MockSession:
     def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
         self.items = items
@@ -37,25 +51,23 @@ class MockSession:
             if tenant_config is _DEFAULT_TENANT_CONFIG
             else tenant_config
         )
+        self.email_send_attempts = []
+        self.commits = 0
 
-    async def execute(self, query):
-        class MockResult:
-            def __init__(self, rows):
-                self.rows = rows
-
-            def scalars(self):
-                return self
-
-            def all(self):
-                return self.rows
-
-            def scalar_one_or_none(self):
-                return self.rows[0] if self.rows else None
-
+    async def execute(self, query, params=None):
         return MockResult(self.items)
 
     async def scalar(self, query):
+        if "email_send_attempts" in str(query).lower():
+            return len(self.email_send_attempts)
         return self.tenant_config
+
+    def add(self, item):
+        if item.__class__.__name__ == "EmailSendAttempt":
+            self.email_send_attempts.append(item)
+
+    async def commit(self):
+        self.commits += 1
 
 
 class LimitAwareMockSession(MockSession):
@@ -63,20 +75,7 @@ class LimitAwareMockSession(MockSession):
         super().__init__(items, tenant_config=tenant_config)
         self.last_limit_value = None
 
-    async def execute(self, query):
-        class MockResult:
-            def __init__(self, rows):
-                self.rows = rows
-
-            def scalars(self):
-                return self
-
-            def all(self):
-                return self.rows
-
-            def scalar_one_or_none(self):
-                return self.rows[0] if self.rows else None
-
+    async def execute(self, query, params=None):
         limit_clause = getattr(query, "_limit_clause", None)
         limit_value = getattr(limit_clause, "value", None)
         self.last_limit_value = limit_value
@@ -399,6 +398,94 @@ async def test_send_email_endpoint(mock_send_email):
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+@pytest.mark.asyncio
+async def test_send_email_endpoint_rate_limits_authenticated_user(mock_send_email):
+    from api.emails import get_current_user as emails_get_current_user
+    from main import app
+
+    async def auth_override():
+        return "rate-limited-user"
+
+    app.dependency_overrides[emails_get_current_user] = auth_override
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers=TEST_AUTH_HEADERS,
+        ) as client:
+            payload = {
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            }
+            for _ in range(10):
+                response = await client.post("/api/emails/send", json=payload)
+                assert response.status_code == 200
+
+            response = await client.post("/api/emails/send", json=payload)
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 429
+    assert response.json() == {"detail": "Email send rate limit exceeded"}
+    assert mock_send_email.call_count == 10
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+@pytest.mark.asyncio
+async def test_send_email_endpoint_records_rate_limit_attempts_in_database(
+    mock_send_email, db_session
+):
+    from api.emails import get_current_user as emails_get_current_user
+    from main import app
+
+    async def auth_override():
+        return "database-limited-user"
+
+    app.dependency_overrides[emails_get_current_user] = auth_override
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+            headers=TEST_AUTH_HEADERS,
+        ) as client:
+            response = await client.post(
+                "/api/emails/send",
+                json={
+                    "to": "test@example.com",
+                    "subject": "Re: Test",
+                    "body": "This is a reply.",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert [attempt.user_id for attempt in db_session.email_send_attempts] == [
+        "database-limited-user"
+    ]
+    assert db_session.commits == 1
+    assert mock_send_email.call_count == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("field", "payload"),
+    [
+        ("subject", {"to": "test@example.com", "subject": "", "body": "Body"}),
+        ("body", {"to": "test@example.com", "subject": "Subject", "body": ""}),
+    ],
+)
+async def test_send_email_endpoint_rejects_blank_message_content(
+    client: AsyncClient, field: str, payload: dict[str, str]
+):
+    response = await client.post("/api/emails/send", json=payload)
+
+    assert response.status_code == 422
+    assert field in response.text
 
 
 @pytest.mark.asyncio

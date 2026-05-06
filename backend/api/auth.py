@@ -1,14 +1,15 @@
 from pathlib import Path
-from secrets import compare_digest
 from stat import S_ISREG
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from core.auth_tokens import verified_signed_subject
 from core.config import settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
-MAX_BEARER_TOKEN_FILE_BYTES = 10 * 1024
+MAX_SIGNING_SECRET_FILE_BYTES = 10 * 1024
+MIN_SIGNING_SECRET_BYTES = 32
 
 
 def _auth_config_error() -> HTTPException:
@@ -19,62 +20,63 @@ def _auth_config_error() -> HTTPException:
     )
 
 
-def _read_bearer_token_file(token_file: str) -> str | None:
-    """Read a small regular-file bearer token without unbounded memory use."""
-    token_path = Path(token_file)
+def _read_signing_secret_file(secret_file: str) -> str | None:
+    """Read a small regular-file signing secret without unbounded memory use."""
+    secret_path = Path(secret_file)
     try:
-        token_stat = token_path.stat()
-        if not S_ISREG(token_stat.st_mode):
+        secret_stat = secret_path.stat()
+        if not S_ISREG(secret_stat.st_mode):
             raise _auth_config_error()
-        if token_stat.st_size > MAX_BEARER_TOKEN_FILE_BYTES:
+        if secret_stat.st_size > MAX_SIGNING_SECRET_FILE_BYTES:
             raise _auth_config_error()
-        with token_path.open("rb") as token_handle:
-            token = token_handle.read(MAX_BEARER_TOKEN_FILE_BYTES + 1)
+        with secret_path.open("rb") as secret_handle:
+            secret = secret_handle.read(MAX_SIGNING_SECRET_FILE_BYTES + 1)
     except HTTPException:
         raise
     except OSError as exc:
         raise _auth_config_error() from exc
 
-    if len(token) > MAX_BEARER_TOKEN_FILE_BYTES:
+    if len(secret) > MAX_SIGNING_SECRET_FILE_BYTES:
         raise _auth_config_error()
     try:
-        decoded_token = token.decode("utf-8")
+        decoded_secret = secret.decode("utf-8")
     except UnicodeError as exc:
         raise _auth_config_error() from exc
-    return decoded_token.strip() or None
+    return decoded_secret.strip() or None
 
 
-def _configured_bearer_token() -> str | None:
-    """Return the configured API bearer token without exposing it in logs."""
-    if settings.API_AUTH_BEARER_TOKEN is not None:
-        token = settings.API_AUTH_BEARER_TOKEN.get_secret_value().strip()
-        return token or None
+def _configured_signing_secret() -> str | None:
+    """Return the configured API token signing secret without exposing it."""
+    if settings.API_AUTH_SIGNING_SECRET is not None:
+        secret = settings.API_AUTH_SIGNING_SECRET.get_secret_value().strip()
+        return secret or None
 
-    if settings.API_AUTH_BEARER_TOKEN_FILE:
-        return _read_bearer_token_file(settings.API_AUTH_BEARER_TOKEN_FILE)
+    if settings.API_AUTH_SIGNING_SECRET_FILE:
+        return _read_signing_secret_file(settings.API_AUTH_SIGNING_SECRET_FILE)
 
     return None
+
+
+def _has_sufficient_entropy(secret: str) -> bool:
+    """Reject placeholder-size signing secrets that are too short for HMAC."""
+    return len(secret.encode("utf-8")) >= MIN_SIGNING_SECRET_BYTES
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> str:
     """
-    Authenticate API callers with a configured bearer token.
+    Authenticate API callers with a signed subject-bearing bearer token.
 
-    The backend no longer trusts request-controlled identity headers or a
-    hardcoded local user. A deployment must configure both the authenticated
-    user id and a bearer token (or token file) before protected endpoints grant
-    access.
+    The backend no longer trusts request-controlled identity headers, a shared
+    static bearer token, or a hardcoded local user. A deployment must configure
+    a signing secret (or secret file), and callers must present a signed token
+    with a non-expired `sub` claim before protected endpoints grant access.
     """
-    configured_user_id = (settings.API_AUTH_USER_ID or "").strip()
-    expected_token = _configured_bearer_token()
+    signing_secret = _configured_signing_secret()
 
-    if not configured_user_id or not expected_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Authentication is not configured",
-        )
+    if not signing_secret or not _has_sufficient_entropy(signing_secret):
+        raise _auth_config_error()
 
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise HTTPException(
@@ -83,11 +85,12 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not compare_digest(credentials.credentials, expected_token):
+    subject = verified_signed_subject(credentials.credentials, signing_secret)
+    if subject is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return configured_user_id
+    return subject

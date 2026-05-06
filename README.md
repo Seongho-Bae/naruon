@@ -6,9 +6,16 @@ Full-stack email client with a FastAPI backend, Next.js frontend, vector search,
 
 ```bash
 cp .env.example .env
-POSTGRES_PASSWORD=change-me-local-only ENCRYPTION_KEY=change-me-local-encryption-key API_AUTH_BEARER_TOKEN=change-me-local-token docker compose up -d --build
+export API_AUTH_SIGNING_SECRET=change-me-local-signing-secret-with-at-least-32-bytes
+export NEXT_PUBLIC_API_AUTH_TOKEN=$(PYTHONPATH=backend python3 - <<'PY'
+import os
+from core.auth_tokens import create_signed_auth_token
+print(create_signed_auth_token(os.environ.get("API_AUTH_USER_ID", "default"), os.environ["API_AUTH_SIGNING_SECRET"], ttl_seconds=86400))
+PY
+)
+POSTGRES_PASSWORD=change-me-local-only ENCRYPTION_KEY=change-me-local-encryption-key docker compose up -d --build
 docker compose exec backend python import_fixtures.py
-curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails
+curl -s -H "Authorization: Bearer $NEXT_PUBLIC_API_AUTH_TOKEN" http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
@@ -50,15 +57,15 @@ npm run dev
 ## API smoke examples
 
 ```bash
-curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
-curl -s -H 'Authorization: Bearer change-me-local-token' http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
+curl -s -H "Authorization: Bearer $NEXT_PUBLIC_API_AUTH_TOKEN" http://localhost:8000/api/emails | jq '.emails[] | {subject, thread_id, reply_count}'
+curl -s -H "Authorization: Bearer $NEXT_PUBLIC_API_AUTH_TOKEN" http://localhost:8000/api/emails/thread/thread-root@example.com | jq '.thread[] | {message_id, in_reply_to, references}'
 
 # Requires a tenant OpenAI key because search generates a query embedding.
-curl -s -X POST http://localhost:8000/api/search -H 'Authorization: Bearer change-me-local-token' -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
+curl -s -X POST http://localhost:8000/api/search -H "Authorization: Bearer $NEXT_PUBLIC_API_AUTH_TOKEN" -H 'content-type: application/json' -d '{"query":"Quarterly plan"}'
 
 # Send remains honest in local/dev mode: if SMTP is not configured, the API returns 400.
 curl -s -X POST http://localhost:8000/api/emails/send \
-  -H 'Authorization: Bearer change-me-local-token' \
+  -H "Authorization: Bearer $NEXT_PUBLIC_API_AUTH_TOKEN" \
   -H 'content-type: application/json' \
   -d '{"to":"alice@example.com","subject":"Re: Quarterly plan","body":"Thanks","in_reply_to":"<thread-reply-2@example.com>","references":"<thread-root@example.com> <thread-reply-1@example.com> <thread-reply-2@example.com>"}'
 ```
@@ -77,8 +84,8 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo uses configured single-principal bearer authentication and persists a
-required `emails.user_id` owner key. Email list, detail, thread, search,
+This repo uses signed subject-bearing bearer tokens and persists a required
+`emails.user_id` owner key. Email list, detail, thread, search,
 reply-count, attachment-search, and network graph queries scope rows to the
 authenticated principal; request-controlled identity headers are ignored. Fresh
 local databases create the column from metadata, while `scripts/bootstrap_db.py`
@@ -87,10 +94,13 @@ backfills existing rows to the configured `API_AUTH_USER_ID` (or the local
 Message IDs are unique per owner via `(user_id, message_id)`, and fixture
 upserts use that same composite key so one principal cannot reassign another
 principal's imported message.
-Configure `DATABASE_URL`, `ENCRYPTION_KEY`, and `API_AUTH_BEARER_TOKEN` or
-`API_AUTH_BEARER_TOKEN_FILE` on the backend; token files must be regular files
-no larger than 10 KiB. Set `NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser
-development because public frontend variables are visible to users.
+Configure `DATABASE_URL`, `ENCRYPTION_KEY`, and `API_AUTH_SIGNING_SECRET` or
+`API_AUTH_SIGNING_SECRET_FILE` on the backend; secret files must be regular
+files no larger than 10 KiB. Bearer tokens must be signed with that secret,
+carry a non-expired `sub` claim, and are rate-limited on `/api/emails/send` per
+authenticated subject through the shared database-backed limiter. Set
+`NEXT_PUBLIC_API_AUTH_TOKEN` only for local browser development because public
+frontend variables are visible to users.
 
 ## Verification used for this hardening pass
 

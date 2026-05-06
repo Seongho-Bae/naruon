@@ -24,7 +24,7 @@ services:
       DEBUG: "false"
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}
       API_AUTH_USER_ID: ${API_AUTH_USER_ID:-default}
-      API_AUTH_BEARER_TOKEN: ${API_AUTH_BEARER_TOKEN:?Set API_AUTH_BEARER_TOKEN in .env before running Docker Compose}
+      API_AUTH_SIGNING_SECRET: ${API_AUTH_SIGNING_SECRET:?Set API_AUTH_SIGNING_SECRET in .env before running Docker Compose}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
@@ -44,7 +44,7 @@ services:
       # host-reachable URL for local Compose; http://backend:8000 is only
       # resolvable inside the Docker network, not from the user's browser.
       NEXT_PUBLIC_API_URL: http://localhost:8000
-      NEXT_PUBLIC_API_AUTH_TOKEN: ${API_AUTH_BEARER_TOKEN:?Set API_AUTH_BEARER_TOKEN in .env before running Docker Compose}
+      NEXT_PUBLIC_API_AUTH_TOKEN: ${NEXT_PUBLIC_API_AUTH_TOKEN:?Set NEXT_PUBLIC_API_AUTH_TOKEN to a signed local auth token before running Docker Compose}
     depends_on:
       - backend
     ports:

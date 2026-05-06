@@ -18,12 +18,13 @@ Encrypted database fields require `ENCRYPTION_KEY`. The key is mandatory and
 must come from local `.env`, a mounted secret, or a managed secret store; the
 backend does not include a fallback encryption key.
 
-Protected API routes require configured bearer authentication. Set
-`API_AUTH_USER_ID` and either `API_AUTH_BEARER_TOKEN` or
-`API_AUTH_BEARER_TOKEN_FILE`; requests must include `Authorization: Bearer
-<token>`. Missing auth configuration fails closed instead of falling back to a
-dummy user. Token files must be regular files no larger than 10 KiB, and invalid
-token-file configuration fails closed with the generic authentication
+Protected API routes require signed bearer authentication. Set
+`API_AUTH_SIGNING_SECRET` or `API_AUTH_SIGNING_SECRET_FILE`; requests must
+include `Authorization: Bearer <signed-token>`, where the token is HMAC-signed,
+has a non-expired `exp` claim, and carries the authenticated owner in `sub`.
+Missing auth configuration fails closed instead of falling back to a dummy user.
+Secret files must be regular files no larger than 10 KiB, and invalid
+secret-file configuration fails closed with the generic authentication
 configuration error.
 
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fixtures.py` uses zero-vector embeddings so the local threading proof path does not need network access.
@@ -34,12 +35,15 @@ For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fi
 - `GET /api/emails/{id}` returns message details including `thread_id`, `message_id`, `in_reply_to`, `references`, and `reply_to`.
 - `GET /api/emails/thread/{thread_id}` returns the conversation oldest to newest.
 - `POST /api/emails/send` accepts `in_reply_to` and `references` and returns either real send status or explicit simulation status.
+  It rejects blank message content and applies a database-backed per-authenticated-principal send rate limit.
 
 ## Schema bootstrap and backfill
 
 `python3 scripts/bootstrap_db.py` creates the `vector` extension, runs `Base.metadata.create_all` for fresh local databases, and applies idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for the threading columns (`thread_id`, `in_reply_to`, `references`, `reply_to`) plus the thread index. Existing email rows that predate threading should then be backfilled by reprocessing imported `.eml` files or by assigning `thread_id` with `services.threading_service.assign_thread_id` in chronological order.
 
-Before claiming multi-user safety, add an owner/mailbox column to `emails`, backfill it, and scope every email/search query by that key.
+`API_AUTH_USER_ID` is only the local fixture/bootstrap owner default used when
+backfilling existing rows; runtime authorization comes from signed bearer-token
+subjects, not this setting.
 
 ## Warning classification
 

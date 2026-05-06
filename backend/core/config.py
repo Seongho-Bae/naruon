@@ -6,9 +6,12 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     DEBUG: bool = False
     ENCRYPTION_KEY: SecretStr
+    # Local fixture/bootstrap owner default only; runtime auth uses signed tokens.
     API_AUTH_USER_ID: str | None = None
-    API_AUTH_BEARER_TOKEN: SecretStr | None = None
-    API_AUTH_BEARER_TOKEN_FILE: str | None = None
+    API_AUTH_SIGNING_SECRET: SecretStr | None = None
+    API_AUTH_SIGNING_SECRET_FILE: str | None = None
+    EMAIL_SEND_RATE_LIMIT_WINDOW_SECONDS: int = 60
+    EMAIL_SEND_MAX_PER_WINDOW: int = 10
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"

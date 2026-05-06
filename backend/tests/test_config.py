@@ -14,8 +14,10 @@ def test_global_config():
 
 def test_api_auth_config():
     assert hasattr(settings, "API_AUTH_USER_ID")
-    assert hasattr(settings, "API_AUTH_BEARER_TOKEN")
-    assert hasattr(settings, "API_AUTH_BEARER_TOKEN_FILE")
+    assert hasattr(settings, "API_AUTH_SIGNING_SECRET")
+    assert hasattr(settings, "API_AUTH_SIGNING_SECRET_FILE")
+    assert hasattr(settings, "EMAIL_SEND_RATE_LIMIT_WINDOW_SECONDS")
+    assert hasattr(settings, "EMAIL_SEND_MAX_PER_WINDOW")
 
 
 def test_openai_config():

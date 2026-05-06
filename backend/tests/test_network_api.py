@@ -125,7 +125,7 @@ async def test_network_endpoint_query_params():
     response = await get_network_response(
         "/api/network/graph?limit=10&user_id=default",
         [("alice@example.com", "bob@example.com")],
-        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        headers={**TEST_AUTH_HEADERS, "X-User-Id": "attacker"},
     )
 
     assert response.status_code == 200
@@ -139,7 +139,7 @@ async def test_network_endpoint_rejects_user_id_impersonation():
     response = await get_network_response(
         "/api/network/graph?user_id=attacker",
         [("alice@example.com", "bob@example.com")],
-        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        headers={**TEST_AUTH_HEADERS, "X-User-Id": "attacker"},
     )
 
     assert response.status_code == 403

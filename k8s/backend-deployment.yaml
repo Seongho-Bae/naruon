@@ -36,8 +36,8 @@ spec:
             secretKeyRef:
               name: backend-secrets
               key: API_AUTH_USER_ID
-        - name: API_AUTH_BEARER_TOKEN
+        - name: API_AUTH_SIGNING_SECRET
           valueFrom:
             secretKeyRef:
               name: backend-secrets
-              key: API_AUTH_BEARER_TOKEN
+              key: API_AUTH_SIGNING_SECRET

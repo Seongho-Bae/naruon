@@ -60,7 +60,7 @@ async def test_tenant_config_endpoint(client: AsyncClient, mock_db):
     response = await client.post(
         "/api/config",
         json=post_payload,
-        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        headers={**TEST_AUTH_HEADERS, "X-User-Id": "attacker"},
     )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
@@ -70,7 +70,7 @@ async def test_tenant_config_endpoint(client: AsyncClient, mock_db):
     get_response = await client.get(
         "/api/config",
         params={"user_id": "default"},
-        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        headers={**TEST_AUTH_HEADERS, "X-User-Id": "attacker"},
     )
     assert get_response.status_code == 200
     data = get_response.json()
@@ -86,7 +86,7 @@ async def test_tenant_config_rejects_user_id_impersonation(client: AsyncClient):
     response = await client.get(
         "/api/config",
         params={"user_id": "attacker"},
-        headers={"Authorization": "Bearer test-token", "X-User-Id": "attacker"},
+        headers={**TEST_AUTH_HEADERS, "X-User-Id": "attacker"},
     )
 
     assert response.status_code == 403
