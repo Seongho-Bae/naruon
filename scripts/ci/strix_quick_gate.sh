@@ -1213,7 +1213,7 @@ should_rebalance_pull_request_batch() {
 	if [ "$INFRA_ERROR_DETECTED" -ne 1 ]; then
 		return 1
 	fi
-	if [ "$(remaining_total_budget)" -le 0 ]; then
+	if [ "$STRIX_TOTAL_TIMEOUT_SECONDS" -gt 0 ] && [ "$(remaining_total_budget)" -le 0 ]; then
 		return 1
 	fi
 	if is_timeout_error; then

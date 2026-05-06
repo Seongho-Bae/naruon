@@ -1457,7 +1457,7 @@ EOS
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
 		;;
-	pr-changed-scope-rebalanced)
+	pr-changed-scope-rebalanced | pr-changed-scope-rebalanced-unlimited-total-timeout)
 		if [ -z "$target_path" ]; then
 			echo "Error: target path missing" >&2
 			exit 51
@@ -3873,6 +3873,29 @@ run_gate_case "pr-changed-scope-rebalanced" \
 	"" \
 	"1200" \
 	"3000" \
+	"pull_request" \
+	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
+	"" \
+	"4"
+
+run_gate_case "pr-changed-scope-rebalanced-unlimited-total-timeout" \
+	"vertex_ai/gemini-2.5-flash" \
+	"vertex_ai/gemini-2.5-pro" \
+	"0" \
+	"Rebalancing pull request Strix batch 1/1 into smaller batches after timeout." \
+	"3" \
+	"vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash" \
+	"<unset>|<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
 	"pull_request" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
 	"" \
