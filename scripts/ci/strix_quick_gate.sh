@@ -907,7 +907,7 @@ pull_request_scope_context_files() {
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 		case "$normalized_changed_file" in
-		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+		backend/*.py)
 			needs_backend_python=1
 			;;
 		esac
@@ -919,6 +919,7 @@ backend/requirements.txt
 backend/api/__init__.py
 backend/api/auth.py
 backend/core/__init__.py
+backend/core/auth_tokens.py
 backend/core/config.py
 backend/core/exceptions.py
 backend/db/__init__.py

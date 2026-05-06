@@ -2109,6 +2109,124 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_backend_auth_context_includes_token_helper_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/api/emails.py"
+	local auth_context_file="backend/api/auth.py"
+	local token_helper_file="backend/core/auth_tokens.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+printf '%s\n' "$target_path" >> "${FAKE_STRIX_CALL_LOG:?}"
+auth_context="$target_path/${FAKE_STRIX_AUTH_CONTEXT_FILE:?}"
+token_helper="$target_path/${FAKE_STRIX_TOKEN_HELPER_FILE:?}"
+if [ -f "$auth_context" ] && [ ! -f "$token_helper" ]; then
+	echo "Error: backend auth token helper context missing from scoped target" >&2
+	exit 71
+fi
+if [ -f "$auth_context" ] && ! grep -Fq -- "from core.auth_tokens import verified_signed_subject" "$auth_context"; then
+	echo "Error: PR head auth context import was not scanned" >&2
+	cat -- "$auth_context" >&2
+	exit 72
+fi
+if [ -f "$token_helper" ] && ! grep -Fq -- "def verified_signed_subject" "$token_helper"; then
+	echo "Error: auth token helper implementation was not scanned" >&2
+	cat -- "$token_helper" >&2
+	exit 73
+fi
+echo "scan ok with backend auth token helper context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$token_helper_file")"
+		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$auth_context_file"
+		printf '%s\n' 'def verified_signed_subject(token, signing_secret): return "trusted-user"' >"$token_helper_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_EMAILS_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'from core.auth_tokens import verified_signed_subject' >"$auth_context_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			FAKE_STRIX_AUTH_CONTEXT_FILE="$auth_context_file" \
+			FAKE_STRIX_TOKEN_HELPER_FILE="$token_helper_file" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file
+$auth_context_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-backend-auth-context-includes-token-helper exit code"
+	if [ "$rc" -ne 0 ]; then
+		cat -- "$output_log" >&2
+	fi
+	assert_file_contains "$output_log" "scan ok with backend auth token helper context" "case=pull-request-target-backend-auth-context-includes-token-helper output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "2" "$call_count" "case=pull-request-target-backend-auth-context-includes-token-helper strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -2892,6 +3010,8 @@ run_pull_request_target_head_scope_case \
 run_pull_request_target_trusted_context_scope_case
 
 run_pull_request_target_changed_context_uses_head_scope_case
+
+run_pull_request_target_backend_auth_context_includes_token_helper_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
