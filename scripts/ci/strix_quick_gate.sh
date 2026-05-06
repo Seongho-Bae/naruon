@@ -918,6 +918,7 @@ pull_request_scope_context_files() {
 backend/requirements.txt
 backend/api/__init__.py
 backend/api/auth.py
+backend/api/emails.py
 backend/core/__init__.py
 backend/core/auth_tokens.py
 backend/core/config.py

@@ -1402,6 +1402,22 @@ EOS
 		echo "scan ok with python dependency scope"
 		exit 0
 		;;
+	pr-python-auth-scope-context)
+		if [ ! -f "$target_path/backend/api/auth.py" ]; then
+			echo "Error: changed backend auth file missing from scoped target ($target_path)" >&2
+			exit 64
+		fi
+		if [ ! -f "$target_path/backend/api/emails.py" ]; then
+			echo "Error: backend email API context missing from auth-scoped target ($target_path)" >&2
+			exit 65
+		fi
+		if [ ! -f "$target_path/backend/core/network_targets.py" ]; then
+			echo "Error: backend network target context missing from auth-scoped target ($target_path)" >&2
+			exit 66
+		fi
+		echo "scan ok with auth dependency scope"
+		exit 0
+		;;
 	pr-changed-scope-batched)
 		attempt="0"
 		if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
@@ -1579,13 +1595,14 @@ EOF
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/node_modules/fake-pkg/index.js"
 	elif [ "$scenario" = "pr-changed-scope-bounded" ]; then
 		echo 'class Unrelated {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
-	elif [ "$scenario" = "pr-python-scope-context" ]; then
+	elif [ "$scenario" = "pr-python-scope-context" ] || [ "$scenario" = "pr-python-auth-scope-context" ]; then
 		mkdir -p "$repo_root_dir/backend/api" "$repo_root_dir/backend/core" "$repo_root_dir/backend/db" "$repo_root_dir/backend/services"
 		touch "$repo_root_dir/backend/api/__init__.py"
 		touch "$repo_root_dir/backend/core/__init__.py"
 		touch "$repo_root_dir/backend/db/__init__.py"
 		touch "$repo_root_dir/backend/services/__init__.py"
-		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
+		echo 'from core.network_targets import validate_mail_server_target' >"$repo_root_dir/backend/api/emails.py"
+		echo 'from core.auth_tokens import verified_signed_subject' >"$repo_root_dir/backend/api/auth.py"
 		echo 'def verified_signed_subject(*args): return "user"' >"$repo_root_dir/backend/core/auth_tokens.py"
 		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
 		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
@@ -2139,8 +2156,9 @@ run_pull_request_target_backend_auth_context_includes_token_helper_case() {
 	local call_log="$tmp_dir/calls.log"
 	local strix_llm_file="$tmp_dir/strix_llm.txt"
 	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
-	local changed_file="backend/api/emails.py"
+	local email_api_file="backend/api/emails.py"
 	local auth_context_file="backend/api/auth.py"
+	local network_target_file="backend/core/network_targets.py"
 	local token_helper_file="backend/core/auth_tokens.py"
 
 	cat >"$fake_strix" <<'EOF'
@@ -2158,10 +2176,20 @@ done
 
 printf '%s\n' "$target_path" >> "${FAKE_STRIX_CALL_LOG:?}"
 auth_context="$target_path/${FAKE_STRIX_AUTH_CONTEXT_FILE:?}"
+email_api="$target_path/${FAKE_STRIX_EMAIL_API_FILE:?}"
+network_target="$target_path/${FAKE_STRIX_NETWORK_TARGET_FILE:?}"
 token_helper="$target_path/${FAKE_STRIX_TOKEN_HELPER_FILE:?}"
 if [ -f "$auth_context" ] && [ ! -f "$token_helper" ]; then
 	echo "Error: backend auth token helper context missing from scoped target" >&2
 	exit 71
+fi
+if [ -f "$auth_context" ] && [ ! -f "$email_api" ]; then
+	echo "Error: backend email API context missing from scoped target" >&2
+	exit 74
+fi
+if [ -f "$auth_context" ] && [ ! -f "$network_target" ]; then
+	echo "Error: backend network target context missing from scoped target" >&2
+	exit 75
 fi
 if [ -f "$auth_context" ] && ! grep -Fq -- "from core.auth_tokens import verified_signed_subject" "$auth_context"; then
 	echo "Error: PR head auth context import was not scanned" >&2
@@ -2184,9 +2212,10 @@ EOF
 		git init -q
 		git config user.name 'Strix Test'
 		git config user.email 'strix-test@example.invalid'
-		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$token_helper_file")"
-		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		mkdir -p "$(dirname -- "$email_api_file")" "$(dirname -- "$token_helper_file")"
+		printf '%s\n' 'from core.network_targets import validate_mail_server_target' >"$email_api_file"
 		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$auth_context_file"
+		printf '%s\n' 'def validate_mail_server_target(host, port, service): return host, port' >"$network_target_file"
 		printf '%s\n' 'def verified_signed_subject(token, signing_secret): return "trusted-user"' >"$token_helper_file"
 		git add .
 		git commit -qm 'base commit'
@@ -2195,7 +2224,6 @@ EOF
 	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
 	(
 		cd "$repo_root_dir"
-		printf '%s\n' 'HEAD_EMAILS_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
 		printf '%s\n' 'from core.auth_tokens import verified_signed_subject' >"$auth_context_file"
 		git add .
 		git commit -qm 'head commit'
@@ -2214,9 +2242,10 @@ EOF
 			PR_HEAD_SHA="$head_sha" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			FAKE_STRIX_AUTH_CONTEXT_FILE="$auth_context_file" \
+			FAKE_STRIX_EMAIL_API_FILE="$email_api_file" \
+			FAKE_STRIX_NETWORK_TARGET_FILE="$network_target_file" \
 			FAKE_STRIX_TOKEN_HELPER_FILE="$token_helper_file" \
-			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file
-$auth_context_file" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$auth_context_file" \
 			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2237,7 +2266,7 @@ $auth_context_file" \
 	if [ -f "$call_log" ]; then
 		call_count="$(wc -l <"$call_log" | tr -d ' ')"
 	fi
-	assert_equals "2" "$call_count" "case=pull-request-target-backend-auth-context-includes-token-helper strix call count"
+	assert_equals "1" "$call_count" "case=pull-request-target-backend-auth-context-includes-token-helper strix call count"
 
 	rm -rf "$tmp_dir"
 }
@@ -4044,6 +4073,27 @@ run_gate_case "pr-python-scope-context" \
 	"0" \
 	"pull_request" \
 	"backend/api/emails.py"
+
+run_gate_case "pr-python-auth-scope-context" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with auth dependency scope" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/auth.py"
 
 run_gate_case "pr-changed-scope-batched" \
 	"openai/gpt-4o-mini" \
