@@ -907,7 +907,7 @@ pull_request_scope_context_files() {
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 		case "$normalized_changed_file" in
-		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+		backend/*.py)
 			needs_backend_python=1
 			;;
 		esac
@@ -918,9 +918,12 @@ pull_request_scope_context_files() {
 backend/requirements.txt
 backend/api/__init__.py
 backend/api/auth.py
+backend/api/emails.py
 backend/core/__init__.py
+backend/core/auth_tokens.py
 backend/core/config.py
 backend/core/exceptions.py
+backend/core/network_targets.py
 backend/db/__init__.py
 backend/db/models.py
 backend/db/session.py
@@ -928,6 +931,7 @@ backend/services/__init__.py
 backend/services/archive.py
 backend/services/email_client.py
 backend/services/email_parser.py
+backend/services/email_sanitizer.py
 backend/services/embedding.py
 backend/services/exceptions.py
 backend/services/threading_service.py
@@ -983,6 +987,18 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	pull_request_changed_file_matches() {
+		local context_relative_path="$1"
+		local changed_file normalized_changed_file
+		for changed_file in "${CHANGED_FILES[@]}"; do
+			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+			if [ "$normalized_changed_file" = "$context_relative_path" ]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+
 	copy_trusted_context_file_into_scope() {
 		local context_file="$1"
 		local relative_path
@@ -1004,6 +1020,25 @@ PY
 		)"
 		if [ -e "$dst_path" ]; then
 			return 0
+		fi
+		local context_is_changed_rc=0
+		pull_request_changed_file_matches "$relative_path" || context_is_changed_rc=$?
+		if [ "$context_is_changed_rc" -eq 2 ]; then
+			return 2
+		fi
+		if [ "$context_is_changed_rc" -eq 0 ]; then
+			local head_sha_for_context
+			head_sha_for_context="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+			if pull_request_head_blob_required || { [ -n "$head_sha_for_context" ] && git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; }; then
+				mkdir -p -- "$(dirname -- "$dst_path")"
+				local context_copy_rc=0
+				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || context_copy_rc=$?
+				if [ "$context_copy_rc" -eq 0 ]; then
+					return 0
+				fi
+				echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+				return 2
+			fi
 		fi
 		local src_path="$REPO_ROOT/$relative_path"
 		if [ ! -e "$src_path" ]; then
@@ -1213,7 +1248,7 @@ should_rebalance_pull_request_batch() {
 	if [ "$INFRA_ERROR_DETECTED" -ne 1 ]; then
 		return 1
 	fi
-	if [ "$(remaining_total_budget)" -le 0 ]; then
+	if [ "$STRIX_TOTAL_TIMEOUT_SECONDS" -gt 0 ] && [ "$(remaining_total_budget)" -le 0 ]; then
 		return 1
 	fi
 	if is_timeout_error; then

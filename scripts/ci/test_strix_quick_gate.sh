@@ -1379,15 +1379,43 @@ EOS
 			echo "Error: backend core config context missing from scoped target ($target_path)" >&2
 			exit 58
 		fi
+		if [ ! -f "$target_path/backend/core/auth_tokens.py" ]; then
+			echo "Error: backend auth token context missing from scoped target ($target_path)" >&2
+			exit 61
+		fi
+		if [ ! -f "$target_path/backend/core/network_targets.py" ]; then
+			echo "Error: backend network target context missing from scoped target ($target_path)" >&2
+			exit 62
+		fi
 		if [ ! -f "$target_path/backend/db/session.py" ]; then
 			echo "Error: backend db session context missing from scoped target ($target_path)" >&2
 			exit 59
+		fi
+		if [ ! -f "$target_path/backend/services/email_sanitizer.py" ]; then
+			echo "Error: backend email sanitizer context missing from scoped target ($target_path)" >&2
+			exit 63
 		fi
 		if [ ! -f "$target_path/backend/services/exceptions.py" ]; then
 			echo "Error: backend service exceptions context missing from scoped target ($target_path)" >&2
 			exit 60
 		fi
 		echo "scan ok with python dependency scope"
+		exit 0
+		;;
+	pr-python-auth-scope-context)
+		if [ ! -f "$target_path/backend/api/auth.py" ]; then
+			echo "Error: changed backend auth file missing from scoped target ($target_path)" >&2
+			exit 64
+		fi
+		if [ ! -f "$target_path/backend/api/emails.py" ]; then
+			echo "Error: backend email API context missing from auth-scoped target ($target_path)" >&2
+			exit 65
+		fi
+		if [ ! -f "$target_path/backend/core/network_targets.py" ]; then
+			echo "Error: backend network target context missing from auth-scoped target ($target_path)" >&2
+			exit 66
+		fi
+		echo "scan ok with auth dependency scope"
 		exit 0
 		;;
 	pr-changed-scope-batched)
@@ -1457,7 +1485,7 @@ EOS
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
 		;;
-	pr-changed-scope-rebalanced)
+	pr-changed-scope-rebalanced | pr-changed-scope-rebalanced-unlimited-total-timeout)
 		if [ -z "$target_path" ]; then
 			echo "Error: target path missing" >&2
 			exit 51
@@ -1567,20 +1595,24 @@ EOF
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/node_modules/fake-pkg/index.js"
 	elif [ "$scenario" = "pr-changed-scope-bounded" ]; then
 		echo 'class Unrelated {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
-	elif [ "$scenario" = "pr-python-scope-context" ]; then
+	elif [ "$scenario" = "pr-python-scope-context" ] || [ "$scenario" = "pr-python-auth-scope-context" ]; then
 		mkdir -p "$repo_root_dir/backend/api" "$repo_root_dir/backend/core" "$repo_root_dir/backend/db" "$repo_root_dir/backend/services"
 		touch "$repo_root_dir/backend/api/__init__.py"
 		touch "$repo_root_dir/backend/core/__init__.py"
 		touch "$repo_root_dir/backend/db/__init__.py"
 		touch "$repo_root_dir/backend/services/__init__.py"
-		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
+		echo 'from core.network_targets import validate_mail_server_target' >"$repo_root_dir/backend/api/emails.py"
+		echo 'from core.auth_tokens import verified_signed_subject' >"$repo_root_dir/backend/api/auth.py"
+		echo 'def verified_signed_subject(*args): return "user"' >"$repo_root_dir/backend/core/auth_tokens.py"
 		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
 		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
+		echo 'def validate_mail_server_target(*args): return None' >"$repo_root_dir/backend/core/network_targets.py"
 		echo 'engine = object()' >"$repo_root_dir/backend/db/session.py"
 		echo 'class Email: pass' >"$repo_root_dir/backend/db/models.py"
 		echo 'class ServiceError(Exception): pass' >"$repo_root_dir/backend/services/exceptions.py"
 		echo 'async def extract_backup_async(*args): return []' >"$repo_root_dir/backend/services/archive.py"
 		echo 'def parse_eml(*args): return {}' >"$repo_root_dir/backend/services/email_parser.py"
+		echo 'def sanitize_email_body_text(value): return value or ""' >"$repo_root_dir/backend/services/email_sanitizer.py"
 		echo 'async def generate_embeddings(*args): return []' >"$repo_root_dir/backend/services/embedding.py"
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
@@ -1987,6 +2019,254 @@ EOF
 
 	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-trusted-checkout exit code"
 	assert_file_contains "$output_log" "scan ok with trusted backend context" "case=pull-request-target-backend-context-uses-trusted-checkout output"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_changed_context_uses_head_scope_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local context_file="backend/api/auth.py"
+	local changed_file="backend/api/emails.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+printf '%s\n' "$target_path" >> "${FAKE_STRIX_CALL_LOG:?}"
+context_file="$target_path/${FAKE_STRIX_EXPECTED_CONTEXT_FILE:?}"
+changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
+	echo "Error: PR head changed backend context was not scanned" >&2
+	cat -- "$context_file" >&2
+	exit 68
+fi
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
+	echo "Error: stale base backend context leaked into PR batch scope" >&2
+	cat -- "$context_file" >&2
+	exit 69
+fi
+if [ -f "$changed_file" ] && ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CHANGED:?}" "$changed_file"; then
+	echo "Error: PR head changed file content was not scanned" >&2
+	cat -- "$changed_file" >&2
+	exit 70
+fi
+echo "scan ok with PR head changed backend context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$context_file")" "$(dirname -- "$changed_file")"
+		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_AUTH_CONTEXT_SHOULD_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'HEAD_EMAILS_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CHANGED="HEAD_EMAILS_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="HEAD_AUTH_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
+	if [ "$rc" -ne 0 ]; then
+		cat -- "$output_log" >&2
+	fi
+	assert_file_contains "$output_log" "scan ok with PR head changed backend context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "2" "$call_count" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_backend_auth_context_includes_token_helper_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local email_api_file="backend/api/emails.py"
+	local auth_context_file="backend/api/auth.py"
+	local network_target_file="backend/core/network_targets.py"
+	local token_helper_file="backend/core/auth_tokens.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+printf '%s\n' "$target_path" >> "${FAKE_STRIX_CALL_LOG:?}"
+auth_context="$target_path/${FAKE_STRIX_AUTH_CONTEXT_FILE:?}"
+email_api="$target_path/${FAKE_STRIX_EMAIL_API_FILE:?}"
+network_target="$target_path/${FAKE_STRIX_NETWORK_TARGET_FILE:?}"
+token_helper="$target_path/${FAKE_STRIX_TOKEN_HELPER_FILE:?}"
+if [ -f "$auth_context" ] && [ ! -f "$token_helper" ]; then
+	echo "Error: backend auth token helper context missing from scoped target" >&2
+	exit 71
+fi
+if [ -f "$auth_context" ] && [ ! -f "$email_api" ]; then
+	echo "Error: backend email API context missing from scoped target" >&2
+	exit 74
+fi
+if [ -f "$auth_context" ] && [ ! -f "$network_target" ]; then
+	echo "Error: backend network target context missing from scoped target" >&2
+	exit 75
+fi
+if [ -f "$auth_context" ] && ! grep -Fq -- "from core.auth_tokens import verified_signed_subject" "$auth_context"; then
+	echo "Error: PR head auth context import was not scanned" >&2
+	cat -- "$auth_context" >&2
+	exit 72
+fi
+if [ -f "$token_helper" ] && ! grep -Fq -- "def verified_signed_subject" "$token_helper"; then
+	echo "Error: auth token helper implementation was not scanned" >&2
+	cat -- "$token_helper" >&2
+	exit 73
+fi
+echo "scan ok with backend auth token helper context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$email_api_file")" "$(dirname -- "$token_helper_file")"
+		printf '%s\n' 'from core.network_targets import validate_mail_server_target' >"$email_api_file"
+		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$auth_context_file"
+		printf '%s\n' 'def validate_mail_server_target(host, port, service): return host, port' >"$network_target_file"
+		printf '%s\n' 'def verified_signed_subject(token, signing_secret): return "trusted-user"' >"$token_helper_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'from core.auth_tokens import verified_signed_subject' >"$auth_context_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			FAKE_STRIX_AUTH_CONTEXT_FILE="$auth_context_file" \
+			FAKE_STRIX_EMAIL_API_FILE="$email_api_file" \
+			FAKE_STRIX_NETWORK_TARGET_FILE="$network_target_file" \
+			FAKE_STRIX_TOKEN_HELPER_FILE="$token_helper_file" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$auth_context_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-backend-auth-context-includes-token-helper exit code"
+	if [ "$rc" -ne 0 ]; then
+		cat -- "$output_log" >&2
+	fi
+	assert_file_contains "$output_log" "scan ok with backend auth token helper context" "case=pull-request-target-backend-auth-context-includes-token-helper output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "1" "$call_count" "case=pull-request-target-backend-auth-context-includes-token-helper strix call count"
 
 	rm -rf "$tmp_dir"
 }
@@ -2772,6 +3052,10 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_trusted_context_scope_case
+
+run_pull_request_target_changed_context_uses_head_scope_case
+
+run_pull_request_target_backend_auth_context_includes_token_helper_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
@@ -3790,6 +4074,27 @@ run_gate_case "pr-python-scope-context" \
 	"pull_request" \
 	"backend/api/emails.py"
 
+run_gate_case "pr-python-auth-scope-context" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with auth dependency scope" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/auth.py"
+
 run_gate_case "pr-changed-scope-batched" \
 	"openai/gpt-4o-mini" \
 	"" \
@@ -3873,6 +4178,29 @@ run_gate_case "pr-changed-scope-rebalanced" \
 	"" \
 	"1200" \
 	"3000" \
+	"pull_request" \
+	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
+	"" \
+	"4"
+
+run_gate_case "pr-changed-scope-rebalanced-unlimited-total-timeout" \
+	"vertex_ai/gemini-2.5-flash" \
+	"vertex_ai/gemini-2.5-pro" \
+	"0" \
+	"Rebalancing pull request Strix batch 1/1 into smaller batches after timeout." \
+	"3" \
+	"vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash" \
+	"<unset>|<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
 	"pull_request" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
 	"" \
