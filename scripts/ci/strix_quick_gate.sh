@@ -1039,11 +1039,15 @@ PY
 			local head_sha_for_context
 			head_sha_for_context="$(load_pull_request_head_sha 2>/dev/null || true)"
 			head_sha_for_context="$(trim_whitespace "$head_sha_for_context")"
-			if pull_request_head_blob_required || [ -n "$head_sha_for_context" ]; then
+			if pull_request_head_blob_required; then
 				if [ -z "$head_sha_for_context" ] || ! git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; then
 					echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
 					return 2
 				fi
+			elif [ -n "$head_sha_for_context" ] && ! git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; then
+				head_sha_for_context=""
+			fi
+			if [ -n "$head_sha_for_context" ]; then
 				mkdir -p -- "$(dirname -- "$dst_path")"
 				local context_copy_rc=0
 				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || context_copy_rc=$?
