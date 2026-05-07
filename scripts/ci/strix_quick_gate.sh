@@ -47,6 +47,7 @@ INFRA_ERROR_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
+PULL_REQUEST_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
@@ -580,11 +581,13 @@ fi
 
 load_pull_request_changed_files() {
 	CHANGED_FILES=()
+	PULL_REQUEST_CHANGED_FILES=()
 
 	if [ "${STRIX_TEST_CHANGED_FILES_OVERRIDE+x}" = x ]; then
 		while IFS= read -r changed_file; do
 			if [ -n "$changed_file" ]; then
 				CHANGED_FILES+=("$changed_file")
+				PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 			fi
 		done <<<"$STRIX_TEST_CHANGED_FILES_OVERRIDE"
 		return 0
@@ -641,7 +644,7 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha")"; then
+	if ! changed_files_output="$(git diff --name-only --no-renames "$base_sha...$head_sha")"; then
 		if pull_request_head_blob_required; then
 			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
 			return 2
@@ -652,6 +655,7 @@ PY
 	while IFS= read -r changed_file; do
 		if [ -n "$changed_file" ]; then
 			CHANGED_FILES+=("$changed_file")
+			PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 		fi
 	done <<<"$changed_files_output"
 
@@ -990,7 +994,7 @@ PY
 	pull_request_changed_file_matches() {
 		local context_relative_path="$1"
 		local changed_file normalized_changed_file
-		for changed_file in "${CHANGED_FILES[@]}"; do
+		for changed_file in "${PULL_REQUEST_CHANGED_FILES[@]}"; do
 			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 			if [ "$normalized_changed_file" = "$context_relative_path" ]; then
 				return 0
@@ -2528,11 +2532,13 @@ run_pull_request_batch_files() {
 
 	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
+	local build_scope_rc=0
+	build_pull_request_scope_dir "${batch_files[@]}" || build_scope_rc=$?
+	if [ "$build_scope_rc" -ne 0 ]; then
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 		TARGET_PATH="$previous_target_path"
 		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 1
+		return "$build_scope_rc"
 	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
@@ -2557,17 +2563,21 @@ run_pull_request_batch_files() {
 		local first_half second_half
 		first_half="$(printf '%s\n' "${batch_files[@]:0:midpoint}")"
 		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
-		if ! run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half"; then
+		local first_half_rc=0
+		run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half" || first_half_rc=$?
+		if [ "$first_half_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return 1
+			return "$first_half_rc"
 		fi
-		if ! run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half"; then
+		local second_half_rc=0
+		run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half" || second_half_rc=$?
+		if [ "$second_half_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return 1
+			return "$second_half_rc"
 		fi
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 		TARGET_PATH="$previous_target_path"
@@ -2586,8 +2596,10 @@ if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
 	batch_number=0
 	for batch_files_text in "${PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"; do
 		batch_number=$((batch_number + 1))
-		if ! run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text"; then
-			exit 1
+		batch_rc=0
+		run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text" || batch_rc=$?
+		if [ "$batch_rc" -ne 0 ]; then
+			exit "$batch_rc"
 		fi
 	done
 	exit 0
