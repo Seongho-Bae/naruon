@@ -57,11 +57,40 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
-          git -C "$TRUSTED_WORKSPACE" fetch --no-tags --prune origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
+          set -euo pipefail
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo '::error::PR number contains unsupported syntax; failing closed.'
+            exit 1
+          fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::PR head SHA contains unsupported syntax; failing closed.'
+            exit 1
+          fi
+          pr_head_ref="refs/remotes/pull/${PR_NUMBER}/head"
+          if ! git -C "$TRUSTED_WORKSPACE" fetch --no-tags --prune origin "+refs/pull/${PR_NUMBER}/head:${pr_head_ref}"; then
+            if [ -z "$PR_HEAD_REF" ] || [ -z "$PR_HEAD_REPOSITORY" ]; then
+              echo '::error::PR head branch metadata is unavailable; failing closed.'
+              exit 1
+            fi
+            if [[ ! "$PR_HEAD_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+              echo '::error::PR head repository name contains unsupported characters; failing closed.'
+              exit 1
+            fi
+            if ! git -C "$TRUSTED_WORKSPACE" check-ref-format "refs/heads/$PR_HEAD_REF"; then
+              echo '::error::PR head branch ref contains unsupported syntax; failing closed.'
+              exit 1
+            fi
+            git -C "$TRUSTED_WORKSPACE" fetch --no-tags "$GITHUB_SERVER_URL/${PR_HEAD_REPOSITORY}.git" "+refs/heads/${PR_HEAD_REF}:${pr_head_ref}"
+          fi
           git -C "$TRUSTED_WORKSPACE" cat-file -e "$PR_HEAD_SHA^{commit}"
-          fetched_head_sha="$(git -C "$TRUSTED_WORKSPACE" rev-parse "refs/remotes/pull/${PR_NUMBER}/head")"
-          test "$fetched_head_sha" = "$PR_HEAD_SHA"
+          fetched_head_sha="$(git -C "$TRUSTED_WORKSPACE" rev-parse "$pr_head_ref")"
+          if [ "$fetched_head_sha" != "$PR_HEAD_SHA" ]; then
+            echo "::error::Fetched PR head SHA does not match event head SHA: expected ${PR_HEAD_SHA}, got ${fetched_head_sha}"
+            exit 1
+          fi
 
       - name: Self-test Strix gate script
         run: bash "$TRUSTED_STRIX_GATE_TEST"
