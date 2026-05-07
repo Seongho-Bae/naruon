@@ -995,7 +995,12 @@ PY
 		local context_relative_path="$1"
 		local changed_file normalized_changed_file
 		for changed_file in "${PULL_REQUEST_CHANGED_FILES[@]}"; do
-			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+			if ! normalized_changed_file="$(normalize_changed_file_path "$changed_file")"; then
+				if pull_request_head_blob_required; then
+					return 2
+				fi
+				continue
+			fi
 			if [ "$normalized_changed_file" = "$context_relative_path" ]; then
 				return 0
 			fi
@@ -1032,14 +1037,24 @@ PY
 		fi
 		if [ "$context_is_changed_rc" -eq 0 ]; then
 			local head_sha_for_context
-			head_sha_for_context="$(trim_whitespace "${PR_HEAD_SHA:-}")"
-			if pull_request_head_blob_required || { [ -n "$head_sha_for_context" ] && git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; }; then
+			head_sha_for_context="$(load_pull_request_head_sha 2>/dev/null || true)"
+			head_sha_for_context="$(trim_whitespace "$head_sha_for_context")"
+			if pull_request_head_blob_required || [ -n "$head_sha_for_context" ]; then
+				if [ -z "$head_sha_for_context" ] || ! git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; then
+					echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+					return 2
+				fi
 				mkdir -p -- "$(dirname -- "$dst_path")"
 				local context_copy_rc=0
 				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || context_copy_rc=$?
 				if [ "$context_copy_rc" -eq 0 ]; then
 					return 0
 				fi
+				echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+				return 2
+			fi
+			local changed_context_src_path="$REPO_ROOT/$relative_path"
+			if [ ! -f "$changed_context_src_path" ] || [ -L "$changed_context_src_path" ]; then
 				echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
 				return 2
 			fi

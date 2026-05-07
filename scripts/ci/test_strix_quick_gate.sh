@@ -2232,6 +2232,130 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_skips_unsafe_context_match_paths_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci" "$repo_root_dir/backend/api"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/api/emails.py"
+	local context_file="backend/api/auth.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "scan ok with unsafe nonprivileged changed path skipped"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s\n' 'email api content' >"$repo_root_dir/$changed_file"
+	printf '%s\n' 'auth context content' >"$repo_root_dir/$context_file"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u PR_BASE_SHA -u PR_HEAD_SHA \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE=$'../outside.py\nbackend/api/emails.py' \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-unsafe-context-match-path-skipped exit code"
+	if [ "$rc" -ne 0 ]; then
+		cat -- "$output_log" >&2
+	fi
+	assert_file_contains "$output_log" "scan ok with unsafe nonprivileged changed path skipped" "case=pull-request-unsafe-context-match-path-skipped output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "1" "$call_count" "case=pull-request-unsafe-context-match-path-skipped invokes Strix once"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_deleted_changed_context_without_head_sha_fails_closed_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci" "$repo_root_dir/backend/api"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local context_file="backend/api/auth.py"
+	local changed_file="backend/api/emails.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run after a nonprivileged PR-deleted backend context file" >&2
+exit 76
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s\n' 'email api content' >"$repo_root_dir/$changed_file"
+	# Intentionally leave $context_file absent while listing it as PR-changed.
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u PR_BASE_SHA -u PR_HEAD_SHA \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE=$'backend/api/emails.py\nbackend/api/auth.py' \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=pull-request-deleted-changed-backend-context-without-head-sha-fails-closed exit code"
+	assert_file_contains "$output_log" "pull request context file could not be read from PR head; failing closed" "case=pull-request-deleted-changed-backend-context-without-head-sha-fails-closed output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=pull-request-deleted-changed-backend-context-without-head-sha-fails-closed must not invoke Strix"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_backend_auth_context_includes_token_helper_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -3144,6 +3268,10 @@ run_pull_request_target_trusted_context_scope_case
 run_pull_request_target_changed_context_uses_head_scope_case
 
 run_pull_request_target_deleted_changed_context_fails_closed_case
+
+run_pull_request_skips_unsafe_context_match_paths_case
+
+run_pull_request_deleted_changed_context_without_head_sha_fails_closed_case
 
 run_pull_request_target_backend_auth_context_includes_token_helper_case
 
