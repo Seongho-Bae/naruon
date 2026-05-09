@@ -1,6 +1,31 @@
-# AI Email Client
+# 나루온 (Naruon)
 
-Full-stack email client with a FastAPI backend, Next.js frontend, vector search, AI summaries, and hardened email threading.
+> 흩어진 이메일의 흐름을 건너, 더 나은 판단과 실행으로 나아가게 하는 AI 워크스페이스.
+
+Naruon is an AI email workspace that synthesizes scattered context — mail, attachments, schedules, relationships, decisions — into better judgment and execution.
+
+기술적으로는 FastAPI 백엔드, Next.js 프론트엔드, 벡터 검색, AI 요약, 강건한 이메일 스레딩으로 구성된 풀스택 이메일 클라이언트입니다.
+
+## 왜 나루온인가
+
+**나루**는 물길을 건너는 곳입니다.
+이메일도 하나의 물길처럼 계속 흐릅니다. 그 안에는 단순한 텍스트뿐 아니라 사람, 약속, 일정, 책임, 결정, 감정, 리스크가 섞여 있습니다.
+
+나루온은 그 흐름을 단순히 짧게 줄이는 도구가 아닙니다.
+흩어진 메일, 첨부, 일정, 관계, 결정 포인트를 하나로 종합해 사용자가 **더 잘 판단하고, 더 잘 실행하고, 더 나은 일과 삶으로 건너가도록 돕는 AI 이메일 워크스페이스**입니다.
+
+뒤의 **on**은 세 가지 의미를 가집니다.
+
+1. 맥락이 **켜진다 (context on).**
+2. 일이 다음 행동으로 **이어진다 (continues on).**
+3. 사용자가 흐름 위에서 다시 **앞으로 나아간다 (moves on).**
+
+그래서 나루온은 단순한 이메일 앱 이름이 아니라,
+**정보의 흐름에서 지혜로운 실행으로 건너가는 장소**라는 뜻을 담고 있습니다.
+
+## About the name (English)
+
+Naruon comes from the Korean word **나루 (naru)**, a crossing point over a river, combined with **on**, meaning context and action switched on. Email is not just a message inbox; it is a stream of work, relationships, decisions, and schedules. Naruon helps users cross that stream by synthesizing scattered context into better judgment and execution.
 
 ## Five-minute local path
 

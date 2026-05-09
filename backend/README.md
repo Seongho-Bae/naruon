@@ -1,5 +1,7 @@
 # Backend
 
+> 나루온 (Naruon) — AI 이메일 워크스페이스의 백엔드 서비스.
+
 FastAPI service for email ingestion, search, AI summaries, calendar sync, and threaded email APIs.
 
 ## Setup

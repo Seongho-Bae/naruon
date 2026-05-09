@@ -1,5 +1,7 @@
 # AI Email Client Frontend
 
+> 나루온 (Naruon) — AI 이메일 워크스페이스의 프론트엔드 앱.
+
 Next.js app for the threaded inbox, email detail pane, AI summary, action items, reply composer, and network graph.
 
 ## Setup
