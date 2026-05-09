@@ -15,6 +15,18 @@
 
 For backend-only changes, run `cd backend && python3 -m pytest -q`. For frontend changes, run `cd frontend && npm test && npm run lint && npm run build`.
 
+Release and CI/CD changes must also run:
+
+```bash
+cd backend
+DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python -m pytest tests/test_release_governance.py tests/test_repo_hygiene.py -q
+POSTGRES_PASSWORD=change-me-local-only docker compose config --quiet
+```
+
+Do not treat warnings, deprecations, notices, denied messages, or fatal logs as
+successful output. Fix the root cause or file a Korean blocker issue with the
+exact run URL/command evidence.
+
 ## Threading changes
 
 - Add or update tests before production code changes.
@@ -26,3 +38,9 @@ For backend-only changes, run `cd backend && python3 -m pytest -q`. For frontend
 ## Secrets and data
 
 Never commit `.env`, real mailbox exports, SMTP credentials, OAuth secrets, OpenAI keys, or user email content. Use synthetic `.eml` fixtures only.
+
+## Mail runner boundary
+
+Naruon is not an email server. It does not provide SMTP, IMAP, MX, or mail relay
+services. Internal-only SMTP/IMAP smoke tests must run on the protected
+`mail-egress` self-hosted runner through `.github/workflows/mail-smoke.yml`.

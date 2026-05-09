@@ -1,4 +1,4 @@
 .worktrees
 secret_fixtures/
-.worktrees/
-.worktrees/
+bandit-results.sarif
+strix_runs/

@@ -16,10 +16,35 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/seongho-bae/ai_email_client-frontend:latest
+        image: ghcr.io/seongho-bae/ai_email_client-frontend:0.1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
         env:
         - name: NEXT_PUBLIC_API_URL
           value: "/api"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]

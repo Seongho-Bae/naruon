@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: imap-worker
+  labels:
+    app: imap-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: imap-worker
+  template:
+    metadata:
+      labels:
+        app: imap-worker
+    spec:
+      containers:
+      - name: imap-worker
+        image: ghcr.io/seongho-bae/ai_email_client-backend:0.1.0
+        imagePullPolicy: Always
+        command: ["python", "scripts/run_imap_worker.py"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: naruon-postgres
+              key: database-url
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]

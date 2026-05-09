@@ -14,7 +14,34 @@ export default function Home() {
 
   return (
     <DashboardLayout>
-      <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+      <div className="flex h-full flex-col gap-3 overflow-y-auto rounded-3xl border border-border/80 bg-card/70 p-2 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
+        <section className="min-h-[24rem] overflow-hidden rounded-2xl border border-border bg-card">
+          <EmailList onSelectEmail={setSelectedEmail} selectedEmailId={selectedEmail} />
+        </section>
+        <section className="min-h-[34rem] overflow-hidden rounded-2xl border border-border bg-card">
+          <EmailDetail emailId={selectedEmail} />
+        </section>
+        <section className="min-h-[28rem] overflow-hidden rounded-2xl border border-border bg-card">
+          <div className="h-full flex flex-col bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4">
+            <div className="mb-4 rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Network className="size-4" aria-hidden="true" />
+                </span>
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">맥락 그래프</h3>
+                  <p className="text-xs text-muted-foreground">메일과 관계의 흐름을 시각화합니다.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+              <NetworkGraph />
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <ResizablePanelGroup orientation="horizontal" className="hidden h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex">
         <ResizablePanel defaultSize={27} minSize={22}>
           <EmailList onSelectEmail={setSelectedEmail} selectedEmailId={selectedEmail} />
         </ResizablePanel>

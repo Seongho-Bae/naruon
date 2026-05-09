@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
@@ -127,7 +126,9 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"})
+        response = client.get(
+            "/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2

@@ -27,6 +27,9 @@ The current `emails` table does not have an owner/mailbox key. Email and
 search behavior should therefore be treated as single-user local-development
 behavior. Multi-user production safety requires a schema migration that adds
 mailbox ownership and applies that filter to every email/search query.
+External email text, headers, JSON payloads, and LLM outputs must remove or
+replace NUL bytes (`\u0000`/`\x00`) before PostgreSQL persistence because the
+database cannot store NUL characters in text/json fields.
 
 ## Local deployment boundary
 
@@ -61,3 +64,44 @@ Medium-or-higher gate, while third-party LLM/provider warnings are tracked
 separately unless they make the scan incomplete.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
+
+## Release and packaging boundary
+
+Application CI, Bandit, Docker image validation, PR governance, and Strix form
+the release gate. Release images are split into `ai_email_client-backend` and
+`ai_email_client-frontend` GHCR packages and must use SemVer tags such as
+`0.1.0`; `latest` alone is not release evidence.
+
+The FastAPI API process is stateless for scaling. IMAP synchronization runs as a
+separate worker process or deployment so increasing API replicas does not start
+duplicate mailbox sync loops.
+
+## Observability boundary
+
+The default open-source APM stack is Prometheus, Grafana, Loki, Tempo, and the
+OpenTelemetry Collector. `/healthz` reports process liveness, `/readyz` checks
+database readiness, and `/metrics` exposes Prometheus text metrics.
+
+## Mail network boundary
+
+Naruon is not an email server. It connects outbound to external SMTP/IMAP
+providers configured by tenants. Internal-only mail smoke tests use a protected
+self-hosted GitHub runner with the `mail-egress` label and do not open inbound
+SMTP/MX paths.
+
+## PostgreSQL replication boundary
+
+Local Compose is single-node development storage. Production physical replication
+should default to managed PostgreSQL read replicas. Self-hosted AKS PostgreSQL
+requires PVCs, backup/restore drills, pgvector compatibility checks, and replica
+lag monitoring before it can be called release-ready.
+
+## Edge auth and gateway boundary
+
+Current auth remains a development boundary until mailbox ownership is modeled in
+the database. Production auth should evaluate Keycloak or Casdoor as the OIDC
+provider and Traefik as the edge gateway for TLS, routing, rate limits, security
+headers, and forward-auth or `auth_request` style integration. The API must only
+trust verified identity and tenant claims from that boundary, then enforce tenant
+filters in every email/search/write query. The operational checklist lives in
+`docs/operations/edge-auth.md`.

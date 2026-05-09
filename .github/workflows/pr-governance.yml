@@ -1,0 +1,176 @@
+name: PR Governance
+
+on:
+  pull_request_target:
+    branches: [master, "release/**"]
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+  workflow_run:
+    workflows:
+      - Application CI
+      - Bandit Security Scan
+      - Build and Publish Docker Images
+      - Strix Security Scan
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to evaluate
+        required: true
+        type: string
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || inputs.pr }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  pr-governance:
+    name: pr-governance
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.event == 'pull_request' ||
+      github.event.workflow_run.event == 'pull_request_target'
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      pr-number: ${{ steps.resolve.outputs.pr_number }}
+      head-sha: ${{ steps.evidence.outputs.head_sha }}
+      ready: ${{ steps.evidence.outputs.ready }}
+    steps:
+      - name: Resolve PR number
+        id: resolve
+        env:
+          PULL_REQUEST_NUMBER: ${{ github.event.pull_request.number }}
+          WORKFLOW_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          INPUT_PR_NUMBER: ${{ inputs.pr }}
+        run: |
+          set -euo pipefail
+          pr_number="${PULL_REQUEST_NUMBER:-${WORKFLOW_RUN_PR_NUMBER:-${INPUT_PR_NUMBER:-}}}"
+          if [ -z "$pr_number" ]; then
+            echo "::error::Unable to resolve pull request number."
+            exit 1
+          fi
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Collect current-head merge evidence
+        id: evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+        run: |
+          set -euo pipefail
+
+          pr_json="$(gh pr view "$PR_NUMBER" --repo "$REPOSITORY" --json number,headRefOid,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,latestReviews,isDraft)"
+          head_sha="$(printf '%s' "$pr_json" | jq -r '.headRefOid')"
+          merge_state="$(printf '%s' "$pr_json" | jq -r '.mergeStateStatus')"
+          mergeable="$(printf '%s' "$pr_json" | jq -r '.mergeable')"
+          is_draft="$(printf '%s' "$pr_json" | jq -r '.isDraft')"
+          repo_owner="${REPOSITORY%%/*}"
+          repo_name="${REPOSITORY#*/}"
+
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+
+          if [ "$is_draft" = "true" ]; then
+            echo "PR is draft; governance gate is intentionally not ready."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$merge_state" = "BEHIND" ]; then
+            echo "::error::PR head is behind base. Run gh pr update-branch before merge."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          if [ "$mergeable" = "CONFLICTING" ]; then
+            echo "::error::PR has merge conflicts. Resolve conflicts from the CLI before merge."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          required_checks="$(gh pr checks "$PR_NUMBER" --repo "$REPOSITORY" --required --json name,state,workflow,link,bucket || true)"
+          failing_required="$(printf '%s' "$required_checks" | jq -r 'map(select(.name != "pr-governance")) | map(select(.state != "SUCCESS" and .state != "SKIPPED")) | length')"
+          if [ "$failing_required" != "0" ]; then
+            echo "::error::Required checks are not all passing on current head ${head_sha}."
+            printf '%s\n' "$required_checks"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          check_runs="$(gh api "/repos/${REPOSITORY}/commits/${head_sha}/check-runs" --paginate)"
+          coderabbit_current_head="$(printf '%s' "$check_runs" | jq --arg head_sha "$head_sha" -r '[.check_runs[] | select((.app.slug // "") == "coderabbitai") | select(.head_sha == $head_sha) | select(.conclusion == "success" or .conclusion == "skipped" or .conclusion == "neutral")] | length')"
+          if [ "$coderabbit_current_head" = "0" ]; then
+            echo "::error::Missing current-head CodeRabbit/robot-review evidence for ${head_sha}."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          review_comments="$(gh api "/repos/${REPOSITORY}/pulls/${PR_NUMBER}/comments" --paginate)"
+          issue_comments="$(gh api "/repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate)"
+          review_threads="$(gh api graphql \
+            -F owner="$repo_owner" \
+            -F name="$repo_name" \
+            -F number="$PR_NUMBER" \
+            -f query='query($owner: String!, $name: String!, $number: Int!) {
+              repository(owner: $owner, name: $name) {
+                pullRequest(number: $number) {
+                  reviewThreads(first: 100) {
+                    nodes {
+                      isResolved
+                      isOutdated
+                      comments(first: 20) {
+                        nodes {
+                          author { login }
+                          body
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }')"
+          blocking_robot_comments="$(jq -s -r '[.[][] | select((.user.login // "" | test("coderabbit|robot"; "i"))) | select((.body // "" | test("pre-merge|blocking|failure|warning|must fix"; "i")))] | length' <(printf '%s' "$review_comments") <(printf '%s' "$issue_comments"))"
+          if [ "$blocking_robot_comments" != "0" ]; then
+            echo "::error::Robot-review comments still contain blocking/warning/failure language that requires a fix or evidence rebuttal."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          unresolved_robot_threads="$(printf '%s' "$review_threads" | jq -r '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .isOutdated == false) | select(any(.comments.nodes[]?; ((.author.login // "") | test("coderabbit|robot"; "i"))))] | length')"
+          if [ "$unresolved_robot_threads" != "0" ]; then
+            echo "::error::Robot-review threads remain unresolved on the current head."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+  enable-auto-merge:
+    name: enable-auto-merge
+    needs: pr-governance
+    runs-on: ubuntu-latest
+    if: needs.pr-governance.outputs.ready == 'true'
+    permissions:
+      actions: read
+      checks: read
+      contents: write
+      pull-requests: write
+      statuses: read
+    steps:
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.pr-governance.outputs.pr-number }}
+          HEAD_SHA: ${{ needs.pr-governance.outputs.head-sha }}
+        run: |
+          set -euo pipefail
+          echo "Enabling auto-merge for PR #${PR_NUMBER} at head ${HEAD_SHA}."
+          gh pr merge "$PR_NUMBER" --repo "$REPOSITORY" --auto --merge --match-head-commit "$HEAD_SHA"

@@ -56,7 +56,9 @@ describe("DashboardLayout", () => {
     expect(nav?.textContent ?? "").toContain("판단 포인트");
     expect(nav?.textContent ?? "").toContain("실행 항목");
     expect(nav?.textContent ?? "").toContain("일정 연결");
-    expect(skipLink?.textContent).toBe("Skip to main content");
+    expect(skipLink?.textContent).toBe("본문으로 건너뛰기");
+    expect(banner?.textContent ?? "").toContain("주요 메뉴");
+    expect(banner?.textContent ?? "").toContain("흐름을 건너, 더 나은 판단과 실행으로.");
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
     expect(Array.from(decorativeMarks).every((mark) => !mark.hasAttribute("role"))).toBe(true);
     expect(new Set(gradientIds).size).toBe(gradientIds.length);

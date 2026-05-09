@@ -1,0 +1,30 @@
+server:
+  http_listen_address: tempo
+  http_listen_port: 3200
+  grpc_listen_address: 127.0.0.1
+  grpc_listen_port: 9095
+
+querier:
+  frontend_worker:
+    frontend_address: 127.0.0.1:9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: tempo:4317
+        http:
+          endpoint: tempo:4318
+
+metrics_generator:
+  storage:
+    path: /tmp/tempo/generator/wal
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /tmp/tempo/traces
+    wal:
+      path: /tmp/tempo/wal

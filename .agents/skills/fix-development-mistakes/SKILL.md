@@ -27,6 +27,11 @@ Use this skill when:
   downgrades.
 - Merge gates, CodeRabbit/robot review, GitHub approval, or stale required
   status contexts are misdiagnosed; use `github-robot-review-gate`.
+- CI or test output contains warning, deprecated, notice, denied, or fatal
+  messages. Treat these as failures until the root cause is fixed or captured as
+  a blocker with evidence.
+- A dependency version is lowered. Require compatibility evidence and security
+  evidence before accepting the downgrade.
 
 ## Workflow
 
@@ -47,6 +52,11 @@ Use this skill when:
   a narrow documented suppression only when the rule is intentionally violated.
 - Merge-gate issues: collect ruleset/check/review evidence before changing code
   or repository settings.
+- Warning/deprecation issues: identify whether the source is code, dependency,
+  runtime, workflow syntax, or environment precondition. Fix the cause instead of
+  hiding the log with `--quiet` or blanket filters.
+- Dependency issues: prefer secure upgrades and package overrides with lockfile
+  evidence. Do not downgrade a library just to make a scanner quiet.
 
 ### 3. Execute and verify
 

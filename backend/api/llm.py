@@ -26,16 +26,23 @@ class DraftRequest(BaseModel):
 
 
 @router.post("/summarize", response_model=ExtractionResult)
-async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def summarize_endpoint(
+    request: SummarizeRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
         openai_api_key = tenant_config.openai_api_key
         return await extract_todos_and_summary(request.email_body, openai_api_key)
     except LLMServiceError:
@@ -43,6 +50,8 @@ async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = No
             status_code=500,
             detail="An internal server error occurred while processing the request.",
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -51,24 +60,35 @@ async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = No
 
 
 @router.post("/draft")
-async def draft_endpoint(request: DraftRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def draft_endpoint(
+    request: DraftRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
         openai_api_key = tenant_config.openai_api_key
-        reply = await draft_reply(request.email_body, request.instruction, openai_api_key)
+        reply = await draft_reply(
+            request.email_body, request.instruction, openai_api_key
+        )
         return {"draft": reply}
     except LLMServiceError:
         raise HTTPException(
             status_code=500,
             detail="An internal server error occurred while processing the request.",
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,

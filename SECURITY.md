@@ -31,3 +31,8 @@
 ## CI/CD Enforcement
 
 - Checks가 통과되어야 Merge 가능하도록 Branch Protection Rule에 의해 강제됩니다.
+- Bandit은 fail-closed로 실행되며 SARIF 업로드는 실패 시에도 evidence로 남깁니다.
+- PR governance는 PR 코드를 checkout하거나 실행하지 않고 current-head required checks와 CodeRabbit/robot-review evidence만 평가합니다.
+- 사내망 SMTP/IMAP smoke는 `mail-egress` self-hosted runner에서 `workflow_dispatch`로만 실행합니다.
+- Kubernetes manifest에는 DB credential을 평문으로 적지 않고 Secret을 참조합니다.
+- GitHub Security alert는 0건을 목표로 하되, 기능 훼손이나 무증거 downgrade로 닫지 않습니다.

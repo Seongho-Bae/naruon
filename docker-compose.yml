@@ -1,14 +1,17 @@
 services:
   db:
     image: pgvector/pgvector:pg16
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ai_email}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}
-    ports:
-      - "5432:5432"
+      POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,32 +22,188 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
       DEBUG: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      ENABLE_API_BACKGROUND_WORKERS: "0"
+      DISABLE_BACKGROUND_WORKERS: "1"
+      OTEL_SERVICE_NAME: naruon-backend
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
     depends_on:
       db:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/readyz', timeout=3).read()\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"
     command: ["sh", "-c", "python scripts/bootstrap_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
+
+  backend-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
+      DEBUG: "false"
+      ENABLE_API_BACKGROUND_WORKERS: "0"
+      DISABLE_BACKGROUND_WORKERS: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "python scripts/bootstrap_db.py && python scripts/run_imap_worker.py"]
 
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - edge
     environment:
       # NEXT_PUBLIC_API_URL is baked into browser-side client code. Keep this
       # host-reachable URL for local Compose; http://backend:8000 is only
       # resolvable inside the Docker network, not from the user's browser.
       NEXT_PUBLIC_API_URL: http://localhost:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-3000}:3000"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.114.0
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
+    command: ["--config=/etc/otel-collector.yml"]
+    volumes:
+      - ./observability/otel-collector.yml:/etc/otel-collector.yml:ro
+    depends_on:
+      tempo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${OTEL_GRPC_HOST_PORT:-4317}:4317"
+      - "127.0.0.1:${OTEL_HTTP_HOST_PORT:-4318}:4318"
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:${PROMETHEUS_HOST_PORT:-9090}:9090"
+    depends_on:
+      backend:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana-oss:11.5.2
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-local-only}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_HOST_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  loki:
+    image: grafana/loki:3.3.2
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "127.0.0.1:${LOKI_HOST_PORT:-3100}:3100"
+
+  tempo:
+    image: grafana/tempo:2.7.2
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+      - edge
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./observability/tempo.yml:/etc/tempo.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://tempo:3200/ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:${TEMPO_HOST_PORT:-3200}:3200"
+
+  alloy:
+    image: grafana/alloy:v1.11.3
+    labels:
+      naruon.logging: "enabled"
+    networks:
+      - app-internal
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./observability/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
 
 volumes:
   postgres-data:
+
+networks:
+  app-internal:
+    internal: true
+  edge:

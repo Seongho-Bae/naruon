@@ -88,4 +88,55 @@ cd backend && python3 -m pytest -q
 cd frontend && npm test && npm run lint && npm run build
 ```
 
-Known local warnings: backend tests emit dependency/toolchain deprecation warnings from Starlette multipart and compiled SWIG metadata. They are not caused by threading code.
+Warning policy: local release verification uses `PYTHONWARNINGS=error`; warnings,
+deprecated messages, notices, denied messages, and fatal errors are treated as
+root-cause defects rather than acceptable background noise.
+
+## Release governance
+
+릴리스 판단은 `docs/development/release-governance-acceptance.md`를 기준으로 한다.
+핵심 원칙은 중복 GitHub Checks를 줄이고, GHCR SemVer image tag, current-head
+robot-review evidence, Bandit/Strix security evidence, Docker live smoke evidence를
+같은 PR head에서 확인하는 것이다.
+
+```bash
+cd backend
+DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python -m pytest -q
+python -m pytest tests/test_release_governance.py tests/test_repo_hygiene.py -q
+
+cd ../frontend
+npm ci
+npm test
+npm run lint
+npm run build
+```
+
+## Open source APM
+
+로컬 Compose는 Prometheus, Grafana, Loki, Tempo, OpenTelemetry Collector를 포함한다.
+
+```bash
+POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
+curl -fsS http://localhost:8000/healthz
+curl -fsS http://localhost:8000/readyz
+curl -fsS http://localhost:8000/metrics | grep python_info
+python3 -m webbrowser http://localhost:3001
+```
+
+When local ports such as 9090 are already used, override host-facing ports while
+keeping internal service names stable:
+
+```bash
+POSTGRES_PASSWORD=change-me-local-only \
+BACKEND_HOST_PORT=18000 FRONTEND_HOST_PORT=13000 \
+PROMETHEUS_HOST_PORT=19090 GRAFANA_HOST_PORT=13001 \
+LOKI_HOST_PORT=13100 TEMPO_HOST_PORT=13200 \
+OTEL_GRPC_HOST_PORT=14317 OTEL_HTTP_HOST_PORT=14318 \
+docker compose up -d --build
+```
+
+PostgreSQL is not published to the host by default. Backend containers use
+`db:5432` inside the Compose network, which keeps host monitoring probes from
+creating false authentication failure logs during live release evidence capture.
+
+자세한 운영 기준은 `docs/operations/observability.md`를 따른다.

@@ -72,7 +72,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-xl focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary focus:shadow-lg focus:outline-none focus:ring-3 focus:ring-ring/40"
       >
-        Skip to main content
+        본문으로 건너뛰기
       </a>
       <aside aria-label="Naruon workspace sidebar" className="hidden w-[17rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
         <div className="space-y-5">
@@ -131,10 +131,27 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <NaruonMark className="h-7 w-7" idSuffix="header" />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
+          <div className="hidden min-w-0 flex-col lg:flex">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Naruon Workspace</span>
+            <span className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</span>
+          </div>
           <div className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] md:flex">
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
-            Search context, people, files, and insights
+            맥락, 사람, 파일, 실행 항목 검색
           </div>
+          <nav aria-label="주요 메뉴" className="flex max-w-[42vw] gap-1 overflow-x-auto lg:hidden">
+            <span className="sr-only">주요 메뉴</span>
+            {navItems.slice(0, 4).map(({ label, active }) => (
+              <a
+                key={label}
+                href="#main-content"
+                aria-current={active ? 'page' : undefined}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${active ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
           <div className="ml-auto flex items-center gap-2">
             <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
               맥락 종합

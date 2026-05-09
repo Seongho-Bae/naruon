@@ -16,6 +16,11 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
 - GitHub rulesets must keep `required_review_thread_resolution=true`.
 - Bypass actors must not be configured for routine delivery.
 - Security workflows and scanners are required gates, not optional paths.
+- Application CI, Bandit, Docker image validation, Strix, and PR Governance are
+  release gates when present. A gate must point to the same current head SHA as
+  the PR being merged.
+- PR Governance automates metadata-only evidence collection and auto-merge
+  enablement. It must not checkout or execute pull request code.
 
 ## Evidence commands
 

@@ -1,0 +1,82 @@
+name: Application CI
+
+on:
+  pull_request:
+    branches: [master, "release/**"]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  DISABLE_BACKGROUND_WORKERS: "1"
+  PYTHONWARNINGS: error
+
+concurrency:
+  group: app-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run backend tests
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          python -m pytest -q 2>&1 | tee /tmp/backend-tests.log
+          ! grep -Ei '(^|[^a-z])(warning|deprecated|fatal|denied|::warning|::notice)' /tmp/backend-tests.log
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee /tmp/frontend-npm-ci.log
+          ! grep -Ei '(^|[^a-z])(warning|deprecated|fatal|denied|::warning|::notice)' /tmp/frontend-npm-ci.log
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee /tmp/frontend-tests.log
+          ! grep -Ei '(^|[^a-z])(warning|deprecated|fatal|denied|::warning|::notice)' /tmp/frontend-tests.log
+
+      - name: Run frontend lint
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm run lint 2>&1 | tee /tmp/frontend-lint.log
+          ! grep -Ei '(^|[^a-z])(warning|deprecated|fatal|denied|::warning|::notice)' /tmp/frontend-lint.log
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee /tmp/frontend-build.log
+          ! grep -Ei '(^|[^a-z])(warning|deprecated|fatal|denied|::warning|::notice)' /tmp/frontend-build.log

@@ -27,10 +27,11 @@ class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
 
+
 class MockSession:
     async def execute(self, stmt):
         return MockResult()
-    
+
     async def scalar(self, stmt):
         return MockTenantConfig()
 
@@ -42,9 +43,12 @@ async def override_get_db():
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides.clear()
+    test_client = TestClient(app)
+    try:
+        yield test_client
+    finally:
+        test_client.close()
+        app.dependency_overrides.clear()
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)

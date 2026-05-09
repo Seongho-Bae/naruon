@@ -1,0 +1,41 @@
+name: Internal Mail Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mail-egress-smoke:
+    name: mail-egress-smoke
+    runs-on: [self-hosted, linux, x64, mail-egress]
+    environment: mail-egress
+    timeout-minutes: 15
+    steps:
+      - name: Verify outbound IMAP and SMTP connectivity
+        env:
+          MAIL_SMOKE_IMAP_HOST: ${{ secrets.MAIL_SMOKE_IMAP_HOST }}
+          MAIL_SMOKE_IMAP_PORT: ${{ secrets.MAIL_SMOKE_IMAP_PORT }}
+          MAIL_SMOKE_SMTP_HOST: ${{ secrets.MAIL_SMOKE_SMTP_HOST }}
+          MAIL_SMOKE_SMTP_PORT: ${{ secrets.MAIL_SMOKE_SMTP_PORT }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import socket
+          import ssl
+
+          targets = [
+              ("IMAP", os.environ["MAIL_SMOKE_IMAP_HOST"], int(os.environ["MAIL_SMOKE_IMAP_PORT"])),
+              ("SMTP", os.environ["MAIL_SMOKE_SMTP_HOST"], int(os.environ["MAIL_SMOKE_SMTP_PORT"])),
+          ]
+
+          context = ssl.create_default_context()
+          for label, host, port in targets:
+              with socket.create_connection((host, port), timeout=10) as sock:
+                  if port in (443, 465, 993, 995):
+                      with context.wrap_socket(sock, server_hostname=host):
+                          pass
+              print(f"{label} outbound connectivity verified for {host}:{port}")
+          PY

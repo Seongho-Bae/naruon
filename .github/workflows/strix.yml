@@ -282,5 +282,5 @@ jobs:
         with:
           name: strix-reports
           path: strix_runs/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 5

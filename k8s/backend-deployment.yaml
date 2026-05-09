@@ -16,10 +16,40 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/seongho-bae/ai_email_client:latest
+        image: ghcr.io/seongho-bae/ai_email_client-backend:0.1.0
         imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:
         - name: DATABASE_URL
-          value: "postgresql+asyncpg://postgres:postgres@postgres-db:5432/ai_email"
+          valueFrom:
+            secretKeyRef:
+              name: naruon-postgres
+              key: database-url
+        - name: DISABLE_BACKGROUND_WORKERS
+          value: "1"
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          capabilities:
+            drop: ["ALL"]

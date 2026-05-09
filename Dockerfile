@@ -2,8 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ARG DEBIAN_FRONTEND=noninteractive
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONPATH=/app
+ENV PATH="/opt/venv/bin:${PATH}"
 
 # Install system dependencies if any are needed for pgvector/psycopg2
 RUN apt-get update \
@@ -11,6 +16,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /app/requirements.txt
+RUN python -m venv /opt/venv
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend /app/
