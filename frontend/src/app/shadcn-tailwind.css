@@ -1,7 +1,9 @@
 /*
- * Local copy of the small Tailwind helper stylesheet previously imported from
- * shadcn@4.5.0. Keeping these CSS primitives in-tree avoids shipping the
- * shadcn CLI dependency and its vulnerable/transitively deprecated install tree.
+ * Local copy of shadcn@4.5.0 dist/tailwind.css, previously imported as
+ * shadcn/tailwind.css. The accordion height fallback chain below matches that
+ * upstream file and keeps Base UI's --accordion-panel-height fallback intact.
+ * Keeping these CSS primitives in-tree avoids shipping the shadcn CLI dependency
+ * and its vulnerable/transitively deprecated install tree.
  */
 
 @theme inline {
