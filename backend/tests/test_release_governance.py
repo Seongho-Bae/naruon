@@ -246,3 +246,4 @@ def test_version_and_changelog_follow_semver_and_keep_a_changelog_contracts():
     assert "@seonghobae" in changelog
     assert "Seongho Bae (@seonghobae)" in changelog
     assert "Keep a Changelog" in changelog
+    assert len(changelog.splitlines()) >= 2000
