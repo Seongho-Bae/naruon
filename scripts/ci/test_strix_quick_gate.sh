@@ -1884,7 +1884,7 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
-run_pull_request_target_trusted_context_scope_case() {
+run_pull_request_target_backend_context_uses_pr_head_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
 	local bin_dir="$tmp_dir/bin"
@@ -1921,17 +1921,17 @@ if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
 	cat -- "$changed_file" >&2
 	exit 65
 fi
-if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_TRUSTED_CONTEXT:?}" "$context_file"; then
-	echo "Error: trusted backend context content missing" >&2
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
+	echo "Error: PR head backend context content missing" >&2
 	cat -- "$context_file" >&2
 	exit 66
 fi
-if grep -Fq -- "${FAKE_STRIX_UNTRUSTED_CONTEXT:?}" "$context_file"; then
-	echo "Error: PR head context leaked into trusted context scope" >&2
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
+	echo "Error: stale base backend context leaked into PR scan scope" >&2
 	cat -- "$context_file" >&2
 	exit 67
 fi
-echo "scan ok with trusted backend context"
+echo "scan ok with PR head backend context"
 EOF
 	chmod +x "$fake_strix"
 	printf '%s' 'gemini/test-model' >"$strix_llm_file"
@@ -1973,8 +1973,8 @@ EOF
 			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
 			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
 			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
-			FAKE_STRIX_EXPECTED_TRUSTED_CONTEXT="TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED" \
-			FAKE_STRIX_UNTRUSTED_CONTEXT="UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -1985,8 +1985,8 @@ EOF
 	local rc=$?
 	set -e
 
-	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-trusted-checkout exit code"
-	assert_file_contains "$output_log" "scan ok with trusted backend context" "case=pull-request-target-backend-context-uses-trusted-checkout output"
+	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-pr-head exit code"
+	assert_file_contains "$output_log" "scan ok with PR head backend context" "case=pull-request-target-backend-context-uses-pr-head output"
 
 	rm -rf "$tmp_dir"
 }
@@ -2771,7 +2771,7 @@ run_pull_request_target_head_scope_case \
 	"HEAD_NESTED_CONTENT_SHOULD_BE_SCANNED" \
 	"1"
 
-run_pull_request_target_trusted_context_scope_case
+run_pull_request_target_backend_context_uses_pr_head_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \

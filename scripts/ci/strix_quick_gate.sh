@@ -1005,6 +1005,34 @@ PY
 		if [ -e "$dst_path" ]; then
 			return 0
 		fi
+		# In privileged PR scans, backend context must reflect the PR head state so
+		# stale vulnerable base files do not create false findings. These files are
+		# scanned as data only; executable CI support stays under trusted-ci-context/.
+		if pull_request_head_blob_required; then
+			local mode_rc=0
+			pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
+			case "$mode_rc" in
+			0)
+				mkdir -p -- "$(dirname -- "$dst_path")"
+				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || {
+					echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+					return 2
+				}
+				return 0
+				;;
+			1)
+				return 0
+				;;
+			3)
+				echo "ERROR: pull request context file is not a regular PR-head file; failing closed: $context_file" >&2
+				return 2
+				;;
+			*)
+				echo "ERROR: pull request context file could not be read from PR head; failing closed: $context_file" >&2
+				return 2
+				;;
+			esac
+		fi
 		local src_path="$REPO_ROOT/$relative_path"
 		if [ ! -e "$src_path" ]; then
 			return 0
