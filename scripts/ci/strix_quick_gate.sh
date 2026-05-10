@@ -1043,17 +1043,52 @@ PY
 		cp -- "$src_path" "$dst_path"
 	}
 
+	copy_trusted_workflow_context_file() {
+		local relative_path="$1"
+		local trusted_relative_path="trusted-ci-context/$relative_path"
+		local dst_path
+		dst_path="$(
+			python3 - "$scope_dir" "$trusted_relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		local src_path="$REPO_ROOT/$relative_path"
+		if [ ! -f "$src_path" ] || [ -L "$src_path" ]; then
+			echo "ERROR: trusted workflow context file is unavailable: $relative_path" >&2
+			return 2
+		fi
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		cp -- "$src_path" "$dst_path"
+	}
+
 	copy_required_scope_support_files() {
 		local include_strix_model_utils=0
+		local include_strix_workflow_gate_context=0
 		local changed_file relative_path
 		for changed_file in "$@"; do
 			relative_path="$(normalize_changed_file_path "$changed_file")" || return 2
 			case "$relative_path" in
+			.github/workflows/strix.yml)
+				include_strix_workflow_gate_context=1
+				;;
 			scripts/ci/strix_quick_gate.sh | scripts/ci/test_strix_quick_gate.sh)
 				include_strix_model_utils=1
 				;;
 			esac
 		done
+
+		if [ "$include_strix_workflow_gate_context" -eq 1 ]; then
+			copy_trusted_workflow_context_file "scripts/ci/strix_quick_gate.sh" || return 2
+			copy_trusted_workflow_context_file "scripts/ci/test_strix_quick_gate.sh" || return 2
+			copy_trusted_workflow_context_file "scripts/ci/strix_model_utils.sh" || return 2
+			return 0
+		fi
 
 		if [ "$include_strix_model_utils" -eq 1 ]; then
 			copy_scope_support_file "scripts/ci/strix_model_utils.sh" || return 2

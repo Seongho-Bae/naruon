@@ -30,12 +30,46 @@ def _sanitize_nul(text: str) -> str:
     return text.replace("\x00", "")
 
 
-def parse_eml(file_path: str | Path) -> EmailData:
+def _validate_allowed_eml_path(file_path: str | Path, allowed_root: str | Path) -> Path:
+    """Resolve an EML path and ensure it stays under the allowed root."""
+    root = Path(allowed_root)
+    try:
+        resolved_root = root.resolve(strict=True)
+    except OSError as e:
+        raise EmailParseError(
+            f"Failed to resolve allowed EML root {allowed_root}: {e}"
+        ) from e
+
+    candidate = Path(file_path)
+    if candidate.is_symlink():
+        raise EmailParseError(f"Refusing to parse symlink EML file {file_path}")
+
+    try:
+        resolved_file = candidate.resolve(strict=True)
+    except OSError as e:
+        raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
+
+    try:
+        resolved_file.relative_to(resolved_root)
+    except ValueError as e:
+        raise EmailParseError(
+            f"Refusing to parse file outside allowed EML root: {file_path}"
+        ) from e
+
+    return resolved_file
+
+
+def parse_eml(
+    file_path: str | Path, allowed_root: str | Path | None = None
+) -> EmailData:
     """Parses an EML file and extracts email metadata and body.
 
     Raises:
         EmailParseError: If there is an issue reading the file.
     """
+    if allowed_root is not None:
+        file_path = _validate_allowed_eml_path(file_path, allowed_root)
+
     try:
         with open(file_path, "rb") as f:
             msg = email.message_from_binary_file(f, policy=policy.default)
@@ -92,25 +126,25 @@ def parse_eml(file_path: str | Path) -> EmailData:
 
     if not parsed_date:
         parsed_date = datetime.datetime.now(datetime.timezone.utc)
-        
+
     message_id = _sanitize_nul(msg.get("Message-ID", ""))
-    
+
     # Extract thread_id
     thread_id = None
-    references = msg.get("References") # O3: email threading support
+    references = msg.get("References")  # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
-    
+
     if references:
         # Get the first reference as the root thread ID
         refs = references.split()
         if refs:
             thread_id = _sanitize_nul(refs[0])
-    
+
     if not thread_id and in_reply_to:
         in_reply_to_list = in_reply_to.split()
         if in_reply_to_list:
             thread_id = _sanitize_nul(in_reply_to_list[0])
-            
+
     if not thread_id:
         thread_id = message_id
 
@@ -118,11 +152,19 @@ def parse_eml(file_path: str | Path) -> EmailData:
         "message_id": message_id,
         "thread_id": thread_id,
         "sender": _sanitize_nul(msg.get("From", "")),
-        "reply_to": _sanitize_nul(msg.get("Reply-To", "")) if msg.get("Reply-To") else None,
+        "reply_to": (
+            _sanitize_nul(msg.get("Reply-To", "")) if msg.get("Reply-To") else None
+        ),
         "recipients": _sanitize_nul(msg.get("To", "")),
         "subject": _sanitize_nul(msg.get("Subject", "")),
-        "in_reply_to": _sanitize_nul(msg.get("In-Reply-To", "")) if msg.get("In-Reply-To") else None,
-        "references": _sanitize_nul(msg.get("References", "")) if msg.get("References") else None,
+        "in_reply_to": (
+            _sanitize_nul(msg.get("In-Reply-To", ""))
+            if msg.get("In-Reply-To")
+            else None
+        ),
+        "references": (
+            _sanitize_nul(msg.get("References", "")) if msg.get("References") else None
+        ),
         "date": parsed_date,
         "body": _sanitize_nul(body),
         "attachments": attachments,

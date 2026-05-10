@@ -65,8 +65,12 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
 
                 target_path = (output_dir / safe_name).resolve()
 
-                # Double-check that it is within output_dir
-                if not str(target_path).startswith(str(output_dir)):
+                # Double-check that it is within output_dir after resolving
+                # symlinked path components. String prefixes are unsafe because
+                # paths like /tmp/output_evil also start with /tmp/output.
+                try:
+                    target_path.relative_to(output_dir)
+                except ValueError:
                     continue
 
                 target_path.parent.mkdir(parents=True, exist_ok=True)

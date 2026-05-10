@@ -128,6 +128,15 @@ def test_mail_smoke_uses_self_hosted_runner_without_turning_naruon_into_mail_ser
     assert "pull_request" not in workflow
     assert "listen" not in workflow.lower()
     assert "MX" not in workflow
+    assert "MAIL_SMOKE_ALLOWED_HOSTS" in workflow
+    assert "ipaddress" in workflow
+    assert "MAIL_SMOKE_ALLOWED_HOSTS must not be empty" in workflow
+    assert "verified_hosts = validate_target" in workflow
+    assert "socket.create_connection((verified_hosts[0], port)" in workflow
+    assert "server_hostname=host" in workflow
+    assert workflow.index("validate_target") < workflow.index(
+        "socket.create_connection"
+    )
 
 
 def test_frontend_dockerfile_builds_production_artifact():

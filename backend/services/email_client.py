@@ -17,6 +17,14 @@ def _sanitize_log_value(value: str) -> str:
     return value.replace("\r", " ").replace("\n", " ")
 
 
+def _validate_header_value(field_name: str, value: str | None) -> None:
+    """Reject control characters before values reach email header parsing."""
+    if value is None:
+        return
+    if any(control in value for control in ("\r", "\n", "\x00")):
+        raise ValueError(f"{field_name} must not contain CR, LF, or NUL characters")
+
+
 class SendEmailResult(TypedDict):
     status: str
     simulated: bool
@@ -31,6 +39,12 @@ def build_email_message(
     references: str | None = None,
 ) -> EmailMessage:
     """Build an outbound email message with optional threading headers."""
+    _validate_header_value("from_address", from_address)
+    _validate_header_value("to_address", to_address)
+    _validate_header_value("subject", subject)
+    _validate_header_value("in_reply_to", in_reply_to)
+    _validate_header_value("references", references)
+
     message = EmailMessage()
     message["From"] = from_address
     message["To"] = to_address

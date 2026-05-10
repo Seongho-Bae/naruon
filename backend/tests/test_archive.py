@@ -1,6 +1,5 @@
 import zipfile
 import pytest
-import asyncio
 
 from services.archive import extract_backup, extract_backup_async
 from services.exceptions import (
@@ -77,6 +76,22 @@ def test_extract_backup_malformed_path(tmp_path):
         assert f.is_file()
 
 
+def test_extract_backup_rejects_symlink_prefix_bypass(tmp_path):
+    zip_path = tmp_path / "symlink-bypass.zip"
+    out_dir = tmp_path / "output"
+    escaped_dir = tmp_path / "output_evil"
+    out_dir.mkdir()
+    escaped_dir.mkdir()
+    (out_dir / "link").symlink_to(escaped_dir)
+    with zipfile.ZipFile(zip_path, "w") as z:
+        z.writestr("link/pwned.eml", b"Subject: Pwned")
+
+    extracted_files = extract_backup(zip_path, out_dir)
+
+    assert extracted_files == []
+    assert not (escaped_dir / "pwned.eml").exists()
+
+
 def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
     import services.archive
 
@@ -95,13 +110,14 @@ def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
         extract_backup(zip_path, tmp_path / "output")
 
 
-def test_extract_backup_async(tmp_path):
+@pytest.mark.asyncio
+async def test_extract_backup_async(tmp_path):
     zip_path = tmp_path / "test_async.zip"
     with zipfile.ZipFile(zip_path, "w") as z:
         z.writestr("test.eml", b"Subject: Test Email")
 
     out_dir = tmp_path / "output"
-    extracted_files = asyncio.run(extract_backup_async(zip_path, out_dir))
+    extracted_files = await extract_backup_async(zip_path, out_dir)
 
     assert len(extracted_files) == 1
     assert extracted_files[0].name == "test.eml"

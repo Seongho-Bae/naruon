@@ -32,6 +32,34 @@ def test_build_email_message_sets_reply_headers():
     assert message["To"] == "test@example.com"
 
 
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("to_address", {"to_address": "victim@example.com\r\nBcc: spy@example.com"}),
+        ("from_address", {"from_address": "sender@example.com\nBcc: spy@example.com"}),
+        ("subject", {"subject": "Quarterly update\r\nBcc: spy@example.com"}),
+        (
+            "in_reply_to",
+            {"in_reply_to": "<parent@example.com>\r\nBcc: spy@example.com"},
+        ),
+        ("references", {"references": "<root@example.com>\x00<parent@example.com>"}),
+    ],
+)
+def test_build_email_message_rejects_header_control_characters(field, kwargs):
+    payload = {
+        "to_address": "test@example.com",
+        "subject": "Re: Test",
+        "body": "Reply body",
+        "from_address": "sender@example.com",
+        "in_reply_to": "<parent@example.com>",
+        "references": "<root@example.com> <parent@example.com>",
+    }
+    payload.update(kwargs)
+
+    with pytest.raises(ValueError, match=field):
+        build_email_message(**payload)
+
+
 @pytest.mark.asyncio
 async def test_send_email_logs_sanitized_recipient(caplog):
     caplog.set_level(logging.INFO, logger="services.email_client")

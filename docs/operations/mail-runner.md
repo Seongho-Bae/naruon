@@ -25,6 +25,9 @@ Network: outbound to GitHub and allowlisted SMTP/IMAP hosts only
 - `MAIL_SMOKE_IMAP_PORT`
 - `MAIL_SMOKE_SMTP_HOST`
 - `MAIL_SMOKE_SMTP_PORT`
+- `MAIL_SMOKE_ALLOWED_HOSTS`: 쉼표로 구분한 허용 대상. 정확한 호스트명,
+  IP, CIDR를 허용한다. 비어 있으면 smoke workflow는 DNS 조회나 연결 전에
+  실패한다.
 
 사용자명과 토큰을 추가하는 인증 테스트는 별도 보호 환경에서만 켠다. PR 코드가
 메일 자격 증명에 접근하면 안 되므로 `mail-smoke.yml`은 `pull_request`에서 실행하지

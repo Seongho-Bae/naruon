@@ -1,9 +1,9 @@
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email"
+    DATABASE_URL: str = Field(...)
     DATABASE_URL_READ_ONLY: str | None = None
     DEBUG: bool = False
     ENCRYPTION_KEY: SecretStr | None = None
@@ -22,4 +22,4 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

@@ -19,21 +19,54 @@ jobs:
           MAIL_SMOKE_IMAP_PORT: ${{ secrets.MAIL_SMOKE_IMAP_PORT }}
           MAIL_SMOKE_SMTP_HOST: ${{ secrets.MAIL_SMOKE_SMTP_HOST }}
           MAIL_SMOKE_SMTP_PORT: ${{ secrets.MAIL_SMOKE_SMTP_PORT }}
+          MAIL_SMOKE_ALLOWED_HOSTS: ${{ secrets.MAIL_SMOKE_ALLOWED_HOSTS }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import ipaddress
           import os
           import socket
           import ssl
+
+          def parse_allowed_targets(raw):
+              allowed_hosts = set()
+              allowed_networks = []
+              for entry in (item.strip() for item in raw.split(",")):
+                  if not entry:
+                      continue
+                  try:
+                      allowed_networks.append(ipaddress.ip_network(entry, strict=False))
+                  except ValueError:
+                      allowed_hosts.add(entry.lower())
+              return allowed_hosts, allowed_networks
+
+          def validate_target(label, host, port, allowed_hosts, allowed_networks):
+              if not allowed_hosts and not allowed_networks:
+                  raise ValueError("MAIL_SMOKE_ALLOWED_HOSTS must not be empty")
+              if not (1 <= port <= 65535):
+                  raise ValueError(f"{label} port must be between 1 and 65535")
+              normalized_host = host.strip().lower()
+              if not normalized_host:
+                  raise ValueError(f"{label} host must not be empty")
+              infos = socket.getaddrinfo(normalized_host, port, type=socket.SOCK_STREAM)
+              resolved_ips = {ipaddress.ip_address(info[4][0]) for info in infos}
+              if normalized_host in allowed_hosts or resolved_ips and all(
+                  any(resolved_ip in network for network in allowed_networks)
+                  for resolved_ip in resolved_ips
+              ):
+                  return [str(resolved_ip) for resolved_ip in resolved_ips]
+              raise ValueError(f"{label} target {host}:{port} is not in MAIL_SMOKE_ALLOWED_HOSTS")
 
           targets = [
               ("IMAP", os.environ["MAIL_SMOKE_IMAP_HOST"], int(os.environ["MAIL_SMOKE_IMAP_PORT"])),
               ("SMTP", os.environ["MAIL_SMOKE_SMTP_HOST"], int(os.environ["MAIL_SMOKE_SMTP_PORT"])),
           ]
+          allowed_hosts, allowed_networks = parse_allowed_targets(os.environ["MAIL_SMOKE_ALLOWED_HOSTS"])
 
           context = ssl.create_default_context()
           for label, host, port in targets:
-              with socket.create_connection((host, port), timeout=10) as sock:
+              verified_hosts = validate_target(label, host, port, allowed_hosts, allowed_networks)
+              with socket.create_connection((verified_hosts[0], port), timeout=10) as sock:
                   if port in (443, 465, 993, 995):
                       with context.wrap_socket(sock, server_hostname=host):
                           pass

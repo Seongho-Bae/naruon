@@ -1,4 +1,11 @@
+import os
+
 import pytest
+
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+)
+os.environ.setdefault("ENCRYPTION_KEY", "test-only-local-encryption-key")
 
 from api.auth import get_current_user
 from main import app

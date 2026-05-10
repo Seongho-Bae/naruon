@@ -94,6 +94,45 @@ def test_parse_eml_io_error():
     with pytest.raises(EmailParseError):
         parse_eml("/path/to/nonexistent/file.eml")
 
+
+def test_parse_eml_accepts_file_inside_allowed_root(tmp_path):
+    allowed_root = tmp_path / "fixtures"
+    allowed_root.mkdir()
+    eml_path = allowed_root / "message.eml"
+    eml_path.write_bytes(b"""Message-ID: <allowed@test.com>
+From: test@test.com
+To: recipient@test.com
+Subject: Allowed
+
+Body""")
+
+    parsed = parse_eml(eml_path, allowed_root=allowed_root)
+
+    assert parsed["message_id"] == "<allowed@test.com>"
+
+
+def test_parse_eml_rejects_file_outside_allowed_root(tmp_path):
+    allowed_root = tmp_path / "fixtures"
+    allowed_root.mkdir()
+    outside_path = tmp_path / "outside.eml"
+    outside_path.write_bytes(b"Subject: Outside\n\nBody")
+
+    with pytest.raises(EmailParseError, match="outside allowed EML root"):
+        parse_eml(outside_path, allowed_root=allowed_root)
+
+
+def test_parse_eml_rejects_symlink_inside_allowed_root(tmp_path):
+    allowed_root = tmp_path / "fixtures"
+    allowed_root.mkdir()
+    outside_path = tmp_path / "outside.eml"
+    outside_path.write_bytes(b"Subject: Outside\n\nBody")
+    symlink_path = allowed_root / "linked.eml"
+    symlink_path.symlink_to(outside_path)
+
+    with pytest.raises(EmailParseError, match="symlink"):
+        parse_eml(symlink_path, allowed_root=allowed_root)
+
+
 def test_parse_eml_thread_id():
     # 1. Has References
     eml1 = b"""Message-ID: <msg1@test.com>

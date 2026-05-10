@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-FALLBACK_KEY = b"f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0="
-
 
 def get_fernet() -> Fernet:
     if settings.ENCRYPTION_KEY:
@@ -24,8 +22,9 @@ def get_fernet() -> Fernet:
         except ValueError:
             key_b64 = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
             return Fernet(key_b64)
-    else:
-        return Fernet(FALLBACK_KEY)
+    raise RuntimeError(
+        "ENCRYPTION_KEY must be configured before encrypted fields can be used"
+    )
 
 
 class EncryptedString(TypeDecorator):
@@ -59,7 +58,9 @@ class Email(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
+    thread_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )  # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)

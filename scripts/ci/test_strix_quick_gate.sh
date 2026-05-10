@@ -1457,6 +1457,17 @@ EOS
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
 		;;
+	pr-workflow-scope-includes-trusted-ci-gates)
+		if [ -f "$target_path/.github/workflows/strix.yml" ] && \
+		   [ -f "$target_path/trusted-ci-context/scripts/ci/strix_quick_gate.sh" ] && \
+		   [ -f "$target_path/trusted-ci-context/scripts/ci/test_strix_quick_gate.sh" ] && \
+		   [ -f "$target_path/trusted-ci-context/scripts/ci/strix_model_utils.sh" ]; then
+			echo "scan ok with trusted workflow CI gate context"
+			exit 0
+		fi
+		echo "Error: workflow PR scope missing trusted CI gate context ($target_path)" >&2
+		exit 56
+		;;
 	pr-changed-scope-rebalanced)
 		if [ -z "$target_path" ]; then
 			echo "Error: target path missing" >&2
@@ -1521,11 +1532,13 @@ EOF
 	# Scenario-specific source-tree setup so is_hallucinated_endpoint_finding()
 	# can locate "real" endpoints inside the self-contained temp workspace.
 	if [ "$effective_event_name" = "pull_request" ]; then
+		mkdir -p "$repo_root_dir/.github/workflows"
 		mkdir -p "$repo_root_dir/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller"
 		mkdir -p "$repo_root_dir/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl"
 		mkdir -p "$repo_root_dir/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service"
 		mkdir -p "$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util"
 		echo '<project />' >"$repo_root_dir/pom.xml"
+		echo 'name: Strix' >"$repo_root_dir/.github/workflows/strix.yml"
 		mkdir -p "$repo_root_dir/sync-module-system/smart-crawling-server/src/main/resources/flyway"
 		echo 'class ChangedController {}' >"$repo_root_dir/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 		echo 'class BaselineUserService {}' >"$repo_root_dir/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java"
@@ -1585,6 +1598,8 @@ EOF
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
+	elif [ "$scenario" = "pr-workflow-scope-includes-trusted-ci-gates" ]; then
+		cp "$REPO_ROOT/scripts/ci/test_strix_quick_gate.sh" "$repo_root_dir/scripts/ci/test_strix_quick_gate.sh"
 	fi
 
 	set +e
@@ -1987,6 +2002,136 @@ EOF
 
 	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-trusted-checkout exit code"
 	assert_file_contains "$output_log" "scan ok with trusted backend context" "case=pull-request-target-backend-context-uses-trusted-checkout output"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_workflow_context_collision_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci" "$repo_root_dir/.github/workflows"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/test_strix_quick_gate.sh" "$repo_root_dir/scripts/ci/test_strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+workflow_file="$target_path/.github/workflows/strix.yml"
+pr_head_gate="$target_path/scripts/ci/strix_quick_gate.sh"
+trusted_gate="$target_path/trusted-ci-context/scripts/ci/strix_quick_gate.sh"
+trusted_test="$target_path/trusted-ci-context/scripts/ci/test_strix_quick_gate.sh"
+trusted_model_utils="$target_path/trusted-ci-context/scripts/ci/strix_model_utils.sh"
+
+if ! grep -Fq -- "${FAKE_STRIX_HEAD_WORKFLOW_TOKEN:?}" "$workflow_file"; then
+	echo "Error: PR head workflow content was not scanned" >&2
+	exit 68
+fi
+if ! grep -Fq -- "${FAKE_STRIX_HEAD_GATE_TOKEN:?}" "$pr_head_gate"; then
+	echo "Error: PR head gate content was not kept as changed-file scan data" >&2
+	exit 69
+fi
+if ! grep -Fq -- "strix_quick_gate.sh — CI gate" "$trusted_gate"; then
+	echo "Error: trusted gate context missing" >&2
+	exit 70
+fi
+if grep -Fq -- "$FAKE_STRIX_HEAD_GATE_TOKEN" "$trusted_gate"; then
+	echo "Error: untrusted PR gate leaked into trusted gate context" >&2
+	exit 71
+fi
+if ! grep -Fq -- "test_strix_quick_gate" "$trusted_test"; then
+	echo "Error: trusted gate test context missing" >&2
+	exit 72
+fi
+if grep -Fq -- "${FAKE_STRIX_HEAD_TEST_TOKEN:?}" "$trusted_test"; then
+	echo "Error: untrusted PR gate test leaked into trusted gate test context" >&2
+	exit 73
+fi
+if ! grep -Fq -- "normalize_model" "$trusted_model_utils"; then
+	echo "Error: trusted model helper context missing" >&2
+	exit 74
+fi
+if grep -Fq -- "${FAKE_STRIX_HEAD_MODEL_UTILS_TOKEN:?}" "$trusted_model_utils"; then
+	echo "Error: untrusted PR model helper leaked into trusted model helper context" >&2
+	exit 75
+fi
+
+echo "scan ok with separated trusted workflow context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	local head_workflow_token="HEAD_WORKFLOW_SHOULD_BE_SCANNED_$tmp_dir"
+	local head_gate_token="UNTRUSTED_HEAD_GATE_SHOULD_BE_SCANNED_$tmp_dir"
+	local head_test_token="UNTRUSTED_HEAD_TEST_SHOULD_BE_SCANNED_$tmp_dir"
+	local head_model_utils_token="UNTRUSTED_HEAD_MODEL_UTILS_SHOULD_BE_SCANNED_$tmp_dir"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'BASE_WORKFLOW_SHOULD_NOT_BE_SCANNED' >.github/workflows/strix.yml
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' "$head_workflow_token" >.github/workflows/strix.yml
+		printf '%s\n' "$head_gate_token" >scripts/ci/strix_quick_gate.sh
+		printf '%s\n' "$head_test_token" >scripts/ci/test_strix_quick_gate.sh
+		printf '%s\n' "$head_model_utils_token" >scripts/ci/strix_model_utils.sh
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_HEAD_WORKFLOW_TOKEN="$head_workflow_token" \
+			FAKE_STRIX_HEAD_GATE_TOKEN="$head_gate_token" \
+			FAKE_STRIX_HEAD_TEST_TOKEN="$head_test_token" \
+			FAKE_STRIX_HEAD_MODEL_UTILS_TOKEN="$head_model_utils_token" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-workflow-context-collision exit code"
+	assert_file_contains "$output_log" "scan ok with separated trusted workflow context" "case=pull-request-target-workflow-context-collision output"
 
 	rm -rf "$tmp_dir"
 }
@@ -2772,6 +2917,8 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_trusted_context_scope_case
+
+run_pull_request_target_workflow_context_collision_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
@@ -3854,6 +4001,27 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
+
+run_gate_case "pr-workflow-scope-includes-trusted-ci-gates" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with trusted workflow CI gate context" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	".github/workflows/strix.yml"
 
 run_gate_case "pr-changed-scope-rebalanced" \
 	"vertex_ai/gemini-2.5-flash" \
