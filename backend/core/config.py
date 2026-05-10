@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     DATABASE_URL_READ_ONLY: str | None = None
     DEBUG: bool = False
     ENCRYPTION_KEY: SecretStr | None = None
+    API_AUTH_TOKEN: SecretStr | None = None
+    AUTH_SINGLE_USER_ID: str = "default"
     ENABLE_API_BACKGROUND_WORKERS: bool = False
     DISABLE_BACKGROUND_WORKERS: bool = False
     OTEL_SERVICE_NAME: str = "naruon-backend"

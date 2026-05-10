@@ -25,8 +25,10 @@ documented in `docs/threading-contract.md`.
 
 The current `emails` table does not have an owner/mailbox key. Email and
 search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+behavior behind the configured bearer-token mailbox principal. Multi-user
+production safety requires a schema migration that adds mailbox ownership and
+applies that filter to every email/search query. Caller-controlled identity
+headers such as `X-User-Id` are not authentication and must not be trusted.
 External email text, headers, JSON payloads, and LLM outputs must remove or
 replace NUL bytes (`\u0000`/`\x00`) before PostgreSQL persistence because the
 database cannot store NUL characters in text/json fields.
@@ -98,10 +100,10 @@ lag monitoring before it can be called release-ready.
 
 ## Edge auth and gateway boundary
 
-Current auth remains a development boundary until mailbox ownership is modeled in
-the database. Production auth should evaluate Keycloak or Casdoor as the OIDC
-provider and Traefik as the edge gateway for TLS, routing, rate limits, security
-headers, and forward-auth or `auth_request` style integration. The API must only
-trust verified identity and tenant claims from that boundary, then enforce tenant
-filters in every email/search/write query. The operational checklist lives in
-`docs/operations/edge-auth.md`.
+Current auth remains a single-mailbox development boundary until mailbox
+ownership is modeled in the database. Production auth should evaluate Keycloak or
+Casdoor as the OIDC provider and Traefik as the edge gateway for TLS, routing,
+rate limits, security headers, and forward-auth or `auth_request` style
+integration. The API must only trust verified identity and tenant claims from
+that boundary, then enforce tenant filters in every email/search/write query.
+The operational checklist lives in `docs/operations/edge-auth.md`.

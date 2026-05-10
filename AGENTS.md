@@ -23,6 +23,7 @@
 ## 배포/운영 주의
 
 - Naruon은 이메일 서버가 아니다. SMTP/IMAP을 자체 제공하지 않고, 외부 메일 서버와 통신하는 웹 클라이언트 서버다.
+- 로컬 API 인증은 `API_AUTH_TOKEN` bearer token이 단일 mailbox principal로 매핑된다. `X-User-Id` 같은 호출자 제어 헤더를 인증으로 되살리지 않는다.
 - 사내망 SMTP/IMAP smoke는 `mail-egress` self-hosted runner에서 수동으로만 실행한다.
 - GHCR 이미지는 `0.1.0` 같은 SemVer tag가 필요하다. `[0.0.0.1]` 또는 `latest`만으로 release를 증명하지 않는다.
 - PostgreSQL 물리 복제는 backup/restore, pgvector extension, replica lag evidence가 없으면 follow-up으로 남긴다.

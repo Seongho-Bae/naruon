@@ -58,6 +58,7 @@ curl -s -X POST http://localhost:8000/api/search -H 'content-type: application/j
 
 # Send remains honest in local/dev mode: if SMTP is not configured, the API returns 400.
 curl -s -X POST http://localhost:8000/api/emails/send \
+  -H 'authorization: Bearer change-me-local-only' \
   -H 'content-type: application/json' \
   -d '{"to":"alice@example.com","subject":"Re: Quarterly plan","body":"Thanks","in_reply_to":"<thread-reply-2@example.com>","references":"<thread-root@example.com> <thread-reply-1@example.com> <thread-reply-2@example.com>"}'
 ```
@@ -76,7 +77,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses dummy header auth and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added.
+This repo uses a single-mailbox bearer token for local development and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added. Do not use caller-controlled `X-User-Id` headers as authentication.
 
 ## Verification used for this hardening pass
 

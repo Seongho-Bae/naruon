@@ -136,9 +136,24 @@ def test_frontend_dockerfile_builds_production_artifact():
     assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
         "RUN npm run build"
     )
+    assert dockerfile.index("ARG NEXT_PUBLIC_API_AUTH_TOKEN") < dockerfile.index(
+        "RUN npm run build"
+    )
+    assert "ENV NEXT_PUBLIC_API_AUTH_TOKEN" in dockerfile
     assert "npm run build" in dockerfile
     assert "npm run start" in dockerfile
     assert "npm run dev" not in dockerfile
+
+
+def test_local_compose_wires_single_mailbox_bearer_auth():
+    compose = read_text("docker-compose.yml")
+    config = read_text("backend/core/config.py")
+
+    assert "API_AUTH_TOKEN" in config
+    assert "AUTH_SINGLE_USER_ID" in config
+    assert "API_AUTH_TOKEN: ${API_AUTH_TOKEN:-change-me-local-only}" in compose
+    assert "AUTH_SINGLE_USER_ID: ${AUTH_SINGLE_USER_ID:-default}" in compose
+    assert "NEXT_PUBLIC_API_AUTH_TOKEN" in compose
 
 
 def test_backend_dockerfile_keeps_dependency_install_output_visible_for_warning_scans():

@@ -1,8 +1,9 @@
 # 인증/게이트웨이 운영 검토
 
-Naruon의 현재 인증은 로컬 개발용 dummy header 경계에 가깝다. 운영 릴리스에서
+Naruon의 현재 인증은 로컬 개발용 단일 mailbox bearer token 경계다. 운영 릴리스에서
 다중 사용자와 외부 공개 접점을 열기 전에는 OIDC 기반 인증 관리 솔루션과 edge
-gateway를 분리해서 검증해야 한다.
+gateway를 분리해서 검증해야 한다. `X-User-Id` 같은 호출자 제어 헤더는 인증으로
+신뢰하지 않는다.
 
 ## 후보
 

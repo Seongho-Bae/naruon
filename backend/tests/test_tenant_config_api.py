@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
+from api.auth import get_current_user
 
 
 # Mock async DB session
@@ -38,6 +39,7 @@ def client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = lambda: "test_user"
     test_client = TestClient(app)
     try:
         yield test_client

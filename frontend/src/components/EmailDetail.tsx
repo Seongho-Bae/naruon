@@ -15,6 +15,7 @@ import {
   getConversationMessages,
   type ThreadEmailData,
 } from "@/lib/email-threading";
+import { apiFetch } from "@/lib/api-client";
 
 type EmailData = ThreadEmailData;
 
@@ -64,7 +65,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
     setThreadLoading(true);
     try {
-      const threadRes = await fetch(buildThreadUrl(API_URL, currentEmail.thread_id));
+      const threadRes = await apiFetch(buildThreadUrl(API_URL, currentEmail.thread_id));
       if (!threadRes.ok) throw new Error("Failed to fetch thread");
       const threadJson = await threadRes.json();
       if (!isLatestThreadRequest()) return;
@@ -98,7 +99,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setSendStatus(null);
 
       try {
-        const emailRes = await fetch(`${API_URL}/api/emails/${emailId}`);
+        const emailRes = await apiFetch(`${API_URL}/api/emails/${emailId}`);
         if (!emailRes.ok) throw new Error("Failed to fetch email details");
         const emailJson = await emailRes.json();
         
@@ -108,7 +109,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         await fetchThread(emailJson);
 
         try {
-          const llmRes = await fetch(`${API_URL}/api/llm/summarize`, {
+          const llmRes = await apiFetch(`${API_URL}/api/llm/summarize`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email_body: emailJson.body })
@@ -140,7 +141,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setDraftError(null);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/llm/draft`, {
+      const res = await apiFetch(`${API_URL}/api/llm/draft`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email_body: email.body, instruction })
@@ -161,7 +162,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSending(true);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/emails/send`, {
+      const res = await apiFetch(`${API_URL}/api/emails/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildReplyPayload(email, draft))
@@ -189,7 +190,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/calendar/sync`, {
+      const res = await apiFetch(`${API_URL}/api/calendar/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

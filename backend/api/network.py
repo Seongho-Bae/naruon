@@ -43,7 +43,10 @@ async def get_network_graph(
 ):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
-    # TODO: filter by user_id/current_user once Email model has user_id
+    # The Email table is a documented single-mailbox local-development store until
+    # the mailbox ownership migration adds an owner key. Authentication resolves to
+    # one server-configured mailbox principal, so this endpoint must not trust a
+    # caller-supplied user selector for multi-user isolation.
     result = await db.execute(select(Email.sender, Email.recipients).limit(limit))
     rows = result.fetchall()
 
