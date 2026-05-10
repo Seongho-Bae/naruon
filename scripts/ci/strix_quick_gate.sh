@@ -2521,10 +2521,15 @@ run_pull_request_batch_files() {
 
 	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
+	local build_scope_rc=0
+	build_pull_request_scope_dir "${batch_files[@]}" || build_scope_rc=$?
+	if [ "$build_scope_rc" -ne 0 ]; then
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 		TARGET_PATH="$previous_target_path"
 		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
+		if [ "$build_scope_rc" -eq 2 ]; then
+			return 2
+		fi
 		return 1
 	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
@@ -2550,16 +2555,26 @@ run_pull_request_batch_files() {
 		local first_half second_half
 		first_half="$(printf '%s\n' "${batch_files[@]:0:midpoint}")"
 		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
-		if ! run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half"; then
+		local first_batch_rc=0
+		run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half" || first_batch_rc=$?
+		if [ "$first_batch_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
+			if [ "$first_batch_rc" -eq 2 ]; then
+				return 2
+			fi
 			return 1
 		fi
-		if ! run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half"; then
+		local second_batch_rc=0
+		run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half" || second_batch_rc=$?
+		if [ "$second_batch_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
+			if [ "$second_batch_rc" -eq 2 ]; then
+				return 2
+			fi
 			return 1
 		fi
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
@@ -2579,8 +2594,10 @@ if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
 	batch_number=0
 	for batch_files_text in "${PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"; do
 		batch_number=$((batch_number + 1))
-		if ! run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text"; then
-			exit 1
+		batch_rc=0
+		run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text" || batch_rc=$?
+		if [ "$batch_rc" -ne 0 ]; then
+			exit "$batch_rc"
 		fi
 	done
 	exit 0
