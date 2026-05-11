@@ -200,7 +200,7 @@ describe("EmailDetail", () => {
     );
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain(
-      "http://localhost:8000/api/emails/thread/thread-b",
+      "/api/emails/thread/thread-b",
     );
     expect(container.textContent).toContain("Thread B sibling body");
     expect(container.textContent).toContain("2개 메시지");
