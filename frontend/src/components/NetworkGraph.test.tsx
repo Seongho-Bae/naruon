@@ -13,8 +13,6 @@ import { Network } from "vis-network";
 
 import NetworkGraph from "./NetworkGraph";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
 function jsonResponse(body: unknown) {
   return {
     ok: true,
@@ -69,8 +67,10 @@ describe("NetworkGraph", () => {
 
     expect(Network).toHaveBeenCalledTimes(1);
     const networkData = vi.mocked(Network).mock.calls[0]?.[1];
-    const nodeTitle = networkData?.nodes?.[0]?.title;
-    const edgeTitle = networkData?.edges?.[0]?.title;
+    const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
+    const edges = Array.isArray(networkData?.edges) ? networkData.edges : [];
+    const nodeTitle = nodes[0]?.title;
+    const edgeTitle = edges[0]?.title;
 
     expect(nodeTitle).toBeInstanceOf(HTMLElement);
     expect(edgeTitle).toBeInstanceOf(HTMLElement);

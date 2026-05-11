@@ -5,8 +5,6 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { DashboardLayout } from "./DashboardLayout";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
 describe("DashboardLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;

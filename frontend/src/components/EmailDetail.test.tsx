@@ -48,8 +48,6 @@ vi.mock("lucide-react", () => ({
 
 import { EmailDetail } from "./EmailDetail";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
 type Deferred<T> = {
   promise: Promise<T>;
   resolve: (value: T) => void;
