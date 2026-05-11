@@ -1,3 +1,10 @@
+## [0.5.0] - 2026-05-11
+
+### 추가
+- Seongho Bae (@seonghobae): Traefik과 Keycloak 기반의 OIDC API 게이트웨이 검증 스택(`docker-compose.gateway.yml`) 및 백엔드 라우터 연동(`backend-auth` 미들웨어)을 도입했습니다.
+- Seongho Bae (@seonghobae): PostgreSQL Primary-Replica 구성(Streaming 물리 복제) 및 `pg_basebackup`을 통한 고가용성(HA) 평가용 스택(`docker-compose.postgres-ha.yml`)을 구축했습니다.
+- Seongho Bae (@seonghobae): 사내망 전용 메일 릴레이 검증용 self-hosted runner 아키텍처 한계점 설계를 문서에 최종 반영했습니다.
+
 ## [0.4.1] - 2026-05-11
 
 ### 수정
