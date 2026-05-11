@@ -1,0 +1,49 @@
+services:
+  db-primary:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ai_email}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
+    command: 
+      - "postgres"
+      - "-c"
+      - "wal_level=replica"
+      - "-c"
+      - "max_wal_senders=10"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "hot_standby=on"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_primary:/var/lib/postgresql/data
+
+  db-replica:
+    image: pgvector/pgvector:pg16
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-ai_email}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - PGUSER=${POSTGRES_USER:-postgres}
+      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+    command: >
+      bash -c "
+      until pg_isready -h db-primary -p 5432; do sleep 1; done;
+      if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
+        pg_basebackup -h db-primary -D /var/lib/postgresql/data -U ${POSTGRES_USER:-postgres} -vP -R -X stream -C -S replica_slot_1;
+      fi;
+      exec postgres
+      "
+    ports:
+      - "5433:5432"
+    depends_on:
+      - db-primary
+    volumes:
+      - pgdata_replica:/var/lib/postgresql/data
+
+volumes:
+  pgdata_primary:
+  pgdata_replica:
