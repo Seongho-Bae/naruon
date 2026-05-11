@@ -1,0 +1,75 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ai_email_live}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}
+      POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - live-postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      DEBUG: "false"
+      OPENAI_API_KEY: ""
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "scripts/bootstrap_db.py"]
+
+  live-seed:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      DEBUG: "false"
+      OPENAI_API_KEY: ""
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "tests/live/seed_live_data.py"]
+
+  backend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      DEBUG: "false"
+      OPENAI_API_KEY: ""
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+    depends_on:
+      live-seed:
+        condition: service_completed_successfully
+    expose:
+      - "8000"
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a pre-built frontend image}
+    environment:
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:18080
+    depends_on:
+      - backend
+    expose:
+      - "3000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    command: ["nginx", "-g", "daemon off; error_log /dev/stderr warn;"]
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./tests/live/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+volumes:
+  live-postgres-data:

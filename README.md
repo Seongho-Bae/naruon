@@ -78,6 +78,15 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 This repo still uses dummy header auth and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added.
 
+## Operations and release docs
+
+- `docs/operations/release-deployment-architecture.md`: release, CI, GHCR, and live E2E evidence path.
+- `docs/operations/open-source-apm.md`: OpenTelemetry, Prometheus, Grafana, Loki, Tempo/Jaeger adoption plan.
+- `docs/operations/email-relay-proxy-boundary.md`: Naruon is a web client relay/proxy, not an email server.
+- `docs/operations/postgresql-physical-replication.md`: physical replication, WAL, restore, and read-routing plan.
+- `docs/operations/auth-key-management.md`: dummy auth boundary, Fernet key management, Keycloak/Casdoor evaluation.
+- `docs/operations/traefik-evaluation.md`: Traefik versus current NGINX ingress evaluation.
+
 ## Verification used for this hardening pass
 
 ```bash

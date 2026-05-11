@@ -31,3 +31,7 @@
 ## CI/CD Enforcement
 
 - Checks가 통과되어야 Merge 가능하도록 Branch Protection Rule에 의해 강제됩니다.
+- GitHub Actions는 full commit SHA pinning을 사용하고 scanner finding을
+  `continue-on-error`로 숨기지 않습니다.
+- Auth/key, mail relay/proxy, PostgreSQL replication, APM, gateway hardening은
+  `docs/operations/` 문서의 Confirmed/Hypothesis 경계를 따릅니다.

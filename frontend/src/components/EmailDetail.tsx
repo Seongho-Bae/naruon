@@ -41,7 +41,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   
   const [draftError, setDraftError] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
-  const [instruction, setInstruction] = useState('reply politely');
+  const [instruction, setInstruction] = useState('정중하게 답장해줘');
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
@@ -72,7 +72,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     } catch (err) {
       if (!isLatestThreadRequest()) return;
       console.error("Error fetching thread:", err);
-      setThreadError("Conversation could not load.");
+      setThreadError("대화 흐름을 불러오지 못했습니다.");
       setThreadEmails([currentEmail]);
     } finally {
       if (isLatestThreadRequest()) setThreadLoading(false);
@@ -119,11 +119,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
           setLlmData(llmJson);
         } catch (llmErr) {
           console.error("Error generating LLM summary:", llmErr);
-          if (isMounted) setLlmError("Failed to generate summary");
+          if (isMounted) setLlmError("요약을 생성하지 못했습니다.");
         }
       } catch (err) {
         console.error("Error fetching email details:", err);
-        if (isMounted) setDetailError("Error loading email");
+        if (isMounted) setDetailError("메일 내용을 불러오지 못했습니다.");
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -150,7 +150,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setDraft(data.draft || '');
     } catch (err) {
       console.error("Error drafting reply:", err);
-      setDraftError("Error generating draft.");
+      setDraftError("답장 초안을 생성하지 못했습니다.");
     } finally {
       setIsDrafting(false);
     }
@@ -171,14 +171,14 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setSendStatus({
         type: 'success',
         message: result.simulated
-          ? 'Reply simulated in development mode. No email was delivered.'
-          : 'Reply sent successfully!',
+          ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.'
+          : '답장을 전송했습니다.',
       });
       setDraft('');
       await fetchThread(email);
     } catch (err) {
       console.error("Error sending email:", err);
-      setSendStatus({ type: 'error', message: 'Error sending reply.' });
+      setSendStatus({ type: 'error', message: '답장 전송에 실패했습니다.' });
     } finally {
       setIsSending(false);
     }
@@ -199,9 +199,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       });
       if (!res.ok) throw new Error("Failed to sync");
       const data = await res.json();
-      setSyncStatus({ type: 'success', message: `Synced ${data.synced} events!` });
+      setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
-      setSyncStatus({ type: 'error', message: 'Error syncing to calendar.' });
+      setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
     } finally {
       setIsSyncing(false);
     }
@@ -220,11 +220,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   }
 
   if (loading) {
-    return <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-card text-muted-foreground">Loading details...</div>;
+    return <div role="status" aria-live="polite" className="flex h-full items-center justify-center bg-card text-muted-foreground">메일 내용을 불러오는 중입니다...</div>;
   }
 
   if (!email || detailError) {
-    return <div role="alert" className="flex h-full items-center justify-center bg-card text-red-500">{detailError || 'Error loading email'}</div>;
+    return <div role="alert" className="flex h-full items-center justify-center bg-card text-red-500">{detailError || '메일 내용을 불러오지 못했습니다.'}</div>;
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
@@ -237,12 +237,12 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
-            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{email.subject || '(No Subject)'}</div>
+            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{email.subject || '(제목 없음)'}</div>
             <div className="line-clamp-1 text-xs">
               <span className="text-muted-foreground">{email.sender}</span>
             </div>
             <div className="line-clamp-1 text-xs text-muted-foreground">
-              Reply-To: {email.reply_to || email.sender}
+              답장 주소: {email.reply_to || email.sender}
             </div>
           </div>
           <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
@@ -258,7 +258,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">✦</span>
               <h3 className="text-sm font-black text-primary">맥락 종합</h3>
-              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI Generated</Badge>
+              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI 생성</Badge>
             </div>
             <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
               {llmData ? (
@@ -266,7 +266,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               ) : llmError ? (
                 <p className="text-sm text-red-500">{llmError}</p>
               ) : (
-                <p className="text-sm text-muted-foreground italic">Generating summary...</p>
+                <p className="text-sm text-muted-foreground italic">요약을 생성하는 중입니다...</p>
               )}
             </div>
           </div>
@@ -275,7 +275,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600" aria-hidden="true">✓</span>
               <h3 className="text-sm font-black text-emerald-700">실행 항목</h3>
-              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0} Tasks</Badge>
+              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0}개 실행 항목</Badge>
             </div>
             {llmData ? (
               llmData.todos.length > 0 ? (
@@ -288,12 +288,12 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-muted-foreground">No action items found.</p>
+                <p className="text-sm text-muted-foreground">실행 항목이 없습니다.</p>
               )
             ) : llmError ? (
-              <p className="text-sm text-red-500">Failed to extract action items</p>
+              <p className="text-sm text-red-500">실행 항목을 추출하지 못했습니다.</p>
             ) : (
-              <p className="text-sm text-muted-foreground italic">Extracting action items...</p>
+              <p className="text-sm text-muted-foreground italic">실행 항목을 추출하는 중입니다...</p>
             )}
             
             {llmData && llmData.todos.length > 0 && (
@@ -322,15 +322,15 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               <h3 className="text-sm font-black text-foreground">대화 흐름</h3>
               <Badge variant="secondary" className="text-[10px] flex items-center gap-1 border border-primary/10 bg-primary/10 text-primary">
                 <MessagesSquare className="w-3 h-3" />
-                {conversationMessages.length} msgs
+                {conversationMessages.length}개 메시지
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Oldest to newest. Replies target the selected message.</p>
-            {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading conversation...</p>}
+            <p className="text-xs text-muted-foreground">오래된 메시지부터 최신 메시지 순서로 보여줍니다. 답장은 선택된 메시지를 기준으로 작성됩니다.</p>
+            {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">대화 흐름을 불러오는 중입니다...</p>}
             {threadError && (
               <div role="alert" className="flex items-center gap-3 text-sm text-red-500">
                 <span>{threadError}</span>
-                <Button size="sm" variant="outline" onClick={() => fetchThread(email)}>Retry</Button>
+                <Button size="sm" variant="outline" onClick={() => fetchThread(email)}>다시 시도</Button>
               </div>
             )}
             <div className="space-y-4">
@@ -340,7 +340,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                     <span className="font-medium text-sm">{msg.sender}</span>
                     <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
                   </div>
-                  {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">Selected message</Badge>}
+                  {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
                   <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
                 </div>
               ))}
@@ -353,13 +353,13 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
                 <h3 className="text-sm font-black text-purple-700">답장 실행</h3>
-                <label htmlFor="reply-instruction" className="sr-only">AI reply instruction</label>
+                <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>
                 <Input
                   id="reply-instruction"
-                  aria-label="AI reply instruction"
+                  aria-label="AI 답장 지시"
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
-                  placeholder="e.g. reply politely"
+                  placeholder="예: 정중하게 답장해줘"
                   className="h-10 rounded-xl border-purple-500/20 bg-purple-500/5 text-xs"
                 />
               </div>
@@ -376,13 +376,13 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             
             {draftError && <p role="alert" className="text-sm text-red-500">{draftError}</p>}
 
-            <label htmlFor="reply-draft" className="sr-only">Reply draft</label>
+            <label htmlFor="reply-draft" className="sr-only">답장 초안</label>
             <Textarea 
               id="reply-draft"
-              aria-label="Reply draft"
+              aria-label="답장 초안"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Your reply..."
+              placeholder="답장 초안을 작성하거나 AI 초안을 생성하세요..."
               className="min-h-[150px] rounded-2xl border-purple-500/20 bg-background/70"
             />
             

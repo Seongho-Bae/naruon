@@ -7,10 +7,17 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
 ## Required gate contract
 
 - Required status checks must pass on the current head SHA.
+- Application CI must run backend pytest and frontend test/lint/build checks on
+  pull requests to `master` and `release/**`, while release-branch pushes must
+  not create duplicate check noise; push checks are scoped to `master`.
 - The CodeRabbit robot-review gate is satisfied by current-head CodeRabbit
   evidence only when current-head blocking findings, warnings, and failures are
   fixed, rebutted with evidence, or superseded. Authoritative current-head
   `Review skipped` evidence satisfies the robot-review gate when applicable.
+- PR Governance automation is metadata-only: it must not checkout pull request
+  code, clone the head branch, dismiss reviews, or use admin merge. It may read
+  PR/check/review-thread metadata, post blocker comments, and enable auto-merge
+  with `--match-head-commit` only after current-head gates are satisfied.
 - GitHub rulesets must use `required_approving_review_count=0` so GitHub does
   not require a human `APPROVED` review when robot-review policy applies.
 - GitHub rulesets must keep `required_review_thread_resolution=true`.
@@ -79,3 +86,12 @@ Handling policy:
 - If the platform still rejects merge after policy-aligned settings and passing
   checks, record the rejection as an external blocker with the exact command
   output and head SHA.
+
+## Related operations docs
+
+- `docs/operations/release-deployment-architecture.md`
+- `docs/operations/open-source-apm.md`
+- `docs/operations/email-relay-proxy-boundary.md`
+- `docs/operations/postgresql-physical-replication.md`
+- `docs/operations/auth-key-management.md`
+- `docs/operations/traefik-evaluation.md`

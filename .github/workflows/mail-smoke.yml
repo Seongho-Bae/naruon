@@ -1,0 +1,23 @@
+name: Internal Mail Smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: [self-hosted, mail-egress]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      
+      - name: Verify SMTP and IMAP outbound connectivity
+        run: |
+          echo "Connecting to internal mail server..."
+          # 실제 사내망 메일 서버의 연결성 검증 스크립트 실행
+          python3 backend/tests/live/mail_smoke_test.py
+        env:
+          SMTP_HOST: ${{ secrets.INTERNAL_SMTP_HOST }}
+          IMAP_HOST: ${{ secrets.INTERNAL_IMAP_HOST }}

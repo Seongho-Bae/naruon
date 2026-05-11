@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Mail, MessagesSquare, Search, Sparkles } from "lucide-react";
+import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
 
 interface EmailItem {
@@ -54,7 +54,7 @@ export function EmailList({
       }
     } catch (err) {
       console.error("Error fetching emails:", err);
-      setError("Failed to load emails.");
+      setError("메일을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
       setIsSearching(false);
@@ -77,6 +77,16 @@ export function EmailList({
             </div>
             <h2 className="mt-1 text-2xl font-black tracking-tight text-foreground">받은편지함</h2>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">중요 메일을 맥락과 실행 흐름으로 정리합니다.</p>
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-primary">
+                <Network className="size-3" aria-hidden="true" />
+                맥락 종합
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-emerald-700">
+                <CheckCircle2 className="size-3" aria-hidden="true" />
+                실행 항목
+              </span>
+            </div>
           </div>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.28)]">
             <Mail className="size-5" aria-hidden="true" />
@@ -107,13 +117,16 @@ export function EmailList({
         </form>
       </div>
       <ScrollArea className="flex-1 w-full">
-        <div className="flex flex-col gap-3 p-4">
+        <div className="flex flex-col gap-2 p-3">
           {loading ? (
-            <div role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading emails...</div>
+            <div role="status" aria-live="polite" className="rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">메일을 불러오는 중입니다...</div>
           ) : error ? (
-            <div role="alert" className="text-sm text-red-500">{error}</div>
+            <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
           ) : emails.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No emails found.</div>
+            <div className="rounded-2xl border border-dashed border-border bg-background/70 p-5 text-sm text-muted-foreground">
+              <p className="font-bold text-foreground">검색 결과가 없습니다</p>
+              <p className="mt-1 text-xs leading-5">검색어를 바꾸거나 메일 동기화 상태를 확인하세요.</p>
+            </div>
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
@@ -123,7 +136,7 @@ export function EmailList({
                 key={email.id} 
                 onClick={() => onSelectEmail(email.id)}
                 aria-current={selected ? "true" : undefined}
-                className={`group relative flex min-h-[7.5rem] flex-col items-start gap-3 overflow-hidden rounded-2xl border p-3 text-left text-sm transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
+                className={`group relative flex min-h-20 flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 pl-4 text-left text-sm transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
               >
                 <span className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${selected ? 'bg-primary' : 'bg-transparent group-hover:bg-primary/50'}`} aria-hidden="true" />
                 <div className="flex w-full flex-col gap-1">
@@ -139,11 +152,11 @@ export function EmailList({
                     </div>
                   </div>
                   <div className="flex items-center gap-2 w-full">
-                    <div className="truncate text-sm font-bold flex-1 text-foreground">{email.subject || '(No Subject)'}</div>
+                    <div className="truncate text-sm font-bold flex-1 text-foreground">{email.subject || '(제목 없음)'}</div>
                     {email.reply_count && email.reply_count > 1 && (
                       <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
                         <MessagesSquare className="w-3 h-3" />
-                        {email.reply_count} msgs
+                        {email.reply_count}개 메시지
                       </Badge>
                     )}
                   </div>
@@ -153,7 +166,7 @@ export function EmailList({
                 </div>
                 {email.unread && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">New</Badge>
+                    <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>
                   </div>
                 )}
               </button>

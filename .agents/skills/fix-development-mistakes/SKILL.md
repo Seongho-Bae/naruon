@@ -43,6 +43,9 @@ Use this skill when:
   the intended changes narrowly.
 - Dependency issues: pin secure versions and resolve conflicts by upgrading the
   conflicting package rather than downgrading a patched package.
+- GitHub Actions vulnerabilities: pin third-party actions to full commit SHAs
+  with a version comment, and never hide scanner findings with
+  `continue-on-error: true`.
 - Linter errors: add missing type hints, fix indentation, add docstrings, or use
   a narrow documented suppression only when the rule is intentionally violated.
 - Merge-gate issues: collect ruleset/check/review evidence before changing code
