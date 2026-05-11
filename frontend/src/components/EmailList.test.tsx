@@ -66,7 +66,7 @@ describe("EmailList", () => {
 
     const selectedThread = container.querySelector('button[aria-current="true"]');
 
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/emails");
+    expect(fetchMock).toHaveBeenCalledWith("/api/emails", expect.any(Object));
     expect(container.textContent).toContain("받은편지함");
     expect(container.textContent).toContain("맥락 종합");
     expect(container.textContent).toContain("실행 항목");

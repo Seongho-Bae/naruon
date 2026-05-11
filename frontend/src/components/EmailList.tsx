@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,26 +36,16 @@ export function EmailList({
     setLoading(true);
     setError(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
       if (query.trim() === "") {
-        const res = await fetch(`${apiUrl}/api/emails`);
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
+        const data = await apiClient.get<{ emails: EmailItem[] }>('/api/emails');
         setEmails(data.emails || []);
       } else {
         setIsSearching(true);
-        const res = await fetch(`${apiUrl}/api/search`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query }),
-        });
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        const data = await res.json();
+        const data = await apiClient.post<{ results: EmailItem[] }>('/api/search', { query });
         setEmails(data.results || []);
       }
-    } catch (err) {
-      console.error("Error fetching emails:", err);
-      setError("메일을 불러오지 못했습니다.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
       setLoading(false);
       setIsSearching(false);
