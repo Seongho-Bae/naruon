@@ -1,3 +1,8 @@
+## [0.1.2] - 2026-05-11
+
+### 수정
+- Seongho Bae (@seonghobae): pytest가 `mail_smoke_test.py` 임포트 시 `sys.exit()`으로 인해 비정상 종료되던 문제를 해결.
+
 ## [0.1.1] - 2026-05-11
 
 ### 수정
