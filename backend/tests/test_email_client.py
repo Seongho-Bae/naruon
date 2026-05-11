@@ -44,7 +44,7 @@ async def test_send_email_logs_sanitized_recipient(caplog):
 
     assert result == {"status": "simulated", "simulated": True}
     messages = [record.getMessage() for record in caplog.records]
-    assert "Simulating sending email to victim@example.com" in messages
+    assert "Simulating sending email to victim@example.com (no SMTP server configured)" in messages
     assert all("\n" not in message and "\r" not in message for message in messages)
 
 
