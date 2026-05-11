@@ -1,3 +1,8 @@
+## [0.1.6] - 2026-05-11
+
+### 수정
+- Seongho Bae (@seonghobae): FastAPI `0.111.0`과 호환되는 `httpx` `0.27.0`으로 업그레이드하여, `TestClient` 실행 시 발생하던 AnyIO `MemoryObjectReceiveStream` 누수 에러를 완전히 해결했습니다.
+
 ## [0.1.5] - 2026-05-11
 
 ### 수정
