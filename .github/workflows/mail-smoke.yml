@@ -3,6 +3,9 @@ name: Internal Mail Smoke
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   smoke:
     runs-on: [self-hosted, mail-egress]
