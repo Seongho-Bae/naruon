@@ -79,4 +79,31 @@ describe("NetworkGraph", () => {
     expect((nodeTitle as HTMLElement).innerHTML).not.toContain("<img");
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
   });
+
+  it("renders a Korean text fallback for graph relationships", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [{ id: "person-1", label: "김지현", title: "PM" }],
+          edges: [{ from: "person-1", to: "person-1", title: "관련 메일" }],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("관계 이해");
+    expect(container.textContent).toContain("1개 노드");
+    expect(container.textContent).toContain("1개 관계");
+    expect(container.textContent).toContain("김지현");
+    expect(container.textContent).not.toContain("nodes and");
+  });
 });
