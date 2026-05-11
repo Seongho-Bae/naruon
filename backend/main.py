@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,12 +12,16 @@ from services.imap_worker import ImapSyncWorker
 
 imap_worker = ImapSyncWorker()
 
+DISABLE_WORKERS = os.environ.get("DISABLE_BACKGROUND_WORKERS") == "1"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await imap_worker.start()
+    if not DISABLE_WORKERS:
+        await imap_worker.start()
     yield
-    await imap_worker.stop()
+    if not DISABLE_WORKERS:
+        await imap_worker.stop()
 
 
 app = FastAPI(title="AI Email Client API", lifespan=lifespan)
