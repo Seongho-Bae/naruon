@@ -44,7 +44,7 @@ export function EmailList({
         const data = await apiClient.post<{ results: EmailItem[] }>('/api/search', { query });
         setEmails(data.results || []);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(err.message || "Failed to load emails");
     } finally {
       setLoading(false);

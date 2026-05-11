@@ -30,7 +30,7 @@ export class ApiClient {
     return response.json();
   }
 
-  async post<T>(endpoint: string, body: any, init?: RequestInit): Promise<T> {
+  async post<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
