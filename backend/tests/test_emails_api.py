@@ -10,7 +10,7 @@ from unittest.mock import patch
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
+        transport=ASGITransport(app=app), headers={"X-User-Id": "testuser"}, base_url="http://test"
     ) as ac:
         yield ac
 
@@ -303,7 +303,7 @@ def test_send_email_endpoint(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
 
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-User-Id": "testuser"})
 
     response = client.post(
         "/api/emails/send",
@@ -340,7 +340,7 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
     app.dependency_overrides[get_db] = missing_smtp_db
     try:
-        client = TestClient(app)
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
         response = client.post(
             "/api/emails/send",
             json={
@@ -361,7 +361,7 @@ def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
 
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-User-Id": "testuser"})
 
     response = client.post(
         "/api/emails/send",
