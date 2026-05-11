@@ -22,7 +22,12 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(header.getByRole('button', { name: '할 일 만들기' })).toHaveCount(0);
   await expect(page.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
 
-  expect(requestedUrls.some((url) => /fonts\.(googleapis|gstatic)\.com/.test(url))).toBe(false);
+  expect(
+    requestedUrls.some((url) => {
+      const hostname = new URL(url).hostname;
+      return hostname === 'fonts.googleapis.com' || hostname === 'fonts.gstatic.com';
+    }),
+  ).toBe(false);
 });
 
 test('renders compact mobile navigation without hover-only controls', async ({ page }) => {
