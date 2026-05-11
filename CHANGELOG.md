@@ -1,3 +1,8 @@
+## [0.1.5] - 2026-05-11
+
+### 수정
+- Seongho Bae (@seonghobae): FastAPI 버전을 0.109.0으로 되돌리고 `python-multipart`를 유지하여 `TestClient` 실행 시 발생하던 Memory Leak (ResourceWarning)을 근본적으로 해결했습니다.
+
 ## [0.1.2] - 2026-05-11
 
 ### 수정
