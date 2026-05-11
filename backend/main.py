@@ -9,6 +9,9 @@ from api.network import router as network_router
 from api.emails import router as emails_router
 from api.tenant_config import router as tenant_config_router
 from services.imap_worker import ImapSyncWorker
+from prometheus_fastapi_instrumentator import Instrumentator
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from core.config import settings
 
 imap_worker = ImapSyncWorker()
 
@@ -24,7 +27,42 @@ async def lifespan(app: FastAPI):
         await imap_worker.stop()
 
 
-app = FastAPI(title="AI Email Client API", lifespan=lifespan)
+app = FastAPI(
+    title="Naruon Backend",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# OpenTelemetry Tracing Setup (if enabled)
+if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
+    
+    resource = Resource(attributes={
+        SERVICE_NAME: "naruon-backend"
+    })
+    
+    trace_provider = TracerProvider(resource=resource)
+    processor = BatchSpanProcessor(OTLPSpanExporter())
+    trace_provider.add_span_processor(processor)
+    trace.set_tracer_provider(trace_provider)
+
+# Instrument Prometheus Metrics
+Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
+
+# Instrument OpenTelemetry
+FastAPIInstrumentor.instrument_app(app)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(search_router)
 app.include_router(llm_router)
@@ -32,6 +70,7 @@ app.include_router(calendar_router)
 app.include_router(network_router)
 app.include_router(emails_router)
 app.include_router(tenant_config_router)
+
 
 app.add_middleware(
     CORSMiddleware,
