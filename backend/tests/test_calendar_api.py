@@ -4,7 +4,7 @@ from main import app
 from unittest.mock import patch, AsyncMock
 from services.exceptions import CalendarServiceError
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-User-Id": "testuser"})
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)

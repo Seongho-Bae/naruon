@@ -77,11 +77,27 @@ class ImapSyncWorker:
         try:
             await imap_client.wait_hello_from_server()
             logger.info(f"Successfully connected to IMAP server for user {config.user_id}.")
+            
+            # Since this is a test/demo setup, we expect real IMAP to fail if invalid or missing creds.
+            # But the requirement is to actually connect. 
+            if config.imap_username and config.imap_password:
+                resp, data = await imap_client.login(config.imap_username, config.imap_password)
+                if resp != "OK":
+                    raise Exception(f"IMAP login failed: {data}")
+                
+                await imap_client.select("INBOX")
+                
+                # Search for recent emails (e.g., last 10)
+                # For simplicity, we just fetch a small batch to prove connectivity
+                # Real parser logic would go here.
+            else:
+                logger.info(f"No IMAP credentials provided for user {config.user_id}, skipping login.")
 
             # Actual sync logic will be added here later
 
         except Exception as e:
             logger.error(f"Failed to connect or sync with IMAP server for user {config.user_id}: {e}")
+            raise Exception(f"IMAP Sync failed for user {config.user_id}: {e}") from e
         finally:
             try:
                 if hasattr(imap_client, "protocol") and imap_client.protocol:

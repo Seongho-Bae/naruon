@@ -4,7 +4,7 @@ from main import app
 from db.session import get_db
 from unittest.mock import patch
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-User-Id": "testuser"})
 
 
 class MockResult:

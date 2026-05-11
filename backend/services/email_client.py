@@ -2,6 +2,7 @@ import base64
 import logging
 from email.message import EmailMessage
 from typing import TypedDict
+import aiosmtplib
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ async def send_email(
 ) -> SendEmailResult:
     """Sends an email using SMTP."""
     safe_to_address = _sanitize_log_value(to_address)
-    build_email_message(
+    message = build_email_message(
         to_address=to_address,
         subject=subject,
         body=body,
@@ -64,21 +65,20 @@ async def send_email(
         references=references,
     )
 
-    # Note: Real implementation would use OAuth or password.
-    # This is a skeleton.
-    try:
-        # Example using aiosmtplib
-        # await aiosmtplib.send(
-        #     message,
-        #     hostname=settings.SMTP_SERVER,
-        #     port=settings.SMTP_PORT,
-        #     use_tls=True,
-        #     # username=...,
-        #     # password=...
-        # )
-        # For now, just pretend we sent it to pass the test locally without creds.
-        # This is intentionally mocked for development.
-        logger.info("Simulating sending email to %s", safe_to_address)
+    if not smtp_server or not smtp_port:
+        logger.info("Simulating sending email to %s (no SMTP server configured)", safe_to_address)
         return {"status": "simulated", "simulated": True}
+
+    try:
+        await aiosmtplib.send(
+            message,
+            hostname=smtp_server,
+            port=smtp_port,
+            use_tls=True,
+            # In a real system, we'd use OAuth2 or password auth here.
+            # Currently we just attempt connection. If it fails, aiosmtplib raises an exception.
+        )
+        logger.info("Successfully sent email to %s via %s", safe_to_address, smtp_server)
+        return {"status": "sent", "simulated": False}
     except Exception as e:
         raise Exception(f"Failed to send email: {e}")
