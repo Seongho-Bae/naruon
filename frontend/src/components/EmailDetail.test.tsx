@@ -203,7 +203,7 @@ describe("EmailDetail", () => {
       "http://localhost:8000/api/emails/thread/thread-b",
     );
     expect(container.textContent).toContain("Thread B sibling body");
-    expect(container.textContent).toContain("2 msgs");
+    expect(container.textContent).toContain("2개 메시지");
 
     await act(async () => {
       threadAResponse.resolve(jsonResponse({ thread: [emailA, siblingA] }));
@@ -212,7 +212,7 @@ describe("EmailDetail", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("Thread B sibling body");
-    expect(container.textContent).toContain("2 msgs");
+    expect(container.textContent).toContain("2개 메시지");
     expect(container.textContent).not.toContain("Thread A stale sibling body");
   });
 
@@ -289,7 +289,46 @@ describe("EmailDetail", () => {
     );
 
     expect(container.textContent).toContain("Standalone body");
-    expect(container.textContent).toContain("1 msgs");
-    expect(container.textContent).not.toContain("Loading conversation...");
+    expect(container.textContent).toContain("1개 메시지");
+    expect(container.textContent).not.toContain("대화 흐름을 불러오는 중입니다...");
+  });
+
+  it("uses Korean-first labels for AI summary and execution actions", async () => {
+    const email: TestEmail = {
+      id: 5,
+      message_id: "<label@example.com>",
+      thread_id: null,
+      sender: "label@example.com",
+      recipients: "user@example.com",
+      subject: "Label check",
+      date: "2026-05-11T09:00:00Z",
+      body: "Please review the launch plan.",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/5")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "출시 계획 검토", todos: ["일정 확인"] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={5} />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("맥락 종합");
+    expect(container.textContent).toContain("AI 생성");
+    expect(container.textContent).toContain("실행 항목");
+    expect(container.textContent).toContain("1개 실행 항목");
+    expect(container.textContent).not.toContain("AI Generated");
+    expect(container.textContent).not.toContain("Tasks");
   });
 });

@@ -258,7 +258,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">✦</span>
               <h3 className="text-sm font-black text-primary">맥락 종합</h3>
-              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI Generated</Badge>
+              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI 생성</Badge>
             </div>
             <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
               {llmData ? (
@@ -266,7 +266,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               ) : llmError ? (
                 <p className="text-sm text-red-500">{llmError}</p>
               ) : (
-                <p className="text-sm text-muted-foreground italic">Generating summary...</p>
+                <p className="text-sm text-muted-foreground italic">요약을 생성하는 중입니다...</p>
               )}
             </div>
           </div>
@@ -275,7 +275,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
             <div className="flex items-center gap-2">
               <span className="grid size-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600" aria-hidden="true">✓</span>
               <h3 className="text-sm font-black text-emerald-700">실행 항목</h3>
-              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0} Tasks</Badge>
+              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0}개 실행 항목</Badge>
             </div>
             {llmData ? (
               llmData.todos.length > 0 ? (
@@ -322,11 +322,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               <h3 className="text-sm font-black text-foreground">대화 흐름</h3>
               <Badge variant="secondary" className="text-[10px] flex items-center gap-1 border border-primary/10 bg-primary/10 text-primary">
                 <MessagesSquare className="w-3 h-3" />
-                {conversationMessages.length} msgs
+                {conversationMessages.length}개 메시지
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Oldest to newest. Replies target the selected message.</p>
-            {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">Loading conversation...</p>}
+            <p className="text-xs text-muted-foreground">오래된 메시지부터 최신 메시지 순서로 보여줍니다. 답장은 선택된 메시지를 기준으로 작성됩니다.</p>
+            {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">대화 흐름을 불러오는 중입니다...</p>}
             {threadError && (
               <div role="alert" className="flex items-center gap-3 text-sm text-red-500">
                 <span>{threadError}</span>
