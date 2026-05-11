@@ -1,3 +1,9 @@
+## [0.1.1] - 2026-05-11
+
+### 수정
+- Seongho Bae (@seonghobae): CodeRabbit 리뷰 지적 사항(FastAPI 의존성 고정, 테스트 Flakiness 방지 등)을 반영.
+- Seongho Bae (@seonghobae): Naruon 워크스페이스 프론트엔드 디자인 시스템 및 브랜딩 재설계(UI/UX 시안 반영) 병합 완료.
+
 # 변경 이력
 
 이 프로젝트의 모든 주요 변경 사항은 이 파일에 기록됩니다.
