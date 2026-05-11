@@ -56,8 +56,9 @@ export default function NetworkGraph() {
   useEffect(() => {
     apiClient.get<NetworkData>('/api/network/graph')
       .then((data) => {
-        setNodes(data.nodes);
-        setEdges(data.edges);
+        const sanitized = sanitizeNetworkData(data);
+        setNodes(sanitized.nodes);
+        setEdges(sanitized.edges);
         setLoading(false);
       })
       .catch((err) => {

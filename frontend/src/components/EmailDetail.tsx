@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,8 +23,6 @@ interface LlmData {
   summary: string;
   todos: string[];
 }
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
@@ -64,9 +63,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
     setThreadLoading(true);
     try {
-      const threadRes = await fetch(buildThreadUrl(API_URL, currentEmail.thread_id));
-      if (!threadRes.ok) throw new Error("Failed to fetch thread");
-      const threadJson = await threadRes.json();
+      const threadJson = await apiClient.get<any>(buildThreadUrl('', currentEmail.thread_id));
       if (!isLatestThreadRequest()) return;
       setThreadEmails(threadJson.thread || []);
     } catch (err) {
@@ -98,9 +95,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setSendStatus(null);
 
       try {
-        const emailRes = await fetch(`${API_URL}/api/emails/${emailId}`);
-        if (!emailRes.ok) throw new Error("Failed to fetch email details");
-        const emailJson = await emailRes.json();
+        const emailJson = await apiClient.get<any>(`/api/emails/${emailId}`);
         
         if (!isMounted) return;
         setEmail(emailJson);
@@ -108,13 +103,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         await fetchThread(emailJson);
 
         try {
-          const llmRes = await fetch(`${API_URL}/api/llm/summarize`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email_body: emailJson.body })
-          });
-          if (!llmRes.ok) throw new Error("Failed to generate summary");
-          const llmJson = await llmRes.json();
+          const llmJson = await apiClient.post<any>('/api/llm/summarize', { email_body: emailJson.body });
           if (!isMounted) return;
           setLlmData(llmJson);
         } catch (llmErr) {
@@ -140,13 +129,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setDraftError(null);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/llm/draft`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email_body: email.body, instruction })
-      });
-      if (!res.ok) throw new Error("Failed to generate draft");
-      const data = await res.json();
+      const data = await apiClient.post<any>('/api/llm/draft', { email_body: email.body, instruction });
       setDraft(data.draft || '');
     } catch (err) {
       console.error("Error drafting reply:", err);
@@ -161,16 +144,10 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSending(true);
     setSendStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/emails/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildReplyPayload(email, draft))
-      });
-      if (!res.ok) throw new Error("Failed to send email");
-      const result = await res.json();
+      const data = await apiClient.post<any>('/api/emails/send', buildReplyPayload(email, draft));
       setSendStatus({
         type: 'success',
-        message: result.simulated
+        message: data.simulated
           ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.'
           : '답장을 전송했습니다.',
       });
@@ -189,16 +166,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const res = await fetch(`${API_URL}/api/calendar/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          todos: llmData.todos,
-          user_token: { token: 'mock' } // Mock token as required by API
-        })
-      });
-      if (!res.ok) throw new Error("Failed to sync");
-      const data = await res.json();
+      const data = await apiClient.post<any>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
       setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
       setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });

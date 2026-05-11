@@ -51,6 +51,10 @@ export function formatEmailDate(value?: string | null): string {
 }
 
 export function buildThreadUrl(apiUrl: string, threadId: string): string {
+  // If no base URL is required (handled by apiClient), return relative path
+  if (!apiUrl) {
+    return `/api/emails/thread/${encodeURIComponent(threadId)}`;
+  }
   return `${apiUrl}/api/emails/thread/${encodeURIComponent(threadId)}`;
 }
 
