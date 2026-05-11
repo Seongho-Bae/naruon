@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title">
+  <title id="title">Naruon app icon</title>
+  <rect x="4" y="4" width="88" height="88" rx="24" fill="#FFFFFF"/>
+  <rect x="4" y="4" width="88" height="88" rx="24" fill="none" stroke="#E5E7EB"/>
+  <defs>
+    <linearGradient id="icon-flow" x1="15" y1="72" x2="72" y2="16" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="0.46" stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="icon-green" x1="55" y1="67" x2="80" y2="41" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#86EFAC"/>
+    </linearGradient>
+  </defs>
+  <path d="M15 68C29 39 51 23 84 20C59 30 44 49 38 80C32 72 26 68 15 68Z" fill="url(#icon-flow)"/>
+  <path d="M15 68C36 57 56 52 77 53C58 60 45 69 38 80C32 72 26 68 15 68Z" fill="#4F46E5" opacity="0.42"/>
+  <path d="M60 57C70 55 76 50 79 40C81 50 87 55 97 57C87 59 81 65 79 75C76 65 70 59 60 57Z" fill="url(#icon-green)"/>
+  <path d="M32 18C38 16 41 12 43 6C45 12 48 16 54 18C48 20 45 23 43 30C41 23 38 20 32 18Z" fill="#2563FF"/>
+</svg>

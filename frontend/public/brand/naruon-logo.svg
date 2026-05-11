@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-labelledby="title">
+  <title id="title">Naruon</title>
+  <defs>
+    <linearGradient id="logo-flow" x1="12" y1="78" x2="74" y2="12" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="0.46" stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#38BDF8"/>
+    </linearGradient>
+    <linearGradient id="logo-green" x1="55" y1="68" x2="84" y2="39" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22C55E"/>
+      <stop offset="1" stop-color="#86EFAC"/>
+    </linearGradient>
+  </defs>
+  <g aria-hidden="true">
+    <path d="M10 68C25 36 49 20 86 16C58 27 42 47 35 82C29 73 22 68 10 68Z" fill="url(#logo-flow)"/>
+    <path d="M10 68C33 56 54 50 78 51C57 59 42 69 35 82C29 73 22 68 10 68Z" fill="#4F46E5" opacity="0.42"/>
+    <path d="M61 56C72 54 79 48 82 37C85 48 91 54 102 56C91 59 85 65 82 76C79 65 72 59 61 56Z" fill="url(#logo-green)"/>
+    <path d="M28 16C35 14 39 10 41 3C43 10 47 14 54 16C47 18 43 22 41 29C39 22 35 18 28 16Z" fill="#2563FF"/>
+  </g>
+  <text x="112" y="63" fill="#0B1220" font-family="Pretendard, Inter, system-ui, sans-serif" font-size="46" font-weight="800" letter-spacing="-2">Naruon</text>
+</svg>

@@ -81,11 +81,11 @@ export default function NetworkGraph() {
   }, [data]);
 
   if (isLoading) {
-    return <div role="status" aria-live="polite" className="flex h-full min-h-[520px] w-full items-center justify-center text-sm text-muted-foreground">Loading relationship graph...</div>;
+    return <div role="status" aria-live="polite" className="flex h-full min-h-[520px] w-full items-center justify-center text-sm text-muted-foreground">관계 그래프를 불러오는 중입니다...</div>;
   }
 
   if (error) {
-    return <div role="alert" className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center text-sm text-red-500">{error}</div>;
+    return <div role="alert" className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center text-sm text-red-500">관계 그래프를 불러오지 못했습니다.</div>;
   }
 
   if (data.nodes.length === 0) {
@@ -100,17 +100,28 @@ export default function NetworkGraph() {
     );
   }
 
+  const nodeLabels = data.nodes
+    .map((node) => String(node.label ?? node.id))
+    .filter(Boolean)
+    .slice(0, 5);
+
   return (
     <div className="flex h-full min-h-[520px] flex-col">
       <div className="border-b border-border bg-card/80 p-4">
         <h4 className="text-sm font-black text-foreground">관계 이해</h4>
         <p className="mt-1 text-xs text-muted-foreground">
-          {data.nodes.length} nodes and {data.edges.length} relationships are connected in this thread context.
+          {data.nodes.length}개 노드와 {data.edges.length}개 관계가 이 스레드 맥락에 연결되어 있습니다.
         </p>
+        <div className="mt-3 rounded-xl border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
+          <p className="font-semibold text-foreground">텍스트 관계 요약</p>
+          <p className="mt-1">
+            관련 노드: {nodeLabels.join(', ')}
+          </p>
+        </div>
       </div>
       <div
         ref={containerRef}
-        aria-label={`Network graph with ${data.nodes.length} nodes and ${data.edges.length} relationships`}
+        aria-label={`${data.nodes.length}개 노드와 ${data.edges.length}개 관계가 있는 네트워크 그래프`}
         className="min-h-0 flex-1 bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
       />
     </div>

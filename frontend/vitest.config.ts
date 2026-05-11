@@ -10,4 +10,8 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  test: {
+    exclude: [...configDefaults.exclude, "tests/e2e/**"],
+    setupFiles: ["./src/test/setup.ts"],
+  },
 });

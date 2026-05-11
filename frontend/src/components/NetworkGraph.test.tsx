@@ -13,8 +13,6 @@ import { Network } from "vis-network";
 
 import NetworkGraph from "./NetworkGraph";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
 function jsonResponse(body: unknown) {
   return {
     ok: true,
@@ -69,8 +67,10 @@ describe("NetworkGraph", () => {
 
     expect(Network).toHaveBeenCalledTimes(1);
     const networkData = vi.mocked(Network).mock.calls[0]?.[1];
-    const nodeTitle = networkData?.nodes?.[0]?.title;
-    const edgeTitle = networkData?.edges?.[0]?.title;
+    const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
+    const edges = Array.isArray(networkData?.edges) ? networkData.edges : [];
+    const nodeTitle = nodes[0]?.title;
+    const edgeTitle = edges[0]?.title;
 
     expect(nodeTitle).toBeInstanceOf(HTMLElement);
     expect(edgeTitle).toBeInstanceOf(HTMLElement);
@@ -78,5 +78,32 @@ describe("NetworkGraph", () => {
     expect((edgeTitle as HTMLElement).textContent).toBe(maliciousTitle);
     expect((nodeTitle as HTMLElement).innerHTML).not.toContain("<img");
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
+  });
+
+  it("renders a Korean text fallback for graph relationships", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [{ id: "person-1", label: "김지현", title: "PM" }],
+          edges: [{ from: "person-1", to: "person-1", title: "관련 메일" }],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("관계 이해");
+    expect(container.textContent).toContain("1개 노드");
+    expect(container.textContent).toContain("1개 관계");
+    expect(container.textContent).toContain("김지현");
+    expect(container.textContent).not.toContain("nodes and");
   });
 });
