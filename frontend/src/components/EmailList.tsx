@@ -45,7 +45,7 @@ export function EmailList({
         setEmails(data.results || []);
       }
     } catch (err: unknown) {
-      setError(err.message || "Failed to load emails");
+      setError(err instanceof Error ? err.message : "Failed to load emails");
     } finally {
       setLoading(false);
       setIsSearching(false);

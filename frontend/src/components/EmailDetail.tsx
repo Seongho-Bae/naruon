@@ -63,7 +63,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
     setThreadLoading(true);
     try {
-      const threadJson = await apiClient.get<unknown>(buildThreadUrl('', currentEmail.thread_id));
+      const threadJson = await apiClient.get<{ thread: EmailData[] }>(buildThreadUrl('', currentEmail.thread_id));
       if (!isLatestThreadRequest()) return;
       setThreadEmails(threadJson.thread || []);
     } catch (err) {
@@ -95,7 +95,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setSendStatus(null);
 
       try {
-        const emailJson = await apiClient.get<unknown>(`/api/emails/${emailId}`);
+        const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
         
         if (!isMounted) return;
         setEmail(emailJson);
@@ -103,7 +103,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         await fetchThread(emailJson);
 
         try {
-          const llmJson = await apiClient.post<unknown>('/api/llm/summarize', { email_body: emailJson.body });
+          const llmJson = await apiClient.post<LlmData>('/api/llm/summarize', { email_body: emailJson.body });
           if (!isMounted) return;
           setLlmData(llmJson);
         } catch (llmErr) {
@@ -129,7 +129,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setDraftError(null);
     setSendStatus(null);
     try {
-      const data = await apiClient.post<unknown>('/api/llm/draft', { email_body: email.body, instruction });
+      const data = await apiClient.post<{ draft: string }>('/api/llm/draft', { email_body: email.body, instruction });
       setDraft(data.draft || '');
     } catch (err) {
       console.error("Error drafting reply:", err);
@@ -144,7 +144,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSending(true);
     setSendStatus(null);
     try {
-      const data = await apiClient.post<unknown>('/api/emails/send', buildReplyPayload(email, draft));
+      const data = await apiClient.post<{ simulated: boolean }>('/api/emails/send', buildReplyPayload(email, draft));
       setSendStatus({
         type: 'success',
         message: data.simulated
@@ -166,7 +166,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = await apiClient.post<unknown>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
+      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
       setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
       setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
