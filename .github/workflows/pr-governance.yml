@@ -86,9 +86,19 @@ jobs:
           fi
 
           CHECK_RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs")"
-          CODERABBIT_COUNT="$(printf '%s' "$CHECK_RUNS" | jq '[.check_runs[] | select(.app.slug == "coderabbitai" or (.name | test("CodeRabbit|coderabbit"; "i")))] | length')"
+          CODERABBIT_MATCHES="$(printf '%s' "$CHECK_RUNS" | jq '
+            [.check_runs[]
+             | select(.app.slug == "coderabbitai" or (.name | test("CodeRabbit|coderabbit"; "i")))]'
+          )"
+          CODERABBIT_COUNT="$(printf '%s' "$CODERABBIT_MATCHES" | jq 'length')"
+          CODERABBIT_NOT_READY="$(printf '%s' "$CODERABBIT_MATCHES" | jq '
+            [.[] | select(.status != "completed" or (.conclusion != "success" and .conclusion != "skipped"))]
+            | length'
+          )"
           if [ "$CODERABBIT_COUNT" = "0" ]; then
             COMMENT_BODY="${COMMENT_BODY}- Missing current-head CodeRabbit/coderabbitai evidence for ${HEAD_REF_OID}.\n"
+          elif [ "$CODERABBIT_NOT_READY" != "0" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- Current-head CodeRabbit check is not successful on ${HEAD_REF_OID}.\n"
           fi
 
           if [ -n "$COMMENT_BODY" ]; then

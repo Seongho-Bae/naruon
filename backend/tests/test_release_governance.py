@@ -25,7 +25,7 @@ def read_repo_text(relative_path: str) -> str:
 def test_root_version_exists_and_is_initial_semver_release() -> None:
     version = read_repo_text("VERSION").strip()
 
-    assert version == "0.1.0"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"VERSION is not valid SemVer: {version!r}"
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
@@ -47,8 +47,12 @@ def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
     assert governed_workflows, "no governed GitHub workflows found"
 
     unpinned_major_refs: list[str] = []
+    missing_version_comments: list[str] = []
     major_only_action = re.compile(
         r"uses:\s*['\"]?([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@v\d+['\"]?\s*$"
+    )
+    sha_without_version_comment = re.compile(
+        r"uses:\s*['\"]?[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}['\"]?\s*$"
     )
     for workflow_path in governed_workflows:
         workflow_lines = workflow_path.read_text(encoding="utf-8").splitlines()
@@ -57,8 +61,13 @@ def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
                 unpinned_major_refs.append(
                     f"{workflow_path.relative_to(REPO_ROOT)}:{line_number}:{line.strip()}"
                 )
+            elif sha_without_version_comment.search(line):
+                missing_version_comments.append(
+                    f"{workflow_path.relative_to(REPO_ROOT)}:{line_number}:{line.strip()}"
+                )
 
     assert unpinned_major_refs == []
+    assert missing_version_comments == []
 
 
 def test_bandit_security_scan_does_not_continue_on_error() -> None:

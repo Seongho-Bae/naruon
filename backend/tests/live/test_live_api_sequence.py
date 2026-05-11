@@ -24,9 +24,13 @@ def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
 
 
 def test_live_api_sequence_uses_real_http(live_base_url: str) -> None:
-    inbox = read_json(f"{live_base_url}/api/emails")
-    subjects = {item.get("subject") for item in inbox["emails"]}
-    assert "Live E2E Release" in subjects
+    for _ in range(12):
+        inbox = read_json(f"{live_base_url}/api/emails")
+        subjects = {item.get("subject") for item in inbox["emails"]}
+        if "Live E2E Release" in subjects:
+            return
+        time.sleep(1)
+    raise AssertionError("seeded live email was not observed in time")
 
 
 def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
