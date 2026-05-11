@@ -1,3 +1,9 @@
+## [0.4.0] - 2026-05-11
+
+### 추가
+- Seongho Bae (@seonghobae): Open Source APM 스택 (Grafana, Prometheus, Loki, Tempo) 환경을 `docker-compose.observability.yml`로 구성했습니다.
+- Seongho Bae (@seonghobae): FastAPI 백엔드에 `prometheus-fastapi-instrumentator` 및 OpenTelemetry (`opentelemetry-instrumentation-fastapi`)를 연동하여 성능/트레이싱 메트릭 수집 기반을 확보했습니다.
+
 ## [0.1.9] - 2026-05-11
 
 ### 수정
