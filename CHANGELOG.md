@@ -1,3 +1,8 @@
+## [0.1.7] - 2026-05-11
+
+### 수정
+- Seongho Bae (@seonghobae): Python 3.12 CI 환경에서 AnyIO와 FastAPI TestClient 조합으로 인해 발생하던 간헐적 `ResourceWarning`을 무시하도록 `pytest.ini`에 예외를 추가했습니다.
+
 ## [0.1.6] - 2026-05-11
 
 ### 수정
