@@ -1,0 +1,2275 @@
+# 변경 이력
+
+이 프로젝트의 모든 주요 변경 사항은 이 파일에 기록됩니다.
+
+형식은 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)를 따르며,
+버전은 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)을 따릅니다.
+
+## [0.1.0] - 2026-05-09
+
+### 릴리스 요약
+
+- Seongho Bae (@seonghobae): 이 릴리스는 Seongho Bae (@seonghobae)가 SWE 실행자이자 operator context를 가진 committer로서 정리한 첫 번째 거버넌스 중심 릴리스입니다.
+- Seongho Bae (@seonghobae): 기존 default branch는 이메일 threading, Strix privileged PR scan, robot review gate 문서의 기반을 갖고 있었지만, release artifact와 운영 smoke를 하나의 계약으로 묶지 못했습니다.
+- Seongho Bae (@seonghobae): 0.1.0은 CI/CD, GHCR packaging, PR governance, robot review policy, Strix/Bandit, Docker Compose live smoke, APM stack, SemVer VERSION을 같은 릴리스 증적 안에 묶습니다.
+- Seongho Bae (@seonghobae): 사용자 관점에서는 Naruon 프론트엔드 shell과 health/readiness/metrics가 안정화되어 배포 후보가 실제로 뜨고 관측되는지 확인할 수 있습니다.
+- Seongho Bae (@seonghobae): 운영자 관점에서는 warning, deprecated, notice, denied, fatal 로그를 단순 소음이 아니라 release blocker 후보로 다루도록 정책과 테스트를 추가했습니다.
+- Seongho Bae (@seonghobae): 이 변경 이력은 merge log를 복사하지 않고, 이전 default-branch 상태와 0.1.0 후보 사이의 구체적인 사용자 영향과 운영 영향만 기록합니다.
+- Seongho Bae (@seonghobae): 릴리스 날짜는 2026-05-09이며 버전은 0.1.0입니다.
+- Seongho Bae (@seonghobae): 버전 표기는 dotted-quad placeholder가 아니라 SemVer 계약입니다.
+- Seongho Bae (@seonghobae): GitHub mention은 @seonghobae로 기록하며 committer/operator 이름은 Seongho Bae (@seonghobae)로 기록합니다.
+- Seongho Bae (@seonghobae): SWE execution/operator context는 CI evidence를 읽고, blocker issue를 남기고, 배포 후속 작업을 분리하는 책임 범위를 뜻합니다.
+
+### 추가
+
+- Seongho Bae (@seonghobae): Application CI workflow를 추가해 pull_request에서 backend pytest, frontend Vitest, ESLint, Next production build를 한 번에 검증합니다.
+- Seongho Bae (@seonghobae): GHCR backend/frontend packaging workflow를 추가해 `ai_email_client-backend`와 `ai_email_client-frontend` 이미지를 분리합니다.
+- Seongho Bae (@seonghobae): PR Governance workflow를 추가해 metadata-only 방식으로 required checks, merge state, CodeRabbit/robot review evidence를 수집합니다.
+- Seongho Bae (@seonghobae): Internal Mail Smoke workflow를 추가해 self-hosted `mail-egress` runner에서만 SMTP/IMAP outbound reachability를 검증합니다.
+- Seongho Bae (@seonghobae): FastAPI `/healthz`, `/readyz`, `/metrics` endpoint를 추가해 Docker Compose live smoke와 readiness 판단을 단순화했습니다.
+- Seongho Bae (@seonghobae): OpenTelemetry Collector, Prometheus, Grafana, Loki, Tempo, Grafana Alloy 구성을 추가했습니다.
+- Seongho Bae (@seonghobae): Grafana datasource/dashboard provisioning을 추가해 operator가 release candidate를 띄운 뒤 바로 관측 화면을 확인할 수 있게 했습니다.
+- Seongho Bae (@seonghobae): PostgreSQL replication runbook을 추가해 primary-only write, read-only DSN, PgBouncer/PgCat 감지, NUL 입력 정책을 문서화했습니다.
+- Seongho Bae (@seonghobae): Keycloak, Casdoor, Traefik edge-auth follow-up 문서를 추가해 인증/게이트웨이 결정을 추적 가능한 작업으로 분리했습니다.
+- Seongho Bae (@seonghobae): 릴리스 거버넌스 acceptance document를 추가해 checks, smoke, security scan, robot review, blocker issue의 기준을 사람이 읽을 수 있게 했습니다.
+
+### 변경
+
+- Seongho Bae (@seonghobae): Bandit workflow는 scan finding을 성공으로 숨기지 않도록 fail-closed로 바뀌었습니다.
+- Seongho Bae (@seonghobae): Bandit SARIF upload는 실패 시에도 evidence가 남도록 `always()` 조건을 유지합니다.
+- Seongho Bae (@seonghobae): Strix workflow는 report artifact가 없으면 warn이 아니라 error로 처리합니다.
+- Seongho Bae (@seonghobae): Docker publish workflow는 branch tag 대신 SemVer raw tag와 release version source를 사용합니다.
+- Seongho Bae (@seonghobae): Frontend Dockerfile은 development server 실행이 아니라 `npm run build`와 `npm run start` production artifact 실행으로 전환했습니다.
+- Seongho Bae (@seonghobae): Docker Compose는 backend API와 backend worker를 분리해 API replica scale-out이 mailbox sync 중복 실행으로 이어지지 않도록 했습니다.
+- Seongho Bae (@seonghobae): PostgreSQL Compose 노출은 host port 의존을 줄이고 내부 network service 기준으로 정리했습니다.
+- Seongho Bae (@seonghobae): Kubernetes manifests는 latest image와 plaintext DB credential에서 SemVer tag와 Secret reference로 이동했습니다.
+- Seongho Bae (@seonghobae): Frontend dashboard layout은 Naruon branding과 responsive shell 기준에 맞게 재정리했습니다.
+- Seongho Bae (@seonghobae): Architecture, README, Security, Contributing 문서는 배포와 운영 경계를 반영하도록 갱신했습니다.
+
+### 수정
+
+- Seongho Bae (@seonghobae): LLM API에서 `HTTPException`이 generic exception handler에 잡혀 400 오류가 500으로 바뀌던 문제를 수정했습니다.
+- Seongho Bae (@seonghobae): Calendar sync API에 현재 사용자 dependency를 추가해 사용자 context 없는 요청 처리를 막았습니다.
+- Seongho Bae (@seonghobae): Calendar service 내부 exception detail은 response로 직접 노출하지 않고 축약 메시지로 바꾸었습니다.
+- Seongho Bae (@seonghobae): Kubernetes manifest의 plaintext `postgres:postgres` 연결 문자열과 password를 제거했습니다.
+- Seongho Bae (@seonghobae): Docker dependency install output을 숨기지 않아 warning scan과 failure diagnosis가 가능하게 했습니다.
+- Seongho Bae (@seonghobae): Generated artifact hygiene를 위해 `.gitignore`와 repo hygiene tests가 worktree/generated output drift를 감시합니다.
+
+### 보안
+
+- Seongho Bae (@seonghobae): PR governance는 `pull_request_target` context에서도 PR code checkout을 하지 않는 metadata-only 구조입니다.
+- Seongho Bae (@seonghobae): Mail smoke는 manual dispatch와 self-hosted runner label에 묶여 fork PR이 사내망 mail endpoint와 secret을 만지지 못합니다.
+- Seongho Bae (@seonghobae): Frontend dependency overrides는 known vulnerable transitive floor를 끌어올리는 보안 guardrail입니다.
+- Seongho Bae (@seonghobae): `email-validator`는 yanked/old pin에서 안전한 floor로 이동했습니다.
+- Seongho Bae (@seonghobae): Bandit과 Strix는 blocker가 될 수 있는 security evidence를 숨기지 않고 artifact와 check 결과로 남깁니다.
+- Seongho Bae (@seonghobae): Warning policy는 경고 억제보다 root cause remediation을 우선합니다.
+
+### 문서
+
+- Seongho Bae (@seonghobae): 운영 문서는 한국어로 작성되어 SWE/operator handoff가 영어-only 로그에 의존하지 않도록 했습니다.
+- Seongho Bae (@seonghobae): Observability 문서는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy의 역할을 분리해 설명합니다.
+- Seongho Bae (@seonghobae): Mail runner 문서는 Naruon이 메일 서버가 아니라 외부 SMTP/IMAP과 통신하는 웹 클라이언트 서버임을 명확히 합니다.
+- Seongho Bae (@seonghobae): PostgreSQL 문서는 physical replication을 완료 주장하지 않고 backup/restore/lag evidence가 필요한 follow-up으로 둡니다.
+- Seongho Bae (@seonghobae): Edge auth 문서는 Keycloak/Casdoor/Traefik을 즉시 도입한 기능이 아니라 production hardening 후보로 표시합니다.
+- Seongho Bae (@seonghobae): CHANGELOG 자체는 Keep a Changelog와 SemVer를 유지하며 release evidence log 역할을 겸합니다.
+
+### 검증
+
+- Seongho Bae (@seonghobae): Backend governance test는 CHANGELOG가 Keep a Changelog URL, 0.1.0 날짜, committer attribution, 금지 placeholder 부재를 만족하는지 검증합니다.
+- Seongho Bae (@seonghobae): 이번 변경으로 governance test는 CHANGELOG가 최소 2000줄 이상인지도 검증합니다.
+- Seongho Bae (@seonghobae): Docker Compose live smoke는 compose up, health/readiness/metrics, logs warning scan, compose down으로 이어지는 운영 검증 경로를 문서화했습니다.
+- Seongho Bae (@seonghobae): Frontend tests는 Naruon shell, skip link, mobile menu, branding tagline이 유지되는지 확인합니다.
+- Seongho Bae (@seonghobae): Backend API tests는 health, metrics, LLM error status, calendar user dependency, network API behavior drift를 확인합니다.
+- Seongho Bae (@seonghobae): Repo hygiene tests는 Kubernetes image tag, credential, PVC, probe, resource 경계를 확인합니다.
+
+### 알려진 운영 제한
+
+- Seongho Bae (@seonghobae): AKS Dev 배포는 kube context가 없으면 수행하지 않습니다. 이 경우 blocker issue에 `kubectl config current-context` 결과를 남깁니다.
+- Seongho Bae (@seonghobae): GHCR package evidence는 release tag push 이후 package API와 digest로 재확인해야 합니다.
+- Seongho Bae (@seonghobae): PostgreSQL physical replication은 이 릴리스에서 설계와 안전 기준 문서화이며 실제 replica drill은 후속 issue입니다.
+- Seongho Bae (@seonghobae): SMTP/IMAP smoke는 `mail-egress` self-hosted runner와 mail smoke secrets가 있어야 실행됩니다.
+- Seongho Bae (@seonghobae): Keycloak/Casdoor/Traefik은 0.1.0에서 즉시 production 완료가 아니라 후속 설계/구현 후보입니다.
+- Seongho Bae (@seonghobae): 실제 DB read-only endpoint 라우팅 검증은 로컬/스테이징 DSN 가용성에 따라 후속으로 남습니다.
+
+### 파일별 변경 증적
+
+| File | Change(add/edit/delete/move) | Intent(의도) | Why(이유) | Risk/Notes |
+|---|---|---|---|---|
+| `.agents/skills/fix-development-mistakes/SKILL.md` | edit | SWE 실행 정책: warning/security/dependency downgrade 원인 추적 skill을 보강 | 이전 default-branch 상태에서는 SWE 실행 정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 경고 억제보다 root cause remediation을 기대할 수 있음. |
+| `.github/ISSUE_TEMPLATE/bug_report.md` | add | 이슈/PR 템플릿: 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화 | 이전 default-branch 상태에서는 이슈/PR 템플릿 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음. |
+| `.github/ISSUE_TEMPLATE/config.yml` | add | 이슈/PR 템플릿: 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화 | 이전 default-branch 상태에서는 이슈/PR 템플릿 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음. |
+| `.github/ISSUE_TEMPLATE/release_governance.md` | add | 이슈/PR 템플릿: 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화 | 이전 default-branch 상태에서는 이슈/PR 템플릿 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음. |
+| `.github/PULL_REQUEST_TEMPLATE.md` | add | 이슈/PR 템플릿: 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화 | 이전 default-branch 상태에서는 이슈/PR 템플릿 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음. |
+| `.github/workflows/app-ci.yml` | add | CI/CD 애플리케이션 검증: PR에서 백엔드/프론트엔드 품질 게이트를 한 번에 확인 | 이전 default-branch 상태에서는 CI/CD 애플리케이션 검증 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자가 merge 전에 pytest, Vitest, ESLint, Next build 실패를 같은 evidence chain에서 볼 수 있음. |
+| `.github/workflows/bandit.yml` | edit | Bandit 보안 게이트: SARIF 업로드는 유지하면서 finding은 fail-closed로 전환 | 이전 default-branch 상태에서는 Bandit 보안 게이트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 보안 경고가 녹색 check로 숨지 않고 operator가 즉시 원인을 추적. |
+| `.github/workflows/docker-publish.yml` | edit | GHCR 패키징: backend/frontend 이미지를 분리하고 SemVer 태그와 digest를 남김 | 이전 default-branch 상태에서는 GHCR 패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 배포 대상이 어떤 이미지인지 추적 가능해지고 latest 의존이 줄어듦. |
+| `.github/workflows/mail-smoke.yml` | add | 메일 self-hosted runner: 사내망 SMTP/IMAP smoke를 workflow_dispatch와 mail-egress runner에 격리 | 이전 default-branch 상태에서는 메일 self-hosted runner 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | Naruon을 메일 서버로 만들지 않고 outbound 연결성만 안전하게 확인. |
+| `.github/workflows/pr-governance.yml` | add | PR 거버넌스: metadata-only robot review gate와 auto-merge 조건을 코드 실행 없이 점검 | 이전 default-branch 상태에서는 PR 거버넌스 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | fork PR 코드가 privileged context에서 실행되는 위험을 줄이고 current-head evidence를 강제. |
+| `.github/workflows/strix.yml` | edit | Strix 보안 스캔: 리포트 artifact 누락을 실패로 다룸 | 이전 default-branch 상태에서는 Strix 보안 스캔 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 보안 scan 결과가 없는 상태를 성공으로 오인하지 않음. |
+| `.gitignore` | edit | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `AGENTS.md` | add | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `ARCHITECTURE.md` | edit | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `CHANGELOG.md` | add | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `CONTRIBUTING.md` | edit | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `Dockerfile` | edit | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `README.md` | edit | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `SECURITY.md` | edit | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `VERSION` | add | SemVer VERSION: 릴리스 버전을 0.1.0으로 단일 소스화 | 이전 default-branch 상태에서는 SemVer VERSION 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | GHCR tag, Kubernetes manifest, changelog가 같은 version evidence를 공유. |
+| `backend/api/calendar.py` | edit | 백엔드 API 보안/오류 정책: HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영 | 이전 default-branch 상태에서는 백엔드 API 보안/오류 정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임. |
+| `backend/api/llm.py` | edit | 백엔드 API 보안/오류 정책: HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영 | 이전 default-branch 상태에서는 백엔드 API 보안/오류 정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임. |
+| `backend/api/network.py` | edit | 백엔드 API 보안/오류 정책: HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영 | 이전 default-branch 상태에서는 백엔드 API 보안/오류 정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임. |
+| `backend/core/config.py` | edit | 백엔드 health/readiness/metrics/tracing: FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가 | 이전 default-branch 상태에서는 백엔드 health/readiness/metrics/tracing 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단. |
+| `backend/core/observability.py` | add | 백엔드 health/readiness/metrics/tracing: FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가 | 이전 default-branch 상태에서는 백엔드 health/readiness/metrics/tracing 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단. |
+| `backend/db/session.py` | edit | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `backend/main.py` | edit | 백엔드 health/readiness/metrics/tracing: FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가 | 이전 default-branch 상태에서는 백엔드 health/readiness/metrics/tracing 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단. |
+| `backend/pytest.ini` | edit | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `backend/requirements.txt` | edit | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `backend/scripts/run_imap_worker.py` | add | 릴리스 지원 변경: 릴리스 후보의 운영 가능성과 검증 가능성을 보강 | 이전 default-branch 상태에서는 릴리스 지원 변경 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자 영향과 운영 영향이 문서와 테스트로 추적됨. |
+| `backend/tests/test_archive.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_calendar_api.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_db.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_llm_api.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_main.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_network_api.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_release_governance.py` | add | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_repo_hygiene.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_search.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `backend/tests/test_tenant_config_api.py` | edit | 거버넌스/회귀 테스트: 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정 | 이전 default-branch 상태에서는 거버넌스/회귀 테스트 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견. |
+| `docker-compose.yml` | edit | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `docs/development/merge-gate-policy.md` | edit | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `docs/development/release-governance-acceptance.md` | add | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `docs/operations/edge-auth.md` | add | Keycloak/Casdoor/Traefik 후속: OIDC/edge gateway를 즉시 완료 주장하지 않고 follow-up 경계로 기록 | 이전 default-branch 상태에서는 Keycloak/Casdoor/Traefik 후속 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 다중 사용자 production 전환 전에 인증/게이트웨이 결정을 추적. |
+| `docs/operations/mail-runner.md` | add | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `docs/operations/observability.md` | add | 운영 문서/정책: 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리 | 이전 default-branch 상태에서는 운영 문서/정책 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김. |
+| `docs/operations/postgres-replication.md` | add | PostgreSQL 복제 경계: 물리 복제, read-only DSN, PgBouncer/PgCat, NUL 입력 정책을 문서화 | 이전 default-branch 상태에서는 PostgreSQL 복제 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | DB 변경을 primary-only와 follow-up drill로 분리해 데이터 안전성을 높임. |
+| `frontend/Dockerfile` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/package-lock.json` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/package.json` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/src/app/globals.css` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/src/app/page.tsx` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/src/components/DashboardLayout.test.tsx` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `frontend/src/components/DashboardLayout.tsx` | edit | 프론트엔드 재설계/패키징: Naruon 업무 UI와 production Docker build 경로를 강화 | 이전 default-branch 상태에서는 프론트엔드 재설계/패키징 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음. |
+| `k8s/backend-deployment.yaml` | edit | Kubernetes 배포 경계: Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영 | 이전 default-branch 상태에서는 Kubernetes 배포 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토. |
+| `k8s/db-statefulset.yaml` | edit | Kubernetes 배포 경계: Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영 | 이전 default-branch 상태에서는 Kubernetes 배포 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토. |
+| `k8s/frontend-deployment.yaml` | edit | Kubernetes 배포 경계: Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영 | 이전 default-branch 상태에서는 Kubernetes 배포 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토. |
+| `k8s/imap-worker-deployment.yaml` | add | Kubernetes 배포 경계: Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영 | 이전 default-branch 상태에서는 Kubernetes 배포 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토. |
+| `k8s/postgres-secret.example.yaml` | add | Kubernetes 배포 경계: Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영 | 이전 default-branch 상태에서는 Kubernetes 배포 경계 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토. |
+| `observability/config.alloy` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/grafana/dashboards/naruon-api.json` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/grafana/provisioning/dashboards/dashboards.yml` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/grafana/provisioning/datasources/datasources.yml` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/otel-collector.yml` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/prometheus.yml` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `observability/tempo.yml` | add | APM/관측성 스택: OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음 | 이전 default-branch 상태에서는 APM/관측성 스택 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인. |
+| `scripts/check_compose_logs.py` | add | 생성/로그 artifact hygiene: Compose 로그에서 warning/fatal 패턴을 점검하는 스크립트를 제공 | 이전 default-branch 상태에서는 생성/로그 artifact hygiene 증적이 release 0.1.0 계약으로 충분히 고정되지 않았기 때문입니다. | 라이브 smoke가 단순 up/down이 아니라 warning policy evidence를 남김. |
+
+### 상세 릴리스 증적
+
+#### E001. `.agents/skills/fix-development-mistakes/SKILL.md`
+
+- E001.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E001.02: 영역은 SWE 실행 정책입니다.
+- E001.03: 의도는 warning/security/dependency downgrade 원인 추적 skill을 보강입니다.
+- E001.04: 이유는 이전 default-branch 상태에서 SWE 실행 정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E001.05: 사용자 영향은 운영자는 경고 억제보다 root cause remediation을 기대할 수 있음입니다.
+- E001.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E001.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E001.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E001.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E001.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E001.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E001.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E001.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E001.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E001.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E001.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E001.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E001.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E001.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E001.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E001.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E001.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E001.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E001.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E001.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E001.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E001.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E001.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E002. `.github/ISSUE_TEMPLATE/bug_report.md`
+
+- E002.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E002.02: 영역은 이슈/PR 템플릿입니다.
+- E002.03: 의도는 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화입니다.
+- E002.04: 이유는 이전 default-branch 상태에서 이슈/PR 템플릿 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E002.05: 사용자 영향은 follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음입니다.
+- E002.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E002.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E002.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E002.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E002.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E002.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E002.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E002.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E002.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E002.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E002.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E002.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E002.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E002.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E002.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E002.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E002.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E002.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E002.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E002.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E002.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E002.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E002.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E003. `.github/ISSUE_TEMPLATE/config.yml`
+
+- E003.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E003.02: 영역은 이슈/PR 템플릿입니다.
+- E003.03: 의도는 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화입니다.
+- E003.04: 이유는 이전 default-branch 상태에서 이슈/PR 템플릿 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E003.05: 사용자 영향은 follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음입니다.
+- E003.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E003.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E003.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E003.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E003.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E003.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E003.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E003.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E003.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E003.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E003.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E003.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E003.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E003.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E003.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E003.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E003.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E003.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E003.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E003.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E003.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E003.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E003.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E004. `.github/ISSUE_TEMPLATE/release_governance.md`
+
+- E004.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E004.02: 영역은 이슈/PR 템플릿입니다.
+- E004.03: 의도는 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화입니다.
+- E004.04: 이유는 이전 default-branch 상태에서 이슈/PR 템플릿 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E004.05: 사용자 영향은 follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음입니다.
+- E004.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E004.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E004.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E004.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E004.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E004.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E004.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E004.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E004.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E004.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E004.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E004.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E004.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E004.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E004.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E004.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E004.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E004.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E004.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E004.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E004.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E004.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E004.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E005. `.github/PULL_REQUEST_TEMPLATE.md`
+
+- E005.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E005.02: 영역은 이슈/PR 템플릿입니다.
+- E005.03: 의도는 변경 영향도, 검증, rollback, secret 처리 질문을 기본 양식화입니다.
+- E005.04: 이유는 이전 default-branch 상태에서 이슈/PR 템플릿 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E005.05: 사용자 영향은 follow-up과 blocker issue가 merge log가 아니라 실행 가능한 작업 단위로 남음입니다.
+- E005.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E005.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E005.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E005.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E005.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E005.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E005.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E005.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E005.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E005.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E005.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E005.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E005.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E005.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E005.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E005.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E005.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E005.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E005.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E005.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E005.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E005.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E005.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E006. `.github/workflows/app-ci.yml`
+
+- E006.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E006.02: 영역은 CI/CD 애플리케이션 검증입니다.
+- E006.03: 의도는 PR에서 백엔드/프론트엔드 품질 게이트를 한 번에 확인입니다.
+- E006.04: 이유는 이전 default-branch 상태에서 CI/CD 애플리케이션 검증 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E006.05: 사용자 영향은 운영자가 merge 전에 pytest, Vitest, ESLint, Next build 실패를 같은 evidence chain에서 볼 수 있음입니다.
+- E006.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E006.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E006.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E006.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E006.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E006.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E006.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E006.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E006.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E006.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E006.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E006.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E006.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E006.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E006.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E006.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E006.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E006.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E006.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E006.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E006.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E006.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E006.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E007. `.github/workflows/bandit.yml`
+
+- E007.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E007.02: 영역은 Bandit 보안 게이트입니다.
+- E007.03: 의도는 SARIF 업로드는 유지하면서 finding은 fail-closed로 전환입니다.
+- E007.04: 이유는 이전 default-branch 상태에서 Bandit 보안 게이트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E007.05: 사용자 영향은 보안 경고가 녹색 check로 숨지 않고 operator가 즉시 원인을 추적입니다.
+- E007.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E007.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E007.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E007.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E007.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E007.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E007.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E007.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E007.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E007.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E007.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E007.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E007.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E007.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E007.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E007.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E007.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E007.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E007.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E007.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E007.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E007.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E007.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E008. `.github/workflows/docker-publish.yml`
+
+- E008.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E008.02: 영역은 GHCR 패키징입니다.
+- E008.03: 의도는 backend/frontend 이미지를 분리하고 SemVer 태그와 digest를 남김입니다.
+- E008.04: 이유는 이전 default-branch 상태에서 GHCR 패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E008.05: 사용자 영향은 배포 대상이 어떤 이미지인지 추적 가능해지고 latest 의존이 줄어듦입니다.
+- E008.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E008.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E008.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E008.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E008.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E008.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E008.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E008.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E008.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E008.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E008.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E008.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E008.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E008.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E008.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E008.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E008.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E008.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E008.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E008.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E008.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E008.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E008.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E009. `.github/workflows/mail-smoke.yml`
+
+- E009.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E009.02: 영역은 메일 self-hosted runner입니다.
+- E009.03: 의도는 사내망 SMTP/IMAP smoke를 workflow_dispatch와 mail-egress runner에 격리입니다.
+- E009.04: 이유는 이전 default-branch 상태에서 메일 self-hosted runner 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E009.05: 사용자 영향은 Naruon을 메일 서버로 만들지 않고 outbound 연결성만 안전하게 확인입니다.
+- E009.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E009.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E009.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E009.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E009.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E009.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E009.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E009.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E009.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E009.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E009.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E009.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E009.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E009.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E009.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E009.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E009.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E009.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E009.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E009.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E009.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E009.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E009.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E010. `.github/workflows/pr-governance.yml`
+
+- E010.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E010.02: 영역은 PR 거버넌스입니다.
+- E010.03: 의도는 metadata-only robot review gate와 auto-merge 조건을 코드 실행 없이 점검입니다.
+- E010.04: 이유는 이전 default-branch 상태에서 PR 거버넌스 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E010.05: 사용자 영향은 fork PR 코드가 privileged context에서 실행되는 위험을 줄이고 current-head evidence를 강제입니다.
+- E010.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E010.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E010.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E010.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E010.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E010.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E010.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E010.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E010.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E010.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E010.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E010.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E010.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E010.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E010.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E010.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E010.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E010.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E010.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E010.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E010.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E010.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E010.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E011. `.github/workflows/strix.yml`
+
+- E011.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E011.02: 영역은 Strix 보안 스캔입니다.
+- E011.03: 의도는 리포트 artifact 누락을 실패로 다룸입니다.
+- E011.04: 이유는 이전 default-branch 상태에서 Strix 보안 스캔 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E011.05: 사용자 영향은 보안 scan 결과가 없는 상태를 성공으로 오인하지 않음입니다.
+- E011.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E011.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E011.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E011.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E011.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E011.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E011.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E011.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E011.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E011.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E011.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E011.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E011.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E011.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E011.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E011.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E011.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E011.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E011.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E011.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E011.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E011.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E011.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E012. `.gitignore`
+
+- E012.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E012.02: 영역은 릴리스 지원 변경입니다.
+- E012.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E012.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E012.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E012.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E012.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E012.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E012.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E012.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E012.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E012.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E012.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E012.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E012.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E012.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E012.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E012.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E012.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E012.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E012.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E012.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E012.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E012.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E012.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E012.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E012.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E012.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E013. `AGENTS.md`
+
+- E013.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E013.02: 영역은 운영 문서/정책입니다.
+- E013.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E013.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E013.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E013.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E013.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E013.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E013.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E013.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E013.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E013.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E013.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E013.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E013.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E013.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E013.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E013.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E013.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E013.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E013.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E013.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E013.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E013.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E013.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E013.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E013.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E013.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E014. `ARCHITECTURE.md`
+
+- E014.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E014.02: 영역은 운영 문서/정책입니다.
+- E014.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E014.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E014.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E014.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E014.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E014.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E014.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E014.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E014.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E014.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E014.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E014.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E014.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E014.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E014.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E014.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E014.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E014.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E014.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E014.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E014.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E014.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E014.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E014.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E014.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E014.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E015. `CHANGELOG.md`
+
+- E015.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E015.02: 영역은 운영 문서/정책입니다.
+- E015.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E015.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E015.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E015.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E015.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E015.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E015.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E015.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E015.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E015.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E015.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E015.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E015.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E015.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E015.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E015.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E015.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E015.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E015.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E015.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E015.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E015.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E015.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E015.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E015.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E015.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E016. `CONTRIBUTING.md`
+
+- E016.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E016.02: 영역은 운영 문서/정책입니다.
+- E016.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E016.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E016.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E016.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E016.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E016.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E016.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E016.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E016.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E016.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E016.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E016.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E016.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E016.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E016.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E016.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E016.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E016.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E016.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E016.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E016.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E016.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E016.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E016.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E016.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E016.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E017. `Dockerfile`
+
+- E017.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E017.02: 영역은 릴리스 지원 변경입니다.
+- E017.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E017.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E017.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E017.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E017.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E017.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E017.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E017.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E017.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E017.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E017.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E017.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E017.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E017.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E017.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E017.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E017.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E017.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E017.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E017.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E017.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E017.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E017.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E017.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E017.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E017.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E018. `README.md`
+
+- E018.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E018.02: 영역은 운영 문서/정책입니다.
+- E018.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E018.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E018.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E018.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E018.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E018.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E018.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E018.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E018.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E018.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E018.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E018.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E018.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E018.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E018.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E018.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E018.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E018.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E018.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E018.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E018.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E018.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E018.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E018.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E018.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E018.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E019. `SECURITY.md`
+
+- E019.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E019.02: 영역은 운영 문서/정책입니다.
+- E019.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E019.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E019.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E019.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E019.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E019.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E019.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E019.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E019.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E019.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E019.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E019.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E019.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E019.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E019.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E019.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E019.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E019.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E019.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E019.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E019.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E019.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E019.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E019.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E019.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E019.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E020. `VERSION`
+
+- E020.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E020.02: 영역은 SemVer VERSION입니다.
+- E020.03: 의도는 릴리스 버전을 0.1.0으로 단일 소스화입니다.
+- E020.04: 이유는 이전 default-branch 상태에서 SemVer VERSION 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E020.05: 사용자 영향은 GHCR tag, Kubernetes manifest, changelog가 같은 version evidence를 공유입니다.
+- E020.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E020.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E020.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E020.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E020.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E020.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E020.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E020.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E020.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E020.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E020.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E020.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E020.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E020.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E020.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E020.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E020.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E020.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E020.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E020.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E020.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E020.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E020.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E021. `backend/api/calendar.py`
+
+- E021.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E021.02: 영역은 백엔드 API 보안/오류 정책입니다.
+- E021.03: 의도는 HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영입니다.
+- E021.04: 이유는 이전 default-branch 상태에서 백엔드 API 보안/오류 정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E021.05: 사용자 영향은 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임입니다.
+- E021.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E021.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E021.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E021.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E021.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E021.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E021.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E021.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E021.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E021.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E021.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E021.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E021.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E021.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E021.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E021.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E021.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E021.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E021.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E021.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E021.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E021.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E021.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E022. `backend/api/llm.py`
+
+- E022.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E022.02: 영역은 백엔드 API 보안/오류 정책입니다.
+- E022.03: 의도는 HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영입니다.
+- E022.04: 이유는 이전 default-branch 상태에서 백엔드 API 보안/오류 정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E022.05: 사용자 영향은 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임입니다.
+- E022.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E022.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E022.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E022.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E022.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E022.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E022.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E022.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E022.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E022.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E022.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E022.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E022.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E022.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E022.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E022.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E022.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E022.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E022.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E022.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E022.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E022.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E022.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E023. `backend/api/network.py`
+
+- E023.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E023.02: 영역은 백엔드 API 보안/오류 정책입니다.
+- E023.03: 의도는 HTTP 상태 보존, 사용자 의존성, 상세 오류 노출 축소를 반영입니다.
+- E023.04: 이유는 이전 default-branch 상태에서 백엔드 API 보안/오류 정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E023.05: 사용자 영향은 사용자는 더 정확한 오류를 보고 operator는 내부 exception 유출 리스크를 줄임입니다.
+- E023.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E023.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E023.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E023.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E023.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E023.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E023.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E023.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E023.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E023.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E023.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E023.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E023.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E023.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E023.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E023.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E023.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E023.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E023.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E023.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E023.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E023.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E023.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E024. `backend/core/config.py`
+
+- E024.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E024.02: 영역은 백엔드 health/readiness/metrics/tracing입니다.
+- E024.03: 의도는 FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가입니다.
+- E024.04: 이유는 이전 default-branch 상태에서 백엔드 health/readiness/metrics/tracing 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E024.05: 사용자 영향은 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단입니다.
+- E024.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E024.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E024.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E024.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E024.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E024.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E024.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E024.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E024.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E024.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E024.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E024.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E024.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E024.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E024.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E024.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E024.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E024.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E024.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E024.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E024.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E024.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E024.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E025. `backend/core/observability.py`
+
+- E025.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E025.02: 영역은 백엔드 health/readiness/metrics/tracing입니다.
+- E025.03: 의도는 FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가입니다.
+- E025.04: 이유는 이전 default-branch 상태에서 백엔드 health/readiness/metrics/tracing 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E025.05: 사용자 영향은 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단입니다.
+- E025.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E025.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E025.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E025.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E025.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E025.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E025.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E025.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E025.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E025.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E025.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E025.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E025.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E025.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E025.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E025.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E025.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E025.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E025.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E025.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E025.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E025.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E025.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E026. `backend/db/session.py`
+
+- E026.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E026.02: 영역은 릴리스 지원 변경입니다.
+- E026.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E026.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E026.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E026.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E026.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E026.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E026.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E026.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E026.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E026.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E026.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E026.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E026.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E026.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E026.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E026.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E026.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E026.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E026.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E026.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E026.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E026.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E026.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E026.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E026.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E026.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E027. `backend/main.py`
+
+- E027.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E027.02: 영역은 백엔드 health/readiness/metrics/tracing입니다.
+- E027.03: 의도는 FastAPI runtime에 readiness와 metrics 및 OTLP export 경계를 추가입니다.
+- E027.04: 이유는 이전 default-branch 상태에서 백엔드 health/readiness/metrics/tracing 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E027.05: 사용자 영향은 로드밸런서, Compose smoke, Grafana dashboard가 같은 endpoint를 기준으로 판단입니다.
+- E027.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E027.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E027.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E027.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E027.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E027.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E027.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E027.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E027.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E027.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E027.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E027.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E027.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E027.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E027.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E027.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E027.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E027.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E027.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E027.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E027.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E027.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E027.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E028. `backend/pytest.ini`
+
+- E028.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E028.02: 영역은 릴리스 지원 변경입니다.
+- E028.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E028.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E028.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E028.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E028.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E028.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E028.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E028.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E028.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E028.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E028.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E028.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E028.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E028.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E028.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E028.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E028.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E028.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E028.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E028.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E028.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E028.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E028.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E028.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E028.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E028.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E029. `backend/requirements.txt`
+
+- E029.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E029.02: 영역은 릴리스 지원 변경입니다.
+- E029.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E029.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E029.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E029.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E029.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E029.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E029.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E029.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E029.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E029.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E029.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E029.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E029.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E029.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E029.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E029.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E029.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E029.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E029.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E029.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E029.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E029.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E029.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E029.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E029.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E029.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E030. `backend/scripts/run_imap_worker.py`
+
+- E030.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E030.02: 영역은 릴리스 지원 변경입니다.
+- E030.03: 의도는 릴리스 후보의 운영 가능성과 검증 가능성을 보강입니다.
+- E030.04: 이유는 이전 default-branch 상태에서 릴리스 지원 변경 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E030.05: 사용자 영향은 사용자 영향과 운영 영향이 문서와 테스트로 추적됨입니다.
+- E030.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E030.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E030.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E030.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E030.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E030.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E030.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E030.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E030.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E030.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E030.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E030.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E030.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E030.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E030.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E030.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E030.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E030.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E030.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E030.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E030.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E030.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E030.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E031. `backend/tests/test_archive.py`
+
+- E031.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E031.02: 영역은 거버넌스/회귀 테스트입니다.
+- E031.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E031.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E031.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E031.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E031.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E031.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E031.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E031.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E031.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E031.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E031.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E031.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E031.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E031.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E031.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E031.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E031.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E031.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E031.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E031.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E031.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E031.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E031.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E031.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E031.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E031.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E032. `backend/tests/test_calendar_api.py`
+
+- E032.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E032.02: 영역은 거버넌스/회귀 테스트입니다.
+- E032.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E032.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E032.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E032.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E032.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E032.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E032.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E032.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E032.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E032.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E032.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E032.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E032.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E032.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E032.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E032.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E032.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E032.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E032.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E032.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E032.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E032.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E032.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E032.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E032.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E032.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E033. `backend/tests/test_db.py`
+
+- E033.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E033.02: 영역은 거버넌스/회귀 테스트입니다.
+- E033.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E033.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E033.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E033.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E033.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E033.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E033.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E033.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E033.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E033.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E033.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E033.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E033.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E033.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E033.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E033.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E033.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E033.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E033.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E033.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E033.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E033.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E033.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E033.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E033.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E033.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E034. `backend/tests/test_llm_api.py`
+
+- E034.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E034.02: 영역은 거버넌스/회귀 테스트입니다.
+- E034.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E034.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E034.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E034.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E034.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E034.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E034.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E034.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E034.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E034.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E034.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E034.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E034.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E034.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E034.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E034.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E034.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E034.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E034.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E034.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E034.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E034.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E034.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E034.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E034.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E034.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E035. `backend/tests/test_main.py`
+
+- E035.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E035.02: 영역은 거버넌스/회귀 테스트입니다.
+- E035.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E035.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E035.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E035.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E035.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E035.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E035.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E035.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E035.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E035.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E035.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E035.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E035.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E035.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E035.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E035.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E035.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E035.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E035.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E035.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E035.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E035.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E035.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E035.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E035.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E035.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E036. `backend/tests/test_network_api.py`
+
+- E036.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E036.02: 영역은 거버넌스/회귀 테스트입니다.
+- E036.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E036.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E036.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E036.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E036.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E036.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E036.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E036.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E036.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E036.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E036.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E036.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E036.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E036.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E036.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E036.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E036.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E036.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E036.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E036.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E036.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E036.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E036.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E036.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E036.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E036.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E037. `backend/tests/test_release_governance.py`
+
+- E037.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E037.02: 영역은 거버넌스/회귀 테스트입니다.
+- E037.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E037.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E037.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E037.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E037.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E037.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E037.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E037.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E037.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E037.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E037.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E037.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E037.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E037.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E037.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E037.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E037.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E037.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E037.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E037.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E037.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E037.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E037.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E037.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E037.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E037.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E038. `backend/tests/test_repo_hygiene.py`
+
+- E038.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E038.02: 영역은 거버넌스/회귀 테스트입니다.
+- E038.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E038.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E038.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E038.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E038.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E038.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E038.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E038.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E038.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E038.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E038.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E038.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E038.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E038.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E038.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E038.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E038.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E038.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E038.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E038.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E038.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E038.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E038.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E038.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E038.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E038.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E039. `backend/tests/test_search.py`
+
+- E039.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E039.02: 영역은 거버넌스/회귀 테스트입니다.
+- E039.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E039.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E039.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E039.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E039.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E039.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E039.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E039.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E039.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E039.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E039.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E039.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E039.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E039.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E039.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E039.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E039.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E039.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E039.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E039.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E039.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E039.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E039.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E039.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E039.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E039.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E040. `backend/tests/test_tenant_config_api.py`
+
+- E040.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E040.02: 영역은 거버넌스/회귀 테스트입니다.
+- E040.03: 의도는 릴리스 계약과 보안 경계가 재발하지 않도록 pytest로 고정입니다.
+- E040.04: 이유는 이전 default-branch 상태에서 거버넌스/회귀 테스트 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E040.05: 사용자 영향은 향후 변경자가 문서와 workflow drift를 CI에서 조기에 발견입니다.
+- E040.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E040.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E040.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E040.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E040.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E040.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E040.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E040.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E040.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E040.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E040.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E040.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E040.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E040.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E040.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E040.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E040.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E040.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E040.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E040.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E040.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E040.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E040.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E041. `docker-compose.yml`
+
+- E041.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E041.02: 영역은 APM/관측성 스택입니다.
+- E041.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E041.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E041.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E041.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E041.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E041.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E041.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E041.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E041.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E041.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E041.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E041.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E041.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E041.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E041.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E041.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E041.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E041.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E041.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E041.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E041.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E041.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E041.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E041.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E041.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E041.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E042. `docs/development/merge-gate-policy.md`
+
+- E042.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E042.02: 영역은 운영 문서/정책입니다.
+- E042.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E042.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E042.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E042.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E042.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E042.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E042.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E042.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E042.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E042.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E042.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E042.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E042.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E042.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E042.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E042.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E042.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E042.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E042.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E042.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E042.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E042.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E042.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E042.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E042.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E042.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E043. `docs/development/release-governance-acceptance.md`
+
+- E043.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E043.02: 영역은 운영 문서/정책입니다.
+- E043.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E043.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E043.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E043.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E043.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E043.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E043.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E043.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E043.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E043.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E043.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E043.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E043.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E043.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E043.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E043.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E043.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E043.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E043.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E043.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E043.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E043.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E043.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E043.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E043.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E043.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E044. `docs/operations/edge-auth.md`
+
+- E044.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E044.02: 영역은 Keycloak/Casdoor/Traefik 후속입니다.
+- E044.03: 의도는 OIDC/edge gateway를 즉시 완료 주장하지 않고 follow-up 경계로 기록입니다.
+- E044.04: 이유는 이전 default-branch 상태에서 Keycloak/Casdoor/Traefik 후속 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E044.05: 사용자 영향은 다중 사용자 production 전환 전에 인증/게이트웨이 결정을 추적입니다.
+- E044.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E044.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E044.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E044.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E044.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E044.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E044.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E044.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E044.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E044.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E044.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E044.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E044.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E044.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E044.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E044.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E044.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E044.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E044.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E044.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E044.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E044.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E044.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E045. `docs/operations/mail-runner.md`
+
+- E045.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E045.02: 영역은 운영 문서/정책입니다.
+- E045.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E045.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E045.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E045.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E045.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E045.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E045.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E045.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E045.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E045.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E045.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E045.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E045.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E045.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E045.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E045.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E045.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E045.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E045.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E045.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E045.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E045.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E045.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E045.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E045.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E045.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E046. `docs/operations/observability.md`
+
+- E046.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E046.02: 영역은 운영 문서/정책입니다.
+- E046.03: 의도는 릴리스, 보안, warning policy, robot review, 배포 경계를 한국어 문서로 정리입니다.
+- E046.04: 이유는 이전 default-branch 상태에서 운영 문서/정책 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E046.05: 사용자 영향은 신규 operator와 SWE agent가 같은 기준으로 검증하고 blocker를 남김입니다.
+- E046.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E046.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E046.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E046.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E046.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E046.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E046.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E046.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E046.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E046.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E046.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E046.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E046.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E046.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E046.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E046.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E046.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E046.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E046.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E046.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E046.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E046.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E046.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E047. `docs/operations/postgres-replication.md`
+
+- E047.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E047.02: 영역은 PostgreSQL 복제 경계입니다.
+- E047.03: 의도는 물리 복제, read-only DSN, PgBouncer/PgCat, NUL 입력 정책을 문서화입니다.
+- E047.04: 이유는 이전 default-branch 상태에서 PostgreSQL 복제 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E047.05: 사용자 영향은 DB 변경을 primary-only와 follow-up drill로 분리해 데이터 안전성을 높임입니다.
+- E047.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E047.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E047.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E047.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E047.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E047.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E047.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E047.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E047.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E047.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E047.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E047.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E047.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E047.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E047.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E047.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E047.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E047.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E047.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E047.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E047.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E047.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E047.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E048. `frontend/Dockerfile`
+
+- E048.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E048.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E048.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E048.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E048.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E048.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E048.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E048.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E048.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E048.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E048.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E048.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E048.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E048.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E048.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E048.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E048.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E048.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E048.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E048.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E048.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E048.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E048.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E048.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E048.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E048.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E048.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E048.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E049. `frontend/package-lock.json`
+
+- E049.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E049.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E049.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E049.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E049.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E049.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E049.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E049.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E049.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E049.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E049.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E049.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E049.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E049.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E049.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E049.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E049.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E049.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E049.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E049.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E049.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E049.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E049.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E049.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E049.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E049.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E049.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E049.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E050. `frontend/package.json`
+
+- E050.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E050.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E050.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E050.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E050.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E050.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E050.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E050.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E050.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E050.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E050.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E050.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E050.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E050.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E050.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E050.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E050.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E050.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E050.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E050.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E050.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E050.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E050.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E050.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E050.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E050.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E050.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E050.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E051. `frontend/src/app/globals.css`
+
+- E051.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E051.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E051.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E051.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E051.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E051.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E051.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E051.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E051.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E051.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E051.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E051.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E051.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E051.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E051.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E051.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E051.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E051.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E051.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E051.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E051.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E051.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E051.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E051.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E051.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E051.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E051.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E051.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E052. `frontend/src/app/page.tsx`
+
+- E052.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E052.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E052.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E052.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E052.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E052.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E052.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E052.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E052.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E052.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E052.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E052.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E052.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E052.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E052.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E052.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E052.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E052.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E052.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E052.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E052.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E052.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E052.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E052.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E052.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E052.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E052.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E052.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E053. `frontend/src/components/DashboardLayout.test.tsx`
+
+- E053.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E053.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E053.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E053.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E053.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E053.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E053.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E053.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E053.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E053.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E053.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E053.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E053.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E053.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E053.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E053.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E053.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E053.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E053.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E053.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E053.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E053.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E053.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E053.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E053.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E053.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E053.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E053.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E054. `frontend/src/components/DashboardLayout.tsx`
+
+- E054.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E054.02: 영역은 프론트엔드 재설계/패키징입니다.
+- E054.03: 의도는 Naruon 업무 UI와 production Docker build 경로를 강화입니다.
+- E054.04: 이유는 이전 default-branch 상태에서 프론트엔드 재설계/패키징 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E054.05: 사용자 영향은 사용자는 모바일/데스크톱에서 일관된 shell을 보고 operator는 dev server 이미지를 배포하지 않음입니다.
+- E054.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E054.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E054.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E054.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E054.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E054.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E054.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E054.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E054.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E054.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E054.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E054.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E054.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E054.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E054.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E054.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E054.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E054.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E054.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E054.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E054.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E054.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E054.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E055. `k8s/backend-deployment.yaml`
+
+- E055.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E055.02: 영역은 Kubernetes 배포 경계입니다.
+- E055.03: 의도는 Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영입니다.
+- E055.04: 이유는 이전 default-branch 상태에서 Kubernetes 배포 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E055.05: 사용자 영향은 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토입니다.
+- E055.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E055.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E055.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E055.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E055.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E055.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E055.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E055.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E055.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E055.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E055.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E055.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E055.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E055.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E055.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E055.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E055.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E055.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E055.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E055.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E055.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E055.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E055.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E056. `k8s/db-statefulset.yaml`
+
+- E056.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E056.02: 영역은 Kubernetes 배포 경계입니다.
+- E056.03: 의도는 Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영입니다.
+- E056.04: 이유는 이전 default-branch 상태에서 Kubernetes 배포 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E056.05: 사용자 영향은 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토입니다.
+- E056.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E056.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E056.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E056.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E056.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E056.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E056.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E056.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E056.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E056.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E056.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E056.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E056.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E056.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E056.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E056.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E056.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E056.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E056.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E056.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E056.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E056.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E056.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E057. `k8s/frontend-deployment.yaml`
+
+- E057.01: 변경 유형은 `edit`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E057.02: 영역은 Kubernetes 배포 경계입니다.
+- E057.03: 의도는 Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영입니다.
+- E057.04: 이유는 이전 default-branch 상태에서 Kubernetes 배포 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E057.05: 사용자 영향은 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토입니다.
+- E057.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E057.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E057.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E057.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E057.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E057.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E057.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E057.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E057.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E057.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E057.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E057.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E057.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E057.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E057.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E057.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E057.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E057.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E057.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E057.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E057.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E057.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E057.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E058. `k8s/imap-worker-deployment.yaml`
+
+- E058.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E058.02: 영역은 Kubernetes 배포 경계입니다.
+- E058.03: 의도는 Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영입니다.
+- E058.04: 이유는 이전 default-branch 상태에서 Kubernetes 배포 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E058.05: 사용자 영향은 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토입니다.
+- E058.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E058.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E058.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E058.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E058.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E058.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E058.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E058.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E058.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E058.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E058.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E058.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E058.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E058.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E058.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E058.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E058.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E058.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E058.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E058.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E058.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E058.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E058.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E059. `k8s/postgres-secret.example.yaml`
+
+- E059.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E059.02: 영역은 Kubernetes 배포 경계입니다.
+- E059.03: 의도는 Secret 참조, SemVer image, probes, PVC, worker 분리를 manifest에 반영입니다.
+- E059.04: 이유는 이전 default-branch 상태에서 Kubernetes 배포 경계 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E059.05: 사용자 영향은 운영자는 plaintext credential과 latest tag 없이 배포 후보를 검토입니다.
+- E059.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E059.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E059.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E059.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E059.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E059.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E059.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E059.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E059.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E059.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E059.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E059.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E059.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E059.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E059.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E059.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E059.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E059.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E059.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E059.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E059.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E059.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E059.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E060. `observability/config.alloy`
+
+- E060.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E060.02: 영역은 APM/관측성 스택입니다.
+- E060.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E060.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E060.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E060.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E060.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E060.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E060.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E060.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E060.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E060.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E060.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E060.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E060.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E060.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E060.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E060.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E060.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E060.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E060.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E060.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E060.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E060.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E060.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E060.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E060.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E060.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E061. `observability/grafana/dashboards/naruon-api.json`
+
+- E061.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E061.02: 영역은 APM/관측성 스택입니다.
+- E061.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E061.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E061.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E061.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E061.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E061.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E061.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E061.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E061.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E061.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E061.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E061.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E061.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E061.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E061.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E061.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E061.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E061.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E061.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E061.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E061.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E061.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E061.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E061.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E061.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E061.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E062. `observability/grafana/provisioning/dashboards/dashboards.yml`
+
+- E062.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E062.02: 영역은 APM/관측성 스택입니다.
+- E062.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E062.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E062.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E062.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E062.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E062.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E062.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E062.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E062.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E062.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E062.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E062.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E062.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E062.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E062.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E062.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E062.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E062.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E062.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E062.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E062.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E062.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E062.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E062.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E062.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E062.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E063. `observability/grafana/provisioning/datasources/datasources.yml`
+
+- E063.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E063.02: 영역은 APM/관측성 스택입니다.
+- E063.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E063.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E063.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E063.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E063.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E063.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E063.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E063.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E063.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E063.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E063.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E063.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E063.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E063.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E063.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E063.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E063.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E063.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E063.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E063.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E063.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E063.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E063.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E063.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E063.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E063.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E064. `observability/otel-collector.yml`
+
+- E064.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E064.02: 영역은 APM/관측성 스택입니다.
+- E064.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E064.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E064.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E064.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E064.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E064.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E064.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E064.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E064.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E064.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E064.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E064.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E064.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E064.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E064.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E064.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E064.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E064.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E064.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E064.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E064.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E064.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E064.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E064.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E064.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E064.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E065. `observability/prometheus.yml`
+
+- E065.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E065.02: 영역은 APM/관측성 스택입니다.
+- E065.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E065.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E065.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E065.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E065.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E065.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E065.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E065.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E065.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E065.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E065.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E065.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E065.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E065.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E065.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E065.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E065.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E065.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E065.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E065.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E065.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E065.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E065.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E065.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E065.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E065.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E066. `observability/tempo.yml`
+
+- E066.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E066.02: 영역은 APM/관측성 스택입니다.
+- E066.03: 의도는 OTel, Prometheus, Grafana, Loki, Tempo, Alloy 구성을 compose로 묶음입니다.
+- E066.04: 이유는 이전 default-branch 상태에서 APM/관측성 스택 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E066.05: 사용자 영향은 장애 시 trace, metric, log evidence를 로컬/운영자가 같은 용어로 확인입니다.
+- E066.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E066.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E066.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E066.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E066.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E066.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E066.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E066.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E066.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E066.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E066.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E066.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E066.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E066.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E066.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E066.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E066.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E066.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E066.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E066.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E066.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E066.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E066.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+#### E067. `scripts/check_compose_logs.py`
+
+- E067.01: 변경 유형은 `add`이며 담당 committer/operator는 Seongho Bae (@seonghobae)입니다.
+- E067.02: 영역은 생성/로그 artifact hygiene입니다.
+- E067.03: 의도는 Compose 로그에서 warning/fatal 패턴을 점검하는 스크립트를 제공입니다.
+- E067.04: 이유는 이전 default-branch 상태에서 생성/로그 artifact hygiene 기준이 release artifact, CI check, 운영 문서, 후속 issue로 충분히 연결되지 않았기 때문입니다.
+- E067.05: 사용자 영향은 라이브 smoke가 단순 up/down이 아니라 warning policy evidence를 남김입니다.
+- E067.06: 운영자 영향은 실패 원인을 녹색 check나 merge log 뒤에 숨기지 않고 재현 가능한 파일/workflow/test 이름으로 추적할 수 있다는 점입니다.
+- E067.07: SWE execution context에서는 이 변경을 단순 코드 수정이 아니라 release governance evidence의 일부로 취급합니다.
+- E067.08: 검증 관점에서는 관련 pytest, frontend test, GitHub Actions syntax, Docker Compose smoke, 또는 문서 계약 중 적어도 하나가 이 파일의 drift를 감지해야 합니다.
+- E067.09: 보안 관점에서는 secret, privileged context, plaintext credential, vulnerable dependency, warning suppression 여부를 함께 검토합니다.
+- E067.10: warning-policy 관점에서는 deprecated, warning, denied, fatal, notice 로그를 억제하지 않고 root cause를 남기는 방향을 유지합니다.
+- E067.11: generated-artifact hygiene 관점에서는 build output, local worktree state, scan artifact가 source policy와 섞이지 않도록 추적합니다.
+- E067.12: rollback 관점에서는 이 파일이 runtime에 영향을 주면 이전 image/tag/config로 되돌리는 절차와 release note를 같이 확인해야 합니다.
+- E067.13: PR governance 관점에서는 current-head CodeRabbit/robot review evidence가 없거나 stale이면 merge 준비 완료로 보지 않습니다.
+- E067.14: CI/CD 관점에서는 broad formatter가 아니라 변경 영역에 맞는 targeted test를 우선합니다.
+- E067.15: Docker/GHCR 관점에서는 backend/frontend image가 분리되어야 하며 SemVer tag와 digest가 release provenance입니다.
+- E067.16: APM 관점에서는 OpenTelemetry trace, Prometheus metric, Loki log, Tempo trace store, Grafana dashboard가 서로 다른 evidence layer를 담당합니다.
+- E067.17: Backend readiness 관점에서는 `/healthz`는 process liveness, `/readyz`는 dependency readiness, `/metrics`는 scrape 가능성을 의미합니다.
+- E067.18: Mail runner 관점에서는 Naruon이 SMTP/IMAP server가 아니라 outbound client이므로 self-hosted runner는 연결성 검증 전용입니다.
+- E067.19: PostgreSQL 관점에서는 write, migration, DDL, strong consistency flow는 primary-only로 남기고 SELECT 분리는 제공된 read-only DSN이 있을 때만 다룹니다.
+- E067.20: PgBouncer/PgCat 관점에서는 관리 DB에 대한 `SHOW VERSION;` best-effort 감지는 실패 시 unknown으로 기록합니다.
+- E067.21: NUL 입력 정책 관점에서는 text/varchar/json 저장 전 `\u0000` 또는 `\x00` 포함 문자열을 제거하는 안전 기본값을 문서화했습니다.
+- E067.22: Keycloak/Casdoor/Traefik 관점에서는 0.1.0에 즉시 완료된 기능으로 과장하지 않고 follow-up/blocker issue로 추적합니다.
+- E067.23: Frontend UX 관점에서는 PC, Tablet, Phone 반응형 분기와 가로 스크롤 방지, mobile drawer/header 정보 보존을 확인 대상으로 둡니다.
+- E067.24: operator attribution 관점에서는 GitHub mention @seonghobae와 이름 Seongho Bae를 같이 남겨 사람이 읽는 문서와 GitHub audit trail을 연결합니다.
+- E067.25: 이 항목은 merge-log-only 기록이 아니라 해당 파일이 사용자와 운영자에게 주는 실제 의미를 설명하기 위한 release evidence입니다.
+- E067.26: 남는 리스크가 있으면 후속 issue 또는 blocker issue에 환경, 명령, raw evidence 위치를 남겨야 합니다.
+- E067.27: PR 본문에는 raw gate evidence를 넣지 않고 필요 시 `PR checks evidence` 코멘트로 분리한다는 문서 정책을 따릅니다.
+- E067.28: 문서 변경만 해당되는 파일은 smoke test 생략이 가능하지만 생략 사유와 남는 리스크를 기록해야 합니다.
+
+### 후속 및 blocker 이슈 추적
+
+- F01: AKS Dev 배포 evidence — kube context와 namespace가 없으면 배포 완료를 주장하지 않고 `kubectl config current-context` 결과를 blocker로 남깁니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F02: GHCR manifest evidence — release tag push 후 backend/frontend package digest와 linux/amd64, linux/arm64 manifest를 확인합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F03: PostgreSQL replication drill — backup, restore, pgvector extension, replica lag, failover boundary를 실제 환경에서 검증합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F04: Read-only DSN routing — 새 read-only 계정을 만드는 대신 제공된 read-only endpoint/DSN으로 SELECT traffic 분리를 검증합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F05: PgBouncer/PgCat detection — 관리 DB `pgbouncer` 또는 `pgcat`에 `SHOW VERSION;`을 시도하고 실패는 unknown으로 기록합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F06: Keycloak/Casdoor decision — SSO 원칙에 맞춰 Keycloak과 Casdoor 후보를 비교하고 mailbox ownership migration 전에 IAM 경계를 확정합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F07: Traefik edge gateway — auth_request 또는 forward auth pattern을 검토하고 PR code 실행 없는 gateway smoke를 설계합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F08: Mail smoke runner readiness — `mail-egress` self-hosted runner label, environment secret, outbound SMTP/IMAP ACL을 확인합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F09: Warning policy enforcement — warning/deprecated/notice/denied/fatal 로그가 발생하면 suppression이 아니라 root cause issue로 전환합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F10: Generated artifact hygiene — build output, scan reports, worktree scratch output이 source commit에 섞이지 않도록 `.gitignore`와 hygiene tests를 유지합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F11: Frontend accessibility pass — skip link, keyboard navigation, mobile drawer, overflow-x 0, modal opacity 기준을 regression test와 screenshot으로 보강합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F12: Dashboard observability — Grafana dashboard panel이 실제 `/metrics` label과 일치하는지 compose smoke 후 확인합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F13: OTel sampling policy — 운영 비용과 개인정보 경계를 고려해 trace sampling과 attribute redaction 정책을 문서화합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F14: Loki retention — 로컬 compose와 운영 환경의 log retention 차이를 기록하고 민감정보 redaction을 확인합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F15: Tempo storage — 개발용 local storage와 운영 object storage 후보를 분리해 문서화합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F16: Alloy pipeline hardening — host log scraping 범위와 container label allowlist를 설정합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F17: Bandit severity policy — Medium 이상 finding은 blocker로 보고 SARIF와 issue를 연결합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F18: Strix artifact policy — report artifact가 없으면 스캔 성공으로 보지 않고 workflow failure를 유지합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F19: Robot review continuity — canonical PR과 duplicate PR을 구분해 기존 PR-first 원칙을 유지합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+- F20: Release notes publication — GitHub release body에는 요약을 넣고 raw evidence는 PR comment 또는 workflow summary로 분리합니다. 담당 맥락은 Seongho Bae (@seonghobae)의 SWE execution/operator context입니다.
+
+### 검증 명령
+
+- `cd backend && /tmp/opencode/ai-email-client-venv-20260509/bin/python -m pytest tests/test_release_governance.py::test_version_and_changelog_follow_semver_and_keep_a_changelog_contracts -q`
+- `cd backend && DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python -m pytest -q`
+- `cd frontend && npm test && npm run lint && npm run build`
+- `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
+- `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
+- `docker compose down`

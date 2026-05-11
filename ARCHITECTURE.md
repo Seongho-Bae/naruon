@@ -61,3 +61,19 @@ Medium-or-higher gate, while third-party LLM/provider warnings are tracked
 separately unless they make the scan incomplete.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
+
+## Release and operations boundary
+
+Release/deployment architecture is documented in
+`docs/operations/release-deployment-architecture.md`. Naruon is not an email
+server; the email boundary is a web client relay/proxy for member-configured
+SMTP/IMAP providers as documented in
+`docs/operations/email-relay-proxy-boundary.md`. PostgreSQL is single-primary in
+the current repo and physical replication/WAL restore remain future work per
+`docs/operations/postgresql-physical-replication.md`.
+
+Authentication remains dummy `X-User-Id` header auth until mailbox ownership,
+Keycloak/Casdoor evaluation, and key rotation are completed; see
+`docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
+NGINX, while Traefik is only an evaluated option in
+`docs/operations/traefik-evaluation.md`.

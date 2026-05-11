@@ -1,0 +1,104 @@
+name: PR Governance
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  workflow_run:
+    workflows:
+      - Application CI
+      - Bandit Security Scan
+      - Build and Publish Docker Images
+      - strix
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to evaluate
+        required: true
+
+permissions:
+  contents: read
+  checks: read
+  statuses: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  governance:
+    name: metadata-only gate evaluation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate PR gate metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DIRECT_PR_NUMBER: ${{ github.event.inputs.pr_number || '' }}
+          TARGET_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+          WORKFLOW_RUN_PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number || '' }}
+        run: |
+          set -euo pipefail
+
+          PR_NUMBER="${DIRECT_PR_NUMBER:-${TARGET_PR_NUMBER:-${WORKFLOW_RUN_PR_NUMBER:-}}}"
+          if [ -z "$PR_NUMBER" ]; then
+            printf 'No pull request number is available for event %s; nothing to evaluate.\n' "$EVENT_NAME"
+            exit 0
+          fi
+
+          OWNER="${GITHUB_REPOSITORY%/*}"
+          REPO="${GITHUB_REPOSITORY#*/}"
+          COMMENT_BODY=""
+
+          PR_JSON="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup)"
+          HEAD_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
+          HEAD_REF_OID="$HEAD_SHA" # headRefOid equivalent for REST metadata paths.
+          MERGE_STATE="$(printf '%s' "$PR_JSON" | jq -r '.mergeStateStatus')"
+          IS_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.isDraft')"
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- Draft PR: merge automation is paused.\n"
+          fi
+
+          if [ "$MERGE_STATE" = "BEHIND" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- Branch is BEHIND the base branch; update the branch and re-run checks.\n"
+          fi
+
+          if [ "$MERGE_STATE" = "DIRTY" ] || [ "$MERGE_STATE" = "UNKNOWN" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- Merge state is ${MERGE_STATE}; resolve conflicts or refresh mergeability.\n"
+          fi
+
+          THREADS_JSON="$(gh api graphql \
+            -F owner="$OWNER" \
+            -F repo="$REPO" \
+            -F number="$PR_NUMBER" \
+            -f query='query($owner:String!, $repo:String!, $number:Int!) { repository(owner:$owner, name:$repo) { pullRequest(number:$number) { headRefOid mergeStateStatus reviewThreads(first:100) { nodes { id isResolved isOutdated } } } } }')"
+          UNRESOLVED_THREADS="$(printf '%s' "$THREADS_JSON" | jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .isOutdated == false)] | length')"
+          if [ "$UNRESOLVED_THREADS" != "0" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- ${UNRESOLVED_THREADS} unresolved current review thread(s) remain.\n"
+          fi
+
+          if ! REQUIRED_CHECKS="$(gh pr checks "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --required --json name,state,link 2>/tmp/pr-checks-error.txt)"; then
+            COMMENT_BODY="${COMMENT_BODY}- Required check metadata could not be read: $(cat /tmp/pr-checks-error.txt).\n"
+          else
+            FAILED_REQUIRED="$(printf '%s' "$REQUIRED_CHECKS" | jq '[.[] | select(.state != "SUCCESS" and .state != "SKIPPED")] | length')"
+            if [ "$FAILED_REQUIRED" != "0" ]; then
+              COMMENT_BODY="${COMMENT_BODY}- ${FAILED_REQUIRED} required check(s) are not successful on ${HEAD_REF_OID}.\n"
+            fi
+          fi
+
+          CHECK_RUNS="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}/check-runs")"
+          CODERABBIT_COUNT="$(printf '%s' "$CHECK_RUNS" | jq '[.check_runs[] | select(.app.slug == "coderabbitai" or (.name | test("CodeRabbit|coderabbit"; "i")))] | length')"
+          if [ "$CODERABBIT_COUNT" = "0" ]; then
+            COMMENT_BODY="${COMMENT_BODY}- Missing current-head CodeRabbit/coderabbitai evidence for ${HEAD_REF_OID}.\n"
+          fi
+
+          if [ -n "$COMMENT_BODY" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
+              -f body="$(printf 'PR governance metadata gate is not ready for `%s`:\n\n%s' "$HEAD_REF_OID" "$COMMENT_BODY")"
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --auto \
+            --merge \
+            --match-head-commit "$HEAD_SHA"
