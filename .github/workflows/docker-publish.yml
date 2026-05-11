@@ -80,7 +80,7 @@ jobs:
             dockerfile: frontend/Dockerfile
             context: .
             build_args: |
-              NEXT_PUBLIC_API_URL=https://example.invalid
+              NEXT_PUBLIC_API_URL=http://localhost:8000
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
