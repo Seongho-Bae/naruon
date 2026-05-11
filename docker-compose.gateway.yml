@@ -30,6 +30,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.localhost`)"
+      - "traefik.http.routers.backend.middlewares=backend-auth"
       - "traefik.http.services.backend.loadbalancer.server.port=8000"
       - "traefik.http.middlewares.backend-auth.forwardauth.address=http://keycloak:8080/realms/master/protocol/openid-connect/userinfo"
       - "traefik.http.middlewares.backend-auth.forwardauth.authResponseHeaders=Authorization"
