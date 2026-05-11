@@ -1,5 +1,7 @@
+'use client';
+
 import Image from 'next/image';
-import React from 'react';
+import React, { useState } from 'react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -25,12 +27,14 @@ const mailNavItems = [
   { label: '임시 보관함', description: '작성 중인 답장', icon: FileText },
 ];
 
+export type MobileWorkspaceView = 'inbox' | 'detail' | 'actions' | 'calendar';
+
 const aiNavItems = [
-  { label: '받은편지함', description: '메일 스레드', icon: Inbox, active: true },
-  { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Network },
-  { label: '판단 포인트', description: '의사결정 기준', icon: Target },
-  { label: '실행 항목', description: '다음 행동 추적', icon: CheckCircle2 },
-  { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays },
+  { label: '받은편지함', description: '메일 스레드', icon: Inbox, active: true, mobileView: 'inbox' as const },
+  { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Network, mobileView: 'detail' as const },
+  { label: '판단 포인트', description: '의사결정 기준', icon: Target, mobileView: 'detail' as const },
+  { label: '실행 항목', description: '다음 행동 추적', icon: CheckCircle2, mobileView: 'actions' as const },
+  { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays, mobileView: 'calendar' as const },
 ];
 
 const headerActions = [
@@ -40,10 +44,10 @@ const headerActions = [
 ];
 
 const mobileNavItems = [
-  { label: '받은편지함', icon: Inbox, active: true },
-  { label: '맥락 검색', icon: Search },
-  { label: 'AI 실행', icon: Sparkles },
-  { label: '일정', icon: CalendarDays },
+  { label: '받은편지함', icon: Inbox, view: 'inbox' as const },
+  { label: '맥락 검색', icon: Search, view: 'detail' as const },
+  { label: 'AI 실행', icon: Sparkles, view: 'actions' as const },
+  { label: '일정', icon: CalendarDays, view: 'calendar' as const },
 ];
 
 function NavLink({
@@ -78,7 +82,38 @@ function NavLink({
   );
 }
 
-export function DashboardLayout({ children }: { children: React.ReactNode }) {
+function HeaderStatusChip({
+  label,
+  icon: Icon,
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+}) {
+  return (
+    <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm">
+      <Icon className="size-4 text-primary" aria-hidden={true} />
+      {label}
+    </span>
+  );
+}
+
+export function DashboardLayout({
+  children,
+  mobileView,
+  onMobileViewChange,
+}: {
+  children: React.ReactNode;
+  mobileView?: MobileWorkspaceView;
+  onMobileViewChange?: (view: MobileWorkspaceView) => void;
+}) {
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [uncontrolledMobileView, setUncontrolledMobileView] = useState<MobileWorkspaceView>('inbox');
+  const activeMobileView = mobileView ?? uncontrolledMobileView;
+  const setActiveMobileView = (view: MobileWorkspaceView) => {
+    if (!onMobileViewChange) setUncontrolledMobileView(view);
+    onMobileViewChange?.(view);
+  };
+
   return (
     <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
       <a
@@ -110,8 +145,8 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
         <nav aria-label="Naruon workspace sections" className="mt-6 space-y-1.5">
           <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">AI 워크스페이스</p>
-          {aiNavItems.map((item) => (
-            <NavLink key={item.label} {...item} />
+          {aiNavItems.map(({ label, description, icon, active }) => (
+            <NavLink key={label} label={label} description={description} icon={icon} active={active} />
           ))}
         </nav>
 
@@ -134,7 +169,14 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
       <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <header aria-label="Naruon workspace header" className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card/85 px-4 backdrop-blur-xl lg:px-6">
-          <button type="button" aria-label="Open workspace menu" className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground lg:hidden">
+          <button
+            type="button"
+            aria-label="Open workspace menu"
+            aria-controls="mobile-workspace-menu"
+            aria-expanded={isWorkspaceMenuOpen}
+            onClick={() => setIsWorkspaceMenuOpen((open) => !open)}
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 lg:hidden"
+          >
             <Menu className="size-5" aria-hidden="true" />
           </button>
           <div className="flex items-center gap-2 lg:hidden">
@@ -152,16 +194,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
           </label>
           <div className="ml-auto hidden items-center gap-2 xl:flex">
             {headerActions.map(({ label, icon: Icon }) => (
-              <button key={label} type="button" className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
-                <Icon className="size-4" aria-hidden="true" />
-                {label}
-              </button>
+              <HeaderStatusChip key={label} label={label} icon={Icon} />
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2 xl:ml-0">
-            <button type="button" aria-label="Help" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground md:grid">
+            <span aria-label="도움말 상태" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground md:grid">
               <HelpCircle className="size-4" aria-hidden="true" />
-            </button>
+            </span>
             <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">
               맥락 종합
             </span>
@@ -176,18 +215,54 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         </section>
       </main>
 
+      <div
+        id="mobile-workspace-menu"
+        hidden={!isWorkspaceMenuOpen}
+        className="fixed inset-x-3 top-20 z-50 rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
+        </div>
+        <nav aria-label="Mobile workspace menu" className="grid gap-2">
+          {aiNavItems.map(({ label, description, icon: Icon, active, mobileView: itemMobileView }) => (
+            <a
+              key={label}
+              href="#main-content"
+              aria-current={active ? 'page' : undefined}
+              onClick={() => {
+                setActiveMobileView(itemMobileView);
+                setIsWorkspaceMenuOpen(false);
+              }}
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            >
+              <Icon className="size-4 text-primary" aria-hidden="true" />
+              <span className="flex flex-col leading-tight">
+                <span>{label}</span>
+                <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
+              </span>
+            </a>
+          ))}
+        </nav>
+      </div>
+
       <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
-        {mobileNavItems.map(({ label, icon: Icon, active }) => (
-          <a
-            key={label}
-            href="#main-content"
-            aria-current={active ? 'page' : undefined}
-            className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-          >
-            <Icon className="size-4" aria-hidden="true" />
-            {label}
-          </a>
-        ))}
+        {mobileNavItems.map(({ label, icon: Icon, view }) => {
+          const active = activeMobileView === view;
+          return (
+            <button
+              key={label}
+              type="button"
+              onClick={() => setActiveMobileView(view)}
+              aria-current={active ? 'page' : undefined}
+              data-mobile-view={view}
+              className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              {label}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );

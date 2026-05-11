@@ -14,13 +14,13 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await expect(page.getByText('1개 노드와 1개 관계')).toBeVisible();
 
   await page.getByRole('button', { name: '캘린더 반영' }).last().click();
-  await expect(page.getByText('Synced 2 events!')).toBeVisible();
+  await expect(page.getByText('2개 일정이 캘린더에 반영되었습니다.')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI 답장 초안' }).last().click();
-  await expect(page.getByLabel('Reply draft')).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
+  await expect(page.getByLabel('답장 초안')).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
 
   await page.getByRole('button', { name: '답장 보내기' }).click();
-  await expect(page.getByText('Reply simulated in development mode. No email was delivered.')).toBeVisible();
+  await expect(page.getByText('개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.')).toBeVisible();
 });
 
 test('submits branded inbox search against the search API', async ({ page }) => {

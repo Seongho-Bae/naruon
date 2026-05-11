@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DashboardLayout } from "./DashboardLayout";
 
@@ -37,6 +37,10 @@ describe("DashboardLayout", () => {
     const mailNav = container.querySelector('nav[aria-label="Mail sections"]');
     const aiNav = container.querySelector('nav[aria-label="AI workspace sections"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('button') ?? []).map(
+      (button) => button.textContent,
+    );
     const main = container.querySelector("main#main-content");
     const skipLink = container.querySelector<HTMLAnchorElement>(
       'a[href="#main-content"]',
@@ -49,6 +53,9 @@ describe("DashboardLayout", () => {
     expect(mailNav).not.toBeNull();
     expect(aiNav).not.toBeNull();
     expect(mobileNav).not.toBeNull();
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
+    expect(mobileNavButtons).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
@@ -67,5 +74,43 @@ describe("DashboardLayout", () => {
     expect(banner?.textContent ?? "").toContain("할 일 만들기");
     expect(skipLink?.textContent).toBe("Skip to main content");
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
+
+    act(() => {
+      mobileMenuButton?.click();
+    });
+
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector('#mobile-workspace-menu')?.textContent ?? "").toContain("판단 포인트");
+  });
+
+  it("routes mobile workspace menu items to primary mobile views", () => {
+    const handleMobileViewChange = vi.fn();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout mobileView="inbox" onMobileViewChange={handleMobileViewChange}>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    act(() => {
+      mobileMenuButton?.click();
+    });
+
+    const executionLink = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('#mobile-workspace-menu a'),
+    ).find((link) => link.textContent?.includes("실행 항목"));
+
+    act(() => {
+      executionLink?.click();
+    });
+
+    expect(handleMobileViewChange).toHaveBeenCalledWith("actions");
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
   });
 });
