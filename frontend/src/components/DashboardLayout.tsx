@@ -91,7 +91,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
         <div className="space-y-5">
           <div className="flex items-center gap-3">
-            <Image src="/brand/naruon-logo.svg" alt="Naruon" width={146} height={40} priority />
+            <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} priority style={{ width: '150px', height: '40px' }} />
           </div>
           <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
             <p className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</p>
@@ -138,7 +138,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <Menu className="size-5" aria-hidden="true" />
           </button>
           <div className="flex items-center gap-2 lg:hidden">
-            <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" />
+            <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
           <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] md:flex">
