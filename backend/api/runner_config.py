@@ -80,6 +80,14 @@ async def rotate_runner_token(
     else:
         config.registration_token = token
 
-    await db.commit()
-    await db.refresh(config)
+    try:
+        await db.commit()
+        await db.refresh(config)
+    except Exception as exc:
+        if "ENCRYPTION_KEY is required" not in str(exc):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail="Server encryption key is not configured. Contact your workspace administrator.",
+        ) from exc
     return RunnerRotateResponse(workspace_id=config.workspace_id, registration_token=token)

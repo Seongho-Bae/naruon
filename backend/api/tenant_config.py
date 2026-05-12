@@ -90,7 +90,15 @@ async def create_or_update_config(
         db_config = TenantConfig(**config_data)
         db.add(db_config)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as exc:
+        if "ENCRYPTION_KEY is required" not in str(exc):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail="Server encryption key is not configured. Contact your workspace administrator.",
+        ) from exc
     return {"status": "ok"}
 
 
