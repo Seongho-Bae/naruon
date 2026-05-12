@@ -1,3 +1,9 @@
+## [0.9.0] - 2026-05-12
+
+### 추가
+- Seongho Bae (@seonghobae): Naruon 워크스페이스의 중앙 뷰인 `AI Hub`와 재사용 가능한 프롬프트를 만들고 테스트할 수 있는 `Prompt Studio` MVP를 추가했습니다. (이슈 T-006)
+- Seongho Bae (@seonghobae): Provider-neutral 레지스트리 기반으로 사용자가 작성한 프롬프트에 `{{변수}}`를 주입하여 곧장 테스트해보고 워크스페이스와 공유할 수 있도록 `/api/prompts` CRUD 엔드포인트와 DB 모델을 도입했습니다.
+
 ## [0.8.1] - 2026-05-11
 
 ### 수정
