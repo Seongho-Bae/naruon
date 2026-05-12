@@ -47,7 +47,8 @@ const headerActions = [
 
 
 
-function isActivePath(pathname: string, href: string) {
+function isActivePath(pathname: string | null, href: string) {
+  if (!pathname) return false;
   return href === '/'
     ? pathname === '/'
     : pathname === href || pathname.startsWith(`${href}/`);
