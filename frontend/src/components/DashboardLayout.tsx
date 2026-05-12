@@ -17,17 +17,39 @@ import {
   Search,
   Send,
   Sparkles,
-  Settings,
-  Code,
   Star,
   Target,
+  FolderOpen,
+  TrendingUp,
+  Edit3
 } from 'lucide-react';
 
 const mailNavItems = [
   { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/' },
-  { label: 'AI Hub', description: '최근 요약 및 인사이트', icon: Network, href: '/ai-hub' },
-  { label: 'Prompt Studio', description: '프롬프트 테스트 및 관리', icon: Code, href: '/prompt-studio' },
-  { label: '워크스페이스 설정', description: 'LLM 및 보안 설정', icon: Settings, href: '/settings' },
+  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred' },
+  { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent' },
+  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts' },
+  { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all' },
+];
+
+const aiHubItems = [
+  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub/context' },
+  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub/decisions' },
+  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub/actions' },
+];
+
+const projectItems = [
+  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects/launch' },
+  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects/vendor' },
+  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects/marketing' },
+];
+
+const labelItems = [
+  { label: '긴급', color: 'bg-red-500', href: '/labels/urgent' },
+  { label: '회의', color: 'bg-yellow-500', href: '/labels/meeting' },
+  { label: '계약', color: 'bg-green-500', href: '/labels/contract' },
+  { label: '디자인', color: 'bg-purple-500', href: '/labels/design' },
+  { label: '개발', color: 'bg-blue-500', href: '/labels/dev' },
 ];
 
 const aiNavItems = [
@@ -61,7 +83,7 @@ function NavLink({
   href = '#main-content',
 }: {
   label: string;
-  description: string;
+  description?: string;
   href?: string;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
@@ -72,7 +94,7 @@ function NavLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+      className={`group flex min-h-9 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
         active
           ? 'bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.24)]'
           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
@@ -134,12 +156,80 @@ export function DashboardLayout({
           </div>
         </div>
 
-        <nav aria-label="Naruon workspace sections" className="mt-6 space-y-1.5">
-          <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">워크스페이스</p>
+        <div className="px-3 pb-4">
+          <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg py-2.5 px-4 flex items-center justify-center gap-2 transition-colors">
+            <Edit3 className="w-4 h-4" />
+            메일 작성
+          </button>
+        </div>
+
+        <nav aria-label="Mail sections" className="space-y-0.5">
           {mailNavItems.map((item) => (
             <NavLink key={item.label} {...item} />
           ))}
         </nav>
+
+        <nav aria-label="AI Hub sections" className="mt-6 space-y-0.5">
+          <div className="flex items-center justify-between px-3 mb-1">
+            <p className="text-[11px] font-bold text-muted-foreground">AI 허브</p>
+            <span className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">BETA</span>
+          </div>
+          {aiHubItems.map((item) => (
+            <NavLink key={item.label} {...item} />
+          ))}
+        </nav>
+
+        <nav aria-label="Projects sections" className="mt-6 space-y-0.5">
+          <div className="flex items-center justify-between px-3 mb-1 cursor-pointer hover:bg-secondary/50 rounded-md py-1">
+            <p className="text-[11px] font-bold text-muted-foreground">프로젝트</p>
+            <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M4 6H11L7.5 10.5L4 6Z" fill="currentColor"></path></svg>
+          </div>
+          {projectItems.map((item) => (
+            <NavLink key={item.label} {...item} />
+          ))}
+        </nav>
+
+        <nav aria-label="Labels sections" className="mt-6 space-y-0.5">
+          <div className="flex items-center justify-between px-3 mb-1 cursor-pointer hover:bg-secondary/50 rounded-md py-1">
+            <p className="text-[11px] font-bold text-muted-foreground">라벨</p>
+            <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M7 7V2H8V7H13V8H8V13H7V8H2V7H7Z" fill="currentColor"></path></svg>
+          </div>
+          {labelItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                className={`group flex min-h-8 items-center gap-3 rounded-lg px-3 py-1 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                  active
+                    ? 'bg-primary/10 font-bold text-primary'
+                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+        
+        <div className="pt-6 px-3 pb-4">
+          <div className="bg-secondary/30 rounded-xl p-3 border border-border">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold text-foreground">오늘의 인사이트</p>
+              <TrendingUp className="w-3 h-3 text-muted-foreground" />
+            </div>
+            <p className="text-xs text-muted-foreground mb-1">업무 집중 시간</p>
+            <p className="text-xs font-bold">오전 10:00 - 12:00</p>
+            <div className="mt-3 h-12 flex items-end gap-1 opacity-60">
+              <div className="bg-primary/40 w-full rounded-t-sm h-[20%]"></div>
+              <div className="bg-primary/40 w-full rounded-t-sm h-[40%]"></div>
+              <div className="bg-primary/80 w-full rounded-t-sm h-[80%]"></div>
+              <div className="bg-primary w-full rounded-t-sm h-[100%]"></div>
+              <div className="bg-primary/60 w-full rounded-t-sm h-[60%]"></div>
+            </div>
+          </div>
+        </div>
 
         <nav aria-label="AI workspace sections" className="sr-only">
           {aiNavItems.map(({ label }) => (

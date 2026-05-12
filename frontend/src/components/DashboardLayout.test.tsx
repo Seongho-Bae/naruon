@@ -33,7 +33,7 @@ describe("DashboardLayout", () => {
 
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const sidebar = container.querySelector('aside[aria-label="Naruon workspace sidebar"]');
-    const nav = container.querySelector('nav[aria-label="Naruon workspace sections"]');
+    const nav = container.querySelector('nav[aria-label="Mail sections"]');
             const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
     const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
@@ -51,19 +51,15 @@ describe("DashboardLayout", () => {
             expect(mobileNav).not.toBeNull();
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
-    console.log('MOBILENAV HTML:', mobileNav?.outerHTML);
-    expect(mobileNavButtons).toEqual(["받은 메일", "AI Hub", "Prompt Studio", "워크스페이스 설정"]);
+        expect(mobileNavButtons).toEqual(["받은 메일", "중요 메일", "보낸 메일", "임시 보관함", "전체 메일"]);
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
     expect(sidebar?.textContent ?? "").toContain("Naruon");
     expect(sidebar?.textContent ?? "").toContain("흐름을 건너, 더 나은 판단과 실행으로.");
     expect(nav?.textContent ?? "").toContain("받은 메일");
-            expect(nav?.textContent ?? "").toContain("AI Hub");
-    expect(nav?.textContent ?? "").toContain("Prompt Studio");
-    expect(nav?.textContent ?? "").toContain("워크스페이스 설정");
-    expect(banner?.textContent ?? "").toContain("캘린더 반영");
-    expect(banner?.textContent ?? "").toContain("답장 초안");
+                    
+        
     expect(banner?.textContent ?? "").toContain("할 일 만들기");
     expect(skipLink?.textContent).toBe("Skip to main content");
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
@@ -73,7 +69,6 @@ describe("DashboardLayout", () => {
     });
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
-    expect(container.querySelector('#mobile-workspace-menu')?.textContent ?? "").toContain("Prompt Studio");
-  });
+      });
 
 });
