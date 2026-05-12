@@ -10,7 +10,9 @@ export function DevAuthSwitcher() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const stored = localStorage.getItem('naruon_dev_user');
-      if (stored) setUserId(stored);
+      if (stored) {
+        setTimeout(() => setUserId(stored), 0);
+      }
     }
   }, []);
 
