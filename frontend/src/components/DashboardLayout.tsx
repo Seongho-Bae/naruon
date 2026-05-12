@@ -1,6 +1,8 @@
 'use client';
 
 import Image from 'next/image';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
 import {
   CalendarDays,
@@ -15,16 +17,17 @@ import {
   Search,
   Send,
   Sparkles,
+  Settings,
+  Code,
   Star,
   Target,
 } from 'lucide-react';
 
 const mailNavItems = [
-  { label: '홈', description: '오늘의 업무 흐름', icon: Home },
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, active: true },
-  { label: '중요 메일', description: '놓치면 안 되는 흐름', icon: Star },
-  { label: '보낸 메일', description: '후속 확인', icon: Send },
-  { label: '임시 보관함', description: '작성 중인 답장', icon: FileText },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/' },
+  { label: 'AI Hub', description: '최근 요약 및 인사이트', icon: Network, href: '/ai-hub' },
+  { label: 'Prompt Studio', description: '프롬프트 테스트 및 관리', icon: Code, href: '/prompt-studio' },
+  { label: '워크스페이스 설정', description: 'LLM 및 보안 설정', icon: Settings, href: '/settings' },
 ];
 
 export type MobileWorkspaceView = 'inbox' | 'detail' | 'actions' | 'calendar';
@@ -54,16 +57,19 @@ function NavLink({
   label,
   description,
   icon: Icon,
-  active = false,
+  href = '#main-content',
 }: {
   label: string;
   description: string;
+  href?: string;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
-  active?: boolean;
 }) {
+  const pathname = usePathname();
+  const active = pathname === href;
+
   return (
-    <a
-      href="#main-content"
+    <Link
+      href={href}
       aria-current={active ? 'page' : undefined}
       className={`group flex min-h-11 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
         active
@@ -78,7 +84,7 @@ function NavLink({
           {description}
         </span>
       </span>
-    </a>
+    </Link>
   );
 }
 
@@ -106,6 +112,7 @@ export function DashboardLayout({
   mobileView?: MobileWorkspaceView;
   onMobileViewChange?: (view: MobileWorkspaceView) => void;
 }) {
+  const pathname = usePathname();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [uncontrolledMobileView, setUncontrolledMobileView] = useState<MobileWorkspaceView>('inbox');
   const activeMobileView = mobileView ?? uncontrolledMobileView;
@@ -136,17 +143,10 @@ export function DashboardLayout({
           </div>
         </div>
 
-        <nav aria-label="Mail sections" className="mt-6 space-y-1.5">
-          <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">메일</p>
+        <nav aria-label="Naruon workspace sections" className="mt-6 space-y-1.5">
+          <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">워크스페이스</p>
           {mailNavItems.map((item) => (
             <NavLink key={item.label} {...item} />
-          ))}
-        </nav>
-
-        <nav aria-label="Naruon workspace sections" className="mt-6 space-y-1.5">
-          <p className="px-3 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">AI 워크스페이스</p>
-          {aiNavItems.map(({ label, description, icon, active }) => (
-            <NavLink key={label} label={label} description={description} icon={icon} active={active} />
           ))}
         </nav>
 
