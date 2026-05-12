@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
-from sqlalchemy import String, DateTime, Text, ForeignKey
+from sqlalchemy import String, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.types import TypeDecorator
 from cryptography.fernet import Fernet
 from core.config import settings
@@ -25,6 +25,8 @@ def get_fernet() -> Fernet:
             key_b64 = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
             return Fernet(key_b64)
     else:
+        if not settings.DEBUG:
+            raise RuntimeError("ENCRYPTION_KEY is required in production. Refusing to use fallback key.")
         return Fernet(FALLBACK_KEY)
 
 
@@ -52,6 +54,30 @@ class EncryptedString(TypeDecorator):
                 logger.warning("Failed to decrypt field in EncryptedString")
                 return value
         return value
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    action: Mapped[str] = mapped_column(String)
+    resource_type: Mapped[str] = mapped_column(String)
+    resource_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class LLMProvider(Base):
+    __tablename__ = "llm_providers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String, index=True, unique=True)
+    provider_type: Mapped[str] = mapped_column(String) # e.g. openai, anthropic, gemini, ollama
+    base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
 class Email(Base):

@@ -9,6 +9,7 @@ from api.network import router as network_router
 from api.emails import router as emails_router
 from api.tenant_config import router as tenant_config_router
 from api.runtime_config import router as runtime_config_router
+from api.llm_providers import router as llm_providers_router
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -72,6 +73,7 @@ app.include_router(network_router)
 app.include_router(emails_router)
 app.include_router(tenant_config_router)
 app.include_router(runtime_config_router)
+app.include_router(llm_providers_router)
 
 
 app.add_middleware(
