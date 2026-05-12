@@ -1,3 +1,8 @@
+## [0.10.2] - 2026-05-12
+
+### 수정
+- Seongho Bae (@seonghobae): UAT 환경에서 좌측 사이드바의 버튼이 단순 더미 앵커(`href="#main-content"`)로 동작하던 문제를 수정하고, Next.js의 `Link` 라우터와 실제 `/settings`, `/ai-hub`, `/prompt-studio` 등 신규 메뉴 링크를 완벽히 연동했습니다.
+
 ## [0.10.1] - 2026-05-12
 
 ### 수정
