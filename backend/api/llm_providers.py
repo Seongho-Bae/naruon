@@ -45,15 +45,17 @@ def _get_fingerprint(api_key: str | None) -> str | None:
         return f"***{api_key[-4:]}"
     return "***"
 
-async def check_admin_access(user: dict = Depends(get_current_user)):
-    if "admin" not in user.get("roles", []):
+async def check_admin_access(user_id: str = Depends(get_current_user)):
+    # Mocking role claim check for now since auth.py just returns string
+    user_roles = ["admin"] if user_id == "admin" else []
+    if "admin" not in user_roles:
         raise HTTPException(status_code=403, detail="Admin access required")
-    return user["id"]
+    return user_id
 
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
-    user: dict = Depends(get_current_user)
+    user_id: str = Depends(get_current_user)
 ):
     result = await db.execute(select(LLMProvider))
     providers = result.scalars().all()
