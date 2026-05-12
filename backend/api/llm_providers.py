@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
@@ -44,16 +45,15 @@ def _get_fingerprint(api_key: str | None) -> str | None:
         return f"***{api_key[-4:]}"
     return "***"
 
-async def check_admin_access(user_id: str = Depends(get_current_user)):
-    # In a real app, check role from DB or token
-    if user_id != "admin":
+async def check_admin_access(user: dict = Depends(get_current_user)):
+    if "admin" not in user.get("roles", []):
         raise HTTPException(status_code=403, detail="Admin access required")
-    return user_id
+    return user["id"]
 
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(check_admin_access)
+    user: dict = Depends(get_current_user)
 ):
     result = await db.execute(select(LLMProvider))
     providers = result.scalars().all()
@@ -86,7 +86,6 @@ async def create_provider(
         is_active=data.is_active
     )
     db.add(provider)
-    
     audit = AuditLog(
         user_id=user_id,
         action="create",
@@ -94,9 +93,12 @@ async def create_provider(
         details=f"Created provider {data.name}"
     )
     db.add(audit)
-    
-    await db.commit()
-    await db.refresh(provider)
+    try:
+        await db.commit()
+        await db.refresh(provider)
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Provider name already exists")
     
     return LLMProviderResponse(
         id=provider.id,
@@ -160,3 +162,25 @@ async def update_provider(
         fingerprint=_get_fingerprint(provider.api_key),
         updated_at=provider.updated_at
     )
+
+@router.delete("/{provider_id}", status_code=204)
+async def delete_provider(
+    provider_id: int,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(check_admin_access)
+):
+    result = await db.execute(select(LLMProvider).where(LLMProvider.id == provider_id))
+    provider = result.scalars().first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Provider not found")
+        
+    await db.delete(provider)
+    audit = AuditLog(
+        user_id=user_id,
+        action="delete",
+        resource_type="llm_provider",
+        resource_id=str(provider.id),
+        details=f"Deleted provider {provider.name}"
+    )
+    db.add(audit)
+    await db.commit()

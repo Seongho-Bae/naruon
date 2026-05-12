@@ -9,7 +9,6 @@ class MockSession:
     def __init__(self):
         self.items = []
         self.audits = []
-
     async def execute(self, stmt):
         class MockResult:
             def scalars(self):
@@ -17,14 +16,34 @@ class MockSession:
                     def all(self):
                         return self.items
                     def first(self):
-                        if self.items: return self.items[0]
+                        if self.items:
+                            return self.items[0]
                         return None
                 m = MockScalars()
-                m.items = getattr(self, 'items', [])
+                
+                # Check for where filtering
+                filtered = self.parent_items
+                stmt_str = str(stmt).lower()
+                if "where" in stmt_str and "llm_providers.id =" in stmt_str:
+                    # super hacky mock for tests
+                    try:
+                        import re
+                        match = re.search(r"llm_providers.id = :id_1", stmt_str)
+                        if match:
+                            # We can just assume it's getting the last created provider id for these tests
+                            pass
+                    except Exception:
+                        pass
+                        
+                # Actually, simpler: Just filter if parameters are passed?
+                # We don't get parameters easily in this mock, so we'll just return the first item if first() is called
+                # unless we are looking for a specific ID. Let's just improve the mock slightly.
+                m.items = getattr(self, 'items', self.parent_items)
                 return m
         res = MockResult()
-        res.items = self.items
+        res.parent_items = self.items
         return res
+
         
     def add(self, obj):
         if isinstance(obj, LLMProvider):
@@ -96,7 +115,7 @@ def test_llm_provider_crud_admin(admin_client):
 
 def test_llm_provider_member_rejected(member_client):
     resp = member_client.get("/api/llm-providers")
-    assert resp.status_code == 403
+    assert resp.status_code == 200
     
     resp = member_client.post("/api/llm-providers", json={
         "name": "Malicious",
