@@ -31,6 +31,8 @@ export default function SettingsPage() {
   });
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
   const fetchProviders = async () => {
     try {
@@ -82,7 +84,12 @@ export default function SettingsPage() {
       if (formData.base_url) payload.base_url = formData.base_url;
       if (formData.api_key) payload.api_key = formData.api_key;
 
-      await apiClient.post<LLMProvider>('/api/llm-providers', payload);
+      if (editingId) {
+        await apiClient.put<LLMProvider>(`/api/llm-providers/${editingId}`, payload);
+        setEditingId(null);
+      } else {
+        await apiClient.post<LLMProvider>('/api/llm-providers', payload);
+      }
       setSubmitSuccess(true);
       setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
       fetchProviders();
@@ -135,9 +142,51 @@ export default function SettingsPage() {
                   <div key={p.id} className="p-4 rounded-xl border border-border bg-card/50 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
                       <span className="font-bold">{p.name}</span>
-                      <Badge variant={p.is_active ? "default" : "secondary"}>
-                        {p.is_active ? "활성" : "비활성"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={p.is_active ? "default" : "secondary"}>
+                          {p.is_active ? "활성" : "비활성"}
+                        </Badge>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-[11px] px-2"
+                          onClick={() => {
+                            setEditingId(p.id);
+                            setFormData({
+                              name: p.name,
+                              provider_type: p.provider_type,
+                              base_url: p.base_url || '',
+                              api_key: ''
+                            });
+                          }}
+                        >
+                          수정
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-[11px] px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          disabled={isDeleting === p.id}
+                          onClick={async () => {
+                            if (!confirm("정말 이 제공자를 삭제하시겠습니까?")) return;
+                            setIsDeleting(p.id);
+                            try {
+                              await apiClient.delete(`/api/llm-providers/${p.id}`);
+                              fetchProviders();
+                              if (editingId === p.id) {
+                                setEditingId(null);
+                                setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
+                              }
+                            } catch (e: unknown) {
+                              alert("삭제 실패: " + ((e as Error).message || ""));
+                            } finally {
+                              setIsDeleting(null);
+                            }
+                          }}
+                        >
+                          {isDeleting === p.id ? "삭제중..." : "삭제"}
+                        </Button>
+                      </div>
                     </div>
                     <div className="text-xs text-muted-foreground font-mono bg-secondary/50 p-2 rounded-lg">
                       <p>Type: {p.provider_type}</p>
@@ -164,7 +213,7 @@ export default function SettingsPage() {
 
         <div>
           <section className="bg-white rounded-2xl border border-border shadow-sm p-5 sticky top-8">
-            <h3 className="font-bold mb-4">새 제공자 추가</h3>
+            <h3 className="font-bold mb-4">{editingId ? "제공자 수정" : "새 제공자 추가"}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground">식별 이름</label>
@@ -212,7 +261,25 @@ export default function SettingsPage() {
               {submitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{submitError}</div>}
               {submitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">제공자가 성공적으로 추가되었습니다.</div>}
 
-              <Button type="submit" className="w-full font-bold">저장 및 활성화</Button>
+              <div className="flex gap-2">
+                <Button type="submit" className="flex-1 font-bold">
+                  {editingId ? "수정 반영" : "저장 및 활성화"}
+                </Button>
+                {editingId && (
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => {
+                      setEditingId(null);
+                      setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
+                      setSubmitError(null);
+                      setSubmitSuccess(false);
+                    }}
+                  >
+                    취소
+                  </Button>
+                )}
+              </div>
             </form>
           </section>
         </div>

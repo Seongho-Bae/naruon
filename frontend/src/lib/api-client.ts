@@ -51,6 +51,33 @@ export class ApiClient {
     }
     return response.json();
   }
+
+  async put<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...init,
+      method: 'PUT',
+      headers: this.getHeaders(init),
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(`API PUT ${endpoint} failed: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  async delete<T>(endpoint: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...init,
+      method: 'DELETE',
+      headers: this.getHeaders(init),
+    });
+    if (!response.ok) {
+      throw new Error(`API DELETE ${endpoint} failed: ${response.statusText}`);
+    }
+    // DELETE might return 204 No Content, handle gracefully
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
+  }
 }
 
 export const apiClient = new ApiClient();
