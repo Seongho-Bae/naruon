@@ -3,7 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 import datetime
-import hashlib
 from db.session import get_db
 from db.models import LLMProvider, AuditLog
 from api.auth import get_current_user
@@ -41,7 +40,9 @@ class LLMProviderResponse(BaseModel):
 def _get_fingerprint(api_key: str | None) -> str | None:
     if not api_key:
         return None
-    return hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:8]
+    if len(api_key) > 8:
+        return f"***{api_key[-4:]}"
+    return "***"
 
 async def check_admin_access(user_id: str = Depends(get_current_user)):
     # In a real app, check role from DB or token

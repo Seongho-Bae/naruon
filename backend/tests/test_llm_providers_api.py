@@ -3,8 +3,6 @@ from fastapi.testclient import TestClient
 from main import app
 from db.models import LLMProvider, AuditLog
 from db.session import get_db
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from db.session import get_db
 
 class MockSession:
@@ -38,7 +36,6 @@ class MockSession:
             
     async def commit(self):
         pass
-        
     async def refresh(self, obj):
         pass
 
