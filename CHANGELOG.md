@@ -1,3 +1,9 @@
+## [0.7.0] - 2026-05-11
+
+### 추가
+- Seongho Bae (@seonghobae): 재사용 가능한 AI 특화 프론트엔드 UI 컴포넌트인 `InsightCard`를 개발하여 로딩/실패/출처(Provenance) 표기 및 재시도 상태를 통합했습니다.
+- Seongho Bae (@seonghobae): 백엔드의 AI 라우터(`api/llm.py`) 및 서비스(`llm_service.py`)가 더 이상 특정 벤더(OpenAI) 환경 변수나 레거시 Tenant 설정에 얽매이지 않고, Provider-neutral 레지스트리(`LLMProvider`)에서 `base_url`과 키를 동적으로 불러와 동작하도록 리팩토링했습니다. (이슈 T-004)
+
 ## [0.6.1] - 2026-05-11
 
 ### 수정
