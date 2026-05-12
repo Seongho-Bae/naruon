@@ -40,8 +40,9 @@ interface RunnerConfig {
 }
 
 function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackMessage: string) {
+  const status = (err as Error & { status?: number }).status;
+  if (status === 403) return forbiddenMessage;
   const message = (err as Error).message || '';
-  if (message.includes('403')) return forbiddenMessage;
   return message || fallbackMessage;
 }
 
@@ -107,11 +108,11 @@ export default function SettingsPage() {
         smtp_server: data.smtp_server ?? '',
         smtp_port: data.smtp_port ? String(data.smtp_port) : '587',
         smtp_username: data.smtp_username ?? '',
-        smtp_password: data.smtp_password ?? '',
+        smtp_password: data.smtp_password === '********' ? '' : (data.smtp_password ?? ''),
         imap_server: data.imap_server ?? '',
         imap_port: data.imap_port ? String(data.imap_port) : '993',
         imap_username: data.imap_username ?? '',
-        imap_password: data.imap_password ?? '',
+        imap_password: data.imap_password === '********' ? '' : (data.imap_password ?? ''),
       });
     } catch {
       // keep defaults for first-time setup
@@ -195,16 +196,29 @@ export default function SettingsPage() {
     setPersonalSubmitSuccess(null);
 
     try {
-      await apiClient.post<{ status: string }>('/api/config', {
+      const smtpPortNum = Number(personalForm.smtp_port);
+      const imapPortNum = Number(personalForm.imap_port);
+      if (!Number.isInteger(smtpPortNum) || smtpPortNum < 1 || smtpPortNum > 65535) {
+        throw new Error('SMTP 포트는 1~65535 범위의 정수여야 합니다.');
+      }
+      if (!Number.isInteger(imapPortNum) || imapPortNum < 1 || imapPortNum > 65535) {
+        throw new Error('IMAP 포트는 1~65535 범위의 정수여야 합니다.');
+      }
+
+      const payload: Record<string, unknown> = {
         user_id: currentUserId,
         smtp_server: personalForm.smtp_server || null,
-        smtp_port: personalForm.smtp_port ? Number(personalForm.smtp_port) : null,
+        smtp_port: smtpPortNum,
         smtp_username: personalForm.smtp_username || null,
-        smtp_password: personalForm.smtp_password || null,
         imap_server: personalForm.imap_server || null,
-        imap_port: personalForm.imap_port ? Number(personalForm.imap_port) : null,
+        imap_port: imapPortNum,
         imap_username: personalForm.imap_username || null,
-        imap_password: personalForm.imap_password || null,
+      };
+      if (personalForm.smtp_password.trim()) payload.smtp_password = personalForm.smtp_password;
+      if (personalForm.imap_password.trim()) payload.imap_password = personalForm.imap_password;
+
+      await apiClient.post<{ status: string }>('/api/config', {
+        ...payload,
       });
       setPersonalSubmitSuccess('이메일 계정 설정이 성공적으로 저장되었습니다.');
     } catch (err: unknown) {

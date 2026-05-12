@@ -7,13 +7,11 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
+from api.auth import get_current_user_role, get_current_workspace_id
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 
 router = APIRouter(prefix="/api/runner-config", tags=["runner-config"])
-
-WORKSPACE_ID = "default-workspace"
 
 
 class RunnerConfigResponse(BaseModel):
@@ -30,10 +28,10 @@ class RunnerRotateResponse(BaseModel):
     registration_token: str
 
 
-def _check_org_admin(user_id: str = Depends(get_current_user)) -> str:
-    if user_id != "admin":
+def _check_org_admin(user_role: str = Depends(get_current_user_role)) -> str:
+    if user_role != "organization_admin":
         raise HTTPException(status_code=403, detail="Organization admin access required")
-    return user_id
+    return user_role
 
 
 def _fingerprint(token: str | None) -> str | None:
@@ -46,14 +44,15 @@ def _fingerprint(token: str | None) -> str | None:
 async def get_runner_config(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(_check_org_admin),
+    workspace_id: str = Depends(get_current_workspace_id),
 ):
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == WORKSPACE_ID)
+        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )
     config = result.scalar_one_or_none()
 
     if not config:
-        return RunnerConfigResponse(workspace_id=WORKSPACE_ID, configured=False, fingerprint=None, updated_at=None)
+        return RunnerConfigResponse(workspace_id=workspace_id, configured=False, fingerprint=None, updated_at=None)
 
     return RunnerConfigResponse(
         workspace_id=config.workspace_id,
@@ -67,15 +66,16 @@ async def get_runner_config(
 async def rotate_runner_token(
     db: AsyncSession = Depends(get_db),
     _: str = Depends(_check_org_admin),
+    workspace_id: str = Depends(get_current_workspace_id),
 ):
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == WORKSPACE_ID)
+        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )
     config = result.scalar_one_or_none()
 
     token = f"nrn_{secrets.token_urlsafe(24)}"
     if not config:
-        config = WorkspaceRunnerConfig(workspace_id=WORKSPACE_ID, registration_token=token)
+        config = WorkspaceRunnerConfig(workspace_id=workspace_id, registration_token=token)
         db.add(config)
     else:
         config.registration_token = token

@@ -14,23 +14,45 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
-    // Check localStorage for a dev user override, fallback to testuser
     const userId = this.getCurrentUserId();
 
     return {
       'Content-Type': 'application/json',
       'X-User-Id': userId,
+      'X-Workspace-Id': this.getCurrentWorkspaceId(),
+      'X-User-Role': this.getCurrentUserRole(),
       ...init?.headers,
     };
   }
 
   getCurrentUserId() {
-    let userId = 'testuser';
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('naruon_dev_user');
-      if (stored) userId = stored;
-    }
-    return userId;
+    const fallbackUserId = 'testuser';
+    if (typeof window === 'undefined') return fallbackUserId;
+
+    const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isPrivateLan = window.location.hostname.startsWith('192.168.');
+    const allowDevOverride = process.env.NODE_ENV !== 'production' || isLocalHost || isPrivateLan;
+    if (!allowDevOverride) return fallbackUserId;
+
+    const stored = localStorage.getItem('naruon_dev_user')?.trim();
+    return stored || fallbackUserId;
+  }
+
+  getCurrentWorkspaceId() {
+    const fallbackWorkspaceId = 'default-workspace';
+    if (typeof window === 'undefined') return fallbackWorkspaceId;
+
+    const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isPrivateLan = window.location.hostname.startsWith('192.168.');
+    const allowDevOverride = process.env.NODE_ENV !== 'production' || isLocalHost || isPrivateLan;
+    if (!allowDevOverride) return fallbackWorkspaceId;
+
+    const stored = localStorage.getItem('naruon_dev_workspace')?.trim();
+    return stored || fallbackWorkspaceId;
+  }
+
+  getCurrentUserRole() {
+    return this.getCurrentUserId() === 'admin' ? 'organization_admin' : 'member';
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
