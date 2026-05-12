@@ -17,12 +17,9 @@ import {
   Search,
   Send,
   Sparkles,
-  Settings,
-  Code,
   Star,
   Target,
   FolderOpen,
-  Tag,
   TrendingUp,
   Edit3
 } from 'lucide-react';
@@ -216,7 +213,7 @@ export function DashboardLayout({
           })}
         </nav>
         
-        <div className="mt-auto pt-6 px-3 pb-4">
+        <div className="pt-6 px-3 pb-4">
           <div className="bg-secondary/30 rounded-xl p-3 border border-border">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[11px] font-bold text-foreground">오늘의 인사이트</p>
