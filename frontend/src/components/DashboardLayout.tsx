@@ -46,6 +46,13 @@ const headerActions = [
 
 
 
+
+function isActivePath(pathname: string, href: string) {
+  return href === '/'
+    ? pathname === '/'
+    : pathname === href || pathname.startsWith(`${href}/`);
+}
+
 function NavLink({
   label,
   description,
@@ -58,7 +65,7 @@ function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const active = pathname === href;
+  const active = isActivePath(pathname, href);
 
   return (
     <Link
@@ -209,7 +216,7 @@ export function DashboardLayout({
         </div>
         <nav aria-label="Mobile workspace menu" className="grid gap-2">
           {mailNavItems.map(({ label, description, icon: Icon, href }) => {
-            const active = pathname === href;
+            const active = isActivePath(pathname, href);
             return (
             <Link
               key={label}
@@ -230,7 +237,7 @@ export function DashboardLayout({
 
       <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
         {mailNavItems.map(({ label, icon: Icon, href }) => {
-          const active = pathname === href;
+          const active = isActivePath(pathname, href);
           return (
             <Link
               key={label}

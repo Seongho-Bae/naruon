@@ -104,7 +104,7 @@ export default function Home() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <NetworkGraph />
+              {showMobileActions && <NetworkGraph />}
             </div>
           </section>
         </div>
