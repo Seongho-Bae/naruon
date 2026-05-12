@@ -35,7 +35,26 @@ export default function SettingsPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
-  const fetchProviders = React.useCallback(async () => {
+  useEffect(() => {
+    const fetchProvidersData = async () => {
+      try {
+        const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
+        setProviders(data);
+        setError(null);
+      } catch (err: unknown) {
+        if (((err as Error).message || '').includes('403')) {
+          setError('워크스페이스(Organization) 관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
+        } else {
+          setError('데이터를 불러오는 데 실패했습니다.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    void fetchProvidersData();
+  }, []);
+
+  const fetchProviders = async () => {
     try {
       const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
       setProviders(data);
@@ -49,11 +68,7 @@ export default function SettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    void fetchProviders();
-  }, [fetchProviders]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,7 +90,7 @@ export default function SettingsPage() {
       } else {
         await apiClient.post<LLMProvider>('/api/llm-providers', payload);
       }
-      
+
       setSubmitSuccess(true);
       setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
       fetchProviders();
@@ -314,11 +329,10 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
-              
               <div className="bg-slate-900 rounded-xl p-4 font-mono text-sm text-slate-300 mb-6">
                 <p className="text-slate-500 mb-2"># 사내망 서버에서 아래 명령어로 Runner를 실행하세요.</p>
                 <p><span className="text-green-400">docker run</span> -d --name naruon-runner \\</p>
-                <p>  -e <span className="text-blue-300">RUNNER_TOKEN</span>=<span className="text-yellow-300">"발급받은_조직_토큰"</span> \\</p>
+                <p>  -e <span className="text-blue-300">RUNNER_TOKEN</span>=<span className="text-yellow-300">&quot;발급받은_조직_토큰&quot;</span> \\</p>
                 <p>  ghcr.io/seongho-bae/naruon-runner:latest</p>
               </div>
 
@@ -329,6 +343,8 @@ export default function SettingsPage() {
           )}
         </TabsContent>
       </Tabs>
+
+
     </div>
   );
 }
