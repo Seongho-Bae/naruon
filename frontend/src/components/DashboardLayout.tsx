@@ -30,8 +30,6 @@ const mailNavItems = [
   { label: '워크스페이스 설정', description: 'LLM 및 보안 설정', icon: Settings, href: '/settings' },
 ];
 
-export type MobileWorkspaceView = 'inbox' | 'detail' | 'actions' | 'calendar';
-
 const aiNavItems = [
   { label: '받은편지함', description: '메일 스레드', icon: Inbox, active: true, mobileView: 'inbox' as const },
   { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Network, mobileView: 'detail' as const },
@@ -46,12 +44,7 @@ const headerActions = [
   { label: '할 일 만들기', icon: CheckCircle2 },
 ];
 
-const mobileNavItems = [
-  { label: '받은편지함', icon: Inbox, view: 'inbox' as const },
-  { label: '맥락 검색', icon: Search, view: 'detail' as const },
-  { label: 'AI 실행', icon: Sparkles, view: 'actions' as const },
-  { label: '일정', icon: CalendarDays, view: 'calendar' as const },
-];
+
 
 function NavLink({
   label,
@@ -105,21 +98,11 @@ function HeaderStatusChip({
 
 export function DashboardLayout({
   children,
-  mobileView,
-  onMobileViewChange,
 }: {
   children: React.ReactNode;
-  mobileView?: MobileWorkspaceView;
-  onMobileViewChange?: (view: MobileWorkspaceView) => void;
 }) {
   const pathname = usePathname();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
-  const [uncontrolledMobileView, setUncontrolledMobileView] = useState<MobileWorkspaceView>('inbox');
-  const activeMobileView = mobileView ?? uncontrolledMobileView;
-  const setActiveMobileView = (view: MobileWorkspaceView) => {
-    if (!onMobileViewChange) setUncontrolledMobileView(view);
-    onMobileViewChange?.(view);
-  };
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
@@ -225,15 +208,14 @@ export function DashboardLayout({
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
         </div>
         <nav aria-label="Mobile workspace menu" className="grid gap-2">
-          {aiNavItems.map(({ label, description, icon: Icon, active, mobileView: itemMobileView }) => (
-            <a
+          {mailNavItems.map(({ label, description, icon: Icon, href }) => {
+            const active = pathname === href;
+            return (
+            <Link
               key={label}
-              href="#main-content"
+              href={href}
               aria-current={active ? 'page' : undefined}
-              onClick={() => {
-                setActiveMobileView(itemMobileView);
-                setIsWorkspaceMenuOpen(false);
-              }}
+              onClick={() => setIsWorkspaceMenuOpen(false)}
               className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             >
               <Icon className="size-4 text-primary" aria-hidden="true" />
@@ -241,26 +223,27 @@ export function DashboardLayout({
                 <span>{label}</span>
                 <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
               </span>
-            </a>
-          ))}
+            </Link>
+          )})}
         </nav>
       </div>
 
       <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
-        {mobileNavItems.map(({ label, icon: Icon, view }) => {
-          const active = activeMobileView === view;
+        {mailNavItems.map(({ label, icon: Icon, href }) => {
+          const active = pathname === href;
           return (
-            <button
+            <Link
               key={label}
-              type="button"
-              onClick={() => setActiveMobileView(view)}
+              href={href}
+              data-mobile-view={label}
               aria-current={active ? 'page' : undefined}
-              data-mobile-view={view}
-              className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold ${active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+              className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-center ${
+                active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+              }`}
             >
               <Icon className="size-4" aria-hidden="true" />
               {label}
-            </button>
+            </Link>
           );
         })}
       </nav>

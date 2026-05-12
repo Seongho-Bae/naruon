@@ -51,6 +51,7 @@ describe("DashboardLayout", () => {
             expect(mobileNav).not.toBeNull();
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
+    console.log('MOBILENAV HTML:', mobileNav?.outerHTML);
     expect(mobileNavButtons).toEqual(["받은 메일", "AI Hub", "Prompt Studio", "워크스페이스 설정"]);
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
