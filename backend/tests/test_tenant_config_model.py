@@ -28,7 +28,13 @@ def test_tenant_config_model_exists():
 
 
 def test_tenant_config_model_encryption(db_session):
-    config = TenantConfig(user_id="test_user2", openai_api_key="test_key2")
+    config = TenantConfig(
+        user_id="test_user2",
+        openai_api_key="test_key2",
+        imap_username="mail-user",
+        imap_password="imap-secret",
+        smtp_password="smtp-secret",
+    )
     db_session.add(config)
     db_session.commit()
 
@@ -46,7 +52,23 @@ def test_tenant_config_model_encryption(db_session):
     assert result is not None
     assert isinstance(result, str)
 
+    imap_pw = db_session.execute(
+        text("SELECT imap_password FROM tenant_configs WHERE user_id='test_user2'")
+    ).scalar()
+    smtp_pw = db_session.execute(
+        text("SELECT smtp_password FROM tenant_configs WHERE user_id='test_user2'")
+    ).scalar()
+    assert imap_pw != "imap-secret"
+    assert smtp_pw != "smtp-secret"
+    assert saved_config.imap_username == "mail-user"
+    assert saved_config.imap_password == "imap-secret"
+    assert saved_config.smtp_password == "smtp-secret"
+
     # Verify __repr__ does not expose sensitive keys
     repr_str = repr(saved_config)
     assert "test_key2" not in repr_str
+    assert "imap-secret" not in repr_str
+    assert "smtp-secret" not in repr_str
     assert "has_openai_key=True" in repr_str
+    assert "has_imap_password=True" in repr_str
+    assert "has_smtp_password=True" in repr_str

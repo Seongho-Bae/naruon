@@ -51,6 +51,7 @@ async def send_email(
     smtp_server: str | None = None,
     smtp_port: int | None = None,
     smtp_username: str | None = None,
+    smtp_password: str | None = None,
     in_reply_to: str | None = None,
     references: str | None = None,
 ) -> SendEmailResult:
@@ -70,14 +71,17 @@ async def send_email(
         return {"status": "simulated", "simulated": True}
 
     try:
-        await aiosmtplib.send(
-            message,
-            hostname=smtp_server,
-            port=smtp_port,
-            use_tls=True,
-            # In a real system, we'd use OAuth2 or password auth here.
-            # Currently we just attempt connection. If it fails, aiosmtplib raises an exception.
-        )
+        send_kwargs: dict[str, object] = {
+            "hostname": smtp_server,
+            "port": smtp_port,
+            "use_tls": True,
+        }
+        if smtp_username:
+            send_kwargs["username"] = smtp_username
+        if smtp_password:
+            send_kwargs["password"] = smtp_password
+
+        await aiosmtplib.send(message, **send_kwargs)
         logger.info("Successfully sent email to %s via %s", safe_to_address, smtp_server)
         return {"status": "sent", "simulated": False}
     except Exception as e:

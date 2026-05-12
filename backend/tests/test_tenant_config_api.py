@@ -43,6 +43,12 @@ def test_tenant_config_endpoint(client, mock_db):
         "user_id": "test_user",
         "openai_api_key": "sk-123",
         "smtp_server": "smtp.example.com",
+        "smtp_username": "sender@example.com",
+        "smtp_password": "smtp-secret",
+        "imap_server": "imap.example.com",
+        "imap_port": 993,
+        "imap_username": "imap-user",
+        "imap_password": "imap-secret",
         "oauth_client_secret": "secret-456",
     }
     response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "test_user"})
@@ -57,6 +63,11 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["user_id"] == "test_user"
     assert data["openai_api_key"] == "********"
     assert data["oauth_client_secret"] == "********"
+    assert data["smtp_password"] == "********"
+    assert data["imap_password"] == "********"
     assert data["smtp_server"] == "smtp.example.com"
+    assert data["smtp_username"] == "sender@example.com"
+    assert data["imap_server"] == "imap.example.com"
+    assert data["imap_port"] == 993
+    assert data["imap_username"] == "imap-user"
     assert data["google_client_secret"] is None
-

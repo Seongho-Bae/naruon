@@ -16,8 +16,11 @@ class TenantConfigCreate(BaseModel):
     smtp_server: Optional[str] = None
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     imap_server: Optional[str] = None
     imap_port: Optional[int] = None
+    imap_username: Optional[str] = None
+    imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
     oauth_client_id: Optional[str] = None
@@ -33,8 +36,11 @@ class TenantConfigResponse(BaseModel):
     smtp_server: Optional[str] = None
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     imap_server: Optional[str] = None
     imap_port: Optional[int] = None
+    imap_username: Optional[str] = None
+    imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
     oauth_client_id: Optional[str] = None
@@ -47,7 +53,13 @@ class TenantConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-SECRET_FIELDS = {"oauth_client_secret", "openai_api_key", "google_client_secret"}
+SECRET_FIELDS = {
+    "smtp_password",
+    "imap_password",
+    "oauth_client_secret",
+    "openai_api_key",
+    "google_client_secret",
+}
 
 
 @router.post("")

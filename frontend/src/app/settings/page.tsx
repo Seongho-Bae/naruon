@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Activity, AlertCircle, CheckCircle2, Key, Mail, Server, Settings, Shield } from 'lucide-react';
+
 import { apiClient } from '@/lib/api-client';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Settings, Shield, Server, CheckCircle2, AlertCircle, Mail, Activity, Key } from 'lucide-react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface LLMProvider {
   id: number;
@@ -19,88 +20,221 @@ interface LLMProvider {
   updated_at: string;
 }
 
-export default function SettingsPage() {
-  const [providers, setProviders] = useState<LLMProvider[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface PersonalMailboxConfig {
+  user_id: string;
+  smtp_server: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password: string | null;
+  imap_server: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password: string | null;
+}
 
-  const [formData, setFormData] = useState({
+interface RunnerConfig {
+  workspace_id: string;
+  configured: boolean;
+  fingerprint: string | null;
+  updated_at: string | null;
+}
+
+function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackMessage: string) {
+  const message = (err as Error).message || '';
+  if (message.includes('403')) return forbiddenMessage;
+  return message || fallbackMessage;
+}
+
+export default function SettingsPage() {
+  const currentUserId = apiClient.getCurrentUserId();
+
+  const [providers, setProviders] = useState<LLMProvider[]>([]);
+  const [loadingProviders, setLoadingProviders] = useState(true);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [providerForm, setProviderForm] = useState({
     name: '',
     provider_type: 'openai',
     base_url: '',
-    api_key: ''
+    api_key: '',
   });
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [providerSubmitError, setProviderSubmitError] = useState<string | null>(null);
+  const [providerSubmitSuccess, setProviderSubmitSuccess] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
 
-  useEffect(() => {
-    const fetchProvidersData = async () => {
-      try {
-        const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
-        setProviders(data);
-        setError(null);
-      } catch (err: unknown) {
-        if (((err as Error).message || '').includes('403')) {
-          setError('워크스페이스(Organization) 관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
-        } else {
-          setError('데이터를 불러오는 데 실패했습니다.');
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetchProvidersData();
-  }, []);
+  const [personalForm, setPersonalForm] = useState({
+    smtp_server: '',
+    smtp_port: '587',
+    smtp_username: '',
+    smtp_password: '',
+    imap_server: '',
+    imap_port: '993',
+    imap_username: '',
+    imap_password: '',
+  });
+  const [personalLoading, setPersonalLoading] = useState(true);
+  const [personalSubmitError, setPersonalSubmitError] = useState<string | null>(null);
+  const [personalSubmitSuccess, setPersonalSubmitSuccess] = useState<string | null>(null);
+
+  const [runnerConfig, setRunnerConfig] = useState<RunnerConfig | null>(null);
+  const [runnerLoading, setRunnerLoading] = useState(true);
+  const [runnerError, setRunnerError] = useState<string | null>(null);
+  const [runnerToken, setRunnerToken] = useState<string | null>(null);
+  const [runnerBusy, setRunnerBusy] = useState(false);
 
   const fetchProviders = async () => {
     try {
       const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
       setProviders(data);
-      setError(null);
+      setProviderError(null);
     } catch (err: unknown) {
-      if (((err as Error).message || '').includes('403')) {
-        setError('워크스페이스(Organization) 관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
-      } else {
-        setError('데이터를 불러오는 데 실패했습니다.');
-      }
+      setProviderError(
+        getScopedErrorMessage(
+          err,
+          '워크스페이스(Organization) 관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.',
+          '제공자 목록을 불러오는 데 실패했습니다.',
+        ),
+      );
     } finally {
-      setLoading(false);
+      setLoadingProviders(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const fetchPersonalConfig = useCallback(async () => {
+    try {
+      const data = await apiClient.get<PersonalMailboxConfig>(`/api/config?user_id=${encodeURIComponent(currentUserId)}`);
+      setPersonalForm({
+        smtp_server: data.smtp_server ?? '',
+        smtp_port: data.smtp_port ? String(data.smtp_port) : '587',
+        smtp_username: data.smtp_username ?? '',
+        smtp_password: data.smtp_password ?? '',
+        imap_server: data.imap_server ?? '',
+        imap_port: data.imap_port ? String(data.imap_port) : '993',
+        imap_username: data.imap_username ?? '',
+        imap_password: data.imap_password ?? '',
+      });
+    } catch {
+      // keep defaults for first-time setup
+    } finally {
+      setPersonalLoading(false);
+    }
+  }, [currentUserId]);
+
+  const fetchRunnerConfig = async () => {
+    try {
+      const data = await apiClient.get<RunnerConfig>('/api/runner-config');
+      setRunnerConfig(data);
+      setRunnerError(null);
+    } catch (err: unknown) {
+      setRunnerError(
+        getScopedErrorMessage(
+          err,
+          '워크스페이스(Organization) 관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.',
+          'Runner 설정을 불러오는 데 실패했습니다.',
+        ),
+      );
+    } finally {
+      setRunnerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchProviders();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchPersonalConfig();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchPersonalConfig]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchRunnerConfig();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitError(null);
-    setSubmitSuccess(false);
+    setProviderSubmitError(null);
+    setProviderSubmitSuccess(null);
 
     try {
       const payload: Record<string, unknown> = {
-        name: formData.name,
-        provider_type: formData.provider_type,
-        is_active: true
+        name: providerForm.name,
+        provider_type: providerForm.provider_type,
+        is_active: true,
       };
-      if (formData.base_url) payload.base_url = formData.base_url;
-      if (formData.api_key) payload.api_key = formData.api_key;
+      if (providerForm.base_url) payload.base_url = providerForm.base_url;
+      if (providerForm.api_key) payload.api_key = providerForm.api_key;
 
-      if (editingId) {
+      if (editingId !== null) {
         await apiClient.put<LLMProvider>(`/api/llm-providers/${editingId}`, payload);
         setEditingId(null);
+        setProviderSubmitSuccess('제공자가 성공적으로 수정되었습니다.');
       } else {
         await apiClient.post<LLMProvider>('/api/llm-providers', payload);
+        setProviderSubmitSuccess('제공자가 성공적으로 추가되었습니다.');
       }
 
-      setSubmitSuccess(true);
-      setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
-      fetchProviders();
+      setProviderForm({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
+      await fetchProviders();
     } catch (err: unknown) {
-      setSubmitError(((err as Error).message || '') || '저장에 실패했습니다.');
+      setProviderSubmitError((err as Error).message || '저장에 실패했습니다.');
     }
   };
 
+  const handlePersonalSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPersonalSubmitError(null);
+    setPersonalSubmitSuccess(null);
+
+    try {
+      await apiClient.post<{ status: string }>('/api/config', {
+        user_id: currentUserId,
+        smtp_server: personalForm.smtp_server || null,
+        smtp_port: personalForm.smtp_port ? Number(personalForm.smtp_port) : null,
+        smtp_username: personalForm.smtp_username || null,
+        smtp_password: personalForm.smtp_password || null,
+        imap_server: personalForm.imap_server || null,
+        imap_port: personalForm.imap_port ? Number(personalForm.imap_port) : null,
+        imap_username: personalForm.imap_username || null,
+        imap_password: personalForm.imap_password || null,
+      });
+      setPersonalSubmitSuccess('이메일 계정 설정이 성공적으로 저장되었습니다.');
+    } catch (err: unknown) {
+      setPersonalSubmitError((err as Error).message || '이메일 계정 저장에 실패했습니다.');
+    }
+  };
+
+  const handleRotateRunnerToken = async () => {
+    setRunnerBusy(true);
+    setRunnerError(null);
+    setRunnerToken(null);
+
+    try {
+      const data = await apiClient.post<{ workspace_id: string; registration_token: string }>('/api/runner-config/rotate', {});
+      setRunnerToken(data.registration_token);
+      await fetchRunnerConfig();
+    } catch (err: unknown) {
+      setRunnerError((err as Error).message || 'Runner 토큰 발급에 실패했습니다.');
+    } finally {
+      setRunnerBusy(false);
+    }
+  };
+
+  const loading = loadingProviders || personalLoading || runnerLoading;
   if (loading) {
-    return <div className="p-8 text-muted-foreground flex items-center gap-2"><Settings className="animate-spin w-5 h-5"/> 설정을 불러오는 중...</div>;
+    return (
+      <div className="p-8 text-muted-foreground flex items-center gap-2">
+        <Settings className="animate-spin w-5 h-5" /> 설정을 불러오는 중...
+      </div>
+    );
   }
 
   return (
@@ -110,40 +244,53 @@ export default function SettingsPage() {
           <Settings className="w-6 h-6 text-primary" />
           설정 (Settings)
         </h1>
-        <p className="text-muted-foreground text-sm">
-          워크스페이스 단위의 통합 관리 및 개인 계정 설정을 구성합니다.
-        </p>
+        <p className="text-muted-foreground text-sm">워크스페이스 단위의 통합 관리 및 개인 계정 설정을 구성합니다.</p>
       </div>
 
       <Tabs defaultValue="personal" className="w-full">
         <TabsList className="grid w-full grid-cols-3 mb-8">
-          <TabsTrigger value="personal" className="font-bold"><Mail className="w-4 h-4 mr-2"/> 개인 이메일 계정</TabsTrigger>
-          <TabsTrigger value="workspace-llm" className="font-bold"><Key className="w-4 h-4 mr-2"/> 워크스페이스 BYOK (관리자)</TabsTrigger>
-          <TabsTrigger value="workspace-runner" className="font-bold"><Activity className="w-4 h-4 mr-2"/> Self-hosted Runner (관리자)</TabsTrigger>
+          <TabsTrigger value="personal" className="font-bold"><Mail className="w-4 h-4 mr-2" /> 개인 이메일 계정</TabsTrigger>
+          <TabsTrigger value="workspace-llm" className="font-bold"><Key className="w-4 h-4 mr-2" /> 워크스페이스 BYOK (관리자)</TabsTrigger>
+          <TabsTrigger value="workspace-runner" className="font-bold"><Activity className="w-4 h-4 mr-2" /> Self-hosted Runner (관리자)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal" className="space-y-6">
           <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
             <h2 className="font-bold text-lg mb-2">개인 이메일 계정 연결</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Naruon 워크스페이스에서 사용할 본인의 IMAP/SMTP 이메일 계정을 연결합니다. (개인 단위 설정)
-            </p>
-            <div className="bg-secondary/30 border border-border rounded-xl p-8 flex flex-col items-center justify-center text-center">
-              <Mail className="w-10 h-10 text-muted-foreground mb-3 opacity-50" />
-              <h3 className="font-bold text-foreground mb-1">등록된 이메일 계정이 없습니다.</h3>
-              <p className="text-sm text-muted-foreground mb-4">현재 IMAP/SMTP 연동 기능 UI는 준비 중입니다. 백엔드는 구현 완료되었습니다.</p>
-              <Button disabled variant="outline">계정 추가하기 (준비 중)</Button>
-            </div>
+            <p className="text-sm text-muted-foreground mb-6">Naruon 워크스페이스에서 사용할 본인의 IMAP/SMTP 이메일 계정을 연결합니다. (개인 단위 설정)</p>
+            <form onSubmit={handlePersonalSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <h3 className="font-bold text-sm">SMTP 발송 설정</h3>
+                <Input placeholder="smtp.example.com" value={personalForm.smtp_server} onChange={(e) => setPersonalForm({ ...personalForm, smtp_server: e.target.value })} />
+                <Input placeholder="587" value={personalForm.smtp_port} onChange={(e) => setPersonalForm({ ...personalForm, smtp_port: e.target.value })} />
+                <Input placeholder="smtp 사용자명" value={personalForm.smtp_username} onChange={(e) => setPersonalForm({ ...personalForm, smtp_username: e.target.value })} />
+                <Input type="password" placeholder="smtp 비밀번호 또는 앱 비밀번호" value={personalForm.smtp_password} onChange={(e) => setPersonalForm({ ...personalForm, smtp_password: e.target.value })} />
+              </div>
+              <div className="space-y-4">
+                <h3 className="font-bold text-sm">IMAP 수신 설정</h3>
+                <Input placeholder="imap.example.com" value={personalForm.imap_server} onChange={(e) => setPersonalForm({ ...personalForm, imap_server: e.target.value })} />
+                <Input placeholder="993" value={personalForm.imap_port} onChange={(e) => setPersonalForm({ ...personalForm, imap_port: e.target.value })} />
+                <Input placeholder="imap 사용자명" value={personalForm.imap_username} onChange={(e) => setPersonalForm({ ...personalForm, imap_username: e.target.value })} />
+                <Input type="password" placeholder="imap 비밀번호 또는 앱 비밀번호" value={personalForm.imap_password} onChange={(e) => setPersonalForm({ ...personalForm, imap_password: e.target.value })} />
+              </div>
+              <div className="lg:col-span-2 space-y-3">
+                {personalSubmitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{personalSubmitError}</div>}
+                {personalSubmitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">{personalSubmitSuccess}</div>}
+                <div className="flex justify-end">
+                  <Button type="submit">계정 저장</Button>
+                </div>
+              </div>
+            </form>
           </section>
         </TabsContent>
 
         <TabsContent value="workspace-llm" className="space-y-6">
-          {error ? (
+          {providerError ? (
             <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
               <Shield className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-bold">접근 거부</h3>
-                <p className="text-sm mt-1">{error}</p>
+                <p className="text-sm mt-1">{providerError}</p>
                 <p className="text-xs mt-2 opacity-80">※ 현재 Naruon 시스템 관리자가 아닌 조직(Organization) 단위의 관리자 권한이 필요합니다.</p>
               </div>
             </div>
@@ -160,53 +307,51 @@ export default function SettingsPage() {
                   {providers.length === 0 ? (
                     <div className="text-sm text-muted-foreground text-center py-8">등록된 제공자가 없습니다.</div>
                   ) : (
-                    providers.map(p => (
+                    providers.map((p) => (
                       <div key={p.id} className="p-4 rounded-xl border border-border bg-card/50 flex flex-col gap-2">
                         <div className="flex items-center justify-between">
                           <span className="font-bold">{p.name}</span>
                           <div className="flex items-center gap-2">
-                            <Badge variant={p.is_active ? "default" : "secondary"}>
-                              {p.is_active ? "활성" : "비활성"}
-                            </Badge>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Badge variant={p.is_active ? 'default' : 'secondary'}>{p.is_active ? '활성' : '비활성'}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="h-6 text-[11px] px-2"
                               onClick={() => {
                                 setEditingId(p.id);
-                                setFormData({
+                                setProviderForm({
                                   name: p.name,
                                   provider_type: p.provider_type,
                                   base_url: p.base_url || '',
-                                  api_key: ''
+                                  api_key: '',
                                 });
                               }}
                             >
                               수정
                             </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               className="h-6 text-[11px] px-2 text-red-500 hover:text-red-600 hover:bg-red-50"
                               disabled={isDeleting === p.id}
                               onClick={async () => {
-                                if (!confirm("정말 이 제공자를 삭제하시겠습니까?")) return;
+                                if (!confirm('정말 이 제공자를 삭제하시겠습니까?')) return;
                                 setIsDeleting(p.id);
                                 try {
                                   await apiClient.delete(`/api/llm-providers/${p.id}`);
-                                  fetchProviders();
+                                  await fetchProviders();
                                   if (editingId === p.id) {
                                     setEditingId(null);
-                                    setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
+                                    setProviderForm({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
                                   }
                                 } catch (e: unknown) {
-                                  alert("삭제 실패: " + ((e as Error).message || ""));
+                                  alert('삭제 실패: ' + ((e as Error).message || ''));
                                 } finally {
                                   setIsDeleting(null);
                                 }
                               }}
                             >
-                              {isDeleting === p.id ? "삭제중..." : "삭제"}
+                              {isDeleting === p.id ? '삭제중...' : '삭제'}
                             </Button>
                           </div>
                         </div>
@@ -214,7 +359,7 @@ export default function SettingsPage() {
                           <p>Type: {p.provider_type}</p>
                           {p.base_url && <p>Base URL: {p.base_url}</p>}
                           <p className="flex items-center gap-1 mt-1">
-                            Secret: 
+                            Secret:
                             {p.configured ? (
                               <span className="text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded flex items-center gap-1">
                                 <CheckCircle2 className="w-3 h-3" /> Configured ({p.fingerprint})
@@ -233,67 +378,42 @@ export default function SettingsPage() {
               </section>
 
               <section className="bg-white rounded-2xl border border-border shadow-sm p-5 h-fit">
-                <h3 className="font-bold mb-4">{editingId ? "제공자 수정" : "새 제공자 추가 (BYOK)"}</h3>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <h3 className="font-bold mb-4">{editingId !== null ? '제공자 수정' : '새 제공자 추가 (BYOK)'}</h3>
+                <form onSubmit={handleProviderSubmit} className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-muted-foreground">식별 이름</label>
-                    <Input 
-                      required
-                      placeholder="예: 사내 보안용 Ollama" 
-                      value={formData.name} 
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    />
+                    <Input required placeholder="예: 사내 보안용 Ollama" value={providerForm.name} onChange={(e) => setProviderForm({ ...providerForm, name: e.target.value })} />
                   </div>
-                  
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-muted-foreground">제공자 유형</label>
-                    <select 
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      value={formData.provider_type}
-                      onChange={e => setFormData({ ...formData, provider_type: e.target.value })}
-                    >
+                    <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" value={providerForm.provider_type} onChange={(e) => setProviderForm({ ...providerForm, provider_type: e.target.value })}>
                       <option value="openai">OpenAI 호환</option>
                       <option value="anthropic">Anthropic</option>
                       <option value="gemini">Google Gemini</option>
                       <option value="ollama">Local Ollama</option>
                     </select>
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-muted-foreground">Base URL (선택)</label>
-                    <Input 
-                      placeholder="https://api.openai.com/v1" 
-                      value={formData.base_url} 
-                      onChange={e => setFormData({ ...formData, base_url: e.target.value })}
-                    />
+                    <Input placeholder="https://api.openai.com/v1" value={providerForm.base_url} onChange={(e) => setProviderForm({ ...providerForm, base_url: e.target.value })} />
                   </div>
-
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-muted-foreground">API Key (시크릿)</label>
-                    <Input 
-                      type="password"
-                      placeholder={editingId ? "변경하려면 새 키를 입력하세요" : "새로운 키를 입력하세요"} 
-                      value={formData.api_key} 
-                      onChange={e => setFormData({ ...formData, api_key: e.target.value })}
-                    />
+                    <Input type="password" placeholder={editingId !== null ? '변경하려면 새 키를 입력하세요' : '새로운 키를 입력하세요'} value={providerForm.api_key} onChange={(e) => setProviderForm({ ...providerForm, api_key: e.target.value })} />
                   </div>
-
-                  {submitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{submitError}</div>}
-                  {submitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">제공자가 성공적으로 저장되었습니다.</div>}
-
+                  {providerSubmitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{providerSubmitError}</div>}
+                  {providerSubmitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">{providerSubmitSuccess}</div>}
                   <div className="flex gap-2 pt-2">
-                    <Button type="submit" className="flex-1 font-bold">
-                      {editingId ? "수정 반영" : "저장 및 활성화"}
-                    </Button>
-                    {editingId && (
-                      <Button 
-                        type="button" 
-                        variant="outline" 
+                    <Button type="submit" className="flex-1 font-bold">{editingId !== null ? '수정 반영' : '저장 및 활성화'}</Button>
+                    {editingId !== null && (
+                      <Button
+                        type="button"
+                        variant="outline"
                         onClick={() => {
                           setEditingId(null);
-                          setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
-                          setSubmitError(null);
-                          setSubmitSuccess(false);
+                          setProviderForm({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
+                          setProviderSubmitError(null);
+                          setProviderSubmitSuccess(null);
                         }}
                       >
                         취소
@@ -307,12 +427,12 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="workspace-runner" className="space-y-6">
-          {error ? (
+          {runnerError ? (
             <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
               <Shield className="w-5 h-5 shrink-0 mt-0.5" />
               <div>
                 <h3 className="font-bold">접근 거부</h3>
-                <p className="text-sm mt-1">{error}</p>
+                <p className="text-sm mt-1">{runnerError}</p>
               </div>
             </div>
           ) : (
@@ -329,22 +449,29 @@ export default function SettingsPage() {
                   </p>
                 </div>
               </div>
+
+              <div className="mb-4 rounded-xl border border-border bg-secondary/20 p-4 text-sm">
+                <p className="font-semibold">현재 Runner 구성</p>
+                <p className="text-muted-foreground mt-1">조직 스코프: {runnerConfig?.workspace_id || 'default-workspace'}</p>
+                <p className="text-muted-foreground">토큰 상태: {runnerConfig?.configured ? `Configured (${runnerConfig.fingerprint})` : '미발급'}</p>
+              </div>
+
               <div className="bg-slate-900 rounded-xl p-4 font-mono text-sm text-slate-300 mb-6">
                 <p className="text-slate-500 mb-2"># 사내망 서버에서 아래 명령어로 Runner를 실행하세요.</p>
                 <p><span className="text-green-400">docker run</span> -d --name naruon-runner \\</p>
-                <p>  -e <span className="text-blue-300">RUNNER_TOKEN</span>=<span className="text-yellow-300">&quot;발급받은_조직_토큰&quot;</span> \\</p>
+                <p>  -e <span className="text-blue-300">RUNNER_TOKEN</span>=<span className="text-yellow-300">&quot;{runnerToken || '발급받은_조직_토큰'}&quot;</span> \\</p>
                 <p>  ghcr.io/seongho-bae/naruon-runner:latest</p>
               </div>
 
+              {runnerToken && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded mb-3">새 Runner 토큰이 발급되었습니다. 지금 복사해 두세요.</div>}
+
               <div className="flex justify-end">
-                <Button disabled>새 Runner 토큰 발급 (준비 중)</Button>
+                <Button disabled={runnerBusy} onClick={handleRotateRunnerToken}>{runnerBusy ? '발급 중...' : '새 Runner 토큰 발급'}</Button>
               </div>
             </section>
           )}
         </TabsContent>
       </Tabs>
-
-
     </div>
   );
 }

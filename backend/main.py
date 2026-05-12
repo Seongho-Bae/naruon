@@ -7,6 +7,7 @@ from api.llm import router as llm_router
 from api.calendar import router as calendar_router
 from api.network import router as network_router
 from api.emails import router as emails_router
+from api.runner_config import router as runner_config_router
 from api.tenant_config import router as tenant_config_router
 from api.runtime_config import router as runtime_config_router
 from api.llm_providers import router as llm_providers_router
@@ -72,6 +73,7 @@ app.include_router(llm_router)
 app.include_router(calendar_router)
 app.include_router(network_router)
 app.include_router(emails_router)
+app.include_router(runner_config_router)
 app.include_router(tenant_config_router)
 app.include_router(runtime_config_router)
 app.include_router(llm_providers_router)
