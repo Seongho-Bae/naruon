@@ -32,18 +32,14 @@ export default function SettingsPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
 
-  useEffect(() => {
-    fetchProviders();
-  }, []);
-
   const fetchProviders = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
       setProviders(data);
       setError(null);
-    } catch (err: any) {
-      if (err.message?.includes('403')) {
+    } catch (err: unknown) {
+      if (((err as Error).message || '')?.includes('403')) {
         setError('관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
       } else {
         setError('제공자 목록을 불러오는 데 실패했습니다.');
@@ -53,13 +49,32 @@ export default function SettingsPage() {
     }
   };
 
+  useEffect(() => {
+    const runFetch = async () => {
+      try {
+        const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
+        setProviders(data);
+        setError(null);
+      } catch (err: unknown) {
+        if (((err as Error).message || '').includes('403')) {
+          setError('관리자 권한이 필요합니다. 관리자 계정으로 로그인해주세요.');
+        } else {
+          setError('제공자 목록을 불러오는 데 실패했습니다.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+    runFetch();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
     setSubmitSuccess(false);
 
     try {
-      const payload: any = {
+      const payload: Record<string, unknown> = {
         name: formData.name,
         provider_type: formData.provider_type,
         is_active: true
@@ -71,8 +86,8 @@ export default function SettingsPage() {
       setSubmitSuccess(true);
       setFormData({ name: '', provider_type: 'openai', base_url: '', api_key: '' });
       fetchProviders();
-    } catch (err: any) {
-      setSubmitError(err.message || '저장에 실패했습니다.');
+    } catch (err: unknown) {
+      setSubmitError(((err as Error).message || '') || '저장에 실패했습니다.');
     }
   };
 
