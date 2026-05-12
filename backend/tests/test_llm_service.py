@@ -48,7 +48,7 @@ async def test_extract_todos_and_summary_api_error(mock_openai):
         side_effect=Exception("API Error")
     )
 
-    with pytest.raises(LLMServiceError, match="OpenAI API error during extraction"):
+    with pytest.raises(LLMServiceError, match="LLM API error during extraction"):
         await extract_todos_and_summary("Test email", "test-key")
 
 
@@ -77,5 +77,5 @@ async def test_draft_reply_api_error(mock_openai):
     # Setup mock to raise an exception
     mock_openai.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
 
-    with pytest.raises(LLMServiceError, match="OpenAI API error during drafting"):
+    with pytest.raises(LLMServiceError, match="LLM API error during drafting"):
         await draft_reply("Test email", "Draft a positive reply", "test-key")

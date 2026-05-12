@@ -49,7 +49,7 @@ def test_summarize_endpoint(mock_extract, client):
 
     resp = client.post("/api/llm/summarize", json={"email_body": "test email"})
     assert resp.status_code == 200
-    assert resp.json() == {"summary": "Test summary", "todos": ["Task 1"]}
+    assert resp.json() == {"summary": "Test summary", "todos": ["Task 1"], "provenance": None}
 
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
 def test_draft_endpoint(mock_draft, client):

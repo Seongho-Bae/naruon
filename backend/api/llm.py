@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import Depends
 from db.session import get_db
-from db.models import TenantConfig
+from db.models import TenantConfig, LLMProvider
 from api.auth import get_current_user
 from services.llm_service import (
     extract_todos_and_summary,
