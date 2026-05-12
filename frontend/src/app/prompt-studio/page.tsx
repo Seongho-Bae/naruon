@@ -26,7 +26,7 @@ export default function PromptStudioPage() {
     setTesting(true);
     setError(null);
     try {
-      const data = await apiClient.post<any>('/api/prompts/test', {
+      const data = await apiClient.post<{ result?: string }>('/api/prompts/test', {
         content: formData.content,
         variables: { email: testVariable }
       });
@@ -42,7 +42,7 @@ export default function PromptStudioPage() {
     setSaving(true);
     setError(null);
     try {
-      await apiClient.post<any>('/api/prompts', formData);
+      await apiClient.post<{ result?: string }>('/api/prompts', formData);
       alert("성공적으로 저장되었습니다.");
     } catch (err: unknown) {
       setError(((err as Error).message || '') || '저장 실패');

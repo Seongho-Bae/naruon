@@ -6,14 +6,14 @@ import { InsightCard } from '@/components/InsightCard';
 import { Network, Sparkles, BookOpen } from 'lucide-react';
 
 export default function AIHubPage() {
-  const [prompts, setPrompts] = useState<any[]>([]);
+  const [prompts, setPrompts] = useState<{ id: number; title: string; description?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const data = await apiClient.get<any[]>('/api/prompts');
+        const data = await apiClient.get<{ id: number; title: string; description?: string }[]>('/api/prompts');
         setPrompts(data);
       } catch (err: unknown) {
         setError(((err as Error).message || '') || "데이터를 불러오는 데 실패했습니다.");
