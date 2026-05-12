@@ -26,8 +26,8 @@ class PromptResponse(BaseModel):
     created_at: datetime.datetime
     updated_at: datetime.datetime
 
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
+
 
 class PromptTestRequest(BaseModel):
     content: str
