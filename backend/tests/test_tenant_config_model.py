@@ -2,6 +2,15 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 from db.models import TenantConfig
+from core.config import settings
+
+@pytest.fixture(autouse=True)
+def mock_debug():
+    old_debug = settings.DEBUG
+    settings.DEBUG = True
+    yield
+    settings.DEBUG = old_debug
+
 
 
 @pytest.fixture

@@ -1,6 +1,7 @@
 from fastapi import Header, HTTPException
 
 async def get_current_user(x_user_id: str | None = Header(None, alias="X-User-Id")) -> str:
+
     """
     Extracts the user ID from the X-User-Id header.
     In a real implementation, this should validate a JWT or Keycloak token.
