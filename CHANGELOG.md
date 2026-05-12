@@ -1,3 +1,10 @@
+## [0.11.0] - 2026-05-12
+
+### 추가
+- Seongho Bae (@seonghobae): 제공된 기획(Figma `uiux4.png`)과 어긋났던 사이드바 네비게이션을 전면 개편하여, `[메일]`, `[AI 허브 BETA]`, `[프로젝트]`, `[라벨]`의 원안 그룹핑을 100% 복구했습니다.
+- Seongho Bae (@seonghobae): 모호했던 워크스페이스 관리자(Admin) 권한과 Self-hosted Runner의 스코프를 `domain-model-realignment.md` 아키텍처 문서로 정의했습니다.
+- Seongho Bae (@seonghobae): 설정(`/settings`) 페이지를 탭(Tabs) 구조로 개편하여 `개인 이메일 계정 연결`, `워크스페이스 BYOK (관리자)`, `Self-hosted Runner (관리자)` 로 명확히 분리하고 제공자 편집(Edit)/삭제(Delete) 기능을 완성했습니다. (이슈 #179, #180 연계 해결)
+
 ## [0.10.6] - 2026-05-12
 
 ### 수정
