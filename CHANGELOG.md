@@ -1,3 +1,8 @@
+## [0.8.0] - 2026-05-11
+
+### 추가
+- Seongho Bae (@seonghobae): 관리자(Admin) 권한을 가진 유저가 Naruon 워크스페이스 상에서 Provider(OpenAI, Ollama, Anthropic 등)와 모델 라우팅 정책, 보안 설정을 직접 관리할 수 있는 `/settings` UI 환경을 도입했습니다. (이슈 T-005)
+
 ## [0.6.1] - 2026-05-11
 
 ### 수정
