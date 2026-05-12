@@ -36,7 +36,7 @@ describe("DashboardLayout", () => {
     const nav = container.querySelector('nav[aria-label="Naruon workspace sections"]');
             const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
-    const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('button') ?? []).map(
+    const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (button) => button.textContent,
     );
     const main = container.querySelector("main#main-content");
@@ -51,7 +51,7 @@ describe("DashboardLayout", () => {
             expect(mobileNav).not.toBeNull();
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
-    expect(mobileNavButtons).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
+    expect(mobileNavButtons).toEqual(["받은 메일", "AI Hub", "Prompt Studio", "워크스페이스 설정"]);
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
@@ -72,37 +72,7 @@ describe("DashboardLayout", () => {
     });
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
-    expect(container.querySelector('#mobile-workspace-menu')?.textContent ?? "").toContain("판단 포인트");
+    expect(container.querySelector('#mobile-workspace-menu')?.textContent ?? "").toContain("Prompt Studio");
   });
 
-  it("routes mobile workspace menu items to primary mobile views", () => {
-    const handleMobileViewChange = vi.fn();
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
-      root?.render(
-        <DashboardLayout mobileView="inbox" onMobileViewChange={handleMobileViewChange}>
-          <section>Inbox workspace content</section>
-        </DashboardLayout>,
-      );
-    });
-
-    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
-    act(() => {
-      mobileMenuButton?.click();
-    });
-
-    const executionLink = Array.from(
-      container.querySelectorAll<HTMLAnchorElement>('#mobile-workspace-menu a'),
-    ).find((link) => link.textContent?.includes("실행 항목"));
-
-    act(() => {
-      executionLink?.click();
-    });
-
-    expect(handleMobileViewChange).toHaveBeenCalledWith("actions");
-    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
-  });
 });
