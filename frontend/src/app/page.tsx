@@ -68,13 +68,13 @@ export default function Home() {
         <div className="h-full overflow-hidden rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <section
             aria-label="모바일 받은편지함"
-            className={`h-full ${!selectedEmail ? 'block' : 'hidden'}`}
+            className={`h-full ${selectedEmail === null ? 'block' : 'hidden'}`}
           >
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </section>
           <section
             aria-label="모바일 메일 상세"
-            className={`h-full flex flex-col ${selectedEmail ? 'flex' : 'hidden'}`}
+            className={`h-full flex flex-col ${selectedEmail !== null ? 'flex' : 'hidden'}`}
           >
             <div className="p-3 border-b border-border bg-card">
               <button 

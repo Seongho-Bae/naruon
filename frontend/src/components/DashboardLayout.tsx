@@ -243,6 +243,7 @@ export function DashboardLayout({
             <Link
               key={label}
               href={href}
+              onClick={() => setIsWorkspaceMenuOpen(false)}
               data-mobile-view={label}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-center ${
