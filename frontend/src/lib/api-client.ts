@@ -2,7 +2,6 @@ export class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl?: string) {
-    // If constructed without URL, fallback to relative path or safe dev URL
     this.baseUrl = baseUrl || (typeof window !== 'undefined' ? '' : 'http://localhost:8000');
   }
 
@@ -14,15 +13,25 @@ export class ApiClient {
     return this.baseUrl;
   }
 
+  private getHeaders(init?: RequestInit): HeadersInit {
+    // Check localStorage for a dev user override, fallback to testuser
+    let userId = 'testuser';
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('naruon_dev_user');
+      if (stored) userId = stored;
+    }
+
+    return {
+      'Content-Type': 'application/json',
+      'X-User-Id': userId,
+      ...init?.headers,
+    };
+  }
+
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        // In real system, proper token is included
-        'X-User-Id': 'testuser',
-        ...init?.headers,
-      },
+      headers: this.getHeaders(init),
     });
     if (!response.ok) {
       throw new Error(`API GET ${endpoint} failed: ${response.statusText}`);
@@ -34,11 +43,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-User-Id': 'testuser',
-        ...init?.headers,
-      },
+      headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
     if (!response.ok) {
@@ -48,5 +53,4 @@ export class ApiClient {
   }
 }
 
-// Global default client instance
 export const apiClient = new ApiClient();
