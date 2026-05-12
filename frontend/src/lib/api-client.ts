@@ -62,7 +62,9 @@ export class ApiClient {
     if (!response.ok) {
       throw new Error(`API PUT ${endpoint} failed: ${response.statusText}`);
     }
-    return response.json();
+    // PUT might return 204 No Content
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
   }
 
   async delete<T>(endpoint: string, init?: RequestInit): Promise<T> {

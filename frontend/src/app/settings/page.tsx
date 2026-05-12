@@ -259,7 +259,7 @@ export default function SettingsPage() {
               </div>
 
               {submitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{submitError}</div>}
-              {submitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">제공자가 성공적으로 추가되었습니다.</div>}
+              {submitSuccess && <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">제공자가 성공적으로 저장되었습니다.</div>}
 
               <div className="flex gap-2">
                 <Button type="submit" className="flex-1 font-bold">
