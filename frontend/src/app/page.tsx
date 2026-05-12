@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { DashboardLayout, type MobileWorkspaceView } from '@/components/DashboardLayout';
+
 import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -16,12 +16,12 @@ function getDesktopWorkspaceMatch() {
 
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
-  const [mobileView, setMobileView] = useState<MobileWorkspaceView>('inbox');
+  
   const [isDesktopWorkspace, setIsDesktopWorkspace] = useState(true);
-  const showMobileActions = mobileView === 'actions' || mobileView === 'calendar';
+  const showMobileActions = false; // network graph hidden on mobile inbox view for simplicity
   const handleSelectEmail = (emailId: number) => {
     setSelectedEmail(emailId);
-    setMobileView('detail');
+    
   };
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export default function Home() {
   }, []);
 
   return (
-    <DashboardLayout mobileView={mobileView} onMobileViewChange={setMobileView}>
+    <>
       {isDesktopWorkspace ? (
         <ResizablePanelGroup orientation="horizontal" className="hidden h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex">
           <ResizablePanel defaultSize={27} minSize={22}>
@@ -68,15 +68,25 @@ export default function Home() {
         <div className="h-full overflow-hidden rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <section
             aria-label="모바일 받은편지함"
-            className={`h-full ${mobileView === 'inbox' ? 'block' : 'hidden'}`}
+            className={`h-full ${selectedEmail === null ? 'block' : 'hidden'}`}
           >
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </section>
           <section
             aria-label="모바일 메일 상세"
-            className={`h-full ${mobileView === 'detail' ? 'block' : 'hidden'}`}
+            className={`h-full flex flex-col ${selectedEmail !== null ? 'flex' : 'hidden'}`}
           >
-            <EmailDetail emailId={selectedEmail} />
+            <div className="p-3 border-b border-border bg-card">
+              <button 
+                onClick={() => setSelectedEmail(null)}
+                className="text-sm font-semibold text-primary flex items-center gap-1"
+              >
+                ← 목록으로
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <EmailDetail emailId={selectedEmail} />
+            </div>
           </section>
           <section
             aria-label="모바일 AI 실행"
@@ -94,11 +104,11 @@ export default function Home() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              <NetworkGraph />
+              {showMobileActions && <NetworkGraph />}
             </div>
           </section>
         </div>
       )}
-    </DashboardLayout>
+    </>
   );
 }
