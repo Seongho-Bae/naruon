@@ -14,6 +14,9 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
+  # Keep the explicit opt-in as belt-and-suspenders. The real warning removal
+  # comes from the Node24-native action SHAs below because the runner may still
+  # emit a deprecation annotation before the override takes effect.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
