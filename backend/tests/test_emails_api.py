@@ -20,6 +20,7 @@ class MockTenantConfig:
         self.smtp_server = "smtp.example.com"
         self.smtp_port = 587
         self.smtp_username = "testuser"
+        self.smtp_password = None
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -325,6 +326,7 @@ def test_send_email_endpoint(mock_send_email):
         smtp_server="smtp.example.com",
         smtp_port=587,
         smtp_username="testuser",
+        smtp_password=None,
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )

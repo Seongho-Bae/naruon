@@ -18,6 +18,8 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""
     depends_on:
@@ -29,6 +31,8 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""
     depends_on:
@@ -40,6 +44,8 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}

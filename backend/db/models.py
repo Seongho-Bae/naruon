@@ -80,6 +80,17 @@ class LLMProvider(Base):
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
 
 
+class WorkspaceRunnerConfig(Base):
+    __tablename__ = "workspace_runner_configs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    workspace_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    registration_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
 
@@ -134,8 +145,11 @@ class TenantConfig(Base):
     smtp_server: Mapped[str | None] = mapped_column(String, nullable=True)
     smtp_port: Mapped[int | None] = mapped_column(nullable=True)
     smtp_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    smtp_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     imap_server: Mapped[str | None] = mapped_column(String, nullable=True)
     imap_port: Mapped[int | None] = mapped_column(nullable=True)
+    imap_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    imap_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     pop3_server: Mapped[str | None] = mapped_column(String, nullable=True)
     pop3_port: Mapped[int | None] = mapped_column(nullable=True)
 
@@ -156,6 +170,8 @@ class TenantConfig(Base):
         return (
             f"<TenantConfig(id={self.id}, user_id='{self.user_id}', "
             f"smtp_server='{self.smtp_server}', imap_server='{self.imap_server}', "
+            f"has_smtp_password={self.smtp_password is not None}, "
+            f"has_imap_password={self.imap_password is not None}, "
             f"has_oauth_secret={self.oauth_client_secret is not None}, "
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"

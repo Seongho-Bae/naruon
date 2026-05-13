@@ -5,6 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email"
     DEBUG: bool = False
+    TRUST_DEV_HEADERS: bool = False
     ENCRYPTION_KEY: SecretStr | None = None
 
     # OpenAI Settings

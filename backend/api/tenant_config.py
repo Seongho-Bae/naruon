@@ -16,8 +16,11 @@ class TenantConfigCreate(BaseModel):
     smtp_server: Optional[str] = None
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     imap_server: Optional[str] = None
     imap_port: Optional[int] = None
+    imap_username: Optional[str] = None
+    imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
     oauth_client_id: Optional[str] = None
@@ -33,8 +36,11 @@ class TenantConfigResponse(BaseModel):
     smtp_server: Optional[str] = None
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
+    smtp_password: Optional[str] = None
     imap_server: Optional[str] = None
     imap_port: Optional[int] = None
+    imap_username: Optional[str] = None
+    imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
     oauth_client_id: Optional[str] = None
@@ -47,7 +53,13 @@ class TenantConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-SECRET_FIELDS = {"oauth_client_secret", "openai_api_key", "google_client_secret"}
+SECRET_FIELDS = {
+    "smtp_password",
+    "imap_password",
+    "oauth_client_secret",
+    "openai_api_key",
+    "google_client_secret",
+}
 
 
 @router.post("")
@@ -78,7 +90,15 @@ async def create_or_update_config(
         db_config = TenantConfig(**config_data)
         db.add(db_config)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception as exc:
+        if "ENCRYPTION_KEY is required" not in str(exc):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail="Server encryption key is not configured. Contact your workspace administrator.",
+        ) from exc
     return {"status": "ok"}
 
 

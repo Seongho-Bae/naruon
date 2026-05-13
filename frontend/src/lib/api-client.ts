@@ -14,18 +14,30 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
-    // Check localStorage for a dev user override, fallback to testuser
-    let userId = 'testuser';
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('naruon_dev_user');
-      if (stored) userId = stored;
-    }
-
-    return {
+    const userId = this.getCurrentUserId();
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'X-User-Id': userId,
       ...init?.headers,
     };
+    if (userId) {
+      return {
+        ...headers,
+        'X-User-Id': userId,
+      };
+    }
+    return headers;
+  }
+
+  getCurrentUserId() {
+    if (typeof window === 'undefined') return null;
+
+    const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+    const isPrivateLan = window.location.hostname.startsWith('192.168.');
+    const allowDevOverride = process.env.NODE_ENV !== 'production' || isLocalHost || isPrivateLan;
+    if (!allowDevOverride) return null;
+
+    const stored = localStorage.getItem('naruon_dev_user')?.trim();
+    return stored || 'testuser';
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
@@ -34,7 +46,9 @@ export class ApiClient {
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      throw new Error(`API GET ${endpoint} failed: ${response.statusText}`);
+      const error = new Error(`API GET ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
@@ -47,7 +61,9 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw new Error(`API POST ${endpoint} failed: ${response.statusText}`);
+      const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
@@ -60,7 +76,9 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw new Error(`API PUT ${endpoint} failed: ${response.statusText}`);
+      const error = new Error(`API PUT ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     // PUT might return 204 No Content
     const text = await response.text();
@@ -74,7 +92,9 @@ export class ApiClient {
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      throw new Error(`API DELETE ${endpoint} failed: ${response.statusText}`);
+      const error = new Error(`API DELETE ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     // DELETE might return 204 No Content, handle gracefully
     const text = await response.text();
