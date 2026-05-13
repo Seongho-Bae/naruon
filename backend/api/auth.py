@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 
 from fastapi import Depends, Header, HTTPException
 
@@ -7,7 +7,7 @@ from core.config import settings
 
 
 RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
-SCOPED_ROLES: set[str] = {"platform_admin", "organization_admin", "group_admin", "member"}
+SCOPED_ROLES: set[str] = set(get_args(RoleName))
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,12 @@ def _normalize_header_value(value: object) -> str | None:
 
 
 def _derive_role(user_id: str, requested_role: str | None) -> RoleName:
+    """
+    Derive user role from request headers in trusted dev/test mode.
+
+    In production, header-provided roles are ignored and every request is treated
+    as `member` until SSO/OIDC claims are wired in.
+    """
     if not (settings.DEBUG or settings.TRUST_DEV_HEADERS):
         return "member"
     if requested_role in SCOPED_ROLES:
@@ -43,8 +49,13 @@ def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
 def _derive_workspace_id(
     user_id: str,
     organization_id: str | None,
-    workspace_id: str | None,
 ) -> str:
+    """
+    Derive workspace identity from organization or user context only.
+
+    Client-provided workspace overrides are intentionally ignored to prevent
+    cross-tenant scope spoofing.
+    """
     if organization_id:
         return f"workspace-{organization_id}"
     return f"workspace-{user_id}"
@@ -62,16 +73,12 @@ async def get_auth_context(
     x_user_role: str | None = Header(None, alias="X-User-Role"),
     x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
     x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
 ) -> AuthContext:
-
-
     return build_auth_context(
         x_user_id=x_user_id,
         x_user_role=x_user_role,
         x_organization_id=x_organization_id,
         x_group_ids=x_group_ids,
-        x_workspace_id=x_workspace_id,
     )
 
 
@@ -80,13 +87,13 @@ def build_auth_context(
     x_user_role: object = None,
     x_organization_id: object = None,
     x_group_ids: object = None,
-    x_workspace_id: object = None,
 ) -> AuthContext:
 
     """
     Builds an auth context from the current request headers.
     Today this still trusts local/dev headers, but the shape matches future
-    token-derived scope claims from Keycloak or Casdoor.
+    token-derived scope claims from Keycloak or Casdoor. In production,
+    role headers are ignored and requests remain `member` until OIDC is wired.
     """
     user_id = _normalize_header_value(x_user_id)
     if user_id is None:
@@ -95,7 +102,7 @@ def build_auth_context(
     organization_id = _normalize_header_value(x_organization_id)
     role = _derive_role(user_id, _normalize_header_value(x_user_role))
     group_ids = _parse_group_ids(_normalize_header_value(x_group_ids))
-    workspace_id = _derive_workspace_id(user_id, organization_id, _normalize_header_value(x_workspace_id))
+    workspace_id = _derive_workspace_id(user_id, organization_id)
 
     return AuthContext(
         user_id=user_id,
@@ -111,14 +118,12 @@ async def get_current_user(
     x_user_role: str | None = Header(None, alias="X-User-Role"),
     x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
     x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
 ) -> str:
     return build_auth_context(
         x_user_id=x_user_id,
         x_user_role=x_user_role,
         x_organization_id=x_organization_id,
         x_group_ids=x_group_ids,
-        x_workspace_id=x_workspace_id,
     ).user_id
 
 
