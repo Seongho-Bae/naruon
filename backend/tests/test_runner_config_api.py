@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 import pytest
 
+from core.config import settings
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
@@ -36,6 +37,14 @@ class MockAsyncSession:
 @pytest.fixture
 def mock_db():
     return MockAsyncSession()
+
+
+@pytest.fixture(autouse=True)
+def enable_dev_headers():
+    previous = settings.TRUST_DEV_HEADERS
+    settings.TRUST_DEV_HEADERS = True
+    yield
+    settings.TRUST_DEV_HEADERS = previous
 
 
 @pytest.fixture

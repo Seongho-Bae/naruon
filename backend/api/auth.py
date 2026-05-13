@@ -1,4 +1,5 @@
 from fastapi import Depends, Header, HTTPException
+from core.config import settings
 
 async def get_current_user(x_user_id: str | None = Header(None, alias="X-User-Id")) -> str:
 
@@ -19,4 +20,6 @@ async def get_current_workspace_id(current_user: str = Depends(get_current_user)
 async def get_current_user_role(
     current_user: str = Depends(get_current_user),
 ) -> str:
+    if not (settings.DEBUG or settings.TRUST_DEV_HEADERS):
+        return "member"
     return "organization_admin" if current_user == "admin" else "member"
