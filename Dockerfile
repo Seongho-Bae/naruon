@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
 # Install system dependencies if any are needed for pgvector/psycopg2

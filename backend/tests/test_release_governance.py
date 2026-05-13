@@ -104,6 +104,12 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
     assert "pull_request:" in workflow
     assert "push:" in workflow
+    assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true" in workflow
+    assert workflow.count("docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0") == 2
+    assert workflow.count("docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0") == 2
+    assert "docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0" in workflow
+    assert "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0" in workflow
+    assert workflow.count("docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0") == 2
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
     assert "tags:" in push_block
     assert "branches:" not in push_block
@@ -124,6 +130,15 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     assert "npm run build" in dockerfile
     assert 'CMD ["npm", "run", "start"' in dockerfile or "npm run start" in dockerfile
     assert "npm run dev" not in dockerfile
+
+
+def test_backend_dockerfile_uses_modern_env_syntax() -> None:
+    dockerfile = read_repo_text("Dockerfile")
+
+    assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
+    assert "ENV PYTHONUNBUFFERED=1" in dockerfile
+    assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
+    assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
