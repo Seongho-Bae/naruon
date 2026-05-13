@@ -72,8 +72,12 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication remains dummy `X-User-Id` header auth until mailbox ownership,
-Keycloak/Casdoor evaluation, and key rotation are completed; see
+Authentication still uses trusted request headers in local/dev, but the backend
+now normalizes them into an auth context with `platform_admin`,
+`organization_admin`, `group_admin`, and `member` roles plus optional
+organization/group scope. This preserves the current `X-User-Id` development
+flow while preparing the backend for future Keycloak/Casdoor claims and
+organization-scoped resources that should not assume one workspace per user; see
 `docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
 NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.

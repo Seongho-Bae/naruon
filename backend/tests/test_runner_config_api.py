@@ -53,7 +53,7 @@ def member_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -64,7 +64,43 @@ def admin_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "admin"}) as c:
+    with TestClient(app, headers={"X-User-Id": "admin", "X-Organization-Id": "org-acme"}) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def second_org_admin_client(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "org-admin-2",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def platform_admin_client(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "platform-root",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -77,17 +113,23 @@ def test_member_cannot_manage_runner_config(member_client):
     assert response.status_code == 403
 
 
-def test_admin_can_rotate_and_read_runner_config(admin_client):
+def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
-    assert rotate_data["workspace_id"] == "workspace-admin"
+    assert rotate_data["workspace_id"] == "workspace-org-acme"
     assert rotate_data["registration_token"].startswith("nrn_")
 
-    read_response = admin_client.get("/api/runner-config")
+    read_response = second_org_admin_client.get("/api/runner-config")
     assert read_response.status_code == 200
     read_data = read_response.json()
-    assert read_data["workspace_id"] == "workspace-admin"
+    assert read_data["workspace_id"] == "workspace-org-acme"
     assert read_data["configured"] is True
     assert read_data["fingerprint"] is not None
     assert "registration_token" not in read_data
+
+
+def test_platform_admin_can_manage_runner_config(platform_admin_client):
+    rotate_response = platform_admin_client.post("/api/runner-config/rotate")
+    assert rotate_response.status_code == 200
+    assert rotate_response.json()["workspace_id"] == "workspace-org-acme"

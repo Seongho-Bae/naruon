@@ -76,7 +76,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses dummy header auth and does not persist an owner/mailbox key on email rows. Treat local data as single-user development data until a mailbox ownership migration is added.
+This repo still uses trusted header auth in local/dev and does not persist an owner/mailbox key on email rows. The backend now derives an auth context with platform/organization/group/member scopes, but email data should still be treated as single-user development data until a mailbox ownership migration is added.
 
 ## Operations and release docs
 
