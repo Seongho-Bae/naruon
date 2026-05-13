@@ -70,25 +70,42 @@ export default function NetworkGraph() {
 
   useEffect(() => {
     if (containerRef.current && nodes.length > 0) {
-      const network = new Network(containerRef.current, { nodes, edges }, {
+      const container = containerRef.current;
+      const network = new Network(container, { nodes, edges }, {
         nodes: { shape: 'dot', size: 16 },
         edges: { arrows: 'to' }
       });
-      return () => network.destroy();
+
+      const fitGraph = () => {
+        network.fit({ animation: false });
+      };
+
+      const resizeObserver = typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            fitGraph();
+          });
+
+      resizeObserver?.observe(container);
+
+      return () => {
+        resizeObserver?.disconnect();
+        network.destroy();
+      };
     }
   }, [nodes, edges]);
 
   if (loading) {
-    return <div role="status" aria-live="polite" className="flex h-full min-h-[520px] w-full items-center justify-center text-sm text-muted-foreground">관계 그래프를 불러오는 중입니다...</div>;
+    return <div role="status" aria-live="polite" className="flex h-full min-h-[320px] w-full items-center justify-center text-sm text-muted-foreground sm:min-h-[420px]">관계 그래프를 불러오는 중입니다...</div>;
   }
 
   if (error) {
-    return <div role="alert" className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center text-sm text-red-500">관계 그래프를 불러오지 못했습니다.</div>;
+    return <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center text-sm text-red-500 sm:min-h-[420px]">관계 그래프를 불러오지 못했습니다.</div>;
   }
 
   if (nodes.length === 0) {
     return (
-      <div className="flex h-full min-h-[520px] w-full items-center justify-center p-6 text-center">
+      <div className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
         <div className="max-w-xs rounded-2xl border border-primary/15 bg-primary/5 p-5">
           <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">✦</div>
           <h4 className="font-bold text-foreground">관계 데이터가 없습니다</h4>
@@ -104,7 +121,7 @@ export default function NetworkGraph() {
     .slice(0, 5);
 
   return (
-    <div className="flex h-full min-h-[520px] flex-col">
+    <div className="flex h-full min-h-[320px] flex-col sm:min-h-[420px]">
       <div className="border-b border-border bg-card/80 p-4">
         <h4 className="text-sm font-black text-foreground">관계 이해</h4>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -120,7 +137,7 @@ export default function NetworkGraph() {
       <div
         ref={containerRef}
         aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 네트워크 그래프`}
-        className="min-h-0 flex-1 bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
+        className="min-h-0 flex-1 w-full bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
       />
     </div>
   );
