@@ -1,3 +1,9 @@
+## [0.13.0] - 2026-05-13
+
+### 수정
+- Seongho Bae (@seonghobae): Frontend `next`/`eslint-config-next`를 `16.2.6`으로, backend `python-multipart`를 `0.0.27`으로 올려 남아 있던 GitHub 보안 경보 17건의 근본 원인을 제거했습니다.
+- Seongho Bae (@seonghobae): backend 런타임 스택을 `fastapi 0.136.1`, `starlette 0.52.1`, `uvicorn 0.34.3`, OpenTelemetry `1.41.1 / 0.62b1`로 정렬해 deprecated multipart import 및 추가 파이썬 취약점까지 함께 정리했습니다.
+
 ## [0.12.1] - 2026-05-13
 
 ### 수정
