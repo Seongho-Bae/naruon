@@ -15,25 +15,29 @@ export class ApiClient {
 
   private getHeaders(init?: RequestInit): HeadersInit {
     const userId = this.getCurrentUserId();
-
-    return {
+    const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'X-User-Id': userId,
       ...init?.headers,
     };
+    if (userId) {
+      return {
+        ...headers,
+        'X-User-Id': userId,
+      };
+    }
+    return headers;
   }
 
   getCurrentUserId() {
-    const fallbackUserId = 'testuser';
-    if (typeof window === 'undefined') return fallbackUserId;
+    if (typeof window === 'undefined') return null;
 
     const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     const isPrivateLan = window.location.hostname.startsWith('192.168.');
     const allowDevOverride = process.env.NODE_ENV !== 'production' || isLocalHost || isPrivateLan;
-    if (!allowDevOverride) return fallbackUserId;
+    if (!allowDevOverride) return null;
 
     const stored = localStorage.getItem('naruon_dev_user')?.trim();
-    return stored || fallbackUserId;
+    return stored || 'testuser';
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {

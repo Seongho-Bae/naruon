@@ -72,13 +72,13 @@ def test_admin_can_rotate_and_read_runner_config(admin_client):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
-    assert rotate_data["workspace_id"] == "default-workspace"
+    assert rotate_data["workspace_id"] == "workspace-admin"
     assert rotate_data["registration_token"].startswith("nrn_")
 
     read_response = admin_client.get("/api/runner-config")
     assert read_response.status_code == 200
     read_data = read_response.json()
-    assert read_data["workspace_id"] == "default-workspace"
+    assert read_data["workspace_id"] == "workspace-admin"
     assert read_data["configured"] is True
     assert read_data["fingerprint"] is not None
     assert "registration_token" not in read_data

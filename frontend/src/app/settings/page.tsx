@@ -102,6 +102,10 @@ export default function SettingsPage() {
   };
 
   const fetchPersonalConfig = useCallback(async () => {
+    if (!currentUserId) {
+      setPersonalLoading(false);
+      return;
+    }
     try {
       const data = await apiClient.get<PersonalMailboxConfig>(`/api/config?user_id=${encodeURIComponent(currentUserId)}`);
       setPersonalForm({
@@ -196,6 +200,9 @@ export default function SettingsPage() {
     setPersonalSubmitSuccess(null);
 
     try {
+      if (!currentUserId) {
+        throw new Error('개인 이메일 계정을 저장하려면 인증된 사용자 세션이 필요합니다.');
+      }
       const smtpPortNum = Number(personalForm.smtp_port);
       const imapPortNum = Number(personalForm.imap_port);
       if (!Number.isInteger(smtpPortNum) || smtpPortNum < 1 || smtpPortNum > 65535) {
