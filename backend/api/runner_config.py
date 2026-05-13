@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import AuthContext, get_auth_context
+from api.auth import AuthContext, ensure_organization_access, get_auth_context
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 
@@ -48,6 +48,8 @@ async def get_runner_config(
     auth_context: AuthContext = Depends(_check_org_admin),
 ):
     workspace_id = auth_context.workspace_id
+    if auth_context.organization_id:
+        ensure_organization_access(auth_context, auth_context.organization_id)
     result = await db.execute(
         select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )
@@ -78,6 +80,8 @@ async def rotate_runner_token(
     auth_context: AuthContext = Depends(_check_org_admin),
 ):
     workspace_id = auth_context.workspace_id
+    if auth_context.organization_id:
+        ensure_organization_access(auth_context, auth_context.organization_id)
     result = await db.execute(
         select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )

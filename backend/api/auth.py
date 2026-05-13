@@ -43,7 +43,6 @@ def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
 def _derive_workspace_id(
     user_id: str,
     organization_id: str | None,
-    workspace_id: str | None,
 ) -> str:
     if organization_id:
         return f"workspace-{organization_id}"
@@ -62,16 +61,12 @@ async def get_auth_context(
     x_user_role: str | None = Header(None, alias="X-User-Role"),
     x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
     x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
 ) -> AuthContext:
-
-
     return build_auth_context(
         x_user_id=x_user_id,
         x_user_role=x_user_role,
         x_organization_id=x_organization_id,
         x_group_ids=x_group_ids,
-        x_workspace_id=x_workspace_id,
     )
 
 
@@ -80,7 +75,6 @@ def build_auth_context(
     x_user_role: object = None,
     x_organization_id: object = None,
     x_group_ids: object = None,
-    x_workspace_id: object = None,
 ) -> AuthContext:
 
     """
@@ -95,7 +89,7 @@ def build_auth_context(
     organization_id = _normalize_header_value(x_organization_id)
     role = _derive_role(user_id, _normalize_header_value(x_user_role))
     group_ids = _parse_group_ids(_normalize_header_value(x_group_ids))
-    workspace_id = _derive_workspace_id(user_id, organization_id, _normalize_header_value(x_workspace_id))
+    workspace_id = _derive_workspace_id(user_id, organization_id)
 
     return AuthContext(
         user_id=user_id,
@@ -111,14 +105,12 @@ async def get_current_user(
     x_user_role: str | None = Header(None, alias="X-User-Role"),
     x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
     x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
-    x_workspace_id: str | None = Header(None, alias="X-Workspace-Id"),
 ) -> str:
     return build_auth_context(
         x_user_id=x_user_id,
         x_user_role=x_user_role,
         x_organization_id=x_organization_id,
         x_group_ids=x_group_ids,
-        x_workspace_id=x_workspace_id,
     ).user_id
 
 
