@@ -61,6 +61,9 @@ SECRET_FIELDS = {
     "google_client_secret",
 }
 
+MAILBOX_MANAGE_FORBIDDEN = "Mailbox settings are personal and can only be managed by the authenticated user"
+MAILBOX_VIEW_FORBIDDEN = "Mailbox settings are personal and can only be viewed by the authenticated user"
+
 
 @router.post("")
 async def create_or_update_config(
@@ -69,7 +72,7 @@ async def create_or_update_config(
     current_user: str = Depends(get_current_user)
 ):
     if config.user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        raise HTTPException(status_code=403, detail=MAILBOX_MANAGE_FORBIDDEN)
 
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == config.user_id)
@@ -109,7 +112,7 @@ async def get_config(
     current_user: str = Depends(get_current_user)
 ):
     if user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
+        raise HTTPException(status_code=403, detail=MAILBOX_VIEW_FORBIDDEN)
 
     result = await db.execute(
         select(TenantConfig).where(TenantConfig.user_id == user_id)

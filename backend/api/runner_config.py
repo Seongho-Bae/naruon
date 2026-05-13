@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user_role, get_current_workspace_id
+from api.auth import AuthContext, get_auth_context
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 
@@ -28,10 +28,10 @@ class RunnerRotateResponse(BaseModel):
     registration_token: str
 
 
-def _check_org_admin(user_role: str = Depends(get_current_user_role)) -> str:
-    if user_role != "organization_admin":
+def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
+    if auth_context.role not in {"platform_admin", "organization_admin"}:
         raise HTTPException(status_code=403, detail="Organization admin access required")
-    return user_role
+    return auth_context
 
 
 def _fingerprint(token: str | None) -> str | None:
@@ -43,9 +43,9 @@ def _fingerprint(token: str | None) -> str | None:
 @router.get("", response_model=RunnerConfigResponse)
 async def get_runner_config(
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(_check_org_admin),
-    workspace_id: str = Depends(get_current_workspace_id),
+    auth_context: AuthContext = Depends(_check_org_admin),
 ):
+    workspace_id = auth_context.workspace_id
     result = await db.execute(
         select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )
@@ -73,9 +73,9 @@ async def get_runner_config(
 @router.post("/rotate", response_model=RunnerRotateResponse)
 async def rotate_runner_token(
     db: AsyncSession = Depends(get_db),
-    _: str = Depends(_check_org_admin),
-    workspace_id: str = Depends(get_current_workspace_id),
+    auth_context: AuthContext = Depends(_check_org_admin),
 ):
+    workspace_id = auth_context.workspace_id
     result = await db.execute(
         select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
     )
