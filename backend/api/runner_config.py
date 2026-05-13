@@ -54,12 +54,20 @@ async def get_runner_config(
     if not config:
         return RunnerConfigResponse(workspace_id=workspace_id, configured=False, fingerprint=None, updated_at=None)
 
-    return RunnerConfigResponse(
-        workspace_id=config.workspace_id,
-        configured=bool(config.registration_token),
-        fingerprint=_fingerprint(config.registration_token),
-        updated_at=config.updated_at,
-    )
+    try:
+        return RunnerConfigResponse(
+            workspace_id=config.workspace_id,
+            configured=bool(config.registration_token),
+            fingerprint=_fingerprint(config.registration_token),
+            updated_at=config.updated_at,
+        )
+    except Exception as exc:
+        if "ENCRYPTION_KEY is required" not in str(exc):
+            raise
+        raise HTTPException(
+            status_code=503,
+            detail="Server encryption key is not configured. Contact your workspace administrator.",
+        ) from exc
 
 
 @router.post("/rotate", response_model=RunnerRotateResponse)

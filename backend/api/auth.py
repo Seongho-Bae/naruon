@@ -1,4 +1,4 @@
-from fastapi import Header, HTTPException
+from fastapi import Depends, Header, HTTPException
 
 async def get_current_user(x_user_id: str | None = Header(None, alias="X-User-Id")) -> str:
 
@@ -17,6 +17,6 @@ async def get_current_workspace_id() -> str:
 
 
 async def get_current_user_role(
-    current_user: str = Header(None, alias="X-User-Id"),
+    current_user: str = Depends(get_current_user),
 ) -> str:
     return "organization_admin" if current_user == "admin" else "member"
