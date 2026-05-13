@@ -53,9 +53,11 @@ def member_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -64,16 +66,18 @@ def admin_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(
-        app,
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-acme",
-        },
-    ) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "organization_admin",
+                "X-Organization-Id": "org-acme",
+            },
+        ) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -82,16 +86,18 @@ def second_org_admin_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(
-        app,
-        headers={
-            "X-User-Id": "org-admin-2",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-acme",
-        },
-    ) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "org-admin-2",
+                "X-User-Role": "organization_admin",
+                "X-Organization-Id": "org-acme",
+            },
+        ) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -100,16 +106,18 @@ def platform_admin_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(
-        app,
-        headers={
-            "X-User-Id": "platform-root",
-            "X-User-Role": "platform_admin",
-            "X-Organization-Id": "org-acme",
-        },
-    ) as c:
-        yield c
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "platform-root",
+                "X-User-Role": "platform_admin",
+                "X-Organization-Id": "org-acme",
+            },
+        ) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 def test_member_cannot_manage_runner_config(member_client):
@@ -147,14 +155,16 @@ def test_org_admin_without_org_scope_is_rejected(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(
-        app,
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
-        },
-    ) as client:
-        response = client.get("/api/runner-config")
-        assert response.status_code == 403
-        assert response.json()["detail"] == "Organization scope is required"
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "organization_admin",
+            },
+        ) as client:
+            response = client.get("/api/runner-config")
+            assert response.status_code == 403
+            assert response.json()["detail"] == "Organization scope is required"
+    finally:
+        app.dependency_overrides.pop(get_db, None)
