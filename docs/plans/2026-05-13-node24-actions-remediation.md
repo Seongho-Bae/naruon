@@ -1,7 +1,5 @@
 # Node24 Actions Remediation Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
-
 **Goal:** Remove GitHub Actions Node 20 deprecation warnings from the Docker publish pipeline by explicitly opting the affected JavaScript actions into Node 24.
 
 **Architecture:** Add the documented `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true` environment variable at workflow scope for the Docker-image workflow so every JavaScript action in that pipeline runs on Node 24. Lock the expectation with a release-governance regression test so the warning cannot silently return.
@@ -17,7 +15,7 @@
 - Test: `backend/tests/test_release_governance.py`
 
 **Step 1: Write the failing test**
-Add an assertion that `.github/workflows/docker-publish.yml` contains `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true`.
+Add an assertion that `.github/workflows/docker-publish.yml` contains `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true`.
 
 **Step 2: Run test to verify it fails**
 Run: `cd backend && python3 -m pytest tests/test_release_governance.py -q`
