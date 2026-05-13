@@ -1,3 +1,15 @@
+## [0.12.0] - 2026-05-13
+
+### 추가
+- Seongho Bae (@seonghobae): `/settings` 화면을 실제 운용 가능한 설정 플로우로 확장했습니다. 개인 이메일 계정(IMAP/SMTP) 연결, 워크스페이스 BYOK, 조직 단위 Self-hosted Runner 토큰 발급/재발급을 탭으로 분리해 구현했습니다.
+- Seongho Bae (@seonghobae): 개인 메일 계정 설정에 `imap_username`, `imap_password`, `smtp_password` 필드를 추가하고 암호화 저장 및 마스킹 반환을 적용했습니다.
+- Seongho Bae (@seonghobae): 조직 단위 `WorkspaceRunnerConfig` 및 `/api/runner-config`, `/api/runner-config/rotate` 엔드포인트를 도입해 러너 토큰 발급 흐름을 구현했습니다.
+
+### 수정
+- Seongho Bae (@seonghobae): 브라우저가 임의의 workspace/role 헤더를 보내지 않도록 제거하고, 로컬/사내망 UAT 시에만 dev identity override가 동작하도록 제한했습니다.
+- Seongho Bae (@seonghobae): 암호화 키 누락 시 개인 메일 설정 저장과 Runner 토큰 발급 경로가 모호한 500이 아니라 명확한 503 운영자 메시지를 반환하도록 보강했습니다.
+- Seongho Bae (@seonghobae): 로봇 리뷰(CodeRabbit/Greptile)가 지적한 마스킹 비밀번호 round-trip, 포트 검증, compose boolean 기본값 문제를 모두 수정했습니다.
+
 ## [0.11.1] - 2026-05-12
 
 ### 수정
