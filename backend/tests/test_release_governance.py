@@ -104,6 +104,7 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
     assert "pull_request:" in workflow
     assert "push:" in workflow
+    assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true" in workflow
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
     assert "tags:" in push_block
     assert "branches:" not in push_block
