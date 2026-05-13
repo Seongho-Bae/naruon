@@ -6,7 +6,7 @@ from typing import List, Optional
 import datetime
 from db.session import get_db
 from db.models import LLMProvider, AuditLog
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/llm-providers", tags=["llm-providers"])
@@ -45,17 +45,15 @@ def _get_fingerprint(api_key: str | None) -> str | None:
         return f"***{api_key[-4:]}"
     return "***"
 
-async def check_admin_access(user_id: str = Depends(get_current_user)):
-    # Mocking role claim check for now since auth.py just returns string
-    user_roles = ["admin"] if user_id == "admin" else []
-    if "admin" not in user_roles:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user_id
+async def check_admin_access(auth_context: AuthContext = Depends(get_auth_context)):
+    if auth_context.role not in {"platform_admin", "organization_admin"}:
+        raise HTTPException(status_code=403, detail="Organization admin access required")
+    return auth_context.user_id
 
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user)
+    auth_context: AuthContext = Depends(get_auth_context)
 ):
     result = await db.execute(select(LLMProvider))
     providers = result.scalars().all()

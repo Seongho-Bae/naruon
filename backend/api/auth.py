@@ -45,8 +45,6 @@ def _derive_workspace_id(
     organization_id: str | None,
     workspace_id: str | None,
 ) -> str:
-    if workspace_id and workspace_id.strip():
-        return workspace_id.strip()
     if organization_id:
         return f"workspace-{organization_id}"
     return f"workspace-{user_id}"
