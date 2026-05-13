@@ -71,4 +71,31 @@ describe("DashboardLayout", () => {
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
       });
 
+  it("keeps the desktop sidebar content reachable through an independent scroll region", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    const sidebar = container.querySelector<HTMLElement>('aside[aria-label="Naruon workspace sidebar"]');
+    const scrollRegion = container.querySelector<HTMLElement>('[data-testid="sidebar-scroll-region"]');
+    const insightHeading = Array.from(container.querySelectorAll("p")).find(
+      (element) => element.textContent === "오늘의 인사이트",
+    );
+
+    expect(sidebar?.className).toContain("overflow-hidden");
+    expect(scrollRegion).not.toBeNull();
+    expect(scrollRegion?.className).toContain("min-h-0");
+    expect(scrollRegion?.className).toContain("overflow-y-auto");
+    expect(scrollRegion?.textContent ?? "").toContain("오늘의 인사이트");
+    expect(insightHeading?.closest('[data-testid="sidebar-scroll-region"]')).toBe(scrollRegion);
+  });
+
 });

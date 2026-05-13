@@ -71,3 +71,37 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["imap_port"] == 993
     assert data["imap_username"] == "imap-user"
     assert data["google_client_secret"] is None
+
+
+def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
+    response = client.post(
+        "/api/config",
+        json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Mailbox settings are personal and can only be managed by the authenticated user"
+    }
+
+
+def test_tenant_config_get_rejects_cross_user_access(client):
+    response = client.get(
+        "/api/config",
+        params={"user_id": "member-user"},
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
+    }

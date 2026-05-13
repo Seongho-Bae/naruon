@@ -143,7 +143,7 @@ export function DashboardLayout({
         Skip to main content
       </a>
 
-      <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
+      <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
         <div className="space-y-5">
           <div className="flex items-center gap-3">
             <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} priority style={{ width: '150px', height: '40px' }} />
@@ -156,86 +156,88 @@ export function DashboardLayout({
           </div>
         </div>
 
-        <div className="px-3 pb-4">
-          <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg py-2.5 px-4 flex items-center justify-center gap-2 transition-colors">
-            <Edit3 className="w-4 h-4" />
-            메일 작성
-          </button>
-        </div>
-
-        <nav aria-label="Mail sections" className="space-y-0.5">
-          {mailNavItems.map((item) => (
-            <NavLink key={item.label} {...item} />
-          ))}
-        </nav>
-
-        <nav aria-label="AI Hub sections" className="mt-6 space-y-0.5">
-          <div className="flex items-center justify-between px-3 mb-1">
-            <p className="text-[11px] font-bold text-muted-foreground">AI 허브</p>
-            <span className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded">BETA</span>
+        <div data-testid="sidebar-scroll-region" className="min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="px-3 pb-4 pt-6">
+            <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg py-2.5 px-4 flex items-center justify-center gap-2 transition-colors">
+              <Edit3 className="w-4 h-4" />
+              메일 작성
+            </button>
           </div>
-          {aiHubItems.map((item) => (
-            <NavLink key={item.label} {...item} />
-          ))}
-        </nav>
 
-        <nav aria-label="Projects sections" className="mt-6 space-y-0.5">
-          <div className="flex items-center justify-between px-3 mb-1 cursor-pointer hover:bg-secondary/50 rounded-md py-1">
-            <p className="text-[11px] font-bold text-muted-foreground">프로젝트</p>
-            <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M4 6H11L7.5 10.5L4 6Z" fill="currentColor"></path></svg>
-          </div>
-          {projectItems.map((item) => (
-            <NavLink key={item.label} {...item} />
-          ))}
-        </nav>
+          <nav aria-label="Mail sections" className="space-y-0.5">
+            {mailNavItems.map((item) => (
+              <NavLink key={item.label} {...item} />
+            ))}
+          </nav>
 
-        <nav aria-label="Labels sections" className="mt-6 space-y-0.5">
-          <div className="flex items-center justify-between px-3 mb-1 cursor-pointer hover:bg-secondary/50 rounded-md py-1">
-            <p className="text-[11px] font-bold text-muted-foreground">라벨</p>
-            <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M7 7V2H8V7H13V8H8V13H7V8H2V7H7Z" fill="currentColor"></path></svg>
-          </div>
-          {labelItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                className={`group flex min-h-8 items-center gap-3 rounded-lg px-3 py-1 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
-                  active
-                    ? 'bg-primary/10 font-bold text-primary'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                {item.label}
-              </Link>
-            )
-          })}
-        </nav>
-        
-        <div className="pt-6 px-3 pb-4">
-          <div className="bg-secondary/30 rounded-xl p-3 border border-border">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-bold text-foreground">오늘의 인사이트</p>
-              <TrendingUp className="w-3 h-3 text-muted-foreground" />
+          <nav aria-label="AI Hub sections" className="mt-6 space-y-0.5">
+            <div className="mb-1 flex items-center justify-between px-3">
+              <p className="text-[11px] font-bold text-muted-foreground">AI 허브</p>
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">BETA</span>
             </div>
-            <p className="text-xs text-muted-foreground mb-1">업무 집중 시간</p>
-            <p className="text-xs font-bold">오전 10:00 - 12:00</p>
-            <div className="mt-3 h-12 flex items-end gap-1 opacity-60">
-              <div className="bg-primary/40 w-full rounded-t-sm h-[20%]"></div>
-              <div className="bg-primary/40 w-full rounded-t-sm h-[40%]"></div>
-              <div className="bg-primary/80 w-full rounded-t-sm h-[80%]"></div>
-              <div className="bg-primary w-full rounded-t-sm h-[100%]"></div>
-              <div className="bg-primary/60 w-full rounded-t-sm h-[60%]"></div>
+            {aiHubItems.map((item) => (
+              <NavLink key={item.label} {...item} />
+            ))}
+          </nav>
+
+          <nav aria-label="Projects sections" className="mt-6 space-y-0.5">
+            <div className="mb-1 flex cursor-pointer items-center justify-between rounded-md py-1 px-3 hover:bg-secondary/50">
+              <p className="text-[11px] font-bold text-muted-foreground">프로젝트</p>
+              <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M4 6H11L7.5 10.5L4 6Z" fill="currentColor"></path></svg>
+            </div>
+            {projectItems.map((item) => (
+              <NavLink key={item.label} {...item} />
+            ))}
+          </nav>
+
+          <nav aria-label="Labels sections" className="mt-6 space-y-0.5">
+            <div className="mb-1 flex cursor-pointer items-center justify-between rounded-md py-1 px-3 hover:bg-secondary/50">
+              <p className="text-[11px] font-bold text-muted-foreground">라벨</p>
+              <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M7 7V2H8V7H13V8H8V13H7V8H2V7H7Z" fill="currentColor"></path></svg>
+            </div>
+            {labelItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`group flex min-h-8 items-center gap-3 rounded-lg px-3 py-1 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active
+                      ? 'bg-primary/10 font-bold text-primary'
+                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                  {item.label}
+                </Link>
+              )
+            })}
+          </nav>
+
+          <div className="px-3 pb-4 pt-6">
+            <div className="rounded-xl border border-border bg-secondary/30 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-[11px] font-bold text-foreground">오늘의 인사이트</p>
+                <TrendingUp className="w-3 h-3 text-muted-foreground" />
+              </div>
+              <p className="mb-1 text-xs text-muted-foreground">업무 집중 시간</p>
+              <p className="text-xs font-bold">오전 10:00 - 12:00</p>
+              <div className="mt-3 flex h-12 items-end gap-1 opacity-60">
+                <div className="h-[20%] w-full rounded-t-sm bg-primary/40"></div>
+                <div className="h-[40%] w-full rounded-t-sm bg-primary/40"></div>
+                <div className="h-[80%] w-full rounded-t-sm bg-primary/80"></div>
+                <div className="h-[100%] w-full rounded-t-sm bg-primary"></div>
+                <div className="h-[60%] w-full rounded-t-sm bg-primary/60"></div>
+              </div>
             </div>
           </div>
-        </div>
 
-        <nav aria-label="AI workspace sections" className="sr-only">
-          {aiNavItems.map(({ label }) => (
-            <a key={label} href="#main-content">{label}</a>
-          ))}
-        </nav>
+          <nav aria-label="AI workspace sections" className="sr-only">
+            {aiNavItems.map(({ label }) => (
+              <a key={label} href="#main-content">{label}</a>
+            ))}
+          </nav>
+        </div>
 
         <div className="mt-auto rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">

@@ -3,9 +3,12 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const destroyMock = vi.fn();
+const fitMock = vi.fn();
+
 vi.mock("vis-network", () => ({
   Network: vi.fn(function MockNetwork() {
-    return { destroy: vi.fn() };
+    return { destroy: destroyMock, fit: fitMock };
   }),
 }));
 
@@ -32,6 +35,17 @@ async function flushAsyncWork() {
 describe("NetworkGraph", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
+  let resizeObserverCallback: ResizeObserverCallback | null = null;
+
+  class MockResizeObserver {
+    observe = vi.fn();
+    unobserve = vi.fn();
+    disconnect = vi.fn();
+
+    constructor(callback: ResizeObserverCallback) {
+      resizeObserverCallback = callback;
+    }
+  }
 
   afterEach(() => {
     if (root) {
@@ -40,6 +54,7 @@ describe("NetworkGraph", () => {
     root = null;
     container?.remove();
     container = null;
+    resizeObserverCallback = null;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
@@ -105,5 +120,38 @@ describe("NetworkGraph", () => {
     expect(container.textContent).toContain("1개 관계");
     expect(container.textContent).toContain("김지현");
     expect(container.textContent).not.toContain("nodes and");
+  });
+
+  it("refits the graph when the viewport changes", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [{ id: "person-1", label: "김지현", title: "PM" }],
+          edges: [{ from: "person-1", to: "person-1", title: "관련 메일" }],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+    await flushAsyncWork();
+
+    expect(Network).toHaveBeenCalledTimes(1);
+    expect(resizeObserverCallback).not.toBeNull();
+    expect(fitMock).toHaveBeenCalledTimes(0);
+
+    await act(async () => {
+      resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
+      await Promise.resolve();
+    });
+
+    expect(fitMock).toHaveBeenCalledTimes(1);
   });
 });

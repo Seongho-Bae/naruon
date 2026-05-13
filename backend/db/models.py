@@ -84,11 +84,46 @@ class WorkspaceRunnerConfig(Base):
     __tablename__ = "workspace_runner_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     workspace_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     registration_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     updated_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    groups: Mapped[list["OrganizationGroup"]] = relationship(back_populates="organization")
+    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(back_populates="organization")
+
+
+class OrganizationGroup(Base):
+    __tablename__ = "organization_groups"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    organization: Mapped["Organization"] = relationship(back_populates="groups")
+    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(back_populates="group")
+
+
+class ScopedRoleAssignment(Base):
+    __tablename__ = "scoped_role_assignments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    role: Mapped[str] = mapped_column(String, index=True)
+    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
+    group_id: Mapped[str | None] = mapped_column(ForeignKey("organization_groups.id"), nullable=True, index=True)
+
+    organization: Mapped["Organization | None"] = relationship(back_populates="role_assignments")
+    group: Mapped["OrganizationGroup | None"] = relationship(back_populates="role_assignments")
 
 
 class PromptTemplate(Base):
