@@ -84,6 +84,7 @@ class WorkspaceRunnerConfig(Base):
     __tablename__ = "workspace_runner_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     workspace_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     registration_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     updated_at: Mapped[datetime.datetime] = mapped_column(

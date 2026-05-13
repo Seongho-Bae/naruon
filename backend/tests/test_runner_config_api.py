@@ -128,12 +128,13 @@ def test_member_cannot_manage_runner_config(member_client):
     assert response.status_code == 403
 
 
-def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client):
+def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client, mock_db):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
     assert rotate_data["workspace_id"] == "workspace-org-acme"
     assert rotate_data["registration_token"].startswith("nrn_")
+    assert mock_db.runner.organization_id == "org-acme"
 
     read_response = second_org_admin_client.get("/api/runner-config")
     assert read_response.status_code == 200

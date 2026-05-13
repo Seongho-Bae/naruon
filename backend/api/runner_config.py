@@ -36,6 +36,12 @@ def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> A
     return auth_context
 
 
+def _get_target_organization_id(auth_context: AuthContext) -> str:
+    if not auth_context.organization_id:
+        raise HTTPException(status_code=403, detail="Organization scope is required")
+    return auth_context.organization_id
+
+
 def _fingerprint(token: str | None) -> str | None:
     if not token:
         return None
@@ -47,11 +53,10 @@ async def get_runner_config(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(_check_org_admin),
 ):
-    workspace_id = auth_context.workspace_id
-    if auth_context.organization_id:
-        ensure_organization_access(auth_context, auth_context.organization_id)
+    organization_id = _get_target_organization_id(auth_context)
+    workspace_id = f"workspace-{organization_id}"
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
+        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.organization_id == organization_id)
     )
     config = result.scalar_one_or_none()
 
@@ -59,6 +64,7 @@ async def get_runner_config(
         return RunnerConfigResponse(workspace_id=workspace_id, configured=False, fingerprint=None, updated_at=None)
 
     try:
+        ensure_organization_access(auth_context, config.organization_id)
         return RunnerConfigResponse(
             workspace_id=config.workspace_id,
             configured=bool(config.registration_token),
@@ -79,19 +85,23 @@ async def rotate_runner_token(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(_check_org_admin),
 ):
-    workspace_id = auth_context.workspace_id
-    if auth_context.organization_id:
-        ensure_organization_access(auth_context, auth_context.organization_id)
+    organization_id = _get_target_organization_id(auth_context)
+    workspace_id = f"workspace-{organization_id}"
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.workspace_id == workspace_id)
+        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.organization_id == organization_id)
     )
     config = result.scalar_one_or_none()
 
     token = f"nrn_{secrets.token_urlsafe(24)}"
     if not config:
-        config = WorkspaceRunnerConfig(workspace_id=workspace_id, registration_token=token)
+        config = WorkspaceRunnerConfig(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            registration_token=token,
+        )
         db.add(config)
     else:
+        ensure_organization_access(auth_context, config.organization_id)
         config.registration_token = token
 
     try:
