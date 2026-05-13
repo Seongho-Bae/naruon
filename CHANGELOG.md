@@ -1,3 +1,13 @@
+## [0.14.0] - 2026-05-13
+
+### 추가
+- Seongho Bae (@seonghobae): `platform_admin`, `organization_admin`, `group_admin`, `member` 역할축을 갖는 `AuthContext` 기반의 엔터프라이즈 RBAC 준비 기반을 도입했습니다.
+- Seongho Bae (@seonghobae): `WorkspaceRunnerConfig`를 조직 스코프 기준으로 정렬하고, Runner/LLM provider 권한 경로를 organization scope 중심으로 재정비했습니다.
+
+### 수정
+- Seongho Bae (@seonghobae): MacBook M1 축소 환경에서 `오늘의 인사이트` 접근이 어렵던 문제를 해결하기 위해 좌측 워크스페이스 셸에 독립 스크롤 영역을 추가했습니다.
+- Seongho Bae (@seonghobae): 관계 DAG 그래프가 viewport resize에 따라 `fit()` 되도록 보강해 축소 시 그래프가 그대로 남는 문제를 해결했습니다.
+
 ## [0.13.0] - 2026-05-13
 
 ### 수정
