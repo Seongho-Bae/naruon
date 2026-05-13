@@ -104,7 +104,7 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
     assert "pull_request:" in workflow
     assert "push:" in workflow
-    assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" not in workflow
+    assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24" in workflow
     assert "docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0" in workflow
     assert "docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0" in workflow
     assert "docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0" in workflow
