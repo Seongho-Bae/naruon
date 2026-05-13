@@ -181,11 +181,19 @@ async def send_email_endpoint(
         
         if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
             raise HTTPException(status_code=400, detail="SMTP is not configured")
-            
-        smtp_server = tenant_config.smtp_server
-        smtp_port = tenant_config.smtp_port
-        smtp_username = tenant_config.smtp_username
-        smtp_password = tenant_config.smtp_password
+
+        try:
+            smtp_server = tenant_config.smtp_server
+            smtp_port = tenant_config.smtp_port
+            smtp_username = tenant_config.smtp_username
+            smtp_password = tenant_config.smtp_password
+        except Exception as exc:
+            if "ENCRYPTION_KEY is required" in str(exc):
+                raise HTTPException(
+                    status_code=503,
+                    detail="Server encryption key is not configured. Contact your workspace administrator.",
+                ) from exc
+            raise
         
         send_result = await send_email(
             request.to, 
