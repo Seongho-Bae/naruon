@@ -185,7 +185,7 @@ async def send_email_endpoint(
         smtp_server = tenant_config.smtp_server
         smtp_port = tenant_config.smtp_port
         smtp_username = tenant_config.smtp_username
-        smtp_password = getattr(tenant_config, "smtp_password", None)
+        smtp_password = tenant_config.smtp_password
         
         send_result = await send_email(
             request.to, 

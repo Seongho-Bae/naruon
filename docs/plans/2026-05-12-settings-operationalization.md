@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Extend tenant config model and API for real mailbox settings
+## Task 1: Extend tenant config model and API for real mailbox settings
 
 **Files:**
 - Modify: `backend/db/models.py`
@@ -44,7 +44,7 @@ Run the same pytest command and confirm PASS.
 
 `git add backend/db/models.py backend/api/tenant_config.py backend/api/emails.py backend/services/email_client.py backend/tests/test_tenant_config_api.py backend/tests/test_tenant_config_model.py && git commit -m "feat(settings): add real mailbox credential fields"`
 
-### Task 2: Add organization-scoped runner token aggregate and API
+## Task 2: Add organization-scoped runner token aggregate and API
 
 **Files:**
 - Modify: `backend/db/models.py`
@@ -79,7 +79,7 @@ Run the same pytest command and confirm PASS.
 
 `git add backend/db/models.py backend/api/runner_config.py backend/main.py backend/tests/test_runner_config_api.py && git commit -m "feat(settings): add organization runner token endpoints"`
 
-### Task 3: Replace personal settings placeholder UI with real mailbox form
+## Task 3: Replace personal settings placeholder UI with real mailbox form
 
 **Files:**
 - Modify: `frontend/src/lib/api-client.ts`
@@ -113,7 +113,7 @@ Expected: PASS.
 
 `git add frontend/src/lib/api-client.ts frontend/src/app/settings/page.tsx && git commit -m "feat(settings): replace personal mailbox placeholder with real config form"`
 
-### Task 4: Replace runner placeholder UI with token issuance and scoped explanation
+## Task 4: Replace runner placeholder UI with token issuance and scoped explanation
 
 **Files:**
 - Modify: `frontend/src/app/settings/page.tsx`
@@ -137,7 +137,7 @@ Expected: PASS.
 
 `git add frontend/src/app/settings/page.tsx && git commit -m "feat(settings): replace runner placeholder with token issuance flow"`
 
-### Task 5: End-to-end verification and review loop
+## Task 5: End-to-end verification and review loop
 
 **Files:**
 - Modify if needed based on review feedback
