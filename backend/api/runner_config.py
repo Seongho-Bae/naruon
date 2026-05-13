@@ -31,6 +31,8 @@ class RunnerRotateResponse(BaseModel):
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
     if auth_context.role not in {"platform_admin", "organization_admin"}:
         raise HTTPException(status_code=403, detail="Organization admin access required")
+    if auth_context.role == "organization_admin" and not auth_context.organization_id:
+        raise HTTPException(status_code=403, detail="Organization scope is required")
     return auth_context
 
 

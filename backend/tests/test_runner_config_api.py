@@ -64,7 +64,14 @@ def admin_client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "admin", "X-Organization-Id": "org-acme"}) as c:
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -133,3 +140,21 @@ def test_platform_admin_can_manage_runner_config(platform_admin_client):
     rotate_response = platform_admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     assert rotate_response.json()["workspace_id"] == "workspace-org-acme"
+
+
+def test_org_admin_without_org_scope_is_rejected(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": "organization_admin",
+        },
+    ) as client:
+        response = client.get("/api/runner-config")
+        assert response.status_code == 403
+        assert response.json()["detail"] == "Organization scope is required"
+    app.dependency_overrides.clear()
