@@ -1,124 +1,147 @@
+import datetime
+
 import pytest
 from fastapi.testclient import TestClient
+
+from core.config import settings
+from db.models import AuditLog, LLMProvider
+from db.session import get_db
 from main import app
-from db.models import LLMProvider, AuditLog
-from db.session import get_db
-from db.session import get_db
+
+
+class MockScalars:
+    def __init__(self, items):
+        self._items = items
+
+    def all(self):
+        return self._items
+
+    def first(self):
+        return self._items[0] if self._items else None
+
+
+class MockResult:
+    def __init__(self, items):
+        self._items = items
+
+    def scalars(self):
+        return MockScalars(self._items)
+
 
 class MockSession:
     def __init__(self):
-        self.items = []
-        self.audits = []
-    async def execute(self, stmt):
-        class MockResult:
-            def scalars(self):
-                class MockScalars:
-                    def all(self):
-                        return self.items
-                    def first(self):
-                        if self.items:
-                            return self.items[0]
-                        return None
-                m = MockScalars()
-                
-                # Check for where filtering
-                filtered = self.parent_items
-                stmt_str = str(stmt).lower()
-                if "where" in stmt_str and "llm_providers.id =" in stmt_str:
-                    # super hacky mock for tests
-                    try:
-                        import re
-                        match = re.search(r"llm_providers.id = :id_1", stmt_str)
-                        if match:
-                            # We can just assume it's getting the last created provider id for these tests
-                            pass
-                    except Exception:
-                        pass
-                        
-                # Actually, simpler: Just filter if parameters are passed?
-                # We don't get parameters easily in this mock, so we'll just return the first item if first() is called
-                # unless we are looking for a specific ID. Let's just improve the mock slightly.
-                m.items = getattr(self, 'items', self.parent_items)
-                return m
-        res = MockResult()
-        res.parent_items = self.items
-        return res
+        self.providers: list[LLMProvider] = []
+        self.audits: list[AuditLog] = []
 
-        
+    async def execute(self, stmt):
+        stmt_str = str(stmt).lower()
+        if "llm_providers.id =" in stmt_str:
+            return MockResult(self.providers[:1])
+        return MockResult(self.providers)
+
     def add(self, obj):
         if isinstance(obj, LLMProvider):
-            obj.id = len(self.items) + 1
-            obj.updated_at = "2026-05-11T00:00:00Z"
-            self.items.append(obj)
+            obj.id = len(self.providers) + 1
+            obj.updated_at = datetime.datetime.now(datetime.timezone.utc)
+            self.providers.append(obj)
         elif isinstance(obj, AuditLog):
             self.audits.append(obj)
-            
+
+    async def delete(self, obj):
+        self.providers = [provider for provider in self.providers if provider is not obj]
+
     async def commit(self):
-        pass
+        return None
+
     async def refresh(self, obj):
-        pass
+        return None
+
 
 mock_session = MockSession()
 
+
+@pytest.fixture(autouse=True)
+def enable_dev_headers():
+    previous = settings.TRUST_DEV_HEADERS
+    settings.TRUST_DEV_HEADERS = True
+    yield
+    settings.TRUST_DEV_HEADERS = previous
+
+
 @pytest.fixture(autouse=True)
 def override_get_db():
-    app.dependency_overrides[get_db] = lambda: mock_session
+    async def override_db():
+        yield mock_session
+
+    app.dependency_overrides[get_db] = override_db
     yield
     app.dependency_overrides.clear()
-    mock_session.items = []
+    mock_session.providers = []
     mock_session.audits = []
 
 
 @pytest.fixture
 def admin_client():
-    with TestClient(app, headers={"X-User-Id": "admin"}) as c:
-        yield c
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as client:
+        yield client
+
 
 @pytest.fixture
 def member_client():
-    with TestClient(app, headers={"X-User-Id": "member"}) as c:
-        yield c
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "member",
+            "X-User-Role": "member",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as client:
+        yield client
+
 
 def test_llm_provider_crud_admin(admin_client):
-    mock_session.items = []
-    # Create
-    resp = admin_client.post("/api/llm-providers", json={
-        "name": "Primary OpenAI",
-        "provider_type": "openai",
-        "api_key": "sk-12345"
-    })
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
+    response = admin_client.post(
+        "/api/llm-providers",
+        json={
+            "name": "Primary OpenAI",
+            "provider_type": "openai",
+            "api_key": "sk-12345",
+        },
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
     assert data["name"] == "Primary OpenAI"
     assert data["configured"] is True
     assert data["fingerprint"] is not None
     assert "api_key" not in data
-    
+
     provider_id = data["id"]
-    
-    # List
-    resp = admin_client.get("/api/llm-providers")
-    assert resp.status_code == 200
-    assert len(resp.json()) >= 1
-    
-    # Update
-    resp = admin_client.put(f"/api/llm-providers/{provider_id}", json={
-        "is_active": True
-    })
-    assert resp.status_code == 200
-    assert resp.json()["is_active"] is True
-    
-    # Check AuditLog
-    # result = await db_session.execute(select(AuditLog).where(AuditLog.user_id == "admin"))
-    # logs = result.scalars().all()
-    pass
+
+    response = admin_client.get("/api/llm-providers")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+    response = admin_client.put(f"/api/llm-providers/{provider_id}", json={"is_active": True})
+    assert response.status_code == 200
+    assert response.json()["is_active"] is True
+
+    response = admin_client.delete(f"/api/llm-providers/{provider_id}")
+    assert response.status_code == 204
+
 
 def test_llm_provider_member_rejected(member_client):
-    resp = member_client.get("/api/llm-providers")
-    assert resp.status_code == 200
-    
-    resp = member_client.post("/api/llm-providers", json={
-        "name": "Malicious",
-        "provider_type": "openai"
-    })
-    assert resp.status_code == 403
+    response = member_client.get("/api/llm-providers")
+    assert response.status_code == 200
+
+    response = member_client.post(
+        "/api/llm-providers",
+        json={"name": "Malicious", "provider_type": "openai"},
+    )
+    assert response.status_code == 403
