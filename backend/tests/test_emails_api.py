@@ -20,6 +20,7 @@ class MockTenantConfig:
         self.smtp_server = "smtp.example.com"
         self.smtp_port = 587
         self.smtp_username = "testuser"
+        self.smtp_password = None
 
 _DEFAULT_TENANT_CONFIG = object()
 
