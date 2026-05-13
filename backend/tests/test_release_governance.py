@@ -132,6 +132,15 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     assert "npm run dev" not in dockerfile
 
 
+def test_backend_dockerfile_uses_modern_env_syntax() -> None:
+    dockerfile = read_repo_text("Dockerfile")
+
+    assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
+    assert "ENV PYTHONUNBUFFERED=1" in dockerfile
+    assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
+    assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
+
+
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
     scanner = read_repo_text("scripts/check_compose_logs.py")
 
