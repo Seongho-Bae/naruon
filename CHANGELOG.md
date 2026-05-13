@@ -1,3 +1,8 @@
+## [0.14.1] - 2026-05-13
+
+### 수정
+- Seongho Bae (@seonghobae): Docker publish 파이프라인의 Docker 관련 GitHub Actions를 Node24-native SHA로 교체하고, 명시적 Node24 opt-in 계약 및 Dockerfile `ENV` 문법 경고까지 함께 정리했습니다. (Issue #193)
+
 ## [0.14.0] - 2026-05-13
 
 ### 추가
