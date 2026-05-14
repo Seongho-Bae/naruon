@@ -82,6 +82,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
+	assert_file_not_contains "$GATE_SCRIPT" "resolved = target_path.resolve(strict=False)" "strix gate must resolve scan targets strictly"
 }
 
 assert_internal_pr_scope_targets() {
@@ -2747,6 +2748,12 @@ run_pull_request_target_head_scope_case \
 	"src/unsafe name.py" \
 	"BASE_CONTENT_WITH_SPACE_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_CONTENT_WITH_SPACE_SHOULD_BE_SCANNED"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-nextjs-bracket-route-uses-head-blob" \
+	"frontend/src/app/labels/[slug]/page.tsx" \
+	"BASE_BRACKET_ROUTE_CONTENT_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_BRACKET_ROUTE_CONTENT_SHOULD_BE_SCANNED"
 
 run_pull_request_target_rejects_unsafe_changed_path_case \
 	"pull-request-target-parent-directory-changed-path-fails-closed" \

@@ -177,7 +177,7 @@ if "\\" in relative_path_str:
 normalized = posixpath.normpath(relative_path_str)
 if normalized in (".", "") or normalized.startswith("../") or normalized == "..":
     raise SystemExit(1)
-if not re.fullmatch(r"[A-Za-z0-9_./ -]+", normalized):
+if not re.fullmatch(r"[A-Za-z0-9_./ \[\]-]+", normalized):
     raise SystemExit(1)
 relative_path = Path(normalized)
 if relative_path.is_absolute():
@@ -506,7 +506,7 @@ target_path = Path(raw_target)
 if not target_path.is_absolute():
     target_path = repo_root / target_path
 
-resolved = target_path.resolve(strict=False)
+resolved = target_path.resolve(strict=True)
 print(resolved)
 PY
 	})" || {
@@ -538,7 +538,7 @@ import sys
 
 raw_target = sys.argv[1]
 target_path = Path(raw_target)
-resolved = target_path.resolve(strict=False)
+resolved = target_path.resolve(strict=True)
 print(resolved)
 PY
 	})" || {
