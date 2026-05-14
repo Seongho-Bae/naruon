@@ -82,6 +82,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
+	assert_file_not_contains "$GATE_SCRIPT" "resolved = target_path.resolve(strict=False)" "strix gate must resolve scan targets strictly"
 }
 
 assert_internal_pr_scope_targets() {

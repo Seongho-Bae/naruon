@@ -506,7 +506,7 @@ target_path = Path(raw_target)
 if not target_path.is_absolute():
     target_path = repo_root / target_path
 
-resolved = target_path.resolve(strict=False)
+resolved = target_path.resolve(strict=True)
 print(resolved)
 PY
 	})" || {
@@ -538,7 +538,7 @@ import sys
 
 raw_target = sys.argv[1]
 target_path = Path(raw_target)
-resolved = target_path.resolve(strict=False)
+resolved = target_path.resolve(strict=True)
 print(resolved)
 PY
 	})" || {
