@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -29,6 +28,33 @@ def test_env_example_documents_required_postgres_password():
     assert "POSTGRES_PASSWORD=change-me-local-only" in env_example
     assert "postgres:postgres@" not in env_example
     assert "postgres:change-me-local-only@" in env_example
+
+
+def test_local_compose_defaults_to_fail_closed_auth_for_dev_only_stacks():
+    compose = (REPO_ROOT / "docker-compose.yml").read_text()
+    live_e2e_compose = (REPO_ROOT / "docker-compose.live-e2e.yml").read_text()
+
+    assert "AUTH_MODE: ${AUTH_MODE:-hybrid}" in compose
+    assert "TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}" in compose
+    assert "AUTH_MODE: ${AUTH_MODE:-header}" not in compose
+    assert "TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-true}" not in compose
+
+    assert "AUTH_MODE: ${AUTH_MODE:-hybrid}" in live_e2e_compose
+    assert "TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}" in live_e2e_compose
+    assert "AUTH_MODE: ${AUTH_MODE:-header}" not in live_e2e_compose
+    assert "TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-true}" not in live_e2e_compose
+    assert "127.0.0.1:8000:8000" in compose
+    assert "127.0.0.1:3000:3000" in compose
+    assert "127.0.0.1:18080:8080" in live_e2e_compose
+
+
+def test_env_example_defaults_to_fail_closed_auth_mode():
+    env_example = (REPO_ROOT / ".env.example").read_text()
+
+    assert "AUTH_MODE=hybrid" in env_example
+    assert "TRUST_DEV_HEADERS=false" in env_example
+    assert "LEGACY_EMAIL_OWNER_USER_ID=" in env_example
+    assert "LEGACY_EMAIL_OWNER_USER_ID=testuser" not in env_example
 
 
 def test_readme_uses_cross_platform_browser_command():

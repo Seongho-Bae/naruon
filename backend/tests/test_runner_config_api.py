@@ -1,3 +1,9 @@
+import base64
+import datetime
+import hashlib
+import hmac
+import json
+
 from fastapi.testclient import TestClient
 import pytest
 
@@ -40,11 +46,60 @@ def mock_db():
 
 
 @pytest.fixture(autouse=True)
-def enable_dev_headers():
-    previous = settings.TRUST_DEV_HEADERS
-    settings.TRUST_DEV_HEADERS = True
+def configure_oidc_auth():
+    previous_auth_mode = settings.AUTH_MODE
+    previous_secret = settings.OIDC_SHARED_SECRET
+    previous_issuer = settings.OIDC_ISSUER
+    previous_audience = settings.OIDC_AUDIENCE
+    previous_trust = settings.TRUST_DEV_HEADERS
+    settings.AUTH_MODE = "oidc"
+    settings.OIDC_SHARED_SECRET = "test-secret"
+    settings.OIDC_ISSUER = "https://issuer.example.com/realms/naruon"
+    settings.OIDC_AUDIENCE = "naruon-web"
+    settings.TRUST_DEV_HEADERS = False
     yield
-    settings.TRUST_DEV_HEADERS = previous
+    settings.AUTH_MODE = previous_auth_mode
+    settings.OIDC_SHARED_SECRET = previous_secret
+    settings.OIDC_ISSUER = previous_issuer
+    settings.OIDC_AUDIENCE = previous_audience
+    settings.TRUST_DEV_HEADERS = previous_trust
+
+
+def _b64url(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def _encode_test_jwt(payload: dict, secret: str) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_part = _b64url(json.dumps(header, separators=(",", ":")).encode())
+    payload_part = _b64url(json.dumps(payload, separators=(",", ":")).encode())
+    signing_input = f"{header_part}.{payload_part}".encode()
+    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    return f"{header_part}.{payload_part}.{_b64url(signature)}"
+
+
+def _auth_headers(
+    user_id: str, role: str, organization_id: str | None = "org-acme"
+) -> dict[str, str]:
+    secret = settings.OIDC_SHARED_SECRET
+    assert secret is not None
+    token = _encode_test_jwt(
+        {
+            "sub": user_id,
+            "iss": settings.OIDC_ISSUER,
+            "aud": settings.OIDC_AUDIENCE,
+            "exp": int(
+                (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=5)
+                ).timestamp()
+            ),
+            "roles": [role],
+            **({"organization_id": organization_id} if organization_id else {}),
+        },
+        secret,
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture
@@ -54,7 +109,7 @@ def member_client(mock_db):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
+        with TestClient(app, headers=_auth_headers("testuser", "member")) as c:
             yield c
     finally:
         app.dependency_overrides.pop(get_db, None)
@@ -69,11 +124,7 @@ def admin_client(mock_db):
     try:
         with TestClient(
             app,
-            headers={
-                "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
-                "X-Organization-Id": "org-acme",
-            },
+            headers=_auth_headers("admin", "organization_admin"),
         ) as c:
             yield c
     finally:
@@ -89,11 +140,7 @@ def second_org_admin_client(mock_db):
     try:
         with TestClient(
             app,
-            headers={
-                "X-User-Id": "org-admin-2",
-                "X-User-Role": "organization_admin",
-                "X-Organization-Id": "org-acme",
-            },
+            headers=_auth_headers("org-admin-2", "organization_admin"),
         ) as c:
             yield c
     finally:
@@ -109,11 +156,7 @@ def platform_admin_client(mock_db):
     try:
         with TestClient(
             app,
-            headers={
-                "X-User-Id": "platform-root",
-                "X-User-Role": "platform_admin",
-                "X-Organization-Id": "org-acme",
-            },
+            headers=_auth_headers("platform-root", "platform_admin"),
         ) as c:
             yield c
     finally:
@@ -128,7 +171,9 @@ def test_member_cannot_manage_runner_config(member_client):
     assert response.status_code == 403
 
 
-def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client, mock_db):
+def test_org_scoped_runner_config_uses_shared_workspace(
+    admin_client, second_org_admin_client, mock_db
+):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
@@ -159,10 +204,7 @@ def test_org_admin_without_org_scope_is_rejected(mock_db):
     try:
         with TestClient(
             app,
-            headers={
-                "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
-            },
+            headers=_auth_headers("admin", "organization_admin", organization_id=None),
         ) as client:
             response = client.get("/api/runner-config")
             assert response.status_code == 403

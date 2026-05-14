@@ -32,6 +32,28 @@ interface PersonalMailboxConfig {
   imap_password: string | null;
 }
 
+interface MailboxAccount {
+  id: number;
+  user_id: string;
+  email_address: string;
+  display_name: string | null;
+  provider: string;
+  is_default_reply: boolean;
+  is_active: boolean;
+  smtp_server: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password_set: boolean;
+  imap_server: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password_set: boolean;
+  pop3_server: string | null;
+  pop3_port: number | null;
+  pop3_username: string | null;
+  pop3_password_set: boolean;
+}
+
 interface RunnerConfig {
   workspace_id: string;
   configured: boolean;
@@ -48,6 +70,8 @@ function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackM
 
 export default function SettingsPage() {
   const currentUserId = apiClient.getCurrentUserId();
+  const currentOrganizationId = apiClient.getCurrentOrganizationId();
+  const canManageWorkspaceSettings = apiClient.canManageWorkspaceSettings();
 
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -76,6 +100,32 @@ export default function SettingsPage() {
   const [personalLoading, setPersonalLoading] = useState(true);
   const [personalSubmitError, setPersonalSubmitError] = useState<string | null>(null);
   const [personalSubmitSuccess, setPersonalSubmitSuccess] = useState<string | null>(null);
+  const [mailboxAccounts, setMailboxAccounts] = useState<MailboxAccount[]>([]);
+  const [mailboxLoading, setMailboxLoading] = useState(true);
+  const [mailboxError, setMailboxError] = useState<string | null>(null);
+  const [mailboxSubmitError, setMailboxSubmitError] = useState<string | null>(null);
+  const [mailboxSubmitSuccess, setMailboxSubmitSuccess] = useState<string | null>(null);
+  const [editingMailboxId, setEditingMailboxId] = useState<number | null>(null);
+  const [mailboxBusyId, setMailboxBusyId] = useState<number | null>(null);
+  const [mailboxForm, setMailboxForm] = useState({
+    email_address: '',
+    display_name: '',
+    provider: 'custom',
+    is_default_reply: false,
+    is_active: true,
+    smtp_server: '',
+    smtp_port: '587',
+    smtp_username: '',
+    smtp_password: '',
+    imap_server: '',
+    imap_port: '993',
+    imap_username: '',
+    imap_password: '',
+    pop3_server: '',
+    pop3_port: '995',
+    pop3_username: '',
+    pop3_password: '',
+  });
 
   const [runnerConfig, setRunnerConfig] = useState<RunnerConfig | null>(null);
   const [runnerLoading, setRunnerLoading] = useState(true);
@@ -83,7 +133,14 @@ export default function SettingsPage() {
   const [runnerToken, setRunnerToken] = useState<string | null>(null);
   const [runnerBusy, setRunnerBusy] = useState(false);
 
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async () => {
+    if (!canManageWorkspaceSettings) {
+      setProviders([]);
+      setProviderError(null);
+      setLoadingProviders(false);
+      return;
+    }
+
     try {
       const data = await apiClient.get<LLMProvider[]>('/api/llm-providers');
       setProviders(data);
@@ -99,7 +156,7 @@ export default function SettingsPage() {
     } finally {
       setLoadingProviders(false);
     }
-  };
+  }, [canManageWorkspaceSettings]);
 
   const fetchPersonalConfig = useCallback(async () => {
     if (!currentUserId) {
@@ -125,7 +182,26 @@ export default function SettingsPage() {
     }
   }, [currentUserId]);
 
-  const fetchRunnerConfig = async () => {
+  const fetchMailboxAccounts = useCallback(async () => {
+    try {
+      const data = await apiClient.get<{ items: MailboxAccount[] }>('/api/mailbox-accounts');
+      setMailboxAccounts(data.items);
+      setMailboxError(null);
+    } catch (err: unknown) {
+      setMailboxError((err as Error).message || '메일 계정 목록을 불러오지 못했습니다.');
+    } finally {
+      setMailboxLoading(false);
+    }
+  }, []);
+
+  const fetchRunnerConfig = useCallback(async () => {
+    if (!canManageWorkspaceSettings) {
+      setRunnerConfig(null);
+      setRunnerError(null);
+      setRunnerLoading(false);
+      return;
+    }
+
     try {
       const data = await apiClient.get<RunnerConfig>('/api/runner-config');
       setRunnerConfig(data);
@@ -141,14 +217,14 @@ export default function SettingsPage() {
     } finally {
       setRunnerLoading(false);
     }
-  };
+  }, [canManageWorkspaceSettings]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void fetchProviders();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [fetchProviders]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -159,10 +235,17 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      void fetchMailboxAccounts();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchMailboxAccounts]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
       void fetchRunnerConfig();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [fetchRunnerConfig]);
 
   const handleProviderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,6 +316,89 @@ export default function SettingsPage() {
     }
   };
 
+  const resetMailboxForm = () => {
+    setEditingMailboxId(null);
+    setMailboxForm({
+      email_address: '',
+      display_name: '',
+      provider: 'custom',
+      is_default_reply: false,
+      is_active: true,
+      smtp_server: '',
+      smtp_port: '587',
+      smtp_username: '',
+      smtp_password: '',
+      imap_server: '',
+      imap_port: '993',
+      imap_username: '',
+      imap_password: '',
+      pop3_server: '',
+      pop3_port: '995',
+      pop3_username: '',
+      pop3_password: '',
+    });
+  };
+
+  const handleMailboxSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMailboxSubmitError(null);
+    setMailboxSubmitSuccess(null);
+
+    try {
+      const smtpPortNum = Number(mailboxForm.smtp_port);
+      const imapPortNum = Number(mailboxForm.imap_port);
+      const pop3PortNum = Number(mailboxForm.pop3_port);
+      if (!mailboxForm.email_address.trim()) throw new Error('메일 주소는 필수입니다.');
+      if (!Number.isInteger(smtpPortNum) || smtpPortNum < 1 || smtpPortNum > 65535) throw new Error('SMTP 포트는 1~65535 범위의 정수여야 합니다.');
+      if (!Number.isInteger(imapPortNum) || imapPortNum < 1 || imapPortNum > 65535) throw new Error('IMAP 포트는 1~65535 범위의 정수여야 합니다.');
+      if (mailboxForm.pop3_server && (!Number.isInteger(pop3PortNum) || pop3PortNum < 1 || pop3PortNum > 65535)) throw new Error('POP3 포트는 1~65535 범위의 정수여야 합니다.');
+
+      const payload: Record<string, unknown> = {
+        email_address: mailboxForm.email_address.trim(),
+        display_name: mailboxForm.display_name.trim() || null,
+        provider: mailboxForm.provider,
+        is_default_reply: mailboxForm.is_default_reply,
+        is_active: mailboxForm.is_active,
+        smtp_server: mailboxForm.smtp_server || null,
+        smtp_port: smtpPortNum,
+        smtp_username: mailboxForm.smtp_username || null,
+        imap_server: mailboxForm.imap_server || null,
+        imap_port: imapPortNum,
+        imap_username: mailboxForm.imap_username || null,
+        pop3_server: mailboxForm.pop3_server || null,
+        pop3_port: mailboxForm.pop3_server ? pop3PortNum : null,
+        pop3_username: mailboxForm.pop3_username || null,
+      };
+      if (mailboxForm.smtp_password.trim()) payload.smtp_password = mailboxForm.smtp_password;
+      if (mailboxForm.imap_password.trim()) payload.imap_password = mailboxForm.imap_password;
+      if (mailboxForm.pop3_password.trim()) payload.pop3_password = mailboxForm.pop3_password;
+
+      if (editingMailboxId !== null) {
+        await apiClient.patch(`/api/mailbox-accounts/${editingMailboxId}`, payload);
+        setMailboxSubmitSuccess('메일 계정이 성공적으로 수정되었습니다.');
+      } else {
+        await apiClient.post('/api/mailbox-accounts', payload);
+        setMailboxSubmitSuccess('메일 계정이 성공적으로 추가되었습니다.');
+      }
+      resetMailboxForm();
+      await fetchMailboxAccounts();
+    } catch (err: unknown) {
+      setMailboxSubmitError((err as Error).message || '메일 계정 저장에 실패했습니다.');
+    }
+  };
+
+  const handleMakeDefaultReply = async (accountId: number) => {
+    setMailboxBusyId(accountId);
+    try {
+      await apiClient.post(`/api/mailbox-accounts/${accountId}/make-default-reply`, {});
+      await fetchMailboxAccounts();
+    } catch (err: unknown) {
+      setMailboxError((err as Error).message || '기본 회신 계정 전환에 실패했습니다.');
+    } finally {
+      setMailboxBusyId(null);
+    }
+  };
+
   const handleRotateRunnerToken = async () => {
     setRunnerBusy(true);
     setRunnerError(null);
@@ -249,7 +415,7 @@ export default function SettingsPage() {
     }
   };
 
-  const loading = loadingProviders || personalLoading || runnerLoading;
+  const loading = loadingProviders || personalLoading || runnerLoading || mailboxLoading;
   if (loading) {
     return (
       <div className="p-8 text-muted-foreground flex items-center gap-2">
@@ -266,19 +432,135 @@ export default function SettingsPage() {
           설정 (Settings)
         </h1>
         <p className="text-muted-foreground text-sm">워크스페이스 단위의 통합 관리 및 개인 계정 설정을 구성합니다.</p>
+        {canManageWorkspaceSettings && currentOrganizationId ? (
+          <p className="text-xs text-muted-foreground mt-2">현재 조직 스코프: {currentOrganizationId}</p>
+        ) : null}
       </div>
 
       <Tabs defaultValue="personal" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
+        <TabsList className={`grid w-full ${canManageWorkspaceSettings ? 'grid-cols-3' : 'grid-cols-1'} mb-8`}>
           <TabsTrigger value="personal" className="font-bold"><Mail className="w-4 h-4 mr-2" /> 개인 이메일 계정</TabsTrigger>
-          <TabsTrigger value="workspace-llm" className="font-bold"><Key className="w-4 h-4 mr-2" /> 워크스페이스 BYOK (관리자)</TabsTrigger>
-          <TabsTrigger value="workspace-runner" className="font-bold"><Activity className="w-4 h-4 mr-2" /> Self-hosted Runner (관리자)</TabsTrigger>
+          {canManageWorkspaceSettings ? (
+            <TabsTrigger value="workspace-llm" className="font-bold"><Key className="w-4 h-4 mr-2" /> 워크스페이스 BYOK (관리자)</TabsTrigger>
+          ) : null}
+          {canManageWorkspaceSettings ? (
+            <TabsTrigger value="workspace-runner" className="font-bold"><Activity className="w-4 h-4 mr-2" /> Self-hosted Runner (관리자)</TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="personal" className="space-y-6">
+          <section className="bg-white rounded-2xl border border-border shadow-sm p-6 space-y-6">
+            <div>
+              <h2 className="font-bold text-lg mb-2">연결된 메일 계정</h2>
+              <p className="text-sm text-muted-foreground">여러 개인 메일 계정을 연결하고 기본 회신 계정을 지정합니다. 추후 Gmail/iCloud/Outlook/사내 수집 경로의 기초가 됩니다.</p>
+            </div>
+
+            {mailboxError ? <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{mailboxError}</div> : null}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                {mailboxAccounts.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">연결된 메일 계정이 아직 없습니다.</div>
+                ) : mailboxAccounts.map((account) => (
+                  <div key={account.id} className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-foreground">{account.display_name || account.email_address}</p>
+                        <p className="text-sm text-muted-foreground">{account.email_address}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {account.is_default_reply ? <Badge>기본 회신 계정</Badge> : null}
+                        <Badge variant={account.is_active ? 'default' : 'secondary'}>{account.is_active ? '활성' : '비활성'}</Badge>
+                      </div>
+                    </div>
+                    <div className="grid gap-1 text-xs text-muted-foreground">
+                      <p>SMTP: {account.smtp_server || '미설정'} / {account.smtp_username || '미설정'}</p>
+                      <p>IMAP: {account.imap_server || '미설정'} / {account.imap_username || '미설정'}</p>
+                      <p>POP3: {account.pop3_server || '미설정'} / {account.pop3_username || '미설정'}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {!account.is_default_reply ? (
+                        <Button type="button" variant="outline" size="sm" onClick={() => void handleMakeDefaultReply(account.id)} disabled={mailboxBusyId === account.id}>
+                          {mailboxBusyId === account.id ? '전환 중...' : '기본 회신으로 지정'}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditingMailboxId(account.id);
+                          setMailboxForm({
+                            email_address: account.email_address,
+                            display_name: account.display_name || '',
+                            provider: account.provider,
+                            is_default_reply: account.is_default_reply,
+                            is_active: account.is_active,
+                            smtp_server: account.smtp_server || '',
+                            smtp_port: account.smtp_port ? String(account.smtp_port) : '587',
+                            smtp_username: account.smtp_username || '',
+                            smtp_password: '',
+                            imap_server: account.imap_server || '',
+                            imap_port: account.imap_port ? String(account.imap_port) : '993',
+                            imap_username: account.imap_username || '',
+                            imap_password: '',
+                            pop3_server: account.pop3_server || '',
+                            pop3_port: account.pop3_port ? String(account.pop3_port) : '995',
+                            pop3_username: account.pop3_username || '',
+                            pop3_password: '',
+                          });
+                        }}
+                      >
+                        수정
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <form onSubmit={handleMailboxSubmit} className="rounded-xl border border-border bg-secondary/20 p-4 space-y-4 h-fit">
+                <div>
+                  <h3 className="font-bold">{editingMailboxId !== null ? '메일 계정 수정' : '메일 계정 추가'}</h3>
+                  <p className="text-xs text-muted-foreground mt-1">개별 계정별 회신/수신 자격 증명을 저장합니다.</p>
+                </div>
+                <Input placeholder="account@example.com" value={mailboxForm.email_address} onChange={(e) => setMailboxForm({ ...mailboxForm, email_address: e.target.value })} />
+                <Input placeholder="표시 이름 (예: Personal Gmail)" value={mailboxForm.display_name} onChange={(e) => setMailboxForm({ ...mailboxForm, display_name: e.target.value })} />
+                <Input placeholder="provider (예: custom / gmail / outlook / icloud)" value={mailboxForm.provider} onChange={(e) => setMailboxForm({ ...mailboxForm, provider: e.target.value })} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <Input placeholder="smtp.example.com" value={mailboxForm.smtp_server} onChange={(e) => setMailboxForm({ ...mailboxForm, smtp_server: e.target.value })} />
+                  <Input placeholder="587" value={mailboxForm.smtp_port} onChange={(e) => setMailboxForm({ ...mailboxForm, smtp_port: e.target.value })} />
+                  <Input placeholder="smtp 사용자명" value={mailboxForm.smtp_username} onChange={(e) => setMailboxForm({ ...mailboxForm, smtp_username: e.target.value })} />
+                  <Input type="password" placeholder="smtp 비밀번호" value={mailboxForm.smtp_password} onChange={(e) => setMailboxForm({ ...mailboxForm, smtp_password: e.target.value })} />
+                  <Input placeholder="imap.example.com" value={mailboxForm.imap_server} onChange={(e) => setMailboxForm({ ...mailboxForm, imap_server: e.target.value })} />
+                  <Input placeholder="993" value={mailboxForm.imap_port} onChange={(e) => setMailboxForm({ ...mailboxForm, imap_port: e.target.value })} />
+                  <Input placeholder="imap 사용자명" value={mailboxForm.imap_username} onChange={(e) => setMailboxForm({ ...mailboxForm, imap_username: e.target.value })} />
+                  <Input type="password" placeholder="imap 비밀번호" value={mailboxForm.imap_password} onChange={(e) => setMailboxForm({ ...mailboxForm, imap_password: e.target.value })} />
+                  <Input placeholder="pop.example.com (선택)" value={mailboxForm.pop3_server} onChange={(e) => setMailboxForm({ ...mailboxForm, pop3_server: e.target.value })} />
+                  <Input placeholder="995" value={mailboxForm.pop3_port} onChange={(e) => setMailboxForm({ ...mailboxForm, pop3_port: e.target.value })} />
+                  <Input placeholder="pop3 사용자명" value={mailboxForm.pop3_username} onChange={(e) => setMailboxForm({ ...mailboxForm, pop3_username: e.target.value })} />
+                  <Input type="password" placeholder="pop3 비밀번호" value={mailboxForm.pop3_password} onChange={(e) => setMailboxForm({ ...mailboxForm, pop3_password: e.target.value })} />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input type="checkbox" checked={mailboxForm.is_default_reply} onChange={(e) => setMailboxForm({ ...mailboxForm, is_default_reply: e.target.checked })} />
+                  기본 회신 계정으로 지정
+                </label>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input type="checkbox" checked={mailboxForm.is_active} onChange={(e) => setMailboxForm({ ...mailboxForm, is_active: e.target.checked })} />
+                  활성 상태 유지
+                </label>
+                {mailboxSubmitError ? <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{mailboxSubmitError}</div> : null}
+                {mailboxSubmitSuccess ? <div className="text-green-600 text-xs font-medium bg-green-50 p-2 rounded">{mailboxSubmitSuccess}</div> : null}
+                <div className="flex gap-2 justify-end">
+                  {editingMailboxId !== null ? <Button type="button" variant="outline" onClick={resetMailboxForm}>취소</Button> : null}
+                  <Button type="submit">{editingMailboxId !== null ? '메일 계정 저장' : '메일 계정 추가'}</Button>
+                </div>
+              </form>
+            </div>
+          </section>
+
           <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
-            <h2 className="font-bold text-lg mb-2">개인 이메일 계정 연결</h2>
-            <p className="text-sm text-muted-foreground mb-6">Naruon 워크스페이스에서 사용할 본인의 IMAP/SMTP 이메일 계정을 연결합니다. (개인 단위 설정)</p>
+            <h2 className="font-bold text-lg mb-2">레거시 단일 계정 설정</h2>
+            <p className="text-sm text-muted-foreground mb-6">기존 단일 계정 경로와의 호환성을 위해 남겨둔 설정입니다. 신규 연결은 위의 메일 계정 목록을 우선 사용합니다.</p>
             <form onSubmit={handlePersonalSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h3 className="font-bold text-sm">SMTP 발송 설정</h3>
@@ -305,18 +587,19 @@ export default function SettingsPage() {
           </section>
         </TabsContent>
 
-        <TabsContent value="workspace-llm" className="space-y-6">
-          {providerError ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
-              <Shield className="w-5 h-5 shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold">접근 거부</h3>
-                <p className="text-sm mt-1">{providerError}</p>
-                <p className="text-xs mt-2 opacity-80">※ 현재 Naruon 시스템 관리자가 아닌 조직(Organization) 단위의 관리자 권한이 필요합니다.</p>
+        {canManageWorkspaceSettings ? (
+          <TabsContent value="workspace-llm" className="space-y-6">
+            {providerError ? (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+                <Shield className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-bold">접근 거부</h3>
+                  <p className="text-sm mt-1">{providerError}</p>
+                  <p className="text-xs mt-2 opacity-80">※ 현재 Naruon 시스템 관리자가 아닌 조직(Organization) 단위의 관리자 권한이 필요합니다.</p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <section className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col">
                 <div className="border-b border-border bg-secondary/30 p-4">
                   <h2 className="font-bold text-foreground flex items-center gap-2">
@@ -443,21 +726,23 @@ export default function SettingsPage() {
                   </div>
                 </form>
               </section>
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="workspace-runner" className="space-y-6">
-          {runnerError ? (
-            <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
-              <Shield className="w-5 h-5 shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-bold">접근 거부</h3>
-                <p className="text-sm mt-1">{runnerError}</p>
               </div>
-            </div>
-          ) : (
-            <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
+            )}
+          </TabsContent>
+        ) : null}
+
+        {canManageWorkspaceSettings ? (
+          <TabsContent value="workspace-runner" className="space-y-6">
+            {runnerError ? (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+                <Shield className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-bold">접근 거부</h3>
+                  <p className="text-sm mt-1">{runnerError}</p>
+                </div>
+              </div>
+            ) : (
+              <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
               <div className="flex items-start gap-4 mb-6">
                 <div className="bg-primary/10 p-3 rounded-xl text-primary">
                   <Activity className="w-6 h-6" />
@@ -489,9 +774,10 @@ export default function SettingsPage() {
               <div className="flex justify-end">
                 <Button disabled={runnerBusy} onClick={handleRotateRunnerToken}>{runnerBusy ? '발급 중...' : '새 Runner 토큰 발급'}</Button>
               </div>
-            </section>
-          )}
-        </TabsContent>
+              </section>
+            )}
+          </TabsContent>
+        ) : null}
       </Tabs>
     </div>
   );

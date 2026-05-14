@@ -22,6 +22,20 @@ const sibling = {
   body: '파트너 미팅 전까지 일정 확인이 필요합니다.',
 };
 
+const executionItem = {
+  id: 70,
+  user_id: 'testuser',
+  source_email_id: 7,
+  source_thread_id: 'thread-q2',
+  source_message_id: '<q2@example.com>',
+  title: 'Q2 출시 계획 및 우선순위 조정',
+  sender: '김지현 PM',
+  status: 'queued',
+  created_at: '2026-05-14T00:00:00.000Z',
+  updated_at: '2026-05-14T00:00:00.000Z',
+  completed_at: null,
+};
+
 async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({
     status: 200,
@@ -35,6 +49,21 @@ export async function mockDashboardApi(page: Page) {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+
+    if (path === '/api/runtime-config' && request.method() === 'GET') {
+      await fulfillJson(route, {
+        product_name: 'Naruon',
+        version: '0.5.1',
+        features: {
+          llm_enabled: true,
+          smtp_enabled: true,
+          imap_enabled: true,
+          dev_header_auth_enabled: true,
+          manual_bearer_login_enabled: false,
+        },
+      });
+      return;
+    }
 
     if (path === '/api/emails' && request.method() === 'GET') {
       await fulfillJson(route, { emails: [email] });
@@ -66,6 +95,21 @@ export async function mockDashboardApi(page: Page) {
 
     if (path === '/api/llm/draft') {
       await fulfillJson(route, { draft: '검토 후 일정과 우선순위를 정리해 공유드리겠습니다.' });
+      return;
+    }
+
+    if (path === '/api/execution-items' && request.method() === 'GET') {
+      await fulfillJson(route, { items: [executionItem] });
+      return;
+    }
+
+    if (path === '/api/execution-items/from-email' && request.method() === 'POST') {
+      await fulfillJson(route, { item: executionItem });
+      return;
+    }
+
+    if (path === '/api/execution-items/70' && request.method() === 'PATCH') {
+      await fulfillJson(route, { item: { ...executionItem, status: 'done', completed_at: '2026-05-14T00:05:00.000Z', updated_at: '2026-05-14T00:05:00.000Z' } });
       return;
     }
 

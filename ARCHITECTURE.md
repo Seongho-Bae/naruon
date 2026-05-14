@@ -14,6 +14,15 @@ The backend owns persistence, threading, search, AI summaries, and outbound
 send orchestration. The frontend consumes the backend contracts and renders
 inbox, detail, thread history, reply composer, and network graph surfaces.
 
+The current frontend shell is organized around three operator-facing work
+surfaces: inbox triage, detail/conversation review, and a context/judgment/
+execution rail. Desktop now exposes board-style summary cards above the main
+workspace, while mobile uses a five-item bottom navigation (`받은 메일`, `맥락
+종합`, `판단 포인트`, `실행 항목`, `설정`) and swipe gestures to push email
+threads into a persisted per-user `ExecutionItem` queue. The frontend still
+keeps a user-scoped local cache for rendering/subscription, but queue creation
+and completion now flow through `/api/execution-items`.
+
 ## Threading boundary
 
 `backend/services/threading_service.py` is the canonical domain service for
@@ -23,10 +32,42 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The current `emails` table does not have an owner/mailbox key. Email and
-search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+The current `emails` table now has a minimal owner field (`Email.user_id`) and
+the inbox/detail/thread read paths already filter on it. That closes the most
+obvious single-user leakage, but it is still only a bridge. Multi-user
+production safety still requires a real `Mailbox` aggregate with provider/source
+identity plus mailbox/member/org scoped filtering for email, search, network,
+attachments, and synthetic routing.
+
+`MailboxAccount` is now the first mailbox-configuration aggregate: multiple
+accounts per user, one default reply account, and explicit SMTP/IMAP credentials
+separate from the legacy `TenantConfig` singleton. Compose/send flows can now
+target a linked mailbox account, but stored emails still need a future
+`mailbox_account_id` rollout across every real sync/import path before reply
+routing becomes fully automatic for all stored messages. Fixture/ZIP imports now
+attempt that routing, and the IMAP worker now enumerates active `MailboxAccount`
+rows instead of the legacy singleton config, but real persisted IMAP/POP/OAuth
+sync paths are still pending. The inbox
+API and UI are now mailbox-aware as well: list items carry `mailbox_account_id`,
+the inbox can filter by a linked mailbox account, and rows show their source
+account label. Search now follows that same scope and keeps mailbox provenance in
+its result items so the UI does not lose account context when a user searches.
+During the bridge period, mailbox-filtered thread and search paths include
+legacy `mailbox_account_id IS NULL` rows for the authenticated owner so restored
+thread context is not lost before the mailbox migration is complete; the inbox UI
+labels those bridge rows as `이전 복원 메일` when a mailbox filter is active.
+Bootstrap now fails closed if ownerless legacy email rows remain and
+`LEGACY_EMAIL_OWNER_USER_ID` is not set, preventing a silent deployment where
+existing inbox/search/network data disappears behind the new owner filters.
+
+`MailboxAccount` also now carries POP3 credentials and the background worker
+enumerates active POP3 accounts from that aggregate with bounded socket timeouts,
+and the app lifecycle now starts/stops that worker beside IMAP. Mailbox-account
+create/update also normalizes mailbox strings, blocks internal-network mail
+server hosts and non-mail ports, enforces server/port pair invariants, forces
+default-reply accounts active, and returns stable 409/503 errors for duplicate
+account or missing encryption-key failures. This is still only a
+connection/scheduling foundation, not a persisted message ingestion path.
 
 ## Local deployment boundary
 
@@ -72,12 +113,47 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication still uses trusted request headers in local/dev, but the backend
-now normalizes them into an auth context with `platform_admin`,
-`organization_admin`, `group_admin`, and `member` roles plus optional
-organization/group scope. This preserves the current `X-User-Id` development
-flow while preparing the backend for future Keycloak/Casdoor claims and
-organization-scoped resources that should not assume one workspace per user; see
-`docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
-NGINX, while Traefik is only an evaluated option in
+Authentication now supports three backend modes: `header`, `hybrid`, and
+`oidc`, with `hybrid` as the fail-closed default. Trusted header auth only runs
+when `DEBUG=true` or `TRUST_DEV_HEADERS=true`; the raw backend default and the
+repo-local dev/live-E2E Compose defaults remain fail-closed. Local developer or
+live-E2E trusted-header runs must opt in explicitly with `AUTH_MODE=header` and
+`TRUST_DEV_HEADERS=true`, and the provided Compose port bindings stay loopback
+only (`127.0.0.1`) so that escape hatch is not advertised as a production
+posture.
+
+In `oidc`/`hybrid`, bearer tokens are normalized into the shared
+`AuthContext` with `platform_admin`, `organization_admin`, `group_admin`, and
+`member` roles plus optional organization/group scope. The backend currently
+accepts HS256 shared-secret tokens and RS256 bearer tokens validated against a
+configured JWKS URL, which is enough for staged Keycloak/Casdoor integration.
+
+The frontend only exposes the dev identity shim on loopback hosts (`localhost`,
+`127.0.0.1`) when no bearer token is present and `/api/runtime-config` confirms
+trusted-header auth is enabled; local storage alone cannot mint trusted headers.
+Admin settings tabs are claim-gated in the UI before the backend performs its
+own authorization checks. Runner tokens are organization-scoped, while LLM
+provider access is now org-scoped through `organization_id`. Shared prompt
+templates also require organization scope and are only listed inside the same
+organization; user-owned private prompts remain visible to their creator. Legacy
+provider rows require an explicit bootstrap migration mapping
+(`LEGACY_LLM_PROVIDER_ORGANIZATION_ID`) before they reappear in the new org
+scoped APIs. See `docs/operations/auth-key-management.md`. The current
+Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
+
+`ExecutionItem` is now a persisted personal queue fed from email swipe/actions.
+It is intentionally self-owned (`user_id`) and currently uses a temporary
+mailbox ownership check through `Email.user_id`, and list/detail/thread reads in
+`/api/emails` now use that same owner field. This is the first real object-scope
+boundary, but it is still only a per-user ownership column, not yet a full
+`Mailbox` aggregate with account/provider/source provenance.
+
+Execution items now also preserve source mailbox context and an excerpt from the
+source email (`source_mailbox_account_id`, `source_snippet`) so the action board
+can keep account provenance visible after the email leaves the inbox view.
+
+Calendar sync is authenticated but intentionally has no body-token trust path:
+`/api/calendar/sync` ignores any submitted `user_token` and returns 503 until a
+server-side per-user calendar credential store is implemented. That keeps the UI
+action honest without turning app identity claims into Google OAuth credentials.

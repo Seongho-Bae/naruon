@@ -1,8 +1,6 @@
-import os
 import zipfile
 import pytest
 import asyncio
-from pathlib import Path
 
 from services.archive import extract_backup, extract_backup_async
 from services.exceptions import (

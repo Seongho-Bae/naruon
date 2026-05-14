@@ -1,18 +1,42 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { getRuntimeConfig } from '@/lib/runtime-config';
 import { UserCircle } from 'lucide-react';
 
 export function DevAuthSwitcher() {
   const [userId, setUserId] = useState('testuser');
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('naruon_dev_user');
-      if (stored) {
-        setTimeout(() => setUserId(stored), 0);
-      }
+      const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+      const isPrivateLan = window.location.hostname.startsWith('192.168.');
+      const hasBearer = !!apiClient.getBearerToken();
+      let cancelled = false;
+      const allowLocalHost = isLocalHost || isPrivateLan;
+      getRuntimeConfig().then((config) => {
+        const allowDevOverride = allowLocalHost && !hasBearer && config.features.dev_header_auth_enabled;
+        const timer = window.setTimeout(() => {
+          if (cancelled) return;
+          setVisible(allowDevOverride);
+          if (!allowDevOverride) {
+            return;
+          }
+          const stored = localStorage.getItem('naruon_dev_user');
+          if (stored) {
+            setUserId(stored);
+          }
+        }, 0);
+        if (cancelled) window.clearTimeout(timer);
+      }).catch(() => {
+        if (!cancelled) setVisible(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
   }, []);
 
@@ -22,6 +46,10 @@ export function DevAuthSwitcher() {
     setUserId(nextUser);
     window.location.reload();
   };
+
+  if (!visible) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-4 right-4 z-50">

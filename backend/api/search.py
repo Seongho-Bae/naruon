@@ -3,8 +3,9 @@ import datetime
 import logging
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, union_all
+from sqlalchemy import or_, select, func, union_all
 from db.session import get_db
+from api.mailbox_scope import require_owned_mailbox_account
 from db.models import Email, Attachment, TenantConfig
 from services.embedding import generate_embeddings
 from api.auth import get_current_user
@@ -16,10 +17,12 @@ logger = logging.getLogger(__name__)
 class SearchRequest(BaseModel):
     query: str
     limit: int = Field(default=10, ge=1, le=50)
+    mailbox_account_id: int | None = Field(default=None, ge=1)
 
 
 class SearchResultItem(BaseModel):
     id: int
+    mailbox_account_id: int | None = None
     subject: str | None
     sender: str
     date: datetime.datetime
@@ -34,26 +37,46 @@ class SearchResponse(BaseModel):
 
 
 def thread_group_key():
-    normalized_thread_id = func.nullif(func.btrim(func.btrim(Email.thread_id), "<>"), "")
-    normalized_message_id = func.nullif(func.btrim(func.btrim(Email.message_id), "<>"), "")
+    normalized_thread_id = func.nullif(
+        func.btrim(func.btrim(Email.thread_id), "<>"), ""
+    )
+    normalized_message_id = func.nullif(
+        func.btrim(func.btrim(Email.message_id), "<>"), ""
+    )
     return func.coalesce(normalized_thread_id, normalized_message_id)
 
 
-def build_reply_counts_subquery():
+def mailbox_scope_predicate(mailbox_account_id: int):
+    return or_(
+        Email.mailbox_account_id == mailbox_account_id,
+        Email.mailbox_account_id.is_(None),
+    )
+
+
+def build_reply_counts_subquery(
+    current_user: str, mailbox_account_id: int | None = None
+):
     group_key = thread_group_key()
-    return (
+    statement = (
         select(
             group_key.label("thread_key"),
             func.count(Email.id).label("reply_count"),
         )
         .select_from(Email)
-        .group_by(group_key)
-        .subquery("thread_counts")
+        .where(Email.user_id == current_user)
     )
+    if mailbox_account_id is not None:
+        statement = statement.where(mailbox_scope_predicate(mailbox_account_id))
+    return statement.group_by(group_key).subquery("thread_counts")
 
 
 @router.post("/search", response_model=SearchResponse)
-async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
+async def hybrid_search(
+    request: SearchRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
@@ -61,13 +84,17 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
     if not request.query.strip():
         return SearchResponse(results=[])
 
+    await require_owned_mailbox_account(db, current_user, request.mailbox_account_id)
+
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-        
+
         openai_api_key = tenant_config.openai_api_key
-        
+
         embeddings = await generate_embeddings([request.query], openai_api_key)
         query_embedding = embeddings[0]
 
@@ -77,11 +104,14 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
-        reply_counts = build_reply_counts_subquery()
+        reply_counts = build_reply_counts_subquery(
+            current_user, request.mailbox_account_id
+        )
 
         stmt_email = (
             select(
                 Email.id,
+                Email.mailbox_account_id,
                 Email.subject,
                 Email.sender,
                 Email.date,
@@ -92,7 +122,12 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             )
             .select_from(Email)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
+            .where(Email.user_id == current_user)
         )
+        if request.mailbox_account_id is not None:
+            stmt_email = stmt_email.where(
+                mailbox_scope_predicate(request.mailbox_account_id)
+            )
 
         fts_score_att = func.ts_rank_cd(
             func.to_tsvector("english", Attachment.content),
@@ -104,6 +139,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
         stmt_att = (
             select(
                 Email.id,
+                Email.mailbox_account_id,
                 Email.subject,
                 Email.sender,
                 Email.date,
@@ -115,13 +151,19 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             .select_from(Attachment)
             .join(Email, Attachment.email_id == Email.id)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
+            .where(Email.user_id == current_user)
         )
+        if request.mailbox_account_id is not None:
+            stmt_att = stmt_att.where(
+                mailbox_scope_predicate(request.mailbox_account_id)
+            )
 
         combined = union_all(stmt_email, stmt_att).cte("combined_search")
 
         stmt = (
             select(
                 combined.c.id,
+                combined.c.mailbox_account_id,
                 combined.c.subject,
                 combined.c.sender,
                 combined.c.date,
@@ -155,6 +197,7 @@ async def hybrid_search(request: SearchRequest, user_id: str | None = None, db: 
             search_results.append(
                 SearchResultItem(
                     id=row.id,
+                    mailbox_account_id=row.mailbox_account_id,
                     subject=row.subject,
                     sender=row.sender,
                     date=row.date,

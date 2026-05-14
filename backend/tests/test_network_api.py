@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
@@ -18,16 +17,35 @@ class MockResult:
 class MockSession:
     def __init__(self, rows):
         self.rows = rows
+        self.queries = []
 
     async def execute(self, query):
+        self.queries.append(query)
         return MockResult(self.rows)
 
 
 def get_override(rows):
-    async def override_get_db():
-        yield MockSession(rows)
+    session = MockSession(rows)
 
+    async def override_get_db():
+        yield session
+
+    override_get_db.session = session
     return override_get_db
+
+
+def test_network_graph_filters_email_rows_to_current_user():
+    override = get_override(
+        [
+            ("alice@example.com", "bob@example.com"),
+        ]
+    )
+    with patch.dict(app.dependency_overrides, {get_db: override}):
+        response = client.get("/api/network/graph")
+
+    assert response.status_code == 200
+    compiled_query = str(override.session.queries[0])
+    assert "emails.user_id" in compiled_query.lower()
 
 
 def test_network_endpoint_exists():
@@ -127,7 +145,9 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"})
+        response = client.get(
+            "/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2

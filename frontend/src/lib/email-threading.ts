@@ -1,5 +1,6 @@
 export interface ThreadEmailData {
   id: number;
+  mailbox_account_id?: number | null;
   subject: string | null;
   sender: string;
   reply_to?: string | null;
@@ -50,12 +51,13 @@ export function formatEmailDate(value?: string | null): string {
   return date.toLocaleString();
 }
 
-export function buildThreadUrl(apiUrl: string, threadId: string): string {
+export function buildThreadUrl(apiUrl: string, threadId: string, mailboxAccountId?: number | null): string {
+  const querySuffix = mailboxAccountId ? `?mailbox_account_id=${mailboxAccountId}` : "";
   // If no base URL is required (handled by apiClient), return relative path
   if (!apiUrl) {
-    return `/api/emails/thread/${encodeURIComponent(threadId)}`;
+    return `/api/emails/thread/${encodeURIComponent(threadId)}${querySuffix}`;
   }
-  return `${apiUrl}/api/emails/thread/${encodeURIComponent(threadId)}`;
+  return `${apiUrl}/api/emails/thread/${encodeURIComponent(threadId)}${querySuffix}`;
 }
 
 export function getConversationMessages<T extends ThreadEmailData>(
@@ -74,18 +76,22 @@ export function getConversationMessages<T extends ThreadEmailData>(
 export function buildReplyPayload(
   email: ThreadEmailData,
   draft: string,
+  overrides?: {
+    to?: string;
+    subject?: string;
+  },
 ): ReplyPayload {
-  const to = email.reply_to?.trim()
+  const defaultTo = email.reply_to?.trim()
     ? extractMailbox(email.reply_to)
     : extractMailbox(email.sender);
-  const subject = email.subject?.startsWith("Re:")
+  const defaultSubject = email.subject?.startsWith("Re:")
     ? email.subject
     : `Re: ${email.subject || ""}`;
   const references = buildReferences(email);
 
   return {
-    to,
-    subject,
+    to: overrides?.to?.trim() || defaultTo,
+    subject: overrides?.subject?.trim() || defaultSubject,
     body: draft,
     in_reply_to: email.message_id || undefined,
     references,

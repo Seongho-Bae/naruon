@@ -73,6 +73,18 @@ describe("email threading UI helpers", () => {
     );
   });
 
+  it("respects explicit reply recipient and subject overrides", () => {
+    expect(
+      buildReplyPayload(baseEmail, "Thanks", {
+        to: "custom@example.com",
+        subject: "Re: Edited subject",
+      }),
+    ).toMatchObject({
+      to: "custom@example.com",
+      subject: "Re: Edited subject",
+    });
+  });
+
   it("falls back to the selected email when the thread response is empty", () => {
     expect(getConversationMessages(baseEmail, [])).toEqual([baseEmail]);
   });
@@ -91,6 +103,12 @@ describe("email threading UI helpers", () => {
   it("encodes reserved characters in thread URLs", () => {
     expect(buildThreadUrl("http://localhost:8000", "root/part?x@example.com")).toBe(
       "http://localhost:8000/api/emails/thread/root%2Fpart%3Fx%40example.com",
+    );
+  });
+
+  it("preserves mailbox scope in thread URLs when a mailbox account is selected", () => {
+    expect(buildThreadUrl("", "root@example.com", 2)).toBe(
+      "/api/emails/thread/root%40example.com?mailbox_account_id=2",
     );
   });
 });

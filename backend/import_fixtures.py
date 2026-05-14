@@ -3,9 +3,11 @@ import sys
 from pathlib import Path
 
 from db.session import AsyncSessionLocal
-from db.models import Email, Attachment
+from db.models import Email, Attachment, MailboxAccount
+from core.config import settings
 from services.email_parser import parse_eml
 from services.embedding import generate_embeddings
+from services.mailbox_routing import resolve_mailbox_account_id_for_email
 from services.threading_service import assign_thread_id
 import os
 from sqlalchemy import select
@@ -22,17 +24,15 @@ async def generate_fixture_embedding(text: str) -> list[float]:
 
 
 async def import_eml_file(session, eml_file: Path) -> bool:
+    owner_user_id = settings.LEGACY_EMAIL_OWNER_USER_ID
+    if not owner_user_id:
+        print("LEGACY_EMAIL_OWNER_USER_ID is required for importing email fixtures.")
+        return False
+
     try:
         parsed = parse_eml(eml_file)
     except Exception as e:
         print(f"Failed to parse {eml_file}: {e}")
-        return False
-
-    existing = await session.execute(
-        select(Email).where(Email.message_id == parsed["message_id"])
-    )
-    if existing.scalar_one_or_none():
-        print(f"Email {parsed['message_id']} already exists, skipping.")
         return False
 
     body_text = parsed["body"] if parsed["body"].strip() else "Empty body"
@@ -43,8 +43,64 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         return False
 
     thread_id = await assign_thread_id(session, parsed)
+    mailbox_accounts_result = await session.execute(
+        select(MailboxAccount).where(
+            MailboxAccount.user_id == owner_user_id, MailboxAccount.is_active.is_(True)
+        )
+    )
+    mailbox_account_id = resolve_mailbox_account_id_for_email(
+        mailbox_accounts_result.scalars().all(),
+        sender=parsed["sender"],
+        reply_to=parsed.get("reply_to"),
+        recipients=parsed["recipients"],
+    )
+    existing = await session.execute(
+        select(Email).where(
+            Email.user_id == owner_user_id,
+            Email.mailbox_account_id == mailbox_account_id,
+            Email.message_id == parsed["message_id"],
+        )
+    )
+    existing_email = existing.scalar_one_or_none()
+    if existing_email:
+        print(f"Email {parsed['message_id']} already exists, skipping.")
+        return False
+
+    if mailbox_account_id is not None:
+        legacy_existing_result = await session.execute(
+            select(Email).where(
+                Email.user_id == owner_user_id,
+                Email.mailbox_account_id.is_(None),
+                Email.message_id == parsed["message_id"],
+            )
+        )
+        legacy_existing = legacy_existing_result.scalar_one_or_none()
+        if legacy_existing:
+            legacy_existing.mailbox_account_id = mailbox_account_id
+            legacy_existing.sender = parsed["sender"]
+            legacy_existing.reply_to = parsed.get("reply_to")
+            legacy_existing.recipients = parsed["recipients"]
+            legacy_existing.subject = parsed["subject"]
+            legacy_existing.in_reply_to = parsed.get("in_reply_to")
+            legacy_existing.references = parsed.get("references")
+            legacy_existing.date = parsed["date"]
+            legacy_existing.body = parsed["body"]
+            legacy_existing.embedding = body_emb
+            legacy_existing.thread_id = thread_id
+            try:
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                print(f"Failed to commit {eml_file}: {e}")
+                return False
+            print(
+                f"Upgraded legacy email {parsed['message_id']} to mailbox account {mailbox_account_id}."
+            )
+            return True
 
     email_obj = Email(
+        user_id=owner_user_id,
+        mailbox_account_id=mailbox_account_id,
         message_id=parsed["message_id"],
         sender=parsed["sender"],
         reply_to=parsed.get("reply_to"),
@@ -79,7 +135,9 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         await session.rollback()
         print(f"Failed to commit {eml_file}: {e}")
         return False
-    print(f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments.")
+    print(
+        f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
+    )
     return True
 
 
