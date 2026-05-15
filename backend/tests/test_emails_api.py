@@ -338,6 +338,26 @@ async def test_get_email_by_id_escapes_legacy_html_body(
 
 
 @pytest.mark.asyncio
+async def test_get_email_by_id_sanitizes_entity_encoded_html_body(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.body = (
+        "&lt;p&gt;Safe text&lt;/p&gt;&lt;img src=x "
+        "onerror=alert(document.domain)&gt;"
+    )
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 200
+    body = response.json()["body"]
+    assert "Safe text" in body
+    assert "&lt;img" not in body
+    assert "<img" not in body
+    assert "onerror" not in body
+    assert "alert(" not in body
+
+
+@pytest.mark.asyncio
 async def test_get_email_thread(client: AsyncClient, db_session, sample_email: Email):
     response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
     assert response.status_code == 200

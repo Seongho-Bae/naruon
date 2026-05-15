@@ -5,6 +5,7 @@ from db.session import get_db
 from db.models import Email, MailboxAccount, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
+import html
 from services.email_client import send_email
 from services.email_parser import sanitize_email_html_to_text
 from services.threading_service import normalize_message_id
@@ -31,9 +32,10 @@ def thread_lookup_values(thread_id: str) -> list[str]:
 
 
 def sanitize_email_body_for_response(body: str) -> str:
-    if "<" not in body or ">" not in body:
+    decoded_body = html.unescape(body)
+    if "<" not in decoded_body or ">" not in decoded_body:
         return body
-    return sanitize_email_html_to_text(body)
+    return sanitize_email_html_to_text(decoded_body)
 
 
 class EmailListItem(BaseModel):
