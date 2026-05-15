@@ -28,6 +28,16 @@ function decodeBearerClaims(token: string): Record<string, unknown> | null {
   }
 }
 
+function getOrganizationIdClaim(claims: Record<string, unknown> | null) {
+  if (typeof claims?.organization_id === 'string' && claims.organization_id.trim()) {
+    return claims.organization_id;
+  }
+  if (typeof claims?.org_id === 'string' && claims.org_id.trim()) {
+    return claims.org_id;
+  }
+  return null;
+}
+
 export class ApiClient {
   private baseUrl: string;
   private devHeaderAuthEnabled = false;
@@ -112,6 +122,10 @@ export class ApiClient {
     return this.isLocalDevOverrideAllowed();
   }
 
+  private canUseTrustedLocalDevHeaders() {
+    return this.isLocalDevOverrideAllowed() && this.devHeaderAuthLoaded && this.devHeaderAuthEnabled;
+  }
+
   private async getHeaders(endpoint: string, init?: RequestInit): Promise<HeadersInit> {
     await this.ensureDevHeaderAuthGate(endpoint);
     const bearerToken = this.getBearerToken();
@@ -178,19 +192,30 @@ export class ApiClient {
 
   getCurrentOrganizationId() {
     const claims = this.getSessionClaims();
-    if (typeof claims?.organization_id === 'string' && claims.organization_id.trim()) {
-      return claims.organization_id;
-    }
-    if (typeof claims?.org_id === 'string' && claims.org_id.trim()) {
-      return claims.org_id;
-    }
+    const organizationId = getOrganizationIdClaim(claims);
+    if (organizationId) return organizationId;
     return this.getLocalDevOrganizationId();
   }
 
   canManageWorkspaceSettings() {
-    const role = this.getCurrentRole();
-    const organizationId = this.getCurrentOrganizationId();
+    const claims = this.getSessionClaims();
+    if (!claims && !this.canUseTrustedLocalDevHeaders()) {
+      return false;
+    }
+
+    const role = claims ? this.getCurrentRole() : this.getLocalDevRole();
+    const organizationId = claims ? getOrganizationIdClaim(claims) : this.getLocalDevOrganizationId();
     return (role === 'platform_admin' || role === 'organization_admin') && !!organizationId;
+  }
+
+  isWorkspaceSettingsAccessReady() {
+    if (this.getSessionClaims()) return true;
+    if (!this.isLocalDevOverrideAllowed()) return true;
+    return this.devHeaderAuthLoaded;
+  }
+
+  async ensureWorkspaceSettingsAccessReady() {
+    await this.ensureDevHeaderAuthGate('/api/workspace-settings-access');
   }
 
   getBearerToken() {

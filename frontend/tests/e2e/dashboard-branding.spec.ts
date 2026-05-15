@@ -20,7 +20,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ browse
 
   await expect(page.locator('img[alt="Naruon"]')).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Mail sections' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'AI Hub sections' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '워크스페이스 맥락 메뉴' })).toBeVisible();
   await expect(page.getByText('빠른 이동')).toBeVisible();
   const header = page.locator('header[aria-label="Naruon workspace header"]');
   await expect(header.getByText('오늘 검토')).toBeVisible();
@@ -80,6 +80,18 @@ test('keeps mobile navigation on one row and content scrollable across target de
     await mobilePage.goto(`${APP_URL}/ai-hub/actions`);
     await expect(mobilePage.getByRole('navigation', { name: 'Mobile workspace sections' })).toBeVisible();
     await expect(mobilePage.getByRole('heading', { name: '실행 항목' })).toBeVisible();
+
+    const menuButton = mobilePage.getByRole('button', { name: 'Open workspace menu' });
+    await menuButton.click();
+    const menuDialog = mobilePage.getByRole('dialog', { name: '워크스페이스 메뉴' });
+    await expect(menuDialog).toBeVisible();
+    await expect(mobilePage.locator('[data-testid="mobile-workspace-backdrop"]')).toBeVisible();
+    await mobilePage.keyboard.press('Escape');
+    await expect(menuDialog).toBeHidden();
+    await expect(menuButton).toBeFocused();
+    await menuButton.click();
+    await mobilePage.locator('[data-testid="mobile-workspace-backdrop"]').click({ position: { x: 4, y: 4 } });
+    await expect(menuDialog).toBeHidden();
 
     const metrics = await mobilePage.locator('body').evaluate(() => {
       const section = document.querySelector('main#main-content > section');

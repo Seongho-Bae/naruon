@@ -13,12 +13,10 @@ export function DevAuthSwitcher() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-      const isPrivateLan = window.location.hostname.startsWith('192.168.');
       const hasBearer = !!apiClient.getBearerToken();
       let cancelled = false;
-      const allowLocalHost = isLocalHost || isPrivateLan;
       getRuntimeConfig().then((config) => {
-        const allowDevOverride = allowLocalHost && !hasBearer && config.features.dev_header_auth_enabled;
+        const allowDevOverride = isLocalHost && !hasBearer && config.features.dev_header_auth_enabled;
         const timer = window.setTimeout(() => {
           if (cancelled) return;
           setVisible(allowDevOverride);

@@ -10,6 +10,8 @@ import datetime
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
+WORKSPACE_ADMIN_ROLES = {"platform_admin", "organization_admin"}
+
 
 class PromptCreate(BaseModel):
     title: str
@@ -78,6 +80,17 @@ def build_prompt_list_statement(auth_context: AuthContext):
     return select(PromptTemplate).where(or_(owned_prompt, shared_in_org))
 
 
+def require_workspace_admin(auth_context: AuthContext, detail: str) -> None:
+    if auth_context.role not in WORKSPACE_ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail=detail)
+
+
+def remove_nul_bytes(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    return value.replace("\x00", "")
+
+
 @router.get("", response_model=List[PromptResponse])
 async def list_prompts(
     db: AsyncSession = Depends(get_db),
@@ -98,11 +111,16 @@ async def create_prompt(
         raise HTTPException(
             status_code=400, detail="Shared prompts require organization scope"
         )
+    if data.is_shared:
+        require_workspace_admin(
+            auth_context,
+            "Workspace admin role is required for shared prompts",
+        )
 
     prompt = PromptTemplate(
-        title=data.title,
-        description=data.description,
-        content=data.content,
+        title=remove_nul_bytes(data.title),
+        description=remove_nul_bytes(data.description),
+        content=remove_nul_bytes(data.content),
         is_shared=data.is_shared,
         created_by=auth_context.user_id,
         organization_id=auth_context.organization_id,
@@ -119,11 +137,10 @@ async def test_prompt(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
-    # Substitute variables
-    prompt_text = data.content
-    for k, v in data.variables.items():
-        prompt_text = prompt_text.replace(f"{{{{{k}}}}}", v)
-
+    require_workspace_admin(
+        auth_context,
+        "Workspace admin role is required for prompt testing",
+    )
     if not auth_context.organization_id:
         raise HTTPException(status_code=400, detail="LLM API key not configured")
 
@@ -145,5 +162,10 @@ async def test_prompt(
 
     if not api_key:
         raise HTTPException(status_code=400, detail="LLM API key not configured")
+
+    # Substitute variables only after authorization and provider validation.
+    prompt_text = remove_nul_bytes(data.content) or ""
+    for k, v in data.variables.items():
+        prompt_text = prompt_text.replace(f"{{{{{k}}}}}", remove_nul_bytes(v) or "")
 
     return await execute_prompt_with_llm(prompt_text, api_key, base_url)

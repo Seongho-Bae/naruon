@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CalendarDays,
   CheckCircle2,
@@ -157,10 +157,24 @@ export function DashboardLayout({
   const pathname = usePathname();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [insightEmails, setInsightEmails] = useState<WorkspaceInsightEmail[]>([]);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const drawerRef = useRef<HTMLDivElement | null>(null);
+  const wasWorkspaceMenuOpenRef = useRef(false);
+  const shouldRestoreWorkspaceMenuFocusRef = useRef(true);
   const scrollRegionRef = useRef<HTMLDivElement | null>(null);
   const sidebarStorageKey = 'naruon.sidebarScrollTop';
   const insightCounts = useMemo(() => deriveWorkspaceInsights(insightEmails), [insightEmails]);
   const insightSummary = useMemo(() => summarizeTodayInsight(insightCounts), [insightCounts]);
+  const canManageWorkspaceSettings = apiClient.canManageWorkspaceSettings();
+  const visibleUtilityNavItems = useMemo(
+    () => utilityNavItems.filter((item) => item.href !== '/prompt-studio' || canManageWorkspaceSettings),
+    [canManageWorkspaceSettings],
+  );
+
+  const closeWorkspaceMenu = useCallback((restoreFocus: boolean) => {
+    shouldRestoreWorkspaceMenuFocusRef.current = restoreFocus;
+    setIsWorkspaceMenuOpen(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -203,6 +217,63 @@ export function DashboardLayout({
     };
   }, [pathname]);
 
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) return;
+
+    const drawer = drawerRef.current;
+    const focusableElements = Array.from(
+      drawer?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])') ?? [],
+    );
+    focusableElements[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeWorkspaceMenu(true);
+        return;
+      }
+      if (event.key !== 'Tab' || focusableElements.length === 0) return;
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (drawer?.contains(target) || menuButtonRef.current?.contains(target)) return;
+      closeWorkspaceMenu(true);
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('pointerdown', handlePointerDown);
+    };
+  }, [closeWorkspaceMenu, isWorkspaceMenuOpen]);
+
+  useEffect(() => {
+    if (isWorkspaceMenuOpen) {
+      wasWorkspaceMenuOpenRef.current = true;
+      shouldRestoreWorkspaceMenuFocusRef.current = true;
+      return;
+    }
+
+    if (!wasWorkspaceMenuOpenRef.current) return;
+    wasWorkspaceMenuOpenRef.current = false;
+    if (shouldRestoreWorkspaceMenuFocusRef.current) {
+      menuButtonRef.current?.focus();
+    }
+    shouldRestoreWorkspaceMenuFocusRef.current = true;
+  }, [isWorkspaceMenuOpen]);
+
   return (
     <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
       <a
@@ -234,7 +305,7 @@ export function DashboardLayout({
             ))}
           </nav>
 
-          <nav aria-label="AI Hub sections" className="mt-6 space-y-0.5">
+          <nav aria-label="워크스페이스 맥락 메뉴" className="mt-6 space-y-0.5">
             <div className="mb-1 flex items-center justify-between px-3">
               <p className="text-[11px] font-bold text-muted-foreground">워크스페이스</p>
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">CONTEXT</span>
@@ -282,7 +353,7 @@ export function DashboardLayout({
             <div className="mb-1 flex items-center justify-between px-3">
               <p className="text-[11px] font-bold text-muted-foreground">도구</p>
             </div>
-            {utilityNavItems.map((item) => (
+            {visibleUtilityNavItems.map((item) => (
               <NavLink key={item.label} {...item} />
             ))}
           </nav>
@@ -305,7 +376,7 @@ export function DashboardLayout({
             </div>
           </div>
 
-          <nav aria-label="AI workspace sections" className="sr-only">
+          <nav aria-label="워크스페이스 작업면" className="sr-only">
             {aiNavItems.map(({ label, href }) => (
               <a key={label} href={href}>{label}</a>
             ))}
@@ -330,6 +401,7 @@ export function DashboardLayout({
       <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <header aria-label="Naruon workspace header" className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card/85 px-4 backdrop-blur-xl lg:px-6">
           <button
+            ref={menuButtonRef}
             type="button"
             aria-label="Open workspace menu"
             aria-controls="mobile-workspace-menu"
@@ -376,13 +448,27 @@ export function DashboardLayout({
         </section>
       </main>
 
+      {isWorkspaceMenuOpen && (
+        <button
+          type="button"
+          aria-label="Close workspace menu"
+          data-testid="mobile-workspace-backdrop"
+          onClick={() => closeWorkspaceMenu(true)}
+          className="fixed inset-0 z-50 bg-slate-950/50 lg:hidden"
+        />
+      )}
+
       <div
+        ref={drawerRef}
         id="mobile-workspace-menu"
         hidden={!isWorkspaceMenuOpen}
-        className="fixed inset-x-3 top-20 z-50 max-h-[calc(100vh-7rem)] overflow-y-auto rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-workspace-menu-title"
+        className="fixed inset-x-3 top-20 z-[60] max-h-[calc(100vh-7rem)] overflow-y-auto rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
       >
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
+          <p id="mobile-workspace-menu-title" className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
         </div>
         <nav aria-label="Mobile workspace menu" className="grid gap-2">
@@ -393,7 +479,7 @@ export function DashboardLayout({
               key={label}
               href={href}
               aria-current={active ? 'page' : undefined}
-              onClick={() => setIsWorkspaceMenuOpen(false)}
+              onClick={() => closeWorkspaceMenu(false)}
               className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             >
               <Icon className="size-4 text-primary" aria-hidden="true" />
@@ -410,7 +496,7 @@ export function DashboardLayout({
             <Link
               key={label}
               href={href}
-              onClick={() => setIsWorkspaceMenuOpen(false)}
+              onClick={() => closeWorkspaceMenu(false)}
               data-mobile-view={label}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-center ${

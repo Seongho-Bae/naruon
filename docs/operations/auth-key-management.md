@@ -18,14 +18,19 @@
 - Dev header fallback is still available only when backend debug/trusted-header
   mode is enabled; frontend dev identity UI is restricted to loopback hosts
   (`localhost`, `127.0.0.1`), waits for `/api/runtime-config` to confirm the
-  backend escape hatch, and disappears when a bearer token is present.
+  backend escape hatch, and disappears when a bearer token is present. Local
+  storage can select a local dev identity only after that runtime gate is known;
+  it cannot expose admin workspace controls by itself.
 - `/api/runner-config` is organization-scoped and claim-gated to
   `platform_admin` / `organization_admin` with organization scope.
 - `/api/llm-providers` is claim-gated and now persists `organization_id`, with
   `(organization_id, name)` as the uniqueness boundary.
 - `/api/prompts` keeps private prompts user-owned, while shared prompt templates
-  require an authenticated `organization_id` and are listed only within that
-  organization.
+  require an authenticated `organization_id` plus `platform_admin` or
+  `organization_admin`. Shared prompts are listed only within that organization,
+  and provider-backed `/api/prompts/test` is also workspace-admin-only because it
+  consumes the organization's LLM provider configuration. Prompt Studio mirrors
+  that backend boundary by hiding its nav/direct controls from non-admin users.
 - `/api/execution-items` is a self-owned personal queue only. It now requires
   the source email row to belong to the authenticated user's `Email.user_id`
   scope, and the queue itself is isolated by `user_id + workspace_id`.

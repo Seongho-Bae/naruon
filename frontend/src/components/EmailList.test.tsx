@@ -507,8 +507,9 @@ describe("EmailList", () => {
 
     const searchInput = container.querySelector('input[aria-label="Search emails"]') as HTMLInputElement;
     await updateInputValue(searchInput, 'legacy');
+    const searchForm = container.querySelector('form');
     await act(async () => {
-      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      searchForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
     await flushAsyncWork();
 
@@ -573,13 +574,15 @@ describe("EmailList", () => {
     const searchInput = container.querySelector('input[aria-label="Search emails"]') as HTMLInputElement;
     await updateInputValue(searchInput, 'legacy');
 
+    const searchForm = container.querySelector('form');
     await act(async () => {
-      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      searchForm?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     });
     await flushAsyncWork();
 
+    const legacyResultButton = container.querySelector<HTMLButtonElement>('button[aria-label*="Legacy restored thread"]');
     await act(async () => {
-      container.querySelector<HTMLButtonElement>('button[aria-label*="Legacy restored thread"]')?.click();
+      legacyResultButton?.click();
     });
 
     expect(onSelectEmail).toHaveBeenCalledWith(

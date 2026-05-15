@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const apiClientMock = vi.hoisted(() => ({
   get: vi.fn(async () => ({ emails: [] })),
+  canManageWorkspaceSettings: vi.fn(() => false),
 }));
 
 vi.mock("@/lib/api-client", () => ({
@@ -32,6 +33,7 @@ describe("DashboardLayout", () => {
     container?.remove();
     container = null;
     vi.clearAllMocks();
+    apiClientMock.canManageWorkspaceSettings.mockReturnValue(false);
   });
 
   it("renders the Naruon branded shell with accessible navigation landmarks", async () => {
@@ -52,6 +54,7 @@ describe("DashboardLayout", () => {
     const sidebar = container.querySelector('aside[aria-label="Naruon workspace sidebar"]');
     const nav = container.querySelector('nav[aria-label="Mail sections"]');
     const desktopSidebarText = sidebar?.textContent ?? "";
+    const workspaceNav = container.querySelector('nav[aria-label="워크스페이스 맥락 메뉴"]');
     const headerSearch = container.querySelector<HTMLFormElement>('form[aria-label="Header context search"]');
     const headerSearchInput = headerSearch?.querySelector<HTMLInputElement>('input[name="q"]');
     const mainScrollSection = container.querySelector<HTMLElement>('main#main-content > section');
@@ -70,10 +73,11 @@ describe("DashboardLayout", () => {
     expect(banner).not.toBeNull();
     expect(sidebar).not.toBeNull();
     expect(nav).not.toBeNull();
+    expect(workspaceNav).not.toBeNull();
     expect(desktopSidebarText).toContain("설정");
-    expect(desktopSidebarText).toContain("Prompt Studio");
+    expect(desktopSidebarText).not.toContain("Prompt Studio");
     expect(container.querySelector('aside a[href="/settings"] svg')).not.toBeNull();
-    expect(container.querySelector('aside a[href="/prompt-studio"]')).not.toBeNull();
+    expect(container.querySelector('aside a[href="/prompt-studio"]')).toBeNull();
     expect(headerSearch).not.toBeNull();
     expect(headerSearch?.getAttribute("action")).toBe("/ai-hub/context");
     expect(headerSearch?.getAttribute("method")?.toLowerCase()).toBe("get");
@@ -94,7 +98,7 @@ describe("DashboardLayout", () => {
     expect(mobileNavButtons).toEqual(["받은 메일", "맥락 종합", "판단 포인트", "실행 항목", "설정"]);
     expect(mobileNav?.className).toContain("pb-[calc(0.5rem+env(safe-area-inset-bottom))]");
     expect(mobileNav?.className).toContain("bottom-[calc(0.75rem+env(safe-area-inset-bottom))]");
-    expect(Array.from(container.querySelectorAll('nav[aria-label="AI workspace sections"] a')).map((link) => link.getAttribute('href'))).toEqual([
+    expect(Array.from(container.querySelectorAll('nav[aria-label="워크스페이스 작업면"] a')).map((link) => link.getAttribute('href'))).toEqual([
       '/',
       '/ai-hub/context',
       '/ai-hub/decisions',
@@ -115,9 +119,146 @@ describe("DashboardLayout", () => {
     act(() => {
       mobileMenuButton?.click();
     });
+    await flushAsyncWork();
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
-      });
+    expect(mobileDrawer?.hidden).toBe(false);
+    expect(mobileDrawer?.getAttribute("role")).toBe("dialog");
+    expect(mobileDrawer?.getAttribute("aria-modal")).toBe("true");
+    expect(mobileDrawer?.getAttribute("aria-labelledby")).toBe("mobile-workspace-menu-title");
+    expect(container.querySelector('[data-testid="mobile-workspace-backdrop"]')).not.toBeNull();
+  });
+
+  it("closes the mobile drawer with keyboard and backdrop actions while returning focus", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+    await flushAsyncWork();
+
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    mobileMenuButton?.focus();
+
+    act(() => {
+      mobileMenuButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement?.textContent).toContain("메일 작성");
+
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(mobileMenuButton);
+
+    act(() => {
+      mobileMenuButton?.click();
+    });
+    await flushAsyncWork();
+
+    const backdrop = container.querySelector<HTMLElement>('[data-testid="mobile-workspace-backdrop"]');
+    act(() => {
+      backdrop?.click();
+    });
+    await flushAsyncWork();
+
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(mobileMenuButton);
+  });
+
+  it("layers the mobile drawer backdrop above the bottom navigation while keeping the drawer on top", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+    await flushAsyncWork();
+
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    act(() => {
+      mobileMenuButton?.click();
+    });
+    await flushAsyncWork();
+
+    const backdrop = container.querySelector<HTMLElement>('[data-testid="mobile-workspace-backdrop"]');
+    const drawer = container.querySelector<HTMLElement>('#mobile-workspace-menu');
+    const bottomNav = container.querySelector<HTMLElement>('nav[aria-label="Mobile workspace sections"]');
+
+    expect(backdrop?.className).toContain("z-50");
+    expect(drawer?.className).toContain("z-[60]");
+    expect(bottomNav?.className).toContain("z-40");
+  });
+
+  it("does not restore focus to the mobile menu opener after drawer link activation", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+    await flushAsyncWork();
+
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    act(() => {
+      mobileMenuButton?.focus();
+      mobileMenuButton?.click();
+    });
+    await flushAsyncWork();
+
+    const composeLink = Array.from(container.querySelectorAll<HTMLAnchorElement>('#mobile-workspace-menu a')).find(
+      (link) => link.textContent?.includes("메일 작성"),
+    );
+    composeLink?.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    act(() => {
+      composeLink?.focus();
+      composeLink?.click();
+    });
+    await flushAsyncWork();
+
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).not.toBe(mobileMenuButton);
+  });
+
+  it("shows Prompt Studio navigation only for workspace admins", async () => {
+    apiClientMock.canManageWorkspaceSettings.mockReturnValue(true);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent ?? "").toContain("Prompt Studio");
+    expect(container.querySelector('aside a[href="/prompt-studio"]')).not.toBeNull();
+  });
 
   it("keeps the desktop sidebar content reachable through an independent scroll region", async () => {
     container = document.createElement("div");

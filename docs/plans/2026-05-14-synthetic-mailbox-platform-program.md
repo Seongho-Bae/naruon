@@ -35,6 +35,7 @@
 - IMAP sync foundation now enumerates active `MailboxAccount` rows instead of `TenantConfig`, preparing multi-account ingestion
 - POP3 sync foundation now also enumerates active `MailboxAccount` rows, with per-account timeout/error handling and UI/API support for POP3 credentials
 - mailbox account writes now normalize/sanitize fields and enforce create/update invariants (default reply implies active, server/port pair validation, duplicate-account 409, missing encryption 503)
+- mobile workspace drawer now has modal-style close/focus behavior, and Prompt Studio is treated as an admin/provider-backed surface rather than a member utility
 
 ### Domain model
 
@@ -53,6 +54,9 @@
 ### LLM platform
 
 - The repo has org-scoped provider CRUD, but runtime is still effectively OpenAI-centric.
+- Prompt Studio can test prompts only for workspace admins because provider-backed
+  execution consumes organization LLM configuration; member-safe prompt drafting
+  or quotas need a separate policy path.
 - The long-term platform needs:
   - provider registry + model catalog
   - per-task routing policy

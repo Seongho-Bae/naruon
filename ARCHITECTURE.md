@@ -130,15 +130,18 @@ configured JWKS URL, which is enough for staged Keycloak/Casdoor integration.
 
 The frontend only exposes the dev identity shim on loopback hosts (`localhost`,
 `127.0.0.1`) when no bearer token is present and `/api/runtime-config` confirms
-trusted-header auth is enabled; local storage alone cannot mint trusted headers.
-Admin settings tabs are claim-gated in the UI before the backend performs its
-own authorization checks. Runner tokens are organization-scoped, while LLM
-provider access is now org-scoped through `organization_id`. Shared prompt
-templates also require organization scope and are only listed inside the same
-organization; user-owned private prompts remain visible to their creator. Legacy
-provider rows require an explicit bootstrap migration mapping
-(`LEGACY_LLM_PROVIDER_ORGANIZATION_ID`) before they reappear in the new org
-scoped APIs. See `docs/operations/auth-key-management.md`. The current
+trusted-header auth is enabled; local storage alone cannot mint trusted headers
+or admin workspace affordances. Admin settings and Prompt Studio controls are
+claim-gated in the UI before the backend performs its own authorization checks.
+Runner tokens are organization-scoped, while LLM provider access is now
+org-scoped through `organization_id`. Shared prompt templates require both
+organization scope and a workspace-admin role (`platform_admin` or
+`organization_admin`), while user-owned private prompts remain visible to their
+creator. Provider-backed prompt testing is also workspace-admin-only because it
+uses the organization's configured LLM provider. Legacy provider rows require an
+explicit bootstrap migration mapping (`LEGACY_LLM_PROVIDER_ORGANIZATION_ID`)
+before they reappear in the new org scoped APIs. See
+`docs/operations/auth-key-management.md`. The current
 Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
