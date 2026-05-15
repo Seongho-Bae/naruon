@@ -4,12 +4,14 @@ import hashlib
 import base64
 import datetime
 import inspect
+from types import SimpleNamespace
 
 import pytest
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
 from jwt.algorithms import RSAAlgorithm
+import api.auth as auth_module
 from api.auth import (
     AuthContext,
     ensure_organization_access,
@@ -577,3 +579,36 @@ async def test_get_auth_context_rejects_bearer_token_without_configured_audience
 
     assert exc.value.status_code == 503
     assert exc.value.detail == "OIDC issuer and audience are not configured"
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_fails_closed_when_oidc_verifier_settings_are_absent(
+    monkeypatch,
+):
+    drifted_settings = SimpleNamespace(
+        AUTH_MODE="oidc",
+        OIDC_ISSUER="https://issuer.example.com/realms/naruon",
+        OIDC_AUDIENCE="naruon-web",
+    )
+    monkeypatch.setattr(auth_module, "settings", drifted_settings)
+
+    token = _encode_test_jwt(
+        {
+            "sub": "alice",
+            "iss": drifted_settings.OIDC_ISSUER,
+            "aud": drifted_settings.OIDC_AUDIENCE,
+            "exp": int(
+                (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=5)
+                ).timestamp()
+            ),
+        },
+        "",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail == "OIDC verifier is not configured"

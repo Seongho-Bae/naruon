@@ -83,8 +83,10 @@ def _get_jwk_client(jwks_url: str) -> jwt.PyJWKClient:
 
 
 def _require_oidc_claim_expectations() -> tuple[str, str]:
-    issuer = settings.OIDC_ISSUER.strip() if settings.OIDC_ISSUER else None
-    audience = settings.OIDC_AUDIENCE.strip() if settings.OIDC_AUDIENCE else None
+    raw_issuer = getattr(settings, "OIDC_ISSUER", None)
+    raw_audience = getattr(settings, "OIDC_AUDIENCE", None)
+    issuer = raw_issuer.strip() if raw_issuer else None
+    audience = raw_audience.strip() if raw_audience else None
     if not issuer or not audience:
         raise HTTPException(
             status_code=503, detail="OIDC issuer and audience are not configured"
@@ -93,16 +95,18 @@ def _require_oidc_claim_expectations() -> tuple[str, str]:
 
 
 def _get_oidc_shared_secret() -> str | None:
-    secret = settings.OIDC_SHARED_SECRET
+    secret = getattr(settings, "OIDC_SHARED_SECRET", None)
     if isinstance(secret, SecretStr):
         return secret.get_secret_value()
     return secret
 
 
 def _expected_oidc_algorithm() -> Literal["RS256", "HS256"]:
-    if settings.OIDC_JWKS_URL:
+    if getattr(settings, "OIDC_JWKS_URL", None):
         return "RS256"
-    return "HS256"
+    if _get_oidc_shared_secret():
+        return "HS256"
+    raise HTTPException(status_code=503, detail="OIDC verifier is not configured")
 
 
 async def _decode_bearer_token(authorization: str) -> dict:
