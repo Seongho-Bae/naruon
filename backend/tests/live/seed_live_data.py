@@ -10,7 +10,6 @@ from sqlalchemy import delete
 from db.models import Email
 from db.session import AsyncSessionLocal
 
-
 THREAD_ID = "<live-e2e-root@example.test>"
 MESSAGE_IDS = [
     "<live-e2e-root@example.test>",
@@ -24,6 +23,7 @@ async def seed_live_data() -> None:
         session.add_all(
             [
                 Email(
+                    user_id="testuser",
                     message_id=MESSAGE_IDS[0],
                     thread_id=THREAD_ID,
                     sender="ops@example.test",
@@ -34,6 +34,7 @@ async def seed_live_data() -> None:
                     embedding=[0.0] * 1536,
                 ),
                 Email(
+                    user_id="testuser",
                     message_id=MESSAGE_IDS[1],
                     thread_id=THREAD_ID,
                     sender="swe@example.test",

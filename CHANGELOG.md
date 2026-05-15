@@ -1,3 +1,8 @@
+## [Unreleased]
+
+### 보안
+- Seongho Bae (@seonghobae): backend 인증 경로에서 client-controlled `X-User-*` 개발 헤더 신뢰를 제거하고, 로컬/테스트 흐름을 서명된 bearer/OIDC claims 기반으로 전환했습니다.
+
 ## [0.14.1] - 2026-05-13
 
 ### 수정

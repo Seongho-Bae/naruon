@@ -1,20 +1,24 @@
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
-from db.models import TenantConfig
+from db.models import TenantConfig, get_fernet
 from core.config import settings
 
 TEST_OPENAI_KEY = "test_key2"  # noqa: S105
 TEST_IMAP_PASSWORD = "imap-secret"  # noqa: S105
 TEST_SMTP_PASSWORD = "smtp-secret"  # noqa: S105
 
+
 @pytest.fixture(autouse=True)
 def mock_debug():
     old_debug = settings.DEBUG
+    old_key = settings.ENCRYPTION_KEY
     settings.DEBUG = True
+    settings.ENCRYPTION_KEY = SecretStr("test-encryption-key")
     yield
     settings.DEBUG = old_debug
-
+    settings.ENCRYPTION_KEY = old_key
 
 
 @pytest.fixture
@@ -76,3 +80,16 @@ def test_tenant_config_model_encryption(db_session):
     assert "has_openai_key=True" in repr_str
     assert "has_imap_password=True" in repr_str
     assert "has_smtp_password=True" in repr_str
+
+
+def test_encryption_key_is_required_even_in_debug():
+    old_key = settings.ENCRYPTION_KEY
+    old_debug = settings.DEBUG
+    settings.ENCRYPTION_KEY = None
+    settings.DEBUG = True
+    try:
+        with pytest.raises(RuntimeError, match="ENCRYPTION_KEY is required"):
+            get_fernet()
+    finally:
+        settings.ENCRYPTION_KEY = old_key
+        settings.DEBUG = old_debug

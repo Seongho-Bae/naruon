@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,13 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Play, Save, Code } from 'lucide-react';
 
 export default function PromptStudioPage() {
+  const [accessState, setAccessState] = useState(() => {
+    const canManage = apiClient.canManageWorkspaceSettings();
+    return {
+      ready: canManage || apiClient.isWorkspaceSettingsAccessReady(),
+      canManage,
+    };
+  });
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -21,6 +28,25 @@ export default function PromptStudioPage() {
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (accessState.ready) return;
+    let active = true;
+
+    const loadAccessState = async () => {
+      await apiClient.ensureWorkspaceSettingsAccessReady();
+      if (!active) return;
+      setAccessState({
+        ready: apiClient.isWorkspaceSettingsAccessReady(),
+        canManage: apiClient.canManageWorkspaceSettings(),
+      });
+    };
+
+    void loadAccessState();
+    return () => {
+      active = false;
+    };
+  }, [accessState.ready]);
 
   const handleTest = async () => {
     setTesting(true);
@@ -50,6 +76,37 @@ export default function PromptStudioPage() {
       setSaving(false);
     }
   };
+
+  if (!accessState.ready) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 p-8">
+        <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <h1 className="mb-2 flex items-center gap-2 text-2xl font-black text-foreground">
+            <Code className="size-6 text-primary" />
+            Prompt Studio
+          </h1>
+          <p className="text-sm font-semibold text-foreground">권한을 확인하고 있습니다.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!accessState.canManage) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-4 p-8">
+        <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+          <h1 className="mb-2 flex items-center gap-2 text-2xl font-black text-foreground">
+            <Code className="size-6 text-primary" />
+            Prompt Studio
+          </h1>
+          <p className="text-sm font-semibold text-foreground">관리자 권한이 필요합니다.</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Prompt Studio는 워크스페이스 LLM provider와 공유 프롬프트를 다루므로 조직 관리자 또는 플랫폼 관리자에게만 열립니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-8">

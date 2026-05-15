@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/ui/separator", () => ({
   Separator: () => <hr />,
@@ -47,6 +47,7 @@ vi.mock("lucide-react", () => ({
 }));
 
 import { EmailDetail } from "./EmailDetail";
+import { apiClient } from "@/lib/api-client";
 
 type Deferred<T> = {
   promise: Promise<T>;
@@ -55,6 +56,7 @@ type Deferred<T> = {
 
 type TestEmail = {
   id: number;
+  mailbox_account_id?: number | null;
   message_id: string;
   thread_id: string | null;
   sender: string;
@@ -99,6 +101,11 @@ describe("EmailDetail", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
+  beforeEach(() => {
+    apiClient.setBaseUrl('');
+    apiClient.setDevHeaderAuthEnabled(true);
+  });
+
   afterEach(() => {
     if (root) {
       act(() => root?.unmount());
@@ -112,6 +119,7 @@ describe("EmailDetail", () => {
   it("keeps the latest conversation when an older thread request resolves late", async () => {
     const emailA: TestEmail = {
       id: 1,
+      mailbox_account_id: 1,
       message_id: "<a@example.com>",
       thread_id: "thread-a",
       sender: "a@example.com",
@@ -122,6 +130,7 @@ describe("EmailDetail", () => {
     };
     const emailB: TestEmail = {
       id: 2,
+      mailbox_account_id: 2,
       message_id: "<b@example.com>",
       thread_id: "thread-b",
       sender: "b@example.com",
@@ -152,8 +161,8 @@ describe("EmailDetail", () => {
         const url = String(input);
         if (url.endsWith("/api/emails/1")) return emailAResponse.promise;
         if (url.endsWith("/api/emails/2")) return emailBResponse.promise;
-        if (url.endsWith("/api/emails/thread/thread-a")) return threadAResponse.promise;
-        if (url.endsWith("/api/emails/thread/thread-b")) return threadBResponse.promise;
+        if (url.endsWith("/api/emails/thread/thread-a?mailbox_account_id=1")) return threadAResponse.promise;
+        if (url.endsWith("/api/emails/thread/thread-b?mailbox_account_id=2")) return threadBResponse.promise;
         if (url.endsWith("/api/llm/summarize")) {
           return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
         }
@@ -186,7 +195,7 @@ describe("EmailDetail", () => {
 
     await waitForCondition(() =>
       fetchMock.mock.calls.some(([input]) =>
-        String(input).endsWith("/api/emails/thread/thread-b"),
+        String(input).endsWith("/api/emails/thread/thread-b?mailbox_account_id=2"),
       ),
     );
 
@@ -200,7 +209,7 @@ describe("EmailDetail", () => {
     );
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain(
-      "/api/emails/thread/thread-b",
+      "/api/emails/thread/thread-b?mailbox_account_id=2",
     );
     expect(container.textContent).toContain("Thread B sibling body");
     expect(container.textContent).toContain("2개 메시지");
@@ -291,6 +300,46 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("Standalone body");
     expect(container.textContent).toContain("1개 메시지");
     expect(container.textContent).not.toContain("대화 흐름을 불러오는 중입니다...");
+  });
+
+  it("uses the selected mailbox scope for legacy emails without mailbox ids", async () => {
+    const legacyEmail: TestEmail = {
+      id: 9,
+      mailbox_account_id: null,
+      message_id: "<legacy@example.com>",
+      thread_id: "legacy-thread",
+      sender: "legacy@example.com",
+      recipients: "user@example.com",
+      subject: "Legacy",
+      date: "2026-04-27T10:00:00Z",
+      body: "Legacy body",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/9")) return Promise.resolve(jsonResponse(legacyEmail));
+      if (url.endsWith("/api/emails/thread/legacy-thread?mailbox_account_id=2")) {
+        return Promise.resolve(jsonResponse({ thread: [legacyEmail] }));
+      }
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={9} mailboxAccountId={2} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain(
+      "/api/emails/thread/legacy-thread?mailbox_account_id=2",
+    );
   });
 
   it("uses Korean-first labels for AI summary and execution actions", async () => {

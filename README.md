@@ -76,7 +76,7 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses trusted header auth in local/dev and does not persist an owner/mailbox key on email rows. The backend now derives an auth context with platform/organization/group/member scopes, but email data should still be treated as single-user development data until a mailbox ownership migration is added.
+This repo now derives backend auth context from verified bearer/OIDC claims, not trusted local/dev identity headers. Email rows have a bridge owner field, but email data should still be treated as pre-production multi-user data until the full mailbox ownership migration lands.
 
 ## Operations and release docs
 
@@ -84,7 +84,7 @@ This repo still uses trusted header auth in local/dev and does not persist an ow
 - `docs/operations/open-source-apm.md`: OpenTelemetry, Prometheus, Grafana, Loki, Tempo/Jaeger adoption plan.
 - `docs/operations/email-relay-proxy-boundary.md`: Naruon is a web client relay/proxy, not an email server.
 - `docs/operations/postgresql-physical-replication.md`: physical replication, WAL, restore, and read-routing plan.
-- `docs/operations/auth-key-management.md`: dummy auth boundary, Fernet key management, Keycloak/Casdoor evaluation.
+- `docs/operations/auth-key-management.md`: bearer/OIDC auth boundary, Fernet key management, Keycloak/Casdoor evaluation.
 - `docs/operations/traefik-evaluation.md`: Traefik versus current NGINX ingress evaluation.
 
 ## Verification used for this hardening pass

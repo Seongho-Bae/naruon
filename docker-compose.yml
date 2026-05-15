@@ -21,6 +21,10 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
+      # Compose auth defaults stay fail-closed. Local verification uses signed
+      # bearer tokens or an OIDC provider/session, not client identity headers.
+      AUTH_MODE: ${AUTH_MODE:-hybrid}
+      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
@@ -29,7 +33,7 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     command: ["sh", "-c", "python scripts/bootstrap_db.py && uvicorn main:app --host 0.0.0.0 --port 8000"]
 
   frontend:
@@ -46,7 +50,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
 
 volumes:
   postgres-data:

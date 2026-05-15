@@ -24,7 +24,7 @@ interface LlmData {
   todos: string[];
 }
 
-export function EmailDetail({ emailId }: { emailId: number | null }) {
+export function EmailDetail({ emailId, mailboxAccountId }: { emailId: number | null; mailboxAccountId?: number | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
   const [threadEmails, setThreadEmails] = useState<EmailData[]>([]);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
@@ -63,7 +63,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
     setThreadLoading(true);
     try {
-      const threadJson = await apiClient.get<{ thread: EmailData[] }>(buildThreadUrl('', currentEmail.thread_id));
+      const threadJson = await apiClient.get<{ thread: EmailData[] }>(
+        buildThreadUrl('', currentEmail.thread_id, currentEmail.mailbox_account_id ?? mailboxAccountId),
+      );
       if (!isLatestThreadRequest()) return;
       setThreadEmails(threadJson.thread || []);
     } catch (err) {
@@ -74,7 +76,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     } finally {
       if (isLatestThreadRequest()) setThreadLoading(false);
     }
-  }, []);
+  }, [mailboxAccountId]);
 
   useEffect(() => {
     if (!emailId) return;
@@ -166,7 +168,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
+      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos });
       setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
       setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
@@ -219,7 +221,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         </div>
       </div>
       <Separator />
-      <ScrollArea className="flex-1">
+      <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-6 bg-background/50 p-6">
           
           <div className="space-y-2 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">

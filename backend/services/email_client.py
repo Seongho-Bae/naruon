@@ -1,8 +1,25 @@
+import asyncio
 import base64
 import logging
 from email.message import EmailMessage
 from typing import TypedDict
+
 import aiosmtplib
+from aiosmtplib.smtp import (
+    SMTPConnectError,
+    SMTPConnectResponseError,
+    SMTPConnectTimeoutError,
+    SMTPProtocol,
+    SMTPServerDisconnected,
+    SMTPStatus,
+    SMTPTimeoutError,
+)
+
+from services.mail_server_security import (
+    MailServerConnectTarget,
+    MailServerValidationError,
+    resolve_mail_server_connect_target,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +38,100 @@ def _sanitize_log_value(value: str) -> str:
 class SendEmailResult(TypedDict):
     status: str
     simulated: bool
+
+
+class _PinnedSMTP(aiosmtplib.SMTP):
+    def __init__(
+        self,
+        *,
+        connect_host: str,
+        tls_server_hostname: str,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self._connect_host = connect_host
+        self._tls_server_hostname = tls_server_hostname
+
+    async def _create_connection(self, timeout: float | None):
+        if self.loop is None:
+            raise RuntimeError("No event loop set")
+
+        protocol = SMTPProtocol(loop=self.loop)
+        tls_context = None
+        ssl_handshake_timeout = None
+        if self.use_tls:
+            tls_context = self._get_tls_context()
+            ssl_handshake_timeout = timeout
+
+        if self.sock is not None or self.socket_path is not None:
+            return await super()._create_connection(timeout)
+        if self.port is None:
+            raise RuntimeError("No port provided; default should have been set")
+
+        connect_coro = self.loop.create_connection(
+            lambda: protocol,
+            host=self._connect_host,
+            port=self.port,
+            ssl=tls_context,
+            ssl_handshake_timeout=ssl_handshake_timeout,
+            local_addr=self.source_address,
+            server_hostname=(
+                self._tls_server_hostname if tls_context is not None else None
+            ),
+        )
+
+        try:
+            transport, _ = await asyncio.wait_for(connect_coro, timeout=timeout)
+        except (TimeoutError, asyncio.TimeoutError) as exc:
+            raise SMTPConnectTimeoutError(
+                f"Timed out connecting to {self.hostname} on port {self.port}"
+            ) from exc
+        except OSError as exc:
+            raise SMTPConnectError(
+                f"Error connecting to {self.hostname} on port {self.port}: {exc}"
+            ) from exc
+
+        self.protocol = protocol
+        self.transport = transport
+
+        try:
+            response = await protocol.read_response(timeout=timeout)
+        except SMTPServerDisconnected as exc:
+            raise SMTPConnectError(
+                f"Error connecting to {self.hostname} on port {self.port}: {exc}"
+            ) from exc
+        except SMTPTimeoutError as exc:
+            raise SMTPConnectTimeoutError(
+                "Timed out waiting for server ready message"
+            ) from exc
+
+        if response.code != SMTPStatus.ready:
+            raise SMTPConnectResponseError(response.code, response.message)
+
+        return response
+
+
+async def _send_message_via_validated_smtp(
+    message: EmailMessage,
+    target: MailServerConnectTarget,
+    username: str | None,
+    password: str | None,
+) -> None:
+    smtp = _PinnedSMTP(
+        hostname=target.host,
+        port=target.port,
+        connect_host=target.connect_host,
+        tls_server_hostname=target.host,
+        use_tls=True,
+        username=username,
+        password=password,
+    )
+    try:
+        await smtp.connect()
+        await smtp.send_message(message)
+    finally:
+        if smtp.is_connected:
+            await smtp.quit()
 
 
 def build_email_message(
@@ -67,22 +178,26 @@ async def send_email(
     )
 
     if not smtp_server or not smtp_port:
-        logger.info("Simulating sending email to %s (no SMTP server configured)", safe_to_address)
+        logger.info(
+            "Simulating sending email to %s (no SMTP server configured)",
+            safe_to_address,
+        )
         return {"status": "simulated", "simulated": True}
 
     try:
-        send_kwargs: dict[str, object] = {
-            "hostname": smtp_server,
-            "port": smtp_port,
-            "use_tls": True,
-        }
-        if smtp_username:
-            send_kwargs["username"] = smtp_username
-        if smtp_password:
-            send_kwargs["password"] = smtp_password
+        try:
+            target = resolve_mail_server_connect_target(
+                "smtp", "SMTP", smtp_server, smtp_port
+            )
+        except MailServerValidationError as exc:
+            raise Exception(str(exc)) from exc
 
-        await aiosmtplib.send(message, **send_kwargs)
-        logger.info("Successfully sent email to %s via %s", safe_to_address, smtp_server)
+        await _send_message_via_validated_smtp(
+            message, target, smtp_username, smtp_password
+        )
+        logger.info(
+            "Successfully sent email to %s via %s", safe_to_address, target.host
+        )
         return {"status": "sent", "simulated": False}
     except Exception as e:
         raise Exception(f"Failed to send email: {e}")
