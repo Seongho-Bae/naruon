@@ -392,6 +392,40 @@ async def test_get_auth_context_rejects_invalid_bearer_signature():
 
 
 @pytest.mark.asyncio
+async def test_get_auth_context_rejects_hs256_when_jwks_url_is_configured():
+    settings.AUTH_MODE = "oidc"
+    settings.OIDC_SHARED_SECRET = "test-secret"
+    settings.OIDC_ISSUER = "https://issuer.example.com/realms/naruon"
+    settings.OIDC_AUDIENCE = "naruon-web"
+    settings.OIDC_JWKS_URL = (
+        "https://issuer.example.com/realms/naruon/protocol/openid-connect/certs"
+    )
+
+    token = _encode_test_jwt(
+        {
+            "sub": "mallory",
+            "iss": settings.OIDC_ISSUER,
+            "aud": settings.OIDC_AUDIENCE,
+            "exp": int(
+                (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=5)
+                ).timestamp()
+            ),
+            "organization_id": "org-acme",
+            "roles": ["platform_admin"],
+        },
+        settings.OIDC_SHARED_SECRET,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Invalid bearer token"
+
+
+@pytest.mark.asyncio
 async def test_get_auth_context_rejects_dev_headers_when_not_trusted():
     settings.DEBUG = False
     settings.TRUST_DEV_HEADERS = False

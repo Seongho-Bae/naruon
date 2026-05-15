@@ -99,6 +99,12 @@ def _get_oidc_shared_secret() -> str | None:
     return secret
 
 
+def _expected_oidc_algorithm() -> Literal["RS256", "HS256"]:
+    if settings.OIDC_JWKS_URL:
+        return "RS256"
+    return "HS256"
+
+
 async def _decode_bearer_token(authorization: str) -> dict:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid bearer token")
@@ -112,7 +118,10 @@ async def _decode_bearer_token(authorization: str) -> dict:
     try:
         header = jwt.get_unverified_header(token)
         algorithm = header.get("alg")
-        if algorithm == "RS256":
+        expected_algorithm = _expected_oidc_algorithm()
+        if algorithm != expected_algorithm:
+            raise HTTPException(status_code=401, detail="Invalid bearer token")
+        if expected_algorithm == "RS256":
             jwks_url = settings.OIDC_JWKS_URL
             if not jwks_url:
                 raise HTTPException(
