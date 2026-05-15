@@ -1991,6 +1991,133 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_changed_backend_context_scope_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+if [ -f "$target_path/backend/api/emails.py" ]; then
+	if [ ! -f "$target_path/backend/api/mailbox_scope.py" ]; then
+		echo "Error: changed backend dependency context missing from PR scope ($target_path)" >&2
+		exit 68
+	fi
+	if ! grep -Fq -- 'HEAD_MAILBOX_SCOPE_SHOULD_BE_SCANNED' "$target_path/backend/api/mailbox_scope.py"; then
+		echo "Error: changed backend dependency context did not use PR-head content" >&2
+		cat -- "$target_path/backend/api/mailbox_scope.py" >&2
+		exit 69
+	fi
+	echo "scan ok with PR-head backend dependency context"
+	exit 0
+fi
+
+echo "scan ok with non-email backend batch"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		mkdir -p backend/api
+		printf '%s\n' 'BASE_AUTH_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
+		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		cat >backend/api/auth.py <<'EOF'
+HEAD_AUTH_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/calendar.py <<'EOF'
+HEAD_CALENDAR_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/emails.py <<'EOF'
+from api.mailbox_scope import require_owned_mailbox_account
+HEAD_EMAILS_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/execution_items.py <<'EOF'
+HEAD_EXECUTION_ITEMS_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/llm.py <<'EOF'
+HEAD_LLM_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/llm_providers.py <<'EOF'
+HEAD_LLM_PROVIDERS_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/mailbox_accounts.py <<'EOF'
+HEAD_MAILBOX_ACCOUNTS_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/api/mailbox_scope.py <<'EOF'
+def require_owned_mailbox_account():
+	return 'HEAD_MAILBOX_SCOPE_SHOULD_BE_SCANNED'
+EOF
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="4" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
+	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
+	assert_equals "2" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -2778,6 +2905,8 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_trusted_context_scope_case
+
+run_pull_request_target_changed_backend_context_scope_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
