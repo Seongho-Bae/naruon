@@ -84,6 +84,12 @@ assert_strix_gate_target_scope_separated() {
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
 }
 
+assert_changed_file_membership_uses_cached_normalized_paths() {
+	assert_file_contains "$GATE_SCRIPT" "NORMALIZED_CHANGED_FILES=()" "strix gate caches normalized PR changed paths"
+	assert_file_contains "$GATE_SCRIPT" 'NORMALIZED_CHANGED_FILES+=("$normalized_changed_file")' "strix gate populates cached normalized PR changed paths"
+	assert_file_contains "$GATE_SCRIPT" "for normalized_changed_file in \"\${NORMALIZED_CHANGED_FILES[@]}\"" "strix gate uses cached normalized paths for membership checks"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -2033,10 +2039,19 @@ if [ -f "$target_path/backend/api/emails.py" ]; then
 		echo "Error: changed backend dependency context missing from PR scope ($target_path)" >&2
 		exit 68
 	fi
+	if [ ! -f "$target_path/backend/api/runner_config.py" ]; then
+		echo "Error: runner config backend dependency context missing from PR scope ($target_path)" >&2
+		exit 70
+	fi
 	if ! grep -Fq -- 'HEAD_MAILBOX_SCOPE_SHOULD_BE_SCANNED' "$target_path/backend/api/mailbox_scope.py"; then
 		echo "Error: changed backend dependency context did not use PR-head content" >&2
 		cat -- "$target_path/backend/api/mailbox_scope.py" >&2
 		exit 69
+	fi
+	if ! grep -Fq -- 'HEAD_RUNNER_CONFIG_SHOULD_BE_SCANNED' "$target_path/backend/api/runner_config.py"; then
+		echo "Error: runner config backend dependency context did not use PR-head content" >&2
+		cat -- "$target_path/backend/api/runner_config.py" >&2
+		exit 71
 	fi
 	echo "scan ok with PR-head backend dependency context"
 	exit 0
@@ -2090,6 +2105,10 @@ EOF
 def require_owned_mailbox_account():
 	return 'HEAD_MAILBOX_SCOPE_SHOULD_BE_SCANNED'
 EOF
+		cat >backend/api/runner_config.py <<'EOF'
+def require_workspace_admin():
+	return 'HEAD_RUNNER_CONFIG_SHOULD_BE_SCANNED'
+EOF
 		git add .
 		git commit -qm 'head commit'
 	)
@@ -2119,7 +2138,7 @@ EOF
 
 	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
-	assert_equals "2" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
+	assert_equals "3" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
 
 	rm -rf "$tmp_dir"
 }
@@ -2862,6 +2881,8 @@ EOF
 assert_strix_workflow_pr_trigger_hardened
 
 assert_strix_gate_target_scope_separated
+
+assert_changed_file_membership_uses_cached_normalized_paths
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

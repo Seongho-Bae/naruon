@@ -47,6 +47,7 @@ INFRA_ERROR_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
+NORMALIZED_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
@@ -188,6 +189,18 @@ candidate = (repo_root / relative_path).resolve(strict=False)
 candidate.relative_to(repo_root)
 print(relative_path.as_posix())
 PY
+}
+
+normalize_changed_files_cache() {
+	NORMALIZED_CHANGED_FILES=()
+	local changed_file normalized_changed_file
+	for changed_file in "${CHANGED_FILES[@]}"; do
+		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || {
+			echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
+			return 2
+		}
+		NORMALIZED_CHANGED_FILES+=("$normalized_changed_file")
+	done
 }
 
 pull_request_head_blob_required() {
@@ -587,6 +600,7 @@ load_pull_request_changed_files() {
 				CHANGED_FILES+=("$changed_file")
 			fi
 		done <<<"$STRIX_TEST_CHANGED_FILES_OVERRIDE"
+		normalize_changed_files_cache || return 2
 		return 0
 	fi
 
@@ -654,6 +668,7 @@ PY
 			CHANGED_FILES+=("$changed_file")
 		fi
 	done <<<"$changed_files_output"
+	normalize_changed_files_cache || return 2
 
 	return 0
 }
@@ -938,10 +953,9 @@ EOF
 }
 
 changed_file_list_contains() {
-	local candidate normalized_candidate changed_file normalized_changed_file
+	local candidate normalized_candidate normalized_changed_file
 	normalized_candidate="$(normalize_changed_file_path "$1")" || return 2
-	for changed_file in "${CHANGED_FILES[@]}"; do
-		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+	for normalized_changed_file in "${NORMALIZED_CHANGED_FILES[@]}"; do
 		if [ "$normalized_changed_file" = "$normalized_candidate" ]; then
 			return 0
 		fi
