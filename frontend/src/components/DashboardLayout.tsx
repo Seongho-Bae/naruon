@@ -50,17 +50,17 @@ const quickLinkItems = [
 ];
 
 const projectItems = [
-  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects/launch' },
-  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects/vendor' },
-  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects/marketing' },
+  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects?workspace=launch' },
+  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects?workspace=vendor' },
+  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects?workspace=marketing' },
 ];
 
 const labelItems = [
-  { label: '긴급', color: 'bg-red-500', href: '/labels/urgent' },
-  { label: '회의', color: 'bg-yellow-500', href: '/labels/meeting' },
-  { label: '계약', color: 'bg-green-500', href: '/labels/contract' },
-  { label: '디자인', color: 'bg-purple-500', href: '/labels/design' },
-  { label: '개발', color: 'bg-blue-500', href: '/labels/dev' },
+  { label: '긴급', color: 'bg-red-500', href: '/labels?label=urgent' },
+  { label: '회의', color: 'bg-yellow-500', href: '/labels?label=meeting' },
+  { label: '계약', color: 'bg-green-500', href: '/labels?label=contract' },
+  { label: '디자인', color: 'bg-purple-500', href: '/labels?label=design' },
+  { label: '개발', color: 'bg-blue-500', href: '/labels?label=dev' },
 ];
 
 const mobileWorkspaceItems = [

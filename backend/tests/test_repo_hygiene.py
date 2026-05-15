@@ -65,3 +65,14 @@ def test_readme_uses_cross_platform_browser_command():
         "python -m webbrowser http://localhost:3000" in readme
         or "python3 -m webbrowser http://localhost:3000" in readme
     )
+
+
+def test_placeholder_routes_avoid_bracket_paths_for_base_strix():
+    """Keep placeholders aggregate-only until protected Strix supports brackets."""
+
+    bracket_routes = [
+        REPO_ROOT / "frontend/src/app/labels/[slug]/page.tsx",
+        REPO_ROOT / "frontend/src/app/projects/[slug]/page.tsx",
+    ]
+
+    assert not [path for path in bracket_routes if path.exists()]
