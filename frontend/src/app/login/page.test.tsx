@@ -77,7 +77,8 @@ describe('LoginPage', () => {
     });
 
     expect(container.textContent).toContain('로그인 / 세션');
-    expect(container.textContent).toContain('trusted header 인증');
+    expect(container.textContent).toContain('OIDC provider/session 구성이 필요합니다');
+    expect(container.textContent).not.toContain('trusted header 인증');
     expect(container.textContent).not.toContain('토큰 저장');
   });
 });

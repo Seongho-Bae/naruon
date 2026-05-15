@@ -58,7 +58,7 @@ export async function mockDashboardApi(page: Page) {
           llm_enabled: true,
           smtp_enabled: true,
           imap_enabled: true,
-          dev_header_auth_enabled: true,
+          dev_header_auth_enabled: false,
           manual_bearer_login_enabled: false,
         },
       });

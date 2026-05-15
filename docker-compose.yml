@@ -21,9 +21,8 @@ services:
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
-      # Compose defaults stay fail-closed. Set AUTH_MODE=header and
-      # TRUST_DEV_HEADERS=true explicitly in a local-only env file when using
-      # the development header identity shim.
+      # Compose auth defaults stay fail-closed. Local verification uses signed
+      # bearer tokens or an OIDC provider/session, not client identity headers.
       AUTH_MODE: ${AUTH_MODE:-hybrid}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"

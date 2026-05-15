@@ -1,7 +1,8 @@
 from fastapi.testclient import TestClient
 from main import app
+from tests.auth_helpers import auth_headers
 
-client = TestClient(app, headers={"X-User-Id": "testuser"})
+client = TestClient(app, headers=auth_headers("testuser"))
 
 
 def test_read_root():

@@ -2,8 +2,9 @@ from fastapi.testclient import TestClient
 from main import app
 from unittest.mock import patch, AsyncMock
 from services.exceptions import CalendarServiceError
+from tests.auth_helpers import auth_headers
 
-client = TestClient(app, headers={"X-User-Id": "testuser"})
+client = TestClient(app, headers=auth_headers("testuser"))
 
 
 def test_calendar_sync_rejects_missing_authentication():

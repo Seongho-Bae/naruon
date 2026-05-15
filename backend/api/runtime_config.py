@@ -28,9 +28,7 @@ async def get_runtime_config():
             "llm_enabled": True,
             "smtp_enabled": True,
             "imap_enabled": True,
-            "dev_header_auth_enabled": bool(
-                settings.DEBUG or settings.TRUST_DEV_HEADERS
-            ),
+            "dev_header_auth_enabled": False,
             "manual_bearer_login_enabled": manual_bearer_login_enabled,
         },
     )

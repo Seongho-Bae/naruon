@@ -1,9 +1,11 @@
-import pytest
 import json
 import hmac
 import hashlib
 import base64
 import datetime
+import inspect
+
+import pytest
 import jwt
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException
@@ -57,22 +59,37 @@ def _build_test_jwk(public_key, kid: str) -> dict:
 
 @pytest.mark.asyncio
 async def test_get_current_user_rejects_missing_auth():
-    # It should raise HTTP 401 when no auth is provided, rather than defaulting to "default".
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(x_user_id=None)
+        await get_current_user()
     assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_get_auth_context_supports_scoped_enterprise_roles():
-    settings.TRUST_DEV_HEADERS = True
+async def test_get_auth_context_supports_scoped_enterprise_roles_from_bearer_claims():
+    settings.AUTH_MODE = "oidc"
+    settings.OIDC_SHARED_SECRET = "test-secret"
+    settings.OIDC_ISSUER = "https://issuer.example.com/realms/naruon"
+    settings.OIDC_AUDIENCE = "naruon-web"
 
-    context = await get_auth_context(
-        x_user_id="alice",
-        x_user_role="group_admin",
-        x_organization_id="org-acme",
-        x_group_ids="group-1,group-2",
+    token = _encode_test_jwt(
+        {
+            "sub": "alice",
+            "iss": settings.OIDC_ISSUER,
+            "aud": settings.OIDC_AUDIENCE,
+            "exp": int(
+                (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=5)
+                ).timestamp()
+            ),
+            "organization_id": "org-acme",
+            "groups": ["group-1", "group-2"],
+            "roles": ["group_admin"],
+        },
+        settings.OIDC_SHARED_SECRET,
     )
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
 
     assert context == AuthContext(
         user_id="alice",
@@ -84,13 +101,29 @@ async def test_get_auth_context_supports_scoped_enterprise_roles():
 
 
 @pytest.mark.asyncio
-async def test_get_auth_context_keeps_legacy_workspace_fallback_for_unscoped_dev_auth():
-    settings.TRUST_DEV_HEADERS = True
+async def test_get_auth_context_keeps_workspace_fallback_for_unscoped_bearer_claims():
+    settings.AUTH_MODE = "oidc"
+    settings.OIDC_SHARED_SECRET = "test-secret"
+    settings.OIDC_ISSUER = "https://issuer.example.com/realms/naruon"
+    settings.OIDC_AUDIENCE = "naruon-web"
 
-    context = await get_auth_context(
-        x_user_id="root",
-        x_user_role="platform_admin",
+    token = _encode_test_jwt(
+        {
+            "sub": "root",
+            "iss": settings.OIDC_ISSUER,
+            "aud": settings.OIDC_AUDIENCE,
+            "exp": int(
+                (
+                    datetime.datetime.now(datetime.timezone.utc)
+                    + datetime.timedelta(minutes=5)
+                ).timestamp()
+            ),
+            "roles": ["platform_admin"],
+        },
+        settings.OIDC_SHARED_SECRET,
     )
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
 
     assert context.role == "platform_admin"
     assert context.organization_id is None
@@ -365,11 +398,43 @@ async def test_get_auth_context_rejects_dev_headers_when_not_trusted():
     settings.AUTH_MODE = "hybrid"
 
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="admin",
-            x_user_role="platform_admin",
-            x_organization_id="org-acme",
-        )
+        await get_auth_context()
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_dev_headers_even_when_trusted_flag_is_set():
+    settings.DEBUG = False
+    settings.TRUST_DEV_HEADERS = True
+    settings.AUTH_MODE = "hybrid"
+
+    signature = inspect.signature(get_auth_context)
+    assert "x_user_id" not in signature.parameters
+    assert "x_user_role" not in signature.parameters
+    assert "x_organization_id" not in signature.parameters
+    assert "x_group_ids" not in signature.parameters
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context()
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_dev_headers_even_when_debug_is_enabled():
+    settings.DEBUG = True
+    settings.TRUST_DEV_HEADERS = False
+    settings.AUTH_MODE = "hybrid"
+
+    signature = inspect.signature(get_current_user)
+    assert "x_user_id" not in signature.parameters
+    assert "x_user_role" not in signature.parameters
+    assert "x_organization_id" not in signature.parameters
+    assert "x_group_ids" not in signature.parameters
+
+    with pytest.raises(HTTPException) as exc:
+        await get_current_user()
 
     assert exc.value.status_code == 401
 
@@ -381,11 +446,19 @@ async def test_get_auth_context_rejects_header_mode_when_headers_are_not_trusted
     settings.AUTH_MODE = "header"
 
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="member",
-            x_user_role="organization_admin",
-            x_organization_id="org-acme",
-        )
+        await get_auth_context()
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_header_mode_even_when_trusted_flag_is_set():
+    settings.DEBUG = False
+    settings.TRUST_DEV_HEADERS = True
+    settings.AUTH_MODE = "header"
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context()
 
     assert exc.value.status_code == 401
 

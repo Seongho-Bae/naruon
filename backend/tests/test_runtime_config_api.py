@@ -3,12 +3,13 @@ from fastapi.testclient import TestClient
 
 from core.config import settings
 from main import app
+from tests.auth_helpers import auth_headers
 
 
 @pytest.fixture
 def client():
     # Pass default headers for authentication
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app, headers=auth_headers("testuser")) as c:
         yield c
 
 
@@ -23,7 +24,7 @@ def test_runtime_config_returns_non_secret_data(client):
     assert "encryption_key" not in data
 
 
-def test_runtime_config_exposes_non_secret_auth_capability_flags(client):
+def test_runtime_config_does_not_advertise_dev_header_auth(client):
     previous_auth_mode = settings.AUTH_MODE
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_secret = settings.OIDC_SHARED_SECRET
@@ -42,13 +43,11 @@ def test_runtime_config_exposes_non_secret_auth_capability_flags(client):
 
     assert response.status_code == 200
     data = response.json()
-    assert data["features"]["dev_header_auth_enabled"] is True
+    assert data["features"]["dev_header_auth_enabled"] is False
     assert data["features"]["manual_bearer_login_enabled"] is False
 
 
-def test_runtime_config_only_enables_manual_bearer_when_full_oidc_validation_inputs_exist(
-    client,
-):
+def test_runtime_config_requires_complete_oidc_inputs_for_manual_bearer(client):
     previous_auth_mode = settings.AUTH_MODE
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_secret = settings.OIDC_SHARED_SECRET

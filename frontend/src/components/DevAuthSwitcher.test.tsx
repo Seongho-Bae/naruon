@@ -87,7 +87,7 @@ describe("DevAuthSwitcher", () => {
     expect(container.textContent).not.toContain("일반 (Member)");
   });
 
-  it("shows the dev switcher only for localhost without a bearer token", async () => {
+  it("keeps the legacy dev switcher hidden on localhost", async () => {
     Object.defineProperty(window, "location", {
       configurable: true,
       value: new URL("http://localhost:3000/settings"),
@@ -102,6 +102,7 @@ describe("DevAuthSwitcher", () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("일반 (Member)");
+    expect(container.textContent).not.toContain("관리자 (Admin)");
+    expect(container.textContent).not.toContain("일반 (Member)");
   });
 });

@@ -2,8 +2,9 @@ from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
 from unittest.mock import patch
+from tests.auth_helpers import auth_headers
 
-client = TestClient(app, headers={"X-User-Id": "testuser"})
+client = TestClient(app, headers=auth_headers("testuser"))
 
 
 class MockResult:
@@ -146,7 +147,7 @@ def test_network_endpoint_query_params():
         },
     ):
         response = client.get(
-            "/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"}
+            "/api/network/graph?limit=10&user_id=123", headers=auth_headers("123")
         )
         assert response.status_code == 200
         data = response.json()

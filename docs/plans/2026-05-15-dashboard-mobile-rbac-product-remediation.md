@@ -27,7 +27,7 @@
 1. `DashboardLayout` 모바일 drawer를 dialog로 만들고, backdrop, Escape, outside click, focus return, scroll reachability를 검증한다.
 2. `AI Hub` 접근성 label과 metadata copy를 워크스페이스/맥락 중심으로 바꾼다. URL `/ai-hub/*`는 유지한다.
 3. Prompt Studio를 admin-like surface로 분류한다. frontend nav/direct route와 backend prompt-sharing/provider-backed test API를 fail-closed로 맞춘다.
-4. dev auth UI와 API client의 localhost-only·runtime-config-gated 동작을 일치시킨다.
+4. legacy dev-header auth UI와 API client header emission을 제거하고 bearer/OIDC 세션만 남긴다.
 
 ### 이번 slice의 non-goals
 
@@ -88,7 +88,7 @@ Expected: PASS.
 **Step 1: Write failing tests**
 
 - `ApiClient.canManageWorkspaceSettings()` is false for local `admin` before runtime dev-header auth is loaded/enabled.
-- `DevAuthSwitcher` is hidden on `192.168.*` even when runtime config enables dev headers.
+- `DevAuthSwitcher` renders no identity switcher even when a legacy runtime flag is mocked on.
 - member direct visit to Prompt Studio sees a blocked state and no save/test controls.
 - organization/platform admin sees Prompt Studio controls.
 - backend member cannot create `is_shared=true` prompts.
@@ -107,8 +107,8 @@ Expected: FAIL before implementation.
 
 **Step 3: Implement minimal code**
 
-- Add a single frontend capability helper path: admin affordances require bearer claims with org scope or runtime-enabled localhost dev headers.
-- Remove private LAN dev-auth visibility from `DevAuthSwitcher`.
+- Add a single frontend capability helper path: admin affordances require bearer claims with org scope.
+- Remove dev-header identity switching from `DevAuthSwitcher`.
 - Hide Prompt Studio nav for non-admin users and render direct-route blocked state.
 - Backend require `platform_admin` or `organization_admin` for shared prompts and provider-backed prompt tests.
 - Preserve member-owned private prompts.
@@ -128,7 +128,7 @@ Run the same targeted frontend/backend commands. Expected: PASS with warnings as
 **Step 1: Update docs only after code behavior is known**
 
 - Document Prompt Studio as admin/provider-backed until a member-safe quota/policy exists.
-- Document dev header auth as localhost-only and runtime-config gated.
+- Document dev-header auth as removed from backend request authentication.
 - Keep full production multi-user claims out of docs until `Mailbox` aggregate and org/workspace query scoping are finished.
 
 **Step 2: Verify docs**
@@ -163,8 +163,8 @@ Expected: PASS.
 | File | Change(add/edit/delete/move) | Intent(의도) | Why(이유) | Risk/Notes |
 |---|---|---|---|---|
 | `frontend/src/components/DashboardLayout.tsx` | edit | 모바일 drawer와 nav affordance 정리 | 접근성·스크롤·권한 노출을 UI에서 먼저 fail-closed로 맞춤 | route rename은 하지 않음 |
-| `frontend/src/lib/api-client.ts` | edit | admin capability 판정을 runtime-config gated로 통일 | dev header가 꺼져 있는데 admin UI가 먼저 열리는 문제 차단 | bearer claim path 보존 |
-| `frontend/src/components/DevAuthSwitcher.tsx` | edit | localhost-only dev auth 표시 | 192.168 LAN에서 switcher만 보이고 header는 안 보내는 불일치 제거 | LAN dev flow가 필요하면 별도 설계 필요 |
+| `frontend/src/lib/api-client.ts` | edit | admin capability 판정을 bearer claim 기준으로 통일 | dev header가 켜진 것처럼 보이는 legacy flag로 admin UI가 열리는 문제 차단 | bearer claim path 보존 |
+| `frontend/src/components/DevAuthSwitcher.tsx` | edit | legacy dev auth 표시 제거 | client-controlled identity header auth path 제거 | local dev는 bearer/OIDC test token 필요 |
 | `frontend/src/app/prompt-studio/page.tsx` | edit | direct route 권한 차단 | provider-backed prompt test는 org secret을 소비하므로 admin-only | member private prompt draft는 backend에서 유지 |
 | `backend/api/prompts.py` | edit | shared prompt/test API admin guard | BYOK provider와 prompt sharing의 권한 경계를 backend에서 강제 | 기존 member private prompt CRUD 보존 |
 | `ARCHITECTURE.md` | edit | 현재 권한/에픽 경계 동기화 | foundation과 future epic을 혼동하지 않게 함 | 구현 이후 사실만 기록 |

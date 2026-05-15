@@ -29,28 +29,6 @@ def _normalize_header_value(value: object) -> str | None:
     return normalized or None
 
 
-def _derive_role(user_id: str, requested_role: str | None) -> RoleName:
-    """
-    Derive user role from request headers in trusted dev/test mode.
-
-    In production, header-provided roles are ignored and every request is treated
-    as `member` until SSO/OIDC claims are wired in.
-    """
-    if not (settings.DEBUG or settings.TRUST_DEV_HEADERS):
-        return "member"
-    if requested_role in SCOPED_ROLES:
-        return cast(RoleName, requested_role)
-    return "organization_admin" if user_id == "admin" else "member"
-
-
-def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
-    if not group_ids_header:
-        return ()
-    return tuple(
-        group_id.strip() for group_id in group_ids_header.split(",") if group_id.strip()
-    )
-
-
 def _extract_role_from_claims(user_id: str, claims: dict) -> RoleName:
     requested_role = claims.get("naruon_role") or claims.get("role")
     if isinstance(requested_role, str) and requested_role in SCOPED_ROLES:
@@ -198,10 +176,6 @@ def ensure_organization_access(auth_context: AuthContext, organization_id: str) 
 
 async def get_auth_context(
     authorization: str | None = Header(None, alias="Authorization"),
-    x_user_id: str | None = Header(None, alias="X-User-Id"),
-    x_user_role: str | None = Header(None, alias="X-User-Role"),
-    x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
-    x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
 ) -> AuthContext:
     authorization_value = _normalize_header_value(authorization)
     if authorization_value and settings.AUTH_MODE in {"oidc", "hybrid"}:
@@ -209,71 +183,15 @@ async def get_auth_context(
             await _decode_bearer_token(authorization_value)
         )
 
-    if settings.AUTH_MODE == "oidc":
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if settings.AUTH_MODE == "hybrid" and not (
-        settings.DEBUG or settings.TRUST_DEV_HEADERS
-    ):
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if settings.AUTH_MODE == "header" and not (
-        settings.DEBUG or settings.TRUST_DEV_HEADERS
-    ):
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    return build_auth_context(
-        x_user_id=x_user_id,
-        x_user_role=x_user_role,
-        x_organization_id=x_organization_id,
-        x_group_ids=x_group_ids,
-    )
-
-
-def build_auth_context(
-    x_user_id: object,
-    x_user_role: object = None,
-    x_organization_id: object = None,
-    x_group_ids: object = None,
-) -> AuthContext:
-    """
-    Builds an auth context from the current request headers.
-    Today this still trusts local/dev headers, but the shape matches future
-    token-derived scope claims from Keycloak or Casdoor. In production,
-    role headers are ignored and requests remain `member` until OIDC is wired.
-    """
-    user_id = _normalize_header_value(x_user_id)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    organization_id = _normalize_header_value(x_organization_id)
-    role = _derive_role(user_id, _normalize_header_value(x_user_role))
-    group_ids = _parse_group_ids(_normalize_header_value(x_group_ids))
-    workspace_id = _derive_workspace_id(user_id, organization_id)
-
-    return AuthContext(
-        user_id=user_id,
-        role=role,
-        organization_id=organization_id,
-        group_ids=group_ids,
-        workspace_id=workspace_id,
-    )
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 async def get_current_user(
     authorization: str | None = Header(None, alias="Authorization"),
-    x_user_id: str | None = Header(None, alias="X-User-Id"),
-    x_user_role: str | None = Header(None, alias="X-User-Role"),
-    x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
-    x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
 ) -> str:
     return (
         await get_auth_context(
             authorization=authorization,
-            x_user_id=x_user_id,
-            x_user_role=x_user_role,
-            x_organization_id=x_organization_id,
-            x_group_ids=x_group_ids,
         )
     ).user_id
 

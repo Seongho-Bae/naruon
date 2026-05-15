@@ -2,25 +2,23 @@
 
 ## 확인된 사실 / Confirmed
 
-- `backend/api/auth.py` now supports `AUTH_MODE=header|hybrid|oidc`.
-- Default backend auth is fail-closed (`AUTH_MODE=hybrid`); trusted header auth
-  now requires explicit `DEBUG=true` or `TRUST_DEV_HEADERS=true`.
+- `backend/api/auth.py` now authenticates from verified bearer/OIDC claims only.
+- Default backend auth is fail-closed (`AUTH_MODE=hybrid`). The legacy
+  `AUTH_MODE=header` value remains parseable for configuration compatibility but
+  no longer authenticates client-controlled identity headers.
+- `DEBUG=true` and `TRUST_DEV_HEADERS=true` do not make `X-User-*` request
+  headers authoritative for user, role, organization, group, or workspace scope.
 - `docker-compose.yml` and `docker-compose.live-e2e.yml` default to fail-closed
   auth (`AUTH_MODE=hybrid`, `TRUST_DEV_HEADERS=false`). Localhost development or
-  live-E2E runs that need the trusted-header identity shim must set
-  `AUTH_MODE=header` and `TRUST_DEV_HEADERS=true` explicitly, and the published
-  ports stay bound to `127.0.0.1` so that escape hatch remains loopback-local.
+  live-E2E runs must use signed bearer tokens or an OIDC provider/session.
 - In `oidc`/`hybrid`, bearer tokens are decoded into the shared `AuthContext`
   contract and map `sub`, role claims, `organization_id`, and `groups`.
 - The backend accepts HS256 shared-secret tokens and RS256 bearer tokens
   validated against `OIDC_JWKS_URL`, which matches staged Keycloak/Casdoor
   rollout patterns.
-- Dev header fallback is still available only when backend debug/trusted-header
-  mode is enabled; frontend dev identity UI is restricted to loopback hosts
-  (`localhost`, `127.0.0.1`), waits for `/api/runtime-config` to confirm the
-  backend escape hatch, and disappears when a bearer token is present. Local
-  storage can select a local dev identity only after that runtime gate is known;
-  it cannot expose admin workspace controls by itself.
+- Dev header fallback is removed from the backend request dependency. The
+  frontend no longer sends `X-User-*` identity headers and the legacy dev identity
+  switcher renders nothing.
 - `/api/runner-config` is organization-scoped and claim-gated to
   `platform_admin` / `organization_admin` with organization scope.
 - `/api/llm-providers` is claim-gated and now persists `organization_id`, with
@@ -79,5 +77,5 @@
   fallback value.
 - Document and eventually replace `LEGACY_EMAIL_OWNER_USER_ID` with a real
   mailbox/account migration path instead of a one-shot owner backfill.
-- Replace the remaining header-only/dev assumptions only after tests prove every
-  email/search/query path is scoped to the authenticated mailbox owner.
+- Replace the remaining test and operator assumptions with signed bearer or OIDC
+  sessions as mailbox/account ownership evolves beyond the current bridge fields.

@@ -18,7 +18,6 @@ export default function LoginPage() {
   const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig | null>(null);
   const claims = decodeClaims();
   const canUseManualBearerSession = apiClient.canUseManualBearerSession() && !!runtimeConfig?.features.manual_bearer_login_enabled;
-  const canUseDevHeaderAuth = !!runtimeConfig?.features.dev_header_auth_enabled;
 
   useEffect(() => {
     let active = true;
@@ -76,9 +75,7 @@ export default function LoginPage() {
         </div>
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-          {canUseDevHeaderAuth
-            ? '이 현재 스택은 로컬 개발용 trusted header 인증만 활성화되어 있습니다. 하단 우측 DevAuthSwitcher로 계정을 전환하세요.'
-            : '수동 Bearer 토큰 입력은 이 스택에서 활성화되어 있지 않습니다. OIDC provider/session 구성이 필요합니다.'}
+          수동 Bearer 토큰 입력은 이 스택에서 활성화되어 있지 않습니다. OIDC provider/session 구성이 필요합니다.
         </div>
       )}
 
@@ -87,7 +84,7 @@ export default function LoginPage() {
         {claims ? (
           <pre className="text-xs overflow-auto whitespace-pre-wrap">{JSON.stringify(claims, null, 2)}</pre>
         ) : (
-          <p className="text-sm text-muted-foreground">저장된 Bearer 토큰이 없습니다. 로컬 개발 환경에서는 DevAuthSwitcher가 계속 동작합니다.</p>
+          <p className="text-sm text-muted-foreground">저장된 Bearer 토큰이 없습니다. 로컬 검증은 서명된 Bearer 토큰이나 OIDC provider/session 구성이 필요합니다.</p>
         )}
       </div>
     </div>

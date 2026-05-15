@@ -40,7 +40,6 @@ function getOrganizationIdClaim(claims: Record<string, unknown> | null) {
 
 export class ApiClient {
   private baseUrl: string;
-  private devHeaderAuthEnabled = false;
   private devHeaderAuthLoaded = false;
   private devHeaderAuthPromise: Promise<void> | null = null;
 
@@ -65,7 +64,7 @@ export class ApiClient {
   }
 
   setDevHeaderAuthEnabled(enabled: boolean) {
-    this.devHeaderAuthEnabled = enabled;
+    void enabled;
     this.devHeaderAuthLoaded = true;
   }
 
@@ -123,13 +122,12 @@ export class ApiClient {
   }
 
   private canUseTrustedLocalDevHeaders() {
-    return this.isLocalDevOverrideAllowed() && this.devHeaderAuthLoaded && this.devHeaderAuthEnabled;
+    return false;
   }
 
   private async getHeaders(endpoint: string, init?: RequestInit): Promise<HeadersInit> {
     await this.ensureDevHeaderAuthGate(endpoint);
     const bearerToken = this.getBearerToken();
-    const userId = this.getCurrentUserId();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...init?.headers,
@@ -139,21 +137,6 @@ export class ApiClient {
         ...headers,
         Authorization: `Bearer ${bearerToken}`,
       };
-    }
-    if (userId && this.devHeaderAuthEnabled) {
-      const headersWithUser: HeadersInit = {
-        ...headers,
-        'X-User-Id': userId,
-      };
-      const organizationId = this.getCurrentOrganizationId();
-      if (this.isLocalDevOverrideAllowed() && organizationId) {
-        return {
-          ...headersWithUser,
-          'X-User-Role': this.getCurrentRole(),
-          'X-Organization-Id': organizationId,
-        };
-      }
-      return headersWithUser;
     }
     return headers;
   }

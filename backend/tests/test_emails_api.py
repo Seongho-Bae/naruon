@@ -5,13 +5,14 @@ from db.models import Email
 from main import app
 import datetime
 from unittest.mock import patch
+from tests.auth_helpers import auth_headers
 
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        headers={"X-User-Id": "testuser"},
+        headers=auth_headers("testuser"),
         base_url="http://test",
     ) as ac:
         yield ac
@@ -551,7 +552,7 @@ def test_send_email_endpoint(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
 
-    client = TestClient(app, headers={"X-User-Id": "testuser"})
+    client = TestClient(app, headers=auth_headers("testuser"))
 
     response = client.post(
         "/api/emails/send",
@@ -589,7 +590,7 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
     app.dependency_overrides[get_db] = missing_smtp_db
     try:
-        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        client = TestClient(app, headers=auth_headers("testuser"))
         response = client.post(
             "/api/emails/send",
             json={
@@ -632,7 +633,7 @@ def test_send_email_endpoint_prefers_default_mailbox_account(
 
     app.dependency_overrides[get_db] = mailbox_db
     try:
-        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        client = TestClient(app, headers=auth_headers("testuser"))
         response = client.post(
             "/api/emails/send",
             json={
@@ -663,7 +664,7 @@ def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
 
-    client = TestClient(app, headers={"X-User-Id": "testuser"})
+    client = TestClient(app, headers=auth_headers("testuser"))
 
     response = client.post(
         "/api/emails/send",

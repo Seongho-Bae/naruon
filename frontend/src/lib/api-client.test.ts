@@ -49,7 +49,7 @@ describe('ApiClient', () => {
     expect(client.getCurrentUserId()).toBe('admin');
   });
 
-  it('fails closed for workspace-admin affordances until localhost dev-header auth is runtime enabled', () => {
+  it('does not grant workspace-admin affordances from the legacy localhost dev-header flag', () => {
     window.localStorage.setItem('naruon_dev_user', 'admin');
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -61,13 +61,13 @@ describe('ApiClient', () => {
     expect(client.canManageWorkspaceSettings()).toBe(false);
 
     client.setDevHeaderAuthEnabled(true);
-    expect(client.canManageWorkspaceSettings()).toBe(true);
+    expect(client.canManageWorkspaceSettings()).toBe(false);
 
     client.setDevHeaderAuthEnabled(false);
     expect(client.canManageWorkspaceSettings()).toBe(false);
   });
 
-  it('reports localhost dev-header workspace access as not ready until runtime config loads', async () => {
+  it('reports localhost workspace access ready after runtime config but keeps dev-header admins denied', async () => {
     window.localStorage.setItem('naruon_dev_user', 'admin');
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -91,7 +91,7 @@ describe('ApiClient', () => {
     await client.ensureWorkspaceSettingsAccessReady();
 
     expect(client.isWorkspaceSettingsAccessReady()).toBe(true);
-    expect(client.canManageWorkspaceSettings()).toBe(true);
+    expect(client.canManageWorkspaceSettings()).toBe(false);
     expect(fetchMock).toHaveBeenCalledWith('/api/runtime-config', {
       headers: { 'Content-Type': 'application/json' },
     });
@@ -173,7 +173,7 @@ describe('ApiClient', () => {
     expect(headers['X-Organization-Id']).toBeUndefined();
   });
 
-  it('sends scoped dev headers only after runtime config enables trusted header auth', async () => {
+  it('does not send scoped dev headers even if runtime config enables the legacy flag', async () => {
     window.localStorage.setItem('naruon_dev_user', 'admin');
     Object.defineProperty(window, 'location', {
       configurable: true,
@@ -204,9 +204,9 @@ describe('ApiClient', () => {
     const runtimeHeaders = headersForCall(fetchMock, 0);
     const apiHeaders = headersForCall(fetchMock, 1);
     expect(runtimeHeaders['X-User-Id']).toBeUndefined();
-    expect(apiHeaders['X-User-Id']).toBe('admin');
-    expect(apiHeaders['X-User-Role']).toBe('organization_admin');
-    expect(apiHeaders['X-Organization-Id']).toBe('org-local-dev');
+    expect(apiHeaders['X-User-Id']).toBeUndefined();
+    expect(apiHeaders['X-User-Role']).toBeUndefined();
+    expect(apiHeaders['X-Organization-Id']).toBeUndefined();
   });
 
   it('does not send localhost dev headers when runtime config disables trusted header auth', async () => {

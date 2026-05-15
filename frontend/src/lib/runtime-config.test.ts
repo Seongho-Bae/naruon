@@ -16,7 +16,7 @@ describe('runtime config helpers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('reads auth capability flags so the frontend can hide unsupported manual bearer login', async () => {
+  it('reads auth capability flags with legacy dev-header auth disabled', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
       product_name: 'Naruon',
       version: '0.5.1',
@@ -24,14 +24,14 @@ describe('runtime config helpers', () => {
         llm_enabled: true,
         smtp_enabled: true,
         imap_enabled: true,
-        dev_header_auth_enabled: true,
+        dev_header_auth_enabled: false,
         manual_bearer_login_enabled: false,
       },
     })));
 
     const config = await getRuntimeConfig();
 
-    expect(config.features.dev_header_auth_enabled).toBe(true);
+    expect(config.features.dev_header_auth_enabled).toBe(false);
     expect(config.features.manual_bearer_login_enabled).toBe(false);
   });
 });

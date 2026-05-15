@@ -6,6 +6,10 @@ from fastapi.testclient import TestClient
 
 from db.session import get_db
 from main import app
+from tests.auth_helpers import auth_headers
+
+PRIVATE_HOST_DETAIL = "메일 서버 주소는 내부 네트워크를 사용할 수 없습니다."
+UNSAFE_SMTP_PORT_DETAIL = "SMTP 포트는 허용된 메일 포트만 사용할 수 있습니다."
 
 
 class MockResult:
@@ -165,7 +169,7 @@ def client(mock_db):
         yield mock_db
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app, headers=auth_headers("testuser")) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -333,10 +337,7 @@ def test_mailbox_account_create_rejects_internal_mail_server_hosts(
     )
 
     assert response.status_code == 400
-    assert (
-        "메일 서버 주소는 내부 네트워크를 사용할 수 없습니다."
-        in response.json()["detail"]
-    )
+    assert PRIVATE_HOST_DETAIL in response.json()["detail"]
 
 
 def test_mailbox_account_create_rejects_hosts_that_resolve_to_private_ips(
@@ -372,10 +373,7 @@ def test_mailbox_account_create_rejects_hosts_that_resolve_to_private_ips(
     )
 
     assert response.status_code == 400
-    assert (
-        "메일 서버 주소는 내부 네트워크를 사용할 수 없습니다."
-        in response.json()["detail"]
-    )
+    assert PRIVATE_HOST_DETAIL in response.json()["detail"]
 
 
 def test_mailbox_account_create_rejects_unsafe_mail_server_ports(client):
@@ -391,10 +389,7 @@ def test_mailbox_account_create_rejects_unsafe_mail_server_ports(client):
     )
 
     assert response.status_code == 400
-    assert (
-        "SMTP 포트는 허용된 메일 포트만 사용할 수 있습니다."
-        in response.json()["detail"]
-    )
+    assert UNSAFE_SMTP_PORT_DETAIL in response.json()["detail"]
 
 
 def test_mailbox_account_create_returns_conflict_for_duplicate_email_address(

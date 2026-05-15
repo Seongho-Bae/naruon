@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
+from tests.auth_helpers import auth_headers
 
 
 class MockRow:
@@ -71,7 +72,7 @@ async def override_get_db():
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app, headers=auth_headers("testuser")) as c:
         yield c
     app.dependency_overrides.clear()
 
@@ -108,7 +109,7 @@ def test_search_endpoint_filters_by_mailbox_account_id(mock_generate_embeddings)
     mock_generate_embeddings.return_value = [[0.1] * 1536]
 
     try:
-        with TestClient(app, headers={"X-User-Id": "testuser"}) as client:
+        with TestClient(app, headers=auth_headers("testuser")) as client:
             allowed = client.post(
                 "/api/search", json={"query": "test query", "mailbox_account_id": 2}
             )
@@ -135,7 +136,7 @@ def test_search_endpoint_rejects_unowned_mailbox_account_id(
     mock_generate_embeddings.return_value = [[0.1] * 1536]
 
     try:
-        with TestClient(app, headers={"X-User-Id": "testuser"}) as client:
+        with TestClient(app, headers=auth_headers("testuser")) as client:
             response = client.post(
                 "/api/search", json={"query": "test query", "mailbox_account_id": 1}
             )

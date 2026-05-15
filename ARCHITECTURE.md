@@ -113,14 +113,13 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication now supports three backend modes: `header`, `hybrid`, and
-`oidc`, with `hybrid` as the fail-closed default. Trusted header auth only runs
-when `DEBUG=true` or `TRUST_DEV_HEADERS=true`; the raw backend default and the
-repo-local dev/live-E2E Compose defaults remain fail-closed. Local developer or
-live-E2E trusted-header runs must opt in explicitly with `AUTH_MODE=header` and
-`TRUST_DEV_HEADERS=true`, and the provided Compose port bindings stay loopback
-only (`127.0.0.1`) so that escape hatch is not advertised as a production
-posture.
+Authentication is bearer/OIDC-derived at the backend boundary. `hybrid` remains
+the fail-closed default and accepts verified bearer claims; `oidc` requires a
+verified bearer token; the legacy `header` mode no longer authenticates
+client-controlled identity headers. `DEBUG` and `TRUST_DEV_HEADERS` do not make
+`X-User-*` request headers authoritative for user, role, organization, group, or
+workspace scope. Local developer and live-E2E flows must use signed bearer tokens
+or an OIDC provider/session.
 
 In `oidc`/`hybrid`, bearer tokens are normalized into the shared
 `AuthContext` with `platform_admin`, `organization_admin`, `group_admin`, and
@@ -128,10 +127,8 @@ In `oidc`/`hybrid`, bearer tokens are normalized into the shared
 accepts HS256 shared-secret tokens and RS256 bearer tokens validated against a
 configured JWKS URL, which is enough for staged Keycloak/Casdoor integration.
 
-The frontend only exposes the dev identity shim on loopback hosts (`localhost`,
-`127.0.0.1`) when no bearer token is present and `/api/runtime-config` confirms
-trusted-header auth is enabled; local storage alone cannot mint trusted headers
-or admin workspace affordances. Admin settings and Prompt Studio controls are
+The frontend no longer emits development identity headers and the legacy dev
+identity switcher renders nothing. Admin settings and Prompt Studio controls are
 claim-gated in the UI before the backend performs its own authorization checks.
 Runner tokens are organization-scoped, while LLM provider access is now
 org-scoped through `organization_id`. Shared prompt templates require both

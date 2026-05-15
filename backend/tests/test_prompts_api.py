@@ -8,6 +8,7 @@ from main import app
 from db.models import LLMProvider, PromptTemplate, TenantConfig
 from db.session import get_db
 from api.auth import AuthContext
+from tests.auth_helpers import auth_headers
 
 
 class MockSession:
@@ -61,7 +62,7 @@ def override_get_db():
 
 @pytest.fixture
 def auth_client():
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app, headers=auth_headers("testuser")) as c:
         yield c
 
 
@@ -114,11 +115,9 @@ def test_prompt_test_execution_mocked(auth_client, monkeypatch):
             "content": "Summarize this: {{email}}",
             "variables": {"email": "hello world"},
         },
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers(
+            "admin", role="organization_admin", organization_id="org-current"
+        ),
     )
 
     assert resp.status_code == 200
@@ -153,11 +152,9 @@ def test_prompt_test_removes_nul_bytes_before_execution(auth_client, monkeypatch
             "content": "Nu\u0000l prompt: {{email}}",
             "variables": {"email": "he\u0000llo"},
         },
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers(
+            "admin", role="organization_admin", organization_id="org-current"
+        ),
     )
 
     assert resp.status_code == 200
@@ -218,11 +215,9 @@ def test_prompt_test_fails_closed_without_active_provider_for_current_org(monkey
 
     with TestClient(
         app,
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers(
+            "admin", role="organization_admin", organization_id="org-current"
+        ),
     ) as c:
         resp = c.post(
             "/api/prompts/test",
@@ -280,11 +275,7 @@ def test_prompt_create_rejects_shared_prompt_for_non_admin_member(auth_client):
             "content": "Summarize this: {{email}}",
             "is_shared": True,
         },
-        headers={
-            "X-User-Id": "member-1",
-            "X-User-Role": "member",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers("member-1", role="member", organization_id="org-current"),
     )
 
     assert response.status_code == 403
@@ -302,11 +293,9 @@ def test_prompt_create_allows_shared_prompt_for_organization_admin(auth_client):
             "content": "Summarize this: {{email}}",
             "is_shared": True,
         },
-        headers={
-            "X-User-Id": "admin-1",
-            "X-User-Role": "organization_admin",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers(
+            "admin-1", role="organization_admin", organization_id="org-current"
+        ),
     )
 
     assert response.status_code == 200, response.text
@@ -355,11 +344,7 @@ def test_prompt_test_rejects_non_admin_member_before_provider_lookup(
             "content": "Summarize this: {{email}}",
             "variables": {"email": "hello world"},
         },
-        headers={
-            "X-User-Id": "member-1",
-            "X-User-Role": "member",
-            "X-Organization-Id": "org-current",
-        },
+        headers=auth_headers("member-1", role="member", organization_id="org-current"),
     )
 
     assert response.status_code == 403
@@ -389,10 +374,7 @@ def test_prompt_test_rejects_non_admin_member_without_org_before_provider_lookup
             "content": "Summarize this: {{email}}",
             "variables": {"email": "hello world"},
         },
-        headers={
-            "X-User-Id": "member-1",
-            "X-User-Role": "member",
-        },
+        headers=auth_headers("member-1", role="member"),
     )
 
     assert response.status_code == 403

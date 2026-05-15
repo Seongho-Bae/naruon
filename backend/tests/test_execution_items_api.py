@@ -7,6 +7,9 @@ from sqlalchemy.exc import IntegrityError
 
 from db.models import Email
 from main import app
+from tests.auth_helpers import auth_headers
+
+SOURCE_SNIPPET = "Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬해 보았습니다."
 
 
 class MockResult:
@@ -185,7 +188,7 @@ def db_session(sample_email):
                 source_email_id=7,
                 source_thread_id="thread-q2",
                 source_message_id="<q2@example.com>",
-                source_snippet="Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬해 보았습니다.",
+                source_snippet=SOURCE_SNIPPET,
                 title="Q2 출시 계획 및 우선순위 조정",
                 sender="김지현 PM",
                 status="queued",
@@ -240,7 +243,7 @@ def override_get_db(db_session):
 async def client():
     async with AsyncClient(
         transport=ASGITransport(app=app),
-        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+        headers=auth_headers("testuser", organization_id="org-acme"),
         base_url="http://test",
     ) as ac:
         yield ac
@@ -350,7 +353,7 @@ async def test_get_execution_items_ignores_same_user_rows_from_other_organizatio
 ):
     response = await client.get(
         "/api/execution-items",
-        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+        headers=auth_headers("testuser", organization_id="org-acme"),
     )
 
     assert response.status_code == 200
@@ -372,7 +375,7 @@ async def test_queue_execution_item_handles_unique_race_by_returning_existing_it
         source_email_id=7,
         source_thread_id="thread-q2",
         source_message_id="<q2@example.com>",
-        source_snippet="Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬해 보았습니다.",
+        source_snippet=SOURCE_SNIPPET,
         title="Q2 출시 계획 및 우선순위 조정",
         sender="김지현 PM",
         status="queued",
