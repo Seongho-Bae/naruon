@@ -184,6 +184,22 @@ async def test_get_emails(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
+async def test_get_emails_sanitizes_legacy_html_snippet(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.body = '<p>Safe list text</p><img src="x" onerror="alert(1)">'
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    snippet = response.json()["emails"][0]["snippet"]
+    assert "Safe list text" in snippet
+    assert "<img" not in snippet
+    assert "onerror" not in snippet
+    assert "alert(" not in snippet
+
+
+@pytest.mark.asyncio
 async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window(
     client: AsyncClient, db_session
 ):
@@ -300,6 +316,25 @@ async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Em
     assert response.json()["id"] == sample_email.id
     assert response.json()["reply_to"] == "reply@example.com"
     assert response.json()["mailbox_account_id"] == 3
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_escapes_legacy_html_body(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.body = (
+        '<p>Safe text</p><img src="x" onerror="alert(1)"><script>alert(2)</script>'
+    )
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 200
+    body = response.json()["body"]
+    assert "Safe text" in body
+    assert "<img" not in body
+    assert "<script" not in body
+    assert "onerror=" not in body
+    assert "alert(" not in body
 
 
 @pytest.mark.asyncio

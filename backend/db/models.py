@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-FALLBACK_KEY = b"f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0="
-
 
 def get_fernet() -> Fernet:
     if settings.ENCRYPTION_KEY:
@@ -24,17 +22,13 @@ def get_fernet() -> Fernet:
         except ValueError:
             key_b64 = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
             return Fernet(key_b64)
-    else:
-        if not settings.DEBUG:
-            raise RuntimeError(
-                "ENCRYPTION_KEY is required in production. Refusing to use fallback key."
-            )
-        return Fernet(FALLBACK_KEY)
+    raise RuntimeError("ENCRYPTION_KEY is required to encrypt secrets")
 
 
 class EncryptedString(TypeDecorator):
     """
-    Encrypts string values before saving to the database and decrypts them when retrieving.
+    Encrypts string values before saving to the database and decrypts them when
+    retrieving.
     Uses Fernet symmetric encryption.
     """
 
@@ -314,10 +308,16 @@ class MailboxAccount(Base):
     )
 
     def __repr__(self) -> str:
+        password_flags = (
+            f"has_smtp_password={self.smtp_password is not None}, "
+            f"has_imap_password={self.imap_password is not None}, "
+            f"has_pop3_password={self.pop3_password is not None}"
+        )
         return (
-            f"<MailboxAccount(id={self.id}, user_id='{self.user_id}', email_address='{self.email_address}', "
-            f"provider='{self.provider}', is_default_reply={self.is_default_reply}, is_active={self.is_active}, "
-            f"has_smtp_password={self.smtp_password is not None}, has_imap_password={self.imap_password is not None}, has_pop3_password={self.pop3_password is not None})>"
+            f"<MailboxAccount(id={self.id}, user_id='{self.user_id}', "
+            f"email_address='{self.email_address}', provider='{self.provider}', "
+            f"is_default_reply={self.is_default_reply}, "
+            f"is_active={self.is_active}, {password_flags})>"
         )
 
 

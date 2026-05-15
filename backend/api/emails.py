@@ -6,6 +6,7 @@ from db.models import Email, MailboxAccount, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email
+from services.email_parser import sanitize_email_html_to_text
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import get_current_user
@@ -27,6 +28,12 @@ def canonical_thread_key(email: Email) -> str:
 def thread_lookup_values(thread_id: str) -> list[str]:
     normalized = normalize_message_id(thread_id) or thread_id
     return list({thread_id, normalized, f"<{normalized}>"})
+
+
+def sanitize_email_body_for_response(body: str) -> str:
+    if "<" not in body or ">" not in body:
+        return body
+    return sanitize_email_html_to_text(body)
 
 
 class EmailListItem(BaseModel):
@@ -92,7 +99,8 @@ async def get_emails(
     items = []
     for email in sorted_groups:
         group_key = canonical_thread_key(email)
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
+        safe_body = sanitize_email_body_for_response(email.body)
+        snippet = safe_body[:100] + "..." if len(safe_body) > 100 else safe_body
         items.append(
             EmailListItem(
                 id=email.id,
@@ -130,7 +138,7 @@ async def get_email(
         recipients=email.recipients,
         subject=email.subject,
         date=email.date,
-        body=email.body,
+        body=sanitize_email_body_for_response(email.body),
         thread_id=canonical_thread_key(email),
         in_reply_to=email.in_reply_to,
         references=email.references,
@@ -178,7 +186,7 @@ async def get_email_thread(
                 recipients=email.recipients,
                 subject=email.subject,
                 date=email.date,
-                body=email.body,
+                body=sanitize_email_body_for_response(email.body),
                 thread_id=canonical_thread_key(email),
                 in_reply_to=email.in_reply_to,
                 references=email.references,
@@ -242,7 +250,10 @@ async def send_email_endpoint(
                 if "ENCRYPTION_KEY is required" in str(exc):
                     raise HTTPException(
                         status_code=503,
-                        detail="Server encryption key is not configured. Contact your workspace administrator.",
+                        detail=(
+                            "Server encryption key is not configured. "
+                            "Contact your workspace administrator."
+                        ),
                     ) from exc
                 raise
         else:
@@ -267,7 +278,10 @@ async def send_email_endpoint(
                 if "ENCRYPTION_KEY is required" in str(exc):
                     raise HTTPException(
                         status_code=503,
-                        detail="Server encryption key is not configured. Contact your workspace administrator.",
+                        detail=(
+                            "Server encryption key is not configured. "
+                            "Contact your workspace administrator."
+                        ),
                     ) from exc
                 raise
 
