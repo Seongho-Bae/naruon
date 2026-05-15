@@ -1387,6 +1387,10 @@ EOS
 			echo "Error: backend service exceptions context missing from scoped target ($target_path)" >&2
 			exit 60
 		fi
+		if ! grep -Fq -- 'ensure_organization_access(auth_context, config.organization_id)' "$target_path/backend/api/runner_config.py"; then
+			echo "Error: backend organization access context missing from scoped target ($target_path)" >&2
+			exit 61
+		fi
 		echo "scan ok with python dependency scope"
 		exit 0
 		;;
@@ -1574,6 +1578,8 @@ EOF
 		touch "$repo_root_dir/backend/db/__init__.py"
 		touch "$repo_root_dir/backend/services/__init__.py"
 		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
+		echo 'from api.auth import ensure_organization_access' >"$repo_root_dir/backend/api/runner_config.py"
+		echo 'ensure_organization_access(auth_context, config.organization_id)' >>"$repo_root_dir/backend/api/runner_config.py"
 		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
 		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
 		echo 'engine = object()' >"$repo_root_dir/backend/db/session.py"
