@@ -36,15 +36,10 @@ async function fulfillJson(route: Route, body: unknown) {
 }
 
 export async function mockDashboardApi(page: Page) {
-  await page.route('**/*', async (route) => {
+  await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
-
-    if (!path.startsWith('/api/')) {
-      await route.continue();
-      return;
-    }
 
     if (request.method() === 'OPTIONS') {
       await route.fulfill({

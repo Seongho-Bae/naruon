@@ -13,9 +13,12 @@ const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: f
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
   const mobileView = useMobileWorkspaceView();
+  const effectiveMobileView = mobileView === 'detail' && selectedEmail === null ? 'inbox' : mobileView;
   const handleSelectEmail = (emailId: number) => {
     setSelectedEmail(emailId);
-    setMobileWorkspaceView('detail');
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      setMobileWorkspaceView('detail');
+    }
   };
 
   return (
@@ -53,7 +56,7 @@ export default function Home() {
             id="mobile-inbox"
             aria-label="모바일 받은편지함"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-inbox h-full ${mobileView === 'inbox' ? 'block' : 'hidden'}`}
+            className={`mobile-workspace-panel mobile-workspace-panel-inbox h-full ${effectiveMobileView === 'inbox' ? 'block' : 'hidden'}`}
           >
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </section>
@@ -61,7 +64,7 @@ export default function Home() {
             id="mobile-detail"
             aria-label="모바일 메일 상세"
             role="region"
-            className={`mobile-workspace-panel h-full flex-col ${mobileView === 'detail' && selectedEmail !== null ? 'flex' : 'hidden'}`}
+            className={`mobile-workspace-panel h-full flex-col ${effectiveMobileView === 'detail' && selectedEmail !== null ? 'flex' : 'hidden'}`}
           >
             <div className="p-3 border-b border-border bg-card">
               <button 
@@ -82,7 +85,7 @@ export default function Home() {
             id="mobile-search"
             aria-label="모바일 맥락 검색"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${mobileView === 'search' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${effectiveMobileView === 'search' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
           >
             <div className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <p className="text-xs font-bold text-primary">맥락 검색</p>
@@ -103,7 +106,7 @@ export default function Home() {
             id="mobile-actions"
             aria-label="모바일 AI 실행"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${mobileView === 'actions' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4`}
           >
             <div className="mb-4 rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2">
@@ -117,14 +120,14 @@ export default function Home() {
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              {mobileView === 'actions' && <NetworkGraph />}
+              {effectiveMobileView === 'actions' && <NetworkGraph />}
             </div>
           </section>
           <section
             id="mobile-calendar"
             aria-label="모바일 일정 연결"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${mobileView === 'calendar' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${effectiveMobileView === 'calendar' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
           >
             <div className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <p className="text-xs font-bold text-primary">일정 연결</p>

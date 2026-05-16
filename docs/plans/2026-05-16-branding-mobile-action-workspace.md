@@ -4,7 +4,7 @@
 
 **Goal:** Make the mobile inbox match the `frontend/branding/uiux` action-workspace direction by exposing inbox, search/context, AI execution, and schedule actions without hover-only controls.
 
-**Architecture:** Keep the desktop layout unchanged. Convert the mobile bottom navigation in `DashboardLayout` into explicit buttons that dispatch a typed browser event, then let `app/page.tsx` switch between the inbox, detail, AI execution graph, search/context placeholder, and schedule placeholder.
+**Architecture:** Keep the desktop layout unchanged. Convert the mobile bottom navigation in `DashboardLayout` into hash-addressable workspace links that call `setMobileWorkspaceView()`, sync `#mobile-{view}`, and dispatch the typed `naruon:mobile-workspace` browser event. Then let `app/page.tsx` switch between the inbox, detail, AI execution graph, search/context placeholder, and schedule placeholder.
 
 **Tech Stack:** Next.js 16 app router, React 19 client components, Vitest/jsdom unit tests, Playwright acceptance tests, Tailwind utility classes.
 
@@ -15,7 +15,7 @@
 - `frontend/branding/uiux/uiux2.png` and `frontend/branding/uiux/uiux8.png` define a mobile-first workspace with direct bottom affordances for inbox, context search, relationship/context, schedule, and more/actions.
 - `docs/plans/2026-05-11-frontend-brand-redesign-implementation.md` requires Playwright coverage for desktop/mobile shell, local brand assets, and dashboard flows.
 - Current `frontend/src/app/page.tsx` has `showMobileActions = false`, so the mobile AI execution section can never be reached.
-- Current `frontend/src/components/DashboardLayout.tsx` renders mobile bottom navigation from mail folders as links, while `frontend/tests/e2e/dashboard-branding.spec.ts` already expects visible mobile buttons for `받은편지함` and `AI 실행`.
+- Current `frontend/src/components/DashboardLayout.tsx` renders mobile bottom navigation from mail folders, while `frontend/tests/e2e/dashboard-branding.spec.ts` expects visible mobile workspace affordances for `받은편지함`, `맥락 검색`, `AI 실행`, and `일정`.
 
 ## Files
 
@@ -24,17 +24,18 @@
 - Modify: `frontend/src/components/DashboardLayout.tsx`
 - Modify: `frontend/src/app/page.tsx`
 
-## Task 1: Mobile action navigation emits workspace events
+## Task 1: Mobile action navigation exposes hash-addressable workspace links
 
 - [ ] **Step 1: Write failing unit test**
 
-Update `frontend/src/components/DashboardLayout.test.tsx` so the mobile nav assertion expects action buttons and verifies the custom event:
+Update `frontend/src/components/DashboardLayout.test.tsx` so the mobile nav assertion expects action links and verifies the custom event:
 
 ```tsx
-const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('button') ?? []).map(
-  (button) => button.textContent,
+const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
+  (link) => link.textContent,
 );
-expect(mobileNavButtons).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
+expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
+expect(mobileNav?.querySelector('[data-mobile-view="actions"]')?.getAttribute('href')).toBe('#mobile-actions');
 
 const events: string[] = [];
 window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
@@ -42,7 +43,7 @@ window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
 }) as EventListener);
 
 act(() => {
-  mobileNav?.querySelector<HTMLButtonElement>('button[data-mobile-view="actions"]')?.click();
+  mobileNav?.querySelector<HTMLElement>('[data-mobile-view="actions"]')?.click();
 });
 
 expect(events).toContain("actions");
@@ -56,7 +57,7 @@ Run:
 npm test -- src/components/DashboardLayout.test.tsx
 ```
 
-Expected: FAIL because the component still renders mail-folder links instead of action buttons.
+Expected: FAIL because the component still renders mail-folder links instead of action workspace links.
 
 - [ ] **Step 3: Implement minimal event-emitting nav**
 
@@ -71,7 +72,7 @@ const mobileWorkspaceItems = [
 ];
 ```
 
-Render each item as a `button` and dispatch:
+Render each item as `<a href="#mobile-${view}">` and call `setMobileWorkspaceView(view)`. `setMobileWorkspaceView()` is responsible for synchronizing the URL hash and dispatching:
 
 ```tsx
 window.dispatchEvent(new CustomEvent('naruon:mobile-workspace', { detail: { view } }));
@@ -94,15 +95,15 @@ Expected: PASS.
 Extend `frontend/tests/e2e/dashboard-branding.spec.ts`:
 
 ```ts
-await page.getByRole('button', { name: 'AI 실행' }).click();
+await page.getByRole('link', { name: 'AI 실행' }).click();
 await expect(page.getByRole('region', { name: '모바일 AI 실행' })).toBeVisible();
 await expect(page.getByText('관계 맥락')).toBeVisible();
 
-await page.getByRole('button', { name: '맥락 검색' }).click();
+await page.getByRole('link', { name: '맥락 검색' }).click();
 await expect(page.getByRole('region', { name: '모바일 맥락 검색' })).toBeVisible();
 await expect(page.getByText('메일, 첨부, 일정, 사람을 한 번에 검색합니다.')).toBeVisible();
 
-await page.getByRole('button', { name: '일정' }).click();
+await page.getByRole('link', { name: '일정' }).click();
 await expect(page.getByRole('region', { name: '모바일 일정 연결' })).toBeVisible();
 await expect(page.getByText('캘린더 반영 대기')).toBeVisible();
 ```

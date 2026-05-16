@@ -55,6 +55,7 @@ describe("DashboardLayout", () => {
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
     expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
+    expect(mobileNav?.querySelector('[data-mobile-view="actions"]')?.getAttribute('href')).toBe('#mobile-actions');
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
