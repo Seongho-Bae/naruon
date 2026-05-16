@@ -26,15 +26,37 @@ async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    },
     body: JSON.stringify(body),
   });
 }
 
 export async function mockDashboardApi(page: Page) {
-  await page.route('**/api/**', async (route) => {
+  await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+
+    if (!path.startsWith('/api/')) {
+      await route.continue();
+      return;
+    }
+
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        },
+      });
+      return;
+    }
 
     if (path === '/api/emails' && request.method() === 'GET') {
       await fulfillJson(route, { emails: [email] });

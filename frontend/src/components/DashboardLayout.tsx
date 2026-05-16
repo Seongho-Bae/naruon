@@ -24,6 +24,8 @@ import {
   Edit3
 } from 'lucide-react';
 
+import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
+
 const mailNavItems = [
   { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/' },
   { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred' },
@@ -60,10 +62,17 @@ const aiNavItems = [
   { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays, mobileView: 'calendar' as const },
 ];
 
+const mobileWorkspaceItems = [
+  { label: '받은편지함', icon: Inbox, view: 'inbox' as const },
+  { label: '맥락 검색', icon: Search, view: 'search' as const },
+  { label: 'AI 실행', icon: Sparkles, view: 'actions' as const },
+  { label: '일정', icon: CalendarDays, view: 'calendar' as const },
+];
+
 const headerActions = [
-  { label: '캘린더 반영', icon: CalendarDays },
-  { label: '답장 초안', icon: PenLine },
-  { label: '할 일 만들기', icon: CheckCircle2 },
+  { label: '캘린더 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
+  { label: '답장 초안', action: 'reply-draft', message: '메일 상세 패널에서 답장 초안을 생성합니다.', icon: PenLine },
+  { label: '할 일 만들기', action: 'create-task', message: '메일 상세 패널에서 실행 항목을 할 일로 정리합니다.', icon: CheckCircle2 },
 ];
 
 
@@ -111,18 +120,30 @@ function NavLink({
   );
 }
 
-function HeaderStatusChip({
+function HeaderActionButton({
   label,
+  action,
   icon: Icon,
 }: {
   label: string;
+  action: string;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
+  function handleClick() {
+    window.dispatchEvent(new CustomEvent('naruon:header-action', { detail: { action } }));
+  }
+
   return (
-    <span className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm">
+    <button
+      type="button"
+      data-header-action={action}
+      popoverTarget={`header-action-${action}`}
+      onClick={handleClick}
+      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+    >
       <Icon className="size-4 text-primary" aria-hidden={true} />
       {label}
-    </span>
+    </button>
   );
 }
 
@@ -133,6 +154,12 @@ export function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const activeMobileView = useMobileWorkspaceView();
+
+  function handleMobileWorkspaceChange(view: (typeof mobileWorkspaceItems)[number]['view']) {
+    setIsWorkspaceMenuOpen(false);
+    setMobileWorkspaceView(view);
+  }
 
   return (
     <div className="relative flex h-screen overflow-hidden bg-background text-foreground">
@@ -170,7 +197,7 @@ export function DashboardLayout({
             ))}
           </nav>
 
-          <nav aria-label="AI Hub sections" className="mt-6 space-y-0.5">
+          <nav aria-label="Naruon workspace sections" className="mt-6 space-y-0.5">
             <div className="mb-1 flex items-center justify-between px-3">
               <p className="text-[11px] font-bold text-muted-foreground">AI 허브</p>
               <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">BETA</span>
@@ -276,8 +303,18 @@ export function DashboardLayout({
             />
           </label>
           <div className="ml-auto hidden items-center gap-2 xl:flex">
-            {headerActions.map(({ label, icon: Icon }) => (
-              <HeaderStatusChip key={label} label={label} icon={Icon} />
+            {headerActions.map(({ label, action, icon: Icon }) => (
+              <HeaderActionButton key={action} label={label} action={action} icon={Icon} />
+            ))}
+            {headerActions.map(({ action, message }) => (
+              <div
+                key={`${action}-popover`}
+                id={`header-action-${action}`}
+                popover="auto"
+                className="max-w-xs rounded-2xl border border-border bg-card p-4 text-sm font-semibold text-foreground shadow-[0_18px_50px_rgba(15,23,42,0.18)] backdrop:bg-transparent"
+              >
+                {message}
+              </div>
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2 xl:ml-0">
@@ -315,7 +352,10 @@ export function DashboardLayout({
               key={label}
               href={href}
               aria-current={active ? 'page' : undefined}
-              onClick={() => setIsWorkspaceMenuOpen(false)}
+              onClick={() => {
+                setIsWorkspaceMenuOpen(false);
+                setMobileWorkspaceView('inbox');
+              }}
               className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             >
               <Icon className="size-4 text-primary" aria-hidden="true" />
@@ -328,15 +368,15 @@ export function DashboardLayout({
         </nav>
       </div>
 
-      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
-        {mailNavItems.map(({ label, icon: Icon, href }) => {
-          const active = isActivePath(pathname, href);
+      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-[60] grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
+        {mobileWorkspaceItems.map(({ label, icon: Icon, view }) => {
+          const active = activeMobileView === view;
           return (
-            <Link
+            <a
+              href={`#mobile-${view}`}
               key={label}
-              href={href}
-              onClick={() => setIsWorkspaceMenuOpen(false)}
-              data-mobile-view={label}
+              onClick={() => handleMobileWorkspaceChange(view)}
+              data-mobile-view={view}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-center ${
                 active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
@@ -344,7 +384,7 @@ export function DashboardLayout({
             >
               <Icon className="size-4" aria-hidden="true" />
               {label}
-            </Link>
+            </a>
           );
         })}
       </nav>

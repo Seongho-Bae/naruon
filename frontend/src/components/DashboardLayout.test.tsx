@@ -34,11 +34,14 @@ describe("DashboardLayout", () => {
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const sidebar = container.querySelector('aside[aria-label="Naruon workspace sidebar"]');
     const nav = container.querySelector('nav[aria-label="Mail sections"]');
-            const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
+    const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
-    const mobileNavButtons = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
-      (button) => button.textContent,
+    const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
+      (link) => link.textContent,
     );
+    const headerActionButtons = Array.from(
+      banner?.querySelectorAll<HTMLButtonElement>('button[data-header-action]') ?? [],
+    ).map((button) => button.textContent);
     const main = container.querySelector("main#main-content");
     const skipLink = container.querySelector<HTMLAnchorElement>(
       'a[href="#main-content"]',
@@ -48,28 +51,48 @@ describe("DashboardLayout", () => {
     expect(banner).not.toBeNull();
     expect(sidebar).not.toBeNull();
     expect(nav).not.toBeNull();
-            expect(mobileNav).not.toBeNull();
+    expect(mobileNav).not.toBeNull();
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
-        expect(mobileNavButtons).toEqual(["받은 메일", "중요 메일", "보낸 메일", "임시 보관함", "전체 메일"]);
+    expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
     expect(sidebar?.textContent ?? "").toContain("Naruon");
     expect(sidebar?.textContent ?? "").toContain("흐름을 건너, 더 나은 판단과 실행으로.");
     expect(nav?.textContent ?? "").toContain("받은 메일");
-                    
-        
-    expect(banner?.textContent ?? "").toContain("할 일 만들기");
+    expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
     expect(skipLink?.textContent).toBe("Skip to main content");
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
+
+    const headerEvents: string[] = [];
+    window.addEventListener("naruon:header-action", ((event: Event) => {
+      headerEvents.push((event as CustomEvent<{ action: string }>).detail.action);
+    }) as EventListener);
+
+    act(() => {
+      banner?.querySelector<HTMLButtonElement>('button[data-header-action="reply-draft"]')?.click();
+    });
+
+    expect(headerEvents).toContain("reply-draft");
 
     act(() => {
       mobileMenuButton?.click();
     });
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
-      });
+
+    const events: string[] = [];
+    window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
+      events.push((event as CustomEvent<{ view: string }>).detail.view);
+    }) as EventListener);
+
+    act(() => {
+      mobileNav?.querySelector<HTMLElement>('[data-mobile-view="actions"]')?.click();
+    });
+
+    expect(events).toContain("actions");
+  });
 
   it("keeps the desktop sidebar content reachable through an independent scroll region", () => {
     container = document.createElement("div");

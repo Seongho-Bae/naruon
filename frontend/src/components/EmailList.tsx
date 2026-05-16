@@ -78,6 +78,11 @@ export function EmailList({
                 실행 항목
               </span>
             </div>
+            <div className="mt-3 rounded-2xl border border-primary/15 bg-background/80 px-3 py-2 text-xs leading-5 shadow-inner shadow-slate-950/[0.02]">
+              <span className="font-bold text-primary">오늘의 판단 포인트</span>
+              <span className="mx-2 text-muted-foreground">·</span>
+              <span className="font-semibold text-foreground">Q2 출시 계획 및 우선순위 조정</span>
+            </div>
           </div>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.28)]">
             <Mail className="size-5" aria-hidden="true" />
