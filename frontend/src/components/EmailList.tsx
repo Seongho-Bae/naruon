@@ -19,6 +19,17 @@ interface EmailItem {
   reply_count?: number;
 }
 
+let inboxRequest: Promise<EmailItem[]> | null = null;
+
+async function fetchInboxEmails() {
+  inboxRequest ??= apiClient.get<{ emails: EmailItem[] }>('/api/emails')
+    .then((data) => data.emails || [])
+    .finally(() => {
+      inboxRequest = null;
+    });
+  return inboxRequest;
+}
+
 export function EmailList({
   onSelectEmail,
   selectedEmailId,
@@ -37,8 +48,7 @@ export function EmailList({
     setError(null);
     try {
       if (query.trim() === "") {
-        const data = await apiClient.get<{ emails: EmailItem[] }>('/api/emails');
-        setEmails(data.emails || []);
+        setEmails(await fetchInboxEmails());
       } else {
         setIsSearching(true);
         const data = await apiClient.post<{ results: EmailItem[] }>('/api/search', { query });

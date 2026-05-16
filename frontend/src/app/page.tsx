@@ -78,7 +78,7 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
-              <EmailDetail emailId={selectedEmail} />
+              {effectiveMobileView === 'detail' && selectedEmail !== null ? <EmailDetail emailId={selectedEmail} /> : null}
             </div>
           </section>
           <section

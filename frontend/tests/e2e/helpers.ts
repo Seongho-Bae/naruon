@@ -22,33 +22,32 @@ const sibling = {
   body: '파트너 미팅 전까지 일정 확인이 필요합니다.',
 };
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
 async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    },
+    headers: CORS_HEADERS,
     body: JSON.stringify(body),
   });
 }
 
-export async function mockDashboardApi(page: Page) {
+export async function mockDashboardApi(page: Page, onApiRequest?: (path: string) => void) {
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    onApiRequest?.(path);
 
     if (request.method() === 'OPTIONS') {
       await route.fulfill({
         status: 204,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
-          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        },
+        headers: CORS_HEADERS,
       });
       return;
     }
@@ -104,6 +103,6 @@ export async function mockDashboardApi(page: Page) {
       return;
     }
 
-    await route.fulfill({ status: 404, body: 'Not mocked' });
+    await route.fulfill({ status: 404, headers: CORS_HEADERS, body: 'Not mocked' });
   });
 }
