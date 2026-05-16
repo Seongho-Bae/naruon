@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
+import { toSafeReactText } from "@/lib/safe-text";
 
 interface EmailItem {
   id: number;
@@ -136,6 +137,9 @@ export function EmailList({
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
+              const safeSender = toSafeReactText(email.sender);
+              const safeSubject = toSafeReactText(email.subject, '(제목 없음)');
+              const safeSnippet = toSafeReactText(email.snippet);
 
               return (
               <button 
@@ -149,16 +153,16 @@ export function EmailList({
                   <div className="flex items-center">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-8 w-8 border border-primary/10 bg-primary/10 text-primary">
-                        <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                        <AvatarFallback>{safeSender ? safeSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
-                      <div className="max-w-[140px] truncate font-bold text-foreground">{email.sender}</div>
+                      <div className="max-w-[140px] truncate font-bold text-foreground">{safeSender}</div>
                     </div>
                     <div className="ml-auto max-w-24 truncate text-right text-xs text-muted-foreground">
                       {formatEmailDate(email.date)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 w-full">
-                    <div className="truncate text-sm font-bold flex-1 text-foreground">{email.subject || '(제목 없음)'}</div>
+                    <div className="truncate text-sm font-bold flex-1 text-foreground">{safeSubject}</div>
                     {email.reply_count && email.reply_count > 1 && (
                       <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
                         <MessagesSquare className="w-3 h-3" />
@@ -168,7 +172,7 @@ export function EmailList({
                   </div>
                 </div>
                 <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
-                  {email.snippet}
+                  {safeSnippet}
                 </div>
                 {email.unread && (
                   <div className="flex items-center gap-2">
