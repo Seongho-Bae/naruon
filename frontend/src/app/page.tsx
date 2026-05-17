@@ -195,18 +195,17 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const markInitialMobileWorkspaceOverride = () => setMobileWorkspaceOverride(true);
-    if (window.location.hash.startsWith('#mobile-')) {
-      markInitialMobileWorkspaceOverride();
-    }
-    const markMobileWorkspaceOverride = () => setMobileWorkspaceOverride(true);
+    const syncMobileWorkspaceOverride = () => {
+      setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-'));
+    };
+    syncMobileWorkspaceOverride();
     const clearMobileWorkspaceOverride = () => setMobileWorkspaceOverride(false);
-    window.addEventListener('hashchange', markMobileWorkspaceOverride);
-    window.addEventListener('naruon:mobile-workspace', markMobileWorkspaceOverride);
+    window.addEventListener('hashchange', syncMobileWorkspaceOverride);
+    window.addEventListener('naruon:mobile-workspace', syncMobileWorkspaceOverride);
     window.addEventListener('naruon:startup-view-change', clearMobileWorkspaceOverride);
     return () => {
-      window.removeEventListener('hashchange', markMobileWorkspaceOverride);
-      window.removeEventListener('naruon:mobile-workspace', markMobileWorkspaceOverride);
+      window.removeEventListener('hashchange', syncMobileWorkspaceOverride);
+      window.removeEventListener('naruon:mobile-workspace', syncMobileWorkspaceOverride);
       window.removeEventListener('naruon:startup-view-change', clearMobileWorkspaceOverride);
     };
   }, []);

@@ -401,6 +401,63 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");
   });
 
+  it("keeps the dashboard visible when unrelated hash links change", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+
+    await act(async () => {
+      window.history.replaceState(null, "", "/#main-content");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("hidden");
+  });
+
+  it("restores the saved dashboard when a mobile hash is removed", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    window.history.replaceState(null, "", "/#mobile-calendar");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+    expect(container.textContent).toContain("캘린더 반영 대기");
+
+    await act(async () => {
+      window.history.replaceState(null, "", "/");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+    expect(container.textContent).not.toContain("캘린더 반영 대기");
+  });
+
   it("renders an API-backed loading state for the mobile search panel instead of placeholders", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({
       matches: true,

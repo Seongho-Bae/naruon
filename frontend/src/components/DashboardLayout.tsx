@@ -248,11 +248,14 @@ export function DashboardLayout({
   function handleStartupViewChange(view: WorkspaceStartupView) {
     setWorkspaceStartupView(view);
     closeMobileWorkspaceMenu();
+    if (view === 'dashboard' && window.location.hash.startsWith('#mobile-')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
     if (view === 'email') {
-      setMobileWorkspaceView('inbox', { updateHash: false });
+      setMobileWorkspaceView('inbox');
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar', { updateHash: false });
+      setMobileWorkspaceView('calendar');
     }
   }
 

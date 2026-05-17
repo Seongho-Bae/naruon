@@ -59,6 +59,31 @@ describe('mobile workspace API panels', () => {
     expect(fetch).toHaveBeenCalledWith('/api/search', expect.objectContaining({ method: 'POST' }));
   });
 
+  it('normalizes unsafe email result text before rendering', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      results: [{
+        id: 1,
+        subject: '\u0001Q2 출시\u0002',
+        sender: '김\u0003지현 PM',
+        date: '2026-05-11T09:30:00Z',
+        snippet: '요청\u0004내용입니다.',
+      }],
+    })));
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<MobileSearchPanel />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('�Q2 출시�');
+    expect(container.textContent).toContain('김�지현 PM');
+    expect(container.textContent).toContain('요청�내용입니다.');
+    expect(container.textContent).not.toContain('\u0001');
+  });
+
   it('renders the calendar empty state when the API has no candidates', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ results: [] })));
     container = document.createElement('div');

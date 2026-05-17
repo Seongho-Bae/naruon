@@ -173,4 +173,32 @@ describe("DashboardLayout", () => {
     expect(insightHeading?.closest('[data-testid="sidebar-scroll-region"]')).toBe(scrollRegion);
   });
 
+  it("clears stale mobile hashes when switching startup back to dashboard", () => {
+    window.history.replaceState(null, "", "/#mobile-calendar");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    act(() => {
+      mobileMenuButton?.click();
+    });
+    const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
+
+    act(() => {
+      mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="dashboard"]')?.click();
+    });
+
+    expect(localStorage.getItem("naruon_startup_view")).toBe("dashboard");
+    expect(window.location.hash).toBe("");
+  });
+
 });

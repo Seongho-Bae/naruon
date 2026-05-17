@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiClient } from '@/lib/api-client';
+import { toSafeReactText } from '@/lib/safe-text';
 
 type MobileSearchResult = {
   id: number;
@@ -105,16 +106,22 @@ function MobileApiPanel({ copy }: { copy: MobilePanelCopy }) {
             {copy.empty}
           </div>
         ) : null}
-        {status === 'success' ? results.map((result) => (
-          <article key={result.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm font-bold text-foreground">{result.subject?.trim() || '(제목 없음)'}</p>
-              <span className="shrink-0 text-xs font-semibold text-muted-foreground">{formatResultDate(result.date)}</span>
-            </div>
-            <p className="mt-1 text-xs font-semibold text-primary">{result.sender}</p>
-            <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{result.snippet}</p>
-          </article>
-        )) : null}
+        {status === 'success' ? results.map((result) => {
+          const safeSubject = toSafeReactText(result.subject?.trim() || null, '(제목 없음)');
+          const safeSender = toSafeReactText(result.sender);
+          const safeSnippet = toSafeReactText(result.snippet);
+
+          return (
+            <article key={result.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-bold text-foreground">{safeSubject}</p>
+                <span className="shrink-0 text-xs font-semibold text-muted-foreground">{formatResultDate(result.date)}</span>
+              </div>
+              <p className="mt-1 text-xs font-semibold text-primary">{safeSender}</p>
+              <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">{safeSnippet}</p>
+            </article>
+          );
+        }) : null}
       </div>
     </>
   );
