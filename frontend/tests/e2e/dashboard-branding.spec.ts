@@ -134,8 +134,8 @@ test('validates mobile hamburger composition and startup preference controls', a
 });
 
 for (const panel of [
-  { hash: 'mobile-search', region: '모바일 맥락 검색', finalText: '사람 결과 준비 중' },
-  { hash: 'mobile-calendar', region: '모바일 일정 연결', finalText: '디자인 리뷰 후속 조치' },
+  { hash: 'mobile-search', region: '모바일 맥락 검색', finalText: '강민수 의사결정 메모', oldPlaceholder: '사람 결과 준비 중' },
+  { hash: 'mobile-calendar', region: '모바일 일정 연결', finalText: '파트너 미팅 일정 확정', oldPlaceholder: '디자인 리뷰 후속 조치' },
 ] as const) {
   test(`allows short mobile users to scroll the ${panel.region} panel past the bottom nav`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 640 });
@@ -145,11 +145,12 @@ for (const panel of [
 
     const region = page.getByRole('region', { name: panel.region });
     await expect(region).toBeVisible();
+    await expect(region.getByText(panel.oldPlaceholder)).toHaveCount(0);
+    await expect(region.getByText(panel.finalText)).toBeVisible();
     await region.evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });
-    await expect(page.getByText(panel.finalText)).toBeVisible();
-    const bottomGap = await page.getByText(panel.finalText).evaluate((element) => {
+    const bottomGap = await region.getByText(panel.finalText).evaluate((element) => {
       const item = element.getBoundingClientRect();
       const nav = document.querySelector('nav[aria-label="Mobile workspace sections"]')?.getBoundingClientRect();
       return nav ? nav.top - item.bottom : 0;

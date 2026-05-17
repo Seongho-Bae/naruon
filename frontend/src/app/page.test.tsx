@@ -400,4 +400,52 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).toContain("캘린더 반영 대기");
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");
   });
+
+  it("renders an API-backed loading state for the mobile search panel instead of placeholders", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    window.history.replaceState(null, "", "/#mobile-search");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.querySelector('#mobile-search')?.className).toContain("flex");
+    expect(container.textContent).toContain("검색 결과를 불러오는 중입니다.");
+    expect(container.textContent).not.toContain("메일 결과 준비 중");
+    expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("renders an API-backed loading state for the mobile calendar panel instead of static candidates", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+    window.history.replaceState(null, "", "/#mobile-calendar");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
+    expect(container.textContent).toContain("일정 후보를 불러오는 중입니다.");
+    expect(container.textContent).not.toContain("디자인 리뷰 후속 조치");
+    expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
+  });
 });

@@ -22,8 +22,8 @@
 2. **P0 — Header primary actions:** shell buttons implemented here; selected-email execution bridge implemented by `docs/plans/2026-05-17-branding-shell-action-bridge.md`.
 3. **P0 — Desktop GNB + mobile central AI action:** implemented by `docs/plans/2026-05-17-branding-shell-gnb-mobile-ai.md` so the brand assets' global wayfinding and primary mobile action affordance are present in the shell.
 4. **P1 — Dead sidebar route handling:** implemented by `docs/plans/2026-05-17-branding-shell-gnb-mobile-ai.md` with disabled/coming-soon controls for unavailable future routes.
-5. **P1 — Tablet AI panel behavior:** add a 1024–1279px detail-tab/drawer layout for the right context panel.
-6. **P1 — API-backed mobile search/calendar:** replace placeholder panels with real loading/empty/error/success states.
+5. **P1 — Tablet AI panel behavior:** implemented by `docs/plans/2026-05-17-tablet-ai-panel-collapse.md` with a 1024–1279px collapsed context panel and tablet header action coverage.
+6. **P1 — API-backed mobile search/calendar:** implemented by `docs/plans/2026-05-17-mobile-search-calendar-api.md` with `/api/search`-backed loading, success, empty, and error states for mobile panels.
 7. **P2 — InsightCard adoption:** refactor `EmailDetail` AI cards to use `InsightCard` consistently.
 
 ## Files

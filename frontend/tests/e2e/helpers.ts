@@ -22,6 +22,33 @@ const sibling = {
   body: '파트너 미팅 전까지 일정 확인이 필요합니다.',
 };
 
+const mobileAttachmentResult = {
+  ...email,
+  id: 17,
+  subject: '브랜드 에셋 검토 자료',
+  sender: '박서연 디자이너',
+  date: '2026-05-11T10:15:00Z',
+  snippet: '모바일 워크스페이스에 필요한 브랜드 에셋과 첨부 자료입니다.',
+};
+
+const mobilePeopleResult = {
+  ...email,
+  id: 18,
+  subject: '강민수 의사결정 메모',
+  sender: '강민수 리드',
+  date: '2026-05-11T11:00:00Z',
+  snippet: '일정과 사람 맥락을 함께 확인해야 하는 의사결정 메모입니다.',
+};
+
+const calendarCandidate = {
+  ...email,
+  id: 27,
+  subject: '파트너 미팅 일정 확정',
+  sender: '이지은 파트너',
+  date: '2026-05-12T13:00:00Z',
+  snippet: '파트너 미팅 일정을 확정하고 캘린더에 반영해야 합니다.',
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
@@ -58,7 +85,19 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
     }
 
     if (path === '/api/search' && request.method() === 'POST') {
-      await fulfillJson(route, { results: [email] });
+      let body: { query?: string } = {};
+      try {
+        body = JSON.parse(request.postData() || '{}') as { query?: string };
+      } catch {
+        body = {};
+      }
+
+      if (body.query?.includes('회의')) {
+        await fulfillJson(route, { results: [calendarCandidate, sibling] });
+        return;
+      }
+
+      await fulfillJson(route, { results: [email, mobileAttachmentResult, mobilePeopleResult] });
       return;
     }
 
