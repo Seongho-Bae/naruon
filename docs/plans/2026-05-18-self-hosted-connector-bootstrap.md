@@ -55,4 +55,5 @@
 
 - RED: `PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest tests/test_runner_config_api.py -q` failed with two expected `KeyError: 'connector_manifest'` failures before production changes.
 - GREEN: `PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest tests/test_runner_config_api.py -q` passed with 6 tests after adding the manifest to read and rotation responses.
+- Review follow-up: CodeRabbit flagged the hard-coded control-plane domain. `Settings.CONTROL_PLANE_DOMAIN` now defaults to `naruon.net`, and `test_runner_config_uses_configured_control_plane_domain` proves the manifest reflects runtime configuration.
 - Full relevant backend runner config contract preserves organization-admin access control and token fingerprint behavior.

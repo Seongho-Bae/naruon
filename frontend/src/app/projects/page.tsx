@@ -62,8 +62,8 @@ export default function ProjectsPage() {
               </div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">{section.description}</p>
               <ul className="mt-4 space-y-2 text-sm text-foreground">
-                {section.bullets.map((bullet) => (
-                  <li key={bullet} className="flex gap-2 rounded-2xl border border-border bg-background/70 px-3 py-2">
+                {section.bullets.map((bullet, index) => (
+                  <li key={index} className="flex gap-2 rounded-2xl border border-border bg-background/70 px-3 py-2">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden="true" />
                     <span>{bullet}</span>
                   </li>

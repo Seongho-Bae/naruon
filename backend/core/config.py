@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     TRUST_DEV_HEADERS: bool = False
     ENCRYPTION_KEY: SecretStr | None = None
+    CONTROL_PLANE_DOMAIN: str = "naruon.net"
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"

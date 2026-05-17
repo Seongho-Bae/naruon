@@ -73,6 +73,7 @@ async function waitForCondition(condition: () => boolean) {
     if (condition()) return;
     await flushAsyncWork();
   }
+  throw new Error("waitForCondition timed out after 20 attempts");
 }
 
 describe("Home workspace action bridge", () => {
@@ -81,7 +82,7 @@ describe("Home workspace action bridge", () => {
 
   afterEach(() => {
     if (root) {
-      act(() => root?.unmount());
+      act(() => root.unmount());
     }
     root = null;
     container?.remove();

@@ -160,6 +160,18 @@ def test_runner_config_exposes_outbound_connector_manifest(admin_client):
     }
 
 
+def test_runner_config_uses_configured_control_plane_domain(admin_client):
+    previous_domain = settings.CONTROL_PLANE_DOMAIN
+    settings.CONTROL_PLANE_DOMAIN = "staging.naruon.net"
+    try:
+        response = admin_client.get("/api/runner-config")
+    finally:
+        settings.CONTROL_PLANE_DOMAIN = previous_domain
+
+    assert response.status_code == 200
+    assert response.json()["connector_manifest"]["control_plane_domain"] == "staging.naruon.net"
+
+
 def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):
     response = admin_client.post("/api/runner-config/rotate")
 

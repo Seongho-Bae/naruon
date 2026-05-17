@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, ensure_organization_access, get_auth_context
+from core.config import settings
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 
@@ -30,14 +31,15 @@ class RunnerRotateResponse(BaseModel):
     connector_manifest: dict[str, object]
 
 
-CONNECTOR_MANIFEST: dict[str, object] = {
-    "role": "self-hosted_connector",
-    "network_mode": "outbound_only",
-    "control_plane_domain": "naruon.net",
-    "local_protocols": ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
-    "prohibited_roles": ["smtp_server", "imap_server", "mx_host"],
-    "runner_usage": "ci_smoke_only",
-}
+def _connector_manifest() -> dict[str, object]:
+    return {
+        "role": "self-hosted_connector",
+        "network_mode": "outbound_only",
+        "control_plane_domain": settings.CONTROL_PLANE_DOMAIN,
+        "local_protocols": ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+        "prohibited_roles": ["smtp_server", "imap_server", "mx_host"],
+        "runner_usage": "ci_smoke_only",
+    }
 
 
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
@@ -78,7 +80,7 @@ async def get_runner_config(
             configured=False,
             fingerprint=None,
             updated_at=None,
-            connector_manifest=CONNECTOR_MANIFEST,
+            connector_manifest=_connector_manifest(),
         )
 
     try:
@@ -88,7 +90,7 @@ async def get_runner_config(
             configured=bool(config.registration_token),
             fingerprint=_fingerprint(config.registration_token),
             updated_at=config.updated_at,
-            connector_manifest=CONNECTOR_MANIFEST,
+            connector_manifest=_connector_manifest(),
         )
     except Exception as exc:
         if "ENCRYPTION_KEY is required" not in str(exc):
@@ -136,5 +138,5 @@ async def rotate_runner_token(
     return RunnerRotateResponse(
         workspace_id=config.workspace_id,
         registration_token=token,
-        connector_manifest=CONNECTOR_MANIFEST,
+        connector_manifest=_connector_manifest(),
     )
