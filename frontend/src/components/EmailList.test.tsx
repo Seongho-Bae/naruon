@@ -106,6 +106,7 @@ describe("EmailList", () => {
     });
     await flushAsyncWork();
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("(제목 없음)");
   });
 
@@ -138,6 +139,7 @@ describe("EmailList", () => {
     });
     await flushAsyncWork();
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
     expect(container.textContent).toContain("<script>alert(1)</script>");
