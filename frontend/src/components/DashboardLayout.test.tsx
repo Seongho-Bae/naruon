@@ -74,8 +74,11 @@ describe("DashboardLayout", () => {
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(true);
     expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(false);
-    expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(true);
+    expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(false);
     expect(nav?.querySelector<HTMLAnchorElement>('a[href="/starred"]')).toBeNull();
+    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#launch"]')?.textContent).toContain("런칭 프로젝트");
+    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#vendor"]')?.textContent).toContain("벤더 관리");
+    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#marketing"]')?.textContent).toContain("마케팅 캠페인");
     expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#context"]')?.textContent).toContain("맥락 종합");
     expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#decisions"]')?.textContent).toContain("판단 포인트");
     expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#actions"]')?.textContent).toContain("실행 항목");

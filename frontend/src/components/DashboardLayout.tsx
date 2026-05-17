@@ -46,9 +46,9 @@ const aiHubItems = [
 ];
 
 const projectItems = [
-  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects/launch', available: false },
-  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects/vendor', available: false },
-  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects/marketing', available: false },
+  { label: '런칭 프로젝트', description: '출시 메일·일정·파일', icon: FolderOpen, href: '/projects#launch', available: true },
+  { label: '벤더 관리', description: '계약·보안·운영', icon: FolderOpen, href: '/projects#vendor', available: true },
+  { label: '마케팅 캠페인', description: '캠페인·성과·후속', icon: FolderOpen, href: '/projects#marketing', available: true },
 ];
 
 const labelItems = [
