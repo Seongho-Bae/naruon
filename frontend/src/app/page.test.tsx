@@ -174,6 +174,7 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).toContain("메일 선택");
     expect(container.textContent).toContain("email:none");
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+    expect(window.location.hash).toBe("");
   });
 
   it("opens the saved calendar startup view on mobile without needing a hash", async () => {
@@ -195,6 +196,7 @@ describe("Home workspace action bridge", () => {
 
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
     expect(container.textContent).toContain("캘린더 반영 대기");
+    expect(window.location.hash).toBe("");
   });
 
   it("shows the saved dashboard startup view until users switch back to email", async () => {

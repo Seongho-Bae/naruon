@@ -113,10 +113,10 @@ export default function Home() {
     setStartupViewOverride(view);
     setMobileWorkspaceOverride(view !== 'dashboard');
     if (view === 'email') {
-      setMobileWorkspaceView('inbox');
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar');
+      setMobileWorkspaceView('calendar', { updateHash: false });
     }
   };
   const handleSelectEmail = (emailId: number) => {
@@ -145,10 +145,10 @@ export default function Home() {
       return;
     }
     if (startupView === 'calendar') {
-      setMobileWorkspaceView('calendar');
+      setMobileWorkspaceView('calendar', { updateHash: false });
     }
     if (startupView === 'email') {
-      setMobileWorkspaceView('inbox');
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
   }, [startupView]);
 

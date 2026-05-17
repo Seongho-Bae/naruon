@@ -42,11 +42,16 @@ function getHashMobileWorkspaceView(): MobileWorkspaceView | null {
     : null;
 }
 
-export function setMobileWorkspaceView(view: MobileWorkspaceView) {
+export function setMobileWorkspaceView(
+  view: MobileWorkspaceView,
+  options: { updateHash?: boolean } = {},
+) {
   const store = getStore();
   store.view = view;
   if (typeof window !== 'undefined') {
-    window.history.replaceState(null, '', `#mobile-${view}`);
+    if (options.updateHash ?? true) {
+      window.history.replaceState(null, '', `#mobile-${view}`);
+    }
     window.dispatchEvent(new CustomEvent('naruon:mobile-workspace', { detail: { view } }));
   }
   store.listeners.forEach((listener) => listener());

@@ -249,10 +249,10 @@ export function DashboardLayout({
     setWorkspaceStartupView(view);
     closeMobileWorkspaceMenu();
     if (view === 'email') {
-      setMobileWorkspaceView('inbox');
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar');
+      setMobileWorkspaceView('calendar', { updateHash: false });
     }
   }
 
