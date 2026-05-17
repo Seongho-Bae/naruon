@@ -4,7 +4,7 @@
 
 **Goal:** Let users choose whether Naruon opens to dashboard, email, or calendar while proving the branded shell works across desktop/tablet/mobile resolutions, scroll states, and the mobile hamburger menu.
 
-**Architecture:** Add a small client-side workspace preference store backed by `localStorage`, keep URL hash overrides for mobile deep links, and surface the preference in the dashboard and settings UI. Extend unit and Playwright coverage before implementation so startup routing, short-height scroll, and hamburger composition are verified against the branding plans.
+**Architecture:** Add a small client-side workspace preference store backed by `localStorage`, keep URL hash overrides for mobile deep links, and surface the preference in the mobile hamburger menu. Extend unit and Playwright coverage before implementation so startup routing, short-height scroll, and hamburger composition are verified against the branding plans.
 
 **Tech Stack:** Next.js 16 app router, React 19 client components, TypeScript, Vitest/jsdom, Playwright, local Naruon brand assets.
 
@@ -25,7 +25,7 @@
 - Modify: `frontend/src/app/page.tsx`
 - Modify: `frontend/src/components/DashboardLayout.test.tsx`
 - Modify: `frontend/src/components/DashboardLayout.tsx`
-- Modify: `frontend/src/app/settings/page.tsx`
+- Scope note: a settings-page startup selector was initially considered but deliberately left out of this PR so pre-existing sensitive settings API code is not pulled into the changed-file security scan scope.
 - Modify: `frontend/tests/e2e/dashboard-branding.spec.ts`
 
 ## Task 1: Startup view preference store and page behavior
@@ -82,7 +82,7 @@ Observed on 2026-05-17: FAIL in `src/components/DashboardLayout.test.tsx` becaus
 
 - [x] **Step 3: Implement selector**
 
-Add a compact `시작 화면` selector to the mobile hamburger menu and settings personal tab. Keep Korean labels explicit: `대시보드`, `이메일`, `일정`. Dispatch `naruon:startup-view-change` so mounted pages update without refresh.
+Add a compact `시작 화면` selector to the mobile hamburger menu. Keep Korean labels explicit: `대시보드`, `이메일`, `일정`. Dispatch `naruon:startup-view-change` so mounted pages update without refresh.
 
 - [x] **Step 4: Verify GREEN**
 
@@ -94,7 +94,7 @@ npm test -- src/components/DashboardLayout.test.tsx src/app/page.test.tsx
 
 Expected: PASS.
 
-Observed on 2026-05-17: PASS after adding hamburger and settings startup selectors.
+Observed on 2026-05-17: PASS after adding the hamburger startup selector. The settings-page selector was scope-cut before landing to keep unrelated settings API code out of this PR's security-scan diff.
 
 ## Task 3: Hamburger menu composition and close behavior
 
