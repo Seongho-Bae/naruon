@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
@@ -10,6 +10,9 @@ import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
+
+type WorkspaceActionCommand = { id: number; action: string; target: 'desktop' | 'tablet'; modeVersion: number };
+type MobileActionCommand = { id: number; action: string; modeVersion: number };
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   return (
@@ -97,14 +100,18 @@ function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupVi
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
   const [workspaceActionNotice, setWorkspaceActionNotice] = useState<string | null>(null);
-  const [desktopDetailActionCommand, setDesktopDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
-  const [mobileDetailActionCommand, setMobileDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
+  const [desktopDetailActionCommand, setDesktopDetailActionCommand] = useState<WorkspaceActionCommand | null>(null);
+  const [mobileDetailActionCommand, setMobileDetailActionCommand] = useState<MobileActionCommand | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isTabletViewport, setIsTabletViewport] = useState(false);
+  const [viewportReady, setViewportReady] = useState(false);
+  const [mobileViewportModeVersion, setMobileViewportModeVersion] = useState(0);
+  const [desktopViewportModeVersion, setDesktopViewportModeVersion] = useState(0);
+  const mobileViewportModeRef = useRef(isMobileViewport);
+  const desktopViewportModeRef = useRef(false);
   const startupView = useWorkspaceStartupView();
   const [startupViewOverride, setStartupViewOverride] = useState<WorkspaceStartupView | null>(null);
-  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(
-    () => typeof window !== 'undefined' && window.location.hash.startsWith('#mobile-'),
-  );
+  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(false);
   const activeStartupView = startupViewOverride ?? startupView;
   const showMobileDashboard = activeStartupView === 'dashboard' && !mobileWorkspaceOverride;
   const mobileView = useMobileWorkspaceView();
@@ -132,9 +139,37 @@ export default function Home() {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.('(max-width: 1023px)');
+    if (!mediaQuery) {
+      const markViewportReady = () => setViewportReady(true);
+      markViewportReady();
+      return;
+    }
+
+    const syncViewport = () => {
+      if (mobileViewportModeRef.current !== mediaQuery.matches) {
+        mobileViewportModeRef.current = mediaQuery.matches;
+        setMobileViewportModeVersion((version) => version + 1);
+        setDesktopViewportModeVersion((version) => version + 1);
+      }
+      setIsMobileViewport(mediaQuery.matches);
+      setViewportReady(true);
+    };
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.('(min-width: 1024px) and (max-width: 1279px)');
     if (!mediaQuery) return;
 
-    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+    const syncViewport = () => {
+      if (desktopViewportModeRef.current !== mediaQuery.matches) {
+        desktopViewportModeRef.current = mediaQuery.matches;
+        setDesktopViewportModeVersion((version) => version + 1);
+      }
+      setIsTabletViewport(mediaQuery.matches);
+    };
     syncViewport();
     mediaQuery.addEventListener('change', syncViewport);
     return () => mediaQuery.removeEventListener('change', syncViewport);
@@ -159,6 +194,10 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const markInitialMobileWorkspaceOverride = () => setMobileWorkspaceOverride(true);
+    if (window.location.hash.startsWith('#mobile-')) {
+      markInitialMobileWorkspaceOverride();
+    }
     const markMobileWorkspaceOverride = () => setMobileWorkspaceOverride(true);
     const clearMobileWorkspaceOverride = () => setMobileWorkspaceOverride(false);
     window.addEventListener('hashchange', markMobileWorkspaceOverride);
@@ -183,16 +222,21 @@ export default function Home() {
 
       setWorkspaceActionNotice(null);
       if (isMobileViewport) {
-        setMobileDetailActionCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action }));
+        setMobileDetailActionCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action, modeVersion: mobileViewportModeVersion }));
         setMobileWorkspaceView('detail');
       } else {
-        setDesktopDetailActionCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action }));
+        setDesktopDetailActionCommand((previous) => ({
+          id: (previous?.id ?? 0) + 1,
+          action,
+          target: isTabletViewport ? 'tablet' : 'desktop',
+          modeVersion: desktopViewportModeVersion,
+        }));
       }
     }
 
     window.addEventListener('naruon:header-action', handleHeaderAction);
     return () => window.removeEventListener('naruon:header-action', handleHeaderAction);
-  }, [isMobileViewport, selectedEmail]);
+  }, [desktopViewportModeVersion, isMobileViewport, isTabletViewport, mobileViewportModeVersion, selectedEmail]);
 
   return (
     <>
@@ -203,13 +247,15 @@ export default function Home() {
       )}
       {activeStartupView === 'dashboard' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupDashboard onOpenView={openStartupView} /></div>}
       {activeStartupView === 'calendar' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupCalendar onOpenView={openStartupView} /></div>}
-      <ResizablePanelGroup role="region" aria-label="데스크톱 메일 작업공간" orientation="horizontal" className={`${activeStartupView === 'email' ? 'hidden lg:flex' : 'hidden'} h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl`}>
+      <section role="region" aria-label="데스크톱 메일 작업공간" className={`${activeStartupView === 'email' ? 'hidden xl:block' : 'hidden'} h-full`}>
+        {viewportReady && !isMobileViewport && !isTabletViewport ? (
+        <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <ResizablePanel defaultSize={27} minSize={22}>
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={48} minSize={34}>
-            <EmailDetail emailId={selectedEmail} actionCommand={isMobileViewport ? null : desktopDetailActionCommand} />
+            <EmailDetail emailId={selectedEmail} actionCommand={desktopDetailActionCommand?.target === 'desktop' && desktopDetailActionCommand.modeVersion === desktopViewportModeVersion ? desktopDetailActionCommand : null} />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={25} minSize={20}>
@@ -230,7 +276,44 @@ export default function Home() {
               </div>
             </div>
           </ResizablePanel>
-      </ResizablePanelGroup>
+        </ResizablePanelGroup>
+        ) : null}
+      </section>
+      <section
+        role="region"
+        aria-label="태블릿 메일 작업공간"
+        className={`${activeStartupView === 'email' ? 'hidden lg:flex xl:hidden' : 'hidden'} h-full min-h-0 gap-3 rounded-3xl border border-border/80 bg-card/70 p-3 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl`}
+      >
+        {viewportReady && isTabletViewport ? (
+          <>
+        <div className="min-w-0 basis-[38%] overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+            <EmailDetail emailId={selectedEmail} actionCommand={desktopDetailActionCommand?.target === 'tablet' && desktopDetailActionCommand.modeVersion === desktopViewportModeVersion ? desktopDetailActionCommand : null} />
+          </div>
+          <details aria-label="태블릿 맥락 그래프" className="shrink-0 rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/5 via-card to-emerald-500/5 shadow-sm">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+              <span className="flex items-center gap-2">
+                <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
+                  <Network className="size-4" aria-hidden="true" />
+                </span>
+                태블릿 맥락 패널
+              </span>
+              <span className="text-xs font-semibold text-muted-foreground">필요할 때 펼치기</span>
+            </summary>
+            <div className="border-t border-border/70 p-4">
+              <p className="mb-3 text-xs font-semibold text-muted-foreground">맥락 그래프는 필요할 때 펼쳐서 확인합니다.</p>
+              <div className="h-80 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+                <NetworkGraph />
+              </div>
+            </div>
+          </details>
+        </div>
+          </>
+        ) : null}
+      </section>
        {showMobileDashboard && <div className="h-full lg:hidden"><StartupDashboard onOpenView={openStartupView} /></div>}
        <div className={`${showMobileDashboard ? 'hidden' : 'block'} h-full overflow-hidden rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden`}>
           <section
@@ -260,7 +343,7 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
-              {effectiveMobileView === 'detail' && selectedEmail !== null ? <EmailDetail emailId={selectedEmail} actionCommand={isMobileViewport ? mobileDetailActionCommand : null} /> : null}
+              {viewportReady && isMobileViewport && effectiveMobileView === 'detail' && selectedEmail !== null ? <EmailDetail emailId={selectedEmail} actionCommand={mobileDetailActionCommand?.modeVersion === mobileViewportModeVersion ? mobileDetailActionCommand : null} /> : null}
             </div>
           </section>
           <section

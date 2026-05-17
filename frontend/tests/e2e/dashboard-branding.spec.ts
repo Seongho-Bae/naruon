@@ -93,6 +93,13 @@ for (const viewport of responsiveViewports) {
     if (viewport.width < 1024) {
       await expect(page.getByRole('navigation', { name: 'Mobile workspace sections' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Open workspace menu' })).toBeVisible();
+    } else if (viewport.width < 1280) {
+      await expect(page.getByRole('region', { name: '태블릿 메일 작업공간' })).toBeVisible();
+      await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeHidden();
+      await expect(page.getByText('태블릿 맥락 패널')).toBeVisible();
+      await expect(page.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '답장 초안' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
     } else {
       await expect(page.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeVisible();
       await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeVisible();
@@ -108,6 +115,8 @@ test('validates mobile hamburger composition and startup preference controls', a
   await page.getByRole('button', { name: 'Open workspace menu' }).click();
 
   const menu = page.locator('#mobile-workspace-menu');
+  const menuWidth = await menu.evaluate((element) => element.getBoundingClientRect().width);
+  expect(menuWidth).toBeGreaterThanOrEqual(340);
   await expect(menu.getByText('시작 화면', { exact: true })).toBeVisible();
   await expect(menu.getByRole('button', { name: '대시보드' })).toBeVisible();
   await expect(menu.getByRole('button', { name: '이메일' })).toBeVisible();

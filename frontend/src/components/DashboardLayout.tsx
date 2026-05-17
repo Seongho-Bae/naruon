@@ -388,7 +388,7 @@ export function DashboardLayout({
             <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
-          <nav aria-label="Primary workspace navigation" className="hidden items-center gap-1 lg:flex">
+          <nav aria-label="Primary workspace navigation" className="hidden items-center gap-1 xl:flex">
             {primaryNavItems.map((item) => (
               <PrimaryNavLink key={item.href} {...item} />
             ))}
@@ -402,7 +402,7 @@ export function DashboardLayout({
               type="search"
             />
           </label>
-          <div className="ml-auto hidden items-center gap-2 xl:flex">
+          <div data-testid="header-action-group" className="ml-auto hidden shrink-0 flex-wrap items-center justify-end gap-2 lg:flex">
             {headerActions.map(({ label, action, icon: Icon }) => (
               <HeaderActionButton key={action} label={label} action={action} icon={Icon} />
             ))}
@@ -449,7 +449,7 @@ export function DashboardLayout({
         aria-label="모바일 워크스페이스 메뉴"
         data-open={isWorkspaceMenuOpen ? 'true' : 'false'}
         onToggle={(event) => setIsWorkspaceMenuOpen(event.currentTarget.matches(':popover-open'))}
-        className="fixed inset-x-3 top-20 z-50 max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-3 top-20 z-50 w-[calc(100vw-1.5rem)] max-w-md max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
       >
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>

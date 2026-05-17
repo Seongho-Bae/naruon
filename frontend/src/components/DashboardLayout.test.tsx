@@ -45,6 +45,7 @@ describe("DashboardLayout", () => {
     const headerActionButtons = Array.from(
       banner?.querySelectorAll<HTMLButtonElement>('button[data-header-action]') ?? [],
     ).map((button) => button.textContent);
+    const headerActionGroup = banner?.querySelector<HTMLElement>('[data-testid="header-action-group"]');
     const main = container.querySelector("main#main-content");
     const skipLink = container.querySelector<HTMLAnchorElement>(
       'a[href="#main-content"]',
@@ -81,6 +82,8 @@ describe("DashboardLayout", () => {
     expect(sidebar?.textContent ?? "").toContain("흐름을 건너, 더 나은 판단과 실행으로.");
     expect(nav?.textContent ?? "").toContain("받은 메일");
     expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
+    expect(headerActionGroup?.className).toContain("lg:flex");
+    expect(headerActionGroup?.className).not.toContain("xl:flex");
     expect(skipLink?.textContent).toBe("Skip to main content");
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
 
