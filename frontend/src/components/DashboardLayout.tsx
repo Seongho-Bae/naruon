@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
 import {
+  Bell,
   CalendarDays,
   CheckCircle2,
   FileText,
@@ -20,30 +21,33 @@ import {
   Star,
   Target,
   FolderOpen,
+  MoreHorizontal,
+  Settings,
   TrendingUp,
+  UserCircle,
   Edit3
 } from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/' },
-  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred' },
-  { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent' },
-  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts' },
-  { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all' },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/', available: true },
+  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred', available: false },
+  { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent', available: false },
+  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts', available: false },
+  { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all', available: false },
 ];
 
 const aiHubItems = [
-  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub/context' },
-  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub/decisions' },
-  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub/actions' },
+  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub/context', available: false },
+  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub/decisions', available: false },
+  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub/actions', available: false },
 ];
 
 const projectItems = [
-  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects/launch' },
-  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects/vendor' },
-  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects/marketing' },
+  { label: '런칭 프로젝트', description: '', icon: FolderOpen, href: '/projects/launch', available: false },
+  { label: '벤더 관리', description: '', icon: FolderOpen, href: '/projects/vendor', available: false },
+  { label: '마케팅 캠페인', description: '', icon: FolderOpen, href: '/projects/marketing', available: false },
 ];
 
 const labelItems = [
@@ -65,8 +69,15 @@ const aiNavItems = [
 const mobileWorkspaceItems = [
   { label: '받은편지함', icon: Inbox, view: 'inbox' as const },
   { label: '맥락 검색', icon: Search, view: 'search' as const },
-  { label: 'AI 실행', icon: Sparkles, view: 'actions' as const },
   { label: '일정', icon: CalendarDays, view: 'calendar' as const },
+  { label: '더보기', icon: MoreHorizontal, view: 'actions' as const },
+];
+
+const primaryNavItems = [
+  { label: '홈', href: '/', icon: Home },
+  { label: 'AI 허브', href: '/ai-hub', icon: Sparkles },
+  { label: '프롬프트', href: '/prompt-studio', icon: PenLine },
+  { label: '설정', href: '/settings', icon: Settings },
 ];
 
 const headerActions = [
@@ -90,14 +101,36 @@ function NavLink({
   description,
   icon: Icon,
   href = '#main-content',
+  available = true,
 }: {
   label: string;
   description?: string;
   href?: string;
+  available?: boolean;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
   const active = isActivePath(pathname, href);
+
+  if (!available) {
+    return (
+      <button
+        type="button"
+        disabled
+        data-coming-soon="true"
+        className="group flex min-h-9 w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-sidebar-foreground/55"
+      >
+        <Icon className="size-4" aria-hidden={true} />
+        <span className="flex min-w-0 flex-1 flex-col leading-tight">
+          <span className="flex items-center gap-2 font-semibold">
+            {label}
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">준비 중</span>
+          </span>
+          <span className="text-[11px] text-muted-foreground/80">{description || '곧 연결됩니다'}</span>
+        </span>
+      </button>
+    );
+  }
 
   return (
     <Link
@@ -116,6 +149,32 @@ function NavLink({
           {description}
         </span>
       </span>
+    </Link>
+  );
+}
+
+function PrimaryNavLink({
+  label,
+  href,
+  icon: Icon,
+}: {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
+}) {
+  const pathname = usePathname();
+  const active = isActivePath(pathname, href);
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+        active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+      }`}
+    >
+      <Icon className="size-4" aria-hidden={true} />
+      {label}
     </Link>
   );
 }
@@ -159,6 +218,10 @@ export function DashboardLayout({
   function handleMobileWorkspaceChange(view: (typeof mobileWorkspaceItems)[number]['view']) {
     setIsWorkspaceMenuOpen(false);
     setMobileWorkspaceView(view);
+  }
+
+  function handleHeaderAction(action: string) {
+    window.dispatchEvent(new CustomEvent('naruon:header-action', { detail: { action } }));
   }
 
   return (
@@ -222,23 +285,21 @@ export function DashboardLayout({
               <p className="text-[11px] font-bold text-muted-foreground">라벨</p>
               <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M7 7V2H8V7H13V8H8V13H7V8H2V7H7Z" fill="currentColor"></path></svg>
             </div>
-            {labelItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`group flex min-h-8 items-center gap-3 rounded-lg px-3 py-1 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
-                    active
-                      ? 'bg-primary/10 font-bold text-primary'
-                      : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
-                  }`}
-                >
-                  <div className={`w-2 h-2 rounded-full ${item.color}`} />
+            {labelItems.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                disabled
+                data-coming-soon="true"
+                className="group flex min-h-8 w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-1 text-left text-sm text-sidebar-foreground/55"
+              >
+                <div className={`h-2 w-2 rounded-full ${item.color}`} aria-hidden="true" />
+                <span className="flex min-w-0 items-center gap-2">
                   {item.label}
-                </Link>
-              )
-            })}
+                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">준비 중</span>
+                </span>
+              </button>
+            ))}
           </nav>
 
           <div className="px-3 pb-4 pt-6">
@@ -293,6 +354,11 @@ export function DashboardLayout({
             <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
+          <nav aria-label="Primary workspace navigation" className="hidden items-center gap-1 lg:flex">
+            {primaryNavItems.map((item) => (
+              <PrimaryNavLink key={item.href} {...item} />
+            ))}
+          </nav>
           <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] md:flex">
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
             <span className="sr-only">맥락 검색</span>
@@ -318,9 +384,16 @@ export function DashboardLayout({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2 xl:ml-0">
-            <span aria-label="도움말 상태" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground md:grid">
+            <button type="button" aria-label="알림 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
+              <Bell className="size-4" aria-hidden="true" />
+            </button>
+            <button type="button" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
               <HelpCircle className="size-4" aria-hidden="true" />
-            </span>
+            </button>
+            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 sm:inline-flex">
+              <UserCircle className="size-4 text-primary" aria-hidden="true" />
+              Seongho
+            </button>
             <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">
               맥락 종합
             </span>
@@ -345,8 +418,25 @@ export function DashboardLayout({
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
         </div>
         <nav aria-label="Mobile workspace menu" className="grid gap-2">
-          {mailNavItems.map(({ label, description, icon: Icon, href }) => {
+          {mailNavItems.map(({ label, description, icon: Icon, href, available }) => {
             const active = isActivePath(pathname, href);
+            if (!available) {
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  disabled
+                  data-coming-soon="true"
+                  className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+                >
+                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex flex-col leading-tight">
+                    <span>{label} <span className="text-[10px]">준비 중</span></span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
+                  </span>
+                </button>
+              );
+            }
             return (
             <Link
               key={label}
@@ -368,8 +458,8 @@ export function DashboardLayout({
         </nav>
       </div>
 
-      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-[60] grid grid-cols-4 rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
-        {mobileWorkspaceItems.map(({ label, icon: Icon, view }) => {
+      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-[60] grid grid-cols-5 items-center rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
+        {mobileWorkspaceItems.slice(0, 2).map(({ label, icon: Icon, view }) => {
           const active = activeMobileView === view;
           return (
             <a
@@ -387,7 +477,69 @@ export function DashboardLayout({
             </a>
           );
         })}
+        <button
+          type="button"
+          aria-label="AI 빠른 실행"
+          aria-haspopup="dialog"
+          aria-controls="mobile-ai-action-menu"
+          popoverTarget="mobile-ai-action-menu"
+          className="mx-auto grid size-14 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(37,99,255,0.35)] transition-transform focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[-10px]"
+        >
+          <Sparkles className="size-6" aria-hidden="true" />
+        </button>
+        {mobileWorkspaceItems.slice(2).map(({ label, icon: Icon, view }) => {
+          const active = activeMobileView === view;
+          return (
+            <a
+              href={`#mobile-${view}`}
+              key={label}
+              onClick={() => handleMobileWorkspaceChange(view)}
+              data-mobile-view={view}
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-center text-[11px] font-semibold ${
+                active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
+              }`}
+            >
+              <Icon className="size-4" aria-hidden="true" />
+              {label}
+            </a>
+          );
+        })}
       </nav>
+      <div
+        id="mobile-ai-action-menu"
+        role="dialog"
+        aria-label="AI 빠른 실행 메뉴"
+        popover="auto"
+        className="fixed inset-x-5 bottom-24 z-[70] rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop:bg-transparent lg:hidden"
+      >
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-black text-foreground">AI 빠른 실행</p>
+              <p className="mt-1 text-xs text-muted-foreground">메일 맥락을 바로 실행으로 전환합니다.</p>
+            </div>
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">Naruon AI</span>
+          </div>
+          <div className="grid gap-2">
+            {headerActions.map(({ label, action, icon: Icon, message }) => (
+              <button
+                key={action}
+                type="button"
+                data-mobile-quick-action={action}
+                popoverTarget="mobile-ai-action-menu"
+                popoverTargetAction="hide"
+                onClick={() => handleHeaderAction(action)}
+                className="flex min-h-12 items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-3 py-2 text-left text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              >
+                <Icon className="size-4 text-primary" aria-hidden="true" />
+                <span className="flex flex-col leading-tight">
+                  {label}
+                  <span className="text-[11px] font-medium text-muted-foreground">{message}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+      </div>
     </div>
   );
 }

@@ -34,7 +34,9 @@ describe("DashboardLayout", () => {
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const sidebar = container.querySelector('aside[aria-label="Naruon workspace sidebar"]');
     const nav = container.querySelector('nav[aria-label="Mail sections"]');
+    const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
+    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
     const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (link) => link.textContent,
@@ -47,15 +49,30 @@ describe("DashboardLayout", () => {
       'a[href="#main-content"]',
     );
     const logo = container.querySelector<HTMLImageElement>('img[alt="Naruon"]');
+    const comingSoonControls = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[data-coming-soon="true"]'),
+    ).map((button) => button.textContent);
 
     expect(banner).not.toBeNull();
     expect(sidebar).not.toBeNull();
     expect(nav).not.toBeNull();
+    expect(primaryNav?.textContent).toContain("홈");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub"]')?.textContent).toContain("AI 허브");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/prompt-studio"]')?.textContent).toContain("프롬프트");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
     expect(mobileNav).not.toBeNull();
+    expect(banner?.querySelector('button[aria-label="알림 보기"]')).not.toBeNull();
+    expect(banner?.querySelector('button[aria-label="프로필 메뉴"]')).not.toBeNull();
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
-    expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "AI 실행", "일정"]);
-    expect(mobileNav?.querySelector('[data-mobile-view="actions"]')?.getAttribute('href')).toBe('#mobile-actions');
+    expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "일정", "더보기"]);
+    expect(mobileQuickActionButton).not.toBeNull();
+    expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
+    expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(true);
+    expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(true);
+    expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(true);
+    expect(nav?.querySelector<HTMLAnchorElement>('a[href="/starred"]')).toBeNull();
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
@@ -87,6 +104,18 @@ describe("DashboardLayout", () => {
     window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
       events.push((event as CustomEvent<{ view: string }>).detail.view);
     }) as EventListener);
+
+    act(() => {
+      mobileQuickActionButton?.click();
+    });
+
+    expect(container.querySelector('[role="dialog"]')?.textContent ?? "").toContain("답장 초안");
+
+    act(() => {
+      container?.querySelector<HTMLButtonElement>('button[data-mobile-quick-action="create-task"]')?.click();
+    });
+
+    expect(headerEvents).toContain("create-task");
 
     act(() => {
       mobileNav?.querySelector<HTMLElement>('[data-mobile-view="actions"]')?.click();

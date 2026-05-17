@@ -20,10 +20,11 @@
 
 1. **P0 — Mobile action workspace:** mostly implemented in `docs/plans/2026-05-16-branding-mobile-action-workspace.md`; remaining semantic cleanup is tracked by tests and review feedback.
 2. **P0 — Header primary actions:** implement in this plan so visible action affordances are real buttons.
-3. **P1 — Dead sidebar route handling:** replace 404-prone future navigation with disabled/coming-soon states or add route stubs.
-4. **P1 — Tablet AI panel behavior:** add a 1024–1279px detail-tab/drawer layout for the right context panel.
-5. **P1 — API-backed mobile search/calendar:** replace placeholder panels with real loading/empty/error/success states.
-6. **P2 — InsightCard adoption:** refactor `EmailDetail` AI cards to use `InsightCard` consistently.
+3. **P0 — Desktop GNB + mobile central AI action:** implemented by `docs/plans/2026-05-17-branding-shell-gnb-mobile-ai.md` so the brand assets' global wayfinding and primary mobile action affordance are present in the shell.
+4. **P1 — Dead sidebar route handling:** implemented by `docs/plans/2026-05-17-branding-shell-gnb-mobile-ai.md` with disabled/coming-soon controls for unavailable future routes.
+5. **P1 — Tablet AI panel behavior:** add a 1024–1279px detail-tab/drawer layout for the right context panel.
+6. **P1 — API-backed mobile search/calendar:** replace placeholder panels with real loading/empty/error/success states.
+7. **P2 — InsightCard adoption:** refactor `EmailDetail` AI cards to use `InsightCard` consistently.
 
 ## Files
 
