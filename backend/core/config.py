@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_email"
     DEBUG: bool = False
     TRUST_DEV_HEADERS: bool = False
+    DEV_AUTH_TOKEN: SecretStr | None = None
     ENCRYPTION_KEY: SecretStr | None = None
     CONTROL_PLANE_DOMAIN: str = "naruon.net"
 

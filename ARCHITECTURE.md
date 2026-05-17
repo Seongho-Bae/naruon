@@ -72,12 +72,14 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication still uses trusted request headers in local/dev, but the backend
-now normalizes them into an auth context with `platform_admin`,
+Authentication no longer treats public `X-User-*` headers as sufficient identity
+material. The remaining development header path requires both
+`TRUST_DEV_HEADERS=true` and a matching server-side `DEV_AUTH_TOKEN` presented as
+`X-Dev-Auth-Token` before `backend/api/auth.py` normalizes `platform_admin`,
 `organization_admin`, `group_admin`, and `member` roles plus optional
-organization/group scope. This preserves the current `X-User-Id` development
-flow while preparing the backend for future Keycloak/Casdoor claims and
-organization-scoped resources that should not assume one workspace per user; see
+organization/group scope. Endpoint tests use FastAPI dependency overrides for
+fixture identity, while production must move to verified Keycloak/Casdoor/OIDC
+claims before multi-user access is claimed; see
 `docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
 NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.

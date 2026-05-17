@@ -2,8 +2,9 @@
 
 ## 확인된 사실 / Confirmed
 
-- `backend/api/auth.py` is dummy header auth using `X-User-Id` and defaults to
-  `default`.
+- `backend/api/auth.py` no longer accepts public `X-User-*` headers by
+  themselves. The development-only header path requires `TRUST_DEV_HEADERS=true`
+  plus a configured `DEV_AUTH_TOKEN` that matches `X-Dev-Auth-Token`.
 - `backend/db/models.py` stores OAuth/OpenAI secret fields through an
   `EncryptedString` type backed by Fernet.
 - `backend/db/models.py` also has a fallback Fernet key when `ENCRYPTION_KEY` is
@@ -22,5 +23,6 @@
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,
   self-hosting footprint, backup/restore, and integration with gateway auth.
-- Replace dummy auth only after tests prove every email/search/query path is
-  scoped to the authenticated mailbox owner.
+- Replace development-token header auth with verified OIDC/JWT claims only after
+  tests prove every email/search/query path is scoped to the authenticated
+  mailbox owner.

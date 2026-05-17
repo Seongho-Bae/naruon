@@ -1,3 +1,11 @@
+## [Unreleased]
+
+### 수정
+- Seongho Bae (@seonghobae): 개발용 `X-User-*` 헤더 인증 경로를 서버 측
+  `DEV_AUTH_TOKEN` 검증 뒤로 격리해, 공개 요청이
+  identity/role/organization 헤더만으로 인증·권한을 획득하지 못하도록
+  수정했습니다.
+
 ## [0.14.1] - 2026-05-13
 
 ### 수정
