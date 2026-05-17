@@ -49,6 +49,12 @@ const calendarCandidate = {
   snippet: '파트너 미팅 일정을 확정하고 캘린더에 반영해야 합니다.',
 };
 
+const aiHubPrompts = [
+  { id: 101, title: 'Q2 출시 판단', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
+  { id: 102, title: '계약 리스크 점검', description: '계약서, 첨부, 메일 스레드를 판단 포인트로 정리합니다.' },
+  { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
+];
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, X-User-Id',
@@ -81,6 +87,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
 
     if (path === '/api/emails' && request.method() === 'GET') {
       await fulfillJson(route, { emails: [email] });
+      return;
+    }
+
+    if (path === '/api/prompts' && request.method() === 'GET') {
+      await fulfillJson(route, aiHubPrompts);
       return;
     }
 

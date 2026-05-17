@@ -133,6 +133,27 @@ test('validates mobile hamburger composition and startup preference controls', a
   await expect(menu.getByText('시작 화면', { exact: true })).toBeHidden();
 });
 
+for (const viewport of [
+  { name: 'mobile', width: 390, height: 844 },
+  { name: 'desktop', width: 1280, height: 1024 },
+] as const) {
+  test(`renders the functional AI hub sections without horizontal overflow at ${viewport.name}`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await mockDashboardApi(page);
+
+    await page.goto('/ai-hub');
+
+    await expect(page.getByRole('heading', { name: 'AI 허브' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '맥락 종합' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '판단 포인트' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '실행 항목' })).toBeVisible();
+    await expect(page.getByText('최근 AI 요약')).toHaveCount(0);
+    await expect(page.getByText('설명 없음')).toHaveCount(0);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+}
+
 for (const panel of [
   { hash: 'mobile-search', region: '모바일 맥락 검색', finalText: '강민수 의사결정 메모', oldPlaceholder: '사람 결과 준비 중' },
   { hash: 'mobile-calendar', region: '모바일 일정 연결', finalText: '파트너 미팅 일정 확정', oldPlaceholder: '디자인 리뷰 후속 조치' },
