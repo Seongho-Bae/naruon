@@ -24,7 +24,12 @@ interface LlmData {
   todos: string[];
 }
 
-export function EmailDetail({ emailId }: { emailId: number | null }) {
+type EmailDetailActionCommand = {
+  id: number;
+  action: string;
+};
+
+export function EmailDetail({ emailId, actionCommand = null }: { emailId: number | null; actionCommand?: EmailDetailActionCommand | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
   const [threadEmails, setThreadEmails] = useState<EmailData[]>([]);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
@@ -44,7 +49,18 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [taskStatus, setTaskStatus] = useState<string | null>(null);
   const threadRequestIdRef = useRef(0);
+  const handledActionCommandIdRef = useRef<number | null>(null);
+  const currentEmailIdRef = useRef<number | null>(emailId);
+
+  useEffect(() => {
+    currentEmailIdRef.current = emailId;
+  }, [emailId]);
+
+  useEffect(() => {
+    handledActionCommandIdRef.current = null;
+  }, [emailId]);
 
   const fetchThread = useCallback(async (currentEmail: EmailData) => {
     const requestId = threadRequestIdRef.current + 1;
@@ -93,6 +109,11 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setDraft('');
       setDraftError(null);
       setSendStatus(null);
+      setIsDrafting(false);
+      setIsSending(false);
+      setIsSyncing(false);
+      setSyncStatus(null);
+      setTaskStatus(null);
 
       try {
         const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
@@ -123,21 +144,25 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     return () => { isMounted = false; };
   }, [emailId, fetchThread]);
 
-  const handleDraftReply = async () => {
+  const handleDraftReply = useCallback(async () => {
     if (!email) return;
+    const actionEmailId = email.id;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
     setIsDrafting(true);
     setDraftError(null);
     setSendStatus(null);
     try {
       const data = await apiClient.post<{ draft: string }>('/api/llm/draft', { email_body: email.body, instruction });
+      if (!isCurrentEmail()) return;
       setDraft(data.draft || '');
     } catch (err) {
+      if (!isCurrentEmail()) return;
       console.error("Error drafting reply:", err);
       setDraftError("답장 초안을 생성하지 못했습니다.");
     } finally {
-      setIsDrafting(false);
+      if (isCurrentEmail()) setIsDrafting(false);
     }
-  };
+  }, [email, instruction]);
 
   const handleSendReply = async () => {
     if (!email || !draft) return;
@@ -161,19 +186,59 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     }
   };
 
-  const handleSyncCalendar = async () => {
-    if (!llmData || !llmData.todos.length) return;
+  const handleSyncCalendar = useCallback(async () => {
+    const actionEmailId = emailId;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    if (!llmData || !llmData.todos.length) {
+      setSyncStatus({ type: 'error', message: '캘린더에 반영할 실행 항목이 없습니다.' });
+      return;
+    }
     setIsSyncing(true);
     setSyncStatus(null);
     try {
       const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
+      if (!isCurrentEmail()) return;
       setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
+      if (!isCurrentEmail()) return;
       setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
     } finally {
-      setIsSyncing(false);
+      if (isCurrentEmail()) setIsSyncing(false);
     }
-  };
+  }, [emailId, llmData]);
+
+  const handleCreateTask = useCallback(() => {
+    if (!llmData || !llmData.todos.length) {
+      setTaskStatus('정리할 실행 항목이 없습니다.');
+      return;
+    }
+    setTaskStatus(`${llmData.todos.length}개 실행 항목을 할 일로 정리했습니다.`);
+  }, [llmData]);
+
+  useEffect(() => {
+    if (!actionCommand) {
+      handledActionCommandIdRef.current = null;
+      return;
+    }
+    if (!email || email.id !== emailId) return;
+    if (handledActionCommandIdRef.current === actionCommand.id) return;
+
+    if (actionCommand.action === 'reply-draft') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(() => void handleDraftReply());
+      return;
+    }
+    if (!llmData && !llmError) return;
+    if (actionCommand.action === 'calendar-sync') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(() => void handleSyncCalendar());
+      return;
+    }
+    if (actionCommand.action === 'create-task') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(handleCreateTask);
+    }
+  }, [actionCommand, email, emailId, handleCreateTask, handleDraftReply, handleSyncCalendar, llmData, llmError]);
 
   if (!emailId) {
     return (
@@ -277,6 +342,25 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                 {syncStatus && (
                   <span className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
                     {syncStatus.message}
+                  </span>
+                )}
+                {taskStatus && (
+                  <span role="status" aria-live="polite" className="text-xs text-emerald-700">
+                    {taskStatus}
+                  </span>
+                )}
+              </div>
+            )}
+            {llmData && llmData.todos.length === 0 && (syncStatus || taskStatus) && (
+              <div className="mt-4 flex flex-col gap-1">
+                {syncStatus && (
+                  <span role={syncStatus.type === 'error' ? 'alert' : 'status'} aria-live="polite" className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {syncStatus.message}
+                  </span>
+                )}
+                {taskStatus && (
+                  <span role="status" aria-live="polite" className="text-xs text-emerald-700">
+                    {taskStatus}
                   </span>
                 )}
               </div>

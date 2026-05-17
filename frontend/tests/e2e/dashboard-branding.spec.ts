@@ -25,8 +25,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await header.getByRole('button', { name: '답장 초안' }).click();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
-  await expect(desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
-  await desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정').click();
+  await expect(desktopWorkspace.getByText('메일을 선택하세요')).toBeVisible();
   await expect(page).not.toHaveURL(/#mobile-detail$/);
 
   expect(

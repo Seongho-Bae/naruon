@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
@@ -12,24 +12,69 @@ const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: f
 
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
+  const [workspaceActionNotice, setWorkspaceActionNotice] = useState<string | null>(null);
+  const [desktopDetailActionCommand, setDesktopDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
+  const [mobileDetailActionCommand, setMobileDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const mobileView = useMobileWorkspaceView();
   const effectiveMobileView = mobileView === 'detail' && selectedEmail === null ? 'inbox' : mobileView;
   const handleSelectEmail = (emailId: number) => {
     setSelectedEmail(emailId);
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+    setWorkspaceActionNotice(null);
+    setDesktopDetailActionCommand(null);
+    setMobileDetailActionCommand(null);
+    if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1023px)').matches) {
       setMobileWorkspaceView('detail');
     }
   };
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia?.('(max-width: 1023px)');
+    if (!mediaQuery) return;
+
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    function handleHeaderAction(event: Event) {
+      const action = (event as CustomEvent<{ action?: string }>).detail?.action;
+      if (!action) return;
+
+      if (selectedEmail === null) {
+        setWorkspaceActionNotice('먼저 메일을 선택하세요.');
+        return;
+      }
+
+      setWorkspaceActionNotice(null);
+      if (isMobileViewport) {
+        setMobileDetailActionCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action }));
+        setMobileWorkspaceView('detail');
+      } else {
+        setDesktopDetailActionCommand((previous) => ({ id: (previous?.id ?? 0) + 1, action }));
+      }
+    }
+
+    window.addEventListener('naruon:header-action', handleHeaderAction);
+    return () => window.removeEventListener('naruon:header-action', handleHeaderAction);
+  }, [isMobileViewport, selectedEmail]);
+
   return (
     <>
+      {workspaceActionNotice && (
+        <div role="status" aria-live="polite" className="absolute left-1/2 top-3 z-50 -translate-x-1/2 rounded-2xl border border-primary/20 bg-card px-4 py-3 text-sm font-bold text-primary shadow-lg">
+          {workspaceActionNotice}
+        </div>
+      )}
       <ResizablePanelGroup role="region" aria-label="데스크톱 메일 작업공간" orientation="horizontal" className="hidden h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex">
           <ResizablePanel defaultSize={27} minSize={22}>
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={48} minSize={34}>
-            <EmailDetail emailId={selectedEmail} />
+            <EmailDetail emailId={selectedEmail} actionCommand={isMobileViewport ? null : desktopDetailActionCommand} />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={25} minSize={20}>
@@ -70,6 +115,7 @@ export default function Home() {
               <button 
                 onClick={() => {
                   setSelectedEmail(null);
+                  setMobileDetailActionCommand(null);
                   setMobileWorkspaceView('inbox');
                 }}
                 className="text-sm font-semibold text-primary flex items-center gap-1"
@@ -78,7 +124,7 @@ export default function Home() {
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-hidden">
-              {effectiveMobileView === 'detail' && selectedEmail !== null ? <EmailDetail emailId={selectedEmail} /> : null}
+              {effectiveMobileView === 'detail' && selectedEmail !== null ? <EmailDetail emailId={selectedEmail} actionCommand={isMobileViewport ? mobileDetailActionCommand : null} /> : null}
             </div>
           </section>
           <section

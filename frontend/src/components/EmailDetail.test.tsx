@@ -242,7 +242,8 @@ describe("EmailDetail", () => {
     const threadResponse = deferred<ReturnType<typeof jsonResponse>>();
     const standaloneEmailResponse = deferred<ReturnType<typeof jsonResponse>>();
 
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
       const url = String(input);
       if (url.endsWith("/api/emails/1")) return threadedEmailResponse.promise;
       if (url.endsWith("/api/emails/3")) return standaloneEmailResponse.promise;
@@ -305,7 +306,8 @@ describe("EmailDetail", () => {
       body: "Please review the launch plan.",
     };
 
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
       const url = String(input);
       if (url.endsWith("/api/emails/5")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) {
@@ -330,5 +332,212 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("1개 실행 항목");
     expect(container.textContent).not.toContain("AI Generated");
     expect(container.textContent).not.toContain("Tasks");
+  });
+
+  it("runs a requested reply draft command for the selected email", async () => {
+    const email: TestEmail = {
+      id: 7,
+      message_id: "<command@example.com>",
+      thread_id: null,
+      sender: "command@example.com",
+      recipients: "user@example.com",
+      subject: "Command check",
+      date: "2026-05-17T09:00:00Z",
+      body: "Please draft a launch update.",
+    };
+    const nextEmail: TestEmail = {
+      ...email,
+      id: 8,
+      message_id: "<next-command@example.com>",
+      subject: "Next command check",
+      body: "Please draft a follow-up update.",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      void init;
+      const url = String(input);
+      if (url.endsWith("/api/emails/7")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/emails/8")) return Promise.resolve(jsonResponse(nextEmail));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "출시 업데이트", todos: ["일정 확인"] }));
+      }
+      if (url.endsWith("/api/llm/draft")) {
+        return Promise.resolve(jsonResponse({ draft: "초안 답장입니다." }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={7} actionCommand={{ id: 1, action: "reply-draft" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/llm/draft");
+    expect(container.querySelector<HTMLTextAreaElement>('#reply-draft')?.value).toBe("초안 답장입니다.");
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={7} actionCommand={{ id: 1, action: "reply-draft" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/llm/draft"))).toHaveLength(1);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={7} actionCommand={null} />);
+    });
+    await flushAsyncWork();
+    await act(async () => {
+      root?.render(<EmailDetail emailId={7} actionCommand={{ id: 1, action: "reply-draft" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/llm/draft"))).toHaveLength(2);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={8} actionCommand={{ id: 1, action: "reply-draft" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/llm/draft"))).toHaveLength(3);
+    const draftRequests = fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/llm/draft"));
+    expect(JSON.parse(String(draftRequests[2][1]?.body))).toMatchObject({
+      email_body: "Please draft a follow-up update.",
+    });
+  });
+
+  it("shows shell command feedback when an email has no todos", async () => {
+    const email: TestEmail = {
+      id: 12,
+      message_id: "<empty-todos@example.com>",
+      thread_id: null,
+      sender: "empty@example.com",
+      recipients: "user@example.com",
+      subject: "No todos",
+      date: "2026-05-17T12:00:00Z",
+      body: "No follow-up needed.",
+    };
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/12")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "후속 조치 없음", todos: [] }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={12} actionCommand={{ id: 3, action: "calendar-sync" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("캘린더에 반영할 실행 항목이 없습니다.");
+  });
+
+  it("waits for summary todos before consuming a calendar command", async () => {
+    const email: TestEmail = {
+      id: 9,
+      message_id: "<calendar-command@example.com>",
+      thread_id: null,
+      sender: "calendar@example.com",
+      recipients: "user@example.com",
+      subject: "Calendar command",
+      date: "2026-05-17T10:00:00Z",
+      body: "Please sync the launch meeting.",
+    };
+    const summaryResponse = deferred<ReturnType<typeof jsonResponse>>();
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/9")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) return summaryResponse.promise;
+      if (url.endsWith("/api/calendar/sync")) return Promise.resolve(jsonResponse({ synced: 1 }));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={9} actionCommand={{ id: 2, action: "calendar-sync" }} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(0);
+
+    await act(async () => {
+      summaryResponse.resolve(jsonResponse({ summary: "회의 일정", todos: ["출시 회의 일정 잡기"] }));
+      await summaryResponse.promise;
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(1);
+    expect(container.textContent).toContain("1개 일정이 캘린더에 반영되었습니다.");
+  });
+
+  it("ignores a late draft response after the selected email changes", async () => {
+    const emailA: TestEmail = {
+      id: 10,
+      message_id: "<late-a@example.com>",
+      thread_id: null,
+      sender: "late-a@example.com",
+      recipients: "user@example.com",
+      subject: "Late A",
+      date: "2026-05-17T11:00:00Z",
+      body: "Draft for A.",
+    };
+    const emailB: TestEmail = {
+      ...emailA,
+      id: 11,
+      message_id: "<late-b@example.com>",
+      subject: "Late B",
+      body: "Draft for B.",
+    };
+    const draftResponse = deferred<ReturnType<typeof jsonResponse>>();
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/10")) return Promise.resolve(jsonResponse(emailA));
+      if (url.endsWith("/api/emails/11")) return Promise.resolve(jsonResponse(emailB));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({ summary: "요약", todos: ["일정 확인"] }));
+      }
+      if (url.endsWith("/api/llm/draft")) return draftResponse.promise;
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={10} actionCommand={{ id: 1, action: "reply-draft" }} />);
+    });
+    await flushAsyncWork();
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={11} actionCommand={null} />);
+    });
+    await flushAsyncWork();
+
+    await act(async () => {
+      draftResponse.resolve(jsonResponse({ draft: "A의 늦은 초안입니다." }));
+      await draftResponse.promise;
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("Late B");
+    expect(container.querySelector<HTMLTextAreaElement>('#reply-draft')?.value).toBe("");
   });
 });
