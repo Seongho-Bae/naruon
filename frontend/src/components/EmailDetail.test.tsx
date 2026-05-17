@@ -44,6 +44,9 @@ vi.mock("@/components/ui/input", () => ({
 
 vi.mock("lucide-react", () => ({
   MessagesSquare: () => <svg aria-hidden="true" />,
+  AlertCircle: () => <svg aria-hidden="true" />,
+  RefreshCw: () => <svg aria-hidden="true" />,
+  Info: () => <svg aria-hidden="true" />,
 }));
 
 import { EmailDetail } from "./EmailDetail";
@@ -214,6 +217,49 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("Thread B sibling body");
     expect(container.textContent).toContain("2개 메시지");
     expect(container.textContent).not.toContain("Thread A stale sibling body");
+  });
+
+  it("renders AI summary, action items, and reply drafting in reusable insight cards", async () => {
+    const email: TestEmail = {
+      id: 7,
+      message_id: "<insight@example.com>",
+      thread_id: null,
+      sender: "insight@example.com",
+      recipients: "user@example.com",
+      subject: "Insight card adoption",
+      date: "2026-05-17T10:00:00Z",
+      body: "Please summarize this launch message and prepare actions.",
+    };
+
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/7")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({
+          summary: "출시 메시지의 핵심 맥락입니다.",
+          todos: ["캘린더에 출시 리뷰 일정을 반영", "답장 초안 준비"],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={7} />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("출시 메시지의 핵심 맥락입니다.") ?? false);
+
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('article[data-insight-card="true"]'));
+    expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual(
+      expect.arrayContaining(["맥락 종합", "실행 항목", "답장 실행"]),
+    );
+    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 실행")?.querySelector('[role="heading"][aria-level="3"]')?.textContent).toContain("답장 실행");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("출시 메시지의 핵심 맥락입니다.");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("캘린더에 출시 리뷰 일정을 반영");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 실행")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
   });
 
   it("clears conversation loading when the latest email has no thread", async () => {

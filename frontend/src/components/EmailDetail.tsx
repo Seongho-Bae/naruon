@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { MessagesSquare } from "lucide-react";
+import { InsightCard } from "@/components/InsightCard";
 import {
   buildThreadUrl,
   buildReplyPayload,
@@ -287,29 +288,49 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-6 bg-background/50 p-6">
           
-          <div className="space-y-2 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">✦</span>
-              <h3 className="text-sm font-black text-primary">맥락 종합</h3>
-              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI 생성</Badge>
-            </div>
-            <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
-              {llmData ? (
-                <p className="text-sm">{llmData.summary}</p>
-              ) : llmError ? (
-                <p className="text-sm text-red-500">{llmError}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">요약을 생성하는 중입니다...</p>
-              )}
-            </div>
-          </div>
+          <InsightCard
+            title="맥락 종합"
+            icon={<span aria-hidden="true">✦</span>}
+            loading={!llmData && !llmError}
+            error={llmError}
+            provenance="AI 생성"
+          >
+            {llmData ? <p className="text-sm">{llmData.summary}</p> : null}
+          </InsightCard>
 
-          <div className="space-y-2 rounded-2xl border border-emerald-500/20 bg-card p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600" aria-hidden="true">✓</span>
-              <h3 className="text-sm font-black text-emerald-700">실행 항목</h3>
-              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0}개 실행 항목</Badge>
-            </div>
+          <InsightCard
+            title="실행 항목"
+            icon={<span aria-hidden="true">✓</span>}
+            loading={!llmData && !llmError}
+            error={llmError ? '실행 항목을 추출하지 못했습니다.' : null}
+            empty={Boolean(llmData && llmData.todos.length === 0)}
+            emptyMessage="실행 항목이 없습니다."
+            provenance={`${llmData?.todos.length || 0}개 실행 항목`}
+            footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
+              <>
+                {llmData.todos.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={handleSyncCalendar}
+                    disabled={isSyncing}
+                    className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
+                  >
+                    {isSyncing ? "동기화 중" : "캘린더 반영"}
+                  </Button>
+                )}
+                {syncStatus && (
+                  <span className={`self-center text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {syncStatus.message}
+                  </span>
+                )}
+                {taskStatus && (
+                  <span role="status" aria-live="polite" className="self-center text-xs text-emerald-700">
+                    {taskStatus}
+                  </span>
+                )}
+              </>
+            ) : null}
+          >
             {llmData ? (
               llmData.todos.length > 0 ? (
                 <ul className="list-none space-y-2 text-sm">
@@ -320,52 +341,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">실행 항목이 없습니다.</p>
-              )
-            ) : llmError ? (
-              <p className="text-sm text-red-500">실행 항목을 추출하지 못했습니다.</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">실행 항목을 추출하는 중입니다...</p>
-            )}
-            
-            {llmData && llmData.todos.length > 0 && (
-              <div className="mt-4 flex items-center justify-between">
-                <Button 
-                  size="sm" 
-                  onClick={handleSyncCalendar} 
-                  disabled={isSyncing}
-                  className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
-                >
-                  {isSyncing ? "동기화 중" : "캘린더 반영"}
-                </Button>
-                {syncStatus && (
-                  <span className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {syncStatus.message}
-                  </span>
-                )}
-                {taskStatus && (
-                  <span role="status" aria-live="polite" className="text-xs text-emerald-700">
-                    {taskStatus}
-                  </span>
-                )}
-              </div>
-            )}
-            {llmData && llmData.todos.length === 0 && (syncStatus || taskStatus) && (
-              <div className="mt-4 flex flex-col gap-1">
-                {syncStatus && (
-                  <span role={syncStatus.type === 'error' ? 'alert' : 'status'} aria-live="polite" className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {syncStatus.message}
-                  </span>
-                )}
-                {taskStatus && (
-                  <span role="status" aria-live="polite" className="text-xs text-emerald-700">
-                    {taskStatus}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              ) : null
+            ) : null}
+          </InsightCard>
 
           <Separator />
           
@@ -401,10 +379,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
           <Separator />
 
-          <div className="space-y-4 rounded-2xl border border-purple-500/20 bg-card p-4 shadow-sm">
+          <InsightCard title="답장 실행" provenance="사용자 확인 필요">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
-                <h3 className="text-sm font-black text-purple-700">답장 실행</h3>
                 <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>
                 <Input
                   id="reply-instruction"
@@ -467,7 +444,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 </Button>
               </div>
             </div>
-          </div>
+          </InsightCard>
         </div>
       </ScrollArea>
     </div>

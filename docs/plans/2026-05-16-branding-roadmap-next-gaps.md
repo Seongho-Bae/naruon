@@ -24,13 +24,24 @@
 4. **P1 — Dead sidebar route handling:** implemented by `docs/plans/2026-05-17-branding-shell-gnb-mobile-ai.md` with disabled/coming-soon controls for unavailable future routes.
 5. **P1 — Tablet AI panel behavior:** implemented by `docs/plans/2026-05-17-tablet-ai-panel-collapse.md` with a 1024–1279px collapsed context panel and tablet header action coverage.
 6. **P1 — API-backed mobile search/calendar:** implemented by `docs/plans/2026-05-17-mobile-search-calendar-api.md` with `/api/search`-backed loading, success, empty, and error states for mobile panels.
-7. **P2 — InsightCard adoption:** refactor `EmailDetail` AI cards to use `InsightCard` consistently.
+7. **P2 — InsightCard adoption:** implemented by making `EmailDetail` render `맥락 종합`, `실행 항목`, and `답장 실행` through reusable `InsightCard` wrappers with stable `article[data-insight-card]` landmarks, loading/error/empty state handling, and footer action/status preservation.
+
+## P2 InsightCard adoption evidence
+
+- RED: `npm test -- src/components/EmailDetail.test.tsx` failed because `EmailDetail` rendered zero `article[data-insight-card="true"]` landmarks for `맥락 종합`, `실행 항목`, and `답장 실행`.
+- GREEN: `npm test -- src/components/EmailDetail.test.tsx` passed with 8 tests after refactoring summary/action/reply sections to `InsightCard`.
+- Regression suite: `npm test -- src/components/EmailDetail.test.tsx src/components/DashboardLayout.test.tsx src/app/page.test.tsx src/app/ai-hub/page.test.tsx src/components/mobile-workspace-panels.test.tsx` passed with 33 tests.
+- Static checks: `npm run typecheck` and `npm run lint` passed.
+- Responsive/browser evidence: mocked localhost Playwright smoke confirmed insight cards `맥락 종합`, `실행 항목`, `답장 실행` render with no horizontal overflow; screenshot captured as `email-insight-cards-1280.png`.
 
 ## Files
 
 - Modify: `frontend/src/components/DashboardLayout.test.tsx`
 - Modify: `frontend/tests/e2e/dashboard-branding.spec.ts`
 - Modify: `frontend/src/components/DashboardLayout.tsx`
+- P2 completed with: `frontend/src/components/EmailDetail.test.tsx`
+- P2 completed with: `frontend/src/components/EmailDetail.tsx`
+- P2 completed with: `frontend/src/components/InsightCard.tsx`
 
 ## Task 1: Header primary actions are accessible buttons
 
