@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
+import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
   { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/', available: true },
@@ -78,6 +79,19 @@ const primaryNavItems = [
   { label: 'AI 허브', href: '/ai-hub', icon: Sparkles },
   { label: '프롬프트', href: '/prompt-studio', icon: PenLine },
   { label: '설정', href: '/settings', icon: Settings },
+];
+
+const startupViewItems = [
+  { label: '대시보드', view: 'dashboard' as const, description: '오늘의 실행 요약' },
+  { label: '이메일', view: 'email' as const, description: '받은편지함 작업공간' },
+  { label: '일정', view: 'calendar' as const, description: '캘린더 연결 먼저 보기' },
+];
+
+const mobileWorkspaceMenuItems = [
+  { label: '받은편지함', description: '메일 스레드', icon: Inbox, href: '#mobile-inbox', view: 'inbox' as const },
+  { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
+  { label: '일정 연결', description: '캘린더 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
+  { label: 'AI 실행', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
 ];
 
 const headerActions = [
@@ -214,14 +228,32 @@ export function DashboardLayout({
   const pathname = usePathname();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const activeMobileView = useMobileWorkspaceView();
+  const startupView = useWorkspaceStartupView();
+
+  function closeMobileWorkspaceMenu() {
+    const menu = document.getElementById('mobile-workspace-menu') as (HTMLElement & { hidePopover?: () => void }) | null;
+    menu?.hidePopover?.();
+    setIsWorkspaceMenuOpen(false);
+  }
 
   function handleMobileWorkspaceChange(view: (typeof mobileWorkspaceItems)[number]['view']) {
-    setIsWorkspaceMenuOpen(false);
+    closeMobileWorkspaceMenu();
     setMobileWorkspaceView(view);
   }
 
   function handleHeaderAction(action: string) {
     window.dispatchEvent(new CustomEvent('naruon:header-action', { detail: { action } }));
+  }
+
+  function handleStartupViewChange(view: WorkspaceStartupView) {
+    setWorkspaceStartupView(view);
+    closeMobileWorkspaceMenu();
+    if (view === 'email') {
+      setMobileWorkspaceView('inbox');
+    }
+    if (view === 'calendar') {
+      setMobileWorkspaceView('calendar');
+    }
   }
 
   return (
@@ -345,6 +377,8 @@ export function DashboardLayout({
             aria-label="Open workspace menu"
             aria-controls="mobile-workspace-menu"
             aria-expanded={isWorkspaceMenuOpen}
+            aria-haspopup="dialog"
+            popoverTarget="mobile-workspace-menu"
             onClick={() => setIsWorkspaceMenuOpen((open) => !open)}
             className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 lg:hidden"
           >
@@ -410,14 +444,46 @@ export function DashboardLayout({
 
       <div
         id="mobile-workspace-menu"
-        hidden={!isWorkspaceMenuOpen}
-        className="fixed inset-x-3 top-20 z-50 rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
+        popover="auto"
+        role="dialog"
+        aria-label="모바일 워크스페이스 메뉴"
+        data-open={isWorkspaceMenuOpen ? 'true' : 'false'}
+        onToggle={(event) => setIsWorkspaceMenuOpen(event.currentTarget.matches(':popover-open'))}
+        className="fixed inset-x-3 top-20 z-50 max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
       >
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
           <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
         </div>
-        <nav aria-label="Mobile workspace menu" className="grid gap-2">
+        <div className="space-y-4">
+          <section aria-label="Mobile startup preference" className="space-y-2">
+            <p className="px-1 text-[11px] font-black text-muted-foreground">시작 화면</p>
+            <div className="grid grid-cols-3 gap-2">
+              {startupViewItems.map(({ label, view, description }) => {
+                const active = startupView === view;
+                return (
+                  <button
+                    key={view}
+                    type="button"
+                    data-startup-view={view}
+                    aria-pressed={active}
+                    title={description}
+                    popoverTarget="mobile-workspace-menu"
+                    popoverTargetAction="hide"
+                    onClick={() => handleStartupViewChange(view)}
+                    className={`min-h-11 rounded-2xl border px-2 text-xs font-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                      active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/70 text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <nav aria-label="Mobile workspace menu" className="grid gap-2">
+            <p className="px-1 text-[11px] font-black text-muted-foreground">메일</p>
           {mailNavItems.map(({ label, description, icon: Icon, href, available }) => {
             const active = isActivePath(pathname, href);
             if (!available) {
@@ -443,7 +509,7 @@ export function DashboardLayout({
               href={href}
               aria-current={active ? 'page' : undefined}
               onClick={() => {
-                setIsWorkspaceMenuOpen(false);
+                closeMobileWorkspaceMenu();
                 setMobileWorkspaceView('inbox');
               }}
               className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
@@ -453,9 +519,67 @@ export function DashboardLayout({
                 <span>{label}</span>
                 <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
               </span>
+              </Link>
+           )})}
+          </nav>
+
+          <nav aria-label="Mobile workspace destinations" className="grid gap-2">
+            <p className="px-1 text-[11px] font-black text-muted-foreground">워크스페이스</p>
+            {mobileWorkspaceMenuItems.map(({ label, description, icon: Icon, href, view }) => {
+              const active = activeMobileView === view;
+              return (
+                <a
+                  key={view}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => handleMobileWorkspaceChange(view)}
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
+                  }`}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  <span className="flex flex-col leading-tight">
+                    <span>{label}</span>
+                    <span className={`text-[11px] font-medium ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{description}</span>
+                  </span>
+                </a>
+              );
+            })}
+          </nav>
+
+          <nav aria-label="Mobile utility menu" className="grid gap-2">
+            <p className="px-1 text-[11px] font-black text-muted-foreground">도움</p>
+            <Link
+              href="/settings"
+              onClick={() => closeMobileWorkspaceMenu()}
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            >
+              <Settings className="size-4 text-primary" aria-hidden="true" />
+              <span className="flex flex-col leading-tight">
+                <span>설정</span>
+                <span className="text-[11px] font-medium text-muted-foreground">시작 화면과 계정 설정</span>
+              </span>
             </Link>
-          )})}
-        </nav>
+            <button
+              type="button"
+              disabled
+              data-coming-soon="true"
+              className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+            >
+              <HelpCircle className="size-4" aria-hidden="true" />
+              <span>도움말 <span className="text-[10px]">준비 중</span></span>
+            </button>
+            <button
+              type="button"
+              disabled
+              data-coming-soon="true"
+              className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+            >
+              <UserCircle className="size-4" aria-hidden="true" />
+              <span>프로필 <span className="text-[10px]">준비 중</span></span>
+            </button>
+          </nav>
+        </div>
       </div>
 
       <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-[60] grid grid-cols-5 items-center rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">

@@ -6,9 +6,93 @@ import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
-import { Network } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
+import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
+
+function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
+  return (
+    <section
+      aria-label="오늘의 실행 대시보드"
+      className="h-full overflow-y-auto rounded-3xl border border-border/80 bg-gradient-to-br from-primary/8 via-card to-emerald-500/8 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
+    >
+      <div className="max-w-5xl space-y-6">
+        <div className="rounded-3xl border border-primary/15 bg-card/90 p-6 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Naruon Start</p>
+          <h1 className="mt-3 text-3xl font-black text-foreground">오늘의 실행 대시보드</h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+            메일, 일정, 실행 항목을 한 번에 훑고 지금 필요한 작업공간으로 바로 이동합니다.
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenView('email')}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground shadow-[0_16px_34px_rgba(37,99,255,0.28)] focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            >
+              <Inbox className="size-4" aria-hidden="true" />
+              이메일 작업공간 열기
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenView('calendar')}
+              className="inline-flex h-11 items-center gap-2 rounded-2xl border border-border bg-background px-4 text-sm font-bold text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            >
+              <CalendarDays className="size-4 text-primary" aria-hidden="true" />
+              일정관리 열기
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            { title: '판단 대기 메일', value: '12', copy: '오늘 답장 또는 위임이 필요한 스레드', icon: Inbox },
+            { title: '캘린더 반영', value: '3', copy: '메일에서 추출된 회의와 마감 후보', icon: CalendarDays },
+            { title: '실행 항목', value: '8', copy: '다음 행동으로 전환할 수 있는 작업', icon: CheckCircle2 },
+          ].map(({ title, value, copy, icon: Icon }) => (
+            <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary">
+                  <Icon className="size-5" aria-hidden="true" />
+                </span>
+                <span className="text-3xl font-black text-foreground">{value}</span>
+              </div>
+              <h2 className="mt-4 text-base font-black text-foreground">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
+  return (
+    <section aria-label="일정관리 시작 화면" className="h-full overflow-y-auto rounded-3xl border border-border/80 bg-card/80 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+      <div className="max-w-4xl space-y-5">
+        <div className="rounded-3xl border border-primary/15 bg-primary/5 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-primary">Calendar</p>
+          <h1 className="mt-3 text-3xl font-black text-foreground">일정관리 시작 화면</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">메일에서 추출한 회의, 마감, 후속 조치를 먼저 확인합니다.</p>
+          <button
+            type="button"
+            onClick={() => onOpenView('email')}
+            className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+          >
+            <Inbox className="size-4" aria-hidden="true" />
+            이메일 작업공간 열기
+          </button>
+        </div>
+        {['Q2 출시 우선순위 회의', '벤더 계약 검토', '디자인 리뷰 후속 조치'].map((title) => (
+          <article key={title} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-sm font-bold text-foreground">{title}</p>
+            <p className="mt-1 text-xs text-muted-foreground">오늘 안에 일정 연결 검토가 필요합니다.</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
@@ -16,9 +100,27 @@ export default function Home() {
   const [desktopDetailActionCommand, setDesktopDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
   const [mobileDetailActionCommand, setMobileDetailActionCommand] = useState<{ id: number; action: string } | null>(null);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const startupView = useWorkspaceStartupView();
+  const [startupViewOverride, setStartupViewOverride] = useState<WorkspaceStartupView | null>(null);
+  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(
+    () => typeof window !== 'undefined' && window.location.hash.startsWith('#mobile-'),
+  );
+  const activeStartupView = startupViewOverride ?? startupView;
+  const showMobileDashboard = activeStartupView === 'dashboard' && !mobileWorkspaceOverride;
   const mobileView = useMobileWorkspaceView();
   const effectiveMobileView = mobileView === 'detail' && selectedEmail === null ? 'inbox' : mobileView;
+  const openStartupView = (view: WorkspaceStartupView) => {
+    setStartupViewOverride(view);
+    setMobileWorkspaceOverride(view !== 'dashboard');
+    if (view === 'email') {
+      setMobileWorkspaceView('inbox');
+    }
+    if (view === 'calendar') {
+      setMobileWorkspaceView('calendar');
+    }
+  };
   const handleSelectEmail = (emailId: number) => {
+    setStartupViewOverride('email');
     setSelectedEmail(emailId);
     setWorkspaceActionNotice(null);
     setDesktopDetailActionCommand(null);
@@ -36,6 +138,37 @@ export default function Home() {
     syncViewport();
     mediaQuery.addEventListener('change', syncViewport);
     return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash.startsWith('#mobile-')) {
+      return;
+    }
+    if (startupView === 'calendar') {
+      setMobileWorkspaceView('calendar');
+    }
+    if (startupView === 'email') {
+      setMobileWorkspaceView('inbox');
+    }
+  }, [startupView]);
+
+  useEffect(() => {
+    const clearStartupOverride = () => setStartupViewOverride(null);
+    window.addEventListener('naruon:startup-view-change', clearStartupOverride);
+    return () => window.removeEventListener('naruon:startup-view-change', clearStartupOverride);
+  }, []);
+
+  useEffect(() => {
+    const markMobileWorkspaceOverride = () => setMobileWorkspaceOverride(true);
+    const clearMobileWorkspaceOverride = () => setMobileWorkspaceOverride(false);
+    window.addEventListener('hashchange', markMobileWorkspaceOverride);
+    window.addEventListener('naruon:mobile-workspace', markMobileWorkspaceOverride);
+    window.addEventListener('naruon:startup-view-change', clearMobileWorkspaceOverride);
+    return () => {
+      window.removeEventListener('hashchange', markMobileWorkspaceOverride);
+      window.removeEventListener('naruon:mobile-workspace', markMobileWorkspaceOverride);
+      window.removeEventListener('naruon:startup-view-change', clearMobileWorkspaceOverride);
+    };
   }, []);
 
   useEffect(() => {
@@ -68,7 +201,9 @@ export default function Home() {
           {workspaceActionNotice}
         </div>
       )}
-      <ResizablePanelGroup role="region" aria-label="데스크톱 메일 작업공간" orientation="horizontal" className="hidden h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:flex">
+      {activeStartupView === 'dashboard' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupDashboard onOpenView={openStartupView} /></div>}
+      {activeStartupView === 'calendar' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupCalendar onOpenView={openStartupView} /></div>}
+      <ResizablePanelGroup role="region" aria-label="데스크톱 메일 작업공간" orientation="horizontal" className={`${activeStartupView === 'email' ? 'hidden lg:flex' : 'hidden'} h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl`}>
           <ResizablePanel defaultSize={27} minSize={22}>
             <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
           </ResizablePanel>
@@ -96,7 +231,8 @@ export default function Home() {
             </div>
           </ResizablePanel>
       </ResizablePanelGroup>
-      <div className="h-full overflow-hidden rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
+       {showMobileDashboard && <div className="h-full lg:hidden"><StartupDashboard onOpenView={openStartupView} /></div>}
+       <div className={`${showMobileDashboard ? 'hidden' : 'block'} h-full overflow-hidden rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden`}>
           <section
             id="mobile-inbox"
             aria-label="모바일 받은편지함"
@@ -131,7 +267,7 @@ export default function Home() {
             id="mobile-search"
             aria-label="모바일 맥락 검색"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${effectiveMobileView === 'search' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${effectiveMobileView === 'search' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-28`}
           >
             <div className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <p className="text-xs font-bold text-primary">맥락 검색</p>
@@ -152,7 +288,7 @@ export default function Home() {
             id="mobile-actions"
             aria-label="모바일 AI 실행"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4 pb-28`}
           >
             <div className="mb-4 rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2">
@@ -173,7 +309,7 @@ export default function Home() {
             id="mobile-calendar"
             aria-label="모바일 일정 연결"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${effectiveMobileView === 'calendar' ? 'flex' : 'hidden'} flex-col bg-gradient-to-b from-primary/5 via-background to-card p-4`}
+            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${effectiveMobileView === 'calendar' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-28`}
           >
             <div className="rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <p className="text-xs font-bold text-primary">일정 연결</p>

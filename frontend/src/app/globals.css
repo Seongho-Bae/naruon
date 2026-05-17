@@ -146,6 +146,16 @@
 }
 
 @layer components {
+  #mobile-workspace-menu:popover-open {
+    display: block;
+  }
+
+  @supports not selector(:popover-open) {
+    #mobile-workspace-menu:not([data-open="true"]) {
+      display: none;
+    }
+  }
+
   body:has(#mobile-search:target) .mobile-workspace-panel,
   body:has(#mobile-actions:target) .mobile-workspace-panel,
   body:has(#mobile-calendar:target) .mobile-workspace-panel {

@@ -39,7 +39,11 @@ vi.mock("next/dynamic", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  CalendarDays: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
+  Inbox: () => <svg aria-hidden="true" />,
   Network: () => <svg aria-hidden="true" />,
+  Sparkles: () => <svg aria-hidden="true" />,
 }));
 
 import Home from "./page";
@@ -67,6 +71,9 @@ describe("Home workspace action bridge", () => {
     container?.remove();
     container = null;
     mockEmailSelection.emailId = 42;
+    localStorage.clear();
+    window.history.replaceState(null, "", "/");
+    Reflect.deleteProperty(window, "__naruonMobileWorkspace");
     vi.unstubAllGlobals();
   });
 
@@ -152,5 +159,89 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).toContain("email:43");
     expect(container.textContent).toContain("action:none");
     expect(container.textContent).not.toContain("action:reply-draft");
+  });
+
+  it("defaults to the email workspace when no startup preference is saved", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("메일 선택");
+    expect(container.textContent).toContain("email:none");
+    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+  });
+
+  it("opens the saved calendar startup view on mobile without needing a hash", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "calendar");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
+    expect(container.textContent).toContain("캘린더 반영 대기");
+  });
+
+  it("shows the saved dashboard startup view until users switch back to email", async () => {
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+    expect(container.textContent).toContain("이메일 작업공간 열기");
+
+    await act(async () => {
+      Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])
+        .find((button) => button.textContent?.includes("이메일 작업공간 열기"))
+        ?.click();
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("메일 선택");
+    expect(container.textContent).toContain("email:none");
+  });
+
+  it("lets a mobile hash deep link override a saved dashboard startup view", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    window.history.replaceState(null, "", "/#mobile-calendar");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
+    expect(container.textContent).toContain("캘린더 반영 대기");
+    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
   });
 });

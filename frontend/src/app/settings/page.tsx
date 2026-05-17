@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 interface LLMProvider {
   id: number;
@@ -46,8 +47,15 @@ function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackM
   return message || fallbackMessage;
 }
 
+const startupOptions: Array<{ label: string; value: WorkspaceStartupView; description: string }> = [
+  { label: '대시보드', value: 'dashboard', description: '메일, 일정, 실행 항목 요약을 먼저 봅니다.' },
+  { label: '이메일', value: 'email', description: '기존 받은편지함 작업공간으로 시작합니다.' },
+  { label: '일정', value: 'calendar', description: '메일에서 추출한 일정 후보를 먼저 확인합니다.' },
+];
+
 export default function SettingsPage() {
   const currentUserId = apiClient.getCurrentUserId();
+  const startupView = useWorkspaceStartupView();
 
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -276,6 +284,30 @@ export default function SettingsPage() {
         </TabsList>
 
         <TabsContent value="personal" className="space-y-6">
+          <section className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-foreground">시작 화면</h2>
+            <p className="mt-2 text-sm text-muted-foreground">Naruon을 열 때 가장 먼저 볼 작업공간을 선택합니다.</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {startupOptions.map(({ label, value, description }) => {
+                const active = startupView === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setWorkspaceStartupView(value)}
+                    className={`rounded-2xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                      active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground hover:border-primary/40'
+                    }`}
+                  >
+                    <span className="block text-sm font-black">{label}</span>
+                    <span className={`mt-2 block text-xs leading-5 ${active ? 'text-primary-foreground/85' : 'text-muted-foreground'}`}>{description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
           <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
             <h2 className="font-bold text-lg mb-2">개인 이메일 계정 연결</h2>
             <p className="text-sm text-muted-foreground mb-6">Naruon 워크스페이스에서 사용할 본인의 IMAP/SMTP 이메일 계정을 연결합니다. (개인 단위 설정)</p>

@@ -16,6 +16,7 @@ describe("DashboardLayout", () => {
     root = null;
     container?.remove();
     container = null;
+    localStorage.clear();
   });
 
   it("renders the Naruon branded shell with accessible navigation landmarks", () => {
@@ -99,6 +100,24 @@ describe("DashboardLayout", () => {
     });
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
+    const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
+    expect(mobileMenu?.textContent ?? "").toContain("시작 화면");
+    expect(mobileMenu?.textContent ?? "").toContain("대시보드");
+    expect(mobileMenu?.textContent ?? "").toContain("이메일");
+    expect(mobileMenu?.textContent ?? "").toContain("일정");
+    expect(mobileMenu?.textContent ?? "").toContain("메일");
+    expect(mobileMenu?.textContent ?? "").toContain("워크스페이스");
+    expect(mobileMenu?.textContent ?? "").toContain("도움");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="#mobile-calendar"]')?.textContent).toContain("일정");
+    expect(mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')).not.toBeNull();
+
+    act(() => {
+      mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')?.click();
+    });
+
+    expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
 
     const events: string[] = [];
     window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
@@ -109,7 +128,7 @@ describe("DashboardLayout", () => {
       mobileQuickActionButton?.click();
     });
 
-    expect(container.querySelector('[role="dialog"]')?.textContent ?? "").toContain("답장 초안");
+    expect(container.querySelector('#mobile-ai-action-menu')?.textContent ?? "").toContain("답장 초안");
 
     act(() => {
       container?.querySelector<HTMLButtonElement>('button[data-mobile-quick-action="create-task"]')?.click();
