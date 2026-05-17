@@ -54,4 +54,6 @@
 - Verification: `npm run lint` passed.
 - Verification: `LIVE_BASE_URL=http://127.0.0.1:18081 npm run test:e2e -- dashboard-branding.spec.ts` passed 16/16 against a current local Next dev server. The default `http://127.0.0.1:18080` server was stale and served an older bundle, so it was not used as acceptance evidence.
 - Review follow-up: hash section links now set `aria-current="location"` after sidebar navigation, and Playwright clicks each sidebar item from `/` before asserting URL hash, visible section, and no horizontal overflow.
+- Strix follow-up: `frontend/src/lib/safe-text.ts` is now part of the PR scope with RED/GREEN coverage proving untrusted email text stays on React's text-node rendering path while ambiguous control characters are normalized.
+- Verification after Strix follow-up: `npm test -- src/lib/safe-text.test.tsx src/components/DashboardLayout.test.tsx src/app/ai-hub/page.test.tsx src/components/mobile-workspace-panels.test.tsx`, `npm run typecheck`, `npm run lint`, and `LIVE_BASE_URL=http://127.0.0.1:18081 npm run test:e2e -- dashboard-branding.spec.ts` passed.
 - Screenshot: `ai-hub-deep-links-1280.png` captured `/ai-hub#decisions` for desktop visual inspection.
