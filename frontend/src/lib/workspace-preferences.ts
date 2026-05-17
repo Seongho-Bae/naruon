@@ -14,8 +14,12 @@ export function getWorkspaceStartupView(): WorkspaceStartupView {
     return DEFAULT_STARTUP_VIEW;
   }
 
-  const stored = window.localStorage.getItem(STARTUP_VIEW_KEY);
-  return isWorkspaceStartupView(stored) ? stored : DEFAULT_STARTUP_VIEW;
+  try {
+    const stored = window.localStorage.getItem(STARTUP_VIEW_KEY);
+    return isWorkspaceStartupView(stored) ? stored : DEFAULT_STARTUP_VIEW;
+  } catch {
+    return DEFAULT_STARTUP_VIEW;
+  }
 }
 
 export function setWorkspaceStartupView(view: WorkspaceStartupView) {
@@ -23,7 +27,11 @@ export function setWorkspaceStartupView(view: WorkspaceStartupView) {
     return;
   }
 
-  window.localStorage.setItem(STARTUP_VIEW_KEY, view);
+  try {
+    window.localStorage.setItem(STARTUP_VIEW_KEY, view);
+  } catch {
+    // Restricted/private browsing can reject localStorage writes; keep the UI responsive.
+  }
   window.dispatchEvent(new CustomEvent('naruon:startup-view-change', { detail: { view } }));
 }
 

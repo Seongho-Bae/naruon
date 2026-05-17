@@ -77,6 +77,38 @@ describe("EmailList", () => {
     expect(selectedThread?.className).toContain("min-h-20");
   });
 
+  it("uses the missing-title fallback for blank email subjects", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          emails: [
+            {
+              id: 9,
+              sender: "운영팀",
+              subject: "   ",
+              date: "2026-05-11T09:30:00Z",
+              snippet: "제목이 비어 있는 메일입니다.",
+              unread: false,
+              reply_count: 1,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailList onSelectEmail={vi.fn()} selectedEmailId={null} />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("(제목 없음)");
+  });
+
   it("keeps untrusted email fields on the React text-node path", async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(

@@ -138,7 +138,8 @@ export function EmailList({
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
               const safeSender = toSafeReactText(email.sender);
-              const safeSubject = toSafeReactText(email.subject, '(제목 없음)');
+              const subject = email.subject?.trim() === '' ? undefined : email.subject;
+              const safeSubject = toSafeReactText(subject, '(제목 없음)');
               const safeSnippet = toSafeReactText(email.snippet);
 
               return (
