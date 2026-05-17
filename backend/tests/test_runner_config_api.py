@@ -145,6 +145,31 @@ def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org
     assert "registration_token" not in read_data
 
 
+def test_runner_config_exposes_outbound_connector_manifest(admin_client):
+    response = admin_client.get("/api/runner-config")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector_manifest"] == {
+        "role": "self-hosted_connector",
+        "network_mode": "outbound_only",
+        "control_plane_domain": "naruon.net",
+        "local_protocols": ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+        "prohibited_roles": ["smtp_server", "imap_server", "mx_host"],
+        "runner_usage": "ci_smoke_only",
+    }
+
+
+def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):
+    response = admin_client.post("/api/runner-config/rotate")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector_manifest"]["network_mode"] == "outbound_only"
+    assert data["connector_manifest"]["control_plane_domain"] == "naruon.net"
+    assert "registration_token" not in data["connector_manifest"]
+
+
 def test_platform_admin_can_manage_runner_config(platform_admin_client):
     rotate_response = platform_admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
