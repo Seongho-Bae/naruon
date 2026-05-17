@@ -25,7 +25,8 @@ describe("ProjectsPage", () => {
   let container: HTMLDivElement | null = null;
 
   afterEach(() => {
-    if (root) act(() => root.unmount());
+    const mountedRoot = root;
+    if (mountedRoot) act(() => mountedRoot.unmount());
     root = null;
     container?.remove();
     container = null;

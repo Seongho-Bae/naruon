@@ -50,7 +50,7 @@ export function setMobileWorkspaceView(
   store.view = view;
   if (typeof window !== 'undefined') {
     if (options.updateHash ?? true) {
-      window.history.replaceState(null, '', `#mobile-${view}`);
+      window.history.pushState(null, '', `#mobile-${view}`);
     }
     window.dispatchEvent(new CustomEvent('naruon:mobile-workspace', { detail: { view } }));
   }

@@ -146,10 +146,13 @@ describe("DashboardLayout", () => {
 
     expect(headerEvents).toContain("create-task");
 
+    const actionsNavLink = mobileNav?.querySelector<HTMLAnchorElement>('[data-mobile-view="actions"]');
+    const actionsClick = new MouseEvent("click", { bubbles: true, cancelable: true });
     act(() => {
-      mobileNav?.querySelector<HTMLElement>('[data-mobile-view="actions"]')?.click();
+      actionsNavLink?.dispatchEvent(actionsClick);
     });
 
+    expect(actionsClick.defaultPrevented).toBe(true);
     expect(events).toContain("actions");
   });
 

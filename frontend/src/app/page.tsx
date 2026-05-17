@@ -175,11 +175,10 @@ export default function Home() {
   const desktopViewportModeRef = useRef(false);
   const startupView = useWorkspaceStartupView();
   const [startupViewOverride, setStartupViewOverride] = useState<WorkspaceStartupView | null>(null);
-  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(() => (
-    typeof window !== 'undefined' && window.location.hash.startsWith('#mobile-')
-  ));
+  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(false);
+  const [mobileWorkspaceOverrideReady, setMobileWorkspaceOverrideReady] = useState(false);
   const activeStartupView = startupViewOverride ?? startupView;
-  const showMobileDashboard = activeStartupView === 'dashboard' && !mobileWorkspaceOverride;
+  const showMobileDashboard = activeStartupView === 'dashboard' && mobileWorkspaceOverrideReady && !mobileWorkspaceOverride;
   const mobileView = useMobileWorkspaceView();
   const effectiveMobileView = mobileView === 'detail' && selectedEmail === null ? 'inbox' : mobileView;
   const openStartupView = (view: WorkspaceStartupView) => {
@@ -262,9 +261,13 @@ export default function Home() {
   useEffect(() => {
     const syncMobileWorkspaceOverride = () => {
       setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-'));
+      setMobileWorkspaceOverrideReady(true);
     };
     syncMobileWorkspaceOverride();
-    const clearMobileWorkspaceOverride = () => setMobileWorkspaceOverride(false);
+    const clearMobileWorkspaceOverride = () => {
+      setMobileWorkspaceOverride(false);
+      setMobileWorkspaceOverrideReady(true);
+    };
     window.addEventListener('hashchange', syncMobileWorkspaceOverride);
     window.addEventListener('naruon:mobile-workspace', syncMobileWorkspaceOverride);
     window.addEventListener('naruon:startup-view-change', clearMobileWorkspaceOverride);

@@ -260,7 +260,11 @@ export function DashboardLayout({
     setIsWorkspaceMenuOpen(false);
   }
 
-  function handleMobileWorkspaceChange(view: (typeof mobileWorkspaceItems)[number]['view']) {
+  function handleMobileWorkspaceChange(
+    view: (typeof mobileWorkspaceItems)[number]['view'],
+    event?: React.MouseEvent<HTMLAnchorElement>,
+  ) {
+    event?.preventDefault();
     closeMobileWorkspaceMenu();
     setMobileWorkspaceView(view);
   }
@@ -559,7 +563,7 @@ export function DashboardLayout({
                   key={view}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  onClick={() => handleMobileWorkspaceChange(view)}
+                  onClick={(event) => handleMobileWorkspaceChange(view, event)}
                   className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                     active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
                   }`}
@@ -616,7 +620,7 @@ export function DashboardLayout({
             <a
               href={`#mobile-${view}`}
               key={label}
-              onClick={() => handleMobileWorkspaceChange(view)}
+              onClick={(event) => handleMobileWorkspaceChange(view, event)}
               data-mobile-view={view}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold text-center ${
@@ -644,7 +648,7 @@ export function DashboardLayout({
             <a
               href={`#mobile-${view}`}
               key={label}
-              onClick={() => handleMobileWorkspaceChange(view)}
+              onClick={(event) => handleMobileWorkspaceChange(view, event)}
               data-mobile-view={view}
               aria-current={active ? 'page' : undefined}
               className={`flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl text-center text-[11px] font-semibold ${
