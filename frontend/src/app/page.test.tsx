@@ -68,6 +68,13 @@ async function flushAsyncWork() {
   });
 }
 
+async function waitForCondition(condition: () => boolean) {
+  for (let index = 0; index < 20; index += 1) {
+    if (condition()) return;
+    await flushAsyncWork();
+  }
+}
+
 describe("Home workspace action bridge", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -378,6 +385,138 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).toContain("email:none");
   });
 
+  it("backs the desktop startup dashboard with live search data instead of fixed counters", async () => {
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            results: [
+              { id: 101, subject: "고객 계약 승인 대기", sender: "legal@example.com", date: "2026-05-17T09:00:00Z", snippet: "오늘 승인해야 하는 계약 검토 요청" },
+              { id: 102, subject: "출시 리뷰 일정 조율", sender: "pm@example.com", date: "2026-05-17T10:00:00Z", snippet: "캘린더 반영 후보" },
+            ],
+          }),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("고객 계약 승인 대기") ?? false);
+
+    expect(container.textContent).toContain("고객 계약 승인 대기");
+    expect(container.textContent).toContain("출시 리뷰 일정 조율");
+    expect(container.textContent).not.toContain("오늘 답장 또는 위임이 필요한 스레드");
+    expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("backs the desktop calendar startup view with live calendar candidates", async () => {
+    localStorage.setItem("naruon_startup_view", "calendar");
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            results: [
+              { id: 201, subject: "엔터프라이즈 데모 일정", sender: "sales@example.com", date: "2026-05-18T11:00:00Z", snippet: "다음 주 데모 일정 조율" },
+            ],
+          }),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("엔터프라이즈 데모 일정") ?? false);
+
+    expect(container.textContent).toContain("엔터프라이즈 데모 일정");
+    expect(container.textContent).not.toContain("디자인 리뷰 후속 조치");
+    expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("shows startup dashboard empty and error states from the search API", async () => {
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ results: [] }),
+    })));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("오늘 표시할 실행 후보가 없습니다.") ?? false);
+
+    expect(container.textContent).toContain("오늘 표시할 실행 후보가 없습니다.");
+
+    act(() => root?.unmount());
+    container.textContent = "";
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: async () => ({}),
+    })));
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("대시보드 후보를 불러오지 못했습니다.") ?? false);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("대시보드 후보를 불러오지 못했습니다.");
+  });
+
+  it("shows desktop calendar empty and error states from the search API", async () => {
+    localStorage.setItem("naruon_startup_view", "calendar");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ results: [] }),
+    })));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("일정 후보가 없습니다.") ?? false);
+
+    expect(container.textContent).toContain("일정 후보가 없습니다.");
+
+    act(() => root?.unmount());
+    container.textContent = "";
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+      json: async () => ({}),
+    })));
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("일정 후보를 불러오지 못했습니다.") ?? false);
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("일정 후보를 불러오지 못했습니다.");
+  });
+
   it("lets a mobile hash deep link override a saved dashboard startup view", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({
       matches: true,
@@ -399,6 +538,34 @@ describe("Home workspace action bridge", () => {
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
     expect(container.textContent).toContain("캘린더 반영 대기");
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+  });
+
+  it("does not fetch desktop dashboard data before a mobile hash override is applied", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    window.history.replaceState(null, "", "/#mobile-calendar");
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
+      ok: true,
+      json: async () => ({ results: [] }),
+    })));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    const searchQueries = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .filter(([input]) => String(input).endsWith("/api/search"))
+      .map(([, init]) => String(init?.body ?? ""));
+    expect(searchQueries.some((body) => body.includes("판단 대기"))).toBe(false);
   });
 
   it("keeps the dashboard visible when unrelated hash links change", async () => {

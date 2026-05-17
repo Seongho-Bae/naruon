@@ -7,15 +7,83 @@ import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
 import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
+import { toSafeReactText } from '@/lib/safe-text';
 import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
 type WorkspaceActionCommand = { id: number; action: string; target: 'desktop' | 'tablet'; modeVersion: number };
 type MobileActionCommand = { id: number; action: string; modeVersion: number };
+type StartupSearchResult = {
+  id: number;
+  subject: string | null;
+  sender: string;
+  date: string;
+  snippet: string;
+};
+
+function useStartupSearch(query: string, limit: number) {
+  const [status, setStatus] = useState<'loading' | 'success' | 'empty' | 'error'>('loading');
+  const [results, setResults] = useState<StartupSearchResult[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+    void apiClient.post<{ results: StartupSearchResult[] }>('/api/search', { query, limit }, { signal: controller.signal })
+      .then((response) => {
+        if (cancelled) return;
+        setResults(response.results);
+        setStatus(response.results.length > 0 ? 'success' : 'empty');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setResults([]);
+        setStatus('error');
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [limit, query]);
+
+  return { results, status };
+}
+
+function formatStartupDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '날짜 미정';
+  return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(date);
+}
+
+function StartupResultList({ results }: { results: StartupSearchResult[] }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {results.map((result) => {
+        const subject = toSafeReactText(result.subject?.trim() || null, '(제목 없음)');
+        const sender = toSafeReactText(result.sender);
+        const snippet = toSafeReactText(result.snippet);
+        return (
+          <article key={result.id} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-base font-black text-foreground">{subject}</h2>
+              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">{formatStartupDate(result.date)}</span>
+            </div>
+            <p className="mt-1 text-xs font-bold text-primary">{sender}</p>
+            <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{snippet}</p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
+  const { results, status } = useStartupSearch('판단 대기 캘린더 반영 실행 항목', 3);
+
   return (
     <section
       aria-label="오늘의 실행 대시보드"
@@ -47,30 +115,27 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             </button>
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            { title: '판단 대기 메일', value: '12', copy: '오늘 답장 또는 위임이 필요한 스레드', icon: Inbox },
-            { title: '캘린더 반영', value: '3', copy: '메일에서 추출된 회의와 마감 후보', icon: CalendarDays },
-            { title: '실행 항목', value: '8', copy: '다음 행동으로 전환할 수 있는 작업', icon: CheckCircle2 },
-          ].map(({ title, value, copy, icon: Icon }) => (
-            <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary">
-                  <Icon className="size-5" aria-hidden="true" />
-                </span>
-                <span className="text-3xl font-black text-foreground">{value}</span>
-              </div>
-              <h2 className="mt-4 text-base font-black text-foreground">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
-            </article>
-          ))}
+        <div className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="grid size-10 place-items-center rounded-2xl bg-primary/10 text-primary"><CheckCircle2 className="size-5" aria-hidden="true" /></span>
+            <div>
+              <h2 className="text-base font-black text-foreground">실시간 실행 후보</h2>
+              <p className="text-sm leading-6 text-muted-foreground">검색 API에서 오늘 처리할 메일과 일정 후보를 불러옵니다.</p>
+            </div>
+          </div>
         </div>
+        {status === 'loading' ? <div role="status" className="rounded-3xl border border-border bg-card p-5 text-sm font-semibold text-muted-foreground shadow-sm">대시보드 후보를 불러오는 중입니다.</div> : null}
+        {status === 'error' ? <div role="alert" className="rounded-3xl border border-destructive/30 bg-destructive/10 p-5 text-sm font-semibold text-destructive shadow-sm">대시보드 후보를 불러오지 못했습니다.</div> : null}
+        {status === 'empty' ? <div className="rounded-3xl border border-border bg-card p-5 text-sm font-semibold text-muted-foreground shadow-sm">오늘 표시할 실행 후보가 없습니다.</div> : null}
+        {status === 'success' ? <StartupResultList results={results} /> : null}
       </div>
     </section>
   );
 }
 
 function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
+  const { results, status } = useStartupSearch('회의 마감 후속 조치 일정', 3);
+
   return (
     <section aria-label="일정관리 시작 화면" className="h-full overflow-y-auto rounded-3xl border border-border/80 bg-card/80 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
       <div className="max-w-4xl space-y-5">
@@ -87,12 +152,10 @@ function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupVi
             이메일 작업공간 열기
           </button>
         </div>
-        {['Q2 출시 우선순위 회의', '벤더 계약 검토', '디자인 리뷰 후속 조치'].map((title) => (
-          <article key={title} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <p className="text-sm font-bold text-foreground">{title}</p>
-            <p className="mt-1 text-xs text-muted-foreground">오늘 안에 일정 연결 검토가 필요합니다.</p>
-          </article>
-        ))}
+        {status === 'loading' ? <div role="status" className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground shadow-sm">일정 후보를 불러오는 중입니다.</div> : null}
+        {status === 'error' ? <div role="alert" className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive shadow-sm">일정 후보를 불러오지 못했습니다.</div> : null}
+        {status === 'empty' ? <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground shadow-sm">일정 후보가 없습니다.</div> : null}
+        {status === 'success' ? <StartupResultList results={results} /> : null}
       </div>
     </section>
   );
@@ -112,7 +175,9 @@ export default function Home() {
   const desktopViewportModeRef = useRef(false);
   const startupView = useWorkspaceStartupView();
   const [startupViewOverride, setStartupViewOverride] = useState<WorkspaceStartupView | null>(null);
-  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(false);
+  const [mobileWorkspaceOverride, setMobileWorkspaceOverride] = useState(() => (
+    typeof window !== 'undefined' && window.location.hash.startsWith('#mobile-')
+  ));
   const activeStartupView = startupViewOverride ?? startupView;
   const showMobileDashboard = activeStartupView === 'dashboard' && !mobileWorkspaceOverride;
   const mobileView = useMobileWorkspaceView();
@@ -245,8 +310,8 @@ export default function Home() {
           {workspaceActionNotice}
         </div>
       )}
-      {activeStartupView === 'dashboard' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupDashboard onOpenView={openStartupView} /></div>}
-      {activeStartupView === 'calendar' && !isMobileViewport && <div className="hidden h-full lg:block"><StartupCalendar onOpenView={openStartupView} /></div>}
+      {activeStartupView === 'dashboard' && viewportReady && !isMobileViewport && <div className="hidden h-full lg:block"><StartupDashboard onOpenView={openStartupView} /></div>}
+      {activeStartupView === 'calendar' && viewportReady && !isMobileViewport && <div className="hidden h-full lg:block"><StartupCalendar onOpenView={openStartupView} /></div>}
       <section role="region" aria-label="데스크톱 메일 작업공간" className={`${activeStartupView === 'email' ? 'hidden xl:block' : 'hidden'} h-full`}>
         {viewportReady && !isMobileViewport && !isTabletViewport ? (
         <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
