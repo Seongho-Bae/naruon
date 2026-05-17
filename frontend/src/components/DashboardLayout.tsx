@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Bell,
   CalendarDays,
@@ -40,9 +40,9 @@ const mailNavItems = [
 ];
 
 const aiHubItems = [
-  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub/context', available: false },
-  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub/decisions', available: false },
-  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub/actions', available: false },
+  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub#context', available: true },
+  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub#decisions', available: true },
+  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub#actions', available: true },
 ];
 
 const projectItems = [
@@ -103,11 +103,20 @@ const headerActions = [
 
 
 
-function isActivePath(pathname: string | null, href: string) {
+function splitHref(href: string) {
+  const [path, hash = ''] = href.split('#');
+  return { path: path || '/', hash: hash ? `#${hash}` : '' };
+}
+
+function isActivePath(pathname: string | null, href: string, currentHash = '') {
   if (!pathname) return false;
-  return href === '/'
+  const { path, hash } = splitHref(href);
+  if (hash) {
+    return pathname === path && currentHash === hash;
+  }
+  return path === '/'
     ? pathname === '/'
-    : pathname === href || pathname.startsWith(`${href}/`);
+    : pathname === path || pathname.startsWith(`${path}/`);
 }
 
 function NavLink({
@@ -124,7 +133,22 @@ function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const active = isActivePath(pathname, href);
+  const [currentHash, setCurrentHash] = useState('');
+
+  useEffect(() => {
+    const updateHash = () => setCurrentHash(window.location.hash);
+    updateHash();
+    const nextTick = window.setTimeout(updateHash, 0);
+    window.addEventListener('hashchange', updateHash);
+    window.addEventListener('popstate', updateHash);
+    return () => {
+      window.clearTimeout(nextTick);
+      window.removeEventListener('hashchange', updateHash);
+      window.removeEventListener('popstate', updateHash);
+    };
+  }, [pathname]);
+
+  const active = isActivePath(pathname, href, currentHash);
 
   if (!available) {
     return (
@@ -149,7 +173,7 @@ function NavLink({
   return (
     <Link
       href={href}
-      aria-current={active ? 'page' : undefined}
+      aria-current={active ? (splitHref(href).hash ? 'location' : 'page') : undefined}
       className={`group flex min-h-9 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
         active
           ? 'bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.24)]'

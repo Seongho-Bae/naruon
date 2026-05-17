@@ -10,6 +10,7 @@ type PromptSummary = { id: number; title: string; description?: string };
 type HubStatus = 'loading' | 'success' | 'empty' | 'error';
 
 type HubSection = {
+  id: string;
   title: string;
   description: string;
   empty: string;
@@ -20,6 +21,7 @@ type HubSection = {
 
 const hubSections: HubSection[] = [
   {
+    id: 'context',
     title: '맥락 종합',
     description: '메일, 일정, 사람, 첨부 흐름을 하나의 작업 맥락으로 묶습니다.',
     empty: '아직 연결된 맥락이 없습니다. 받은편지함에서 메일을 선택하면 관련 흐름을 모읍니다.',
@@ -28,6 +30,7 @@ const hubSections: HubSection[] = [
     icon: Network,
   },
   {
+    id: 'decisions',
     title: '판단 포인트',
     description: '마감, 리스크, 의사결정 후보를 실행 전에 확인합니다.',
     empty: '검토할 판단 포인트가 없습니다. 새 메일을 동기화하거나 검색을 실행하세요.',
@@ -36,6 +39,7 @@ const hubSections: HubSection[] = [
     icon: Sparkles,
   },
   {
+    id: 'actions',
     title: '실행 항목',
     description: '답장, 일정 연결, 할 일을 다음 행동으로 전환합니다.',
     empty: '실행 항목이 없습니다. 메일 상세에서 할 일 만들기를 실행하세요.',
@@ -54,7 +58,7 @@ function HubCard({ section, prompt }: { section: HubSection; prompt?: PromptSumm
   const hasPrompt = Boolean(prompt);
 
   return (
-    <section aria-label={section.title} className="flex min-h-64 flex-col rounded-3xl border border-border bg-card/90 p-5 shadow-sm">
+    <section id={section.id} aria-label={section.title} className="scroll-mt-24 flex min-h-64 flex-col rounded-3xl border border-border bg-card/90 p-5 shadow-sm">
       <div className="flex items-start gap-3">
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
           <Icon className="size-5" aria-hidden="true" />

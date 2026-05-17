@@ -63,6 +63,9 @@ describe('AIHubPage', () => {
     expect(container.textContent).toContain('판단 포인트');
     expect(container.textContent).toContain('실행 항목');
     expect(container.textContent).toContain('Q2 출시 판단');
+    expect(container.querySelector('section#context[aria-label="맥락 종합"]')).not.toBeNull();
+    expect(container.querySelector('section#decisions[aria-label="판단 포인트"]')).not.toBeNull();
+    expect(container.querySelector('section#actions[aria-label="실행 항목"]')).not.toBeNull();
     expect(container.textContent).not.toContain('최근 AI 요약');
     expect(container.textContent).not.toContain('AI Hub');
     expect(container.textContent).not.toContain('설명 없음');

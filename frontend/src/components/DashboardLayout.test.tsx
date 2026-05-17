@@ -54,6 +54,7 @@ describe("DashboardLayout", () => {
     const comingSoonControls = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[data-coming-soon="true"]'),
     ).map((button) => button.textContent);
+    const aiHubSectionNav = container.querySelector('nav[aria-label="Naruon workspace sections"]');
 
     expect(banner).not.toBeNull();
     expect(sidebar).not.toBeNull();
@@ -72,9 +73,12 @@ describe("DashboardLayout", () => {
     expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(true);
-    expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(true);
+    expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(false);
     expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(true);
     expect(nav?.querySelector<HTMLAnchorElement>('a[href="/starred"]')).toBeNull();
+    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#context"]')?.textContent).toContain("맥락 종합");
+    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#decisions"]')?.textContent).toContain("판단 포인트");
+    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#actions"]')?.textContent).toContain("실행 항목");
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");

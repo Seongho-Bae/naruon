@@ -11,7 +11,11 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
 
   await expect(page.getByRole('img', { name: 'Naruon' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Mail sections' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Naruon workspace sections' })).toBeVisible();
+  const aiHubNav = page.getByRole('navigation', { name: 'Naruon workspace sections' });
+  await expect(aiHubNav).toBeVisible();
+  await expect(aiHubNav.getByRole('link', { name: /맥락 종합/ })).toHaveAttribute('href', '/ai-hub#context');
+  await expect(aiHubNav.getByRole('link', { name: /판단 포인트/ })).toHaveAttribute('href', '/ai-hub#decisions');
+  await expect(aiHubNav.getByRole('link', { name: /실행 항목/ })).toHaveAttribute('href', '/ai-hub#actions');
   await expect(page.getByText('흐름을 건너, 더 나은 판단과 실행으로.')).toBeVisible();
   const header = page.locator('header[aria-label="Naruon workspace header"]');
   await expect(page.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeVisible();
@@ -149,6 +153,28 @@ for (const viewport of [
     await expect(page.getByRole('region', { name: '실행 항목' })).toBeVisible();
     await expect(page.getByText('최근 AI 요약')).toHaveCount(0);
     await expect(page.getByText('설명 없음')).toHaveCount(0);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
+}
+
+for (const section of [
+  { hash: 'context', linkName: /맥락 종합/, region: '맥락 종합' },
+  { hash: 'decisions', linkName: /판단 포인트/, region: '판단 포인트' },
+  { hash: 'actions', linkName: /실행 항목/, region: '실행 항목' },
+] as const) {
+  test(`deep-links desktop AI hub sidebar to ${section.region}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 1024 });
+    await mockDashboardApi(page);
+
+    await page.goto('/');
+    await page.getByRole('navigation', { name: 'Naruon workspace sections' }).getByRole('link', { name: section.linkName }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/ai-hub#${section.hash}$`));
+    await expect(page.getByRole('region', { name: section.region })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Naruon workspace sections' }).getByRole('link', { name: section.linkName })).toHaveAttribute('aria-current', 'location');
+    const targetTop = await page.getByRole('region', { name: section.region }).evaluate((element) => Math.round(element.getBoundingClientRect().top));
+    expect(targetTop).toBeGreaterThanOrEqual(0);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
   });
