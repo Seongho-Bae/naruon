@@ -158,6 +158,7 @@ def test_calendar_writeback_intent_uses_customer_owned_caldav_account(
                 provider="naruon",
                 protocol="local",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read"],
                 writeback_enabled=False,
             ),
@@ -166,6 +167,7 @@ def test_calendar_writeback_intent_uses_customer_owned_caldav_account(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="abc123",
@@ -203,6 +205,7 @@ def test_calendar_writeback_update_requires_etag_if_match(writeback_source_overr
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="abc123",
@@ -231,6 +234,7 @@ def test_calendar_writeback_rejects_non_owner_and_naruon_only_storage(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="other-user",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="abc123",
@@ -250,6 +254,7 @@ def test_calendar_writeback_rejects_non_owner_and_naruon_only_storage(
                 provider="naruon",
                 protocol="local",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write"],
                 writeback_enabled=True,
             )
@@ -273,6 +278,7 @@ def test_calendar_writeback_rejects_targeted_non_owned_source_without_selection(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="other-user",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="shared-etag",
@@ -282,6 +288,7 @@ def test_calendar_writeback_rejects_targeted_non_owned_source_without_selection(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="owned-etag",
@@ -314,6 +321,7 @@ def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="other-user",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="shared-etag",
@@ -323,6 +331,7 @@ def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="owned-etag",
@@ -349,6 +358,7 @@ def test_calendar_writeback_rejects_forged_client_source_ownership(
                 provider="fastmail",
                 protocol="caldav",
                 owner_id="testuser",
+                organization_id="org-acme",
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="abc123",
@@ -378,3 +388,32 @@ def test_calendar_writeback_rejects_forged_client_source_ownership(
     assert response.status_code == 422
     assert response.json()["detail"][0]["type"] == "extra_forbidden"
     assert response.json()["detail"][0]["loc"] == ["body", "sources"]
+
+
+def test_calendar_writeback_rejects_same_owner_cross_org_source(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-other",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={"action": "create", "summary": "Launch review"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "No customer-owned writeback source is available"
+    }

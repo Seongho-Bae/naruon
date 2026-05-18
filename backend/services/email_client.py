@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 SMTP_HOST_NOT_ALLOWED = "SMTP server is not allowed"
 SMTP_PORT_NOT_ALLOWED = "SMTP port is not allowed"
 SMTP_TIMEOUT_SECONDS = 60
+SMTP_EGRESS_PORTS = {25, 465, 587}
 
 
 def generate_oauth2_string(user: str, access_token: str) -> bytes:
@@ -46,9 +47,14 @@ def _parse_allowed_smtp_ports() -> set[int]:
     allowed_ports = set()
     for item in _parse_csv_values(settings.ALLOWED_SMTP_PORTS):
         try:
-            allowed_ports.add(int(item))
+            port = int(item)
         except ValueError:
             logger.warning("Ignoring invalid SMTP port policy entry")
+            continue
+        if port in SMTP_EGRESS_PORTS:
+            allowed_ports.add(port)
+        else:
+            logger.warning("Ignoring non-SMTP port policy entry")
     return allowed_ports
 
 
@@ -80,6 +86,8 @@ def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     normalized_host = _normalize_smtp_host(host)
     allowed_hosts = _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
     if not allowed_hosts:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    if any("*" in allowed_host for allowed_host in allowed_hosts):
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
     if normalized_host not in allowed_hosts:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)

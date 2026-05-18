@@ -32,6 +32,31 @@ def test_smtp_host_policy_keeps_empty_allowlist_guard_explicit():
     assert "if normalized_host not in allowed_hosts:" in source
 
 
+def test_smtp_host_policy_rejects_wildcard_allowlist_entry(monkeypatch):
+    monkeypatch.setattr(
+        email_client.settings,
+        "ALLOWED_SMTP_HOSTS",
+        "smtp.example.com,*",
+    )
+    monkeypatch.setattr(
+        email_client.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 587))
+        ],
+    )
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
+
+
+def test_smtp_port_policy_rejects_configured_non_smtp_ports(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "465,587,80")
+
+    with pytest.raises(ValueError, match=email_client.SMTP_PORT_NOT_ALLOWED):
+        email_client.validate_smtp_port(80)
+
+
 class FakeSmtpClient:
     def __init__(self, *, fail_send=False):
         self.fail_send = fail_send
