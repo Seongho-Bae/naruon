@@ -21,7 +21,7 @@ ALLOWED_ROLES: set[str] = {
 }
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
-SESSION_TOKEN_ALGORITHM = "HS256"
+SESSION_SIGNING_ALGORITHM = "HS256"
 MIN_SESSION_SECRET_BYTES = 32
 
 
@@ -122,7 +122,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     header_segment, payload_segment, signature_segment = token_segments
 
     header = _json_object_from_base64url_segment(header_segment)
-    if header.get("alg") != SESSION_TOKEN_ALGORITHM:
+    if header.get("alg") != SESSION_SIGNING_ALGORITHM:
         raise _authentication_error()
 
     secret = _session_secret_bytes()
