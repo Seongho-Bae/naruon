@@ -8,6 +8,8 @@ from core.config import settings
 
 RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
 SCOPED_ROLES: set[str] = set(get_args(RoleName))
+DEV_HEADER_AUTH_ENVIRONMENTS = {"development", "local", "test"}
+MIN_DEV_AUTH_TOKEN_LENGTH = 32
 
 
 @dataclass(frozen=True)
@@ -27,13 +29,19 @@ def _normalize_header_value(value: object) -> str | None:
 
 
 def _dev_auth_token_matches(provided_token: str | None) -> bool:
-    if not settings.TRUST_DEV_HEADERS or settings.DEV_AUTH_TOKEN is None:
+    runtime_environment = settings.RUNTIME_ENVIRONMENT.strip().lower()
+    if (
+        not settings.TRUST_DEV_HEADERS
+        or runtime_environment not in DEV_HEADER_AUTH_ENVIRONMENTS
+        or settings.DEV_AUTH_TOKEN is None
+    ):
         return False
     if provided_token is None:
         return False
-    return hmac.compare_digest(
-        provided_token, settings.DEV_AUTH_TOKEN.get_secret_value()
-    )
+    configured_token = settings.DEV_AUTH_TOKEN.get_secret_value()
+    if len(configured_token) < MIN_DEV_AUTH_TOKEN_LENGTH:
+        return False
+    return hmac.compare_digest(provided_token, configured_token)
 
 
 def _derive_role(user_id: str, requested_role: str | None) -> RoleName:
@@ -42,11 +50,13 @@ def _derive_role(user_id: str, requested_role: str | None) -> RoleName:
 
     Header-provided roles are only available after the caller proves access to
     the server-side development auth token. DEBUG alone never enables identity
-    or role trust because DEBUG can leak into deployed environments.
+    or role trust because DEBUG can leak into deployed environments. User IDs do
+    not imply administrative roles; privileged roles must be explicit trusted
+    role claims.
     """
     if requested_role in SCOPED_ROLES:
         return cast(RoleName, requested_role)
-    return "organization_admin" if user_id == "admin" else "member"
+    return "member"
 
 
 def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
@@ -108,7 +118,8 @@ def build_auth_context(
     Builds an auth context from trusted identity material.
 
     Local/test header auth is accepted only when the server operator explicitly
-    enables `TRUST_DEV_HEADERS` and the request includes the configured
+    runs a local/test runtime environment, enables `TRUST_DEV_HEADERS`, configures
+    a strong development token, and the request includes the matching
     `X-Dev-Auth-Token`. Public `X-User-*` headers alone are never an
     authentication mechanism; production OIDC/Keycloak/Casdoor token validation
     will replace this development-only path.

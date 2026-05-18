@@ -17,6 +17,10 @@
 - Seongho Bae (@seonghobae): `backend/db/models.py`의 하드코딩된 Fernet fallback
   key를 제거하고, `DEBUG=true` 환경에서도 암호화 필드는 명시적인
   `ENCRYPTION_KEY` 없이는 암·복호화하지 않도록 수정했습니다.
+- Seongho Bae (@seonghobae): 개발용 헤더 인증이 production runtime에서는
+  동작하지 않도록 `RUNTIME_ENVIRONMENT`와 32자 이상 `DEV_AUTH_TOKEN` gate를
+  추가하고, `X-User-Id: admin`만으로 `organization_admin`이 되던 fallback을
+  제거했습니다.
 
 ## [0.14.1] - 2026-05-13
 

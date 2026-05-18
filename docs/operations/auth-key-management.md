@@ -3,8 +3,13 @@
 ## 확인된 사실 / Confirmed
 
 - `backend/api/auth.py` no longer accepts public `X-User-*` headers by
-  themselves. The development-only header path requires `TRUST_DEV_HEADERS=true`
-  plus a configured `DEV_AUTH_TOKEN` that matches `X-Dev-Auth-Token`.
+  themselves. The development-only header path is disabled for the default
+  production runtime and requires `RUNTIME_ENVIRONMENT` to be `local`,
+  `development`, or `test`, `TRUST_DEV_HEADERS=true`, plus a configured
+  `DEV_AUTH_TOKEN` of at least 32 characters that matches `X-Dev-Auth-Token`.
+- User IDs do not imply administrative roles. Development header auth only honors
+  explicit trusted role headers after the runtime, feature flag, and token gates
+  all pass.
 - `backend/db/models.py` stores OAuth/OpenAI secret fields through an
   `EncryptedString` type backed by Fernet.
 - `backend/db/models.py` no longer contains a fallback Fernet key. Secret-field

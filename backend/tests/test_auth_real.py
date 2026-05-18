@@ -11,19 +11,38 @@ from api.auth import (
 from core.config import settings
 from main import app
 
-TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"  # noqa: S105 - test-only token
-WRONG_DEV_AUTH_TOKEN = "wrong-dev-auth-token"  # noqa: S105 - test-only token
+TEST_DEV_AUTH_TOKEN = (
+    "test-dev-auth-token-with-32-byte-minimum"  # noqa: S105 - test-only token
+)
+WEAK_DEV_AUTH_TOKEN = "weak-token"  # noqa: S105 - test-only token
+WRONG_DEV_AUTH_TOKEN = (
+    "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
+)
 
 
 @pytest.fixture(autouse=True)
 def restore_auth_flags():
     previous_debug = settings.DEBUG
+    previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_dev_auth_token = settings.DEV_AUTH_TOKEN
     yield
     settings.DEBUG = previous_debug
+    if previous_runtime_environment is not None:
+        setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     settings.TRUST_DEV_HEADERS = previous_trust
     settings.DEV_AUTH_TOKEN = previous_dev_auth_token
+
+
+def _set_runtime_environment(value: str) -> None:
+    if hasattr(settings, "RUNTIME_ENVIRONMENT"):
+        setattr(settings, "RUNTIME_ENVIRONMENT", value)
+
+
+def _enable_local_dev_headers() -> None:
+    _set_runtime_environment("local")
+    settings.TRUST_DEV_HEADERS = True
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
 
 @pytest.mark.asyncio
@@ -57,6 +76,7 @@ async def test_debug_mode_does_not_trust_unsigned_identity_headers():
 
 @pytest.mark.asyncio
 async def test_dev_header_trust_requires_configured_token():
+    _set_runtime_environment("local")
     settings.TRUST_DEV_HEADERS = True
 
     with pytest.raises(HTTPException) as exc:
@@ -72,8 +92,7 @@ async def test_dev_header_trust_requires_configured_token():
 
 @pytest.mark.asyncio
 async def test_dev_header_trust_rejects_wrong_token():
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
+    _enable_local_dev_headers()
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(
@@ -89,6 +108,7 @@ async def test_dev_header_trust_rejects_wrong_token():
 
 @pytest.mark.asyncio
 async def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
+    _set_runtime_environment("local")
     settings.TRUST_DEV_HEADERS = False
     settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
@@ -98,6 +118,42 @@ async def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
             x_user_role="platform_admin",
             x_organization_id="org-victim",
             x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+        )
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Authentication required"
+
+
+@pytest.mark.asyncio
+async def test_dev_header_trust_is_rejected_in_production_environment():
+    _set_runtime_environment("production")
+    settings.TRUST_DEV_HEADERS = True
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            x_user_id="attacker",
+            x_user_role="platform_admin",
+            x_organization_id="org-victim",
+            x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+        )
+
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Authentication required"
+
+
+@pytest.mark.asyncio
+async def test_dev_header_trust_requires_strong_token():
+    _set_runtime_environment("local")
+    settings.TRUST_DEV_HEADERS = True
+    settings.DEV_AUTH_TOKEN = SecretStr(WEAK_DEV_AUTH_TOKEN)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            x_user_id="attacker",
+            x_user_role="platform_admin",
+            x_organization_id="org-victim",
+            x_dev_auth_token=WEAK_DEV_AUTH_TOKEN,
         )
 
     assert exc.value.status_code == 401
@@ -131,8 +187,7 @@ def test_http_route_rejects_public_identity_headers_without_dev_token():
 
 @pytest.mark.asyncio
 async def test_get_auth_context_supports_scoped_enterprise_roles():
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
+    _enable_local_dev_headers()
 
     context = await get_auth_context(
         x_user_id="alice",
@@ -153,8 +208,7 @@ async def test_get_auth_context_supports_scoped_enterprise_roles():
 
 @pytest.mark.asyncio
 async def test_get_auth_context_keeps_legacy_workspace_fallback_for_unscoped_dev_auth():
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
+    _enable_local_dev_headers()
 
     context = await get_auth_context(
         x_user_id="root",
@@ -166,6 +220,19 @@ async def test_get_auth_context_keeps_legacy_workspace_fallback_for_unscoped_dev
     assert context.organization_id is None
     assert context.group_ids == ()
     assert context.workspace_id == "workspace-root"
+
+
+@pytest.mark.asyncio
+async def test_admin_user_id_without_explicit_role_defaults_to_member():
+    _enable_local_dev_headers()
+
+    context = await get_auth_context(
+        x_user_id="admin",
+        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+    )
+
+    assert context.role == "member"
+    assert context.workspace_id == "workspace-admin"
 
 
 def test_ensure_organization_access_rejects_cross_scope_resource():

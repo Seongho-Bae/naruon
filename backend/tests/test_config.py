@@ -9,6 +9,7 @@ from core.config import settings
 def test_global_config():
     assert hasattr(settings, "DATABASE_URL")
     assert hasattr(settings, "DEBUG")
+    assert hasattr(settings, "RUNTIME_ENVIRONMENT")
     assert hasattr(settings, "ENCRYPTION_KEY")
 
 

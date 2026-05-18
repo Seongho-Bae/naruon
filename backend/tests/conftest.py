@@ -6,13 +6,17 @@ from api.auth import AuthContext, build_auth_context, get_auth_context, get_curr
 from core.config import settings
 from main import app
 
-TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"  # noqa: S105 - test-only token
+TEST_DEV_AUTH_TOKEN = (
+    "test-dev-auth-token-with-32-byte-minimum"  # noqa: S105 - test-only token
+)
 
 
 @pytest.fixture
 def dev_auth_dependency_overrides():
+    previous_runtime_environment = settings.RUNTIME_ENVIRONMENT
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_dev_auth_token = settings.DEV_AUTH_TOKEN
+    settings.RUNTIME_ENVIRONMENT = "test"
     settings.TRUST_DEV_HEADERS = True
     settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
@@ -50,5 +54,6 @@ def dev_auth_dependency_overrides():
     yield
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
+    settings.RUNTIME_ENVIRONMENT = previous_runtime_environment
     settings.TRUST_DEV_HEADERS = previous_trust
     settings.DEV_AUTH_TOKEN = previous_dev_auth_token
