@@ -96,6 +96,7 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
     )
 
     assert result == {"status": "sent", "simulated": False}
+    assert smtp_socket.fileno() == -1
 
 
 @pytest.mark.asyncio
@@ -134,6 +135,7 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
     assert fake_client.starttls_hostname == "smtp.example.com"
     assert fake_client.login_args == ("testuser", "secret")
     assert fake_client.sent_message is message
+    assert smtp_socket.fileno() == -1
 
 
 def test_implicit_tls_smtp_client_keeps_original_tls_hostname():
@@ -155,9 +157,10 @@ def test_implicit_tls_smtp_client_keeps_original_tls_hostname():
 @pytest.mark.asyncio
 async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
     fake_client = FakeSmtpClient(fail_send=True)
+    smtp_socket = _make_socket()
 
     async def fake_connect_validated_socket(*args, **kwargs):
-        return _make_socket()
+        return smtp_socket
 
     def fake_build_client(**kwargs):
         return fake_client
@@ -177,3 +180,4 @@ async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
             smtp_port=587,
             smtp_username="testuser",
         )
+    assert smtp_socket.fileno() == -1

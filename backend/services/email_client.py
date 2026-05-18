@@ -256,18 +256,21 @@ async def _send_pinned_smtp_message(
     smtp_password: str | None,
 ) -> SendEmailResult:
     """Send through a pre-connected SMTP socket without a second DNS lookup."""
-    client = _build_smtp_client(
-        smtp_socket=smtp_socket,
-        smtp_server=smtp_server,
-        smtp_port=smtp_port,
-    )
-    async with client:
-        if smtp_port != 465:
-            await client.starttls(server_hostname=smtp_server)
-        if smtp_username is not None:
-            await client.login(smtp_username, smtp_password or "")
-        await client.send_message(message)
-    return {"status": "sent", "simulated": False}
+    try:
+        client = _build_smtp_client(
+            smtp_socket=smtp_socket,
+            smtp_server=smtp_server,
+            smtp_port=smtp_port,
+        )
+        async with client:
+            if smtp_port != 465:
+                await client.starttls(server_hostname=smtp_server)
+            if smtp_username is not None:
+                await client.login(smtp_username, smtp_password or "")
+            await client.send_message(message)
+        return {"status": "sent", "simulated": False}
+    finally:
+        smtp_socket.close()
 
 
 def build_email_message(
@@ -326,14 +329,17 @@ async def send_email(
 
     try:
         smtp_socket = await _connect_validated_smtp_socket(smtp_server, smtp_port)
-        result = await _send_pinned_smtp_message(
-            message,
-            smtp_socket=smtp_socket,
-            smtp_server=smtp_server,
-            smtp_port=smtp_port,
-            smtp_username=smtp_username,
-            smtp_password=smtp_password,
-        )
+        try:
+            result = await _send_pinned_smtp_message(
+                message,
+                smtp_socket=smtp_socket,
+                smtp_server=smtp_server,
+                smtp_port=smtp_port,
+                smtp_username=smtp_username,
+                smtp_password=smtp_password,
+            )
+        finally:
+            smtp_socket.close()
         logger.info(
             "Successfully sent email to %s via %s", safe_to_address, smtp_server
         )
