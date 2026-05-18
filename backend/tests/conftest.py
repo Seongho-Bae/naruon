@@ -6,7 +6,7 @@ from api.auth import AuthContext, build_auth_context, get_auth_context, get_curr
 from core.config import settings
 from main import app
 
-TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"
+TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"  # noqa: S105 - test-only token
 
 
 @pytest.fixture

@@ -74,6 +74,10 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 - [x] Update `scripts/ci/strix_quick_gate.sh` so changed context files fail
   closed on PR-head blob read errors instead of falling back to trusted-base
   content.
+- [x] Keep `pull_request_target` unsafe changed paths fail-closed, but do not
+  abort regular `pull_request` context construction for unrelated
+  unnormalizable filenames that `is_scannable_changed_file()` would already
+  ignore.
 - [x] RED evidence:
 
 ```bash

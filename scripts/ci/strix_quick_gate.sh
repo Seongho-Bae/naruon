@@ -1013,7 +1013,12 @@ PY
 		local context_file_changed_in_pr=0
 		local changed_file normalized_changed_file
 		for changed_file in "${PULL_REQUEST_CHANGED_FILES[@]}"; do
-			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+			if ! normalized_changed_file="$(normalize_changed_file_path "$changed_file")"; then
+				if pull_request_head_blob_required; then
+					return 2
+				fi
+				continue
+			fi
 			if [ "$normalized_changed_file" = "$relative_path" ]; then
 				context_file_changed_in_pr=1
 				break

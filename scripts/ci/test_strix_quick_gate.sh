@@ -2136,6 +2136,41 @@ EOF
 	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-target-changed-context-uses-pr-head first batch output"
 	assert_file_contains "$output_log" "scan ok with changed context file batch" "case=pull-request-target-changed-context-uses-pr-head second batch output"
 
+	printf '0' >"$state_file"
+	(
+		cd "$repo_root_dir"
+		git checkout -q "$head_sha"
+	)
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$(printf '%s\n%s' '../outside.py' "$changed_file")" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE="$requirements_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="HEAD_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS="HEAD_REQUIREMENTS_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_STATE_FILE="$state_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-unsafe-changed-file-does-not-abort-context exit code"
+	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-unsafe-changed-file-does-not-abort-context output"
+
 	rm -rf "$tmp_dir"
 }
 

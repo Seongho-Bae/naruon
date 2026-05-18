@@ -11,6 +11,9 @@ from api.auth import (
 from core.config import settings
 from main import app
 
+TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"  # noqa: S105 - test-only token
+WRONG_DEV_AUTH_TOKEN = "wrong-dev-auth-token"  # noqa: S105 - test-only token
+
 
 @pytest.fixture(autouse=True)
 def restore_auth_flags():
@@ -70,14 +73,14 @@ async def test_dev_header_trust_requires_configured_token():
 @pytest.mark.asyncio
 async def test_dev_header_trust_rejects_wrong_token():
     settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr("expected-dev-auth-token")
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(
             x_user_id="attacker",
             x_user_role="platform_admin",
             x_organization_id="org-victim",
-            x_dev_auth_token="wrong-dev-auth-token",
+            x_dev_auth_token=WRONG_DEV_AUTH_TOKEN,
         )
 
     assert exc.value.status_code == 401
@@ -87,14 +90,14 @@ async def test_dev_header_trust_rejects_wrong_token():
 @pytest.mark.asyncio
 async def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
     settings.TRUST_DEV_HEADERS = False
-    settings.DEV_AUTH_TOKEN = SecretStr("expected-dev-auth-token")
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(
             x_user_id="attacker",
             x_user_role="platform_admin",
             x_organization_id="org-victim",
-            x_dev_auth_token="expected-dev-auth-token",
+            x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
         )
 
     assert exc.value.status_code == 401
@@ -129,14 +132,14 @@ def test_http_route_rejects_public_identity_headers_without_dev_token():
 @pytest.mark.asyncio
 async def test_get_auth_context_supports_scoped_enterprise_roles():
     settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr("test-dev-auth-token")
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     context = await get_auth_context(
         x_user_id="alice",
         x_user_role="group_admin",
         x_organization_id="org-acme",
         x_group_ids="group-1,group-2",
-        x_dev_auth_token="test-dev-auth-token",
+        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
     )
 
     assert context == AuthContext(
@@ -151,12 +154,12 @@ async def test_get_auth_context_supports_scoped_enterprise_roles():
 @pytest.mark.asyncio
 async def test_get_auth_context_keeps_legacy_workspace_fallback_for_unscoped_dev_auth():
     settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr("test-dev-auth-token")
+    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     context = await get_auth_context(
         x_user_id="root",
         x_user_role="platform_admin",
-        x_dev_auth_token="test-dev-auth-token",
+        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
     )
 
     assert context.role == "platform_admin"
