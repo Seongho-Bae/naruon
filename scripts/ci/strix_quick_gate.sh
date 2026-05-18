@@ -2439,6 +2439,7 @@ is_model_retryable_error() {
 
 run_current_target_scan() {
 	INFRA_ERROR_DETECTED=0
+	ZERO_FINDINGS_REPORTED=0
 
 	if run_strix_with_transient_retry "$PRIMARY_MODEL"; then
 		return 0
@@ -2513,7 +2514,7 @@ run_current_target_scan() {
 		fi
 		done
 
-	if is_vertex_model "$PRIMARY_MODEL" && should_allow_pull_request_infra_zero_finding_bypass; then
+	if should_allow_pull_request_infra_zero_finding_bypass; then
 		return 0
 	fi
 

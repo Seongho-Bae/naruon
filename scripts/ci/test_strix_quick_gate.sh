@@ -607,7 +607,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	gemini-zero-findings-timeout-fallback-fails)
+	gemini-zero-findings-timeout-fallback-allows-pr)
 		case "${STRIX_LLM:-}" in
 		gemini/zero-timeout-primary|gemini/fallback-one)
 			echo "Vulnerabilities 0"
@@ -620,6 +620,21 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			exit 40
 			;;
 		esac
+		;;
+	pr-batch-zero-finding-does-not-leak)
+		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ]; then
+			echo "Vulnerabilities 0"
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+		fi
+		if [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ]; then
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+		fi
+		echo "Error: unexpected PR batch zero-finding leak target layout ($target_path)" >&2
+		exit 41
 		;;
 	service-unavailable-no-llm-marker-nonrecoverable)
 		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
@@ -3477,11 +3492,11 @@ run_gate_case "gemini-generic-fallback-success" \
 	"__UNSET__" \
 	"gemini/fallback-one gemini/fallback-two"
 
-run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
+run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"gemini/zero-timeout-primary" \
 	"gemini/fallback-one" \
-	"1" \
-	"Configured model and fallback models were unavailable." \
+	"0" \
+	"Strix reported zero vulnerabilities before provider infrastructure failure; allowing pull request continuation and deferring provider outage follow-up." \
 	"2" \
 	"gemini/zero-timeout-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
@@ -3497,6 +3512,29 @@ run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-batch-zero-finding-does-not-leak" \
+	"gemini/batch-zero-leak-primary" \
+	"" \
+	"1" \
+	"Configured model and fallback models were unavailable." \
+	"2" \
+	"gemini/batch-zero-leak-primary|gemini/batch-zero-leak-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java' \
+	"" \
+	"1"
 
 run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
 	"custom/service-unavailable-primary" \
