@@ -4,6 +4,8 @@ from main import app
 from db.session import get_db
 from unittest.mock import patch
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 client = TestClient(app, headers={"X-User-Id": "testuser"})
 
 
@@ -127,7 +129,9 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"})
+        response = client.get(
+            "/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2

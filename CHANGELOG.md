@@ -8,6 +8,9 @@
 - Seongho Bae (@seonghobae): Strix PR 스코프 배치가 변경된 backend context
   파일을 다른 배치에서 포함할 때 trusted-base 사본이 아니라 PR-head blob을
   스캔하도록 수정해, 보안 수정이 stale context로 다시 실패하지 않게 했습니다.
+- Seongho Bae (@seonghobae): backend 테스트의 개발용 인증 dependency override를
+  전역 autouse fixture에서 명시적 opt-in fixture로 좁혀, 실제 인증 경로 회귀가
+  테스트 우회에 가려지지 않도록 했습니다.
 
 ## [0.14.1] - 2026-05-13
 

@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 class MockRow:
     def __init__(self, id, subject, sender, content, score):
@@ -27,10 +29,11 @@ class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
 
+
 class MockSession:
     async def execute(self, stmt):
         return MockResult()
-    
+
     async def scalar(self, stmt):
         return MockTenantConfig()
 

@@ -6,6 +6,8 @@ from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 class MockResult:
     def __init__(self, obj):
@@ -54,7 +56,9 @@ def member_client(mock_db):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
+        with TestClient(
+            app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}
+        ) as c:
             yield c
     finally:
         app.dependency_overrides.pop(get_db, None)
@@ -128,7 +132,9 @@ def test_member_cannot_manage_runner_config(member_client):
     assert response.status_code == 403
 
 
-def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client, mock_db):
+def test_org_scoped_runner_config_uses_shared_workspace(
+    admin_client, second_org_admin_client, mock_db
+):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
@@ -169,7 +175,10 @@ def test_runner_config_uses_configured_control_plane_domain(admin_client):
         settings.CONTROL_PLANE_DOMAIN = previous_domain
 
     assert response.status_code == 200
-    assert response.json()["connector_manifest"]["control_plane_domain"] == "staging.naruon.net"
+    assert (
+        response.json()["connector_manifest"]["control_plane_domain"]
+        == "staging.naruon.net"
+    )
 
 
 def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):

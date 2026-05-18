@@ -48,8 +48,14 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 
 ## Task 3: Keep endpoint tests isolated from production auth
 
-- [x] Add `backend/tests/conftest.py` to install FastAPI dependency overrides for endpoint tests only.
-- [x] The override injects the test dev token internally and still reads existing test fixture headers, so endpoint tests do not require weakening production auth logic.
+- [x] Add `backend/tests/conftest.py` with an opt-in FastAPI dependency
+  override fixture for endpoint tests only.
+- [x] The override injects the test dev token internally and still reads
+  existing test fixture headers, so endpoint tests do not require weakening
+  production auth logic.
+- [x] Add regression coverage proving auth dependency overrides are absent by
+  default, so real authentication regressions cannot be hidden by a global
+  autouse test fixture.
 
 ## Task 4: Review follow-up regression coverage
 
@@ -79,7 +85,10 @@ bash scripts/ci/test_strix_quick_gate.sh
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py -q
-# 9 passed
+# 10 passed
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_config.py backend/tests/test_calendar_api.py backend/tests/test_runtime_config_api.py backend/tests/test_prompts_api.py backend/tests/test_llm_api.py backend/tests/test_network_api.py backend/tests/test_main.py -q
+# 59 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_auth_real.py -q
 # 36 passed
@@ -89,4 +98,9 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 
 bash scripts/ci/test_strix_quick_gate.sh
 # test_strix_quick_gate: PASS
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests -q
+# 122 passed, 2 skipped; known pre-existing path assertions failed in
+# backend/tests/test_apm_observability.py because ../docker-compose.observability.yml
+# and ../observability/... are resolved outside the repo root.
 ```

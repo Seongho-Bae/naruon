@@ -9,8 +9,8 @@ from main import app
 TEST_DEV_AUTH_TOKEN = "test-dev-auth-token"
 
 
-@pytest.fixture(autouse=True)
-def test_dev_auth_dependency_overrides():
+@pytest.fixture
+def dev_auth_dependency_overrides():
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_dev_auth_token = settings.DEV_AUTH_TOKEN
     settings.TRUST_DEV_HEADERS = True

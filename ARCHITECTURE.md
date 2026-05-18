@@ -81,8 +81,9 @@ material. The remaining development header path requires both
 `X-Dev-Auth-Token` before `backend/api/auth.py` normalizes `platform_admin`,
 `organization_admin`, `group_admin`, and `member` roles plus optional
 organization/group scope. Endpoint tests use FastAPI dependency overrides for
-fixture identity, while production must move to verified Keycloak/Casdoor/OIDC
-claims before multi-user access is claimed; see
+fixture identity only through explicit opt-in pytest fixtures, while production
+must move to verified Keycloak/Casdoor/OIDC claims before multi-user access is
+claimed; see
 `docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
 NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.

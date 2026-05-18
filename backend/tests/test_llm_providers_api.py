@@ -8,6 +8,8 @@ from db.models import AuditLog, LLMProvider
 from db.session import get_db
 from main import app
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 class MockScalars:
     def __init__(self, items):
@@ -48,7 +50,9 @@ class MockSession:
             self.audits.append(obj)
 
     async def delete(self, obj):
-        self.providers = [provider for provider in self.providers if provider is not obj]
+        self.providers = [
+            provider for provider in self.providers if provider is not obj
+        ]
 
     async def commit(self):
         return None
@@ -128,7 +132,9 @@ def test_llm_provider_crud_admin(admin_client):
     assert response.status_code == 200
     assert len(response.json()) == 1
 
-    response = admin_client.put(f"/api/llm-providers/{provider_id}", json={"is_active": True})
+    response = admin_client.put(
+        f"/api/llm-providers/{provider_id}", json={"is_active": True}
+    )
     assert response.status_code == 200
     assert response.json()["is_active"] is True
 

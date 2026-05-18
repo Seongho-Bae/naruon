@@ -6,11 +6,15 @@ from main import app
 import datetime
 from unittest.mock import patch
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
-        transport=ASGITransport(app=app), headers={"X-User-Id": "testuser"}, base_url="http://test"
+        transport=ASGITransport(app=app),
+        headers={"X-User-Id": "testuser"},
+        base_url="http://test",
     ) as ac:
         yield ac
 
@@ -21,6 +25,7 @@ class MockTenantConfig:
         self.smtp_port = 587
         self.smtp_username = "testuser"
         self.smtp_password = None
+
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -129,7 +134,9 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
             sender="hot@example.com",
             recipients="user@example.com",
             subject="Hot thread",
-            date=datetime.datetime(2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc),
+            date=datetime.datetime(
+                2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc
+            ),
             body=f"Hot body {index}",
         )
         for index in range(6)
@@ -170,7 +177,9 @@ async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit:
 
 
 @pytest.mark.asyncio
-async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+async def test_get_emails_bounds_database_candidate_window(
+    client: AsyncClient, db_session
+):
     from db.session import get_db
 
     session = LimitAwareMockSession(db_session.items)
@@ -184,7 +193,9 @@ async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncClient, db_session):
+async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
+    client: AsyncClient, db_session
+):
     root = Email(
         id=1,
         message_id="<root@example.com>",
@@ -235,7 +246,9 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
 
 
 @pytest.mark.asyncio
-async def test_get_email_thread_returns_chronological_order(client: AsyncClient, db_session):
+async def test_get_email_thread_returns_chronological_order(
+    client: AsyncClient, db_session
+):
     newer = Email(
         id=2,
         message_id="newer-msg",

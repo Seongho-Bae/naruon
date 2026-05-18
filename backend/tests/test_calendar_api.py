@@ -4,6 +4,8 @@ from main import app
 from unittest.mock import patch, AsyncMock
 from services.exceptions import CalendarServiceError
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 client = TestClient(app, headers={"X-User-Id": "testuser"})
 workspace_client = TestClient(
     app,

@@ -31,6 +31,11 @@ async def test_get_current_user_rejects_missing_auth():
     assert exc.value.status_code == 401
 
 
+def test_auth_dependency_overrides_are_opt_in_by_default():
+    assert get_auth_context not in app.dependency_overrides
+    assert get_current_user not in app.dependency_overrides
+
+
 @pytest.mark.asyncio
 async def test_debug_mode_does_not_trust_unsigned_identity_headers():
     settings.DEBUG = True

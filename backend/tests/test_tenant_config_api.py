@@ -3,6 +3,9 @@ from fastapi.testclient import TestClient
 from main import app
 from db.session import get_db
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
+
 # Mock async DB session
 class MockResult:
     def __init__(self, obj):
@@ -10,6 +13,7 @@ class MockResult:
 
     def scalar_one_or_none(self):
         return self.obj
+
 
 class MockAsyncSession:
     def __init__(self):
@@ -24,19 +28,22 @@ class MockAsyncSession:
     async def commit(self):
         pass
 
+
 @pytest.fixture
 def mock_db():
     return MockAsyncSession()
+
 
 @pytest.fixture
 def client(mock_db):
     async def override_get_db():
         yield mock_db
-    
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
         yield c
     app.dependency_overrides.clear()
+
 
 def test_tenant_config_endpoint(client, mock_db):
     post_payload = {
@@ -51,13 +58,19 @@ def test_tenant_config_endpoint(client, mock_db):
         "imap_password": "imap-secret",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "test_user"})
+    response = client.post(
+        "/api/config", json=post_payload, headers={"X-User-Id": "test_user"}
+    )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
     assert "test_user" in mock_db.objects
 
-    get_response = client.get("/api/config", params={"user_id": "test_user"}, headers={"X-User-Id": "test_user"})
+    get_response = client.get(
+        "/api/config",
+        params={"user_id": "test_user"},
+        headers={"X-User-Id": "test_user"},
+    )
     assert get_response.status_code == 200
     data = get_response.json()
     assert data["user_id"] == "test_user"
