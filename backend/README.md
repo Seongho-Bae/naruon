@@ -24,9 +24,13 @@ For local fixture imports, `OPENAI_API_KEY` is optional. When absent, `import_fi
 
 ## Schema bootstrap and backfill
 
-`python3 scripts/bootstrap_db.py` creates the `vector` extension, runs `Base.metadata.create_all` for fresh local databases, and applies idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for the threading columns (`thread_id`, `in_reply_to`, `references`, `reply_to`) plus the thread index. Existing email rows that predate threading should then be backfilled by reprocessing imported `.eml` files or by assigning `thread_id` with `services.threading_service.assign_thread_id` in chronological order.
+`python3 scripts/bootstrap_db.py` creates the `vector` extension, runs `Base.metadata.create_all` for fresh local databases, and applies idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for the email owner key (`user_id`) and threading columns (`thread_id`, `in_reply_to`, `references`, `reply_to`) plus the owner/thread indexes. Existing email rows that predate threading should then be backfilled by reprocessing imported `.eml` files or by assigning `thread_id` with `services.threading_service.assign_thread_id` in chronological order.
 
-Before claiming multi-user safety, add an owner/mailbox column to `emails`, backfill it, and scope every email/search query by that key.
+For existing local databases, the bootstrap stamps null `emails.user_id` values
+with `NARUON_IMPORT_USER_ID` or `default` so local rows remain visible through
+the authenticated-user query scope. Before claiming production multi-user
+safety, audit and backfill historical `emails.user_id` values against verified
+mailbox owners.
 
 ## Warning classification
 

@@ -42,6 +42,15 @@ async def override_get_db():
     yield MockSession()
 
 
+class CapturingMockSession(MockSession):
+    def __init__(self):
+        self.statements = []
+
+    async def execute(self, stmt):
+        self.statements.append(stmt)
+        return await super().execute(stmt)
+
+
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
@@ -83,3 +92,22 @@ def test_search_reply_counts_group_by_coalesced_thread_key():
     assert "coalesce(emails.thread_id, emails.message_id)" not in sql
     assert "count(emails.id)" in sql
     assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embeddings):
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+    session = CapturingMockSession()
+
+    async def override_scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_scoped_db
+    try:
+        with TestClient(app, headers={"X-User-Id": "testuser"}) as client:
+            response = client.post("/api/search", json={"query": "test query"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert "emails.user_id" in str(session.statements[-1]).lower()

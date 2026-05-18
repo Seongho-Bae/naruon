@@ -25,15 +25,17 @@
   including `DEBUG=true`. User-facing routes that touch encrypted fields should
   return the existing operator-facing missing-key error rather than fallback
   encryption.
-- Email rows do not yet have a mailbox ownership key, as documented in
-  `ARCHITECTURE.md`.
+- Email rows now have a nullable `user_id` owner key, and
+  email/search/network graph queries are scoped to the authenticated user.
+  Existing local databases receive the column and a null-row default backfill
+  through `backend/scripts/bootstrap_db.py`; production still needs an audited
+  mailbox-owner migration/backfill before multi-tenant data is mixed.
 
 ## 가설 / Hypothesis
 
-- Keycloak and Casdoor should be evaluated as OIDC providers after mailbox
-  ownership is modeled and before production multi-user access is claimed. The
-  HMAC session envelope is a narrow internal bridge, not the final external IdP
-  integration.
+- Keycloak and Casdoor should be evaluated as OIDC providers before production
+  multi-user access is claimed. The HMAC session envelope is a narrow internal
+  bridge, not the final external IdP integration.
 - Production still needs key rotation runbooks and separate secret scopes for
   `AUTH_SESSION_HMAC_SECRET`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
@@ -41,6 +43,6 @@
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,
   self-hosting footprint, backup/restore, and integration with gateway auth.
-- Replace the HMAC session bridge with verified OIDC/JWT claims only after tests
-  prove every email/search/query path is scoped to the authenticated mailbox
-  owner.
+- Replace the HMAC session bridge with verified OIDC/JWT claims while keeping
+  regression tests that prove every email/search/network query path is scoped to
+  the authenticated mailbox owner.

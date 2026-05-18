@@ -3,7 +3,6 @@ import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from core.config import settings
 from db.models import AuditLog, LLMProvider
 from db.session import get_db
 from main import app
@@ -62,14 +61,6 @@ class MockSession:
 
 
 mock_session = MockSession()
-
-
-@pytest.fixture(autouse=True)
-def enable_dev_headers():
-    previous = settings.TRUST_DEV_HEADERS
-    settings.TRUST_DEV_HEADERS = True
-    yield
-    settings.TRUST_DEV_HEADERS = previous
 
 
 @pytest.fixture(autouse=True)

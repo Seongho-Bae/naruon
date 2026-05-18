@@ -23,10 +23,15 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The current `emails` table does not have an owner/mailbox key. Email and
-search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+The `emails` table now has a nullable `user_id` owner key, and the current
+email list, detail, thread, search, and network graph endpoints scope their
+queries to the authenticated user. Fresh local databases get this column from
+SQLAlchemy metadata; existing local databases get it through
+`scripts/bootstrap_db.py`, which stamps null local rows with
+`NARUON_IMPORT_USER_ID` or `default`. Fixture imports use the same owner default
+for local data. Production multi-user safety still requires an audited migration
+and backfill that maps historical rows to verified mailbox owners before real
+tenant data is mixed in one database.
 
 ## Local deployment boundary
 
@@ -84,9 +89,9 @@ session envelope must carry explicit identity, role, organization/group, and
 workspace claims, so user ids such as `admin` do not imply elevated privileges.
 Endpoint tests use FastAPI dependency overrides for fixture identity only through
 explicit opt-in pytest fixtures, while a full Keycloak/Casdoor/OIDC provider and
-mailbox ownership model remain required before production multi-user access is
-claimed; see `docs/operations/auth-key-management.md`. The current Kubernetes
-ingress assumes NGINX, while Traefik is only an evaluated option in
+audited mailbox-owner migration remain required before production multi-user
+access is claimed; see `docs/operations/auth-key-management.md`. The current
+Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires

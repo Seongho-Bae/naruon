@@ -8,8 +8,10 @@
   when a tenant SMTP configuration exists; missing SMTP config returns a 400.
 - `backend/services/imap_worker.py` connects to configured IMAP endpoints as a
   client; it does not listen for inbound mail or own MX records.
-- `backend/api/auth.py` still uses dummy `X-User-Id` auth, so mailbox ownership
-  and production tenancy are not complete.
+- `backend/api/auth.py` rejects public identity headers at runtime and accepts
+  only signed bearer session envelopes. Email reads are scoped by `emails.user_id`,
+  but production tenancy still needs verified OIDC/JWT identity plus an audited
+  mailbox-owner migration/backfill.
 
 ## 사내망 Self-hosted Runner 아키텍처 (Issue #136)
 

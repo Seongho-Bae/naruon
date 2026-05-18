@@ -41,14 +41,6 @@ def mock_db():
     return MockAsyncSession()
 
 
-@pytest.fixture(autouse=True)
-def enable_dev_headers():
-    previous = settings.TRUST_DEV_HEADERS
-    settings.TRUST_DEV_HEADERS = True
-    yield
-    settings.TRUST_DEV_HEADERS = previous
-
-
 @pytest.fixture
 def member_client(mock_db):
     async def override_get_db():

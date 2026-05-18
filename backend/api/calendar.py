@@ -11,8 +11,9 @@ router = APIRouter(prefix="/api/calendar")
 
 
 class SyncRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     todos: list[str]
-    user_token: dict
 
 
 class WritebackSource(BaseModel):
@@ -61,6 +62,20 @@ async def get_writeback_sources(
     return ()
 
 
+async def get_calendar_user_token(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> dict | None:
+    """
+    Return server-authoritative calendar credentials for the authenticated user.
+
+    The current slice has no persisted Google credential registry yet. The
+    production default therefore fails closed, and tests may override this
+    dependency with fixture-owned credentials. A connector registry can replace
+    this placeholder with a lookup scoped by `auth_context`.
+    """
+    return None
+
+
 def _select_writeback_source(
     sources: Sequence[WritebackSource],
     target_source_id: str | None,
@@ -83,11 +98,19 @@ def _select_writeback_source(
 
 
 @router.post("/sync")
-async def sync_todos(request: SyncRequest):
+async def sync_todos(
+    request: SyncRequest,
+    user_token: dict | None = Depends(get_calendar_user_token),
+):
+    if user_token is None:
+        raise HTTPException(
+            status_code=422,
+            detail="No server-authoritative calendar credentials are configured",
+        )
     try:
         results = []
         for todo in request.todos:
-            event = await create_calendar_event(todo, request.user_token)
+            event = await create_calendar_event(todo, user_token)
             results.append(event)
         return {"synced": len(results), "events": results}
     except CalendarServiceError as e:

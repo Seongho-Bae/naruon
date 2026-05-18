@@ -14,7 +14,9 @@
 
 - `docs/operations/email-relay-proxy-boundary.md` states Naruon is not an SMTP/IMAP server or MX host; it is a web client server and relay/proxy for member-configured providers.
 - `frontend/src/components/DashboardLayout.tsx` already exposes primary IA (`AI 허브`, `프롬프트`, `설정`, mobile search/calendar/actions), but several destinations remain disabled or thin.
-- `backend/api/auth.py` still uses header-derived development identity; production-grade OIDC/RBAC/ABAC and mailbox ownership are not complete.
+- `backend/api/auth.py` no longer uses header-derived development identity.
+  Production-grade OIDC/RBAC/ABAC and audited mailbox-owner backfill remain
+  incomplete.
 - `backend/db/models.py` has organization and scoped role primitives, but persisted emails are not mailbox-account scoped.
 - `.github/workflows/mail-smoke.yml` uses `[self-hosted, mail-egress]` for internal mail connectivity smoke, but there is no implemented customer connector/runner artifact.
 - `.github/workflows/pr-governance.yml` exists, but Strix workflow naming, blocker exit behavior, and comment dedupe need hardening.
@@ -55,7 +57,8 @@ Naruon SaaS control plane (naruon.net)
    - Keep startup dashboard/email/calendar choice, but make dashboard/calendar API-backed in the next slice.
 
 2. **Mailbox ownership, auth, RBAC/ABAC**
-   - Add RED tests proving list/detail/thread/search cannot cross mailbox ownership boundaries.
+   - Keep RED/GREEN regression tests proving list/detail/thread/search cannot
+     cross mailbox ownership boundaries.
    - Introduce `MailboxAccount` and owner-scope model before broad OIDC claims are trusted.
    - Default IdP design: Keycloak for enterprise federation; Casdoor as optional lighter deployment.
    - Enforce ABAC denial precedence over RBAC allow for data region, delegation, consent, and resource ownership.

@@ -76,7 +76,13 @@ Errors should tell a contributor what failed and avoid leaking internals:
 
 ## Current scope contract
 
-This repo still uses trusted header auth in local/dev and does not persist an owner/mailbox key on email rows. The backend now derives an auth context with platform/organization/group/member scopes, but email data should still be treated as single-user development data until a mailbox ownership migration is added.
+Runtime auth no longer trusts public `X-User-*`, `X-Organization-*`,
+`X-Group-*`, or `X-Dev-Auth-Token` headers. Email rows now carry a nullable
+`user_id` owner key, and email/search/network graph endpoints scope reads to the
+authenticated user. Local bootstrap and fixture imports default that owner to
+`default`; production
+multi-user use still needs a verified OIDC provider plus an audited
+mailbox-owner migration/backfill before real tenant data is mixed.
 
 ## Operations and release docs
 

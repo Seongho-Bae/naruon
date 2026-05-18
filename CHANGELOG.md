@@ -21,9 +21,8 @@
 - Seongho Bae (@seonghobae): `backend/db/models.py`의 하드코딩된 Fernet fallback
   key를 제거하고, `DEBUG=true` 환경에서도 암호화 필드는 명시적인
   `ENCRYPTION_KEY` 없이는 암·복호화하지 않도록 수정했습니다.
-- Seongho Bae (@seonghobae): 개발용 헤더 인증이 production runtime에서는
-  동작하지 않도록 `RUNTIME_ENVIRONMENT`와 32자 이상 `DEV_AUTH_TOKEN` gate를
-  추가하고, `X-User-Id: admin`만으로 `organization_admin`이 되던 fallback을
+- Seongho Bae (@seonghobae): 개발용 헤더 인증 경로를 production runtime에서
+  제거하고, `X-User-Id: admin`만으로 `organization_admin`이 되던 fallback을
   제거했습니다.
 - Seongho Bae (@seonghobae): backend endpoint 테스트의 fixture identity를
   production `build_auth_context()`가 아니라 명시적 pytest dependency override가
@@ -31,6 +30,12 @@
 - Seongho Bae (@seonghobae): calendar writeback intent가 클라이언트 제공
   source owner/capability metadata를 신뢰하지 않고 server-authoritative source
   provider에서 선택하도록 바꿔 forged `owner_id` 기반 IDOR를 차단했습니다.
+- Seongho Bae (@seonghobae): calendar sync가 클라이언트 제공
+  `user_token`을 받지 않고 서버 권한 credential dependency에서만 Google
+  token을 받아 쓰도록 fail-closed 처리했습니다.
+- Seongho Bae (@seonghobae): `emails.user_id` owner key와 bootstrap backfill을
+  추가하고 email list/detail/thread/search/network graph 쿼리를 authenticated
+  user로 scope해 다른 사용자의 메일과 검색 결과가 노출되지 않도록 했습니다.
 
 ## [0.14.1] - 2026-05-13
 

@@ -16,8 +16,8 @@ source id, but they may not supply source ownership/capability records. This is
 an intent contract only: it does not write to provider APIs yet, and it does not
 store created objects only inside Naruon.
 
-**Tech Stack:** FastAPI, Pydantic input validation, existing dev-header auth
-context, pytest/TestClient.
+**Tech Stack:** FastAPI, Pydantic input validation, signed-session auth context
+with explicit test dependency overrides, pytest/TestClient.
 
 ---
 
@@ -28,9 +28,10 @@ context, pytest/TestClient.
   accounts.
 - Phase 2 writeback must use ETag/If-Match conflict handling, provenance, audit
   logs, and per-source capability detection.
-- Existing `POST /api/calendar/sync` writes directly to Google Calendar from a
-  supplied token and does not describe source selection, ownership, or
-  sovereignty semantics.
+- The previous `POST /api/calendar/sync` contract wrote directly to Google
+  Calendar from a supplied token and did not describe source selection,
+  ownership, or sovereignty semantics. It now fails closed unless a
+  server-authoritative credential dependency supplies trusted user credentials.
 
 ## API security scope
 

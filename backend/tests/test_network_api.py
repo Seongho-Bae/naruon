@@ -25,6 +25,16 @@ class MockSession:
         return MockResult(self.rows)
 
 
+class QueryCapturingSession(MockSession):
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+
 def get_override(rows):
     async def override_get_db():
         yield MockSession(rows)
@@ -136,3 +146,16 @@ def test_network_endpoint_query_params():
         data = response.json()
         assert len(data["nodes"]) == 2
         assert len(data["edges"]) == 1
+
+
+def test_network_graph_query_is_scoped_to_current_user():
+    session = QueryCapturingSession([("alice@example.com", "bob@example.com")])
+
+    async def override_get_db():
+        yield session
+
+    with patch.dict(app.dependency_overrides, {get_db: override_get_db}):
+        response = client.get("/api/network/graph")
+
+    assert response.status_code == 200
+    assert "emails.user_id" in str(session.queries[-1]).lower()

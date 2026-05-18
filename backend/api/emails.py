@@ -38,6 +38,7 @@ class EmailListItem(BaseModel):
     snippet: str
     reply_count: int | None = None
 
+
 class EmailDetailResponse(BaseModel):
     id: int
     message_id: str
@@ -60,7 +61,10 @@ async def get_emails(
 ):
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
-        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+        select(Email)
+        .where(Email.user_id == current_user)
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
     )
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
@@ -104,7 +108,9 @@ async def get_email(
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    result = await db.execute(select(Email).where(Email.id == email_id))
+    result = await db.execute(
+        select(Email).where(Email.id == email_id, Email.user_id == current_user)
+    )
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -123,7 +129,9 @@ async def get_email(
     )
 
 
-@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get(
+    "/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]]
+)
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
@@ -132,7 +140,12 @@ async def get_email_thread(
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
-        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .where(
+            Email.user_id == current_user,
+            or_(
+                Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
+            ),
+        )
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
@@ -164,22 +177,32 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None # O3: email threading support
+    in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
 
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+    request: SendEmailRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
-        
-        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
+
+        if (
+            not tenant_config
+            or not tenant_config.smtp_server
+            or not tenant_config.smtp_port
+            or not tenant_config.smtp_username
+        ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
 
         try:
@@ -194,10 +217,10 @@ async def send_email_endpoint(
                     detail="Server encryption key is not configured. Contact your workspace administrator.",
                 ) from exc
             raise
-        
+
         send_result = await send_email(
-            request.to, 
-            request.subject, 
+            request.to,
+            request.subject,
             request.body,
             smtp_server=smtp_server,
             smtp_port=smtp_port,

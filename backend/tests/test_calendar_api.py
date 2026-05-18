@@ -28,14 +28,27 @@ def writeback_source_override():
         app.dependency_overrides.pop(calendar_api.get_writeback_sources, None)
 
 
+@pytest.fixture
+def calendar_user_token_override():
+    def apply(token: dict[str, str]) -> None:
+        async def token_override() -> dict[str, str]:
+            return token
+
+        app.dependency_overrides[calendar_api.get_calendar_user_token] = token_override
+
+    yield apply
+    app.dependency_overrides.pop(calendar_api.get_calendar_user_token, None)
+
+
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_success(mock_create):
+def test_calendar_sync_endpoint_success(mock_create, calendar_user_token_override):
     # Setup mock
     mock_create.return_value = {"id": "123", "summary": "Test todo"}
+    calendar_user_token_override({"token": "server-owned"})
 
     response = client.post(
         "/api/calendar/sync",
-        json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
+        json={"todos": ["Test todo"]},
     )
 
     assert response.status_code == 200
@@ -43,16 +56,52 @@ def test_calendar_sync_endpoint_success(mock_create):
         "synced": 1,
         "events": [{"id": "123", "summary": "Test todo"}],
     }
-    mock_create.assert_called_once_with("Test todo", {"token": "dummy"})
+    mock_create.assert_called_once_with("Test todo", {"token": "server-owned"})
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_error(mock_create):
-    mock_create.side_effect = CalendarServiceError("Mocked error")
+def test_calendar_sync_rejects_client_supplied_user_token(mock_create):
+    mock_create.return_value = {"id": "attacker-event"}
 
     response = client.post(
         "/api/calendar/sync",
-        json={"todos": ["Test todo"], "user_token": {"token": "dummy"}},
+        json={"todos": ["Test todo"], "user_token": {"token": "attacker"}},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "extra_forbidden"
+    mock_create.assert_not_called()
+
+
+@patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
+def test_calendar_sync_uses_server_authoritative_calendar_credentials(mock_create):
+    mock_create.return_value = {"id": "123", "summary": "Test todo"}
+
+    async def token_override():
+        return {"token": "server-owned"}
+
+    app.dependency_overrides[calendar_api.get_calendar_user_token] = token_override
+    try:
+        response = client.post("/api/calendar/sync", json={"todos": ["Test todo"]})
+    finally:
+        app.dependency_overrides.pop(calendar_api.get_calendar_user_token, None)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "synced": 1,
+        "events": [{"id": "123", "summary": "Test todo"}],
+    }
+    mock_create.assert_called_once_with("Test todo", {"token": "server-owned"})
+
+
+@patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
+def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override):
+    mock_create.side_effect = CalendarServiceError("Mocked error")
+    calendar_user_token_override({"token": "server-owned"})
+
+    response = client.post(
+        "/api/calendar/sync",
+        json={"todos": ["Test todo"]},
     )
 
     assert response.status_code == 500

@@ -39,10 +39,12 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 # FAIL: DID NOT RAISE HTTPException
 ```
 
-## Task 2: Require explicit development auth token
+## Task 2: Superseded development-token mitigation
 
-- [x] Add `DEV_AUTH_TOKEN` to settings.
-- [x] Require `TRUST_DEV_HEADERS=True` and matching `X-Dev-Auth-Token` before parsing `X-User-Id`, `X-User-Role`, `X-Organization-Id`, or `X-Group-Ids`.
+- [x] Initial mitigation added an explicit development-token gate.
+- [x] Later Strix review showed any mutable runtime switch for public identity
+  headers inside production code remained too risky, so Task 8 superseded this
+  with complete runtime removal of the development-header auth path.
 - [x] Stop using `DEBUG` as an auth trust switch.
 - [x] Keep invalid/missing dev token errors generic: `401 Authentication required`.
 
@@ -115,9 +117,8 @@ python3 -m pytest backend/tests/test_tenant_config_model.py::test_get_fernet_req
   when the local/test header path is enabled.
 - [x] Add regression coverage proving `X-User-Id: admin` without an explicit
   trusted role header defaults to `member`.
-- [x] Require `RUNTIME_ENVIRONMENT` to be `local`, `development`, or `test`, a
-  configured 32+ character `DEV_AUTH_TOKEN`, and `TRUST_DEV_HEADERS=true` before
-  accepting development identity headers.
+- [x] The intermediate runtime/environment/token gate was superseded by Task 8,
+  which removed the development-header identity path from production code.
 - [x] Remove the hardcoded `admin` user-id role fallback.
 - [x] RED evidence:
 
@@ -173,6 +174,25 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q back
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q backend/tests/test_auth_real.py::test_signed_bearer_session_rejects_non_ascii_claim_values backend/tests/test_auth_real.py::test_signed_bearer_session_rejects_non_finite_expiration
 # 2 failed: non-ASCII claim values and NaN exp authenticated instead of failing closed.
 ```
+
+## Task 10: Strix calendar credential and email IDOR blockers
+
+- [x] Root cause: latest Strix run `26034843236` still found two public API
+  trust-boundary defects. `POST /api/calendar/sync` accepted client-provided
+  Google credential payloads, and email/search reads did not enforce a persisted
+  mailbox owner key.
+- [x] Add RED regression coverage proving calendar sync rejects extra
+  client-supplied token data and only calls `create_calendar_event()` with a
+  server-authoritative credential dependency.
+- [x] Add RED regression coverage proving email list, detail, thread, search,
+  and network graph query statements include the authenticated user's
+  `emails.user_id` scope.
+- [x] Remove the development-header bypass settings from runtime configuration,
+  add `emails.user_id`, add idempotent local schema backfill/indexing that stamps
+  null local rows with `NARUON_IMPORT_USER_ID` or `default`, and stamp fixture
+  imports with the same owner value.
+- [x] Keep production calendar credential lookup fail-closed until a connector
+  registry provides trusted per-user credentials.
 
 ## Verification evidence
 

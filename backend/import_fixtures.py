@@ -11,6 +11,7 @@ import os
 from sqlalchemy import select
 
 EMBEDDING_DIMENSION = 1536
+IMPORT_USER_ID = os.environ.get("NARUON_IMPORT_USER_ID", "default")
 
 
 async def generate_fixture_embedding(text: str) -> list[float]:
@@ -45,6 +46,7 @@ async def import_eml_file(session, eml_file: Path) -> bool:
     thread_id = await assign_thread_id(session, parsed)
 
     email_obj = Email(
+        user_id=IMPORT_USER_ID,
         message_id=parsed["message_id"],
         sender=parsed["sender"],
         reply_to=parsed.get("reply_to"),
@@ -79,7 +81,9 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         await session.rollback()
         print(f"Failed to commit {eml_file}: {e}")
         return False
-    print(f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments.")
+    print(
+        f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
+    )
     return True
 
 

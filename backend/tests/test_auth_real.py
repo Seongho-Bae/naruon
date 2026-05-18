@@ -91,15 +91,11 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
 def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
-    previous_trust = settings.TRUST_DEV_HEADERS
-    previous_dev_auth_token = settings.DEV_AUTH_TOKEN
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
-    settings.TRUST_DEV_HEADERS = previous_trust
-    settings.DEV_AUTH_TOKEN = previous_dev_auth_token
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
 
@@ -111,8 +107,6 @@ def _set_runtime_environment(value: str) -> None:
 
 def _enable_local_dev_headers() -> None:
     _set_runtime_environment("local")
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
 
 def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
@@ -337,7 +331,6 @@ def test_auth_dependency_overrides_are_opt_in_by_default():
 @pytest.mark.asyncio
 async def test_debug_mode_does_not_trust_unsigned_identity_headers():
     settings.DEBUG = True
-    settings.TRUST_DEV_HEADERS = False
 
     _assert_runner_config_rejects_identity_headers(
         {
@@ -350,7 +343,6 @@ async def test_debug_mode_does_not_trust_unsigned_identity_headers():
 
 def test_dev_header_trust_requires_configured_token():
     _set_runtime_environment("local")
-    settings.TRUST_DEV_HEADERS = True
 
     _assert_runner_config_rejects_identity_headers(
         {
@@ -376,8 +368,6 @@ def test_dev_header_trust_rejects_wrong_token():
 
 def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
     _set_runtime_environment("local")
-    settings.TRUST_DEV_HEADERS = False
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     _assert_runner_config_rejects_identity_headers(
         {
@@ -391,8 +381,6 @@ def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
 
 def test_dev_header_trust_is_rejected_in_production_environment():
     _set_runtime_environment("production")
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
     _assert_runner_config_rejects_identity_headers(
         {
@@ -406,8 +394,6 @@ def test_dev_header_trust_is_rejected_in_production_environment():
 
 def test_dev_header_trust_requires_strong_token():
     _set_runtime_environment("local")
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(WEAK_DEV_AUTH_TOKEN)
 
     _assert_runner_config_rejects_identity_headers(
         {
@@ -444,9 +430,6 @@ def test_http_route_rejects_dev_token_and_forged_role_even_when_flags_enabled():
 
 
 def test_http_route_rejects_public_identity_headers_without_dev_token():
-    settings.TRUST_DEV_HEADERS = False
-    settings.DEV_AUTH_TOKEN = None
-
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",

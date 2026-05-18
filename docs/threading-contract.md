@@ -28,4 +28,8 @@
 
 ## Current ownership boundary
 
-Email rows are single-user development data today. Multi-user production safety requires an owner/mailbox key on `emails` and matching filters in email and search endpoints.
+Email rows include a nullable `user_id` owner key. Email list, detail, thread,
+search, and network graph endpoints filter by the authenticated user before
+grouping thread or relationship results. Production multi-user safety still
+requires an audited backfill that maps historical rows to verified mailbox
+owners before tenant data is mixed.

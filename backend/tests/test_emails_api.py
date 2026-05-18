@@ -85,10 +85,25 @@ class LimitAwareMockSession(MockSession):
         return MockResult(rows)
 
 
+class QueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+
+def compiled_query_text(query) -> str:
+    return str(query).lower()
+
+
 @pytest.fixture
 def sample_email():
     return Email(
         id=1,
+        user_id="testuser",
         message_id="msg123",
         thread_id="thread123",
         sender="test@example.com",
@@ -129,6 +144,7 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     hot_thread = [
         Email(
             id=index + 1,
+            user_id="testuser",
             message_id=f"hot-{index}",
             thread_id="hot-thread",
             sender="hot@example.com",
@@ -143,6 +159,7 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     ]
     second_thread = Email(
         id=99,
+        user_id="testuser",
         message_id="second-thread-root",
         thread_id="second-thread",
         sender="second@example.com",
@@ -198,6 +215,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
 ):
     root = Email(
         id=1,
+        user_id="testuser",
         message_id="<root@example.com>",
         thread_id="<root@example.com>",
         sender="root@example.com",
@@ -208,6 +226,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
     )
     reply = Email(
         id=2,
+        user_id="testuser",
         message_id="<reply@example.com>",
         thread_id="root@example.com",
         sender="reply@example.com",
@@ -251,6 +270,7 @@ async def test_get_email_thread_returns_chronological_order(
 ):
     newer = Email(
         id=2,
+        user_id="testuser",
         message_id="newer-msg",
         thread_id="thread123",
         sender="newer@example.com",
@@ -261,6 +281,7 @@ async def test_get_email_thread_returns_chronological_order(
     )
     older = Email(
         id=1,
+        user_id="testuser",
         message_id="older-msg",
         thread_id="thread123",
         sender="older@example.com",
@@ -310,6 +331,51 @@ async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path:
 
     assert response.status_code == 200
     assert calls == ["hit"]
+
+
+@pytest.mark.asyncio
+async def test_get_emails_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    assert "emails.user_id" in compiled_query_text(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 200
+    assert "emails.user_id" in compiled_query_text(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
+
+    assert response.status_code == 200
+    assert "emails.user_id" in compiled_query_text(session.queries[-1])
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

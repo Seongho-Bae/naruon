@@ -57,7 +57,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=datetime.datetime.utcnow)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=datetime.datetime.utcnow
+    )
     user_id: Mapped[str] = mapped_column(String, index=True)
     action: Mapped[str] = mapped_column(String)
     resource_type: Mapped[str] = mapped_column(String)
@@ -70,11 +72,17 @@ class LLMProvider(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String, index=True, unique=True)
-    provider_type: Mapped[str] = mapped_column(String) # e.g. openai, anthropic, gemini, ollama
+    provider_type: Mapped[str] = mapped_column(
+        String
+    )  # e.g. openai, anthropic, gemini, ollama
     base_url: Mapped[str | None] = mapped_column(String, nullable=True)
     api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
-    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
+    )
 
 
 class WorkspaceRunnerConfig(Base):
@@ -83,9 +91,13 @@ class WorkspaceRunnerConfig(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     workspace_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    registration_token: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
     updated_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+        DateTime(timezone=True),
+        default=datetime.datetime.utcnow,
+        onupdate=datetime.datetime.utcnow,
     )
 
 
@@ -95,19 +107,27 @@ class Organization(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    groups: Mapped[list["OrganizationGroup"]] = relationship(back_populates="organization")
-    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(back_populates="organization")
+    groups: Mapped[list["OrganizationGroup"]] = relationship(
+        back_populates="organization"
+    )
+    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(
+        back_populates="organization"
+    )
 
 
 class OrganizationGroup(Base):
     __tablename__ = "organization_groups"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
-    organization_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    organization_id: Mapped[str] = mapped_column(
+        ForeignKey("organizations.id"), index=True
+    )
     name: Mapped[str | None] = mapped_column(String, nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="groups")
-    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(back_populates="group")
+    role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(
+        back_populates="group"
+    )
 
 
 class ScopedRoleAssignment(Base):
@@ -116,11 +136,19 @@ class ScopedRoleAssignment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True)
     role: Mapped[str] = mapped_column(String, index=True)
-    organization_id: Mapped[str | None] = mapped_column(ForeignKey("organizations.id"), nullable=True, index=True)
-    group_id: Mapped[str | None] = mapped_column(ForeignKey("organization_groups.id"), nullable=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True, index=True
+    )
+    group_id: Mapped[str | None] = mapped_column(
+        ForeignKey("organization_groups.id"), nullable=True, index=True
+    )
 
-    organization: Mapped["Organization | None"] = relationship(back_populates="role_assignments")
-    group: Mapped["OrganizationGroup | None"] = relationship(back_populates="role_assignments")
+    organization: Mapped["Organization | None"] = relationship(
+        back_populates="role_assignments"
+    )
+    group: Mapped["OrganizationGroup | None"] = relationship(
+        back_populates="role_assignments"
+    )
 
 
 class PromptTemplate(Base):
@@ -132,15 +160,26 @@ class PromptTemplate(Base):
     content: Mapped[str] = mapped_column(Text)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str] = mapped_column(String, index=True)
-    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc))
-    updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc), onupdate=lambda: datetime.datetime.now(datetime.timezone.utc))
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
 
 class Email(Base):
     __tablename__ = "emails"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
-    thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True) # O3: email threading support
+    thread_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )  # O3: email threading support
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
