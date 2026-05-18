@@ -48,6 +48,7 @@ ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
 PULL_REQUEST_CHANGED_FILES=()
+NORMALIZED_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
@@ -178,7 +179,7 @@ if "\\" in relative_path_str:
 normalized = posixpath.normpath(relative_path_str)
 if normalized in (".", "") or normalized.startswith("../") or normalized == "..":
     raise SystemExit(1)
-if not re.fullmatch(r"[A-Za-z0-9_./ -]+", normalized):
+if not re.fullmatch(r"[A-Za-z0-9_./ \[\]-]+", normalized):
     raise SystemExit(1)
 relative_path = Path(normalized)
 if relative_path.is_absolute():
@@ -189,6 +190,21 @@ candidate = (repo_root / relative_path).resolve(strict=False)
 candidate.relative_to(repo_root)
 print(relative_path.as_posix())
 PY
+}
+
+normalize_changed_files_cache() {
+	NORMALIZED_CHANGED_FILES=()
+	local changed_file normalized_changed_file
+	for changed_file in "${CHANGED_FILES[@]}"; do
+		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || {
+			if pull_request_head_blob_required; then
+				echo "ERROR: pull request changed file path is unsafe: $changed_file" >&2
+				return 2
+			fi
+			continue
+		}
+		NORMALIZED_CHANGED_FILES+=("$normalized_changed_file")
+	done
 }
 
 pull_request_head_blob_required() {
@@ -590,6 +606,7 @@ load_pull_request_changed_files() {
 				PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 			fi
 		done <<<"$STRIX_TEST_CHANGED_FILES_OVERRIDE"
+		normalize_changed_files_cache || return 2
 		return 0
 	fi
 
@@ -658,6 +675,7 @@ PY
 			PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 		fi
 	done <<<"$changed_files_output"
+	normalize_changed_files_cache || return 2
 
 	return 0
 }
@@ -922,6 +940,8 @@ pull_request_scope_context_files() {
 backend/requirements.txt
 backend/api/__init__.py
 backend/api/auth.py
+backend/api/mailbox_scope.py
+backend/api/runner_config.py
 backend/core/__init__.py
 backend/core/config.py
 backend/core/exceptions.py
@@ -937,6 +957,17 @@ backend/services/exceptions.py
 backend/services/threading_service.py
 EOF
 	fi
+}
+
+changed_file_list_contains() {
+	local candidate normalized_candidate normalized_changed_file
+	normalized_candidate="$(normalize_changed_file_path "$1")" || return 2
+	for normalized_changed_file in "${NORMALIZED_CHANGED_FILES[@]}"; do
+		if [ "$normalized_changed_file" = "$normalized_candidate" ]; then
+			return 0
+		fi
+	done
+	return 1
 }
 
 build_pull_request_scope_dir() {
@@ -1009,35 +1040,30 @@ PY
 		if [ -e "$dst_path" ]; then
 			return 0
 		fi
-
-		local context_file_changed_in_pr=0
-		local changed_file normalized_changed_file
-		for changed_file in "${PULL_REQUEST_CHANGED_FILES[@]}"; do
-			if ! normalized_changed_file="$(normalize_changed_file_path "$changed_file")"; then
-				if pull_request_head_blob_required; then
-					return 2
-				fi
-				continue
-			fi
-			if [ "$normalized_changed_file" = "$relative_path" ]; then
-				context_file_changed_in_pr=1
-				break
-			fi
-		done
-
-		if [ "$context_file_changed_in_pr" -eq 1 ]; then
+		local changed_context_rc=0
+		changed_file_list_contains "$relative_path" || changed_context_rc=$?
+		case "$changed_context_rc" in
+		0)
 			mkdir -p -- "$(dirname -- "$dst_path")"
-			local head_sha_for_context
-			head_sha_for_context="$(trim_whitespace "${PR_HEAD_SHA:-}")"
-			if pull_request_head_blob_required || { [ -n "$head_sha_for_context" ] && git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; }; then
-				if copy_pr_head_blob_to_file "$relative_path" "$dst_path"; then
-					return 0
-				fi
+			local copy_rc=1
+			local head_sha_for_copy
+			head_sha_for_copy="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+			if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && git cat-file -e "$head_sha_for_copy^{commit}" 2>/dev/null; }; then
+				copy_rc=0
+				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || copy_rc=$?
+			fi
+			if [ "$copy_rc" -eq 0 ]; then
+				return 0
+			fi
+			if pull_request_head_blob_required || [ "$copy_rc" -eq 2 ]; then
 				echo "ERROR: pull request changed context file could not be read from PR head; failing closed: $context_file" >&2
 				return 2
 			fi
-		fi
-
+			;;
+		2)
+			return 2
+			;;
+		esac
 		local src_path="$REPO_ROOT/$relative_path"
 		if [ ! -e "$src_path" ]; then
 			return 0
@@ -1275,10 +1301,10 @@ import sys
 
 text = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
 patterns = [
-    re.compile(r'(?P<path>/workspace/[^\s`]+|[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+):\d+'),
-    re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Target:(?:\*\*)?[ \t]*(?:File:[ \t]*)?(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
-    re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Endpoint:(?:\*\*)?[ \t]*(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
-    re.compile(r'(?i)(?:in\s+)?file\s+`(?P<path>(?:\.\.?/)?[A-Za-z0-9_./-]+\.[A-Za-z0-9_]+)`'),
+    re.compile(r'(?P<path>/workspace/[^\s`]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+):\d+'),
+    re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Target:(?:\*\*)?[ \t]*(?:File:[ \t]*)?(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
+    re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Endpoint:(?:\*\*)?[ \t]*(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
+    re.compile(r'(?i)(?:in\s+)?file\s+`(?P<path>(?:\.\.?/)?[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)`'),
 ]
 seen = set()
 for pattern in patterns:
