@@ -23,15 +23,21 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The `emails` table now has a nullable `user_id` owner key, and the current
-email list, detail, thread, search, and network graph endpoints scope their
-queries to the authenticated user. Fresh local databases get this column from
-SQLAlchemy metadata; existing local databases get it through
-`scripts/bootstrap_db.py`, which stamps null local rows with
-`NARUON_IMPORT_USER_ID` or `default`. Fixture imports use the same owner default
-for local data. Production multi-user safety still requires an audited migration
-and backfill that maps historical rows to verified mailbox owners before real
-tenant data is mixed in one database.
+The `emails` table now has nullable `user_id` and `organization_id` owner keys,
+and the current email list, detail, thread, search, and network graph endpoints
+scope their queries to the authenticated user plus organization. Fresh local
+databases get these columns from SQLAlchemy metadata; existing local databases
+get them through `scripts/bootstrap_db.py`, which stamps null local rows with
+`NARUON_IMPORT_USER_ID` / `NARUON_IMPORT_ORGANIZATION_ID` or `default`. Fixture
+imports use the same owner defaults for local data. Production multi-user safety
+still requires an audited migration and backfill that maps historical rows to
+verified mailbox owners and organizations before real tenant data is mixed in
+one database.
+
+`message_id` is unique only within the `(user_id, organization_id)` owner scope,
+not globally. Fixture import upserts and reply-thread lookup use the same owner
+scope so a reused RFC Message-ID from another organization cannot overwrite an
+email row or attach a reply to another tenant's thread.
 
 ## Local deployment boundary
 

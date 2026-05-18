@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.session import get_db
 from db.models import Email
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context
 import re
 
 router = APIRouter(prefix="/api/network")
@@ -39,15 +39,21 @@ async def get_network_graph(
     limit: int = 500,
     user_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
+    current_user = auth_context.user_id
     if user_id and user_id != current_user:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or current_user
+    organization_filter = (
+        Email.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else Email.organization_id.is_(None)
+    )
 
     result = await db.execute(
         select(Email.sender, Email.recipients)
-        .where(Email.user_id == target_user_id)
+        .where(Email.user_id == target_user_id, organization_filter)
         .limit(limit)
     )
     rows = result.fetchall()

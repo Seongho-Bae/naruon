@@ -158,4 +158,6 @@ def test_network_graph_query_is_scoped_to_current_user():
         response = client.get("/api/network/graph")
 
     assert response.status_code == 200
-    assert "emails.user_id" in str(session.queries[-1]).lower()
+    query_text = str(session.queries[-1]).lower()
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text

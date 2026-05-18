@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
-from sqlalchemy import String, DateTime, Text, ForeignKey, Boolean
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.types import TypeDecorator
 from cryptography.fernet import Fernet
 from core.config import settings
@@ -173,10 +173,21 @@ class PromptTemplate(Base):
 
 class Email(Base):
     __tablename__ = "emails"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "organization_id",
+            "message_id",
+            name="uq_emails_owner_message_id",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    message_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    message_id: Mapped[str] = mapped_column(String, index=True)
     thread_id: Mapped[str | None] = mapped_column(
         String, index=True, nullable=True
     )  # O3: email threading support

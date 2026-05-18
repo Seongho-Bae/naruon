@@ -317,15 +317,22 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
     ["/api/emails?limit=10", "/api/emails/1", "/api/emails/thread/thread123"],
 )
 async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path: str):
-    from api.emails import get_current_user as emails_get_current_user
+    from api.auth import AuthContext
+    from api.emails import get_auth_context as emails_get_auth_context
 
     calls = []
 
     async def auth_override():
         calls.append("hit")
-        return "authorized-user"
+        return AuthContext(
+            user_id="authorized-user",
+            role="member",
+            organization_id="authorized-org",
+            group_ids=(),
+            workspace_id="workspace-authorized-org",
+        )
 
-    app.dependency_overrides[emails_get_current_user] = auth_override
+    app.dependency_overrides[emails_get_auth_context] = auth_override
 
     response = await client.get(path)
 
@@ -345,7 +352,9 @@ async def test_get_emails_query_is_scoped_to_current_user(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    assert "emails.user_id" in compiled_query_text(session.queries[-1])
+    query_text = compiled_query_text(session.queries[-1])
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
 
 
 @pytest.mark.asyncio
@@ -360,7 +369,9 @@ async def test_get_email_by_id_query_is_scoped_to_current_user(
     response = await client.get(f"/api/emails/{sample_email.id}")
 
     assert response.status_code == 200
-    assert "emails.user_id" in compiled_query_text(session.queries[-1])
+    query_text = compiled_query_text(session.queries[-1])
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
 
 
 @pytest.mark.asyncio
@@ -375,7 +386,9 @@ async def test_get_email_thread_query_is_scoped_to_current_user(
     response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
 
     assert response.status_code == 200
-    assert "emails.user_id" in compiled_query_text(session.queries[-1])
+    query_text = compiled_query_text(session.queries[-1])
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

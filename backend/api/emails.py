@@ -8,7 +8,7 @@ import datetime
 from services.email_client import send_email
 from services.threading_service import normalize_message_id
 import logging
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,15 @@ def canonical_thread_key(email: Email) -> str:
 def thread_lookup_values(thread_id: str) -> list[str]:
     normalized = normalize_message_id(thread_id) or thread_id
     return list({thread_id, normalized, f"<{normalized}>"})
+
+
+def email_owner_filters(auth_context: AuthContext):
+    organization_filter = (
+        Email.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else Email.organization_id.is_(None)
+    )
+    return (Email.user_id == auth_context.user_id, organization_filter)
 
 
 class EmailListItem(BaseModel):
@@ -57,12 +66,12 @@ class EmailDetailResponse(BaseModel):
 async def get_emails(
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
         select(Email)
-        .where(Email.user_id == current_user)
+        .where(*email_owner_filters(auth_context))
         .order_by(Email.date.desc())
         .limit(candidate_window)
     )
@@ -106,10 +115,10 @@ async def get_emails(
 async def get_email(
     email_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     result = await db.execute(
-        select(Email).where(Email.id == email_id, Email.user_id == current_user)
+        select(Email).where(Email.id == email_id, *email_owner_filters(auth_context))
     )
     email = result.scalar_one_or_none()
     if not email:
@@ -135,13 +144,13 @@ async def get_email(
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
         .where(
-            Email.user_id == current_user,
+            *email_owner_filters(auth_context),
             or_(
                 Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
             ),

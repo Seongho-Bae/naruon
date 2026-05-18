@@ -33,9 +33,13 @@
 - Seongho Bae (@seonghobae): calendar sync가 클라이언트 제공
   `user_token`을 받지 않고 서버 권한 credential dependency에서만 Google
   token을 받아 쓰도록 fail-closed 처리했습니다.
-- Seongho Bae (@seonghobae): `emails.user_id` owner key와 bootstrap backfill을
-  추가하고 email list/detail/thread/search/network graph 쿼리를 authenticated
-  user로 scope해 다른 사용자의 메일과 검색 결과가 노출되지 않도록 했습니다.
+- Seongho Bae (@seonghobae): `emails.user_id` / `emails.organization_id` owner
+  key와 bootstrap backfill을 추가하고 email list/detail/thread/search/network
+  graph 쿼리를 authenticated user와 organization으로 scope해 다른 사용자나 조직의
+  메일/검색/네트워크 그래프가 노출되지 않도록 했습니다.
+- Seongho Bae (@seonghobae): email `message_id` 중복/업서트/스레드 lookup을
+  owner+organization 범위로 제한해, 다른 조직의 동일 Message-ID가 기존 행을
+  덮어쓰거나 cross-tenant thread에 연결되지 않도록 했습니다.
 
 ## [0.14.1] - 2026-05-13
 

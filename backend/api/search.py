@@ -7,7 +7,7 @@ from sqlalchemy import select, func, union_all
 from db.session import get_db
 from db.models import Email, Attachment, TenantConfig
 from services.embedding import generate_embeddings
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -43,14 +43,25 @@ def thread_group_key():
     return func.coalesce(normalized_thread_id, normalized_message_id)
 
 
-def build_reply_counts_subquery(user_id: str | None = None):
+def email_owner_filters(user_id: str, organization_id: str | None):
+    organization_filter = (
+        Email.organization_id == organization_id
+        if organization_id is not None
+        else Email.organization_id.is_(None)
+    )
+    return (Email.user_id == user_id, organization_filter)
+
+
+def build_reply_counts_subquery(
+    user_id: str | None = None, organization_id: str | None = None
+):
     group_key = thread_group_key()
     statement = select(
         group_key.label("thread_key"),
         func.count(Email.id).label("reply_count"),
     ).select_from(Email)
     if user_id is not None:
-        statement = statement.where(Email.user_id == user_id)
+        statement = statement.where(*email_owner_filters(user_id, organization_id))
     return statement.group_by(group_key).subquery("thread_counts")
 
 
@@ -59,11 +70,11 @@ async def hybrid_search(
     request: SearchRequest,
     user_id: str | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    if user_id and user_id != current_user:
+    if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = user_id or auth_context.user_id
 
     if not request.query.strip():
         return SearchResponse(results=[])
@@ -86,7 +97,12 @@ async def hybrid_search(
         )
         vector_distance_email = Email.embedding.cosine_distance(query_embedding)
         hybrid_score_email = fts_score_email - vector_distance_email
-        reply_counts = build_reply_counts_subquery(target_user_id)
+        owner_filters = email_owner_filters(
+            target_user_id, auth_context.organization_id
+        )
+        reply_counts = build_reply_counts_subquery(
+            target_user_id, auth_context.organization_id
+        )
 
         stmt_email = (
             select(
@@ -101,7 +117,7 @@ async def hybrid_search(
             )
             .select_from(Email)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
-            .where(Email.user_id == target_user_id)
+            .where(*owner_filters)
         )
 
         fts_score_att = func.ts_rank_cd(
@@ -125,7 +141,7 @@ async def hybrid_search(
             .select_from(Attachment)
             .join(Email, Attachment.email_id == Email.id)
             .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
-            .where(Email.user_id == target_user_id)
+            .where(*owner_filters)
         )
 
         combined = union_all(stmt_email, stmt_att).cte("combined_search")

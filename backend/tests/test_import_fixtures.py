@@ -66,7 +66,66 @@ async def test_root_importer_persists_canonical_thread_id(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_root_importer_uses_local_embedding_without_openai_key(tmp_path, monkeypatch):
+async def test_root_importer_duplicate_check_is_scoped_to_owner(tmp_path):
+    class MockResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class MockSession:
+        def __init__(self):
+            self.queries = []
+            self.added = None
+
+        async def execute(self, query):
+            self.queries.append(query)
+            return MockResult()
+
+        def add(self, obj):
+            self.added = obj
+
+        async def commit(self):
+            pass
+
+    eml_file = tmp_path / "duplicate-scope.eml"
+    eml_file.write_text("Message-ID: <duplicate-scope@example.com>\n\nBody")
+    parsed = {
+        "message_id": "<duplicate-scope@example.com>",
+        "sender": "sender@example.com",
+        "recipients": "user@example.com",
+        "subject": "Duplicate scope",
+        "date": datetime.datetime.now(datetime.timezone.utc),
+        "body": "Body",
+        "attachments": [],
+    }
+    session = MockSession()
+
+    with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(
+        import_fixtures, "generate_embeddings", new_callable=AsyncMock
+    ) as mock_embeddings, patch.object(
+        import_fixtures, "assign_thread_id", new_callable=AsyncMock
+    ) as mock_assign:
+        mock_embeddings.return_value = [[0.0] * 1536]
+        mock_assign.return_value = "duplicate-scope-thread"
+
+        imported = await import_fixtures.import_eml_file(session, eml_file)
+
+    assert imported is True
+    query_text = str(session.queries[0]).lower()
+    assert "emails.message_id" in query_text
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
+    mock_assign.assert_awaited_once_with(
+        session,
+        parsed,
+        user_id=import_fixtures.IMPORT_USER_ID,
+        organization_id=import_fixtures.IMPORT_ORGANIZATION_ID,
+    )
+
+
+@pytest.mark.asyncio
+async def test_root_importer_uses_local_embedding_without_openai_key(
+    tmp_path, monkeypatch
+):
     class MockResult:
         def scalar_one_or_none(self):
             return None
@@ -99,7 +158,9 @@ async def test_root_importer_uses_local_embedding_without_openai_key(tmp_path, m
     session = MockSession()
 
     with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(
-        import_fixtures, "generate_embeddings", side_effect=AssertionError("network call")
+        import_fixtures,
+        "generate_embeddings",
+        side_effect=AssertionError("network call"),
     ):
         imported = await import_fixtures.import_eml_file(session, eml_file)
 

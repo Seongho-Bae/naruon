@@ -25,11 +25,15 @@
   including `DEBUG=true`. User-facing routes that touch encrypted fields should
   return the existing operator-facing missing-key error rather than fallback
   encryption.
-- Email rows now have a nullable `user_id` owner key, and
-  email/search/network graph queries are scoped to the authenticated user.
-  Existing local databases receive the column and a null-row default backfill
-  through `backend/scripts/bootstrap_db.py`; production still needs an audited
-  mailbox-owner migration/backfill before multi-tenant data is mixed.
+- Email rows now have nullable `user_id` and `organization_id` owner keys, and
+  email/search/network graph queries are scoped to the authenticated user plus
+  organization. Existing local databases receive the columns and null-row
+  default backfills through `backend/scripts/bootstrap_db.py`; production still
+  needs an audited mailbox-owner and organization migration/backfill before
+  multi-tenant data is mixed.
+- Email `message_id` uniqueness, fixture import upserts, and reply-thread lookup
+  are scoped by `user_id` plus `organization_id` so reused RFC Message-ID values
+  cannot cross tenant boundaries.
 
 ## 가설 / Hypothesis
 
@@ -45,4 +49,4 @@
   self-hosting footprint, backup/restore, and integration with gateway auth.
 - Replace the HMAC session bridge with verified OIDC/JWT claims while keeping
   regression tests that prove every email/search/network query path is scoped to
-  the authenticated mailbox owner.
+  the authenticated mailbox owner and organization.

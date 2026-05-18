@@ -110,4 +110,6 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert "emails.user_id" in str(session.statements[-1]).lower()
+    query_text = str(session.statements[-1]).lower()
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
