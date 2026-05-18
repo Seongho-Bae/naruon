@@ -154,7 +154,7 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error pyth
 # 16 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_config.py backend/tests/test_calendar_api.py backend/tests/test_runtime_config_api.py backend/tests/test_prompts_api.py backend/tests/test_llm_api.py backend/tests/test_network_api.py backend/tests/test_main.py -q
-# 65 passed
+# 67 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_auth_real.py -q
 # 36 passed
@@ -172,7 +172,7 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 # 3 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests -q
-# 2 failed, 129 passed, 2 skipped; known pre-existing path assertions failed in
+# 2 failed, 131 passed, 2 skipped; known pre-existing path assertions failed in
 # backend/tests/test_apm_observability.py because ../docker-compose.observability.yml
 # and ../observability/... are resolved outside the repo root.
 ```

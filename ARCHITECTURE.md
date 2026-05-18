@@ -92,3 +92,10 @@ an explicit `ENCRYPTION_KEY` before Fernet encrypts or decrypts OAuth, OpenAI,
 SMTP, IMAP, Google, and runner registration token fields, even in debug mode.
 Routes that touch encrypted values should surface an operator-facing missing-key
 error rather than silently storing plaintext or using a shared development key.
+
+Calendar writeback intent selection is server-authoritative. The
+`/api/calendar/writeback-intent` request may specify an action and optional
+target source id, but it must not provide source ownership or capability records;
+`backend/api/calendar.py` obtains writeback sources through a FastAPI dependency
+that is empty by default until a connector/source registry supplies trusted
+records scoped to the authenticated user.

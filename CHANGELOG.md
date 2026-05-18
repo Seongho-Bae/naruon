@@ -24,6 +24,9 @@
 - Seongho Bae (@seonghobae): backend endpoint 테스트의 fixture identity를
   production `build_auth_context()`가 아니라 명시적 pytest dependency override가
   직접 만든 `AuthContext`로 분리했습니다.
+- Seongho Bae (@seonghobae): calendar writeback intent가 클라이언트 제공
+  source owner/capability metadata를 신뢰하지 않고 server-authoritative source
+  provider에서 선택하도록 바꿔 forged `owner_id` 기반 IDOR를 차단했습니다.
 
 ## [0.14.1] - 2026-05-13
 

@@ -1,34 +1,58 @@
 # Calendar Writeback Sovereignty Slice
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use
+> superpowers:subagent-driven-development (recommended) or
+> superpowers:executing-plans to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make calendar writeback choose customer-owned CalDAV/CardDAV/WebDAV sources instead of treating Naruon as the system of record.
+**Goal:** Make calendar writeback choose customer-owned CalDAV/CardDAV/WebDAV
+sources instead of treating Naruon as the system of record.
 
-**Architecture:** Add a thin `/api/calendar/writeback-intent` API that accepts available source capabilities, selects an owned write-enabled external source, and returns an intent with provenance, audit event name, and ETag/If-Match requirements for updates. This is an intent contract only: it does not write to provider APIs yet, and it does not store created objects only inside Naruon.
+**Architecture:** Add a thin `/api/calendar/writeback-intent` API that selects
+an owned write-enabled external source from a server-authoritative source
+provider and returns an intent with provenance, audit event name, and
+ETag/If-Match requirements for updates. Client requests may choose a target
+source id, but they may not supply source ownership/capability records. This is
+an intent contract only: it does not write to provider APIs yet, and it does not
+store created objects only inside Naruon.
 
-**Tech Stack:** FastAPI, Pydantic input validation, existing dev-header auth context, pytest/TestClient.
+**Tech Stack:** FastAPI, Pydantic input validation, existing dev-header auth
+context, pytest/TestClient.
 
 ---
 
 ## Source gap
 
-- `docs/plans/2026-05-17-north-star-platform-roadmap.md` requires explicit data-sovereignty writeback to customer-owned mail, CalDAV, and WebDAV accounts.
-- Phase 2 writeback must use ETag/If-Match conflict handling, provenance, audit logs, and per-source capability detection.
-- Existing `POST /api/calendar/sync` writes directly to Google Calendar from a supplied token and does not describe source selection, ownership, or sovereignty semantics.
+- `docs/plans/2026-05-17-north-star-platform-roadmap.md` requires explicit
+  data-sovereignty writeback to customer-owned mail, CalDAV, and WebDAV
+  accounts.
+- Phase 2 writeback must use ETag/If-Match conflict handling, provenance, audit
+  logs, and per-source capability detection.
+- Existing `POST /api/calendar/sync` writes directly to Google Calendar from a
+  supplied token and does not describe source selection, ownership, or
+  sovereignty semantics.
 
 ## API security scope
 
-- Surface changed: authenticated private HTTP endpoint `POST /api/calendar/writeback-intent`.
-- AuthN/AuthZ gate: uses `get_auth_context`; selected source owner must match the current user.
-- Input validation: Pydantic constrains action and source protocol values.
-- Secret/PII output: response does not echo user tokens or provider credentials; it returns only source id, protocol, provenance, and audit metadata.
-- Abuse/rate limiting: no provider write happens in this slice, so endpoint cost is bounded to request validation and source selection.
+- Surface changed: authenticated private HTTP endpoint
+  `POST /api/calendar/writeback-intent`.
+- AuthN/AuthZ gate: uses `get_auth_context`; selected source owner must come
+  from the server-side source provider and match the current user.
+- Input validation: Pydantic constrains action values and forbids
+  client-supplied source metadata.
+- Secret/PII output: response does not echo user tokens or provider
+  credentials; it returns only source id, protocol, provenance, and audit
+  metadata.
+- Abuse/rate limiting: no provider write happens in this slice, so endpoint
+  cost is bounded to request validation and source selection.
 
 ## Task 1: Select customer-owned writeback source
 
 - [x] **Step 1: Write failing test**
 
-  `backend/tests/test_calendar_api.py` now requires `/api/calendar/writeback-intent` to skip the Naruon cache source and choose a write-enabled CalDAV account owned by the current user.
+  `backend/tests/test_calendar_api.py` now requires
+  `/api/calendar/writeback-intent` to skip the Naruon cache source and choose a
+  write-enabled CalDAV account owned by the current user.
 
 - [x] **Step 2: Verify RED**
 
@@ -36,13 +60,15 @@
 
 - [x] **Step 3: Implement minimal endpoint**
 
-  `backend/api/calendar.py` adds Pydantic request/response models and returns a customer-owned writeback intent.
+  `backend/api/calendar.py` adds Pydantic request/response models and returns a
+  customer-owned writeback intent.
 
 ## Task 2: Preserve ETag conflict contract for updates
 
 - [x] **Step 1: Write failing test**
 
-  The update test requires `requires_if_match: true` and `if_match` set to the selected source ETag.
+  The update test requires `requires_if_match: true` and `if_match` set to the
+  selected source ETag.
 
 - [x] **Step 2: Implement minimal ETag gate**
 
@@ -52,13 +78,72 @@
 
 - [x] **Step 1: Write failing test**
 
-  The rejection test requires 403 for a source owned by another user and 422 when only local/Naruon storage is available.
+  The rejection test requires 403 for a source owned by another user and 422
+  when only local/Naruon storage is available.
 
 - [x] **Step 2: Implement minimal authorization and sovereignty checks**
 
-  The endpoint rejects cross-owner source selection and refuses local-only writeback candidates.
+  The endpoint rejects cross-owner source selection and refuses local-only
+  writeback candidates.
+
+## Task 4: Reject forged client-side source ownership
+
+- [x] **Step 1: Write failing test**
+
+  A regression test posts attacker-controlled `sources` metadata with `owner_id`
+  set to the authenticated user and expects the endpoint to reject it instead of
+  selecting the forged source.
+
+- [x] **Step 2: Verify RED**
+
+  RED command:
+
+  ```bash
+  PYTHONDONTWRITEBYTECODE=1 \
+    DISABLE_BACKGROUND_WORKERS=1 \
+    python3 -m pytest backend/tests/test_calendar_api.py \
+    -k test_calendar_writeback_rejects_forged_client_source_ownership -q
+  # failed with assert 200 == 422
+  ```
+
+  The failure proved the endpoint trusted client-provided ownership.
+
+- [x] **Step 3: Implement server-authoritative source provider**
+
+  `backend/api/calendar.py` now depends on `get_writeback_sources()` for trusted
+  source records, prefers authenticated-user-owned sources during selection, and
+  forbids extra request fields, so client-supplied owner/capability data cannot
+  drive authorization.
 
 ## Acceptance evidence
 
-- RED: `PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest tests/test_calendar_api.py -q` failed with three expected 404s before endpoint implementation.
-- GREEN: `PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest tests/test_calendar_api.py -q` passed with 5 tests after endpoint implementation.
+- RED before endpoint implementation:
+
+  ```bash
+  PYTHONDONTWRITEBYTECODE=1 \
+    DISABLE_BACKGROUND_WORKERS=1 \
+    PYTHONWARNINGS=error \
+    python3 -m pytest backend/tests/test_calendar_api.py -q
+  # failed with three expected 404s
+  ```
+
+- GREEN after endpoint implementation:
+
+  ```bash
+  PYTHONDONTWRITEBYTECODE=1 \
+    DISABLE_BACKGROUND_WORKERS=1 \
+    PYTHONWARNINGS=error \
+    python3 -m pytest backend/tests/test_calendar_api.py -q
+  # 5 passed
+  ```
+
+- SECURITY GREEN after moving source selection behind a server-authoritative
+  dependency:
+
+  ```bash
+  PYTHONDONTWRITEBYTECODE=1 \
+    DISABLE_BACKGROUND_WORKERS=1 \
+    PYTHONWARNINGS=error \
+    python3 -m pytest backend/tests/test_calendar_api.py -q
+  # 7 passed
+  ```

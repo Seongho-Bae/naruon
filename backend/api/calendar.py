@@ -1,7 +1,8 @@
+from collections.abc import Sequence
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from api.auth import AuthContext, get_auth_context
 from services.calendar_service import create_calendar_event
 from services.exceptions import CalendarServiceError
@@ -25,9 +26,11 @@ class WritebackSource(BaseModel):
 
 
 class WritebackIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     action: Literal["create", "update"]
     summary: str
-    sources: list[WritebackSource]
+    target_source_id: str | None = None
 
 
 class WritebackIntentResponse(BaseModel):
@@ -42,6 +45,41 @@ class WritebackIntentResponse(BaseModel):
 
 
 CUSTOMER_OWNED_PROTOCOLS = {"caldav", "carddav", "webdav"}
+
+
+async def get_writeback_sources(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> tuple[WritebackSource, ...]:
+    """
+    Return server-authoritative writeback sources for the authenticated user.
+
+    The current slice has no persisted connector/source registry yet, so the
+    production default is intentionally empty. Tests may override this dependency
+    with fixture-owned sources, and the future connector registry should replace
+    this placeholder with a database-backed lookup scoped by `auth_context`.
+    """
+    return ()
+
+
+def _select_writeback_source(
+    sources: Sequence[WritebackSource],
+    target_source_id: str | None,
+    owner_id: str,
+) -> WritebackSource | None:
+    first_non_owned_candidate: WritebackSource | None = None
+    for source in sources:
+        if (
+            not source.writeback_enabled
+            or "write" not in source.capabilities
+            or source.protocol not in CUSTOMER_OWNED_PROTOCOLS
+            or (target_source_id is not None and source.source_id != target_source_id)
+        ):
+            continue
+        if source.owner_id == owner_id:
+            return source
+        if first_non_owned_candidate is None:
+            first_non_owned_candidate = source
+    return first_non_owned_candidate
 
 
 @router.post("/sync")
@@ -60,26 +98,28 @@ async def sync_todos(request: SyncRequest):
 async def create_writeback_intent(
     request: WritebackIntentRequest,
     auth_context: AuthContext = Depends(get_auth_context),
+    available_sources: tuple[WritebackSource, ...] = Depends(get_writeback_sources),
 ) -> WritebackIntentResponse:
-    target_source = next(
-        (
-            source
-            for source in request.sources
-            if source.writeback_enabled
-            and "write" in source.capabilities
-            and source.protocol in CUSTOMER_OWNED_PROTOCOLS
-        ),
-        None,
+    target_source = _select_writeback_source(
+        available_sources,
+        request.target_source_id,
+        auth_context.user_id,
     )
     if target_source is None:
-        raise HTTPException(status_code=422, detail="No customer-owned writeback source is available")
+        raise HTTPException(
+            status_code=422, detail="No customer-owned writeback source is available"
+        )
 
     if target_source.owner_id != auth_context.user_id:
-        raise HTTPException(status_code=403, detail="Writeback source belongs to a different owner")
+        raise HTTPException(
+            status_code=403, detail="Writeback source belongs to a different owner"
+        )
 
     requires_if_match = request.action == "update"
     if requires_if_match and not target_source.etag:
-        raise HTTPException(status_code=409, detail="ETag is required for writeback updates")
+        raise HTTPException(
+            status_code=409, detail="ETag is required for writeback updates"
+        )
 
     return WritebackIntentResponse(
         workspace_id=auth_context.workspace_id,
