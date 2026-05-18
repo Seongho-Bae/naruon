@@ -13,6 +13,9 @@ flowchart LR
 The backend owns persistence, threading, search, AI summaries, and outbound
 send orchestration. The frontend consumes the backend contracts and renders
 inbox, detail, thread history, reply composer, and network graph surfaces.
+Runtime database connectivity is secret-injected: `backend/core/config.py` has
+no fallback `DATABASE_URL`, so missing database configuration fails at startup
+rather than silently using shared development credentials.
 
 ## Threading boundary
 
@@ -53,6 +56,15 @@ Outbound replies preserve `In-Reply-To` and `References` headers in the built
 message payload. Local/dev behavior is explicit: missing SMTP config returns a
 400, and simulated send results are marked with `simulated: true` rather than
 described as real delivery.
+
+Tenant-provided SMTP destinations are not a general outbound socket primitive.
+`backend/api/tenant_config.py`, `backend/api/emails.py`, and the final
+`backend/services/email_client.py` network sink enforce the operator-controlled
+`ALLOWED_SMTP_HOSTS` and `ALLOWED_SMTP_PORTS` allowlists. The service also
+rejects loopback, link-local, private, reserved, and otherwise non-global DNS
+answers before opening a pinned socket to the selected global address, so stale
+database rows or direct service calls fail closed instead of reaching internal
+network targets or re-resolving DNS after validation.
 
 ## CI security boundary
 

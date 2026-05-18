@@ -103,6 +103,51 @@ def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
     }
 
 
+def test_tenant_config_rejects_private_smtp_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "127.0.0.1",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_metadata_smtp_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "169.254.169.254",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_smtp_port(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP port is not allowed" in response.json()["detail"]
+
+
 def test_tenant_config_get_rejects_cross_user_access(client):
     response = client.get(
         "/api/config",

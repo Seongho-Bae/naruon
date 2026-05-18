@@ -5,7 +5,7 @@ from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
-from services.email_client import send_email
+from services.email_client import send_email, validate_smtp_destination
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import AuthContext, get_auth_context, get_current_user
@@ -219,12 +219,15 @@ async def send_email_endpoint(
             smtp_port = tenant_config.smtp_port
             smtp_username = tenant_config.smtp_username
             smtp_password = tenant_config.smtp_password
+            validate_smtp_destination(smtp_server, smtp_port, resolve_host=False)
         except Exception as exc:
             if "ENCRYPTION_KEY is required" in str(exc):
                 raise HTTPException(
                     status_code=503,
                     detail="Server encryption key is not configured. Contact your workspace administrator.",
                 ) from exc
+            if isinstance(exc, ValueError):
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             raise
 
         send_result = await send_email(

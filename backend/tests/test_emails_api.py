@@ -450,6 +450,40 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
     assert response.json() == {"detail": "SMTP is not configured"}
 
 
+@patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    class UnsafeTenantConfig(MockTenantConfig):
+        def __init__(self):
+            super().__init__()
+            self.smtp_server = "127.0.0.1"
+            self.smtp_port = 587
+
+    async def unsafe_smtp_db():
+        yield MockSession([], tenant_config=UnsafeTenantConfig())
+
+    app.dependency_overrides[get_db] = unsafe_smtp_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Test",
+                "body": "Body",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+    mock_send_email.assert_not_called()
+
+
 @patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
 def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
     from main import app

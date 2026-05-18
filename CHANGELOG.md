@@ -40,6 +40,10 @@
 - Seongho Bae (@seonghobae): email `message_id` 중복/업서트/스레드 lookup을
   owner+organization 범위로 제한해, 다른 조직의 동일 Message-ID가 기존 행을
   덮어쓰거나 cross-tenant thread에 연결되지 않도록 했습니다.
+- Seongho Bae (@seonghobae): backend `DATABASE_URL`의 하드코딩된
+  `postgres:postgres` fallback을 제거하고, tenant SMTP outbound는 운영자가
+  명시한 `ALLOWED_SMTP_HOSTS`/`ALLOWED_SMTP_PORTS` allowlist와 private IP 차단을
+  통과한 pinned socket으로만 연결하도록 fail-closed 처리했습니다.
 
 ## [0.14.1] - 2026-05-13
 

@@ -1,3 +1,11 @@
+import os
+
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+)
+os.environ.setdefault("ALLOWED_SMTP_HOSTS", "smtp.example.com")
+os.environ.setdefault("DISABLE_BACKGROUND_WORKERS", "1")
+
 import pytest
 from fastapi import Header, HTTPException
 from typing import cast

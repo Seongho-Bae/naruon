@@ -7,6 +7,11 @@ from typing import Optional
 from db.models import TenantConfig
 from db.session import get_db
 from api.auth import get_current_user
+from services.email_client import (
+    validate_smtp_destination,
+    validate_smtp_host,
+    validate_smtp_port,
+)
 
 router = APIRouter(prefix="/api/config")
 
@@ -61,15 +66,40 @@ SECRET_FIELDS = {
     "google_client_secret",
 }
 
-MAILBOX_MANAGE_FORBIDDEN = "Mailbox settings are personal and can only be managed by the authenticated user"
-MAILBOX_VIEW_FORBIDDEN = "Mailbox settings are personal and can only be viewed by the authenticated user"
+MAILBOX_MANAGE_FORBIDDEN = (
+    "Mailbox settings are personal and can only be managed by the authenticated user"
+)
+MAILBOX_VIEW_FORBIDDEN = (
+    "Mailbox settings are personal and can only be viewed by the authenticated user"
+)
+
+
+def _validate_smtp_config_update(
+    config_data: dict, db_config: TenantConfig | None
+) -> None:
+    smtp_server = config_data.get(
+        "smtp_server", db_config.smtp_server if db_config is not None else None
+    )
+    smtp_port = config_data.get(
+        "smtp_port", db_config.smtp_port if db_config is not None else None
+    )
+
+    try:
+        if smtp_server is not None:
+            validate_smtp_host(smtp_server, resolve_host=False)
+        if smtp_port is not None:
+            validate_smtp_port(smtp_port)
+        if smtp_server is not None and smtp_port is not None:
+            validate_smtp_destination(smtp_server, smtp_port, resolve_host=False)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("")
 async def create_or_update_config(
-    config: TenantConfigCreate, 
+    config: TenantConfigCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user),
 ):
     if config.user_id != current_user:
         raise HTTPException(status_code=403, detail=MAILBOX_MANAGE_FORBIDDEN)
@@ -80,6 +110,7 @@ async def create_or_update_config(
     db_config = result.scalar_one_or_none()
 
     config_data = config.model_dump(exclude_unset=True)
+    _validate_smtp_config_update(config_data, db_config)
 
     if db_config:
         for key, value in config_data.items():
@@ -107,9 +138,9 @@ async def create_or_update_config(
 
 @router.get("", response_model=TenantConfigResponse)
 async def get_config(
-    user_id: str, 
+    user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user)
+    current_user: str = Depends(get_current_user),
 ):
     if user_id != current_user:
         raise HTTPException(status_code=403, detail=MAILBOX_VIEW_FORBIDDEN)

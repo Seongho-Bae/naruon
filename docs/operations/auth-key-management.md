@@ -34,6 +34,14 @@
 - Email `message_id` uniqueness, fixture import upserts, and reply-thread lookup
   are scoped by `user_id` plus `organization_id` so reused RFC Message-ID values
   cannot cross tenant boundaries.
+- `DATABASE_URL` has no code default. Every runtime, test harness, and deployment
+  path must inject the database URL explicitly instead of relying on a shared
+  development credential fallback.
+- Tenant SMTP hosts are accepted only when the operator has placed the normalized
+  hostname in `ALLOWED_SMTP_HOSTS`, the port is in `ALLOWED_SMTP_PORTS`, and the
+  final send-time DNS answers are globally routable. Localhost, metadata,
+  private, link-local, reserved, multicast, and otherwise non-global addresses
+  are rejected before the backend opens a pinned SMTP socket.
 
 ## 가설 / Hypothesis
 
