@@ -101,8 +101,10 @@ the current repo and physical replication/WAL restore remain future work per
 Authentication does not treat public `X-User-*`, `X-Organization-*`,
 `X-Group-*`, or `X-Dev-Auth-Token` headers as identity material. The runtime
 FastAPI dependency in `backend/api/auth.py` accepts only `Authorization: Bearer`
-session tokens signed by the configured `AUTH_SESSION_HMAC_SECRET`; missing,
-weak, malformed, tampered, or expired tokens fail closed with 401. The signed
+compact session tokens whose protected header pins `alg=HS256` and whose
+`header.payload` signing input is signed by the configured
+`AUTH_SESSION_HMAC_SECRET`; missing, weak, malformed, legacy two-segment,
+wrong-algorithm, tampered, or expired tokens fail closed with 401. The signed
 session envelope must carry explicit identity, role, organization/group, and
 workspace claims, so user ids such as `admin` do not imply elevated privileges.
 Endpoint tests use FastAPI dependency overrides for fixture identity only through

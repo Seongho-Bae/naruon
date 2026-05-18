@@ -21,6 +21,7 @@ ALLOWED_ROLES: set[str] = {
 }
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
+SESSION_TOKEN_ALGORITHM = "HS256"
 MIN_SESSION_SECRET_BYTES = 32
 
 
@@ -103,27 +104,37 @@ def _ascii_token_segment(segment: str) -> bytes:
         raise _authentication_error() from None
 
 
+def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
+    try:
+        decoded = json.loads(_base64url_decode(segment).decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise _authentication_error() from None
+    if not isinstance(decoded, dict):
+        raise _authentication_error()
+    return decoded
+
+
 def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
-    payload_segment, separator, signature_segment = token.partition(".")
-    if separator != "." or "." in signature_segment:
+    token_segments = token.split(".")
+    if len(token_segments) != 3:
+        raise _authentication_error()
+    header_segment, payload_segment, signature_segment = token_segments
+
+    header = _json_object_from_base64url_segment(header_segment)
+    if header.get("alg") != SESSION_TOKEN_ALGORITHM:
         raise _authentication_error()
 
     secret = _session_secret_bytes()
+    signing_input = f"{header_segment}.{payload_segment}"
     expected_signature = hmac.new(
-        secret, _ascii_token_segment(payload_segment), hashlib.sha256
+        secret, _ascii_token_segment(signing_input), hashlib.sha256
     ).digest()
     provided_signature = _base64url_decode(signature_segment)
     if not hmac.compare_digest(expected_signature, provided_signature):
         raise _authentication_error()
 
-    try:
-        payload = json.loads(_base64url_decode(payload_segment).decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        raise _authentication_error() from None
-    if not isinstance(payload, dict):
-        raise _authentication_error()
-    return payload
+    return _json_object_from_base64url_segment(payload_segment)
 
 
 def _required_string_claim(payload: dict[str, Any], name: str) -> str:

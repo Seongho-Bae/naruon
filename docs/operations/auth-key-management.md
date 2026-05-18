@@ -5,16 +5,21 @@
 - `backend/api/auth.py` no longer accepts public `X-User-*`,
   `X-Organization-*`, `X-Group-*`, or `X-Dev-Auth-Token` headers as runtime
   authentication material.
-- Runtime authentication accepts only `Authorization: Bearer` session envelopes
-  signed with HMAC-SHA256 by the configured `AUTH_SESSION_HMAC_SECRET`. The
-  secret must be explicitly configured, high-entropy generated material, and at
-  least 32 bytes; missing or weak secrets fail closed with
-  `401 Authentication required`.
+- Runtime authentication accepts only `Authorization: Bearer` compact session
+  envelopes whose protected header pins `alg=HS256` and whose `header.payload`
+  signing input is signed with HMAC-SHA256 by the configured
+  `AUTH_SESSION_HMAC_SECRET`. The secret must be explicitly configured,
+  high-entropy generated material, and at least 32 bytes; missing or weak
+  secrets fail closed with `401 Authentication required`.
 - The signed session payload is versioned and must include
   `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
   `workspace`, `exp`, and organization/group scope claims. Tampered, expired,
-  malformed, wrong-secret, or invalid-role tokens are rejected; user ids such as
-  `admin` do not grant privileges unless the signed role claim is elevated.
+  malformed, wrong-secret, wrong-algorithm, legacy two-segment, or invalid-role
+  tokens are rejected; user ids such as `admin` do not grant privileges unless
+  the signed role claim is elevated.
+- Token issuers must mint the compact `header.payload.signature` form before this
+  verifier rolls out, or the rollout must intentionally expire all legacy
+  two-segment sessions.
 - Endpoint tests that need fixture identity use explicit FastAPI dependency
   overrides in `backend/tests/conftest.py`; those test overrides are not the
   production auth path.

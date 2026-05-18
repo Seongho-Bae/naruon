@@ -59,6 +59,28 @@ def _base64url_encode(raw: bytes) -> str:
 
 
 def _signed_session_token(
+    payload: dict[str, object],
+    secret: str = TEST_SESSION_HMAC_SECRET,
+    header: dict[str, object] | None = None,
+) -> str:
+    header_bytes = json.dumps(
+        {"alg": "HS256", "typ": "JWT"} if header is None else header,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    header_segment = _base64url_encode(header_bytes)
+    payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+        "utf-8"
+    )
+    payload_segment = _base64url_encode(payload_bytes)
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        secret.encode("utf-8"), signing_input.encode("ascii"), hashlib.sha256
+    ).digest()
+    return f"{header_segment}.{payload_segment}.{_base64url_encode(signature)}"
+
+
+def _legacy_signed_session_token(
     payload: dict[str, object], secret: str = TEST_SESSION_HMAC_SECRET
 ) -> str:
     payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
@@ -165,7 +187,7 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 async def test_signed_bearer_session_rejects_tampered_payload():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload(role="member"))
-    _payload_segment, signature_segment = token.split(".")
+    header_segment, _payload_segment, signature_segment = token.split(".")
     tampered_payload_segment = _base64url_encode(
         json.dumps(
             _valid_session_payload(role="platform_admin"),
@@ -176,8 +198,81 @@ async def test_signed_bearer_session_rejects_tampered_payload():
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(
-            authorization=f"Bearer {tampered_payload_segment}.{signature_segment}"
+            authorization=(
+                f"Bearer {header_segment}.{tampered_payload_segment}.{signature_segment}"
+            )
         )
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_tampered_header():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    _header_segment, payload_segment, signature_segment = token.split(".")
+    tampered_header_segment = _base64url_encode(
+        json.dumps(
+            {"alg": "HS256", "kid": "attacker", "typ": "JWT"},
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            authorization=(
+                f"Bearer {tampered_header_segment}.{payload_segment}.{signature_segment}"
+            )
+        )
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_legacy_two_segment_token():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _legacy_signed_session_token(_valid_session_payload())
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_missing_algorithm():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(), header={"typ": "JWT"})
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_none_algorithm():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(), header={"alg": "none", "typ": "JWT"}
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_rs256_algorithm():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(), header={"alg": "RS256", "typ": "JWT"}
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
 
     assert exc.value.status_code == 401
 
@@ -198,7 +293,7 @@ async def test_signed_bearer_session_rejects_non_ascii_token_segment():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization="Bearer 💥.signature")
+        await get_auth_context(authorization="Bearer 💥.payload.signature")
 
     assert exc.value.status_code == 401
 

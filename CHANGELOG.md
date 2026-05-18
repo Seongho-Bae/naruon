@@ -6,9 +6,10 @@
   제거해, 배포 환경 변수 오설정만으로 공개 요청이 identity/role/scope를
   위조하지 못하도록 fail-closed 처리했습니다.
 - Seongho Bae (@seonghobae): backend runtime 인증에 32바이트 이상
-  `AUTH_SESSION_HMAC_SECRET`으로 서명된 `Authorization: Bearer` session
-  envelope 검증을 추가해, 위조/만료/변조 token과 암시적 `admin` 권한 승격을
-  거부하도록 했습니다.
+  `AUTH_SESSION_HMAC_SECRET`으로 서명된 `Authorization: Bearer` compact
+  session envelope 검증을 추가하고 `alg=HS256` protected header를 고정해,
+  위조/만료/변조/wrong-algorithm token과 암시적 `admin` 권한 승격을 거부하도록
+  했습니다.
 - Seongho Bae (@seonghobae): Strix PR 스코프 배치가 변경된 backend context
   파일을 다른 배치에서 포함할 때 trusted-base 사본이 아니라 PR-head blob을
   스캔하도록 수정해, 보안 수정이 stale context로 다시 실패하지 않게 했습니다.
