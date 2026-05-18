@@ -323,9 +323,7 @@ async def send_email(
         )
         return {"status": "simulated", "simulated": True}
 
-    smtp_server, smtp_port = validate_smtp_destination(
-        smtp_server, smtp_port, resolve_host=False
-    )
+    smtp_server, smtp_port = validate_smtp_destination(smtp_server, smtp_port)
 
     try:
         smtp_socket = await _connect_validated_smtp_socket(smtp_server, smtp_port)

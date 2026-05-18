@@ -219,7 +219,7 @@ async def send_email_endpoint(
             smtp_port = tenant_config.smtp_port
             smtp_username = tenant_config.smtp_username
             smtp_password = tenant_config.smtp_password
-            validate_smtp_destination(smtp_server, smtp_port, resolve_host=False)
+            validate_smtp_destination(smtp_server, smtp_port)
         except Exception as exc:
             if "ENCRYPTION_KEY is required" in str(exc):
                 raise HTTPException(

@@ -392,9 +392,19 @@ async def test_get_email_thread_query_is_scoped_to_current_user(
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
-def test_send_email_endpoint(mock_send_email):
+def test_send_email_endpoint(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
+
+    validate_calls = []
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        validate_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 
@@ -411,6 +421,7 @@ def test_send_email_endpoint(mock_send_email):
 
     assert response.status_code == 200
     assert response.json() == {"status": "simulated", "simulated": True}
+    assert validate_calls == [True]
     mock_send_email.assert_called_once_with(
         "test@example.com",
         "Re: Test",
@@ -485,9 +496,17 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
 
 
 @patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
-def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
+def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        assert resolve_host is True
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 

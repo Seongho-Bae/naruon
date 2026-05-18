@@ -86,11 +86,11 @@ def _validate_smtp_config_update(
 
     try:
         if smtp_server is not None:
-            validate_smtp_host(smtp_server, resolve_host=False)
+            validate_smtp_host(smtp_server, resolve_host=True)
         if smtp_port is not None:
             validate_smtp_port(smtp_port)
         if smtp_server is not None and smtp_port is not None:
-            validate_smtp_destination(smtp_server, smtp_port, resolve_host=False)
+            validate_smtp_destination(smtp_server, smtp_port)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

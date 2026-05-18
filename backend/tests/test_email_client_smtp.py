@@ -86,6 +86,17 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
         raising=False,
     )
 
+    validate_calls = []
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        validate_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "services.email_client.validate_smtp_destination",
+        fake_validate_smtp_destination,
+    )
+
     result = await send_email(
         to_address="test@example.com",
         subject="Test",
@@ -96,6 +107,7 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
     )
 
     assert result == {"status": "sent", "simulated": False}
+    assert validate_calls == [True]
     assert smtp_socket.fileno() == -1
 
 
@@ -170,6 +182,15 @@ async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
         fake_connect_validated_socket,
     )
     monkeypatch.setattr("services.email_client._build_smtp_client", fake_build_client)
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        assert resolve_host is True
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "services.email_client.validate_smtp_destination",
+        fake_validate_smtp_destination,
+    )
 
     with pytest.raises(Exception, match="Failed to send email"):
         await send_email(

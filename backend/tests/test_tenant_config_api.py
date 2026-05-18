@@ -45,11 +45,29 @@ def client(mock_db):
     app.dependency_overrides.clear()
 
 
-def test_tenant_config_endpoint(client, mock_db):
+def test_tenant_config_endpoint(client, mock_db, monkeypatch):
+    host_resolve_calls = []
+    destination_resolve_calls = []
+
+    def fake_validate_smtp_host(smtp_server, *, resolve_host=True):
+        host_resolve_calls.append(resolve_host)
+        return smtp_server
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        destination_resolve_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_destination",
+        fake_validate_smtp_destination,
+    )
+
     post_payload = {
         "user_id": "test_user",
         "openai_api_key": "sk-123",
         "smtp_server": "smtp.example.com",
+        "smtp_port": 587,
         "smtp_username": "sender@example.com",
         "smtp_password": "smtp-secret",
         "imap_server": "imap.example.com",
@@ -63,6 +81,8 @@ def test_tenant_config_endpoint(client, mock_db):
     )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert host_resolve_calls == [True]
+    assert destination_resolve_calls == [True]
 
     assert "test_user" in mock_db.objects
 
@@ -79,6 +99,7 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["smtp_password"] == "********"
     assert data["imap_password"] == "********"
     assert data["smtp_server"] == "smtp.example.com"
+    assert data["smtp_port"] == 587
     assert data["smtp_username"] == "sender@example.com"
     assert data["imap_server"] == "imap.example.com"
     assert data["imap_port"] == 993
@@ -133,7 +154,12 @@ def test_tenant_config_rejects_metadata_smtp_host(client):
     assert "SMTP server is not allowed" in response.json()["detail"]
 
 
-def test_tenant_config_rejects_unsafe_smtp_port(client):
+def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
+    def fake_getaddrinfo(host, port=None, *args, **kwargs):
+        return [(2, 1, 6, "", ("93.184.216.34", port or 587))]
+
+    monkeypatch.setattr("services.email_client.socket.getaddrinfo", fake_getaddrinfo)
+
     response = client.post(
         "/api/config",
         json={
