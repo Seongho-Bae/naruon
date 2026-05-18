@@ -1134,6 +1134,16 @@ EOS
 		echo "Penetration test failed: changed critical finding"
 		exit 1
 		;;
+	pr-critical-changed-bracketed-next-route)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-changed-bracketed-next-route/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-changed-bracketed-next-route/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Location 1:
+frontend/src/app/labels/[slug]/page.tsx:12
+EOS
+		echo "Penetration test failed: changed bracketed Next.js route finding"
+		exit 1
+		;;
 	pr-critical-unmapped)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities/vuln-0001.md" <<'EOS'
@@ -1541,6 +1551,8 @@ EOF
 		echo 'class BaselineUserService {}' >"$repo_root_dir/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java"
 		echo 'class ChangedPlaywright {}' >"$repo_root_dir/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java"
 		echo 'class ChangedJwtUtil {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
+		mkdir -p "$repo_root_dir/frontend/src/app/labels/[slug]"
+		echo 'export default function Page() { return null }' >"$repo_root_dir/frontend/src/app/labels/[slug]/page.tsx"
 		if [ -n "$current_pr_number" ]; then
 			cat >"$event_payload_file" <<EOF
 {
@@ -4267,6 +4279,27 @@ run_gate_case "pr-critical-changed" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-critical-changed-bracketed-next-route" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"frontend/src/app/labels/[slug]/page.tsx"
 
 run_gate_case "pr-critical-changed-absolute-target" \
 	"openai/gpt-4o-mini" \
