@@ -1,10 +1,10 @@
 ## [Unreleased]
 
 ### 수정
-- Seongho Bae (@seonghobae): 개발용 `X-User-*` 헤더 인증 경로를 서버 측
-  `DEV_AUTH_TOKEN` 검증 뒤로 격리해, 공개 요청이
-  identity/role/organization 헤더만으로 인증·권한을 획득하지 못하도록
-  수정했습니다.
+- Seongho Bae (@seonghobae): runtime 인증 dependency에서 개발용 `X-User-*`,
+  `X-Organization-*`, `X-Group-*`, `X-Dev-Auth-Token` 헤더 인증 경로를
+  제거해, 배포 환경 변수 오설정만으로 공개 요청이 identity/role/scope를
+  위조하지 못하도록 fail-closed 처리했습니다.
 - Seongho Bae (@seonghobae): Strix PR 스코프 배치가 변경된 backend context
   파일을 다른 배치에서 포함할 때 trusted-base 사본이 아니라 PR-head blob을
   스캔하도록 수정해, 보안 수정이 stale context로 다시 실패하지 않게 했습니다.
@@ -21,6 +21,9 @@
   동작하지 않도록 `RUNTIME_ENVIRONMENT`와 32자 이상 `DEV_AUTH_TOKEN` gate를
   추가하고, `X-User-Id: admin`만으로 `organization_admin`이 되던 fallback을
   제거했습니다.
+- Seongho Bae (@seonghobae): backend endpoint 테스트의 fixture identity를
+  production `build_auth_context()`가 아니라 명시적 pytest dependency override가
+  직접 만든 `AuthContext`로 분리했습니다.
 
 ## [0.14.1] - 2026-05-13
 

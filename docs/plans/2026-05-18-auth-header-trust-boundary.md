@@ -6,7 +6,7 @@
 
 **Goal:** Strix가 지적한 개발용 `X-User-*` 헤더 인증 우회를 제거하고, 공개 HTTP 요청이 클라이언트 제공 identity/role/organization 값을 인증 수단으로 쓰지 못하게 한다.
 
-**Architecture:** `backend/api/auth.py`는 서버가 `RUNTIME_ENVIRONMENT=local|development|test`, `TRUST_DEV_HEADERS=true`, 32자 이상 `DEV_AUTH_TOKEN`을 명시적으로 설정하고 요청이 `X-Dev-Auth-Token`을 제시한 경우에만 개발용 identity 헤더를 해석한다. `admin` 같은 user id는 더 이상 관리자 role을 암시하지 않으며, 관리자 권한은 token gate 뒤의 명시적 trusted role header에서만 온다. FastAPI 엔드포인트 테스트는 production dependency가 아니라 `backend/tests/conftest.py`의 테스트 전용 dependency override로 기존 헤더 기반 fixture를 유지한다. Production OIDC/Keycloak/Casdoor 검증은 별도 후속 slice로 남긴다.
+**Architecture:** `backend/api/auth.py`의 runtime FastAPI dependency는 공개 `X-User-*`, `X-Organization-*`, `X-Group-*`, `X-Dev-Auth-Token` 헤더를 더 이상 인증 material로 해석하지 않고 fail-closed 한다. FastAPI 엔드포인트 테스트는 production dependency가 아니라 `backend/tests/conftest.py`의 테스트 전용 dependency override로 기존 헤더 기반 fixture를 유지한다. Production OIDC/Keycloak/Casdoor 검증은 별도 후속 slice로 남긴다.
 
 **Tech Stack:** FastAPI dependency injection, Pydantic Settings, pytest, Strix required security gate.
 
@@ -122,18 +122,39 @@ python3 -m pytest backend/tests/test_tenant_config_model.py::test_get_fernet_req
 - [x] RED evidence:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_auth_real.py::test_admin_user_id_without_explicit_role_defaults_to_member backend/tests/test_auth_real.py::test_dev_header_trust_is_rejected_in_production_environment backend/tests/test_auth_real.py::test_dev_header_trust_requires_strong_token -q
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_auth_real.py::test_admin_user_id_is_rejected_without_verified_identity_provider backend/tests/test_auth_real.py::test_dev_header_trust_is_rejected_in_production_environment backend/tests/test_auth_real.py::test_dev_header_trust_requires_strong_token -q
 # 3 failed
+```
+
+## Task 8: Strix development header production-code separation blocker
+
+- [x] Root cause: 최신 Strix run `26013001731`은 defaults/token/runtime gate가
+  있어도 production artifact 안에 mutable environment 설정으로 다시 켤 수
+  있는 development-header auth path가 남아 있다고 보았다.
+- [x] Add RED regression coverage proving even fully enabled local dev flags and
+  matching `X-Dev-Auth-Token` cannot authenticate the runtime dependency or a
+  real HTTP route.
+- [x] Make `backend/api/auth.py` fail closed until verified OIDC/JWT/session
+  claims are implemented, so public headers cannot forge identity, role,
+  organization, group, or workspace scope.
+- [x] Move endpoint fixture identity to the explicit pytest dependency override
+  in `backend/tests/conftest.py`, constructing `AuthContext` directly instead of
+  calling production `build_auth_context()`.
+- [x] RED evidence:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_auth_real.py::test_runtime_auth_rejects_dev_headers_even_when_local_flags_enabled backend/tests/test_auth_real.py::test_http_route_rejects_dev_token_and_forged_role_even_when_flags_enabled -q
+# 2 failed: runtime dependency accepted forged headers; HTTP route reached DB and returned 500 instead of 401.
 ```
 
 ## Verification evidence
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py -q
-# 13 passed
+# 16 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_config.py backend/tests/test_calendar_api.py backend/tests/test_runtime_config_api.py backend/tests/test_prompts_api.py backend/tests/test_llm_api.py backend/tests/test_network_api.py backend/tests/test_main.py -q
-# 62 passed
+# 65 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_runner_config_api.py backend/tests/test_llm_providers_api.py backend/tests/test_tenant_config_api.py backend/tests/test_emails_api.py backend/tests/test_search.py backend/tests/test_auth_real.py -q
 # 36 passed
@@ -147,11 +168,11 @@ bash scripts/ci/test_strix_quick_gate.sh
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_tenant_config_model.py -q
 # 3 passed
 
-PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_auth_real.py::test_admin_user_id_without_explicit_role_defaults_to_member backend/tests/test_auth_real.py::test_dev_header_trust_is_rejected_in_production_environment backend/tests/test_auth_real.py::test_dev_header_trust_requires_strong_token -q
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_auth_real.py::test_admin_user_id_is_rejected_without_verified_identity_provider backend/tests/test_auth_real.py::test_dev_header_trust_is_rejected_in_production_environment backend/tests/test_auth_real.py::test_dev_header_trust_requires_strong_token -q
 # 3 passed
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests -q
-# 2 failed, 126 passed, 2 skipped; known pre-existing path assertions failed in
+# 2 failed, 129 passed, 2 skipped; known pre-existing path assertions failed in
 # backend/tests/test_apm_observability.py because ../docker-compose.observability.yml
 # and ../observability/... are resolved outside the repo root.
 ```

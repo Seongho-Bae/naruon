@@ -1,37 +1,58 @@
 import pytest
-from fastapi import Header
-from pydantic import SecretStr
+from fastapi import Header, HTTPException
+from typing import cast
 
-from api.auth import AuthContext, build_auth_context, get_auth_context, get_current_user
-from core.config import settings
+from api.auth import AuthContext, RoleName, get_auth_context, get_current_user
 from main import app
 
-TEST_DEV_AUTH_TOKEN = (
-    "test-dev-auth-token-with-32-byte-minimum"  # noqa: S105 - test-only token
-)
+TEST_SCOPED_ROLES = {"platform_admin", "organization_admin", "group_admin", "member"}
+
+
+def _normalize_header_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _parse_group_ids(group_ids_header: str | None) -> tuple[str, ...]:
+    if not group_ids_header:
+        return ()
+    return tuple(
+        group_id.strip() for group_id in group_ids_header.split(",") if group_id.strip()
+    )
+
+
+def _derive_test_role(requested_role: str | None) -> RoleName:
+    if requested_role in TEST_SCOPED_ROLES:
+        return cast(RoleName, requested_role)
+    return "member"
+
+
+def _derive_workspace_id(user_id: str, organization_id: str | None) -> str:
+    if organization_id:
+        return f"workspace-{organization_id}"
+    return f"workspace-{user_id}"
 
 
 @pytest.fixture
 def dev_auth_dependency_overrides():
-    previous_runtime_environment = settings.RUNTIME_ENVIRONMENT
-    previous_trust = settings.TRUST_DEV_HEADERS
-    previous_dev_auth_token = settings.DEV_AUTH_TOKEN
-    settings.RUNTIME_ENVIRONMENT = "test"
-    settings.TRUST_DEV_HEADERS = True
-    settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
-
     async def test_auth_context(
         x_user_id: str | None = Header(None, alias="X-User-Id"),
         x_user_role: str | None = Header(None, alias="X-User-Role"),
         x_organization_id: str | None = Header(None, alias="X-Organization-Id"),
         x_group_ids: str | None = Header(None, alias="X-Group-Ids"),
     ) -> AuthContext:
-        return build_auth_context(
-            x_user_id=x_user_id,
-            x_user_role=x_user_role,
-            x_organization_id=x_organization_id,
-            x_group_ids=x_group_ids,
-            x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+        user_id = _normalize_header_value(x_user_id)
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        organization_id = _normalize_header_value(x_organization_id)
+        return AuthContext(
+            user_id=user_id,
+            role=_derive_test_role(_normalize_header_value(x_user_role)),
+            organization_id=organization_id,
+            group_ids=_parse_group_ids(_normalize_header_value(x_group_ids)),
+            workspace_id=_derive_workspace_id(user_id, organization_id),
         )
 
     async def test_current_user(
@@ -54,6 +75,3 @@ def dev_auth_dependency_overrides():
     yield
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
-    settings.RUNTIME_ENVIRONMENT = previous_runtime_environment
-    settings.TRUST_DEV_HEADERS = previous_trust
-    settings.DEV_AUTH_TOKEN = previous_dev_auth_token

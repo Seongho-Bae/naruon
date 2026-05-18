@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -18,6 +20,13 @@ WEAK_DEV_AUTH_TOKEN = "weak-token"  # noqa: S105 - test-only token
 WRONG_DEV_AUTH_TOKEN = (
     "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
 )
+RUNTIME_HEADER_PARAMS = {
+    "x_user_id",
+    "x_user_role",
+    "x_organization_id",
+    "x_group_ids",
+    "x_dev_auth_token",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -45,11 +54,39 @@ def _enable_local_dev_headers() -> None:
     settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
 
+def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            return client.get("/api/runner-config", headers=headers)
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
+def _assert_runner_config_rejects_identity_headers(headers: dict[str, str]) -> None:
+    response = _get_runner_config_without_dependency_overrides(headers)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+def test_runtime_auth_dependencies_do_not_declare_dev_header_api_surface():
+    auth_context_params = set(inspect.signature(get_auth_context).parameters)
+    current_user_params = set(inspect.signature(get_current_user).parameters)
+
+    assert RUNTIME_HEADER_PARAMS.isdisjoint(auth_context_params)
+    assert RUNTIME_HEADER_PARAMS.isdisjoint(current_user_params)
+
+
 @pytest.mark.asyncio
-async def test_get_current_user_rejects_missing_auth():
+async def test_get_auth_context_rejects_missing_auth():
     # It should raise HTTP 401 when no auth is provided, rather than defaulting to "default".
     with pytest.raises(HTTPException) as exc:
-        await get_current_user(x_user_id=None)
+        await get_auth_context()
     assert exc.value.status_code == 401
 
 
@@ -63,176 +100,158 @@ async def test_debug_mode_does_not_trust_unsigned_identity_headers():
     settings.DEBUG = True
     settings.TRUST_DEV_HEADERS = False
 
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-        )
-
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Authentication required"
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_dev_header_trust_requires_configured_token():
+def test_dev_header_trust_requires_configured_token():
     _set_runtime_environment("local")
     settings.TRUST_DEV_HEADERS = True
 
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-        )
-
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Authentication required"
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_dev_header_trust_rejects_wrong_token():
+def test_dev_header_trust_rejects_wrong_token():
     _enable_local_dev_headers()
 
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-            x_dev_auth_token=WRONG_DEV_AUTH_TOKEN,
-        )
-
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Authentication required"
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+            "X-Dev-Auth-Token": WRONG_DEV_AUTH_TOKEN,
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
+def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
     _set_runtime_environment("local")
     settings.TRUST_DEV_HEADERS = False
     settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-            x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
-        )
-
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Authentication required"
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_dev_header_trust_is_rejected_in_production_environment():
+def test_dev_header_trust_is_rejected_in_production_environment():
     _set_runtime_environment("production")
     settings.TRUST_DEV_HEADERS = True
     settings.DEV_AUTH_TOKEN = SecretStr(TEST_DEV_AUTH_TOKEN)
 
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-            x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
-        )
-
-    assert exc.value.status_code == 401
-    assert exc.value.detail == "Authentication required"
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_dev_header_trust_requires_strong_token():
+def test_dev_header_trust_requires_strong_token():
     _set_runtime_environment("local")
     settings.TRUST_DEV_HEADERS = True
     settings.DEV_AUTH_TOKEN = SecretStr(WEAK_DEV_AUTH_TOKEN)
 
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+            "X-Dev-Auth-Token": WEAK_DEV_AUTH_TOKEN,
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_auth_rejects_dev_headers_even_when_local_flags_enabled():
+    _enable_local_dev_headers()
+
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            x_user_id="attacker",
-            x_user_role="platform_admin",
-            x_organization_id="org-victim",
-            x_dev_auth_token=WEAK_DEV_AUTH_TOKEN,
-        )
+        await get_auth_context()
 
     assert exc.value.status_code == 401
     assert exc.value.detail == "Authentication required"
+
+
+def test_http_route_rejects_dev_token_and_forged_role_even_when_flags_enabled():
+    _enable_local_dev_headers()
+
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
+    )
 
 
 def test_http_route_rejects_public_identity_headers_without_dev_token():
     settings.TRUST_DEV_HEADERS = False
     settings.DEV_AUTH_TOKEN = None
-    original_overrides = dict(app.dependency_overrides)
-    app.dependency_overrides.pop(get_auth_context, None)
-    app.dependency_overrides.pop(get_current_user, None)
 
-    try:
-        with TestClient(
-            app,
-            headers={
-                "X-User-Id": "attacker",
-                "X-User-Role": "platform_admin",
-                "X-Organization-Id": "org-victim",
-            },
-        ) as client:
-            response = client.get("/api/runner-config")
-    finally:
-        app.dependency_overrides.clear()
-        app.dependency_overrides.update(original_overrides)
-
-    assert response.status_code == 401
-    assert response.json() == {"detail": "Authentication required"}
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "attacker",
+            "X-User-Role": "platform_admin",
+            "X-Organization-Id": "org-victim",
+        }
+    )
 
 
-@pytest.mark.asyncio
-async def test_get_auth_context_supports_scoped_enterprise_roles():
+def test_runtime_auth_rejects_scoped_enterprise_role_headers():
     _enable_local_dev_headers()
 
-    context = await get_auth_context(
-        x_user_id="alice",
-        x_user_role="group_admin",
-        x_organization_id="org-acme",
-        x_group_ids="group-1,group-2",
-        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
-    )
-
-    assert context == AuthContext(
-        user_id="alice",
-        role="group_admin",
-        organization_id="org-acme",
-        group_ids=("group-1", "group-2"),
-        workspace_id="workspace-org-acme",
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "alice",
+            "X-User-Role": "group_admin",
+            "X-Organization-Id": "org-acme",
+            "X-Group-Ids": "group-1,group-2",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
     )
 
 
-@pytest.mark.asyncio
-async def test_get_auth_context_keeps_legacy_workspace_fallback_for_unscoped_dev_auth():
+def test_runtime_auth_rejects_platform_admin_role_headers():
     _enable_local_dev_headers()
 
-    context = await get_auth_context(
-        x_user_id="root",
-        x_user_role="platform_admin",
-        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "root",
+            "X-User-Role": "platform_admin",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
     )
 
-    assert context.role == "platform_admin"
-    assert context.organization_id is None
-    assert context.group_ids == ()
-    assert context.workspace_id == "workspace-root"
 
-
-@pytest.mark.asyncio
-async def test_admin_user_id_without_explicit_role_defaults_to_member():
+def test_admin_user_id_is_rejected_without_verified_identity_provider():
     _enable_local_dev_headers()
 
-    context = await get_auth_context(
-        x_user_id="admin",
-        x_dev_auth_token=TEST_DEV_AUTH_TOKEN,
+    _assert_runner_config_rejects_identity_headers(
+        {
+            "X-User-Id": "admin",
+            "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+        }
     )
-
-    assert context.role == "member"
-    assert context.workspace_id == "workspace-admin"
 
 
 def test_ensure_organization_access_rejects_cross_scope_resource():

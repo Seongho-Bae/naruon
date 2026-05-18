@@ -75,17 +75,14 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication no longer treats public `X-User-*` headers as sufficient identity
-material. The remaining development header path is disabled in production by
-default and requires `RUNTIME_ENVIRONMENT` to be `local`, `development`, or
-`test`, `TRUST_DEV_HEADERS=true`, and a matching server-side `DEV_AUTH_TOKEN` of
-at least 32 characters presented as `X-Dev-Auth-Token` before
-`backend/api/auth.py` normalizes explicit `platform_admin`, `organization_admin`,
-`group_admin`, and `member` role headers plus optional organization/group scope.
-User IDs such as `admin` do not imply elevated roles. Endpoint tests use FastAPI
-dependency overrides for fixture identity only through explicit opt-in pytest
-fixtures, while production must move to verified Keycloak/Casdoor/OIDC claims
-before multi-user access is claimed; see
+Authentication does not treat public `X-User-*`, `X-Organization-*`,
+`X-Group-*`, or `X-Dev-Auth-Token` headers as identity material. The runtime
+FastAPI dependency in `backend/api/auth.py` now fails closed until a verified
+OIDC/JWT/session provider supplies trusted claims; mutable deployment
+environment flags can no longer re-enable a development-header auth backdoor.
+Endpoint tests use FastAPI dependency overrides for fixture identity only through
+explicit opt-in pytest fixtures, while production must move to verified
+Keycloak/Casdoor/OIDC claims before multi-user access is claimed; see
 `docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
 NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.

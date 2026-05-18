@@ -2,14 +2,14 @@
 
 ## 확인된 사실 / Confirmed
 
-- `backend/api/auth.py` no longer accepts public `X-User-*` headers by
-  themselves. The development-only header path is disabled for the default
-  production runtime and requires `RUNTIME_ENVIRONMENT` to be `local`,
-  `development`, or `test`, `TRUST_DEV_HEADERS=true`, plus a configured
-  `DEV_AUTH_TOKEN` of at least 32 characters that matches `X-Dev-Auth-Token`.
-- User IDs do not imply administrative roles. Development header auth only honors
-  explicit trusted role headers after the runtime, feature flag, and token gates
-  all pass.
+- `backend/api/auth.py` no longer accepts public `X-User-*`,
+  `X-Organization-*`, `X-Group-*`, or `X-Dev-Auth-Token` headers as runtime
+  authentication material. The runtime auth dependency fails closed until a
+  verified OIDC/JWT/session provider supplies trusted identity, role, and scope
+  claims.
+- Endpoint tests that need fixture identity use explicit FastAPI dependency
+  overrides in `backend/tests/conftest.py`; those test overrides are not the
+  production auth path.
 - `backend/db/models.py` stores OAuth/OpenAI secret fields through an
   `EncryptedString` type backed by Fernet.
 - `backend/db/models.py` no longer contains a fallback Fernet key. Secret-field
@@ -31,6 +31,6 @@
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,
   self-hosting footprint, backup/restore, and integration with gateway auth.
-- Replace development-token header auth with verified OIDC/JWT claims only after
-  tests prove every email/search/query path is scoped to the authenticated
-  mailbox owner.
+- Replace the fail-closed runtime auth placeholder with verified OIDC/JWT claims
+  only after tests prove every email/search/query path is scoped to the
+  authenticated mailbox owner.
