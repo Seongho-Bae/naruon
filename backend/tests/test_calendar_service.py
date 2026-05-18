@@ -17,6 +17,21 @@ async def test_create_calendar_event_unauthorized():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "unsafe_summary",
+    ["<script>alert(1)</script>", "`sleep 5`", "bad\x7fsummary", "bad\x85summary"],
+)
+async def test_create_calendar_event_rejects_unsafe_summary_before_google_build(
+    unsafe_summary,
+):
+    with patch("services.calendar_service.build") as mock_build:
+        with pytest.raises(CalendarServiceError, match="Unsafe calendar todo text"):
+            await create_calendar_event(unsafe_summary, {"token": "dummy"})
+
+        mock_build.assert_not_called()
+
+
+@pytest.mark.asyncio
 @patch("services.calendar_service.build")
 async def test_create_calendar_event_success(mock_build):
     # Mock the calendar service

@@ -108,6 +108,46 @@ def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override)
     assert response.json() == {"detail": "Mocked error"}
 
 
+@pytest.mark.parametrize(
+    "unsafe_todo",
+    [
+        "<script>alert('xss')</script>",
+        "$(sleep 5)",
+    ],
+)
+@patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
+def test_calendar_sync_rejects_unsafe_todo_text_before_writeback(
+    mock_create,
+    calendar_user_token_override,
+    unsafe_todo,
+):
+    calendar_user_token_override({"token": "server-owned"})
+
+    response = client.post("/api/calendar/sync", json={"todos": [unsafe_todo]})
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Unsafe calendar todo text"}
+    mock_create.assert_not_called()
+
+
+@patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
+def test_calendar_sync_rejects_mixed_batch_before_any_writeback(
+    mock_create,
+    calendar_user_token_override,
+):
+    mock_create.return_value = {"id": "created-before-rejection"}
+    calendar_user_token_override({"token": "server-owned"})
+
+    response = client.post(
+        "/api/calendar/sync",
+        json={"todos": ["Buy milk", "<script>alert('xss')</script>"]},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Unsafe calendar todo text"}
+    mock_create.assert_not_called()
+
+
 def test_calendar_writeback_intent_uses_customer_owned_caldav_account(
     writeback_source_override,
 ):
@@ -201,7 +241,7 @@ def test_calendar_writeback_rejects_non_owner_and_naruon_only_storage(
         "/api/calendar/writeback-intent",
         json={"action": "create", "summary": "Launch review"},
     )
-    assert non_owner_response.status_code == 403
+    assert non_owner_response.status_code == 422
 
     writeback_source_override(
         [
@@ -221,6 +261,47 @@ def test_calendar_writeback_rejects_non_owner_and_naruon_only_storage(
         json={"action": "create", "summary": "Launch review"},
     )
     assert naruon_only_response.status_code == 422
+
+
+def test_calendar_writeback_rejects_targeted_non_owned_source_without_selection(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="shared-calendar",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="other-user",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="shared-etag",
+            ),
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="owned-etag",
+            ),
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "shared-calendar",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "No customer-owned writeback source is available"
+    }
 
 
 def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(

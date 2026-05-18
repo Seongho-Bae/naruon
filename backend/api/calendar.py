@@ -4,8 +4,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from api.auth import AuthContext, get_auth_context
-from services.calendar_service import create_calendar_event
-from services.exceptions import CalendarServiceError
+from services.calendar_service import create_calendar_event, validate_calendar_todo_text
+from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 router = APIRouter(prefix="/api/calendar")
 
@@ -81,20 +81,17 @@ def _select_writeback_source(
     target_source_id: str | None,
     owner_id: str,
 ) -> WritebackSource | None:
-    first_non_owned_candidate: WritebackSource | None = None
     for source in sources:
         if (
             not source.writeback_enabled
             or "write" not in source.capabilities
             or source.protocol not in CUSTOMER_OWNED_PROTOCOLS
             or (target_source_id is not None and source.source_id != target_source_id)
+            or source.owner_id != owner_id
         ):
             continue
-        if source.owner_id == owner_id:
-            return source
-        if first_non_owned_candidate is None:
-            first_non_owned_candidate = source
-    return first_non_owned_candidate
+        return source
+    return None
 
 
 @router.post("/sync")
@@ -108,11 +105,14 @@ async def sync_todos(
             detail="No server-authoritative calendar credentials are configured",
         )
     try:
+        safe_todos = [validate_calendar_todo_text(todo) for todo in request.todos]
         results = []
-        for todo in request.todos:
-            event = await create_calendar_event(todo, user_token)
+        for safe_todo in safe_todos:
+            event = await create_calendar_event(safe_todo, user_token)
             results.append(event)
         return {"synced": len(results), "events": results}
+    except UnsafeCalendarTodoError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:
         raise HTTPException(status_code=500, detail=str(e))
 
