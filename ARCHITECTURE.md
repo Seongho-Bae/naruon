@@ -49,8 +49,11 @@ The Strix workflow treats pull request code as untrusted whenever repository
 secrets are available. Privileged PR scans run from `pull_request_target`,
 materialize only trusted base content for workflow scripts and dependencies via
 the GitHub API, fetch the pull request head as Git objects, and copy changed
-PR-head blobs into temporary scan scopes before invoking Strix. Do not checkout
-or execute pull request branch scripts in the privileged Strix job.
+PR-head blobs into temporary scan scopes before invoking Strix. When a changed
+file is also included as backend context for another batch, the scope still uses
+the PR-head blob rather than trusted-base content, so a security fix is not
+re-scanned against stale vulnerable context. Do not checkout or execute pull
+request branch scripts in the privileged Strix job.
 
 The gate fails closed when a changed PR-head blob cannot be validated or copied;
 it must never fall back to scanning trusted-base content for a modified PR path.

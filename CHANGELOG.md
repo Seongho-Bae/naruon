@@ -5,6 +5,9 @@
   `DEV_AUTH_TOKEN` 검증 뒤로 격리해, 공개 요청이
   identity/role/organization 헤더만으로 인증·권한을 획득하지 못하도록
   수정했습니다.
+- Seongho Bae (@seonghobae): Strix PR 스코프 배치가 변경된 backend context
+  파일을 다른 배치에서 포함할 때 trusted-base 사본이 아니라 PR-head blob을
+  스캔하도록 수정해, 보안 수정이 stale context로 다시 실패하지 않게 했습니다.
 
 ## [0.14.1] - 2026-05-13
 

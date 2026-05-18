@@ -1991,6 +1991,154 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_changed_context_scope_uses_pr_head_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local state_file="$tmp_dir/state.log"
+	local changed_file="backend/api/emails.py"
+	local context_file="backend/core/config.py"
+	local requirements_file="backend/requirements.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+attempt="0"
+if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+	attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+fi
+attempt="$((attempt + 1))"
+echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
+
+context_file="$target_path/${FAKE_STRIX_EXPECTED_CONTEXT_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
+	echo "Error: changed backend context did not use PR head content" >&2
+	cat -- "$context_file" >&2
+	exit 68
+fi
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
+	echo "Error: changed backend context leaked trusted base content" >&2
+	cat -- "$context_file" >&2
+	exit 69
+fi
+
+requirements_file="$target_path/${FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS:?}" "$requirements_file"; then
+	echo "Error: changed filtered backend context did not use PR head content" >&2
+	cat -- "$requirements_file" >&2
+	exit 72
+fi
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS:?}" "$requirements_file"; then
+	echo "Error: changed filtered backend context leaked trusted base content" >&2
+	cat -- "$requirements_file" >&2
+	exit 73
+fi
+
+if [ "$attempt" -eq 1 ]; then
+	changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+	if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
+		echo "Error: PR head changed file content was not scanned" >&2
+		cat -- "$changed_file" >&2
+		exit 70
+	fi
+	echo "scan ok with changed PR head backend context"
+	exit 0
+fi
+
+if [ "$attempt" -eq 2 ]; then
+	echo "scan ok with changed context file batch"
+	exit 0
+fi
+
+echo "Error: unexpected changed context batch attempt $attempt" >&2
+exit 71
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$context_file")" "$(dirname -- "$requirements_file")"
+		printf '%s\n' 'BASE_CHANGED_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'BASE_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED' >"$requirements_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'HEAD_CONTEXT_SHOULD_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'HEAD_REQUIREMENTS_SHOULD_BE_SCANNED' >"$requirements_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$(printf '%s\n%s\n%s' "$changed_file" "$context_file" "$requirements_file")" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE="$requirements_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="HEAD_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS="HEAD_REQUIREMENTS_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_STATE_FILE="$state_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-changed-context-uses-pr-head exit code"
+	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-target-changed-context-uses-pr-head first batch output"
+	assert_file_contains "$output_log" "scan ok with changed context file batch" "case=pull-request-target-changed-context-uses-pr-head second batch output"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -2772,6 +2920,8 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_trusted_context_scope_case
+
+run_pull_request_target_changed_context_scope_uses_pr_head_case
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \

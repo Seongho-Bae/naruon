@@ -47,6 +47,7 @@ INFRA_ERROR_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
+PULL_REQUEST_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
 PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
@@ -580,11 +581,13 @@ fi
 
 load_pull_request_changed_files() {
 	CHANGED_FILES=()
+	PULL_REQUEST_CHANGED_FILES=()
 
 	if [ "${STRIX_TEST_CHANGED_FILES_OVERRIDE+x}" = x ]; then
 		while IFS= read -r changed_file; do
 			if [ -n "$changed_file" ]; then
 				CHANGED_FILES+=("$changed_file")
+				PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 			fi
 		done <<<"$STRIX_TEST_CHANGED_FILES_OVERRIDE"
 		return 0
@@ -652,6 +655,7 @@ PY
 	while IFS= read -r changed_file; do
 		if [ -n "$changed_file" ]; then
 			CHANGED_FILES+=("$changed_file")
+			PULL_REQUEST_CHANGED_FILES+=("$changed_file")
 		fi
 	done <<<"$changed_files_output"
 
@@ -1005,6 +1009,30 @@ PY
 		if [ -e "$dst_path" ]; then
 			return 0
 		fi
+
+		local context_file_changed_in_pr=0
+		local changed_file normalized_changed_file
+		for changed_file in "${PULL_REQUEST_CHANGED_FILES[@]}"; do
+			normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
+			if [ "$normalized_changed_file" = "$relative_path" ]; then
+				context_file_changed_in_pr=1
+				break
+			fi
+		done
+
+		if [ "$context_file_changed_in_pr" -eq 1 ]; then
+			mkdir -p -- "$(dirname -- "$dst_path")"
+			local head_sha_for_context
+			head_sha_for_context="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+			if pull_request_head_blob_required || { [ -n "$head_sha_for_context" ] && git cat-file -e "$head_sha_for_context^{commit}" 2>/dev/null; }; then
+				if copy_pr_head_blob_to_file "$relative_path" "$dst_path"; then
+					return 0
+				fi
+				echo "ERROR: pull request changed context file could not be read from PR head; failing closed: $context_file" >&2
+				return 2
+			fi
+		fi
+
 		local src_path="$REPO_ROOT/$relative_path"
 		if [ ! -e "$src_path" ]; then
 			return 0

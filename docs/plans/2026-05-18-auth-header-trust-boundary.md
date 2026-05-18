@@ -57,6 +57,24 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 - [x] Prove a matching dev token still fails when `TRUST_DEV_HEADERS=false`.
 - [x] Prove a real FastAPI route rejects public `X-User-*` headers when the test-only dependency override is removed.
 
+## Task 5: Strix PR-scope stale context blocker
+
+- [x] Root cause: Strix batch 2 scanned `backend/core/config.py` plus trusted
+  backend context from the base branch, so `backend/api/auth.py` appeared with
+  the stale vulnerable implementation even though PR #202 changed it.
+- [x] Add regression coverage that changed backend context files, including
+  filtered non-scannable context such as `backend/requirements.txt`, are copied
+  from the PR-head blob when included as context in a different Strix batch.
+- [x] Update `scripts/ci/strix_quick_gate.sh` so changed context files fail
+  closed on PR-head blob read errors instead of falling back to trusted-base
+  content.
+- [x] RED evidence:
+
+```bash
+bash scripts/ci/test_strix_quick_gate.sh
+# FAIL: case=pull-request-target-changed-context-uses-pr-head exit code
+```
+
 ## Verification evidence
 
 ```bash
@@ -68,4 +86,7 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_config.py backend/tests/test_calendar_api.py backend/tests/test_runtime_config_api.py backend/tests/test_prompts_api.py backend/tests/test_llm_api.py backend/tests/test_network_api.py backend/tests/test_main.py -q
 # 19 passed
+
+bash scripts/ci/test_strix_quick_gate.sh
+# test_strix_quick_gate: PASS
 ```
