@@ -147,9 +147,54 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 # 2 failed: runtime dependency accepted forged headers; HTTP route reached DB and returned 500 instead of 401.
 ```
 
+## Task 9: Strix verified runtime session blocker
+
+- [x] Root cause: 최신 Strix run `26028878019`는 development-header path 제거
+  이후에도 runtime `build_auth_context()`가 verified success path 없이 항상
+  fail-closed 하는 placeholder라 실제 인증 부재(CWE-287)로 보고했다.
+- [x] Add RED regression coverage for HMAC-signed bearer session acceptance and
+  forged/tampered/wrong-secret/expired/weak-secret/invalid-role/non-ASCII token
+  rejection.
+- [x] Add regression coverage proving `sub=admin` does not imply elevated role,
+  while an explicit signed `platform_admin` role is accepted.
+- [x] Add route-level regression coverage proving signed bearer auth works and
+  forged public identity/dev headers are ignored.
+- [x] Implement a narrow stdlib HMAC-SHA256 session envelope behind
+  `AUTH_SESSION_HMAC_SECRET` until a full OIDC/JWT provider is adopted.
+- [x] RED evidence:
+
+```bash
+python3 -m pytest -q backend/tests/test_auth_real.py
+# 9 failed, 16 passed: Settings had no AUTH_SESSION_HMAC_SECRET and get_auth_context() had no authorization parameter.
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q backend/tests/test_auth_real.py::test_signed_bearer_session_rejects_non_ascii_token_segment
+# FAIL: UnicodeEncodeError escaped instead of returning HTTPException 401.
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q backend/tests/test_auth_real.py::test_signed_bearer_session_rejects_non_ascii_claim_values backend/tests/test_auth_real.py::test_signed_bearer_session_rejects_non_finite_expiration
+# 2 failed: non-ASCII claim values and NaN exp authenticated instead of failing closed.
+```
+
 ## Verification evidence
 
 ```bash
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q backend/tests/test_auth_real.py
+# 28 passed
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q backend/tests/test_auth_real.py backend/tests/test_runner_config_api.py backend/tests/test_calendar_api.py backend/tests/test_config.py
+# 44 passed
+
+uvx black --check backend/api/auth.py backend/core/config.py backend/tests/test_auth_real.py
+# 3 files would be left unchanged.
+
+uvx ruff check backend/api/auth.py backend/core/config.py backend/tests/test_auth_real.py
+# All checks passed.
+
+bash scripts/ci/test_strix_quick_gate.sh
+# test_strix_quick_gate: PASS
+
+git diff --check
+# pass
+
 PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests/test_auth_real.py -q
 # 16 passed
 

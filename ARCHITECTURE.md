@@ -77,14 +77,16 @@ the current repo and physical replication/WAL restore remain future work per
 
 Authentication does not treat public `X-User-*`, `X-Organization-*`,
 `X-Group-*`, or `X-Dev-Auth-Token` headers as identity material. The runtime
-FastAPI dependency in `backend/api/auth.py` now fails closed until a verified
-OIDC/JWT/session provider supplies trusted claims; mutable deployment
-environment flags can no longer re-enable a development-header auth backdoor.
+FastAPI dependency in `backend/api/auth.py` accepts only `Authorization: Bearer`
+session tokens signed by the configured `AUTH_SESSION_HMAC_SECRET`; missing,
+weak, malformed, tampered, or expired tokens fail closed with 401. The signed
+session envelope must carry explicit identity, role, organization/group, and
+workspace claims, so user ids such as `admin` do not imply elevated privileges.
 Endpoint tests use FastAPI dependency overrides for fixture identity only through
-explicit opt-in pytest fixtures, while production must move to verified
-Keycloak/Casdoor/OIDC claims before multi-user access is claimed; see
-`docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
-NGINX, while Traefik is only an evaluated option in
+explicit opt-in pytest fixtures, while a full Keycloak/Casdoor/OIDC provider and
+mailbox ownership model remain required before production multi-user access is
+claimed; see `docs/operations/auth-key-management.md`. The current Kubernetes
+ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires

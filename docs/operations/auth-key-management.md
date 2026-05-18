@@ -4,9 +4,17 @@
 
 - `backend/api/auth.py` no longer accepts public `X-User-*`,
   `X-Organization-*`, `X-Group-*`, or `X-Dev-Auth-Token` headers as runtime
-  authentication material. The runtime auth dependency fails closed until a
-  verified OIDC/JWT/session provider supplies trusted identity, role, and scope
-  claims.
+  authentication material.
+- Runtime authentication accepts only `Authorization: Bearer` session envelopes
+  signed with HMAC-SHA256 by the configured `AUTH_SESSION_HMAC_SECRET`. The
+  secret must be explicitly configured, high-entropy generated material, and at
+  least 32 bytes; missing or weak secrets fail closed with
+  `401 Authentication required`.
+- The signed session payload is versioned and must include
+  `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
+  `workspace`, `exp`, and organization/group scope claims. Tampered, expired,
+  malformed, wrong-secret, or invalid-role tokens are rejected; user ids such as
+  `admin` do not grant privileges unless the signed role claim is elevated.
 - Endpoint tests that need fixture identity use explicit FastAPI dependency
   overrides in `backend/tests/conftest.py`; those test overrides are not the
   production auth path.
@@ -23,14 +31,16 @@
 ## 가설 / Hypothesis
 
 - Keycloak and Casdoor should be evaluated as OIDC providers after mailbox
-  ownership is modeled and before production multi-user access is claimed.
+  ownership is modeled and before production multi-user access is claimed. The
+  HMAC session envelope is a narrow internal bridge, not the final external IdP
+  integration.
 - Production still needs key rotation runbooks and separate secret scopes for
-  OpenAI, SMTP/IMAP, OAuth, and CI tokens.
+  `AUTH_SESSION_HMAC_SECRET`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
 ## 다음 결정
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,
   self-hosting footprint, backup/restore, and integration with gateway auth.
-- Replace the fail-closed runtime auth placeholder with verified OIDC/JWT claims
-  only after tests prove every email/search/query path is scoped to the
-  authenticated mailbox owner.
+- Replace the HMAC session bridge with verified OIDC/JWT claims only after tests
+  prove every email/search/query path is scoped to the authenticated mailbox
+  owner.

@@ -1,4 +1,9 @@
+import base64
+import hashlib
+import hmac
 import inspect
+import json
+import time
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +16,7 @@ from api.auth import (
     get_current_user,
 )
 from core.config import settings
+from db.session import get_db
 from main import app
 
 TEST_DEV_AUTH_TOKEN = (
@@ -19,6 +25,12 @@ TEST_DEV_AUTH_TOKEN = (
 WEAK_DEV_AUTH_TOKEN = "weak-token"  # noqa: S105 - test-only token
 WRONG_DEV_AUTH_TOKEN = (
     "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
+)
+TEST_SESSION_HMAC_SECRET = (
+    "test-session-hmac-secret-with-32-byte-minimum"  # noqa: S105 - test-only secret
+)
+WRONG_SESSION_HMAC_SECRET = (
+    "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
 )
 RUNTIME_HEADER_PARAMS = {
     "x_user_id",
@@ -29,18 +41,67 @@ RUNTIME_HEADER_PARAMS = {
 }
 
 
+class _MockResult:
+    def __init__(self, obj):
+        self.obj = obj
+
+    def scalar_one_or_none(self):
+        return self.obj
+
+
+class _EmptyRunnerConfigSession:
+    async def execute(self, query):
+        return _MockResult(None)
+
+
+def _base64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(
+    payload: dict[str, object], secret: str = TEST_SESSION_HMAC_SECRET
+) -> str:
+    payload_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+        "utf-8"
+    )
+    payload_segment = _base64url_encode(payload_bytes)
+    signature = hmac.new(
+        secret.encode("utf-8"), payload_segment.encode("ascii"), hashlib.sha256
+    ).digest()
+    return f"{payload_segment}.{_base64url_encode(signature)}"
+
+
+def _valid_session_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ver": 1,
+        "iss": "naruon-control-plane",
+        "aud": "naruon-api",
+        "sub": "alice",
+        "role": "organization_admin",
+        "org": "org-acme",
+        "groups": ["group-1", "group-2"],
+        "workspace": "workspace-org-acme",
+        "exp": int(time.time()) + 300,
+    }
+    payload.update(overrides)
+    return payload
+
+
 @pytest.fixture(autouse=True)
 def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_trust = settings.TRUST_DEV_HEADERS
     previous_dev_auth_token = settings.DEV_AUTH_TOKEN
+    previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     settings.TRUST_DEV_HEADERS = previous_trust
     settings.DEV_AUTH_TOKEN = previous_dev_auth_token
+    if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
+        settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -88,6 +149,184 @@ async def test_get_auth_context_rejects_missing_auth():
     with pytest.raises(HTTPException) as exc:
         await get_auth_context()
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_accepts_signed_bearer_session():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context == AuthContext(
+        user_id="alice",
+        role="organization_admin",
+        organization_id="org-acme",
+        group_ids=("group-1", "group-2"),
+        workspace_id="workspace-org-acme",
+    )
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_tampered_payload():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(role="member"))
+    _payload_segment, signature_segment = token.split(".")
+    tampered_payload_segment = _base64url_encode(
+        json.dumps(
+            _valid_session_payload(role="platform_admin"),
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            authorization=f"Bearer {tampered_payload_segment}.{signature_segment}"
+        )
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_wrong_secret():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(), WRONG_SESSION_HMAC_SECRET)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_non_ascii_token_segment():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization="Bearer 💥.signature")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_non_ascii_claim_values():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(sub="álïcé"))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_non_finite_expiration():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(exp=float("nan")))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_expired_token():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(exp=int(time.time()) - 1))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_requires_strong_configured_secret():
+    token = _signed_session_token(_valid_session_payload())
+
+    settings.AUTH_SESSION_HMAC_SECRET = None
+    with pytest.raises(HTTPException) as missing_secret_exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr("weak-secret")
+    with pytest.raises(HTTPException) as weak_secret_exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert missing_secret_exc.value.status_code == 401
+    assert weak_secret_exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_invalid_role_claim():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(role="platform_owner"))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_subject_does_not_imply_platform_admin_role():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(sub="admin", role="member"))
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.user_id == "admin"
+    assert context.role == "member"
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_requires_explicit_signed_role_claim():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            role="platform_admin", org=None, workspace="workspace-root"
+        )
+    )
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.user_id == "alice"
+    assert context.role == "platform_admin"
+    assert context.organization_id is None
+    assert context.workspace_id == "workspace-root"
+
+
+def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    async def override_get_db():
+        yield _EmptyRunnerConfigSession()
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get(
+                "/api/runner-config",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "X-User-Id": "attacker",
+                    "X-User-Role": "platform_admin",
+                    "X-Organization-Id": "org-victim",
+                    "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 200
+    assert response.json()["workspace_id"] == "workspace-org-acme"
+    assert response.json()["configured"] is False
 
 
 def test_auth_dependency_overrides_are_opt_in_by_default():
