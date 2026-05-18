@@ -14,6 +14,9 @@
 - Seongho Bae (@seonghobae): 일반 PR Strix 스캔에서 scannable backend 파일과
   무관한 비정규화 경로가 함께 들어와도 context 구성 자체가 실패하지 않도록
   pull_request와 pull_request_target의 fail-closed 범위를 분리했습니다.
+- Seongho Bae (@seonghobae): `backend/db/models.py`의 하드코딩된 Fernet fallback
+  key를 제거하고, `DEBUG=true` 환경에서도 암호화 필드는 명시적인
+  `ENCRYPTION_KEY` 없이는 암·복호화하지 않도록 수정했습니다.
 
 ## [0.14.1] - 2026-05-13
 

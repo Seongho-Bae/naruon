@@ -7,8 +7,11 @@
   plus a configured `DEV_AUTH_TOKEN` that matches `X-Dev-Auth-Token`.
 - `backend/db/models.py` stores OAuth/OpenAI secret fields through an
   `EncryptedString` type backed by Fernet.
-- `backend/db/models.py` also has a fallback Fernet key when `ENCRYPTION_KEY` is
-  not configured, so production key management is not complete.
+- `backend/db/models.py` no longer contains a fallback Fernet key. Secret-field
+  encryption now requires an explicit `ENCRYPTION_KEY` in every runtime mode,
+  including `DEBUG=true`. User-facing routes that touch encrypted fields should
+  return the existing operator-facing missing-key error rather than fallback
+  encryption.
 - Email rows do not yet have a mailbox ownership key, as documented in
   `ARCHITECTURE.md`.
 
@@ -16,8 +19,8 @@
 
 - Keycloak and Casdoor should be evaluated as OIDC providers after mailbox
   ownership is modeled and before production multi-user access is claimed.
-- Production should require explicit `ENCRYPTION_KEY`, key rotation runbooks, and
-  separate secret scopes for OpenAI, SMTP/IMAP, OAuth, and CI tokens.
+- Production still needs key rotation runbooks and separate secret scopes for
+  OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
 ## 다음 결정
 

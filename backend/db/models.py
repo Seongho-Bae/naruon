@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
-FALLBACK_KEY = b"f_Z_GZzHjJ-mO2hP5k-yJ-W0t-J9_YlB-H_V-_m-_A0="
-
 
 def get_fernet() -> Fernet:
     if settings.ENCRYPTION_KEY:
@@ -24,10 +22,9 @@ def get_fernet() -> Fernet:
         except ValueError:
             key_b64 = base64.urlsafe_b64encode(hashlib.sha256(key).digest())
             return Fernet(key_b64)
-    else:
-        if not settings.DEBUG:
-            raise RuntimeError("ENCRYPTION_KEY is required in production. Refusing to use fallback key.")
-        return Fernet(FALLBACK_KEY)
+    raise RuntimeError(
+        "ENCRYPTION_KEY is required. Refusing to encrypt without a configured key."
+    )
 
 
 class EncryptedString(TypeDecorator):

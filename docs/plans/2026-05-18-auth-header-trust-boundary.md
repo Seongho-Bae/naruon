@@ -85,6 +85,24 @@ bash scripts/ci/test_strix_quick_gate.sh
 # FAIL: case=pull-request-target-changed-context-uses-pr-head exit code
 ```
 
+## Task 6: Strix hardcoded fallback encryption key blocker
+
+- [x] Root cause: `backend/db/models.py` used a static `FALLBACK_KEY` whenever
+  `ENCRYPTION_KEY` was missing and `DEBUG=true`, so debug mode could encrypt
+  sensitive fields with a repository-known Fernet key.
+- [x] Add a regression test proving `get_fernet()` still rejects a missing
+  `ENCRYPTION_KEY` when `DEBUG=true`.
+- [x] Remove the fallback Fernet key and require explicit key configuration in
+  every runtime mode.
+- [x] Update auth/key management and architecture docs to state that encrypted
+  secret fields have no code fallback key.
+- [x] RED evidence:
+
+```bash
+python3 -m pytest backend/tests/test_tenant_config_model.py::test_get_fernet_requires_encryption_key_even_when_debug_enabled
+# FAIL: DID NOT RAISE <class 'RuntimeError'>
+```
+
 ## Verification evidence
 
 ```bash
@@ -103,8 +121,11 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend
 bash scripts/ci/test_strix_quick_gate.sh
 # test_strix_quick_gate: PASS
 
-PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 PYTHONWARNINGS=error python3 -m pytest backend/tests -q
-# 122 passed, 2 skipped; known pre-existing path assertions failed in
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_tenant_config_model.py -q
+# 3 passed
+
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests -q
+# 2 failed, 123 passed, 2 skipped; known pre-existing path assertions failed in
 # backend/tests/test_apm_observability.py because ../docker-compose.observability.yml
 # and ../observability/... are resolved outside the repo root.
 ```
