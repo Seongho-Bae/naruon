@@ -1,6 +1,8 @@
+import inspect
 import socket
 
 import pytest
+import services.email_client as email_client
 from services.email_client import build_email_message, send_email
 from services.email_client import _build_smtp_client
 from services.email_client import _send_pinned_smtp_message
@@ -8,6 +10,26 @@ from services.email_client import _send_pinned_smtp_message
 
 def _make_socket() -> socket.socket:
     return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+
+def test_smtp_host_policy_denies_empty_allowlist_before_dns(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "")
+
+    def fail_getaddrinfo(*args, **kwargs):
+        raise AssertionError("empty SMTP allowlist must fail before DNS resolution")
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
+
+
+def test_smtp_host_policy_keeps_empty_allowlist_guard_explicit():
+    source = inspect.getsource(email_client.validate_smtp_host)
+
+    assert "if not allowed_hosts or" not in source
+    assert "if not allowed_hosts:" in source
+    assert "if normalized_host not in allowed_hosts:" in source
 
 
 class FakeSmtpClient:

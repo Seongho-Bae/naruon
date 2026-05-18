@@ -79,7 +79,9 @@ def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     """Validate an outbound SMTP host against operator policy and SSRF guards."""
     normalized_host = _normalize_smtp_host(host)
     allowed_hosts = _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
-    if not allowed_hosts or normalized_host not in allowed_hosts:
+    if not allowed_hosts:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    if normalized_host not in allowed_hosts:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
 
     try:
