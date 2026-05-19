@@ -2015,6 +2015,117 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_calendar_service_context_scope_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/api/calendar.py"
+	local context_file="backend/services/calendar_service.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+context_file="$target_path/${FAKE_STRIX_EXPECTED_CONTEXT_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
+	echo "Error: PR head calendar API content was not scanned" >&2
+	cat -- "$changed_file" >&2
+	exit 72
+fi
+if [ ! -f "$context_file" ]; then
+	echo "Error: calendar service validation context missing from PR scope ($target_path)" >&2
+	exit 73
+fi
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_CONTEXT_CONTENT:?}" "$context_file"; then
+	echo "Error: calendar service validation context content missing" >&2
+	cat -- "$context_file" >&2
+	exit 74
+fi
+echo "scan ok with calendar service validation context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$context_file")"
+		printf '%s\n' 'BASE_CALENDAR_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		cat >"$context_file" <<'EOF'
+def validate_calendar_todo_text(value):
+	return 'TRUSTED_CALENDAR_VALIDATOR_SHOULD_BE_SCANNED'
+EOF
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		cat >"$changed_file" <<'EOF'
+from services.calendar_service import validate_calendar_todo_text
+
+HEAD_CALENDAR_SYNC_SHOULD_BE_SCANNED
+EOF
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CALENDAR_SYNC_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_CONTEXT_CONTENT="TRUSTED_CALENDAR_VALIDATOR_SHOULD_BE_SCANNED" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-calendar-service-validation-context exit code"
+	assert_file_contains "$output_log" "scan ok with calendar service validation context" "case=pull-request-target-calendar-service-validation-context output"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_changed_backend_context_scope_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2944,6 +3055,8 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_trusted_context_scope_case
+
+run_pull_request_target_calendar_service_context_scope_case
 
 run_pull_request_target_changed_backend_context_scope_case
 

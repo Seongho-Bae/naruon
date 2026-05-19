@@ -943,6 +943,7 @@ backend/db/models.py
 backend/db/session.py
 backend/services/__init__.py
 backend/services/archive.py
+backend/services/calendar_service.py
 backend/services/email_client.py
 backend/services/email_parser.py
 backend/services/embedding.py
