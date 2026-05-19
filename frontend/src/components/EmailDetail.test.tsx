@@ -263,6 +263,7 @@ describe("EmailDetail", () => {
   });
 
   it("lets users create tasks from visible execution items in the email detail", async () => {
+    localStorage.setItem("naruon_session_token", "signed.task.session");
     const email: TestEmail = {
       id: 14,
       message_id: "<tasks@example.com>",
@@ -274,7 +275,7 @@ describe("EmailDetail", () => {
       body: "Please convert these follow-ups into tasks.",
     };
 
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/emails/14")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) {
@@ -283,8 +284,27 @@ describe("EmailDetail", () => {
           todos: ["담당자 확인", "일정 공유"],
         }));
       }
+      if (url.endsWith("/api/tasks/from-email")) {
+        expect(init?.method).toBe("POST");
+        expect(init?.headers).toMatchObject({
+          Authorization: "Bearer signed.task.session",
+        });
+        expect(JSON.parse(String(init?.body))).toEqual({
+          source_email_id: "<tasks@example.com>",
+          thread_id: "<tasks@example.com>",
+          items: ["담당자 확인", "일정 공유"],
+        });
+        return Promise.resolve(jsonResponse({
+          created: 2,
+          tasks: [
+            { id: "task_01HZXOPAQUE001", title: "담당자 확인", status: "open", priority: "normal", source_type: "email", source_email_id: "<tasks@example.com>", related_thread_id: "<tasks@example.com>", created_at: "2026-05-19T00:00:00Z", updated_at: "2026-05-19T00:00:00Z" },
+            { id: "task_01HZXOPAQUE002", title: "일정 공유", status: "open", priority: "normal", source_type: "email", source_email_id: "<tasks@example.com>", related_thread_id: "<tasks@example.com>", created_at: "2026-05-19T00:00:00Z", updated_at: "2026-05-19T00:00:00Z" },
+          ],
+        }));
+      }
       throw new Error(`Unexpected fetch: ${url}`);
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -308,7 +328,8 @@ describe("EmailDetail", () => {
       createTaskButton?.click();
     });
 
-    expect(actionCard?.textContent).toContain("2개 실행 항목을 할 일로 정리했습니다.");
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/tasks/from-email");
+    expect(actionCard?.textContent).toContain("2개 실행 항목을 티켓형 할 일로 추적합니다.");
   });
 
   it("clears conversation loading when the latest email has no thread", async () => {
@@ -550,11 +571,15 @@ describe("EmailDetail", () => {
     };
     const summaryResponse = deferred<ReturnType<typeof jsonResponse>>();
 
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/api/emails/9")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) return summaryResponse.promise;
-      if (url.endsWith("/api/calendar/sync")) return Promise.resolve(jsonResponse({ synced: 1 }));
+      if (url.endsWith("/api/calendar/sync")) {
+        expect(init?.method).toBe("POST");
+        expect(JSON.parse(String(init?.body))).toEqual({ todos: ["출시 회의 일정 잡기"] });
+        return Promise.resolve(jsonResponse({ synced: 1 }));
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);

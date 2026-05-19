@@ -43,6 +43,9 @@ if [ "$1" = "pr" ] && [ "$2" = "checks" ]; then
     pending)
       printf '[{"name":"Application CI","state":"IN_PROGRESS","link":"https://checks/app-ci"}]'
       ;;
+    startup_failure)
+      printf '[{"name":"Application CI","state":"STARTUP_FAILURE","link":"https://checks/app-ci"}]'
+      ;;
     failed)
       printf '[{"name":"Application CI","state":"FAILED","link":"https://checks/app-ci"}]'
       ;;
@@ -60,6 +63,9 @@ if [ "$1" = "api" ] && [[ "$2" == repos/*/commits/*/check-runs ]]; then
   case "${GH_SCENARIO:-pass}" in
     coderabbit_pending)
       printf '{"check_runs":[{"name":"CodeRabbit","app":{"slug":"coderabbitai"},"status":"in_progress","conclusion":null,"html_url":"https://checks/coderabbit"}]}'
+      ;;
+    missing_coderabbit)
+      printf '{"check_runs":[]}'
       ;;
     coderabbit_failed)
       printf '{"check_runs":[{"name":"CodeRabbit","app":{"slug":"coderabbitai"},"status":"completed","conclusion":"failure","html_url":"https://checks/coderabbit"}]}'
@@ -147,6 +153,16 @@ assert_no_comment_or_merge_for_pending_checks() {
   ! grep -q '^pr merge' "$temp_dir/gh.log"
 }
 
+assert_startup_failure_creates_marker_comment() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate startup_failure "$temp_dir"
+
+  grep -q 'Required check `Application CI` is STARTUP_FAILURE' "$temp_dir/gh.log"
+  grep -q '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
+  ! grep -q '^pr merge' "$temp_dir/gh.log"
+}
+
 assert_failed_checks_create_marker_comment() {
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -171,6 +187,16 @@ assert_coderabbit_pending_waits_without_hard_comment() {
   local temp_dir
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_pending "$temp_dir"
+
+  grep -q 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
+  ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
+  ! grep -q '^pr merge' "$temp_dir/gh.log"
+}
+
+assert_missing_coderabbit_waits_without_hard_comment() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate missing_coderabbit "$temp_dir"
 
   grep -q 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
   ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
@@ -224,9 +250,11 @@ assert_passing_gate_enables_non_admin_auto_merge() {
 }
 
 assert_no_comment_or_merge_for_pending_checks
+assert_startup_failure_creates_marker_comment
 assert_failed_checks_create_marker_comment
 assert_existing_marker_comment_is_patched
 assert_coderabbit_pending_waits_without_hard_comment
+assert_missing_coderabbit_waits_without_hard_comment
 assert_coderabbit_failure_creates_marker_comment
 assert_coderabbit_neutral_without_skip_evidence_blocks
 assert_coderabbit_review_skipped_neutral_can_merge

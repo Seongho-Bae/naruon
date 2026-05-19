@@ -145,6 +145,37 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/tasks/from-email') {
+      await fulfillJson(route, {
+        created: 2,
+        tasks: [
+          {
+            id: 'task-q2-owner',
+            title: '리소스 배정 검토 회의',
+            status: 'open',
+            priority: 'normal',
+            source_type: 'email',
+            source_email_id: '<q2@example.com>',
+            related_thread_id: 'thread-q2',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+          },
+          {
+            id: 'task-q2-marketing',
+            title: '마케팅 캠페인 오프',
+            status: 'open',
+            priority: 'normal',
+            source_type: 'email',
+            source_email_id: '<q2@example.com>',
+            related_thread_id: 'thread-q2',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+          },
+        ],
+      });
+      return;
+    }
+
     if (path === '/api/network/graph') {
       await fulfillJson(route, {
         nodes: [{ id: 'person-1', label: '김지현', title: 'PM' }],

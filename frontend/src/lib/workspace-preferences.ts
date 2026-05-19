@@ -3,7 +3,7 @@ import { useSyncExternalStore } from 'react';
 export type WorkspaceStartupView = 'dashboard' | 'email' | 'calendar';
 
 const STARTUP_VIEW_KEY = 'naruon_startup_view';
-const DEFAULT_STARTUP_VIEW: WorkspaceStartupView = 'email';
+const DEFAULT_STARTUP_VIEW: WorkspaceStartupView = 'dashboard';
 
 function isWorkspaceStartupView(value: string | null): value is WorkspaceStartupView {
   return value === 'dashboard' || value === 'email' || value === 'calendar';

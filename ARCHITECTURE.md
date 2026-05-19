@@ -20,6 +20,19 @@ Runtime database connectivity is secret-injected: `backend/core/config.py` has
 no fallback `DATABASE_URL`, so missing database configuration fails at startup
 rather than silently using shared development credentials.
 
+## Workspace navigation boundary
+
+The Next.js shell opens the Today execution dashboard for first-run sessions and
+lets users explicitly choose Dashboard, Email, or Calendar as their startup
+surface. The primary and mobile menus expose Mail, Calendar, Tasks, Projects,
+Context Search, AI Hub, Data, Security, and Settings as navigable workspace
+destinations, with the tablet/mobile drawer carrying the same global navigation
+matrix as the desktop shell. The `/mail`, `/search`, `/calendar`, `/tasks`,
+`/data`, and `/security` pages are honest scope and control-plane surfaces: they
+describe CalDAV/WebDAV writeback, source-linked task tracking, duplicate
+import/thread provenance, and RBAC/ABAC admin boundaries without pretending
+provider writeback or enterprise identity integrations are fully implemented.
+
 ## Threading boundary
 
 `backend/services/threading_service.py` is the canonical domain service for
@@ -44,6 +57,16 @@ one database.
 not globally. Fixture import upserts and reply-thread lookup use the same owner
 scope so a reused RFC Message-ID from another organization cannot overwrite an
 email row or attach a reply to another tenant's thread.
+
+`ticket_tasks` stores email-derived execution items as ticket-like work records.
+The table and its new columns use at least two-word `snake_case` database names
+such as `task_id`, `task_title`, `status_code`, `priority_code`, `email_id`, and
+`thread_id`. The integer `task_id` stays an internal database surrogate; API
+responses use the opaque `task_uid` as their public id and expose source message
+provenance instead of private foreign keys. Task creation from email always
+checks the source email owner scope, copies the canonical thread provenance, and
+strips NUL bytes from titles before persistence so malformed LLM/email-derived
+strings cannot break PostgreSQL text writes.
 
 Customer-owned mail, CalDAV/CardDAV, and WebDAV systems remain the durable
 source-of-truth. Naruon can cache/index metadata and generate writeback intents,
@@ -136,6 +159,12 @@ audited mailbox-owner migration remain required before production multi-user
 access is claimed; see `docs/operations/auth-key-management.md`. The current
 Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
+
+The browser API client reads `naruon_session_token` from local storage and sends
+it as the bearer session on signed routes before falling back to local
+development identity headers. UI flows that create source-linked tasks or other
+server-side writes must keep that signed-session path covered in fast tests and
+E2E mocks so authenticated backend behavior is not masked by stale fixtures.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
 an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,

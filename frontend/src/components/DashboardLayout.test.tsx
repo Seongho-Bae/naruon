@@ -40,7 +40,7 @@ describe("DashboardLayout", () => {
     const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
     const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
-    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]');
     const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (link) => link.textContent,
     );
@@ -62,8 +62,14 @@ describe("DashboardLayout", () => {
     expect(sidebar).not.toBeNull();
     expect(nav).not.toBeNull();
     expect(primaryNav?.textContent).toContain("홈");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/mail"]')?.textContent).toContain("메일");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/calendar"]')?.textContent).toContain("일정");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/tasks"]')?.textContent).toContain("작업");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.textContent).toContain("프로젝트");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/search"]')?.textContent).toContain("맥락 검색");
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub"]')?.textContent).toContain("AI 허브");
-    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/prompt-studio"]')?.textContent).toContain("프롬프트");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/data"]')?.textContent).toContain("데이터");
+    expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/security"]')?.textContent).toContain("보안");
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
     expect(mobileNav).not.toBeNull();
     expect(banner?.querySelector('button[aria-label="알림 보기"]')).not.toBeNull();
@@ -115,10 +121,11 @@ describe("DashboardLayout", () => {
     expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="calendar"]')?.textContent).toContain("일정");
 
     act(() => {
-      desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="dashboard"]')?.click();
+      desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="email"]')?.click();
     });
 
-    expect(localStorage.getItem("naruon_startup_view")).toBe("dashboard");
+    expect(localStorage.getItem("naruon_startup_view")).toBe("email");
+    expect(window.location.hash).toBe("");
 
     act(() => {
       mobileMenuButton?.click();
@@ -126,13 +133,25 @@ describe("DashboardLayout", () => {
 
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("true");
     const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
+    expect(container.querySelector('[data-testid="mobile-workspace-backdrop"]')).not.toBeNull();
+    expect(mobileMenu?.className).toContain("inset-y-0");
+    expect(mobileMenu?.querySelector<HTMLButtonElement>('button[aria-label="모바일 워크스페이스 메뉴 닫기"]')).not.toBeNull();
     expect(mobileMenu?.textContent ?? "").toContain("시작 화면");
     expect(mobileMenu?.textContent ?? "").toContain("대시보드");
     expect(mobileMenu?.textContent ?? "").toContain("이메일");
     expect(mobileMenu?.textContent ?? "").toContain("일정");
     expect(mobileMenu?.textContent ?? "").toContain("메일");
     expect(mobileMenu?.textContent ?? "").toContain("워크스페이스");
+    expect(mobileMenu?.textContent ?? "").toContain("주요 작업공간");
     expect(mobileMenu?.textContent ?? "").toContain("도움");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/"]')?.textContent).toContain("홈");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail"]')?.textContent).toContain("메일");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/calendar"]')?.textContent).toContain("일정");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/tasks"]')?.textContent).toContain("작업");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.textContent).toContain("프로젝트");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/search"]')?.textContent).toContain("맥락 검색");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/data"]')?.textContent).toContain("데이터");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/security"]')?.textContent).toContain("보안");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="#mobile-calendar"]')?.textContent).toContain("일정");
     expect(mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')).not.toBeNull();
@@ -142,6 +161,14 @@ describe("DashboardLayout", () => {
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
+    expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
+
+    act(() => {
+      mobileMenuButton?.click();
+    });
+    act(() => {
+      mobileMenu?.querySelector<HTMLButtonElement>('button[aria-label="모바일 워크스페이스 메뉴 닫기"]')?.click();
+    });
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
 
     const events: string[] = [];
@@ -211,7 +238,7 @@ describe("DashboardLayout", () => {
       );
     });
 
-    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="Open workspace menu"]');
+    const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]');
     act(() => {
       mobileMenuButton?.click();
     });
@@ -222,7 +249,7 @@ describe("DashboardLayout", () => {
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
-    expect(window.location.hash).toBe("#mobile-calendar");
+    expect(window.location.hash).toBe("");
     expect(window.__naruonMobileWorkspace?.view).toBe("calendar");
     expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="calendar"]')?.getAttribute("aria-current")).toBe("page");
 

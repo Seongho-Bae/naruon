@@ -84,11 +84,11 @@ else
     [ -n "$item" ] && add_blocker "$item"
   done < <(printf '%s' "$REQUIRED_CHECKS" | jq -r '
     .[]
-    | select((.state | ascii_upcase) as $state | ["FAILED", "FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED"] | index($state))
+    | select((.state | ascii_upcase) as $state | ["FAILED", "FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE"] | index($state))
     | "Required check `\(.name)` is \(.state) on the current head: \(.link // "no link")"
   ')
 
-  PENDING_REQUIRED_COUNT="$(printf '%s' "$REQUIRED_CHECKS" | jq '[.[] | select((.state | ascii_upcase) as $state | ["PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING", "EXPECTED", "STARTUP_FAILURE"] | index($state))] | length')"
+  PENDING_REQUIRED_COUNT="$(printf '%s' "$REQUIRED_CHECKS" | jq '[.[] | select((.state | ascii_upcase) as $state | ["PENDING", "QUEUED", "IN_PROGRESS", "REQUESTED", "WAITING", "EXPECTED"] | index($state))] | length')"
   if [ "$PENDING_REQUIRED_COUNT" != "0" ]; then
     add_waiting "Waiting for ${PENDING_REQUIRED_COUNT} required check(s) to finish on ${HEAD_REF_OID}."
   fi
@@ -101,7 +101,7 @@ CODERABBIT_MATCHES="$(printf '%s' "$CHECK_RUNS" | jq '
 )"
 CODERABBIT_COUNT="$(printf '%s' "$CODERABBIT_MATCHES" | jq 'length')"
 if [ "$CODERABBIT_COUNT" = "0" ]; then
-  add_blocker "Missing current-head CodeRabbit/coderabbitai evidence for ${HEAD_REF_OID}."
+  add_waiting "Waiting for current-head CodeRabbit evidence on ${HEAD_REF_OID}."
 else
   CODERABBIT_PENDING="$(printf '%s' "$CODERABBIT_MATCHES" | jq '[.[] | select(.status != "completed")] | length')"
   CODERABBIT_FAILED="$(printf '%s' "$CODERABBIT_MATCHES" | jq '

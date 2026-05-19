@@ -42,6 +42,8 @@ python3 -m webbrowser http://localhost:3000
 What you should see: the fixture import loads a three-message `Quarterly plan`
 conversation. `/api/emails` returns one threaded inbox item with `reply_count`
 greater than 1, and the frontend shows conversation history oldest to newest.
+First-run frontend sessions open the Today execution dashboard by default, with
+explicit entry points to the email workspace and calendar-first workspace.
 
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is
 set. With the default empty key it writes local zero-vector embeddings so the
@@ -82,21 +84,69 @@ npm run dev
 
 ## API smoke examples
 
+The backend accepts only signed bearer sessions. For local smoke tests, start the
+API with the same `AUTH_SESSION_HMAC_SECRET` used below, then mint a short-lived
+fixture token:
+
+```bash
+export AUTH_SESSION_HMAC_SECRET="naruon-session-hmac-token-32-byte-minimum"
+export NARUON_DEV_BEARER="$(python3 - <<'PY'
+import base64, hashlib, hmac, json, os, time
+
+secret = os.environ["AUTH_SESSION_HMAC_SECRET"].encode()
+payload = {
+    "ver": 1,
+    "iss": "naruon-control-plane",
+    "aud": "naruon-api",
+    "sub": "default",
+    "role": "organization_admin",
+    "org": "default",
+    "groups": [],
+    "workspace": "default",
+    "exp": int(time.time()) + 300,
+}
+enc = lambda raw: base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+header = enc(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+body = enc(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode())
+sig = enc(hmac.new(secret, f"{header}.{body}".encode(), hashlib.sha256).digest())
+print(f"{header}.{body}.{sig}")
+PY
+)"
+```
+
 ```bash
 curl -s http://localhost:8000/api/emails \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   | jq '.emails[] | {subject, thread_id, reply_count}'
 curl -s http://localhost:8000/api/emails/thread/thread-root@example.com \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   | jq '.thread[] | {message_id, in_reply_to, references}'
 
 # Requires a tenant OpenAI key because search generates a query embedding.
 curl -s -X POST http://localhost:8000/api/search \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
   -d '{"query":"Quarterly plan"}'
 
 # Send remains honest in local/dev mode: missing SMTP config returns 400.
 curl -s -X POST http://localhost:8000/api/emails/send \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
   -d '{"to":"alice@example.com","subject":"Re: Quarterly plan","body":"Thanks"}'
+
+# Convert email-derived execution items into source-linked ticket tasks.
+TASK_BODY="$(cat <<'JSON'
+{
+  "source_email_id": "<root@example.com>",
+  "thread_id": "thread-root@example.com",
+  "items": ["담당자 확인"]
+}
+JSON
+)"
+curl -s -X POST http://localhost:8000/api/tasks/from-email \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
+  -H 'content-type: application/json' \
+  -d "$TASK_BODY"
 ```
 
 ## Error-message contract
@@ -113,6 +163,10 @@ Errors should tell a contributor what failed and avoid leaking internals:
   raw exceptions are intentionally not returned to clients.
 - Missing thread: `404 {"detail":"Thread not found"}`. Re-import fixtures or
   verify the URL uses the normalized thread id.
+- Task creation from a missing or unauthorized source email:
+  `404 {"detail":"Source email not found"}`.
+- Task creation without usable execution items:
+  `422 {"detail":"At least one execution item is required"}`.
 
 ## Current scope contract
 
@@ -123,6 +177,22 @@ authenticated user. Local bootstrap and fixture imports default that owner to
 `default`; production
 multi-user use still needs a verified OIDC provider plus an audited
 mailbox-owner migration/backfill before real tenant data is mixed.
+
+The current frontend shell now exposes the north-star workspace map in the
+primary and mobile menus: Today dashboard, Mail, Calendar, Tasks, Projects,
+Context Search, AI Hub, Data, Security, and Settings. The `/mail`, `/search`,
+`/tasks`, `/calendar`, `/data`, and `/security` destinations are scope-setting
+pages that make the source-of-truth/writeback and RBAC/ABAC boundaries visible
+before those deeper provider integrations are claimed complete. Browser writes
+to signed backend routes use the stored `naruon_session_token` as an
+`Authorization: Bearer` session before any development fallback headers.
+
+Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
+tasks retain an internal source-email foreign key, expose source message/thread
+provenance, sanitize NUL bytes from LLM/email-derived titles, and return opaque
+public task ids instead of exposing database integer surrogates. The new
+`ticket_tasks` table keeps database names two-word `snake_case` such as
+`task_id`, `task_title`, `status_code`, and `priority_code`.
 
 ## Operations and release docs
 
@@ -151,6 +221,22 @@ mailbox-owner migration/backfill before real tenant data is mixed.
 # Equivalent manual checks:
 cd backend && python3 -m pytest -q
 cd frontend && npm test && npm run lint && npm run build
+```
+
+Additional focused checks for the current workspace/task/governance slice:
+
+```bash
+cd backend && \
+  PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 \
+  pytest tests/test_tasks_api.py -q
+cd frontend && npm test -- \
+  src/lib/api-client.test.ts \
+  src/lib/workspace-preferences.test.ts \
+  src/components/DashboardLayout.test.tsx \
+  src/app/page.test.tsx \
+  src/components/EmailDetail.test.tsx
+cd frontend && LIVE_BASE_URL=http://127.0.0.1:18081 npm run test:e2e -- tests/e2e/dashboard-branding.spec.ts
+bash scripts/ci/test_pr_governance_gate.sh
 ```
 
 Known local warnings: backend tests emit dependency/toolchain deprecation warnings

@@ -1,5 +1,6 @@
 import datetime
 import logging
+import uuid
 
 from cryptography.fernet import Fernet, InvalidToken
 from pgvector.sqlalchemy import Vector
@@ -207,6 +208,45 @@ class Email(Base):
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
+    ticket_tasks: Mapped[list["TicketTask"]] = relationship(
+        back_populates="related_email", cascade="all, delete-orphan"
+    )
+
+
+class TicketTask(Base):
+    __tablename__ = "ticket_tasks"
+
+    id: Mapped[int] = mapped_column("task_id", primary_key=True)
+    task_uid: Mapped[str] = mapped_column(
+        String(32), default=lambda: uuid.uuid4().hex, unique=True, index=True
+    )
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    title: Mapped[str] = mapped_column("task_title", String)
+    status: Mapped[str] = mapped_column("status_code", String, default="open", index=True)
+    priority: Mapped[str] = mapped_column(
+        "priority_code", String, default="normal", index=True
+    )
+    source_type: Mapped[str] = mapped_column(String, default="email", index=True)
+    related_email_id: Mapped[int | None] = mapped_column(
+        "email_id", ForeignKey("emails.id"), nullable=True, index=True
+    )
+    related_thread_id: Mapped[str | None] = mapped_column(
+        "thread_id", String, nullable=True, index=True
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+    related_email: Mapped["Email | None"] = relationship(back_populates="ticket_tasks")
 
 
 class Attachment(Base):

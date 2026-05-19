@@ -116,6 +116,7 @@ describe("Home workspace action bridge", () => {
   });
 
   it("forwards shell actions to the selected email detail", async () => {
+    localStorage.setItem("naruon_startup_view", "email");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -140,6 +141,7 @@ describe("Home workspace action bridge", () => {
   });
 
   it("does not replay a desktop shell action after a desktop-tablet-desktop resize", async () => {
+    localStorage.setItem("naruon_startup_view", "email");
     const mobileListeners = new Set<(event: MediaQueryListEvent) => void>();
     const tabletListeners = new Set<(event: MediaQueryListEvent) => void>();
     let mobileMatches = false;
@@ -211,6 +213,7 @@ describe("Home workspace action bridge", () => {
   });
 
   it("unmounts the mobile detail pane after returning from mobile to desktop", async () => {
+    localStorage.setItem("naruon_startup_view", "email");
     const mobileListeners = new Set<(event: MediaQueryListEvent) => void>();
     let mobileMatches = true;
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
@@ -304,7 +307,7 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).not.toContain("action:reply-draft");
   });
 
-  it("defaults to the email workspace when no startup preference is saved", async () => {
+  it("defaults to the Today dashboard when no startup preference is saved", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -314,9 +317,8 @@ describe("Home workspace action bridge", () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("메일 선택");
-    expect(container.textContent).toContain("email:none");
-    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+    expect(container.textContent).toContain("이메일 작업공간 열기");
     expect(window.location.hash).toBe("");
   });
 

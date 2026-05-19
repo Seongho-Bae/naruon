@@ -15,10 +15,17 @@ export class ApiClient {
 
   private getHeaders(init?: RequestInit): HeadersInit {
     const userId = this.getCurrentUserId();
+    const sessionToken = this.getSessionToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...init?.headers,
     };
+    if (sessionToken) {
+      return {
+        ...headers,
+        Authorization: `Bearer ${sessionToken}`,
+      };
+    }
     if (userId) {
       return {
         ...headers,
@@ -26,6 +33,13 @@ export class ApiClient {
       };
     }
     return headers;
+  }
+
+  getSessionToken() {
+    if (typeof window === 'undefined') return null;
+
+    const stored = localStorage.getItem('naruon_session_token')?.trim();
+    return stored || null;
   }
 
   getCurrentUserId() {

@@ -19,3 +19,31 @@
 - Pending/queued checks and pending CodeRabbit evidence are wait states, not hard
   failures. Hard blockers should be reported through the idempotent
   `<!-- pr-governance:metadata-gate -->` comment path.
+- Missing current-head CodeRabbit evidence is a wait state until bounded polling
+  or authoritative skip/review evidence resolves it; do not post a hard blocker
+  only because the current head has not been reviewed yet.
+- `STARTUP_FAILURE` in required PR governance/check metadata is a hard blocker
+  and should use the same idempotent metadata-gate comment path.
+
+## Workspace and task tracking defaults
+
+- First-run frontend sessions should open the Today execution dashboard while
+  preserving explicit Dashboard, Email, and Calendar startup choices.
+- Workspace navigation changes must keep the desktop primary nav and the
+  tablet/mobile drawer in sync for Mail, Calendar, Tasks, Projects, Context
+  Search, AI Hub, Data, Security, and Settings; add route and responsive E2E
+  coverage instead of documenting unavailable destinations as implemented.
+- Browser frontend writes to signed backend routes must carry the stored
+  `naruon_session_token` as `Authorization: Bearer` before development fallback
+  headers, and tests/mocks must exercise that path.
+- Email-derived tasks must stay source-linked to the email/thread and tenant
+  owner scope. Do not expose new sequential database ids through task APIs; use
+  opaque public ids for user-visible ticket tasks.
+- New database tables and columns must use at least two-word `snake_case` names;
+  avoid single-token columns such as `id`, `title`, `status`, or `priority` on
+  newly introduced objects.
+- When reviews find public/private identifier leaks or stale API fixture shapes,
+  update tests, frontend mocks, E2E mocks, README examples, and architecture docs
+  together so the same bug pattern does not reappear in copied examples.
+- DB-affecting API slices need both mocked fast tests and a real PostgreSQL
+  bootstrap/smoke path before PR merge evidence is considered complete.

@@ -6,8 +6,10 @@ import { usePathname } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import {
   Bell,
+  Briefcase,
   CalendarDays,
   CheckCircle2,
+  Database,
   FileText,
   HelpCircle,
   Home,
@@ -23,6 +25,7 @@ import {
   FolderOpen,
   MoreHorizontal,
   Settings,
+  ShieldCheck,
   TrendingUp,
   UserCircle,
   Edit3
@@ -32,7 +35,7 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/', available: true },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail', available: true },
   { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred', available: false },
   { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent', available: false },
   { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts', available: false },
@@ -76,8 +79,14 @@ const mobileWorkspaceItems = [
 
 const primaryNavItems = [
   { label: '홈', href: '/', icon: Home },
+  { label: '메일', href: '/mail', icon: Inbox },
+  { label: '일정', href: '/calendar', icon: CalendarDays },
+  { label: '작업', href: '/tasks', icon: CheckCircle2 },
+  { label: '프로젝트', href: '/projects', icon: Briefcase },
+  { label: '맥락 검색', href: '/search', icon: Search },
   { label: 'AI 허브', href: '/ai-hub', icon: Sparkles },
-  { label: '프롬프트', href: '/prompt-studio', icon: PenLine },
+  { label: '데이터', href: '/data', icon: Database },
+  { label: '보안', href: '/security', icon: ShieldCheck },
   { label: '설정', href: '/settings', icon: Settings },
 ];
 
@@ -283,10 +292,10 @@ export function DashboardLayout({
       setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'email') {
-      setMobileWorkspaceView('inbox');
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar');
+      setMobileWorkspaceView('calendar', { updateHash: false });
     }
   }
 
@@ -302,7 +311,7 @@ export function DashboardLayout({
       <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
         <div className="space-y-5">
           <div className="flex items-center gap-3">
-            <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} priority style={{ width: '150px', height: '40px' }} />
+            <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} style={{ width: '150px', height: '40px' }} />
           </div>
           <div data-testid="sidebar-brand-card" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
             <p className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</p>
@@ -408,21 +417,21 @@ export function DashboardLayout({
         <header aria-label="Naruon workspace header" className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card/85 px-4 backdrop-blur-xl lg:px-6">
           <button
             type="button"
-            aria-label="Open workspace menu"
+            aria-label="워크스페이스 메뉴 열기"
             aria-controls="mobile-workspace-menu"
             aria-expanded={isWorkspaceMenuOpen}
             aria-haspopup="dialog"
             popoverTarget="mobile-workspace-menu"
             onClick={() => setIsWorkspaceMenuOpen((open) => !open)}
-            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 lg:hidden"
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:hidden"
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-2 lg:hidden">
+          <div className="flex items-center gap-2 xl:hidden">
             <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
-          <nav aria-label="Primary workspace navigation" className="hidden items-center gap-1 xl:flex">
+          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto xl:flex 2xl:max-w-none">
             {primaryNavItems.map((item) => (
               <PrimaryNavLink key={item.href} {...item} />
             ))}
@@ -497,6 +506,18 @@ export function DashboardLayout({
         </section>
       </main>
 
+      {isWorkspaceMenuOpen ? (
+        <button
+          type="button"
+          aria-label="모바일 워크스페이스 메뉴 배경 닫기"
+          data-testid="mobile-workspace-backdrop"
+          popoverTarget="mobile-workspace-menu"
+          popoverTargetAction="hide"
+          onClick={closeMobileWorkspaceMenu}
+          className="fixed inset-0 z-[70] bg-slate-950/75 backdrop-blur-sm xl:hidden"
+        />
+      ) : null}
+
       <div
         id="mobile-workspace-menu"
         popover="auto"
@@ -504,11 +525,23 @@ export function DashboardLayout({
         aria-label="모바일 워크스페이스 메뉴"
         data-open={isWorkspaceMenuOpen ? 'true' : 'false'}
         onToggle={(event) => setIsWorkspaceMenuOpen(event.currentTarget.matches(':popover-open'))}
-        className="fixed inset-x-3 top-20 z-50 w-[calc(100vw-1.5rem)] max-w-md max-h-[calc(100dvh-7rem)] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] backdrop-blur-xl lg:hidden"
+        className="fixed inset-y-0 left-0 z-[80] h-dvh w-[min(88vw,360px)] max-w-md overflow-y-auto overscroll-contain rounded-r-3xl border-r border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.22)] backdrop-blur-xl xl:hidden"
       >
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
-          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">모바일</span>
+          <div>
+            <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
+            <p className="mt-1 text-xs text-muted-foreground">메일, 일정, 할 일, 데이터와 보안 메뉴로 이동합니다.</p>
+          </div>
+          <button
+            type="button"
+            aria-label="모바일 워크스페이스 메뉴 닫기"
+            popoverTarget="mobile-workspace-menu"
+            popoverTargetAction="hide"
+            onClick={closeMobileWorkspaceMenu}
+            className="grid size-10 place-items-center rounded-2xl border border-border bg-background text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+          >
+            ×
+          </button>
         </div>
         <div className="space-y-4">
           <section aria-label="Mobile startup preference" className="space-y-2">
@@ -598,6 +631,27 @@ export function DashboardLayout({
                     <span className={`text-[11px] font-medium ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{description}</span>
                   </span>
                 </a>
+              );
+            })}
+          </nav>
+
+          <nav aria-label="Mobile primary destinations" className="grid gap-2">
+            <p className="px-1 text-[11px] font-black text-muted-foreground">주요 작업공간</p>
+            {primaryNavItems.map(({ label, href, icon: Icon }) => {
+              const active = isActivePath(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => closeMobileWorkspaceMenu()}
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
+                  }`}
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  <span>{label}</span>
+                </Link>
               );
             })}
           </nav>

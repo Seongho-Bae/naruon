@@ -9,12 +9,12 @@ describe("workspace startup preferences", () => {
     localStorage.clear();
   });
 
-  it("falls back to email when localStorage reads throw", () => {
+  it("falls back to dashboard when localStorage reads throw", () => {
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new DOMException("blocked", "SecurityError");
     });
 
-    expect(getWorkspaceStartupView()).toBe("email");
+    expect(getWorkspaceStartupView()).toBe("dashboard");
   });
 
   it("does not throw or skip notification when localStorage writes throw", () => {

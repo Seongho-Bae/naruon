@@ -25,6 +25,10 @@ interface LlmData {
   todos: string[];
 }
 
+interface CreateTasksFromEmailResponse {
+  created: number;
+}
+
 type EmailDetailActionCommand = {
   id: number;
   action: string;
@@ -49,6 +53,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   const [instruction, setInstruction] = useState('정중하게 답장해줘');
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [taskStatus, setTaskStatus] = useState<string | null>(null);
   const threadRequestIdRef = useRef(0);
@@ -113,6 +118,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       setIsDrafting(false);
       setIsSending(false);
       setIsSyncing(false);
+      setIsCreatingTask(false);
       setSyncStatus(null);
       setTaskStatus(null);
 
@@ -197,7 +203,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
+      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos });
       if (!isCurrentEmail()) return;
       setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
     } catch {
@@ -208,13 +214,32 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
     }
   }, [emailId, llmData]);
 
-  const handleCreateTask = useCallback(() => {
+  const handleCreateTask = useCallback(async () => {
+    const actionEmail = email;
+    const actionEmailId = actionEmail?.id ?? null;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    if (!actionEmail) return;
     if (!llmData || !llmData.todos.length) {
       setTaskStatus('정리할 실행 항목이 없습니다.');
       return;
     }
-    setTaskStatus(`${llmData.todos.length}개 실행 항목을 할 일로 정리했습니다.`);
-  }, [llmData]);
+    setIsCreatingTask(true);
+    setTaskStatus(null);
+    try {
+      const data = await apiClient.post<CreateTasksFromEmailResponse>('/api/tasks/from-email', {
+        source_email_id: actionEmail.message_id,
+        thread_id: actionEmail.thread_id || actionEmail.message_id,
+        items: llmData.todos,
+      });
+      if (!isCurrentEmail()) return;
+      setTaskStatus(`${data.created}개 실행 항목을 티켓형 할 일로 추적합니다.`);
+    } catch {
+      if (!isCurrentEmail()) return;
+      setTaskStatus('티켓형 할 일 생성에 실패했습니다.');
+    } finally {
+      if (isCurrentEmail()) setIsCreatingTask(false);
+    }
+  }, [email, llmData]);
 
   useEffect(() => {
     if (!actionCommand) {
@@ -237,7 +262,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
     }
     if (actionCommand.action === 'create-task') {
       handledActionCommandIdRef.current = actionCommand.id;
-      queueMicrotask(handleCreateTask);
+      queueMicrotask(() => void handleCreateTask());
     }
   }, [actionCommand, email, emailId, handleCreateTask, handleDraftReply, handleSyncCalendar, llmData, llmError]);
 
@@ -323,9 +348,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     size="sm"
                     variant="outline"
                     onClick={handleCreateTask}
+                    disabled={isCreatingTask}
                     className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
                   >
-                    할 일 만들기
+                    {isCreatingTask ? "추적 중" : "할 일 만들기"}
                   </Button>
                 )}
                 {syncStatus && (
