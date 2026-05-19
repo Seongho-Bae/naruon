@@ -1788,6 +1788,12 @@ EOF
 			"scenario=$scenario runtime env forwarding"
 	fi
 
+	case "$scenario" in
+	api-base-query-token-rejected | api-base-fragment-token-rejected)
+		assert_file_not_contains "$output_log" "SUPER_SECRET_TOKEN_123" "scenario=$scenario output redacts rejected API base secret"
+		;;
+	esac
+
 	if [ "$scenario" = "pr-changed-scope-max-batches" ]; then
 		assert_internal_pr_scope_targets "$target_log" "$repo_root_dir" "$expected_calls"
 	fi
@@ -3131,6 +3137,28 @@ run_gate_case "runtime-env-forwarding" \
 	"<unset>" \
 	"gemini" \
 	""
+
+run_gate_case "api-base-query-token-rejected" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"LLM_API_BASE must not contain URL userinfo, query, or fragment components." \
+	"0" \
+	"" \
+	"" \
+	"gemini" \
+	"https://example.invalid/generateContent?token=SUPER_SECRET_TOKEN_123"
+
+run_gate_case "api-base-fragment-token-rejected" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"LLM_API_BASE must not contain URL userinfo, query, or fragment components." \
+	"0" \
+	"" \
+	"" \
+	"gemini" \
+	"https://example.invalid:generateContent#SUPER_SECRET_TOKEN_123"
 
 run_gate_case "vertex-primary-notfound-fallback-success" \
 	"vertex_ai/missing-primary" \

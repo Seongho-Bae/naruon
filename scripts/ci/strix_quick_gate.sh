@@ -1640,6 +1640,24 @@ fallback_models_config_name_for_model() {
 	printf '%s\n' "STRIX_FALLBACK_MODELS"
 }
 
+llm_api_base_has_public_url_components_only() {
+	local url="$1"
+	local authority
+	case "$url" in
+	*\?* | *#*)
+		return 1
+		;;
+	esac
+	authority="${url#https://}"
+	authority="${authority%%/*}"
+	case "$authority" in
+	*@*)
+		return 1
+		;;
+	esac
+	return 0
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -1657,8 +1675,6 @@ resolved_llm_api_base_for_model() {
 
 	local llm_api_base_value
 	llm_api_base_value="$(cat -- "$LLM_API_BASE_FILE")"
-	llm_api_base_value="${llm_api_base_value%%/generateContent*}"
-	llm_api_base_value="${llm_api_base_value%%:generateContent*}"
 	llm_api_base_value="$(trim_whitespace "$llm_api_base_value")"
 	if [ -z "$llm_api_base_value" ]; then
 		return 0
@@ -1671,6 +1687,12 @@ resolved_llm_api_base_for_model() {
 		echo "ERROR: LLM_API_BASE must be an https URL when configured." >&2
 		return 2
 	fi
+	if ! llm_api_base_has_public_url_components_only "$llm_api_base_value"; then
+		echo "ERROR: LLM_API_BASE must not contain URL userinfo, query, or fragment components." >&2
+		return 2
+	fi
+	llm_api_base_value="${llm_api_base_value%%/generateContent*}"
+	llm_api_base_value="${llm_api_base_value%%:generateContent*}"
 	printf '%s\n' "$llm_api_base_value"
 }
 
