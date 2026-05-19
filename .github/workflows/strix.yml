@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   strix:
-    timeout-minutes: 60
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
@@ -256,8 +256,8 @@ jobs:
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
           STRIX_PROCESS_TIMEOUT_SECONDS: ${{ github.event_name == 'pull_request_target' && '1200' || '2400' }}
-          STRIX_TOTAL_TIMEOUT_SECONDS: 3000
-          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 4
+          STRIX_TOTAL_TIMEOUT_SECONDS: 4800
+          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ github.event_name == 'pull_request_target' && '0' || '1' }}
           GH_TOKEN: ${{ github.event_name == 'pull_request_target' && github.token || '' }}
