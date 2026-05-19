@@ -2288,6 +2288,97 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_rejects_invalid_sha_case() {
+	local case_name="$1"
+	local invalid_side="$2"
+
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >> "${FAKE_STRIX_CALL_LOG:?}"
+echo "Error: Strix should not run after invalid pull request SHA metadata" >&2
+exit 67
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		echo 'seed' >README.md
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		echo 'head' >>README.md
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	local injection_marker="STRIX_SHA_INJECTION_MARKER"
+	local malicious_sha='0000000000000000000000000000000000000000$(echo STRIX_SHA_INJECTION_MARKER)'
+	local expected_message="pull request $invalid_side commit SHA is invalid; failing closed"
+	if [ "$invalid_side" = "base" ]; then
+		base_sha="$malicious_sha"
+	else
+		head_sha="$malicious_sha"
+	fi
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=$case_name invalid PR SHA exits closed"
+	assert_file_contains "$output_log" "$expected_message" "case=$case_name invalid PR SHA output"
+	assert_file_not_contains "$output_log" "$injection_marker" "case=$case_name invalid PR SHA must not echo untrusted value"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "0" "$call_count" "case=$case_name invalid PR SHA must not invoke Strix"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_irregular_head_entry_fails_closed_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -3005,6 +3096,14 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_DIFF_FAILURE" \
 	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
 	"diff"
+
+run_pull_request_target_rejects_invalid_sha_case \
+	"pull-request-target-invalid-base-sha-fails-closed" \
+	"base"
+
+run_pull_request_target_rejects_invalid_sha_case \
+	"pull-request-target-invalid-head-sha-fails-closed" \
+	"head"
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-disabled-pr-scope-pr-head-blob-read-failure" \
