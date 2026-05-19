@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from services.calendar_service import create_calendar_event
-from services.exceptions import CalendarServiceError
+from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_create_calendar_event_rejects_unsafe_summary_before_google_build(
     unsafe_summary,
 ):
     with patch("services.calendar_service.build") as mock_build:
-        with pytest.raises(CalendarServiceError, match="Unsafe calendar todo text"):
+        with pytest.raises(UnsafeCalendarTodoError, match="Unsafe calendar todo text"):
             await create_calendar_event(unsafe_summary, {"token": "dummy"})
 
         mock_build.assert_not_called()

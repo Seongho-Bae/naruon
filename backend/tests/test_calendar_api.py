@@ -305,10 +305,70 @@ def test_calendar_writeback_rejects_targeted_non_owned_source_without_selection(
         },
     )
 
-    assert response.status_code == 422
+    assert response.status_code == 403
     assert response.json() == {
-        "detail": "No customer-owned writeback source is available"
+        "detail": "Not authorized for requested writeback source"
     }
+
+
+def test_calendar_writeback_targeted_authorization_hides_source_existence(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="shared-calendar",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="other-user",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="shared-etag",
+            ),
+            WritebackSource(
+                source_id="cross-org-calendar",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-other",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="cross-org-etag",
+            )
+        ]
+    )
+
+    missing_response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "missing-calendar",
+        },
+    )
+    non_owner_response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "shared-calendar",
+        },
+    )
+    cross_org_response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "cross-org-calendar",
+        },
+    )
+
+    assert missing_response.status_code == 403
+    assert non_owner_response.status_code == 403
+    assert cross_org_response.status_code == 403
+    assert missing_response.json() == non_owner_response.json()
+    assert missing_response.json() == cross_org_response.json()
 
 
 def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(

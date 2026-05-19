@@ -575,6 +575,34 @@ describe("Home workspace action bridge", () => {
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");
   });
 
+  it("ignores malformed hashless mobile workspace events for dashboard overrides", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent("naruon:mobile-workspace", { detail: {} }));
+    });
+    await flushAsyncWork();
+
+    expect(window.location.hash).toBe("");
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("hidden");
+  });
+
   it("does not fetch desktop dashboard data before a mobile hash override is applied", async () => {
     vi.stubGlobal("matchMedia", vi.fn(() => ({
       matches: true,

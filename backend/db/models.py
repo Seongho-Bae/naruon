@@ -188,10 +188,8 @@ class Email(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    organization_id: Mapped[str | None] = mapped_column(
-        String, index=True, nullable=True
-    )
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     message_id: Mapped[str] = mapped_column(String, index=True)
     thread_id: Mapped[str | None] = mapped_column(
         String, index=True, nullable=True

@@ -262,7 +262,8 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
   useEffect(() => {
     const syncMobileWorkspaceOverride = (event?: Event) => {
       const eventView = event instanceof CustomEvent ? (event as CustomEvent<{ view?: string }>).detail?.view : null;
-      setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-') || (eventView !== null && eventView !== 'inbox'));
+      const hasExplicitWorkspaceOverride = typeof eventView === 'string' && eventView !== 'inbox';
+      setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-') || hasExplicitWorkspaceOverride);
       setMobileWorkspaceOverrideReady(true);
     };
     syncMobileWorkspaceOverride();

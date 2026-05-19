@@ -15,14 +15,17 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
   fixed, rebutted with evidence, or superseded. Authoritative current-head
   `Review skipped` evidence satisfies the robot-review gate when applicable.
 - PR Governance automation is metadata-only: it must not checkout pull request
-  code, clone the head branch, dismiss reviews, or use admin merge. It may read
-  PR/check/review-thread metadata, post blocker comments, and enable auto-merge
-  with `--match-head-commit` only after current-head gates are satisfied.
+  code, clone the head branch, dismiss reviews, enable auto-merge, or use admin
+  merge. It may read PR/check/review-thread metadata and post blocker comments;
+  the separate human/agent landing path performs any allowed merge action after
+  current-head gates are satisfied.
 - PR Governance runs trusted-base logic only. The workflow materializes the base
   repository script from a trusted tarball and must not execute PR-head scripts.
 - Pending, queued, requested, waiting, or in-progress checks are wait states, not
   hard failure findings. Failed, cancelled, timed-out, and action-required states
   are blockers.
+- `reviewDecision=CHANGES_REQUESTED` is a blocker until requested changes are
+  addressed or superseded on the current head.
 - Blocker comments use the idempotent
   `<!-- pr-governance:metadata-gate -->` marker and are patched in place instead
   of duplicated on repeated workflow events.

@@ -15,7 +15,14 @@ printf '%s\n' "$*" >> "$GH_LOG"
 head_sha="0123456789abcdef0123456789abcdef01234567"
 
 if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
-  printf '{"number":42,"isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"","statusCheckRollup":[]}'
+  case "${GH_SCENARIO:-pass}" in
+    changes_requested)
+      printf '{"number":42,"isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"CHANGES_REQUESTED","statusCheckRollup":[]}'
+      ;;
+    *)
+      printf '{"number":42,"isDraft":false,"mergeable":"MERGEABLE","mergeStateStatus":"CLEAN","reviewDecision":"","statusCheckRollup":[]}'
+      ;;
+  esac
   exit 0
 fi
 
@@ -143,14 +150,31 @@ run_gate() {
     bash "$script" > "$temp_dir/output.txt"
 }
 
+assert_in_file() {
+  local pattern="$1"
+  local file="$2"
+  grep -q -- "$pattern" "$file"
+}
+
+assert_not_in_file() {
+  local pattern="$1"
+  local file="$2"
+  if grep -q -- "$pattern" "$file"; then
+    printf 'unexpected pattern found in %s: %s\n' "$file" "$pattern" >&2
+    printf '%s\n' '--- file contents ---' >&2
+    sed -n '1,200p' "$file" >&2
+    return 1
+  fi
+}
+
 assert_no_comment_or_merge_for_pending_checks() {
   local temp_dir
   temp_dir="$(mktemp -d)"
   run_gate pending "$temp_dir"
 
-  grep -q 'Waiting for 1 required check' "$temp_dir/output.txt"
-  ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Waiting for 1 required check' "$temp_dir/output.txt"
+  assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_startup_failure_creates_marker_comment() {
@@ -158,9 +182,9 @@ assert_startup_failure_creates_marker_comment() {
   temp_dir="$(mktemp -d)"
   run_gate startup_failure "$temp_dir"
 
-  grep -q 'Required check `Application CI` is STARTUP_FAILURE' "$temp_dir/gh.log"
-  grep -q '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Required check `Application CI` is STARTUP_FAILURE' "$temp_dir/gh.log"
+  assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_failed_checks_create_marker_comment() {
@@ -168,10 +192,10 @@ assert_failed_checks_create_marker_comment() {
   temp_dir="$(mktemp -d)"
   run_gate failed "$temp_dir"
 
-  grep -q 'PR governance metadata gate is not ready' "$temp_dir/gh.log"
-  grep -q '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
-  grep -q 'Application CI' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'PR governance metadata gate is not ready' "$temp_dir/gh.log"
+  assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
+  assert_in_file 'Application CI' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_existing_marker_comment_is_patched() {
@@ -179,8 +203,8 @@ assert_existing_marker_comment_is_patched() {
   temp_dir="$(mktemp -d)"
   run_gate failed_existing "$temp_dir"
 
-  grep -q 'api --method PATCH repos/owner/repo/issues/comments/555' "$temp_dir/gh.log"
-  ! grep -q 'repos/owner/repo/issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_in_file 'api --method PATCH repos/owner/repo/issues/comments/555' "$temp_dir/gh.log"
+  assert_not_in_file 'repos/owner/repo/issues/42/comments -f body' "$temp_dir/gh.log"
 }
 
 assert_coderabbit_pending_waits_without_hard_comment() {
@@ -188,9 +212,9 @@ assert_coderabbit_pending_waits_without_hard_comment() {
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_pending "$temp_dir"
 
-  grep -q 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
-  ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
+  assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_missing_coderabbit_waits_without_hard_comment() {
@@ -198,9 +222,9 @@ assert_missing_coderabbit_waits_without_hard_comment() {
   temp_dir="$(mktemp -d)"
   run_gate missing_coderabbit "$temp_dir"
 
-  grep -q 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
-  ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
+  assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_coderabbit_failure_creates_marker_comment() {
@@ -208,9 +232,9 @@ assert_coderabbit_failure_creates_marker_comment() {
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_failed "$temp_dir"
 
-  grep -q 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
-  grep -q '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
+  assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
 assert_coderabbit_neutral_without_skip_evidence_blocks() {
@@ -218,17 +242,18 @@ assert_coderabbit_neutral_without_skip_evidence_blocks() {
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_neutral "$temp_dir"
 
-  grep -q 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
-assert_coderabbit_review_skipped_neutral_can_merge() {
+assert_coderabbit_review_skipped_neutral_is_ready_without_merge() {
   local temp_dir
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_review_skipped "$temp_dir"
 
-  grep -q '^pr merge 42 --repo owner/repo --auto --merge --match-head-commit 0123456789abcdef0123456789abcdef01234567$' "$temp_dir/gh.log"
-  ! grep -q 'issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
 }
 
 assert_coderabbit_blocking_issue_comment_blocks() {
@@ -236,17 +261,30 @@ assert_coderabbit_blocking_issue_comment_blocks() {
   temp_dir="$(mktemp -d)"
   run_gate coderabbit_blocking_comment "$temp_dir"
 
-  grep -q 'Current-head CodeRabbit issue comment has blocking warning/failure evidence' "$temp_dir/gh.log"
-  ! grep -q '^pr merge' "$temp_dir/gh.log"
+  assert_in_file 'Current-head CodeRabbit issue comment has blocking warning/failure evidence' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
-assert_passing_gate_enables_non_admin_auto_merge() {
+assert_changes_requested_creates_marker_comment() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate changes_requested "$temp_dir"
+
+  assert_in_file 'Review decision is CHANGES_REQUESTED' "$temp_dir/gh.log"
+  assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+}
+
+assert_passing_gate_is_metadata_only_without_merge() {
   local temp_dir
   temp_dir="$(mktemp -d)"
   run_gate pass "$temp_dir"
 
-  grep -q '^pr merge 42 --repo owner/repo --auto --merge --match-head-commit 0123456789abcdef0123456789abcdef01234567$' "$temp_dir/gh.log"
-  ! grep -q -- '--admin' "$temp_dir/gh.log"
+  assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_not_in_file 'checkout' "$temp_dir/gh.log"
+  assert_not_in_file 'dismiss' "$temp_dir/gh.log"
+  assert_not_in_file 'continue-on-error' "$temp_dir/gh.log"
 }
 
 assert_no_comment_or_merge_for_pending_checks
@@ -257,8 +295,9 @@ assert_coderabbit_pending_waits_without_hard_comment
 assert_missing_coderabbit_waits_without_hard_comment
 assert_coderabbit_failure_creates_marker_comment
 assert_coderabbit_neutral_without_skip_evidence_blocks
-assert_coderabbit_review_skipped_neutral_can_merge
+assert_coderabbit_review_skipped_neutral_is_ready_without_merge
 assert_coderabbit_blocking_issue_comment_blocks
-assert_passing_gate_enables_non_admin_auto_merge
+assert_changes_requested_creates_marker_comment
+assert_passing_gate_is_metadata_only_without_merge
 
 printf 'test_pr_governance_gate: PASS\n'

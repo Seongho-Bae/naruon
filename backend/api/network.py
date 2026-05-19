@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -36,7 +36,7 @@ def extract_emails(text: str | None) -> list[str]:
 
 @router.get("/graph", response_model=GraphResponse)
 async def get_network_graph(
-    limit: int = 500,
+    limit: int = Query(default=500, ge=1, le=2000),
     user_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),

@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-from api.auth import AuthContext, ensure_organization_access, get_auth_context
+from api.auth import AuthContext, get_auth_context
 from services.calendar_service import create_calendar_event, validate_calendar_todo_text
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
@@ -49,6 +49,14 @@ class WritebackIntentResponse(BaseModel):
 CUSTOMER_OWNED_PROTOCOLS = {"caldav", "carddav", "webdav"}
 
 
+def _has_writeback_capability(source: WritebackSource) -> bool:
+    return (
+        source.writeback_enabled
+        and "write" in source.capabilities
+        and source.protocol in CUSTOMER_OWNED_PROTOCOLS
+    )
+
+
 async def get_writeback_sources(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> tuple[WritebackSource, ...]:
@@ -79,22 +87,52 @@ async def get_calendar_user_token(
 
 def _select_writeback_source(
     sources: Sequence[WritebackSource],
-    target_source_id: str | None,
     owner_id: str,
     organization_id: str | None,
 ) -> WritebackSource | None:
     for source in sources:
         if (
-            not source.writeback_enabled
-            or "write" not in source.capabilities
-            or source.protocol not in CUSTOMER_OWNED_PROTOCOLS
-            or (target_source_id is not None and source.source_id != target_source_id)
+            not _has_writeback_capability(source)
             or source.owner_id != owner_id
             or source.organization_id != organization_id
         ):
             continue
         return source
     return None
+
+
+def _find_writeback_source_by_id(
+    sources: Sequence[WritebackSource], target_source_id: str
+) -> WritebackSource | None:
+    for source in sources:
+        if source.source_id == target_source_id:
+            return source
+    return None
+
+
+def _authorize_targeted_writeback_source(
+    sources: Sequence[WritebackSource],
+    target_source_id: str,
+    auth_context: AuthContext,
+) -> WritebackSource | None:
+    target_source = _find_writeback_source_by_id(sources, target_source_id)
+    if target_source is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized for requested writeback source",
+        )
+
+    if (
+        auth_context.role != "platform_admin"
+        and target_source.organization_id != auth_context.organization_id
+    ) or target_source.owner_id != auth_context.user_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Not authorized for requested writeback source",
+        )
+    if not _has_writeback_capability(target_source):
+        return None
+    return target_source
 
 
 @router.post("/sync")
@@ -126,22 +164,21 @@ async def create_writeback_intent(
     auth_context: AuthContext = Depends(get_auth_context),
     available_sources: tuple[WritebackSource, ...] = Depends(get_writeback_sources),
 ) -> WritebackIntentResponse:
-    target_source = _select_writeback_source(
-        available_sources,
-        request.target_source_id,
-        auth_context.user_id,
-        auth_context.organization_id,
-    )
+    if request.target_source_id is not None:
+        target_source = _authorize_targeted_writeback_source(
+            available_sources,
+            request.target_source_id,
+            auth_context,
+        )
+    else:
+        target_source = _select_writeback_source(
+            available_sources,
+            auth_context.user_id,
+            auth_context.organization_id,
+        )
     if target_source is None:
         raise HTTPException(
             status_code=422, detail="No customer-owned writeback source is available"
-        )
-
-    ensure_organization_access(auth_context, target_source.organization_id)
-
-    if target_source.owner_id != auth_context.user_id:
-        raise HTTPException(
-            status_code=403, detail="Writeback source belongs to a different owner"
         )
 
     requires_if_match = request.action == "update"

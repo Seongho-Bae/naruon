@@ -99,6 +99,20 @@ def compiled_query_text(query) -> str:
     return str(query).lower()
 
 
+def compiled_query_params(query) -> dict[str, object]:
+    return dict(query.compile().params)
+
+
+def assert_query_is_owner_scoped(query) -> None:
+    query_text = compiled_query_text(query)
+    query_params = compiled_query_params(query)
+
+    assert "emails.user_id = :user_id_1" in query_text
+    assert "emails.organization_id = :organization_id_1" in query_text
+    assert query_params["user_id_1"] == "testuser"
+    assert query_params["organization_id_1"] == "org-acme"
+
+
 @pytest.fixture
 def sample_email():
     return Email(
@@ -349,12 +363,13 @@ async def test_get_emails_query_is_scoped_to_current_user(
     session = QueryCapturingSession([sample_email])
     app.dependency_overrides[get_db] = lambda: session
 
-    response = await client.get("/api/emails?limit=10")
+    response = await client.get(
+        "/api/emails?limit=10",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
 
     assert response.status_code == 200
-    query_text = compiled_query_text(session.queries[-1])
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
+    assert_query_is_owner_scoped(session.queries[-1])
 
 
 @pytest.mark.asyncio
@@ -366,12 +381,13 @@ async def test_get_email_by_id_query_is_scoped_to_current_user(
     session = QueryCapturingSession([sample_email])
     app.dependency_overrides[get_db] = lambda: session
 
-    response = await client.get(f"/api/emails/{sample_email.id}")
+    response = await client.get(
+        f"/api/emails/{sample_email.id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
 
     assert response.status_code == 200
-    query_text = compiled_query_text(session.queries[-1])
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
+    assert_query_is_owner_scoped(session.queries[-1])
 
 
 @pytest.mark.asyncio
@@ -383,12 +399,13 @@ async def test_get_email_thread_query_is_scoped_to_current_user(
     session = QueryCapturingSession([sample_email])
     app.dependency_overrides[get_db] = lambda: session
 
-    response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
+    response = await client.get(
+        f"/api/emails/thread/{sample_email.thread_id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
 
     assert response.status_code == 200
-    query_text = compiled_query_text(session.queries[-1])
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
+    assert_query_is_owner_scoped(session.queries[-1])
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

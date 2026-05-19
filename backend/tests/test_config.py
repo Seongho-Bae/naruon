@@ -4,11 +4,11 @@ from typing import Any, cast
 import pytest
 from pydantic import ValidationError
 
+TEST_AUTH_SESSION_HMAC_SECRET = "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test fixture secret
+
 # Set required environment variables before importing settings
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test_db"
-os.environ.setdefault(
-    "AUTH_SESSION_HMAC_SECRET", "naruon-session-hmac-token-32-byte-minimum"
-)
+os.environ.setdefault("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
 
 from core.config import Settings, settings
 
@@ -39,9 +39,7 @@ def test_database_url_is_required(monkeypatch):
 def test_database_url_loads_from_environment(monkeypatch):
     database_url = "postgresql+asyncpg://test:test@localhost:5432/test_db"
     monkeypatch.setenv("DATABASE_URL", database_url)
-    monkeypatch.setenv(
-        "AUTH_SESSION_HMAC_SECRET", "naruon-session-hmac-token-32-byte-minimum"
-    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
 
     loaded_settings = _settings_without_env_file()
 
@@ -94,7 +92,7 @@ def test_non_production_settings_allow_missing_auth_session_hmac_secret(monkeypa
 
 
 def test_settings_repr_redacts_auth_session_hmac_secret(monkeypatch):
-    secret = "naruon-session-hmac-token-32-byte-minimum"
+    secret = TEST_AUTH_SESSION_HMAC_SECRET
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
     )

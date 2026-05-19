@@ -5,6 +5,8 @@ import socket
 import pytest
 import services.email_client as email_client
 
+TEST_SMTP_PASSWORD = "secret"  # noqa: S105 - test fixture password
+
 
 def _make_socket() -> socket.socket:
     return socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -300,14 +302,14 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
         smtp_server="smtp.example.com",
         smtp_port=587,
         smtp_username="testuser",
-        smtp_password="secret",
+        smtp_password=TEST_SMTP_PASSWORD,
     )
 
     assert result == {"status": "sent", "simulated": False}
     assert fake_client.entered is True
     assert fake_client.exited is True
     assert starttls_hostnames == ["smtp.example.com"]
-    assert fake_client.login_args == ("testuser", "secret")
+    assert fake_client.login_args == ("testuser", TEST_SMTP_PASSWORD)
     assert fake_client.sent_message is message
     assert smtp_socket.fileno() == -1
 

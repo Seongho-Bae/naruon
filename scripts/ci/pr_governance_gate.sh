@@ -54,6 +54,7 @@ HEAD_REF_OID="$HEAD_SHA" # headRefOid equivalent for REST metadata paths.
 HEAD_COMMIT_DATE="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}" --jq '.commit.committer.date')"
 MERGE_STATE="$(printf '%s' "$PR_JSON" | jq -r '.mergeStateStatus')"
 IS_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.isDraft')"
+REVIEW_DECISION="$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // ""')"
 
 if [ "$IS_DRAFT" = "true" ]; then
   add_blocker 'Draft PR: merge automation is paused.'
@@ -65,6 +66,10 @@ fi
 
 if [ "$MERGE_STATE" = "DIRTY" ] || [ "$MERGE_STATE" = "UNKNOWN" ]; then
   add_blocker "Merge state is ${MERGE_STATE}; resolve conflicts or refresh mergeability."
+fi
+
+if [ "$REVIEW_DECISION" = "CHANGES_REQUESTED" ]; then
+  add_blocker 'Review decision is CHANGES_REQUESTED; address requested changes before merge.'
 fi
 
 THREADS_JSON="$(gh api graphql \
@@ -163,8 +168,4 @@ if [ "${#WAITING[@]}" -gt 0 ]; then
   exit 0
 fi
 
-gh pr merge "$PR_NUMBER" \
-  --repo "$GITHUB_REPOSITORY" \
-  --auto \
-  --merge \
-  --match-head-commit "$HEAD_SHA"
+printf 'PR governance metadata gate is ready for `%s` on `%s`.\n' "$PR_NUMBER" "$HEAD_REF_OID"
