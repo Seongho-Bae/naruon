@@ -1179,6 +1179,40 @@ EOS
 		echo "Penetration test failed: changed XML file location finding"
 		exit 1
 		;;
+	pr-critical-changed-xml-file-location-space)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-changed-xml-space/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-changed-xml-space/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: HIGH
+<parameter=code_locations>
+  <location>
+	    <file>src/unsafe name.py</file>
+    <start_line>7</start_line>
+    <end_line>9</end_line>
+  </location>
+</parameter=code_locations>
+EOS
+		echo "Penetration test failed: changed XML file location finding with space"
+		exit 1
+		;;
+	pr-baseline-critical-narrative-backticked-service-file)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-narrative-service/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-narrative-service/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Technical Analysis
+The `backend/services/email_parser.py` file extracts HTML email bodies without sanitizing script tags.
+EOS
+		echo "Penetration test failed: baseline critical narrative service finding"
+		exit 1
+		;;
+	pr-critical-unmapped-arbitrary-backticked-service-file)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped-arbitrary-backtick/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped-arbitrary-backtick/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Description: location data unavailable, but the report also mentions `backend/services/email_parser.py` as unrelated context.
+EOS
+		echo "Penetration test failed: unmapped critical finding with arbitrary backticked file mention"
+		exit 1
+		;;
 	pr-critical-unmapped)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities/vuln-0001.md" <<'EOS'
@@ -1592,6 +1626,11 @@ EOF
 		echo 'class ChangedJwtUtil {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
 		mkdir -p "$repo_root_dir/frontend/src/app/labels/[slug]"
 		echo 'export default function Page() { return null }' >"$repo_root_dir/frontend/src/app/labels/[slug]/page.tsx"
+		mkdir -p "$repo_root_dir/src"
+		echo 'print("unsafe name")' >"$repo_root_dir/src/unsafe name.py"
+		mkdir -p "$repo_root_dir/backend/services"
+		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
+		echo 'def parse_eml(*args): return {}' >"$repo_root_dir/backend/services/email_parser.py"
 		if [ -n "$current_pr_number" ]; then
 			cat >"$event_payload_file" <<EOF
 {
@@ -4626,6 +4665,69 @@ run_gate_case "pr-critical-changed-xml-file-location" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-critical-changed-xml-file-location-space" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"src/unsafe name.py"
+
+run_gate_case "pr-baseline-critical-narrative-backticked-service-file" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Strix findings are limited to unchanged files in this pull request; allowing pipeline continuation." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/services/email_client.py"
+
+run_gate_case "pr-critical-unmapped-arbitrary-backticked-service-file" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Unable to map Strix findings to changed files; failing closed for pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/services/email_client.py"
 
 run_gate_case "pr-critical-changed-absolute-target" \
 	"openai/gpt-4o-mini" \
