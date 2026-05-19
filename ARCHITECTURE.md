@@ -52,9 +52,13 @@ checks, and conflict-aware provider revisions such as ETag/If-Match. The detaile
 contract is documented in
 `docs/operations/source-of-truth-and-writeback-sovereignty.md`.
 
-Authorization is RBAC plus ABAC with deny precedence. A broad SaaS/admin role does
-not bypass data-region, consent, delegation, workspace, group, mailbox ownership,
-or source capability denies; see `docs/operations/auth-key-management.md`.
+Authorization is RBAC plus ABAC with deny precedence. Data-region, consent,
+workspace, group, source capability, and customer-policy denies still override
+broad roles. The narrow exception is an explicitly RBAC-permitted
+`platform_admin`: that role may cross organization and resource ownership
+boundaries in the pure access-policy evaluator for platform operations, but it
+does not bypass data-region or consent denies; see
+`docs/operations/auth-key-management.md`.
 
 ## Local deployment boundary
 

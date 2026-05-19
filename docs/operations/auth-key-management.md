@@ -61,9 +61,17 @@
 - Roles such as SaaS admin, enterprise admin, security operator, IT operator,
   B2B2C tenant admin, B2C member, SOHO owner, and delegated support engineer are
   authorization inputs, not final decisions by themselves.
-- ABAC denies for data region, mailbox/source ownership, consent, delegation
-  expiry, workspace/group scope, provider capability, legal hold, and customer
-  policy must take precedence over RBAC allows.
+- ABAC denies for data region, consent, workspace/group scope, provider
+  capability, legal hold, and customer policy must take precedence over RBAC
+  allows.
+- `platform_admin` is the only cross-tenant exception in the pure resource access
+  evaluator: when `platform_admin` is explicitly present in `permitted_roles`, it
+  may bypass organization and resource ownership/delegation checks for platform
+  operations. That exception does not bypass data-region, consent, provider
+  capability, legal hold, or customer-policy denies.
+- `ResourcePolicy.data_region = None` means the resource has no residency
+  restriction. A request with `data_region = None` does not satisfy a resource
+  that declares a concrete data region.
 - Runtime claims must be signed and server-verifiable. Public headers from
   browsers or edge proxies are not identity material unless they are backed by a
   validated OIDC/JWT or internal signed session envelope.

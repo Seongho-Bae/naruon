@@ -1,12 +1,9 @@
-import inspect
 import asyncio
+import inspect
 import socket
 
 import pytest
 import services.email_client as email_client
-from services.email_client import build_email_message, send_email
-from services.email_client import _build_smtp_client
-from services.email_client import _send_pinned_smtp_message
 
 
 def _make_socket() -> socket.socket:
@@ -108,7 +105,7 @@ async def test_send_email_rejects_private_smtp_host_before_network(monkeypatch):
     monkeypatch.setattr("services.email_client.aiosmtplib.send", fail_if_called)
 
     with pytest.raises(ValueError, match="SMTP server is not allowed"):
-        await send_email(
+        await email_client.send_email(
             to_address="test@example.com",
             subject="Test",
             body="Body",
@@ -168,7 +165,7 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
         fake_validate_smtp_destination,
     )
 
-    result = await send_email(
+    result = await email_client.send_email(
         to_address="test@example.com",
         subject="Test",
         body="Body",
@@ -225,11 +222,46 @@ def test_pinned_starttls_uses_existing_transport_helper():
     assert "_starttls_existing_transport" in source
 
 
+def test_implicit_tls_connection_uses_running_loop_instead_of_stale_client_loop():
+    source = inspect.getsource(email_client._PinnedImplicitTlsSMTP._create_connection)
+
+    assert "asyncio.get_running_loop()" in source
+    assert "self.loop" not in source
+
+
+def test_starttls_existing_transport_uses_public_aiosmtplib_api():
+    source = inspect.getsource(email_client._starttls_existing_transport)
+
+    assert "client.starttls" in source
+    assert "._ehlo_or_helo_if_needed" not in source
+    assert "._get_tls_context" not in source
+    assert "._reset_server_state" not in source
+
+
+@pytest.mark.asyncio
+async def test_starttls_existing_transport_delegates_to_public_starttls_api():
+    class PublicStarttlsClient:
+        def __init__(self):
+            self.calls = []
+
+        async def starttls(self, *, server_hostname, timeout):
+            self.calls.append((server_hostname, timeout))
+
+    client = PublicStarttlsClient()
+
+    await email_client._starttls_existing_transport(
+        client,  # type: ignore[arg-type]
+        tls_sni_hostname="smtp.example.com",
+    )
+
+    assert client.calls == [("smtp.example.com", email_client.SMTP_TIMEOUT_SECONDS)]
+
+
 @pytest.mark.asyncio
 async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch):
     smtp_socket = _make_socket()
     fake_client = FakeSmtpClient()
-    message = build_email_message(
+    message = email_client.build_email_message(
         to_address="test@example.com",
         subject="Test",
         body="Body",
@@ -256,7 +288,7 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
         fake_starttls_existing_transport,
     )
 
-    result = await _send_pinned_smtp_message(
+    result = await email_client._send_pinned_smtp_message(
         message,
         smtp_socket=smtp_socket,
         smtp_server="smtp.example.com",
@@ -277,7 +309,7 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
 def test_implicit_tls_smtp_client_keeps_original_tls_hostname():
     smtp_socket = _make_socket()
     try:
-        client = _build_smtp_client(
+        client = email_client._build_smtp_client(
             smtp_socket=smtp_socket,
             smtp_server="smtp.example.com",
             smtp_port=465,
@@ -328,7 +360,7 @@ async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
     )
 
     with pytest.raises(Exception, match="Failed to send email"):
-        await send_email(
+        await email_client.send_email(
             to_address="test@example.com",
             subject="Test Failure",
             body="Should fail because SMTP server is invalid",

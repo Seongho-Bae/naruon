@@ -18,8 +18,11 @@ mail/calendar/file systems.
 - Calendar/file/contact writeback is opt-in, server-authoritative, and
   conflict-aware through source capabilities, provenance, ETags/If-Match, and
   audit logs.
-- Access control is universal RBAC plus ABAC: data-region, consent, delegation,
-  workspace, group, and ownership denies take precedence over broad role allows.
+- Access control is universal RBAC plus ABAC: data-region, consent, workspace,
+  group, source capability, and customer-policy denies take precedence over broad
+  role allows. A permitted `platform_admin` can cross organization and resource
+  ownership boundaries for platform operations, but not data-region or consent
+  denies.
 - Keycloak is the default enterprise OIDC evaluation target; Casdoor remains a
   lighter alternative. Traefik and OpenTelemetry are evaluated for edge policy and
   open-source observability.

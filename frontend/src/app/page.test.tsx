@@ -56,6 +56,7 @@ vi.mock("lucide-react", () => ({
 }));
 
 import Home from "./page";
+import { setMobileWorkspaceView } from "@/lib/mobile-workspace";
 
 function countText(haystack: string, needle: string) {
   return haystack.split(needle).length - 1;
@@ -537,6 +538,36 @@ describe("Home workspace action bridge", () => {
     });
     await flushAsyncWork();
 
+    expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
+    expect(container.textContent).toContain("캘린더 반영 대기");
+    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+  });
+
+  it("lets hashless mobile workspace events override a saved dashboard startup view", async () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      media: "(max-width: 1023px)",
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_startup_view", "dashboard");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<Home />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("오늘의 실행 대시보드");
+
+    await act(async () => {
+      setMobileWorkspaceView("calendar", { updateHash: false });
+    });
+    await flushAsyncWork();
+
+    expect(window.location.hash).toBe("");
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
     expect(container.textContent).toContain("캘린더 반영 대기");
     expect(container.textContent).not.toContain("오늘의 실행 대시보드");

@@ -259,8 +259,9 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const syncMobileWorkspaceOverride = () => {
-      setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-'));
+    const syncMobileWorkspaceOverride = (event?: Event) => {
+      const eventView = event instanceof CustomEvent ? (event as CustomEvent<{ view?: string }>).detail?.view : null;
+      setMobileWorkspaceOverride(window.location.hash.startsWith('#mobile-') || (eventView !== null && eventView !== 'inbox'));
       setMobileWorkspaceOverrideReady(true);
     };
     syncMobileWorkspaceOverride();

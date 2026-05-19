@@ -31,8 +31,12 @@
 ## Policy and audit requirements
 
 - RBAC grants are necessary but never sufficient when ABAC denies apply. Region,
-  consent, delegation, workspace, group, mailbox ownership, and data-residency
-  denials take precedence over broad roles.
+  consent, workspace, group, source capability, customer policy, and
+  data-residency denials take precedence over broad roles.
+- A permitted `platform_admin` can cross organization and resource ownership
+  boundaries in Naruon's pure access-policy evaluator, but writeback still must
+  use server-authoritative source records, provider capabilities, consent, and
+  conflict-aware revisions before any customer-owned system is changed.
 - Every writeback intent should record `actor`, `workspace`, `source_id`,
   `protocol`, `remote_id`/`etag` where available, `action`, and conflict result.
 - Observability must redact email body, secrets, provider tokens, DSNs, contact

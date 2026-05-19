@@ -276,8 +276,11 @@ export function DashboardLayout({
   function handleStartupViewChange(view: WorkspaceStartupView) {
     setWorkspaceStartupView(view);
     closeMobileWorkspaceMenu();
-    if (view === 'dashboard' && window.location.hash.startsWith('#mobile-')) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    if (view === 'dashboard') {
+      if (window.location.hash.startsWith('#mobile-')) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+      }
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'email') {
       setMobileWorkspaceView('inbox');

@@ -13,7 +13,6 @@ from aiosmtplib.errors import (
     SMTPConnectError,
     SMTPConnectResponseError,
     SMTPConnectTimeoutError,
-    SMTPException,
     SMTPServerDisconnected,
     SMTPTimeoutError,
 )
@@ -225,16 +224,15 @@ class _PinnedImplicitTlsSMTP(aiosmtplib.SMTP):
         super().__init__(**kwargs)
 
     async def _create_connection(self, timeout: float | None):
-        if self.loop is None:
-            raise RuntimeError("No event loop set")
+        loop = asyncio.get_running_loop()
         smtp_socket = self.sock
         if not isinstance(smtp_socket, socket.socket) or not self.use_tls:
             return await super()._create_connection(timeout)
         smtp_socket = cast(socket.socket, smtp_socket)
 
-        protocol = SMTPProtocol(loop=self.loop)
+        protocol = SMTPProtocol(loop=loop)
         tls_context = self._get_tls_context()
-        connect_coro = self.loop.create_connection(
+        connect_coro = loop.create_connection(
             lambda: protocol,
             sock=smtp_socket,
             ssl=tls_context,
@@ -298,26 +296,10 @@ async def _starttls_existing_transport(
     client: aiosmtplib.SMTP, *, tls_sni_hostname: str
 ) -> None:
     """Upgrade the existing pinned SMTP transport to TLS without DNS or connect."""
-    await client._ehlo_or_helo_if_needed()
-    if client.protocol is None:
-        raise SMTPServerDisconnected("Server not connected")
-    if client.get_transport_info("sslcontext") is not None:
-        raise SMTPException("Connection already using TLS")
-    if not client.supports_extension("starttls"):
-        raise SMTPException("SMTP STARTTLS extension not supported by server.")
-
-    tls_context = client._get_tls_context()
-    # SMTPProtocol.start_tls wraps the current transport in TLS. It does not
-    # perform DNS resolution or create another outbound socket.
-    await client.protocol.start_tls(
-        tls_context,
+    await client.starttls(
         server_hostname=tls_sni_hostname,
         timeout=SMTP_TIMEOUT_SECONDS,
     )
-    if client.protocol is None:
-        raise SMTPServerDisconnected("Connection lost")
-    client.transport = client.protocol.transport
-    client._reset_server_state()
 
 
 async def _send_pinned_smtp_message(

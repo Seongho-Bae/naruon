@@ -17,6 +17,8 @@ describe("DashboardLayout", () => {
     container?.remove();
     container = null;
     localStorage.clear();
+    window.history.replaceState(null, "", "/");
+    Reflect.deleteProperty(window, "__naruonMobileWorkspace");
   });
 
   it("renders the Naruon branded shell with accessible navigation landmarks", () => {
@@ -196,8 +198,7 @@ describe("DashboardLayout", () => {
     expect(insightHeading?.closest('[data-testid="sidebar-scroll-region"]')).toBe(scrollRegion);
   });
 
-  it("clears stale mobile hashes when switching startup back to dashboard", () => {
-    window.history.replaceState(null, "", "/#mobile-calendar");
+  it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -217,11 +218,23 @@ describe("DashboardLayout", () => {
     const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
 
     act(() => {
+      mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')?.click();
+    });
+
+    expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
+    expect(window.location.hash).toBe("#mobile-calendar");
+    expect(window.__naruonMobileWorkspace?.view).toBe("calendar");
+    expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="calendar"]')?.getAttribute("aria-current")).toBe("page");
+
+    act(() => {
       mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="dashboard"]')?.click();
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("dashboard");
     expect(window.location.hash).toBe("");
+    expect(window.__naruonMobileWorkspace?.view).toBe("inbox");
+    expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="inbox"]')?.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="calendar"]')?.getAttribute("aria-current")).toBeNull();
   });
 
 });

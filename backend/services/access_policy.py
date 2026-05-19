@@ -5,8 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-
-PolicyRoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
+PolicyRoleName = Literal[
+    "platform_admin", "organization_admin", "group_admin", "member"
+]
 DecisionReason = Literal[
     "allowed",
     "organization_denied",
@@ -46,23 +47,33 @@ class AccessDecision:
 
 def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessDecision:
     """Evaluate resource access with ABAC denials before RBAC allows."""
-    if request.organization_id != resource.organization_id:
+    role_allowed = request.role in resource.permitted_roles
+    group_allowed = bool(set(request.group_ids) & set(resource.permitted_group_ids))
+    platform_admin_allowed = request.role == "platform_admin" and role_allowed
+
+    if request.role == "platform_admin" and not role_allowed:
+        return AccessDecision(allowed=False, reason="rbac_denied")
+
+    if (
+        not platform_admin_allowed
+        and request.organization_id != resource.organization_id
+    ):
         return AccessDecision(allowed=False, reason="organization_denied")
 
-    if request.data_region != resource.data_region:
+    if resource.data_region is not None and request.data_region != resource.data_region:
         return AccessDecision(allowed=False, reason="data_region_denied")
 
-    missing_consent = set(resource.required_consent_scopes) - set(request.consent_scopes)
+    missing_consent = set(resource.required_consent_scopes) - set(
+        request.consent_scopes
+    )
     if missing_consent:
         return AccessDecision(allowed=False, reason="consent_denied")
 
     owns_resource = request.user_id == resource.owner_id
     has_delegation = request.user_id in resource.delegated_user_ids
-    if not owns_resource and not has_delegation:
+    if not platform_admin_allowed and not owns_resource and not has_delegation:
         return AccessDecision(allowed=False, reason="ownership_denied")
 
-    role_allowed = request.role in resource.permitted_roles
-    group_allowed = bool(set(request.group_ids) & set(resource.permitted_group_ids))
     if not role_allowed and not group_allowed:
         return AccessDecision(allowed=False, reason="rbac_denied")
 
