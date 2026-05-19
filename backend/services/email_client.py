@@ -123,27 +123,54 @@ def _validate_public_ip_address(address: str) -> None:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
 
 
+def _is_ip_literal(candidate: str) -> bool:
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+    return True
+
+
+def _looks_like_ip_literal(candidate: str) -> bool:
+    compact_candidate = candidate.replace(".", "").lower()
+    return (
+        ":" in candidate
+        or compact_candidate.isdigit()
+        or compact_candidate.startswith("0x")
+    )
+
+
+def _resolve_public_smtp_addresses(
+    smtp_server: str, smtp_port: int | None
+) -> list[tuple[Any, ...]]:
+    try:
+        address_infos = socket.getaddrinfo(
+            smtp_server, smtp_port, type=socket.SOCK_STREAM
+        )
+    except socket.gaierror as exc:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
+
+    validated_address_infos = []
+    for address_info in address_infos:
+        sockaddr = address_info[4]
+        _validate_public_ip_address(str(sockaddr[0]))
+        validated_address_infos.append(address_info)
+    if not validated_address_infos:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    return validated_address_infos
+
+
 def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     """Validate an outbound SMTP host against operator policy and SSRF guards."""
     normalized_host = _normalize_smtp_host(host)
     _validate_allowed_smtp_host(normalized_host)
 
-    try:
+    if _is_ip_literal(normalized_host):
         _validate_public_ip_address(normalized_host)
-    except ValueError:
-        if normalized_host.replace(".", "").isdigit() or ":" in normalized_host:
-            raise
-
-    if resolve_host:
-        try:
-            address_infos = socket.getaddrinfo(
-                normalized_host, None, type=socket.SOCK_STREAM
-            )
-        except socket.gaierror as exc:
-            raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
-        for address_info in address_infos:
-            sockaddr = address_info[4]
-            _validate_public_ip_address(str(sockaddr[0]))
+    elif _looks_like_ip_literal(normalized_host):
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    elif resolve_host:
+        _resolve_public_smtp_addresses(normalized_host, None)
     return normalized_host
 
 
@@ -189,18 +216,11 @@ def _resolve_smtp_connect_address(
     smtp_server: str, smtp_port: int
 ) -> tuple[int, int, int, tuple]:
     """Resolve SMTP host once and return a globally-routable socket target."""
-    try:
-        address_infos = socket.getaddrinfo(
-            smtp_server, smtp_port, type=socket.SOCK_STREAM
-        )
-    except socket.gaierror as exc:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
+    address_infos = _resolve_public_smtp_addresses(smtp_server, smtp_port)
 
     connect_address = None
     for address_info in address_infos:
         family, socktype, proto, _, sockaddr = address_info
-        resolved_address = str(sockaddr[0])
-        _validate_public_ip_address(resolved_address)
         connect_address = connect_address or (family, socktype, proto, sockaddr)
     if connect_address is None:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)

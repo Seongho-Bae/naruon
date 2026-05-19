@@ -77,6 +77,37 @@ def test_smtp_ip_policy_uses_explicit_ssrf_denylists():
         assert guard in source
 
 
+def test_smtp_control_plane_hostname_is_resolved_before_ip_policy(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "naruon.net")
+    monkeypatch.setattr(email_client.settings, "CONTROL_PLANE_DOMAIN", "naruon.net")
+    monkeypatch.setattr(
+        email_client.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 587))
+        ],
+    )
+    original_validate_public_ip_address = email_client._validate_public_ip_address
+    validated_addresses = []
+
+    def fake_validate_public_ip_address(address):
+        validated_addresses.append(address)
+        if address == "naruon.net":
+            raise AssertionError("raw hostnames must be resolved before IP checks")
+        original_validate_public_ip_address(address)
+
+    monkeypatch.setattr(
+        email_client,
+        "_validate_public_ip_address",
+        fake_validate_public_ip_address,
+    )
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_host("naruon.net", resolve_host=True)
+
+    assert validated_addresses == ["127.0.0.1"]
+
+
 class FakeSmtpClient:
     def __init__(self, *, fail_send=False):
         self.fail_send = fail_send

@@ -11,6 +11,9 @@
   `ALLOWED_SMTP_PORTS`; the final SMTP sink also rejects DNS answers that resolve
   to loopback, link-local, private, reserved, multicast, or other non-global
   addresses before opening a pinned socket to the selected global address.
+- `CONTROL_PLANE_DOMAIN` has no SMTP egress bypass. If an operator allowlists the
+  control-plane hostname for SMTP, it is still resolved and subjected to the same
+  public-address checks before any socket is opened.
 - `backend/services/imap_worker.py` connects to configured IMAP endpoints as a
   client; it does not listen for inbound mail or own MX records.
 - `backend/api/auth.py` rejects public identity headers at runtime and accepts
