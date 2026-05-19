@@ -33,6 +33,13 @@
   tablet/mobile drawer in sync for Mail, Calendar, Tasks, Projects, Context
   Search, AI Hub, Data, Security, and Settings; add route and responsive E2E
   coverage instead of documenting unavailable destinations as implemented.
+- Workspace destination pages must show actionable detail surfaces, not inert
+  marketing placeholders. Calendar needs month/week/detail/coordination and
+  CalDAV writeback states; Tasks needs source-linked ticket boards/details;
+  Search needs result/detail graph/timeline states; Projects needs decision logs;
+  Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
+  Settings need governance and operational control surfaces. Keep provider writes
+  labeled as future work until source-backed integrations exist.
 - Browser frontend writes to signed backend routes must carry the stored
   `naruon_session_token` as `Authorization: Bearer` before development fallback
   headers, and tests/mocks must exercise that path.

@@ -181,11 +181,17 @@ mailbox-owner migration/backfill before real tenant data is mixed.
 The current frontend shell now exposes the north-star workspace map in the
 primary and mobile menus: Today dashboard, Mail, Calendar, Tasks, Projects,
 Context Search, AI Hub, Data, Security, and Settings. The `/mail`, `/search`,
-`/tasks`, `/calendar`, `/data`, and `/security` destinations are scope-setting
-pages that make the source-of-truth/writeback and RBAC/ABAC boundaries visible
-before those deeper provider integrations are claimed complete. Browser writes
-to signed backend routes use the stored `naruon_session_token` as an
-`Authorization: Bearer` session before any development fallback headers.
+`/tasks`, `/calendar`, `/projects`, `/ai-hub`, `/data`, `/security`, and
+`/settings` destinations must render real work-detail surfaces rather than
+static placeholder copy: calendar month/week/detail/coordination and CalDAV
+writeback queues, ticket task boards and source-linked details, integrated
+search result/detail graph timelines, project decision logs, document
+repository/ingestion/embedding/quality queues, security dashboards and policy
+screens, and operational settings. Provider write execution and enterprise
+identity remain future connector/auth slices until source-backed integrations
+exist. Browser writes to signed backend routes use the stored
+`naruon_session_token` as an `Authorization: Bearer` session before any
+development fallback headers.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread
@@ -233,6 +239,12 @@ cd frontend && npm test -- \
   src/lib/api-client.test.ts \
   src/lib/workspace-preferences.test.ts \
   src/components/DashboardLayout.test.tsx \
+  src/app/calendar/page.test.tsx \
+  src/app/tasks/page.test.tsx \
+  src/app/search/page.test.tsx \
+  src/app/projects/page.test.tsx \
+  src/app/data/page.test.tsx \
+  src/app/security/page.test.tsx \
   src/app/page.test.tsx \
   src/components/EmailDetail.test.tsx
 cd frontend && LIVE_BASE_URL=http://127.0.0.1:18081 npm run test:e2e -- tests/e2e/dashboard-branding.spec.ts

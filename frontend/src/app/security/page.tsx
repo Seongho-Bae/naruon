@@ -8,6 +8,14 @@ const securityCards = [
   { title: 'Traefik edge', icon: Route, copy: 'ForwardAuth, route policy, rate limit, trusted forwarded header 검증을 edge에서 분리합니다.' },
 ];
 
+const governanceScreens = [
+  { title: '보안 대시보드', copy: 'SSO 상태, 커넥터 권한, source별 실패율, 정책 거부 이벤트를 한 화면에서 봅니다.' },
+  { title: '접근 권한', copy: 'SaaS 공급자, 기업, 그룹, 사업부, 팀, 개인/SOHO 역할을 RBAC/ABAC 조합으로 관리합니다.' },
+  { title: '감사 로그', copy: '메일, CalDAV, WebDAV read와 writeback intent, 관리자 조회, 정책 거부를 불변 이벤트로 추적합니다.' },
+  { title: '외부 공유', copy: '프로젝트 산출물 공유는 data-region, consent, source capability, customer policy deny를 먼저 통과해야 합니다.' },
+  { title: '정책', copy: 'deny 우선 규칙, legal hold, source-of-truth, connector scope를 배포 전 검증합니다.' },
+];
+
 export default function SecurityPage() {
   return (
     <div className="h-full min-h-0 overflow-y-auto bg-gradient-to-br from-primary/5 via-background to-card p-4 sm:p-6">
@@ -22,6 +30,16 @@ export default function SecurityPage() {
             <LockKeyhole className="size-4" aria-hidden="true" />
             인증/커넥터 설정 열기
           </Link>
+        </section>
+
+        <section aria-label="보안 운영 화면" className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {governanceScreens.map(({ title, copy }) => (
+            <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <ShieldCheck className="size-5 text-primary" aria-hidden="true" />
+              <h2 className="mt-3 text-lg font-black text-foreground">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+            </article>
+          ))}
         </section>
 
         <section aria-label="보안 설계 카드" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

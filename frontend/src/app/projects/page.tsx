@@ -22,10 +22,16 @@ const projectSections = [
   },
 ];
 
+const projectDetailCards = [
+  { title: '의사결정 로그', copy: '메일, 회의, 파일에서 결정 근거와 승인자를 추출해 프로젝트별 변경 이력으로 남깁니다.' },
+  { title: '일정·작업 연결', copy: 'CalDAV 일정 후보와 티켓 작업을 프로젝트 milestone에 연결하고 차단 사유를 노출합니다.' },
+  { title: '산출물 provenance', copy: 'WebDAV 파일, AI 요약, 공유 링크가 어느 원본 thread와 계정에서 왔는지 추적합니다.' },
+];
+
 const architectureCards = [
   { title: '외부 메일 relay/proxy', icon: Mail, copy: 'Naruon은 이메일 서버가 아니라 사용자가 지정한 IMAP/POP3/SMTP/OAuth 공급자에 접속하는 웹 클라이언트 서버입니다.' },
   { title: 'self-hosted connector', icon: ServerCog, copy: '사내망 전용 메일 서버는 고객 네트워크의 outbound-only connector가 naruon.net control plane과 통신합니다.' },
-  { title: 'CalDAV/CardDAV/WebDAV', icon: CalendarDays, copy: '계정 N개의 일정·연락처·파일을 읽고, ETag/If-Match 충돌 방지와 provenance로 원본 계정에 writeback합니다.' },
+  { title: 'CalDAV/CardDAV/WebDAV', icon: CalendarDays, copy: '계정 N개의 일정·연락처·파일을 읽고, ETag/If-Match 충돌 방지와 provenance로 원본 계정 writeback intent를 준비합니다.' },
   { title: 'RBAC/ABAC', icon: ShieldCheck, copy: 'SaaS 관리자, 기업/그룹/사업부/팀, 개인/SOHO를 universal tenant model로 다루고 ABAC deny가 RBAC allow보다 우선합니다.' },
   { title: 'Keycloak/Casdoor + Traefik', icon: LockKeyhole, copy: 'OIDC, enterprise federation, ForwardAuth, route policy, rate limit을 edge에서 분리해 자체 로그인과 외부 SSO를 함께 지원합니다.' },
   { title: 'OpenTelemetry APM', icon: Network, copy: 'Prometheus, Loki, Tempo/Jaeger, Grafana로 connector heartbeat, sync lag, writeback conflict, AI action audit trail을 봅니다.' },
@@ -72,6 +78,16 @@ export default function ProjectsPage() {
             </section>
           ))}
         </div>
+
+        <section aria-label="프로젝트 상세 작업" className="grid gap-4 md:grid-cols-3">
+          {projectDetailCards.map(({ title, copy }) => (
+            <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <CheckCircle2 className="size-5 text-primary" aria-hidden="true" />
+              <h2 className="mt-3 text-lg font-black text-foreground">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+            </article>
+          ))}
+        </section>
 
         <section aria-label="북극성 통합 설계" className="rounded-3xl border border-border bg-card/90 p-6 shadow-sm">
           <h2 className="text-xl font-black text-foreground">북극성 통합 설계</h2>

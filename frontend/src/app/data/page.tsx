@@ -2,9 +2,15 @@ import Link from 'next/link';
 import { Database, FileArchive, FolderTree, ShieldCheck } from 'lucide-react';
 
 const dataSections = [
-  { title: 'WebDAV 파일', copy: '첨부파일과 산출물을 프로젝트/스레드/할 일 기준 폴더로 구조화합니다.' },
-  { title: 'ZIP/메일 반입', copy: 'ZIP 반입과 포워딩 중복을 Message-ID, fingerprint, thread provenance로 정리합니다.' },
-  { title: 'Naruon 산출물', copy: 'AI가 종합한 결과도 원본 계정의 파일/일정/업무 흐름으로 되돌릴 수 있게 추적합니다.' },
+  { title: '문서 저장소', copy: '첨부파일과 산출물을 프로젝트/스레드/할 일 기준 폴더로 구조화합니다.' },
+  { title: '수집 파이프라인', copy: 'ZIP 반입, 포워딩, OAuth/IMAP/POP3 수집을 provenance와 함께 큐잉합니다.' },
+  { title: '임베딩', copy: '메일, 파일, 일정 후보를 tenant scope와 source capability가 반영된 검색 인덱스로 변환합니다.' },
+  { title: '품질 점검', copy: '중복 반입, stale fixture shape, private id 노출, writeback intent 누락을 배포 전 검증합니다.' },
+];
+
+const writebackItems = [
+  { title: 'WebDAV writeback 큐', copy: 'Naruon 산출물을 고객 소유 WebDAV 폴더로 돌려보내기 전 ETag와 권한을 확인합니다.' },
+  { title: 'unique email 정리', copy: 'Message-ID, UIDVALIDITY/UID, content fingerprint로 같은 이메일을 canonical thread에 묶습니다.' },
 ];
 
 export default function DataPage() {
@@ -22,10 +28,19 @@ export default function DataPage() {
             프로젝트 폴더 구조 보기
           </Link>
         </section>
-        <section aria-label="데이터 작업 영역" className="grid gap-4 md:grid-cols-3">
+        <section aria-label="데이터 작업 영역" className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {dataSections.map(({ title, copy }) => (
             <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
               <Database className="size-5 text-primary" aria-hidden="true" />
+              <h2 className="mt-3 text-lg font-black text-foreground">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
+            </article>
+          ))}
+        </section>
+        <section aria-label="WebDAV writeback 큐" className="grid gap-4 md:grid-cols-2">
+          {writebackItems.map(({ title, copy }) => (
+            <article key={title} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
+              <FolderTree className="size-5 text-primary" aria-hidden="true" />
               <h2 className="mt-3 text-lg font-black text-foreground">{title}</h2>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">{copy}</p>
             </article>

@@ -248,6 +248,21 @@ Open the generated PNGs and visually confirm no clipped menu, hidden bottom acti
 
 - Real PostgreSQL smoke: a temporary `pgvector/pgvector:pg16` database bootstrapped with `PYTHONPATH=. python3 scripts/bootstrap_db.py` created `ticket_tasks` with `task_id,task_uid,user_id,organization_id,task_title,status_code,priority_code,source_type,email_id,thread_id,created_at,updated_at`; `/api/tasks/from-email` returned `SMOKE_POST_STATUS 200`, `SMOKE_CREATED 2`, `SMOKE_PUBLIC_ID_LENGTH 32`, and `SMOKE_SOURCE_EMAIL <task-smoke@example.com>`.
 - Tenant provenance smoke: `GET /api/tasks` returned `SMOKE_GET_STATUS 200`, `SMOKE_GET_COUNT 3`, and a deliberately cross-tenant source row returned `SMOKE_CROSS_SOURCE None` plus `SMOKE_CROSS_THREAD None`.
+- Workspace destination GREEN evidence: unit tests now require Calendar
+  month/week/detail/coordination and CalDAV writeback queues, Tasks board/detail
+  source links and reply tracking, Search integrated results/detail graph and
+  timeline states, Projects decision logs, Data
+  repository/ingestion/embedding/quality/WebDAV queues, and Security
+  dashboard/access/audit/sharing/policy surfaces. The desktop primary
+  nav and mobile drawer destination hrefs are asserted to stay synchronized for
+  Home, Mail, Calendar, Tasks, Projects, Context Search, AI Hub, Data, Security,
+  and Settings.
+- Playwright route evidence: `LIVE_BASE_URL=http://127.0.0.1:18081 npx
+  playwright test tests/e2e/dashboard-branding.spec.ts --project=desktop` passed
+  29/29 checks covering desktop/tablet/mobile overflow, mobile drawer scrolling,
+  route smoke for `/mail`, `/calendar`, `/tasks`, `/data`, `/search`,
+  `/security`, `/projects`, `/ai-hub`, and `/settings`, and screenshot capture
+  for startup desktop/tablet/mobile plus the mobile drawer.
 
 ## North-star work deliberately deferred from this slice
 

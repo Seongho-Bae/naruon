@@ -21,6 +21,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   const header = page.locator('header[aria-label="Naruon workspace header"]');
   const primaryNav = page.getByRole('navigation', { name: 'Primary workspace navigation' });
   await expect(primaryNav).toBeVisible();
+  await expect(primaryNav.getByRole('link', { name: '홈', exact: true })).toHaveAttribute('href', '/');
   await expect(primaryNav.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
   await expect(primaryNav.getByRole('link', { name: '일정', exact: true })).toHaveAttribute('href', '/calendar');
   await expect(primaryNav.getByRole('link', { name: '작업', exact: true })).toHaveAttribute('href', '/tasks');
@@ -29,6 +30,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(primaryNav.getByRole('link', { name: 'AI 허브', exact: true })).toHaveAttribute('href', '/ai-hub');
   await expect(primaryNav.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
   await expect(primaryNav.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
+  await expect(primaryNav.getByRole('link', { name: '설정', exact: true })).toHaveAttribute('href', '/settings');
   await expect(header.getByRole('button', { name: '알림 보기' })).toBeVisible();
   await expect(header.getByRole('button', { name: '프로필 메뉴' })).toBeVisible();
   await expect(header.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
@@ -166,6 +168,9 @@ for (const destination of [
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
   { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },
+  { path: '/projects', heading: '프로젝트 워크스페이스', marker: { text: '의사결정 로그' } },
+  { path: '/ai-hub', heading: 'AI 허브', marker: { name: '실행 항목' } },
+  { path: '/settings', heading: '설정 (Settings)', marker: { text: 'Self-hosted Runner' } },
 ] as const) {
   test(`renders the ${destination.path} workspace destination without horizontal overflow`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1024 });
@@ -218,7 +223,11 @@ test('validates mobile hamburger composition and startup preference controls', a
   await expect(menu.getByRole('button', { name: '대시보드' })).toBeVisible();
   await expect(menu.getByRole('button', { name: '이메일' })).toBeVisible();
   await expect(menu.getByRole('button', { name: '일정' })).toBeVisible();
+  await expect(menu.getByRole('link', { name: '홈', exact: true })).toHaveAttribute('href', '/');
   await expect(menu.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
+  await expect(menu.getByRole('link', { name: '일정', exact: true })).toHaveAttribute('href', '/calendar');
+  await expect(menu.getByRole('link', { name: '맥락 검색', exact: true })).toHaveAttribute('href', '/search');
+  await expect(menu.getByRole('link', { name: 'AI 허브', exact: true })).toHaveAttribute('href', '/ai-hub');
   await expect(menu.getByText('워크스페이스', { exact: true })).toBeVisible();
   await expect(menu.getByText('주요 작업공간', { exact: true })).toBeVisible();
   await expect(menu.getByText('도움', { exact: true })).toBeVisible();
@@ -227,8 +236,26 @@ test('validates mobile hamburger composition and startup preference controls', a
   await expect(menu.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
   await expect(menu.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
   await expect(menu.getByRole('link', { name: '설정', exact: true })).toHaveAttribute('href', '/settings');
+  const desktopDestinationHrefs = await page
+    .locator('nav[aria-label="Primary workspace navigation"] a')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+  const mobileDestinationHrefs = await menu
+    .locator('nav[aria-label="Mobile primary destinations"] a')
+    .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+  expect(mobileDestinationHrefs).toEqual(desktopDestinationHrefs);
   await expect(menu.getByRole('link', { name: /일정 연결/ })).toHaveAttribute('href', '#mobile-calendar');
   await expect(menu.getByText(/중요 메일.*준비 중/)).toBeVisible();
+  await menu.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(menu.getByText('도움말')).toBeVisible();
+  await expect(menu.getByText('프로필')).toBeVisible();
+  const utilityGap = await menu.getByText('프로필').evaluate((element) => {
+    const item = element.getBoundingClientRect();
+    const dialog = document.querySelector('#mobile-workspace-menu')?.getBoundingClientRect();
+    return dialog ? dialog.bottom - item.bottom : 0;
+  });
+  expect(utilityGap).toBeGreaterThanOrEqual(0);
   await page.screenshot({ path: testInfo.outputPath('mobile-workspace-menu.png'), fullPage: true });
 
   await menu.getByRole('button', { name: '일정' }).click();

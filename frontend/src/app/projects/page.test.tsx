@@ -25,14 +25,13 @@ describe("ProjectsPage", () => {
   let container: HTMLDivElement | null = null;
 
   afterEach(() => {
-    const mountedRoot = root;
-    if (mountedRoot) act(() => mountedRoot.unmount());
+    if (root) act(() => root?.unmount());
     root = null;
     container?.remove();
     container = null;
   });
 
-  it("renders detailed project workspace sections for sidebar deep links and north-star integrations", () => {
+  it("renders project execution surfaces with decision logs and source boundaries", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -41,17 +40,13 @@ describe("ProjectsPage", () => {
       root?.render(<ProjectsPage />);
     });
 
-    expect(container.querySelector('h1')?.textContent).toContain("프로젝트 워크스페이스");
-    expect(container.querySelector('section#launch[aria-label="런칭 프로젝트"]')).not.toBeNull();
-    expect(container.querySelector('section#vendor[aria-label="벤더 관리"]')).not.toBeNull();
-    expect(container.querySelector('section#marketing[aria-label="마케팅 캠페인"]')).not.toBeNull();
-    expect(container.textContent).toContain("CalDAV/CardDAV/WebDAV");
+    expect(container.querySelector("h1")?.textContent).toContain("프로젝트 워크스페이스");
+    expect(container.querySelector('[aria-label="런칭 프로젝트"]')?.textContent).toContain("CalDAV 일정 writeback 후보");
+    expect(container.querySelector('[aria-label="벤더 관리"]')?.textContent).toContain("RBAC/ABAC deny 우선 정책");
+    expect(container.querySelector('[aria-label="프로젝트 상세 작업"]')?.textContent).toContain("의사결정 로그");
+    expect(container.querySelector('[aria-label="프로젝트 상세 작업"]')?.textContent).toContain("산출물 provenance");
     expect(container.textContent).toContain("self-hosted connector");
-    expect(container.textContent).toContain("Keycloak");
-    expect(container.textContent).toContain("Traefik");
-    expect(container.textContent).toContain("OpenTelemetry");
-    expect(container.textContent).toContain("RBAC/ABAC");
-    expect(container.textContent).not.toContain("준비 중");
-    expect(container.querySelector<HTMLAnchorElement>('a[href="/#mobile-calendar"]')?.textContent).toContain("일정 후보 열기");
+    expect(container.textContent).toContain("ETag/If-Match");
+    expect(container.textContent).toContain("writeback intent");
   });
 });

@@ -29,6 +29,9 @@ connector, and PR governance is metadata-only.
   inbox item.
 - [x] Brittle copy reduction: branding checks assert structural brand surfaces and
   local assets rather than a fixed slogan string.
+- [x] Destination detail surfaces: Calendar, Tasks, Search, Data, Security,
+  Projects, AI Hub, and Settings now have route-smoke coverage and the new
+  pages expose actionable work states instead of inert placeholder copy.
 - [x] PR governance hardening: `.github/workflows/pr-governance.yml` listens for
   the exact `Strix Security Scan` workflow, runs a trusted-base governance script,
   separates pending/waiting states from failures, and updates an idempotent marker
@@ -47,6 +50,7 @@ connector, and PR governance is metadata-only.
     src/app/page.test.tsx \
     src/components/EmailList.test.tsx
   ```
+
 - PR governance RED: `bash scripts/ci/test_pr_governance_gate.sh` failed while
   `scripts/ci/pr_governance_gate.sh` was absent.
 - PR governance GREEN:
@@ -61,6 +65,21 @@ connector, and PR governance is metadata-only.
   ```bash
   LIVE_BASE_URL=http://127.0.0.1:18081 \
     npm run test:e2e -- dashboard-branding.spec.ts dashboard-flows.spec.ts
+  ```
+
+- Destination detail GREEN:
+
+  ```bash
+  npm test -- \
+    src/app/calendar/page.test.tsx \
+    src/app/tasks/page.test.tsx \
+    src/app/search/page.test.tsx \
+    src/app/projects/page.test.tsx \
+    src/app/data/page.test.tsx \
+    src/app/security/page.test.tsx \
+    src/components/DashboardLayout.test.tsx
+  LIVE_BASE_URL=http://127.0.0.1:18081 \
+    npx playwright test tests/e2e/dashboard-branding.spec.ts --project=desktop
   ```
 
 ## Remaining north-star work

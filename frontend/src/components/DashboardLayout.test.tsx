@@ -93,8 +93,12 @@ describe("DashboardLayout", () => {
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
-    expect(sidebar?.textContent ?? "").toContain("Naruon");
     expect(sidebar?.querySelector('[data-testid="sidebar-brand-card"]')).not.toBeNull();
+    expect(sidebar?.textContent ?? "").toContain("답장 대기");
+    expect(sidebar?.textContent ?? "").toContain("일정 충돌");
+    expect(sidebar?.textContent ?? "").toContain("writeback 대기");
+    expect(sidebar?.textContent ?? "").not.toContain("흐름을 건너, 더 나은 판단과 실행으로.");
+    expect(sidebar?.textContent ?? "").not.toContain("Naruon AI 어시스턴트");
     expect(nav?.textContent ?? "").toContain("받은 메일");
     expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
@@ -150,6 +154,7 @@ describe("DashboardLayout", () => {
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/tasks"]')?.textContent).toContain("작업");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.textContent).toContain("프로젝트");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/search"]')?.textContent).toContain("맥락 검색");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/ai-hub"]')?.textContent).toContain("AI 허브");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/data"]')?.textContent).toContain("데이터");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/security"]')?.textContent).toContain("보안");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
@@ -223,6 +228,30 @@ describe("DashboardLayout", () => {
     expect(scrollRegion?.className).toContain("overflow-y-auto");
     expect(scrollRegion?.textContent ?? "").toContain("오늘의 인사이트");
     expect(insightHeading?.closest('[data-testid="sidebar-scroll-region"]')).toBe(scrollRegion);
+  });
+
+  it("keeps desktop primary and mobile primary destinations synchronized", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Inbox workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    const desktopHrefs = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Primary workspace navigation"] a'),
+    ).map((link) => link.getAttribute("href"));
+    const mobileHrefs = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Mobile primary destinations"] a'),
+    ).map((link) => link.getAttribute("href"));
+
+    expect(mobileHrefs).toEqual(desktopHrefs);
+    expect(mobileHrefs).toEqual(["/", "/mail", "/calendar", "/tasks", "/projects", "/search", "/ai-hub", "/data", "/security", "/settings"]);
   });
 
   it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", () => {

@@ -314,10 +314,21 @@ export function DashboardLayout({
             <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} style={{ width: '150px', height: '40px' }} />
           </div>
           <div data-testid="sidebar-brand-card" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
-            <p className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</p>
-            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-              이메일, 일정, 관계와 결정을 하나의 맥락으로 연결합니다.
-            </p>
+            <p className="text-sm font-bold text-foreground">처리 상태 유형</p>
+            <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-xl bg-background/80 p-2">
+                <dt className="text-[10px] font-bold text-muted-foreground">답장 대기</dt>
+                <dd className="text-[11px] font-black text-primary">추적</dd>
+              </div>
+              <div className="rounded-xl bg-background/80 p-2">
+                <dt className="text-[10px] font-bold text-muted-foreground">일정 충돌</dt>
+                <dd className="text-[11px] font-black text-amber-600">조율</dd>
+              </div>
+              <div className="rounded-xl bg-background/80 p-2">
+                <dt className="text-[10px] font-bold text-muted-foreground">writeback 대기</dt>
+                <dd className="text-[11px] font-black text-emerald-700">확인</dd>
+              </div>
+            </dl>
           </div>
         </div>
 
@@ -405,10 +416,10 @@ export function DashboardLayout({
         <div className="mt-auto rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Sparkles className="size-4 text-primary" aria-hidden="true" />
-            Naruon AI 어시스턴트
+            실행 큐
           </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            맥락 종합, 판단 포인트, 실행 항목을 한 화면에서 추적하세요.
+            미응답 메일, 위임 작업, CalDAV/WebDAV writeback intent 점검을 다음 액션 기준으로 묶습니다.
           </p>
         </div>
       </aside>
@@ -493,10 +504,10 @@ export function DashboardLayout({
               Seongho
             </button>
             <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">
-              맥락 종합
+              답장 추적
             </span>
             <span className="hidden rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">
-              실행 중심
+              충돌 조율
             </span>
           </div>
         </header>

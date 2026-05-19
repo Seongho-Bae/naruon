@@ -28,10 +28,14 @@ surface. The primary and mobile menus expose Mail, Calendar, Tasks, Projects,
 Context Search, AI Hub, Data, Security, and Settings as navigable workspace
 destinations, with the tablet/mobile drawer carrying the same global navigation
 matrix as the desktop shell. The `/mail`, `/search`, `/calendar`, `/tasks`,
-`/data`, and `/security` pages are honest scope and control-plane surfaces: they
-describe CalDAV/WebDAV writeback, source-linked task tracking, duplicate
-import/thread provenance, and RBAC/ABAC admin boundaries without pretending
-provider writeback or enterprise identity integrations are fully implemented.
+`/projects`, `/ai-hub`, `/data`, `/security`, and `/settings` pages are honest
+scope and control-plane surfaces with actionable detail states: CalDAV
+month/week/detail/coordination and writeback queues, source-linked task boards,
+integrated search results with graph/timeline context, project decision logs,
+document repository/ingestion/embedding/quality queues, security policy/audit
+surfaces, and operational settings. They expose source-of-truth, duplicate
+import/thread provenance, and RBAC/ABAC boundaries without pretending provider
+writeback or enterprise identity integrations are fully implemented.
 
 ## Threading boundary
 
