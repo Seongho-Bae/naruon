@@ -138,10 +138,12 @@ Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
-an explicit `ENCRYPTION_KEY` before Fernet encrypts or decrypts OAuth, OpenAI,
-SMTP, IMAP, Google, and runner registration token fields, even in debug mode.
-Routes that touch encrypted values should surface an operator-facing missing-key
-error rather than silently storing plaintext or using a shared development key.
+an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,
+OpenAI, SMTP, IMAP, Google, and runner registration token fields, even in debug
+mode. Invalid passphrase-style keys fail closed instead of being transformed into
+derived keys. Decryption failures return `None` rather than ciphertext, so routes
+that touch encrypted values must surface operator-facing missing-key or
+unavailable-secret behavior without exposing encrypted blobs.
 
 Calendar writeback intent selection is server-authoritative. The
 `/api/calendar/writeback-intent` request may specify an action and optional

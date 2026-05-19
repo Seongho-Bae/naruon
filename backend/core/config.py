@@ -1,5 +1,23 @@
-from pydantic import SecretStr
+from typing import Any, cast
+
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_AUTH_SESSION_HMAC_SECRET_BYTES = 32
+_LOW_ENTROPY_PLACEHOLDER_TERMS = ("change", "example", "password", "secret")
+
+
+def validate_auth_session_hmac_secret_value(secret: str) -> None:
+    secret_bytes = secret.encode("utf-8")
+    if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
+        raise ValueError(
+            "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in production"
+        )
+    if len(set(secret)) == 1:
+        raise ValueError("AUTH_SESSION_HMAC_SECRET must not be a repeated character")
+    normalized_secret = secret.lower()
+    if any(term in normalized_secret for term in _LOW_ENTROPY_PLACEHOLDER_TERMS):
+        raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
 
 
 class Settings(BaseSettings):
@@ -18,5 +36,19 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    @model_validator(mode="after")
+    def validate_production_session_secret(self) -> "Settings":
+        if self.RUNTIME_ENVIRONMENT.lower() not in {"production", "prod"}:
+            return self
 
-settings = Settings()
+        configured = self.AUTH_SESSION_HMAC_SECRET
+        if configured is None:
+            raise ValueError(
+                "AUTH_SESSION_HMAC_SECRET is required in production environments"
+            )
+
+        validate_auth_session_hmac_secret_value(configured.get_secret_value())
+        return self
+
+
+settings = Settings(**cast(dict[str, Any], {}))  # type: ignore

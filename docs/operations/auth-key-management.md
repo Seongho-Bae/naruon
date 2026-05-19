@@ -9,8 +9,10 @@
   envelopes whose protected header pins `alg=HS256` and whose `header.payload`
   signing input is signed with HMAC-SHA256 by the configured
   `AUTH_SESSION_HMAC_SECRET`. The secret must be explicitly configured,
-  high-entropy generated material, and at least 32 bytes; missing or weak
-  secrets fail closed with `401 Authentication required`.
+  high-entropy generated material, and at least 32 bytes. Production settings
+  fail at startup when this secret is missing, too short, or an obvious repeated
+  placeholder; non-production runtime verification still fails closed with
+  `401 Authentication required` when the configured value is absent or weak.
 - The signed session payload is versioned and must include
   `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
   `workspace`, `exp`, and organization/group scope claims. Tampered, expired,
@@ -25,11 +27,13 @@
   production auth path.
 - `backend/db/models.py` stores OAuth/OpenAI secret fields through an
   `EncryptedString` type backed by Fernet.
-- `backend/db/models.py` no longer contains a fallback Fernet key. Secret-field
-  encryption now requires an explicit `ENCRYPTION_KEY` in every runtime mode,
-  including `DEBUG=true`. User-facing routes that touch encrypted fields should
-  return the existing operator-facing missing-key error rather than fallback
-  encryption.
+- `backend/db/models.py` no longer contains a fallback Fernet key or SHA256
+  passphrase-derivation path. Secret-field encryption now requires an explicit
+  valid Fernet `ENCRYPTION_KEY` in every runtime mode, including `DEBUG=true`.
+  Decryption failures return `None` instead of ciphertext; user-facing routes
+  that touch encrypted fields should return the existing operator-facing
+  missing-key or unavailable-secret error rather than fallback encryption or raw
+  encrypted blobs.
 - Email rows now have nullable `user_id` and `organization_id` owner keys, and
   email/search/network graph queries are scoped to the authenticated user plus
   organization. Existing local databases receive the columns and null-row

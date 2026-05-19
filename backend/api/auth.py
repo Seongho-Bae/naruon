@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, cast
 
 from fastapi import Depends, Header, HTTPException
 
-from core.config import settings
+from core.config import settings, validate_auth_session_hmac_secret_value
 
 RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
 ALLOWED_ROLES: set[str] = {
@@ -74,6 +74,10 @@ def _session_secret_bytes() -> bytes:
     secret = configured.get_secret_value().encode("utf-8")
     if len(secret) < MIN_SESSION_SECRET_BYTES:
         raise _authentication_error()
+    try:
+        validate_auth_session_hmac_secret_value(configured.get_secret_value())
+    except ValueError:
+        raise _authentication_error() from None
     return secret
 
 

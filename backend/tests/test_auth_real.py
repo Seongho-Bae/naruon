@@ -27,7 +27,7 @@ WRONG_DEV_AUTH_TOKEN = (
     "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
 )
 TEST_SESSION_HMAC_SECRET = (
-    "test-session-hmac-secret-with-32-byte-minimum"  # noqa: S105 - test-only secret
+    "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test-only secret
 )
 WRONG_SESSION_HMAC_SECRET = (
     "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
@@ -345,6 +345,18 @@ async def test_signed_bearer_session_requires_strong_configured_secret():
 
     assert missing_secret_exc.value.status_code == 401
     assert weak_secret_exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_repeated_configured_secret():
+    repeated_secret = "A" * 32
+    token = _signed_session_token(_valid_session_payload(), repeated_secret)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(repeated_secret)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
