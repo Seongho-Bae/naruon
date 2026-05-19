@@ -13,6 +13,15 @@ OWNER="${GITHUB_REPOSITORY%/*}"
 REPO="${GITHUB_REPOSITORY#*/}"
 BLOCKERS=()
 WAITING=()
+PR_CHECKS_ERROR_FILE="$(mktemp)"
+ISSUE_COMMENTS_ERROR_FILE="$(mktemp)"
+REVIEW_COMMENTS_ERROR_FILE="$(mktemp)"
+
+cleanup_temp_files() {
+  rm -f "$PR_CHECKS_ERROR_FILE" "$ISSUE_COMMENTS_ERROR_FILE" "$REVIEW_COMMENTS_ERROR_FILE"
+}
+
+trap cleanup_temp_files EXIT
 
 add_blocker() {
   BLOCKERS+=("$1")
@@ -51,7 +60,6 @@ post_or_update_blocker_comment() {
 PR_JSON="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json number,isDraft,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup)"
 HEAD_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
 HEAD_REF_OID="$HEAD_SHA" # headRefOid equivalent for REST metadata paths.
-HEAD_COMMIT_DATE="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${HEAD_SHA}" --jq '.commit.committer.date')"
 MERGE_STATE="$(printf '%s' "$PR_JSON" | jq -r '.mergeStateStatus')"
 IS_DRAFT="$(printf '%s' "$PR_JSON" | jq -r '.isDraft')"
 REVIEW_DECISION="$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // ""')"
@@ -82,8 +90,8 @@ if [ "$UNRESOLVED_THREADS" != "0" ]; then
   add_blocker "${UNRESOLVED_THREADS} unresolved current review thread(s) remain."
 fi
 
-if ! REQUIRED_CHECKS="$(gh pr checks "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --required --json name,state,link 2>/tmp/pr-checks-error.txt)"; then
-  add_blocker "Required check metadata could not be read: $(cat /tmp/pr-checks-error.txt)."
+if ! REQUIRED_CHECKS="$(gh pr checks "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --required --json name,state,link 2>"$PR_CHECKS_ERROR_FILE")"; then
+  add_blocker "Required check metadata could not be read: $(<"$PR_CHECKS_ERROR_FILE")."
 else
   while IFS= read -r item; do
     [ -n "$item" ] && add_blocker "$item"
@@ -128,14 +136,14 @@ else
 fi
 
 CODERABBIT_BLOCKING_PATTERN='pre[- ]merge|blocking|failure|failed|warning|potential issue|actionable comment|actionable comments'
-if ! ISSUE_COMMENTS_JSON="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" 2>/tmp/pr-issue-comments-error.txt)"; then
-  add_blocker "CodeRabbit issue comments could not be read: $(cat /tmp/pr-issue-comments-error.txt)."
+if ! ISSUE_COMMENTS_JSON="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" 2>"$ISSUE_COMMENTS_ERROR_FILE")"; then
+  add_blocker "CodeRabbit issue comments could not be read: $(<"$ISSUE_COMMENTS_ERROR_FILE")."
 else
-  CODERABBIT_ISSUE_BLOCKERS="$(printf '%s' "$ISSUE_COMMENTS_JSON" | jq -s --arg head_date "$HEAD_COMMIT_DATE" --arg head_sha "$HEAD_SHA" --arg pattern "$CODERABBIT_BLOCKING_PATTERN" '
+  CODERABBIT_ISSUE_BLOCKERS="$(printf '%s' "$ISSUE_COMMENTS_JSON" | jq -s --arg head_sha "$HEAD_SHA" --arg pattern "$CODERABBIT_BLOCKING_PATTERN" '
     [.[][]
       | select((.user.login // "") | test("coderabbit"; "i"))
       | select((.body // "") | test($pattern; "i"))
-      | select(((.created_at // "") >= $head_date) or ((.body // "") | contains($head_sha)))]
+      | select((.body // "") | contains($head_sha))]
     | length'
   )"
   if [ "$CODERABBIT_ISSUE_BLOCKERS" != "0" ]; then
@@ -143,14 +151,14 @@ else
   fi
 fi
 
-if ! REVIEW_COMMENTS_JSON="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/comments" 2>/tmp/pr-review-comments-error.txt)"; then
-  add_blocker "CodeRabbit review comments could not be read: $(cat /tmp/pr-review-comments-error.txt)."
+if ! REVIEW_COMMENTS_JSON="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/comments" 2>"$REVIEW_COMMENTS_ERROR_FILE")"; then
+  add_blocker "CodeRabbit review comments could not be read: $(<"$REVIEW_COMMENTS_ERROR_FILE")."
 else
-  CODERABBIT_REVIEW_BLOCKERS="$(printf '%s' "$REVIEW_COMMENTS_JSON" | jq -s --arg head_date "$HEAD_COMMIT_DATE" --arg head_sha "$HEAD_SHA" --arg pattern "$CODERABBIT_BLOCKING_PATTERN" '
+  CODERABBIT_REVIEW_BLOCKERS="$(printf '%s' "$REVIEW_COMMENTS_JSON" | jq -s --arg head_sha "$HEAD_SHA" --arg pattern "$CODERABBIT_BLOCKING_PATTERN" '
     [.[][]
       | select((.user.login // "") | test("coderabbit"; "i"))
       | select((.body // "") | test($pattern; "i"))
-      | select(((.commit_id // "") == $head_sha) or ((.original_commit_id // "") == $head_sha) or ((.created_at // "") >= $head_date) or ((.body // "") | contains($head_sha)))]
+      | select(((.commit_id // "") == $head_sha) or ((.original_commit_id // "") == $head_sha) or ((.body // "") | contains($head_sha)))]
     | length'
   )"
   if [ "$CODERABBIT_REVIEW_BLOCKERS" != "0" ]; then

@@ -70,15 +70,26 @@ def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
     assert any(
-        "update emails set user_id" in statement
-        and "where user_id is null" in statement
+        "update emails" in statement
+        and "set user_id" in statement
+        and "organization_id = :organization_id" in statement
+        and "where user_id is null and organization_id is null" in statement
         for statement in statements
     )
+    assert sum("update emails" in statement for statement in statements) == 1
+
+
+def test_schema_backfill_stops_partially_owned_legacy_rows(monkeypatch):
+    monkeypatch.setenv("NARUON_IMPORT_USER_ID", "import-user")
+    monkeypatch.setenv("NARUON_IMPORT_ORGANIZATION_ID", "import-org")
+
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
     assert any(
-        "update emails set organization_id" in statement
-        and "where organization_id is null" in statement
+        "where user_id is null and organization_id is null" in statement
         for statement in statements
     )
+    assert any("existing emails require explicit non-default" in statement for statement in statements)
 
 
 def test_schema_backfill_rejects_default_owner_ids(monkeypatch):

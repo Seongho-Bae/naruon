@@ -42,13 +42,14 @@ def schema_backfill_sql():
         statements.extend(
             [
                 text(
-                    "UPDATE emails SET user_id = :user_id "
-                    "WHERE user_id IS NULL"
-                ).bindparams(user_id=backfill_user_id),
-                text(
-                    "UPDATE emails SET organization_id = :organization_id "
-                    "WHERE organization_id IS NULL"
-                ).bindparams(organization_id=backfill_organization_id),
+                    "UPDATE emails "
+                    "SET user_id = :user_id, "
+                    "organization_id = :organization_id "
+                    "WHERE user_id IS NULL AND organization_id IS NULL"
+                ).bindparams(
+                    user_id=backfill_user_id,
+                    organization_id=backfill_organization_id,
+                ),
             ]
         )
     statements.extend(

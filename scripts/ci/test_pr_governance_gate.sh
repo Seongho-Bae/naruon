@@ -102,6 +102,9 @@ if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/issues/42/comments
       coderabbit_blocking_comment)
         printf '[{"id":777,"user":{"login":"coderabbitai[bot]"},"created_at":"2026-05-19T00:01:00Z","body":"Pre-merge warning for 0123456789abcdef0123456789abcdef01234567"}]'
         ;;
+      coderabbit_stale_blocking_comment)
+        printf '[{"id":777,"user":{"login":"coderabbitai[bot]"},"created_at":"2026-05-19T00:01:00Z","body":"Pre-merge warning for older head"}]'
+        ;;
       *)
         printf '[]'
         ;;
@@ -113,7 +116,17 @@ if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/issues/42/comments
 fi
 
 if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/pulls/42/comments'; then
-  printf '[]'
+  case "${GH_SCENARIO:-pass}" in
+    coderabbit_current_review_comment)
+      printf '[{"id":888,"user":{"login":"coderabbitai[bot]"},"commit_id":"0123456789abcdef0123456789abcdef01234567","original_commit_id":"old","created_at":"2026-05-19T00:01:00Z","body":"Potential issue on current head"}]'
+      ;;
+    coderabbit_stale_review_comment)
+      printf '[{"id":888,"user":{"login":"coderabbitai[bot]"},"commit_id":"old","original_commit_id":"old","created_at":"2026-05-19T00:01:00Z","body":"Potential issue on stale head"}]'
+      ;;
+    *)
+      printf '[]'
+      ;;
+  esac
   exit 0
 fi
 
@@ -265,6 +278,35 @@ assert_coderabbit_blocking_issue_comment_blocks() {
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
 }
 
+assert_coderabbit_stale_issue_comment_does_not_block() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate coderabbit_stale_blocking_comment "$temp_dir"
+
+  assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
+  assert_not_in_file 'Current-head CodeRabbit issue comment' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+}
+
+assert_coderabbit_current_review_comment_blocks() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate coderabbit_current_review_comment "$temp_dir"
+
+  assert_in_file 'Current-head CodeRabbit review comment has blocking warning/failure evidence' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+}
+
+assert_coderabbit_stale_review_comment_does_not_block() {
+  local temp_dir
+  temp_dir="$(mktemp -d)"
+  run_gate coderabbit_stale_review_comment "$temp_dir"
+
+  assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
+  assert_not_in_file 'Current-head CodeRabbit review comment' "$temp_dir/gh.log"
+  assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+}
+
 assert_changes_requested_creates_marker_comment() {
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -297,6 +339,9 @@ assert_coderabbit_failure_creates_marker_comment
 assert_coderabbit_neutral_without_skip_evidence_blocks
 assert_coderabbit_review_skipped_neutral_is_ready_without_merge
 assert_coderabbit_blocking_issue_comment_blocks
+assert_coderabbit_stale_issue_comment_does_not_block
+assert_coderabbit_current_review_comment_blocks
+assert_coderabbit_stale_review_comment_does_not_block
 assert_changes_requested_creates_marker_comment
 assert_passing_gate_is_metadata_only_without_merge
 

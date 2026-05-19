@@ -161,10 +161,11 @@ Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
 The browser API client reads `naruon_session_token` from local storage and sends
-it as the bearer session on signed routes before falling back to local
-development identity headers. UI flows that create source-linked tasks or other
-server-side writes must keep that signed-session path covered in fast tests and
-E2E mocks so authenticated backend behavior is not masked by stale fixtures.
+it as the bearer session on signed routes. Any local development identity-header
+flow is limited to explicit dev-only, unsigned/test paths and is not accepted by
+authenticated runtime dependencies. UI flows that create source-linked tasks or
+other server-side writes must keep that signed-session path covered in fast tests
+and E2E mocks so authenticated backend behavior is not masked by stale fixtures.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
 an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,
