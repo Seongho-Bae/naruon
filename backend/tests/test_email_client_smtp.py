@@ -22,10 +22,16 @@ def test_smtp_host_policy_denies_empty_allowlist_before_dns(monkeypatch):
         email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
 
 
-def test_smtp_host_policy_keeps_empty_allowlist_guard_explicit():
-    source = inspect.getsource(email_client.validate_smtp_host)
+def test_smtp_allowed_host_helper_fails_closed_when_allowlist_empty(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "")
 
-    assert "if not allowed_hosts or" not in source
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client._validate_allowed_smtp_host("smtp.example.com")
+
+
+def test_smtp_host_policy_keeps_empty_allowlist_guard_explicit():
+    source = inspect.getsource(email_client._validate_allowed_smtp_host)
+
     assert "if not allowed_hosts:" in source
     assert "if normalized_host not in allowed_hosts:" in source
 

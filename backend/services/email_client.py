@@ -69,6 +69,21 @@ def _parse_allowed_smtp_ports() -> set[int]:
     return allowed_ports
 
 
+def _parse_allowed_smtp_hosts() -> set[str]:
+    return _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
+
+
+def _validate_allowed_smtp_host(normalized_host: str) -> None:
+    """Fail closed unless the SMTP host is explicitly operator-allowlisted."""
+    allowed_hosts = _parse_allowed_smtp_hosts()
+    if not allowed_hosts:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    if any("*" in allowed_host for allowed_host in allowed_hosts):
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    if normalized_host not in allowed_hosts:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+
+
 def _normalize_smtp_host(host: str) -> str:
     candidate = host.strip().lower().rstrip(".")
     if not candidate:
@@ -103,13 +118,7 @@ def _validate_public_ip_address(address: str) -> None:
 def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     """Validate an outbound SMTP host against operator policy and SSRF guards."""
     normalized_host = _normalize_smtp_host(host)
-    allowed_hosts = _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
-    if not allowed_hosts:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    if any("*" in allowed_host for allowed_host in allowed_hosts):
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    if normalized_host not in allowed_hosts:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    _validate_allowed_smtp_host(normalized_host)
 
     try:
         _validate_public_ip_address(normalized_host)
