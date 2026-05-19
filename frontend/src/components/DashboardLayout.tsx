@@ -301,7 +301,7 @@ export function DashboardLayout({
           <div className="flex items-center gap-3">
             <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} priority style={{ width: '150px', height: '40px' }} />
           </div>
-          <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
+          <div data-testid="sidebar-brand-card" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
             <p className="text-sm font-bold text-foreground">흐름을 건너, 더 나은 판단과 실행으로.</p>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
               이메일, 일정, 관계와 결정을 하나의 맥락으로 연결합니다.
@@ -433,6 +433,27 @@ export function DashboardLayout({
               type="search"
             />
           </label>
+          <section aria-label="Desktop startup preference" className="hidden shrink-0 items-center gap-1 rounded-2xl border border-border bg-background/80 p-1 shadow-sm lg:flex">
+            <span className="px-2 text-[11px] font-black text-muted-foreground">시작 화면</span>
+            {startupViewItems.map(({ label, view, description }) => {
+              const active = startupView === view;
+              return (
+                <button
+                  key={view}
+                  type="button"
+                  data-desktop-startup-view={view}
+                  aria-pressed={active}
+                  title={description}
+                  onClick={() => handleStartupViewChange(view)}
+                  className={`h-8 rounded-xl px-2 text-[11px] font-black transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </section>
           <div data-testid="header-action-group" className="ml-auto hidden shrink-0 flex-wrap items-center justify-end gap-2 lg:flex">
             {headerActions.map(({ label, action, icon: Icon }) => (
               <HeaderActionButton key={action} label={label} action={action} icon={Icon} />
@@ -613,7 +634,7 @@ export function DashboardLayout({
         </div>
       </div>
 
-      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-3 z-[60] grid grid-cols-5 items-center rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
+      <nav aria-label="Mobile workspace sections" className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-[60] grid grid-cols-5 items-center rounded-3xl border border-border bg-card/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur-xl lg:hidden">
         {mobileWorkspaceItems.slice(0, 2).map(({ label, icon: Icon, view }) => {
           const active = activeMobileView === view;
           return (
@@ -666,7 +687,7 @@ export function DashboardLayout({
         role="dialog"
         aria-label="AI 빠른 실행 메뉴"
         popover="auto"
-        className="fixed inset-x-5 bottom-24 z-[70] rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop:bg-transparent lg:hidden"
+        className="fixed inset-x-5 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[70] max-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop:bg-transparent lg:hidden"
       >
           <div className="mb-3 flex items-center justify-between">
             <div>

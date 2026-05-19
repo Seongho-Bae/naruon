@@ -10,3 +10,12 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
+
+## PR automation and review defaults
+
+- Follow `docs/development/merge-gate-policy.md` for PR gate interpretation.
+- PR Governance must stay metadata-only: no PR-head checkout, no admin merge, no
+  review dismissal, and no security-check suppression.
+- Pending/queued checks and pending CodeRabbit evidence are wait states, not hard
+  failures. Hard blockers should be reported through the idempotent
+  `<!-- pr-governance:metadata-gate -->` comment path.

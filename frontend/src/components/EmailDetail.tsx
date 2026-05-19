@@ -286,7 +286,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       </div>
       <Separator />
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-6 bg-background/50 p-6">
+        <div className="flex flex-col gap-6 bg-background/50 p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
           
           <InsightCard
             title="맥락 종합"
@@ -316,6 +316,16 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing ? "동기화 중" : "캘린더 반영"}
+                  </Button>
+                )}
+                {llmData.todos.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCreateTask}
+                    className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
+                  >
+                    할 일 만들기
                   </Button>
                 )}
                 {syncStatus && (

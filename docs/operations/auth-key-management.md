@@ -56,6 +56,29 @@
 - Production still needs key rotation runbooks and separate secret scopes for
   `AUTH_SESSION_HMAC_SECRET`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
+## Universal RBAC/ABAC contract
+
+- Roles such as SaaS admin, enterprise admin, security operator, IT operator,
+  B2B2C tenant admin, B2C member, SOHO owner, and delegated support engineer are
+  authorization inputs, not final decisions by themselves.
+- ABAC denies for data region, mailbox/source ownership, consent, delegation
+  expiry, workspace/group scope, provider capability, legal hold, and customer
+  policy must take precedence over RBAC allows.
+- Runtime claims must be signed and server-verifiable. Public headers from
+  browsers or edge proxies are not identity material unless they are backed by a
+  validated OIDC/JWT or internal signed session envelope.
+
+## Keycloak/Casdoor decision path
+
+- Keycloak is the default enterprise candidate when realm federation, identity
+  brokering, authorization services, admin separation, and audit requirements are
+  more important than footprint.
+- Casdoor remains the lighter candidate when a deployment values simpler
+  self-hosting, Casbin-style policy integration, and lower operational overhead.
+- Either option must preserve Naruon's signed claim contract: explicit subject,
+  organization, group/workspace, role, delegation, expiry, and provider/source
+  ownership claims are required before production multi-user access is claimed.
+
 ## 다음 결정
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,

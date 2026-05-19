@@ -4,10 +4,13 @@
 
 ```mermaid
 flowchart LR
-  UI[Next.js frontend] --> API[FastAPI backend]
+  UI[Next.js frontend] --> API[FastAPI backend / Naruon control plane]
   API --> DB[(Postgres + pgvector)]
   API --> LLM[OpenAI APIs when configured]
-  API --> SMTP[SMTP when configured]
+  API --> CONN[Outbound-only self-hosted connector]
+  CONN --> MAIL[Customer IMAP/POP3/SMTP]
+  CONN --> DAV[Customer CalDAV/CardDAV/WebDAV]
+  API --> SMTP[Direct SMTP only when operator-allowed]
 ```
 
 The backend owns persistence, threading, search, AI summaries, and outbound
@@ -42,6 +45,17 @@ not globally. Fixture import upserts and reply-thread lookup use the same owner
 scope so a reused RFC Message-ID from another organization cannot overwrite an
 email row or attach a reply to another tenant's thread.
 
+Customer-owned mail, CalDAV/CardDAV, and WebDAV systems remain the durable
+source-of-truth. Naruon can cache/index metadata and generate writeback intents,
+but provider writes must use server-authoritative source records, ownership
+checks, and conflict-aware provider revisions such as ETag/If-Match. The detailed
+contract is documented in
+`docs/operations/source-of-truth-and-writeback-sovereignty.md`.
+
+Authorization is RBAC plus ABAC with deny precedence. A broad SaaS/admin role does
+not bypass data-region, consent, delegation, workspace, group, mailbox ownership,
+or source capability denies; see `docs/operations/auth-key-management.md`.
+
 ## Local deployment boundary
 
 `docker-compose.yml` provides the blessed local stack: Postgres with pgvector,
@@ -65,6 +79,11 @@ rejects loopback, link-local, private, reserved, and otherwise non-global DNS
 answers before opening a pinned socket to the selected global address, so stale
 database rows or direct service calls fail closed instead of reaching internal
 network targets or re-resolving DNS after validation.
+
+Private-network IMAP/SMTP/CalDAV/CardDAV/WebDAV access belongs behind the
+outbound-only self-hosted connector boundary. GitHub self-hosted runners can
+smoke-test internal mail connectivity, but production relay/proxy access should
+use a connector artifact and never imply inbound MX hosting.
 
 ## CI security boundary
 

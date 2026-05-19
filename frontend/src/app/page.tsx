@@ -418,7 +418,7 @@ export default function Home() {
             id="mobile-search"
             aria-label="모바일 맥락 검색"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${effectiveMobileView === 'search' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-28`}
+            className={`mobile-workspace-panel mobile-workspace-panel-search h-full ${effectiveMobileView === 'search' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]`}
           >
             {effectiveMobileView === 'search' ? <MobileSearchPanel /> : null}
           </section>
@@ -426,7 +426,7 @@ export default function Home() {
             id="mobile-actions"
             aria-label="모바일 AI 실행"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4 pb-28`}
+            className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]`}
           >
             <div className="mb-4 rounded-2xl border border-primary/15 bg-card p-4 shadow-sm">
               <div className="flex items-center gap-2">
@@ -447,7 +447,7 @@ export default function Home() {
             id="mobile-calendar"
             aria-label="모바일 일정 연결"
             role="region"
-            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${effectiveMobileView === 'calendar' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-28`}
+            className={`mobile-workspace-panel mobile-workspace-panel-calendar h-full ${effectiveMobileView === 'calendar' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-card p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]`}
           >
             {effectiveMobileView === 'calendar' ? <MobileCalendarPanel /> : null}
           </section>

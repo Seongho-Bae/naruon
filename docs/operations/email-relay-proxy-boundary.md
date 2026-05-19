@@ -32,6 +32,17 @@
   증명을 바탕으로 TCP/TLS 기반의 메일 프로토콜 클라이언트(Proxy) 역할만을
   수행합니다.
 
+## Outbound-only production connector
+
+- Production private-network access should be handled by a customer-hosted
+  connector, not by turning the SaaS backend into a public mail server.
+- The connector opens an outbound control-plane channel to `naruon.net` and uses
+  local client adapters for IMAP, POP3, SMTP, CalDAV, CardDAV, and WebDAV.
+- The `/api/runner-config` manifest describes this production connector role, but
+  GitHub self-hosted runners remain CI smoke infrastructure only.
+- Customer mail/calendar/file systems remain the source-of-truth; see
+  `docs/operations/source-of-truth-and-writeback-sovereignty.md`.
+
 ## 금지 사항
 
 - Do not describe Naruon as an SMTP server, IMAP server, MX host, or mail transfer

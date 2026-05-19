@@ -16,7 +16,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(aiHubNav.getByRole('link', { name: /맥락 종합/ })).toHaveAttribute('href', '/ai-hub#context');
   await expect(aiHubNav.getByRole('link', { name: /판단 포인트/ })).toHaveAttribute('href', '/ai-hub#decisions');
   await expect(aiHubNav.getByRole('link', { name: /실행 항목/ })).toHaveAttribute('href', '/ai-hub#actions');
-  await expect(page.getByText('흐름을 건너, 더 나은 판단과 실행으로.')).toBeVisible();
+  await expect(page.locator('[data-testid="sidebar-brand-card"]')).toBeVisible();
   const header = page.locator('header[aria-label="Naruon workspace header"]');
   await expect(page.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'AI 허브' })).toHaveAttribute('href', '/ai-hub');
@@ -32,12 +32,38 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(desktopWorkspace.getByText('메일을 선택하세요')).toBeVisible();
   await expect(page).not.toHaveURL(/#mobile-detail$/);
 
+  const desktopStartup = page.getByRole('region', { name: 'Desktop startup preference' });
+  await expect(desktopStartup).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '대시보드' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '이메일' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '일정' })).toBeVisible();
+
   expect(
     requestedUrls.some((url) => {
       const hostname = new URL(url).hostname;
       return hostname === 'fonts.googleapis.com' || hostname === 'fonts.gstatic.com';
     }),
   ).toBe(false);
+});
+
+test('keeps the short mobile AI quick action menu inside the viewport with scrollable actions', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await mockDashboardApi(page);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
+
+  const menu = page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  const bounds = await menu.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    return { top: rect.top, bottom: rect.bottom, viewportHeight: window.innerHeight, overflowY: style.overflowY };
+  });
+  expect(bounds.top).toBeGreaterThanOrEqual(0);
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.viewportHeight);
+  expect(['auto', 'scroll']).toContain(bounds.overflowY);
 });
 
 test('renders compact mobile navigation without hover-only controls', async ({ page }) => {
@@ -181,6 +207,7 @@ for (const section of [
 }
 
 for (const panel of [
+  { hash: 'mobile-inbox', region: '모바일 받은편지함', finalText: 'Q2 출시 계획 및 우선순위 조정', oldPlaceholder: '사람 결과 준비 중' },
   { hash: 'mobile-search', region: '모바일 맥락 검색', finalText: '강민수 의사결정 메모', oldPlaceholder: '사람 결과 준비 중' },
   { hash: 'mobile-calendar', region: '모바일 일정 연결', finalText: '파트너 미팅 일정 확정', oldPlaceholder: '디자인 리뷰 후속 조치' },
 ] as const) {
@@ -205,3 +232,30 @@ for (const panel of [
     expect(bottomGap).toBeGreaterThanOrEqual(0);
   });
 }
+
+test('keeps selected mobile email detail and actions above the bottom navigation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await mockDashboardApi(page);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /김지현 PM/ }).click();
+
+  const detailRegion = page.getByRole('region', { name: '모바일 메일 상세' });
+  await expect(detailRegion).toBeVisible();
+  await expect(detailRegion.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
+  await expect(detailRegion.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
+  await expect(detailRegion.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+
+  const replyButton = detailRegion.getByRole('button', { name: '답장 보내기' });
+  await replyButton.scrollIntoViewIfNeeded();
+  const bottomGap = await replyButton.evaluate((element) => {
+    const item = element.getBoundingClientRect();
+    const nav = document.querySelector('nav[aria-label="Mobile workspace sections"]')?.getBoundingClientRect();
+    return nav ? nav.top - item.bottom : 0;
+  });
+  expect(bottomGap).toBeGreaterThanOrEqual(0);
+
+  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
+  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '할 일 만들기' }).click();
+  await expect(detailRegion.getByText('2개 실행 항목을 할 일로 정리했습니다.')).toBeVisible();
+});

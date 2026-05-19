@@ -86,7 +86,7 @@ describe("DashboardLayout", () => {
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
     expect(sidebar?.textContent ?? "").toContain("Naruon");
-    expect(sidebar?.textContent ?? "").toContain("흐름을 건너, 더 나은 판단과 실행으로.");
+    expect(sidebar?.querySelector('[data-testid="sidebar-brand-card"]')).not.toBeNull();
     expect(nav?.textContent ?? "").toContain("받은 메일");
     expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
@@ -104,6 +104,19 @@ describe("DashboardLayout", () => {
     });
 
     expect(headerEvents).toContain("reply-draft");
+
+    const desktopStartupPreference = container.querySelector<HTMLElement>('section[aria-label="Desktop startup preference"]');
+    expect(desktopStartupPreference).not.toBeNull();
+    expect(desktopStartupPreference?.textContent ?? "").toContain("시작 화면");
+    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="dashboard"]')?.textContent).toContain("대시보드");
+    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="email"]')?.textContent).toContain("이메일");
+    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="calendar"]')?.textContent).toContain("일정");
+
+    act(() => {
+      desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="dashboard"]')?.click();
+    });
+
+    expect(localStorage.getItem("naruon_startup_view")).toBe("dashboard");
 
     act(() => {
       mobileMenuButton?.click();

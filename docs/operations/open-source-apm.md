@@ -18,6 +18,16 @@
   dependency calls, and worker-loop spans, while redacting email body and secret
   values.
 
+## North-star telemetry targets
+
+- Connector heartbeat, version, queue depth, and outbound control-channel health.
+- Sync lag per mailbox/calendar/file source, provider throttling, retry budgets,
+  and conflict rates.
+- Writeback intent lifecycle: selected source, ETag/If-Match requirement,
+  provider response class, conflict outcome, and audit event id.
+- Tenant/workspace latency, error budget, AI action audit events, and prompt/model
+  usage without logging email bodies, secrets, DSNs, or raw provider tokens.
+
 ## 도입 기준
 
 - Add instrumentation behind explicit environment variables.

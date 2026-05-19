@@ -124,7 +124,7 @@ export function EmailList({
         </form>
       </div>
       <ScrollArea className="flex-1 w-full">
-        <div className="flex flex-col gap-2 p-3">
+        <div className="flex flex-col gap-2 p-3 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-3">
           {loading ? (
             <div role="status" aria-live="polite" className="rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">메일을 불러오는 중입니다...</div>
           ) : error ? (

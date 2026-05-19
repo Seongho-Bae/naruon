@@ -27,8 +27,25 @@ test('submits branded inbox search against the search API', async ({ page }) => 
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByLabel('Search emails').fill('출시');
-  await page.getByRole('button', { name: '검색' }).click();
+  const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
+  await desktopWorkspace.getByLabel('Search emails').fill('출시');
+  await desktopWorkspace.getByRole('button', { name: '검색' }).click();
 
-  await expect(page.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
+  await expect(desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
+});
+
+test('selects an email on mobile and executes visible detail task actions', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockDashboardApi(page);
+
+  await page.goto('/');
+  await page.getByRole('button', { name: /김지현 PM/ }).click();
+
+  const detailRegion = page.getByRole('region', { name: '모바일 메일 상세' });
+  await expect(detailRegion).toBeVisible();
+  await expect(detailRegion.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
+  await expect(detailRegion.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
+  await expect(detailRegion.getByRole('heading', { name: '실행 항목' })).toBeVisible();
+  await detailRegion.getByRole('button', { name: '할 일 만들기' }).click();
+  await expect(detailRegion.getByText('2개 실행 항목을 할 일로 정리했습니다.')).toBeVisible();
 });

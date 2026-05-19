@@ -18,6 +18,14 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
   code, clone the head branch, dismiss reviews, or use admin merge. It may read
   PR/check/review-thread metadata, post blocker comments, and enable auto-merge
   with `--match-head-commit` only after current-head gates are satisfied.
+- PR Governance runs trusted-base logic only. The workflow materializes the base
+  repository script from a trusted tarball and must not execute PR-head scripts.
+- Pending, queued, requested, waiting, or in-progress checks are wait states, not
+  hard failure findings. Failed, cancelled, timed-out, and action-required states
+  are blockers.
+- Blocker comments use the idempotent
+  `<!-- pr-governance:metadata-gate -->` marker and are patched in place instead
+  of duplicated on repeated workflow events.
 - GitHub rulesets must use `required_approving_review_count=0` so GitHub does
   not require a human `APPROVED` review when robot-review policy applies.
 - GitHub rulesets must keep `required_review_thread_resolution=true`.

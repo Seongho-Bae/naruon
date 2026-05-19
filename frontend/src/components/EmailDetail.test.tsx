@@ -262,6 +262,55 @@ describe("EmailDetail", () => {
     expect(cards.find((card) => card.getAttribute("aria-label") === "답장 실행")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
   });
 
+  it("lets users create tasks from visible execution items in the email detail", async () => {
+    const email: TestEmail = {
+      id: 14,
+      message_id: "<tasks@example.com>",
+      thread_id: null,
+      sender: "tasks@example.com",
+      recipients: "user@example.com",
+      subject: "Visible task action",
+      date: "2026-05-18T09:00:00Z",
+      body: "Please convert these follow-ups into tasks.",
+    };
+
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/14")) return Promise.resolve(jsonResponse(email));
+      if (url.endsWith("/api/llm/summarize")) {
+        return Promise.resolve(jsonResponse({
+          summary: "후속 실행 항목을 정리해야 합니다.",
+          todos: ["담당자 확인", "일정 공유"],
+        }));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailDetail emailId={14} />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("후속 실행 항목을 정리해야 합니다.") ?? false);
+
+    const actionCard = Array.from(container.querySelectorAll<HTMLElement>('article[data-insight-card="true"]')).find(
+      (card) => card.getAttribute("aria-label") === "실행 항목",
+    );
+    const createTaskButton = Array.from(actionCard?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
+      (button) => button.textContent?.includes("할 일 만들기"),
+    );
+
+    expect(createTaskButton).not.toBeUndefined();
+
+    await act(async () => {
+      createTaskButton?.click();
+    });
+
+    expect(actionCard?.textContent).toContain("2개 실행 항목을 할 일로 정리했습니다.");
+  });
+
   it("clears conversation loading when the latest email has no thread", async () => {
     const threadedEmail: TestEmail = {
       id: 1,
