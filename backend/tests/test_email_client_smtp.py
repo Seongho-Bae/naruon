@@ -1,4 +1,5 @@
 import inspect
+import asyncio
 import socket
 
 import pytest
@@ -57,6 +58,20 @@ def test_smtp_port_policy_rejects_configured_non_smtp_ports(monkeypatch):
         email_client.validate_smtp_port(80)
 
 
+def test_smtp_ip_policy_uses_explicit_ssrf_denylists():
+    source = inspect.getsource(email_client._validate_public_ip_address)
+
+    for guard in (
+        "is_private",
+        "is_loopback",
+        "is_link_local",
+        "is_reserved",
+        "is_unspecified",
+        "is_multicast",
+    ):
+        assert guard in source
+
+
 class FakeSmtpClient:
     def __init__(self, *, fail_send=False):
         self.fail_send = fail_send
@@ -109,6 +124,14 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
         raise AssertionError("aiosmtplib.send must not resolve the hostname again")
 
     smtp_socket = _make_socket()
+    smtp_destination = email_client.ValidatedSmtpDestination(
+        hostname="smtp.example.com",
+        port=587,
+        family=socket.AF_INET,
+        socktype=socket.SOCK_STREAM,
+        proto=6,
+        sockaddr=("8.8.8.8", 587),
+    )
 
     async def fake_pinned_send(message, **kwargs):
         assert kwargs["smtp_socket"] is smtp_socket
@@ -116,9 +139,8 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
         assert kwargs["smtp_port"] == 587
         return {"status": "sent", "simulated": False}
 
-    async def fake_connect_validated_socket(smtp_server, smtp_port):
-        assert smtp_server == "smtp.example.com"
-        assert smtp_port == 587
+    async def fake_connect_validated_socket(destination):
+        assert destination is smtp_destination
         return smtp_socket
 
     monkeypatch.setattr("services.email_client.aiosmtplib.send", fail_legacy_send)
@@ -137,7 +159,9 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
 
     def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
         validate_calls.append(resolve_host)
-        return smtp_server, smtp_port
+        assert smtp_server == "smtp.example.com"
+        assert smtp_port == 587
+        return smtp_destination
 
     monkeypatch.setattr(
         "services.email_client.validate_smtp_destination",
@@ -159,6 +183,49 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_connect_validated_socket_uses_pre_resolved_address_without_dns(
+    monkeypatch,
+):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "587")
+    getaddrinfo_calls = []
+
+    def fake_getaddrinfo(*args, **kwargs):
+        getaddrinfo_calls.append((args, kwargs))
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 587))]
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fake_getaddrinfo)
+
+    destination = email_client.validate_smtp_destination("smtp.example.com", 587)
+
+    def fail_getaddrinfo(*args, **kwargs):
+        raise AssertionError("connection must use the pre-resolved SMTP address")
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
+    connected_sockaddrs = []
+    loop = asyncio.get_running_loop()
+
+    async def fake_sock_connect(sock, sockaddr):
+        connected_sockaddrs.append(sockaddr)
+
+    monkeypatch.setattr(loop, "sock_connect", fake_sock_connect)
+
+    smtp_socket = await email_client._connect_validated_smtp_socket(destination)
+    try:
+        assert connected_sockaddrs == [("8.8.8.8", 587)]
+    finally:
+        smtp_socket.close()
+    assert len(getaddrinfo_calls) == 1
+
+
+def test_pinned_starttls_uses_existing_transport_helper():
+    source = inspect.getsource(email_client._send_pinned_smtp_message)
+
+    assert ".starttls(" not in source
+    assert "_starttls_existing_transport" in source
+
+
+@pytest.mark.asyncio
 async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch):
     smtp_socket = _make_socket()
     fake_client = FakeSmtpClient()
@@ -177,7 +244,17 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
         }
         return fake_client
 
+    starttls_hostnames = []
+
+    async def fake_starttls_existing_transport(client, *, tls_sni_hostname):
+        assert client is fake_client
+        starttls_hostnames.append(tls_sni_hostname)
+
     monkeypatch.setattr("services.email_client._build_smtp_client", fake_build_client)
+    monkeypatch.setattr(
+        "services.email_client._starttls_existing_transport",
+        fake_starttls_existing_transport,
+    )
 
     result = await _send_pinned_smtp_message(
         message,
@@ -191,7 +268,7 @@ async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch)
     assert result == {"status": "sent", "simulated": False}
     assert fake_client.entered is True
     assert fake_client.exited is True
-    assert fake_client.starttls_hostname == "smtp.example.com"
+    assert starttls_hostnames == ["smtp.example.com"]
     assert fake_client.login_args == ("testuser", "secret")
     assert fake_client.sent_message is message
     assert smtp_socket.fileno() == -1
@@ -217,8 +294,17 @@ def test_implicit_tls_smtp_client_keeps_original_tls_hostname():
 async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
     fake_client = FakeSmtpClient(fail_send=True)
     smtp_socket = _make_socket()
+    smtp_destination = email_client.ValidatedSmtpDestination(
+        hostname="smtp.example.com",
+        port=587,
+        family=socket.AF_INET,
+        socktype=socket.SOCK_STREAM,
+        proto=6,
+        sockaddr=("8.8.8.8", 587),
+    )
 
-    async def fake_connect_validated_socket(*args, **kwargs):
+    async def fake_connect_validated_socket(destination):
+        assert destination is smtp_destination
         return smtp_socket
 
     def fake_build_client(**kwargs):
@@ -232,7 +318,9 @@ async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
 
     def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
         assert resolve_host is True
-        return smtp_server, smtp_port
+        assert smtp_server == "smtp.example.com"
+        assert smtp_port == 587
+        return smtp_destination
 
     monkeypatch.setattr(
         "services.email_client.validate_smtp_destination",

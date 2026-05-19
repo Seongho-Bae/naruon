@@ -3,8 +3,9 @@ import base64
 import ipaddress
 import logging
 import socket
+from dataclasses import dataclass
 from email.message import EmailMessage
-from typing import TypedDict, cast
+from typing import Any, TypedDict, cast
 from urllib.parse import urlsplit
 
 import aiosmtplib
@@ -12,6 +13,7 @@ from aiosmtplib.errors import (
     SMTPConnectError,
     SMTPConnectResponseError,
     SMTPConnectTimeoutError,
+    SMTPException,
     SMTPServerDisconnected,
     SMTPTimeoutError,
 )
@@ -26,6 +28,16 @@ SMTP_HOST_NOT_ALLOWED = "SMTP server is not allowed"
 SMTP_PORT_NOT_ALLOWED = "SMTP port is not allowed"
 SMTP_TIMEOUT_SECONDS = 60
 SMTP_EGRESS_PORTS = {25, 465, 587}
+
+
+@dataclass(frozen=True)
+class ValidatedSmtpDestination:
+    hostname: str
+    port: int
+    family: int
+    socktype: int
+    proto: int
+    sockaddr: tuple[Any, ...]
 
 
 def generate_oauth2_string(user: str, access_token: str) -> bytes:
@@ -77,7 +89,15 @@ def _validate_public_ip_address(address: str) -> None:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
         raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
-    if not ip_address.is_global:
+    if (
+        ip_address.is_private
+        or ip_address.is_loopback
+        or ip_address.is_link_local
+        or ip_address.is_reserved
+        or ip_address.is_unspecified
+        or ip_address.is_multicast
+        or not ip_address.is_global
+    ):
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
 
 
@@ -124,20 +144,37 @@ def validate_smtp_destination(
     smtp_port: int,
     *,
     resolve_host: bool = True,
-) -> tuple[str, int]:
+) -> ValidatedSmtpDestination:
     """Validate SMTP destination before any server-side network connection."""
-    normalized_host = validate_smtp_host(smtp_server, resolve_host=resolve_host)
+    normalized_host = validate_smtp_host(smtp_server, resolve_host=False)
     validated_port = validate_smtp_port(smtp_port)
-    return normalized_host, validated_port
+    if resolve_host:
+        family, socktype, proto, sockaddr = _resolve_smtp_connect_address(
+            normalized_host, validated_port
+        )
+    else:
+        family, socktype, proto, sockaddr = (
+            socket.AF_UNSPEC,
+            socket.SOCK_STREAM,
+            0,
+            (normalized_host, validated_port),
+        )
+    return ValidatedSmtpDestination(
+        hostname=normalized_host,
+        port=validated_port,
+        family=family,
+        socktype=socktype,
+        proto=proto,
+        sockaddr=sockaddr,
+    )
 
 
-async def _resolve_smtp_connect_address(
+def _resolve_smtp_connect_address(
     smtp_server: str, smtp_port: int
 ) -> tuple[int, int, int, tuple]:
     """Resolve SMTP host once and return a globally-routable socket target."""
-    loop = asyncio.get_running_loop()
     try:
-        address_infos = await loop.getaddrinfo(
+        address_infos = socket.getaddrinfo(
             smtp_server, smtp_port, type=socket.SOCK_STREAM
         )
     except socket.gaierror as exc:
@@ -155,17 +192,18 @@ async def _resolve_smtp_connect_address(
 
 
 async def _connect_validated_smtp_socket(
-    smtp_server: str, smtp_port: int
+    smtp_destination: ValidatedSmtpDestination,
 ) -> socket.socket:
-    """Connect a non-blocking socket to the already validated SMTP address."""
-    family, socktype, proto, sockaddr = await _resolve_smtp_connect_address(
-        smtp_server, smtp_port
+    """Connect a non-blocking socket to the pre-resolved SMTP address."""
+    smtp_socket = socket.socket(
+        smtp_destination.family, smtp_destination.socktype, smtp_destination.proto
     )
-    smtp_socket = socket.socket(family, socktype, proto)
     smtp_socket.setblocking(False)
     try:
         await asyncio.wait_for(
-            asyncio.get_running_loop().sock_connect(smtp_socket, sockaddr),
+            asyncio.get_running_loop().sock_connect(
+                smtp_socket, smtp_destination.sockaddr
+            ),
             timeout=SMTP_TIMEOUT_SECONDS,
         )
     except Exception:
@@ -256,6 +294,32 @@ def _build_smtp_client(
     )
 
 
+async def _starttls_existing_transport(
+    client: aiosmtplib.SMTP, *, tls_sni_hostname: str
+) -> None:
+    """Upgrade the existing pinned SMTP transport to TLS without DNS or connect."""
+    await client._ehlo_or_helo_if_needed()
+    if client.protocol is None:
+        raise SMTPServerDisconnected("Server not connected")
+    if client.get_transport_info("sslcontext") is not None:
+        raise SMTPException("Connection already using TLS")
+    if not client.supports_extension("starttls"):
+        raise SMTPException("SMTP STARTTLS extension not supported by server.")
+
+    tls_context = client._get_tls_context()
+    # SMTPProtocol.start_tls wraps the current transport in TLS. It does not
+    # perform DNS resolution or create another outbound socket.
+    await client.protocol.start_tls(
+        tls_context,
+        server_hostname=tls_sni_hostname,
+        timeout=SMTP_TIMEOUT_SECONDS,
+    )
+    if client.protocol is None:
+        raise SMTPServerDisconnected("Connection lost")
+    client.transport = client.protocol.transport
+    client._reset_server_state()
+
+
 async def _send_pinned_smtp_message(
     message: EmailMessage,
     *,
@@ -274,7 +338,7 @@ async def _send_pinned_smtp_message(
         )
         async with client:
             if smtp_port != 465:
-                await client.starttls(server_hostname=smtp_server)
+                await _starttls_existing_transport(client, tls_sni_hostname=smtp_server)
             if smtp_username is not None:
                 await client.login(smtp_username, smtp_password or "")
             await client.send_message(message)
@@ -333,23 +397,25 @@ async def send_email(
         )
         return {"status": "simulated", "simulated": True}
 
-    smtp_server, smtp_port = validate_smtp_destination(smtp_server, smtp_port)
+    smtp_destination = validate_smtp_destination(smtp_server, smtp_port)
 
     try:
-        smtp_socket = await _connect_validated_smtp_socket(smtp_server, smtp_port)
+        smtp_socket = await _connect_validated_smtp_socket(smtp_destination)
         try:
             result = await _send_pinned_smtp_message(
                 message,
                 smtp_socket=smtp_socket,
-                smtp_server=smtp_server,
-                smtp_port=smtp_port,
+                smtp_server=smtp_destination.hostname,
+                smtp_port=smtp_destination.port,
                 smtp_username=smtp_username,
                 smtp_password=smtp_password,
             )
         finally:
             smtp_socket.close()
         logger.info(
-            "Successfully sent email to %s via %s", safe_to_address, smtp_server
+            "Successfully sent email to %s via %s",
+            safe_to_address,
+            smtp_destination.hostname,
         )
         return result
     except ValueError:
