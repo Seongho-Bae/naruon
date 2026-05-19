@@ -27,6 +27,7 @@ SMTP_HOST_NOT_ALLOWED = "SMTP server is not allowed"
 SMTP_PORT_NOT_ALLOWED = "SMTP port is not allowed"
 SMTP_TIMEOUT_SECONDS = 60
 SMTP_EGRESS_PORTS = {25, 465, 587}
+EMAIL_HEADER_NEWLINE_ERROR = "Email header fields must not contain newlines"
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,13 @@ def generate_oauth2_string(user: str, access_token: str) -> bytes:
 def _sanitize_log_value(value: str) -> str:
     """Remove CR/LF characters from user-provided values before logging."""
     return value.replace("\r", " ").replace("\n", " ")
+
+
+def _validate_email_header_value(value: str) -> str:
+    """Reject CR/LF input before it can be assigned to an email header."""
+    if "\r" in value or "\n" in value:
+        raise ValueError(EMAIL_HEADER_NEWLINE_ERROR)
+    return value
 
 
 def _parse_csv_values(value: str) -> set[str]:
@@ -348,13 +356,13 @@ def build_email_message(
 ) -> EmailMessage:
     """Build an outbound email message with optional threading headers."""
     message = EmailMessage()
-    message["From"] = from_address
-    message["To"] = to_address
-    message["Subject"] = subject
+    message["From"] = _validate_email_header_value(from_address)
+    message["To"] = _validate_email_header_value(to_address)
+    message["Subject"] = _validate_email_header_value(subject)
     if in_reply_to:
-        message["In-Reply-To"] = in_reply_to
+        message["In-Reply-To"] = _validate_email_header_value(in_reply_to)
     if references:
-        message["References"] = references
+        message["References"] = _validate_email_header_value(references)
     message.set_content(body)
     return message
 
