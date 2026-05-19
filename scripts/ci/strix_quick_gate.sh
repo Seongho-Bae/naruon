@@ -1295,6 +1295,7 @@ import sys
 text = Path(sys.argv[1]).read_text(encoding='utf-8', errors='replace')
 patterns = [
     re.compile(r'(?P<path>/workspace/[^\s`]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+):\d+'),
+    re.compile(r'<file>\s*(?P<path>/workspace/[^\s<`│]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)\s*</file>'),
     re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Target:(?:\*\*)?[ \t]*(?:File:[ \t]*)?(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
     re.compile(r'^[^\S\r\n│]*[│]?[ \t]*(?:\*\*)?Endpoint:(?:\*\*)?[ \t]*(?P<path>/workspace/[^\s`│]+|[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)', re.MULTILINE),
     re.compile(r'(?i)(?:in\s+)?file\s+`(?P<path>(?:\.\.?/)?[A-Za-z0-9_./\[\]-]+\.[A-Za-z0-9_]+)`'),

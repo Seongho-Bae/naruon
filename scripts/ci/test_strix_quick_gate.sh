@@ -1144,6 +1144,21 @@ EOS
 		echo "Penetration test failed: changed bracketed Next.js route finding"
 		exit 1
 		;;
+	pr-critical-changed-xml-file-location)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-changed-xml/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-changed-xml/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: HIGH
+<parameter=code_locations>
+  <location>
+	    <file>sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java</file>
+    <start_line>120</start_line>
+    <end_line>124</end_line>
+  </location>
+</parameter=code_locations>
+EOS
+		echo "Penetration test failed: changed XML file location finding"
+		exit 1
+		;;
 	pr-critical-unmapped)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities/vuln-0001.md" <<'EOS'
@@ -4300,6 +4315,27 @@ run_gate_case "pr-critical-changed-bracketed-next-route" \
 	"0" \
 	"pull_request" \
 	"frontend/src/app/labels/[slug]/page.tsx"
+
+run_gate_case "pr-critical-changed-xml-file-location" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
 run_gate_case "pr-critical-changed-absolute-target" \
 	"openai/gpt-4o-mini" \
