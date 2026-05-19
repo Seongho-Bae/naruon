@@ -1150,7 +1150,7 @@ EOS
 Severity: HIGH
 <parameter=code_locations>
   <location>
-	    <file>sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java</file>
+    <file>sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java</file>
     <start_line>120</start_line>
     <end_line>124</end_line>
   </location>
@@ -4427,7 +4427,7 @@ run_gate_case "pr-critical-changed-xml-file-location" \
 	"__DEFAULT__" \
 	"" \
 	"0" \
-	"MEDIUM" \
+	"HIGH" \
 	"0" \
 	"" \
 	"" \
