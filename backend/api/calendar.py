@@ -110,6 +110,18 @@ def _find_writeback_source_by_id(
     return None
 
 
+def _can_target_writeback_source(
+    target_source: WritebackSource, auth_context: AuthContext
+) -> bool:
+    if auth_context.role == "platform_admin":
+        return True
+    if target_source.organization_id != auth_context.organization_id:
+        return False
+    if auth_context.role == "organization_admin":
+        return True
+    return target_source.owner_id == auth_context.user_id
+
+
 def _authorize_targeted_writeback_source(
     sources: Sequence[WritebackSource],
     target_source_id: str,
@@ -122,10 +134,7 @@ def _authorize_targeted_writeback_source(
             detail="Not authorized for requested writeback source",
         )
 
-    if (
-        auth_context.role != "platform_admin"
-        and target_source.organization_id != auth_context.organization_id
-    ) or target_source.owner_id != auth_context.user_id:
+    if not _can_target_writeback_source(target_source, auth_context):
         raise HTTPException(
             status_code=403,
             detail="Not authorized for requested writeback source",

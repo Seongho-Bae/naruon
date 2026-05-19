@@ -371,6 +371,80 @@ def test_calendar_writeback_targeted_authorization_hides_source_existence(
     assert missing_response.json() == cross_org_response.json()
 
 
+def test_calendar_writeback_allows_org_admin_to_target_same_org_source(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="shared-calendar",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="other-user",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="shared-etag",
+            )
+        ]
+    )
+    org_admin_client = TestClient(
+        app,
+        headers={
+            "X-User-Id": "org-admin",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    )
+
+    response = org_admin_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "shared-calendar",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["target_source_id"] == "shared-calendar"
+
+
+def test_calendar_writeback_allows_platform_admin_to_target_any_org_source(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="cross-org-calendar",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="other-user",
+                organization_id="org-other",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="cross-org-etag",
+            )
+        ]
+    )
+    platform_admin_client = TestClient(
+        app,
+        headers={"X-User-Id": "platform-ops", "X-User-Role": "platform_admin"},
+    )
+
+    response = platform_admin_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "cross-org-calendar",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["target_source_id"] == "cross-org-calendar"
+
+
 def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(
     writeback_source_override,
 ):
