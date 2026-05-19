@@ -11,7 +11,7 @@ def validate_auth_session_hmac_secret_value(secret: str) -> None:
     secret_bytes = secret.encode("utf-8")
     if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
         raise ValueError(
-            "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in production"
+            "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"
         )
     if len(set(secret)) == 1:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not be a repeated character")
@@ -37,14 +37,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
     @model_validator(mode="after")
-    def validate_production_session_secret(self) -> "Settings":
-        if self.RUNTIME_ENVIRONMENT.lower() not in {"production", "prod"}:
-            return self
-
+    def validate_session_secret(self) -> "Settings":
         configured = self.AUTH_SESSION_HMAC_SECRET
         if configured is None:
             raise ValueError(
-                "AUTH_SESSION_HMAC_SECRET is required in production environments"
+                "AUTH_SESSION_HMAC_SECRET is required in all runtime environments"
             )
 
         validate_auth_session_hmac_secret_value(configured.get_secret_value())

@@ -9,10 +9,11 @@
   envelopes whose protected header pins `alg=HS256` and whose `header.payload`
   signing input is signed with HMAC-SHA256 by the configured
   `AUTH_SESSION_HMAC_SECRET`. The secret must be explicitly configured,
-  high-entropy generated material, and at least 32 bytes. Production settings
-  fail at startup when this secret is missing, too short, or an obvious repeated
-  placeholder; non-production runtime verification still fails closed with
-  `401 Authentication required` when the configured value is absent or weak.
+  high-entropy generated material, and at least 32 bytes. Settings fail at
+  startup in every runtime mode when this secret is missing, too short, or an
+  obvious repeated placeholder; runtime verification still fails closed with
+  `401 Authentication required` when an already-loaded configured value becomes
+  absent or weak.
 - The signed session payload is versioned and must include
   `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
   `workspace`, `exp`, and organization/group scope claims. Tampered, expired,

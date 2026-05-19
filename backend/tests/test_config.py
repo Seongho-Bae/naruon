@@ -79,16 +79,26 @@ def test_production_settings_reject_repeated_auth_session_hmac_secret(monkeypatc
         _settings_without_env_file()
 
 
-def test_non_production_settings_allow_missing_auth_session_hmac_secret(monkeypatch):
+def test_non_production_settings_reject_missing_auth_session_hmac_secret(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
     )
     monkeypatch.setenv("RUNTIME_ENVIRONMENT", "local")
     monkeypatch.delenv("AUTH_SESSION_HMAC_SECRET", raising=False)
 
-    loaded_settings = _settings_without_env_file()
+    with pytest.raises(ValidationError, match="AUTH_SESSION_HMAC_SECRET is required"):
+        _settings_without_env_file()
 
-    assert loaded_settings.AUTH_SESSION_HMAC_SECRET is None
+
+def test_non_production_settings_reject_short_auth_session_hmac_secret(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("RUNTIME_ENVIRONMENT", "local")
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", "weak-secret")
+
+    with pytest.raises(ValidationError, match="at least 32 bytes"):
+        _settings_without_env_file()
 
 
 def test_settings_repr_redacts_auth_session_hmac_secret(monkeypatch):
