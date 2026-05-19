@@ -2274,6 +2274,21 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
+calendar_context_seen=0
+if [ -f "$target_path/backend/api/calendar.py" ]; then
+	if [ ! -f "$target_path/backend/services/calendar_service.py" ]; then
+		echo "Error: calendar service backend dependency context missing from PR scope ($target_path)" >&2
+		exit 72
+	fi
+	if ! grep -Fq -- 'BASE_CALENDAR_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/calendar_service.py"; then
+		echo "Error: calendar service backend dependency context did not use trusted base content" >&2
+		cat -- "$target_path/backend/services/calendar_service.py" >&2
+		exit 73
+	fi
+	echo "scan ok with calendar service backend context"
+	calendar_context_seen=1
+fi
+
 if [ -f "$target_path/backend/api/emails.py" ]; then
 	if [ ! -f "$target_path/backend/api/mailbox_scope.py" ]; then
 		echo "Error: changed backend dependency context missing from PR scope ($target_path)" >&2
@@ -2297,6 +2312,10 @@ if [ -f "$target_path/backend/api/emails.py" ]; then
 	exit 0
 fi
 
+if [ "$calendar_context_seen" -eq 1 ]; then
+	exit 0
+fi
+
 echo "scan ok with non-email backend batch"
 EOF
 	chmod +x "$fake_strix"
@@ -2309,9 +2328,10 @@ EOF
 		git config user.name 'Strix Test'
 		git config user.email 'strix-test@example.invalid'
 		echo 'seed' >README.md
-		mkdir -p backend/api
+		mkdir -p backend/api backend/services
 		printf '%s\n' 'BASE_AUTH_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
 		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
+		printf '%s\n' 'BASE_CALENDAR_SERVICE_SHOULD_BE_SCANNED' >backend/services/calendar_service.py
 		git add .
 		git commit -qm 'base commit'
 	)
@@ -2377,6 +2397,7 @@ EOF
 	set -e
 
 	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
+	assert_file_contains "$output_log" "scan ok with calendar service backend context" "case=pull-request-target-changed-backend-context-includes-calendar-service output"
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
 	assert_equals "3" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
 
