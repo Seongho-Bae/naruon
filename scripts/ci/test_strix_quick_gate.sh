@@ -2240,30 +2240,60 @@ if ! grep -Fq -- 'BASE_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backen
 	cat -- "$target_path/backend/api/emails.py" >&2
 	exit 79
 fi
+if grep -Fq -- 'HEAD_EMAIL_API_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/emails.py"; then
+	echo "Error: email API backend context used PR head content" >&2
+	cat -- "$target_path/backend/api/emails.py" >&2
+	exit 87
+fi
 if ! grep -Fq -- 'BASE_AUTH_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/auth.py"; then
 	echo "Error: auth backend context did not use trusted base content" >&2
 	cat -- "$target_path/backend/api/auth.py" >&2
 	exit 82
+fi
+if grep -Fq -- 'HEAD_AUTH_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/auth.py"; then
+	echo "Error: auth backend context used PR head content" >&2
+	cat -- "$target_path/backend/api/auth.py" >&2
+	exit 88
 fi
 if ! grep -Fq -- 'BASE_EMAIL_MODEL_SHOULD_BE_SCANNED' "$target_path/backend/db/models.py"; then
 	echo "Error: email model backend context did not use trusted base content" >&2
 	cat -- "$target_path/backend/db/models.py" >&2
 	exit 83
 fi
+if grep -Fq -- 'HEAD_EMAIL_MODEL_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/db/models.py"; then
+	echo "Error: email model backend context used PR head content" >&2
+	cat -- "$target_path/backend/db/models.py" >&2
+	exit 89
+fi
 if ! grep -Fq -- 'BASE_CONFIG_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/core/config.py"; then
 	echo "Error: backend config context did not use trusted base content" >&2
 	cat -- "$target_path/backend/core/config.py" >&2
 	exit 84
+fi
+if grep -Fq -- 'HEAD_CONFIG_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/core/config.py"; then
+	echo "Error: backend config context used PR head content" >&2
+	cat -- "$target_path/backend/core/config.py" >&2
+	exit 90
 fi
 if ! grep -Fq -- 'BASE_ROUTER_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/main.py"; then
 	echo "Error: backend router registration context did not use trusted base content" >&2
 	cat -- "$target_path/backend/main.py" >&2
 	exit 85
 fi
+if grep -Fq -- 'HEAD_ROUTER_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/main.py"; then
+	echo "Error: backend router registration context used PR head content" >&2
+	cat -- "$target_path/backend/main.py" >&2
+	exit 91
+fi
 if ! grep -Fq -- 'BASE_THREADING_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
 	echo "Error: threading backend context did not use trusted base content" >&2
 	cat -- "$target_path/backend/services/threading_service.py" >&2
 	exit 86
+fi
+if grep -Fq -- 'HEAD_THREADING_MARKER_SHOULD_NOT_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
+	echo "Error: threading backend context used PR head content" >&2
+	cat -- "$target_path/backend/services/threading_service.py" >&2
+	exit 92
 fi
 
 echo "scan ok with frontend email backend authorization context"
@@ -2291,10 +2321,16 @@ EOF
 	local base_sha
 	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
 	(
-		cd "$repo_root_dir"
-		printf '%s\n' 'HEAD_FRONTEND_EMAIL_FLOW_SHOULD_BE_SCANNED' >"$changed_file"
-		git add .
-		git commit -qm 'head commit'
+	cd "$repo_root_dir"
+	printf '%s\n' 'HEAD_FRONTEND_EMAIL_FLOW_SHOULD_BE_SCANNED' >"$changed_file"
+	printf '%s\n' 'HEAD_EMAIL_API_MARKER_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
+	printf '%s\n' 'HEAD_AUTH_MARKER_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
+	printf '%s\n' 'HEAD_CONFIG_MARKER_SHOULD_NOT_BE_SCANNED' >backend/core/config.py
+	printf '%s\n' 'HEAD_EMAIL_MODEL_MARKER_SHOULD_NOT_BE_SCANNED' >backend/db/models.py
+	printf '%s\n' 'HEAD_ROUTER_MARKER_SHOULD_NOT_BE_SCANNED' >backend/main.py
+	printf '%s\n' 'HEAD_THREADING_MARKER_SHOULD_NOT_BE_SCANNED' >backend/services/threading_service.py
+	git add .
+	git commit -qm 'head commit'
 	)
 	local head_sha
 	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
@@ -2303,12 +2339,13 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
 			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2655,7 +2692,7 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE -u STRIX_INPUT_FILE_ROOT \
 			PATH="$bin_dir:$PATH" \
 			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
@@ -2696,6 +2733,63 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_vertex_model_ignores_untrusted_llm_api_base_file_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
+	local allowed_input_dir="$tmp_dir/runner-temp"
+	local outside_dir="$tmp_dir/outside"
+	local output_log="$tmp_dir/output.log"
+	local fake_strix="$tmp_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$allowed_input_dir/strix_llm.txt"
+	local llm_api_key_file="$allowed_input_dir/llm_api_key.txt"
+	local llm_api_base_file="$outside_dir/llm_api_base.txt"
+
+	mkdir -p "$repo_root_dir/scripts/ci" "$allowed_input_dir" "$outside_dir"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [ "${LLM_API_BASE+x}" = "x" ]; then
+	echo "Error: Vertex scan should not receive LLM_API_BASE" >&2
+	exit 64
+fi
+printf 'called\n' >"${FAKE_STRIX_CALL_LOG:?}"
+echo "vertex scan ok without external LLM_API_BASE"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'vertex_ai/gemini-2.5-pro' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s' 'https://example.invalid/generateContent' >"$llm_api_base_file"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE -u STRIX_INPUT_FILE_ROOT \
+			PATH="$tmp_dir:$PATH" \
+			RUNNER_TEMP="$allowed_input_dir" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			LLM_API_BASE_FILE="$llm_api_base_file" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=vertex-ignores-untrusted-llm-api-base-file exit code"
+	assert_file_contains "$output_log" "vertex scan ok without external LLM_API_BASE" "case=vertex-ignores-untrusted-llm-api-base-file output"
+	assert_file_contains "$call_log" "called" "case=vertex-ignores-untrusted-llm-api-base-file strix invocation"
+
+	rm -rf "$tmp_dir"
+}
+
 run_total_timeout_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2726,7 +2820,7 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE -u STRIX_INPUT_FILE_ROOT \
 			PATH="$bin_dir:$PATH" \
 			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
@@ -2891,7 +2985,7 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE -u STRIX_INPUT_FILE_ROOT \
 			PATH="$tmp_dir:$PATH" \
 			RUNNER_TEMP="$allowed_input_dir" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
@@ -2908,6 +3002,65 @@ EOF
 	assert_file_contains "$output_log" "LLM_API_BASE_FILE must be inside the trusted input file root" "case=llm-api-base-file-outside-input-root output"
 	if [ -f "$call_log" ]; then
 		record_failure "case=llm-api-base-file-outside-input-root should reject before invoking strix"
+	fi
+
+	rm -rf "$tmp_dir"
+}
+
+run_pr_batched_llm_api_base_file_config_failure_exits_2_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
+	local allowed_input_dir="$tmp_dir/runner-temp"
+	local outside_dir="$tmp_dir/outside"
+	local output_log="$tmp_dir/output.log"
+	local fake_strix="$tmp_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$allowed_input_dir/strix_llm.txt"
+	local llm_api_key_file="$allowed_input_dir/llm_api_key.txt"
+	local llm_api_base_file="$outside_dir/llm_api_base.txt"
+
+	mkdir -p "$repo_root_dir/scripts/ci" "$repo_root_dir/src" "$allowed_input_dir" "$outside_dir"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	printf '%s\n' 'print("one")' >"$repo_root_dir/src/one.py"
+	printf '%s\n' 'print("two")' >"$repo_root_dir/src/two.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >"${FAKE_STRIX_CALL_LOG:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'openai/gpt-4o-mini' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s' 'https://example.invalid/generateContent' >"$llm_api_base_file"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_INPUT_FILE_ROOT \
+			PATH="$tmp_dir:$PATH" \
+			RUNNER_TEMP="$allowed_input_dir" \
+			GITHUB_EVENT_NAME="pull_request" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE=$'src/one.py\nsrc/two.py' \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			LLM_API_BASE_FILE="$llm_api_base_file" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=pr-batched-llm-api-base-file-config-failure exit code"
+	assert_file_contains "$output_log" "LLM_API_BASE_FILE must be inside the trusted input file root" "case=pr-batched-llm-api-base-file-config-failure output"
+	if [ -f "$call_log" ]; then
+		record_failure "case=pr-batched-llm-api-base-file-config-failure should reject before invoking strix"
 	fi
 
 	rm -rf "$tmp_dir"
@@ -2962,7 +3115,7 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE -u STRIX_INPUT_FILE_ROOT \
 			PATH="$tmp_dir:$PATH" \
 			RUNNER_TEMP="$allowed_input_dir" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
@@ -4253,7 +4406,9 @@ run_gate_case "infra-error-sticky-flag" \
 run_invalid_min_fail_severity_case
 run_required_input_file_outside_input_root_fails_closed_case "STRIX_LLM_FILE"
 run_required_input_file_outside_input_root_fails_closed_case "LLM_API_KEY_FILE"
+run_vertex_model_ignores_untrusted_llm_api_base_file_case
 run_llm_api_base_file_outside_input_root_fails_closed_case
+run_pr_batched_llm_api_base_file_config_failure_exits_2_case
 run_input_file_root_override_takes_precedence_over_runner_temp_case
 run_stale_report_case
 run_symlink_report_case
