@@ -402,7 +402,7 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
             className={`mobile-workspace-panel h-full flex-col ${effectiveMobileView === 'detail' && selectedEmail !== null ? 'flex' : 'hidden'}`}
           >
             <div className="p-3 border-b border-border bg-card">
-              <button 
+              <button
                 onClick={() => {
                   setSelectedEmail(null);
                   setMobileDetailActionCommand(null);
