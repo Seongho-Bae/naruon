@@ -2170,6 +2170,156 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_frontend_email_context_scope_case() {
+	local changed_file="${1:?changed file is required}"
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+if ! grep -Fq -- 'HEAD_FRONTEND_EMAIL_FLOW_SHOULD_BE_SCANNED' "$changed_file"; then
+	echo "Error: frontend email retrieval PR-head content was not scanned" >&2
+	cat -- "$changed_file" >&2
+	exit 74
+fi
+
+if [ ! -f "$target_path/backend/api/emails.py" ]; then
+	echo "Error: email API backend context missing from frontend email PR scope" >&2
+	exit 75
+fi
+if [ ! -f "$target_path/backend/api/auth.py" ]; then
+	echo "Error: auth backend context missing from frontend email PR scope" >&2
+	exit 76
+fi
+if [ ! -f "$target_path/backend/db/models.py" ]; then
+	echo "Error: email model backend context missing from frontend email PR scope" >&2
+	exit 77
+fi
+if [ ! -f "$target_path/backend/core/config.py" ]; then
+	echo "Error: backend config context missing from frontend email PR scope" >&2
+	exit 80
+fi
+if [ ! -f "$target_path/backend/main.py" ]; then
+	echo "Error: backend router registration context missing from frontend email PR scope" >&2
+	exit 81
+fi
+if [ ! -f "$target_path/backend/services/threading_service.py" ]; then
+	echo "Error: threading backend context missing from frontend email PR scope" >&2
+	exit 78
+fi
+if ! grep -Fq -- 'BASE_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/emails.py"; then
+	echo "Error: email API backend context did not use trusted base content" >&2
+	cat -- "$target_path/backend/api/emails.py" >&2
+	exit 79
+fi
+if ! grep -Fq -- 'BASE_AUTH_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/auth.py"; then
+	echo "Error: auth backend context did not use trusted base content" >&2
+	cat -- "$target_path/backend/api/auth.py" >&2
+	exit 82
+fi
+if ! grep -Fq -- 'BASE_EMAIL_MODEL_SHOULD_BE_SCANNED' "$target_path/backend/db/models.py"; then
+	echo "Error: email model backend context did not use trusted base content" >&2
+	cat -- "$target_path/backend/db/models.py" >&2
+	exit 83
+fi
+if ! grep -Fq -- 'BASE_CONFIG_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/core/config.py"; then
+	echo "Error: backend config context did not use trusted base content" >&2
+	cat -- "$target_path/backend/core/config.py" >&2
+	exit 84
+fi
+if ! grep -Fq -- 'BASE_ROUTER_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/main.py"; then
+	echo "Error: backend router registration context did not use trusted base content" >&2
+	cat -- "$target_path/backend/main.py" >&2
+	exit 85
+fi
+if ! grep -Fq -- 'BASE_THREADING_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
+	echo "Error: threading backend context did not use trusted base content" >&2
+	cat -- "$target_path/backend/services/threading_service.py" >&2
+	exit 86
+fi
+
+echo "scan ok with frontend email backend authorization context"
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" backend/api backend/core backend/db backend/services
+		printf '%s\n' 'BASE_FRONTEND_EMAIL_FLOW_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'BASE_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' >backend/api/emails.py
+		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_BE_SCANNED' >backend/api/auth.py
+		printf '%s\n' 'BASE_CONFIG_CONTEXT_SHOULD_BE_SCANNED' >backend/core/config.py
+		printf '%s\n' 'BASE_EMAIL_MODEL_SHOULD_BE_SCANNED' >backend/db/models.py
+		printf '%s\n' 'BASE_ROUTER_CONTEXT_SHOULD_BE_SCANNED' >backend/main.py
+		printf '%s\n' 'BASE_THREADING_SERVICE_SHOULD_BE_SCANNED' >backend/services/threading_service.py
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_FRONTEND_EMAIL_FLOW_SHOULD_BE_SCANNED' >"$changed_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-frontend-email-context exit code"
+	assert_file_contains "$output_log" "scan ok with frontend email backend authorization context" "case=pull-request-target-frontend-email-context output"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -2961,6 +3111,21 @@ run_pull_request_target_head_scope_case \
 run_pull_request_target_trusted_context_scope_case
 
 run_pull_request_target_changed_backend_context_scope_case
+
+run_pull_request_target_frontend_email_context_scope_case \
+	"frontend/src/components/EmailDetail.tsx"
+
+run_pull_request_target_frontend_email_context_scope_case \
+	"frontend/src/components/EmailList.tsx"
+
+run_pull_request_target_frontend_email_context_scope_case \
+	"frontend/src/app/page.tsx"
+
+run_pull_request_target_frontend_email_context_scope_case \
+	"frontend/src/lib/api-client.ts"
+
+run_pull_request_target_frontend_email_context_scope_case \
+	"frontend/src/lib/email-threading.ts"
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-added-file-pr-head-blob-read-failure" \
