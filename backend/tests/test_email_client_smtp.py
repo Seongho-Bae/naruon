@@ -108,6 +108,28 @@ def test_smtp_control_plane_hostname_is_resolved_before_ip_policy(monkeypatch):
     assert validated_addresses == ["127.0.0.1"]
 
 
+def test_smtp_host_rejects_mixed_public_and_private_dns_answers(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+    monkeypatch.setattr(
+        email_client.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("1.1.1.1", 587)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 587)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
+
+
+def test_smtp_connect_address_uses_all_answer_validation_helper():
+    source = inspect.getsource(email_client._resolve_smtp_connect_address)
+
+    assert "_resolve_all_public_smtp_addresses" in source
+    assert "connect_address = connect_address or" not in source
+
+
 class FakeSmtpClient:
     def __init__(self, *, fail_send=False):
         self.fail_send = fail_send

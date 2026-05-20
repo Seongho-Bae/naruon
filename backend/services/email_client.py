@@ -140,9 +140,10 @@ def _looks_like_ip_literal(candidate: str) -> bool:
     )
 
 
-def _resolve_public_smtp_addresses(
+def _resolve_all_public_smtp_addresses(
     smtp_server: str, smtp_port: int | None
 ) -> list[tuple[Any, ...]]:
+    """Resolve a host and reject the entire hostname if any answer is non-global."""
     try:
         address_infos = socket.getaddrinfo(
             smtp_server, smtp_port, type=socket.SOCK_STREAM
@@ -170,7 +171,7 @@ def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     elif _looks_like_ip_literal(normalized_host):
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
     elif resolve_host:
-        _resolve_public_smtp_addresses(normalized_host, None)
+        _resolve_all_public_smtp_addresses(normalized_host, None)
     return normalized_host
 
 
@@ -216,15 +217,9 @@ def _resolve_smtp_connect_address(
     smtp_server: str, smtp_port: int
 ) -> tuple[int, int, int, tuple]:
     """Resolve SMTP host once and return a globally-routable socket target."""
-    address_infos = _resolve_public_smtp_addresses(smtp_server, smtp_port)
-
-    connect_address = None
-    for address_info in address_infos:
-        family, socktype, proto, _, sockaddr = address_info
-        connect_address = connect_address or (family, socktype, proto, sockaddr)
-    if connect_address is None:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    return connect_address
+    address_infos = _resolve_all_public_smtp_addresses(smtp_server, smtp_port)
+    family, socktype, proto, _, sockaddr = address_infos[0]
+    return family, socktype, proto, sockaddr
 
 
 async def _connect_validated_smtp_socket(
