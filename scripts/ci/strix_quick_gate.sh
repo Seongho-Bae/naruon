@@ -29,6 +29,7 @@ DEFAULT_PROVIDER_RAW="${STRIX_LLM_DEFAULT_PROVIDER:-}"
 # shellcheck disable=SC2034  # consumed indirectly by sourced model helper functions
 DEFAULT_PROVIDER=""
 LLM_API_BASE_FILE="${LLM_API_BASE_FILE:-}"
+STRIX_INPUT_FILE_ROOT="${STRIX_INPUT_FILE_ROOT:-${RUNNER_TEMP:-}}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
 STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
@@ -54,6 +55,49 @@ PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
 TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
+
+resolve_trusted_input_file() {
+	local label="$1"
+	local input_file="$2"
+	if [ -z "$input_file" ] || [ ! -f "$input_file" ] || [ -L "$input_file" ]; then
+		echo "ERROR: $label must reference a regular file." >&2
+		return 2
+	fi
+	if [ -z "$STRIX_INPUT_FILE_ROOT" ] || [ ! -d "$STRIX_INPUT_FILE_ROOT" ] || [ -L "$STRIX_INPUT_FILE_ROOT" ]; then
+		echo "ERROR: STRIX_INPUT_FILE_ROOT or RUNNER_TEMP must reference a trusted input file root." >&2
+		return 2
+	fi
+
+	python3 - "$label" "$input_file" "$STRIX_INPUT_FILE_ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+label = sys.argv[1]
+input_path = Path(sys.argv[2])
+root_path = Path(sys.argv[3])
+
+try:
+    resolved_input = input_path.resolve(strict=True)
+    resolved_root = root_path.resolve(strict=True)
+except OSError as exc:
+    print(f"ERROR: {label} could not be canonicalized: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+
+if not resolved_root.is_dir():
+    print("ERROR: STRIX_INPUT_FILE_ROOT or RUNNER_TEMP must reference a trusted input file root.", file=sys.stderr)
+    raise SystemExit(2)
+if not resolved_input.is_file():
+    print(f"ERROR: {label} must reference a regular file.", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    resolved_input.relative_to(resolved_root)
+except ValueError:
+    print(f"ERROR: {label} must be inside the trusted input file root.", file=sys.stderr)
+    raise SystemExit(2)
+
+print(resolved_input)
+PY
+}
 
 # shellcheck disable=SC2317,SC2329  # invoked from cleanup trap
 publish_artifact_reports() {
@@ -84,8 +128,15 @@ cleanup_runtime() {
 trap cleanup_runtime EXIT INT TERM
 
 STRIX_LLM_FILE="${STRIX_LLM_FILE:-}"
-if [ -z "$STRIX_LLM_FILE" ] || [ ! -f "$STRIX_LLM_FILE" ] || [ -L "$STRIX_LLM_FILE" ]; then
+if [ -z "$STRIX_LLM_FILE" ]; then
 	echo "ERROR: STRIX_LLM_FILE must reference a regular file containing the model." >&2
+	exit 2
+fi
+if [ ! -f "$STRIX_LLM_FILE" ] || [ -L "$STRIX_LLM_FILE" ]; then
+	echo "ERROR: STRIX_LLM_FILE must reference a regular file containing the model." >&2
+	exit 2
+fi
+if ! STRIX_LLM_FILE="$(resolve_trusted_input_file "STRIX_LLM_FILE" "$STRIX_LLM_FILE")"; then
 	exit 2
 fi
 STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"
@@ -95,8 +146,15 @@ if [ -z "$STRIX_LLM" ]; then
 fi
 
 LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
-if [ -z "$LLM_API_KEY_FILE" ] || [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+if [ -z "$LLM_API_KEY_FILE" ]; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
+	exit 2
+fi
+if [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
+	exit 2
+fi
+if ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
 	exit 2
 fi
 LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
@@ -925,12 +983,18 @@ is_scannable_changed_file() {
 
 pull_request_scope_context_files() {
 	local needs_backend_python=0
+	local needs_frontend_email_api_context=0
 	local changed_file normalized_changed_file
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 		case "$normalized_changed_file" in
 		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
 			needs_backend_python=1
+			;;
+		# The app shell, email components, threading URL builder, and API client can
+		# shape frontend email retrieval flows; include backend auth context with them.
+		frontend/src/components/EmailDetail.tsx | frontend/src/components/EmailList.tsx | frontend/src/app/page.tsx | frontend/src/lib/api-client.ts | frontend/src/lib/email-threading.ts)
+			needs_frontend_email_api_context=1
 			;;
 		esac
 	done
@@ -955,6 +1019,17 @@ backend/services/email_client.py
 backend/services/email_parser.py
 backend/services/embedding.py
 backend/services/exceptions.py
+backend/services/threading_service.py
+EOF
+	fi
+
+	if [ "$needs_frontend_email_api_context" -eq 1 ]; then
+		cat <<'EOF'
+backend/api/auth.py
+backend/api/emails.py
+backend/core/config.py
+backend/db/models.py
+backend/main.py
 backend/services/threading_service.py
 EOF
 	fi
@@ -1673,13 +1748,13 @@ resolved_llm_api_base_for_model() {
 	if [ -z "$LLM_API_BASE_FILE" ]; then
 		return 0
 	fi
-	if [ ! -f "$LLM_API_BASE_FILE" ] || [ -L "$LLM_API_BASE_FILE" ]; then
-		echo "ERROR: LLM_API_BASE_FILE must reference a regular file." >&2
+	local resolved_llm_api_base_file
+	if ! resolved_llm_api_base_file="$(resolve_trusted_input_file "LLM_API_BASE_FILE" "$LLM_API_BASE_FILE")"; then
 		return 2
 	fi
 
 	local llm_api_base_value
-	llm_api_base_value="$(cat -- "$LLM_API_BASE_FILE")"
+	llm_api_base_value="$(cat -- "$resolved_llm_api_base_file")"
 	llm_api_base_value="${llm_api_base_value%%/generateContent*}"
 	llm_api_base_value="${llm_api_base_value%%:generateContent*}"
 	llm_api_base_value="$(trim_whitespace "$llm_api_base_value")"
@@ -1700,7 +1775,7 @@ resolved_llm_api_base_for_model() {
 ## Run a single strix invocation against TARGET_PATH with the given model.
 ## Builds a child-only environment so secrets and model routing do not leak
 ## through the parent shell process.
-## Returns 0 on success (strix exit 0), 1 on any failure.
+## Returns 0 on success (strix exit 0), 1 on scan failure, 2 on configuration failure.
 ## The caller is responsible for retry/fallback logic; process-level timeout
 ## wrapping prevents CI from hanging indefinitely.
 run_strix_once() {
@@ -1721,7 +1796,7 @@ run_strix_once() {
 		fi
 	fi
 	if ! llm_api_base_value="$(resolved_llm_api_base_for_model "$model")"; then
-		return 1
+		return 2
 	fi
 	if ! resolved_target_path="$(resolve_current_target_path "$TARGET_PATH")"; then
 		return 1
@@ -1935,8 +2010,13 @@ run_strix_with_transient_retry() {
 	local attempt=1
 
 	while [ "$attempt" -le "$max_attempts" ]; do
-		if run_strix_once "$model"; then
+		local run_rc=0
+		run_strix_once "$model" || run_rc=$?
+		if [ "$run_rc" -eq 0 ]; then
 			return 0
+		fi
+		if [ "$run_rc" -eq 2 ]; then
+			return 2
 		fi
 
 		if [ "$attempt" -ge "$max_attempts" ]; then
@@ -2606,8 +2686,13 @@ run_current_target_scan() {
 	INFRA_ERROR_DETECTED=0
 	ZERO_FINDINGS_REPORTED=0
 
-	if run_strix_with_transient_retry "$PRIMARY_MODEL"; then
+	local primary_scan_rc=0
+	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
+	if [ "$primary_scan_rc" -eq 0 ]; then
 		return 0
+	fi
+	if [ "$primary_scan_rc" -eq 2 ]; then
+		return 2
 	fi
 
 	if should_rebalance_pull_request_batch; then
@@ -2654,9 +2739,14 @@ run_current_target_scan() {
 		else
 			echo "Primary model unavailable; retrying with fallback '$candidate'."
 		fi
-		if run_strix_with_transient_retry "$candidate"; then
+		local fallback_scan_rc=0
+		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
+		if [ "$fallback_scan_rc" -eq 0 ]; then
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
+		fi
+		if [ "$fallback_scan_rc" -eq 2 ]; then
+			return 2
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2728,8 +2818,8 @@ run_pull_request_batch_files() {
 	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
 
-	run_current_target_scan
-	local batch_rc=$?
+	local batch_rc=0
+	run_current_target_scan || batch_rc=$?
 	if [ "$batch_rc" -eq 0 ]; then
 		capture_preexisting_report_dirs
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
@@ -2747,17 +2837,21 @@ run_pull_request_batch_files() {
 		local first_half second_half
 		first_half="$(printf '%s\n' "${batch_files[@]:0:midpoint}")"
 		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
-		if ! run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half"; then
+		local first_half_rc=0
+		run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half" || first_half_rc=$?
+		if [ "$first_half_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return 1
+			return "$first_half_rc"
 		fi
-		if ! run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half"; then
+		local second_half_rc=0
+		run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half" || second_half_rc=$?
+		if [ "$second_half_rc" -ne 0 ]; then
 			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 			TARGET_PATH="$previous_target_path"
 			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return 1
+			return "$second_half_rc"
 		fi
 		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 		TARGET_PATH="$previous_target_path"
@@ -2768,7 +2862,7 @@ run_pull_request_batch_files() {
 	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
 	TARGET_PATH="$previous_target_path"
 	TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-	return 1
+	return "$batch_rc"
 }
 
 if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
@@ -2776,15 +2870,15 @@ if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
 	batch_number=0
 	for batch_files_text in "${PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"; do
 		batch_number=$((batch_number + 1))
-		if ! run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text"; then
-			exit 1
+		batch_rc=0
+		run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text" || batch_rc=$?
+		if [ "$batch_rc" -ne 0 ]; then
+			exit "$batch_rc"
 		fi
 	done
 	exit 0
 fi
 
-if run_current_target_scan; then
-	exit 0
-fi
-
-exit 1
+scan_rc=0
+run_current_target_scan || scan_rc=$?
+exit "$scan_rc"
