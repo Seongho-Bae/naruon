@@ -1,8 +1,11 @@
+import asyncio
 import datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
+from core.config import settings
 from db.models import AuditLog, LLMProvider
 from db.session import get_db
 from main import app
@@ -131,6 +134,94 @@ def test_llm_provider_crud_admin(admin_client):
 
     response = admin_client.delete(f"/api/llm-providers/{provider_id}")
     assert response.status_code == 204
+
+
+def test_llm_provider_rejects_internal_base_url_on_create(admin_client):
+    response = admin_client.post(
+        "/api/llm-providers",
+        json={
+            "name": "Metadata Target",
+            "provider_type": "openai",
+            "base_url": "http://169.254.169.254/latest/meta-data/",
+            "api_key": "sk-12345",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "LLM provider base URL is not allowed"}
+    assert mock_session.providers == []
+
+
+def test_llm_provider_rejects_private_base_url_on_update(admin_client):
+    response = admin_client.post(
+        "/api/llm-providers",
+        json={"name": "Primary", "provider_type": "openai"},
+    )
+    assert response.status_code == 200, response.text
+
+    response = admin_client.put(
+        "/api/llm-providers/1",
+        json={"base_url": "https://127.0.0.1:8000/v1"},
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "LLM provider base URL is not allowed"}
+
+
+def test_llm_provider_rejects_userinfo_base_url(admin_client):
+    response = admin_client.post(
+        "/api/llm-providers",
+        json={
+            "name": "Userinfo Target",
+            "provider_type": "openai",
+            "base_url": "https://user:pass@api.openai.com/v1",
+            "api_key": "sk-12345",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "LLM provider base URL is not allowed"}
+
+
+def test_llm_provider_accepts_allowlisted_external_https_base_url(
+    admin_client, monkeypatch
+):
+    previous_allowed_hosts = settings.ALLOWED_LLM_BASE_URL_HOSTS
+    previous_encryption_key = settings.ENCRYPTION_KEY
+    settings.ALLOWED_LLM_BASE_URL_HOSTS = "llm-gateway.example.com"
+    settings.ENCRYPTION_KEY = SecretStr("u9HJJ0G6sMCnrbT88ppMuIjEsn4EqH8U9jtw34oZw1c=")
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "llm-gateway.example.com"
+        assert port == 443
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("LLM provider DNS resolution ran on event loop")
+        return [(2, 1, 6, "", ("93.184.216.34", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    try:
+        response = admin_client.post(
+            "/api/llm-providers",
+            json={
+                "name": "External Gateway",
+                "provider_type": "openai",
+                "base_url": "https://llm-gateway.example.com/v1",
+                "api_key": "sk-12345",
+            },
+        )
+    finally:
+        settings.ALLOWED_LLM_BASE_URL_HOSTS = previous_allowed_hosts
+        settings.ENCRYPTION_KEY = previous_encryption_key
+
+    assert response.status_code == 200, response.text
+    assert response.json()["base_url"] == "https://llm-gateway.example.com/v1"
 
 
 def test_llm_provider_member_rejected(member_client):

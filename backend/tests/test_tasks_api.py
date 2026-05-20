@@ -343,6 +343,53 @@ def test_create_ticket_tasks_rejects_html_execution_item_titles(auth_client):
     assert mock_session.tasks == []
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        "&lt;img src=x onerror=alert(document.domain)&gt;",
+        "<!-- hidden task markup -->",
+        "<!DOCTYPE html>",
+        "<?xml version='1.0'?>",
+        "< /script>alert(1)</script>",
+        "<svg/onload=alert(1)@x>",
+        "<math/href=javascript:alert(1)@x>",
+    ],
+)
+def test_create_ticket_tasks_rejects_encoded_and_malformed_html_titles(
+    auth_client, payload
+):
+    mock_session.emails[14] = make_email()
+
+    response = auth_client.post(
+        "/api/tasks/from-email",
+        json={
+            "source_email_id": "<message-14@example.com>",
+            "thread_id": "thread-123",
+            "items": [payload],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Execution items must be plain text"}
+    assert mock_session.tasks == []
+
+
+def test_create_ticket_tasks_allows_plain_comparison_text(auth_client):
+    mock_session.emails[14] = make_email()
+
+    response = auth_client.post(
+        "/api/tasks/from-email",
+        json={
+            "source_email_id": "<message-14@example.com>",
+            "thread_id": "thread-123",
+            "items": ["Confirm 2 < 3 and 5 > 4"],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["tasks"][0]["title"] == "Confirm 2 < 3 and 5 > 4"
+
+
 def test_create_ticket_tasks_rejects_email_owned_by_another_member(auth_client):
     mock_session.emails[99] = make_email(
         email_id=99,

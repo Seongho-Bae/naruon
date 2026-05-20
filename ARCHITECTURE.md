@@ -71,8 +71,11 @@ provenance instead of private foreign keys. Task creation from email always
 checks the source email owner scope, copies the canonical thread provenance, and
 strips NUL bytes from titles before persistence so malformed LLM/email-derived
 strings cannot break PostgreSQL text writes. Because task titles are plain text,
-the backend rejects HTML-like execution item markup before storage instead of
-returning stored tags to a future rendering surface.
+the backend rejects encoded, malformed, or direct HTML-like execution item markup
+before storage instead of returning stored tags to a future rendering surface.
+Parsed email body/subject, address, and attachment display text strips active
+HTML/script markup at the parser boundary while preserving message/thread
+identifiers and angle-address headers separately.
 
 Customer-owned mail, CalDAV/CardDAV, and WebDAV systems remain the durable
 source-of-truth. Naruon can cache/index metadata and generate writeback intents,
@@ -117,6 +120,13 @@ Private-network IMAP/SMTP/CalDAV/CardDAV/WebDAV access belongs behind the
 outbound-only self-hosted connector boundary. GitHub self-hosted runners can
 smoke-test internal mail connectivity, but production relay/proxy access should
 use a connector artifact and never imply inbound MX hosting.
+
+LLM provider `base_url` is also a server-side egress boundary, not an arbitrary
+URL field. Provider registry create/update paths and LLM call sinks both validate
+custom OpenAI-compatible base URLs with HTTPS-only syntax, no userinfo/query or
+fragment, exact host membership in `ALLOWED_LLM_BASE_URL_HOSTS`, and DNS answers
+that are all globally routable. Missing allowlist configuration fails closed; the
+default provider path should leave `base_url` unset.
 
 ## CI security boundary
 
@@ -174,7 +184,9 @@ resource checks run. `/api/runtime-config`, `/`, and `/metrics` remain public
 because they expose only non-secret runtime/health metadata. LLM provider
 registry reads and writes are organization/platform admin operations; members use
 tenant-scoped configuration or approved AI workflows rather than provider
-inventory APIs.
+inventory APIs. Custom provider endpoints additionally require an operator-owned
+egress allowlist so an organization admin cannot point LLM traffic at localhost,
+private networks, or cloud metadata services.
 
 The browser API client reads `naruon_session_token` from local storage and sends
 it as the bearer session on signed routes. It does not synthesize or forward

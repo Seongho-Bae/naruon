@@ -10,26 +10,9 @@ from api.auth import AuthContext, get_auth_context
 from api.emails import canonical_thread_key
 from db.models import Email, TicketTask
 from db.session import get_db
+from services.text_safety import contains_html_markup
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
-
-
-def _contains_html_like_tag(value: str) -> bool:
-    cursor = 0
-    while cursor < len(value):
-        if value[cursor] != "<":
-            cursor += 1
-            continue
-
-        tag_start = cursor + 1
-        if tag_start < len(value) and value[tag_start] == "/":
-            tag_start += 1
-        while tag_start < len(value) and value[tag_start].isspace():
-            tag_start += 1
-        if tag_start < len(value) and value[tag_start].isalpha():
-            return value.find(">", tag_start + 1) != -1
-        cursor += 1
-    return False
 
 
 TaskStatus = Literal["open", "in_progress", "blocked", "done"]
@@ -68,7 +51,7 @@ def _normalize_execution_items(items: list[str]) -> list[str]:
     for item in items:
         trimmed = item.replace("\x00", "").strip()
         if trimmed:
-            if _contains_html_like_tag(trimmed):
+            if contains_html_markup(trimmed):
                 raise HTTPException(
                     status_code=422, detail="Execution items must be plain text"
                 )

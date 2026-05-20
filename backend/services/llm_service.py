@@ -3,6 +3,7 @@ from openai import AsyncOpenAI
 from core.config import settings
 from core.exceptions import LLMServiceError
 from pydantic import BaseModel
+from services.llm_provider_urls import validate_llm_provider_base_url_async
 
 logger = logging.getLogger(__name__)
 
@@ -14,15 +15,19 @@ class ExtractionResult(BaseModel):
 
 
 async def extract_todos_and_summary(
-    email_body: str, 
-    openai_api_key: str, 
+    email_body: str,
+    openai_api_key: str,
     base_url: str | None = None,
-    provider_name: str = "OpenAI"
+    provider_name: str = "OpenAI",
 ) -> ExtractionResult:
     if not openai_api_key:
         raise ValueError("API Key is not set")
-        
-    client = AsyncOpenAI(api_key=openai_api_key, base_url=base_url)
+
+    validated_base_url = await validate_llm_provider_base_url_async(base_url)
+    client = AsyncOpenAI(
+        api_key=openai_api_key,
+        base_url=validated_base_url,
+    )
     try:
         response = await client.beta.chat.completions.parse(
             model=settings.OPENAI_MODEL,
@@ -42,21 +47,22 @@ async def extract_todos_and_summary(
     parsed = response.choices[0].message.parsed
     if not parsed:
         raise RuntimeError("Failed to parse LLM response")
-    
+
     parsed.provenance = f"{provider_name} ({settings.OPENAI_MODEL})"
     return parsed
 
 
 async def draft_reply(
-    email_body: str, 
-    instruction: str, 
-    openai_api_key: str, 
-    base_url: str | None = None
+    email_body: str, instruction: str, openai_api_key: str, base_url: str | None = None
 ) -> str:
     if not openai_api_key:
         raise ValueError("API Key is not set")
-        
-    client = AsyncOpenAI(api_key=openai_api_key, base_url=base_url)
+
+    validated_base_url = await validate_llm_provider_base_url_async(base_url)
+    client = AsyncOpenAI(
+        api_key=openai_api_key,
+        base_url=validated_base_url,
+    )
     try:
         response = await client.chat.completions.create(
             model=settings.OPENAI_MODEL,

@@ -2,9 +2,11 @@ import email
 from email import policy
 from pathlib import Path
 import datetime
+from email.utils import formataddr, getaddresses
 from email.utils import parsedate_to_datetime
 from typing import TypedDict
 from .exceptions import EmailParseError
+from .text_safety import strip_html_markup
 
 
 class EmailData(TypedDict):
@@ -28,6 +30,24 @@ def _sanitize_nul(text: str) -> str:
     if not isinstance(text, str):
         text = str(text) if text is not None else ""
     return text.replace("\x00", "")
+
+
+def _sanitize_display_text(text: str) -> str:
+    return strip_html_markup(_sanitize_nul(text))
+
+
+def _sanitize_address_display_text(text: str) -> str:
+    sanitized_parts: list[str] = []
+    for display_name, address in getaddresses([text]):
+        safe_display_name = _sanitize_display_text(display_name).strip()
+        safe_address = _sanitize_nul(address).strip()
+        if safe_address:
+            sanitized_parts.append(formataddr((safe_display_name, safe_address)))
+        elif safe_display_name:
+            sanitized_parts.append(safe_display_name)
+    if sanitized_parts:
+        return ", ".join(sanitized_parts)
+    return _sanitize_display_text(text)
 
 
 def parse_eml(file_path: str | Path) -> EmailData:
@@ -57,8 +77,8 @@ def parse_eml(file_path: str | Path) -> EmailData:
                     if isinstance(part_content, str):
                         attachments.append(
                             {
-                                "filename": _sanitize_nul(filename),
-                                "content": _sanitize_nul(part_content),
+                                "filename": _sanitize_display_text(filename),
+                                "content": _sanitize_display_text(part_content),
                             }
                         )
                 continue
@@ -92,38 +112,48 @@ def parse_eml(file_path: str | Path) -> EmailData:
 
     if not parsed_date:
         parsed_date = datetime.datetime.now(datetime.timezone.utc)
-        
+
     message_id = _sanitize_nul(msg.get("Message-ID", ""))
-    
+
     # Extract thread_id
     thread_id = None
-    references = msg.get("References") # O3: email threading support
+    references = msg.get("References")  # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
-    
+
     if references:
         # Get the first reference as the root thread ID
         refs = references.split()
         if refs:
             thread_id = _sanitize_nul(refs[0])
-    
+
     if not thread_id and in_reply_to:
         in_reply_to_list = in_reply_to.split()
         if in_reply_to_list:
             thread_id = _sanitize_nul(in_reply_to_list[0])
-            
+
     if not thread_id:
         thread_id = message_id
 
     return {
         "message_id": message_id,
         "thread_id": thread_id,
-        "sender": _sanitize_nul(msg.get("From", "")),
-        "reply_to": _sanitize_nul(msg.get("Reply-To", "")) if msg.get("Reply-To") else None,
-        "recipients": _sanitize_nul(msg.get("To", "")),
-        "subject": _sanitize_nul(msg.get("Subject", "")),
-        "in_reply_to": _sanitize_nul(msg.get("In-Reply-To", "")) if msg.get("In-Reply-To") else None,
-        "references": _sanitize_nul(msg.get("References", "")) if msg.get("References") else None,
+        "sender": _sanitize_address_display_text(msg.get("From", "")),
+        "reply_to": (
+            _sanitize_address_display_text(msg.get("Reply-To", ""))
+            if msg.get("Reply-To")
+            else None
+        ),
+        "recipients": _sanitize_address_display_text(msg.get("To", "")),
+        "subject": _sanitize_display_text(msg.get("Subject", "")),
+        "in_reply_to": (
+            _sanitize_nul(msg.get("In-Reply-To", ""))
+            if msg.get("In-Reply-To")
+            else None
+        ),
+        "references": (
+            _sanitize_nul(msg.get("References", "")) if msg.get("References") else None
+        ),
         "date": parsed_date,
-        "body": _sanitize_nul(body),
+        "body": _sanitize_display_text(body),
         "attachments": attachments,
     }

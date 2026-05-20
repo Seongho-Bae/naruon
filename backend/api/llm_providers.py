@@ -1,13 +1,19 @@
+import datetime
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List, Optional
-import datetime
-from db.session import get_db
-from db.models import LLMProvider, AuditLog
+
 from api.auth import AuthContext, get_auth_context
-from pydantic import BaseModel
+from db.models import AuditLog, LLMProvider
+from db.session import get_db
+from services.llm_provider_urls import (
+    LLM_BASE_URL_NOT_ALLOWED,
+    validate_llm_provider_base_url_async,
+)
 
 router = APIRouter(prefix="/api/llm-providers", tags=["llm-providers"])
 
@@ -47,6 +53,13 @@ def _get_fingerprint(api_key: str | None) -> str | None:
     if len(api_key) > 8:
         return f"***{api_key[-4:]}"
     return "***"
+
+
+async def _validated_base_url(value: str | None) -> str | None:
+    try:
+        return await validate_llm_provider_base_url_async(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=LLM_BASE_URL_NOT_ALLOWED) from exc
 
 
 async def check_admin_access(
@@ -93,7 +106,7 @@ async def create_provider(
     provider = LLMProvider(
         name=data.name,
         provider_type=data.provider_type,
-        base_url=data.base_url,
+        base_url=await _validated_base_url(data.base_url),
         api_key=data.api_key,
         is_active=data.is_active,
     )
@@ -144,7 +157,7 @@ async def update_provider(
         provider.provider_type = data.provider_type
         updated = True
     if data.base_url is not None:
-        provider.base_url = data.base_url
+        provider.base_url = await _validated_base_url(data.base_url)
         updated = True
     if data.api_key is not None:
         provider.api_key = data.api_key

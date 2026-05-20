@@ -49,12 +49,16 @@
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/api/runtime-config`, `/`, and `/metrics` may omit
   it. Admin/provider registry endpoints must enforce role checks in addition to
-  authentication.
+  authentication. LLM provider `base_url` values must fail closed unless they are
+  HTTPS, exact-host allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only
+  to global addresses.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
   reject HTML-like execution item markup at the backend boundary rather than
-  storing user-supplied tags for later UI rendering.
+  storing user-supplied tags for later UI rendering. Parsed email display fields
+  must not persist active HTML/script markup; preserve message/thread identifiers
+  separately from UI-safe subject/body, address, and attachment display text.
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.

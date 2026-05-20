@@ -1,11 +1,15 @@
+import asyncio
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from core.config import settings
+from core.exceptions import LLMServiceError
 from services.llm_service import (
     extract_todos_and_summary,
     draft_reply,
     ExtractionResult,
 )
-from core.exceptions import LLMServiceError
 
 
 @pytest.fixture
@@ -68,6 +72,47 @@ async def test_draft_reply_success(mock_openai):
     result = await draft_reply("Test email", "Draft a positive reply", "test-key")
 
     # Verify results
+    assert result == "Drafted reply text"
+    mock_openai.chat.completions.create.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_draft_reply_resolves_custom_base_url_off_event_loop(
+    mock_openai, monkeypatch
+):
+    monkeypatch.setattr(
+        settings, "ALLOWED_LLM_BASE_URL_HOSTS", "llm-gateway.example.com"
+    )
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "llm-gateway.example.com"
+        assert port == 443
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("LLM provider DNS resolution ran on event loop")
+        return [(2, 1, 6, "", ("93.184.216.34", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+    mock_response = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = "Drafted reply text"
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_response.choices = [mock_choice]
+    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    result = await draft_reply(
+        "Test email",
+        "Draft a positive reply",
+        "test-key",
+        base_url="https://llm-gateway.example.com/v1",
+    )
+
     assert result == "Drafted reply text"
     mock_openai.chat.completions.create.assert_called_once()
 

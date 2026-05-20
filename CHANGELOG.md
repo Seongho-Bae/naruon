@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
+  global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
+  provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.
+- Seongho Bae (@seonghobae): task 제목 HTML 검출을 entity/comment/doctype/processing
+  instruction 우회까지 막도록 확장하고, email parser가 subject/body/attachment
+  display text에서 active HTML/script markup을 제거하도록 보강했습니다.
 - Seongho Bae (@seonghobae): email-derived task 제목을 plain text 경계로 고정해
   `/api/tasks/from-email`이 HTML-like 실행 항목을 저장하지 않도록 거부하고,
   공개 문서/테스트 fixture용 `AUTH_SESSION_HMAC_SECRET` 재사용을 설정과 runtime

@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     CONTROL_PLANE_DOMAIN: str = "naruon.net"
     ALLOWED_SMTP_HOSTS: str = ""
     ALLOWED_SMTP_PORTS: str = "465,587"
+    ALLOWED_LLM_BASE_URL_HOSTS: str = ""
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
