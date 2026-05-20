@@ -2172,6 +2172,7 @@ EOF
 
 run_pull_request_target_frontend_email_context_scope_case() {
 	local changed_file="${1:?changed file is required}"
+	local case_name="pull-request-target-frontend-email-context:$changed_file"
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
 	local bin_dir="$tmp_dir/bin"
@@ -2314,8 +2315,8 @@ EOF
 	local rc=$?
 	set -e
 
-	assert_equals "0" "$rc" "case=pull-request-target-frontend-email-context exit code"
-	assert_file_contains "$output_log" "scan ok with frontend email backend authorization context" "case=pull-request-target-frontend-email-context output"
+	assert_equals "0" "$rc" "case=$case_name exit code"
+	assert_file_contains "$output_log" "scan ok with frontend email backend authorization context" "case=$case_name output"
 
 	rm -rf "$tmp_dir"
 }
