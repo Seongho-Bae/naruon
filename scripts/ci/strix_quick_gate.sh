@@ -1450,6 +1450,7 @@ evaluate_pull_request_findings() {
 	threshold_rank="$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")"
 	local found_baseline_threshold_finding=0
 	local found_changed_manifest_only_threshold_finding=0
+	local found_retryable_model_inconsistency=0
 	local found_any_vuln_file=0
 	local run_dir vulnerabilities_dir vuln_file line severity rank
 	for run_dir in "$STRIX_REPORTS_DIR"/*; do
@@ -1475,6 +1476,10 @@ evaluate_pull_request_findings() {
 				return 1
 			fi
 			if [ "$rank" -lt "$threshold_rank" ]; then
+				continue
+			fi
+			if vulnerability_file_is_retryable_model_inconsistency "$vuln_file"; then
+				found_retryable_model_inconsistency=1
 				continue
 			fi
 			mapfile -t vulnerability_locations < <(extract_vulnerability_locations "$vuln_file")
@@ -1520,6 +1525,10 @@ evaluate_pull_request_findings() {
 	if [ "$found_baseline_threshold_finding" -eq 0 ] && [ "$found_changed_manifest_only_threshold_finding" -eq 0 ]; then
 		rank="$(extract_first_severity_rank "$STRIX_LOG")"
 		if [ "$rank" -lt 0 ]; then
+			if [ "$found_retryable_model_inconsistency" -eq 1 ]; then
+				PR_FINDINGS_DECISION="retry_model_inconsistency"
+				return 1
+			fi
 			return 1
 		fi
 		if [ "$rank" -ge "$threshold_rank" ]; then
@@ -1561,6 +1570,11 @@ evaluate_pull_request_findings() {
 				done
 			fi
 		fi
+	fi
+
+	if [ "$found_baseline_threshold_finding" -eq 0 ] && [ "$found_changed_manifest_only_threshold_finding" -eq 0 ] && [ "$found_retryable_model_inconsistency" -eq 1 ]; then
+		PR_FINDINGS_DECISION="retry_model_inconsistency"
+		return 1
 	fi
 
 	if [ "$found_changed_manifest_only_threshold_finding" -eq 1 ]; then
@@ -2296,7 +2310,8 @@ should_allow_pull_request_infra_zero_finding_bypass() {
 	return 0
 }
 
-is_hallucinated_endpoint_finding() {
+vulnerability_file_has_absent_endpoint_finding() {
+	local vuln_file="$1"
 	# Configurable list of source directories to check for endpoints.
 	# Defaults to "." (i.e. TARGET_PATH itself) so that both
 	# STRIX_TARGET_PATH=./ and STRIX_TARGET_PATH=./src work correctly
@@ -2321,78 +2336,80 @@ is_hallucinated_endpoint_finding() {
 		return 1
 	fi
 
-	local latest_report_dir
-	if ! latest_report_dir="$(latest_strix_report_dir)"; then
+	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
 		return 1
 	fi
 
 	local endpoint_seen=0
 	local endpoint_present_in_source=0
 	local endpoint
-	local vuln_file
 
-	for vuln_file in "$latest_report_dir"/vulnerabilities/*.md; do
-		if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+	while IFS= read -r endpoint; do
+		if [ -z "$endpoint" ]; then
 			continue
 		fi
 
-		while IFS= read -r endpoint; do
-			if [ -z "$endpoint" ]; then
-				continue
-			fi
-
-			endpoint_seen=1
-			local search_dir
-			for search_dir in "${resolved_dirs[@]}"; do
-				# Exclude the strix reports directory and common non-source
-				# directories from the source search to prevent accidental
-				# matches and reduce runtime (especially when STRIX_TARGET_PATH=./).
-				#
-				# Each exclude-dir:
-				#   STRIX_REPORTS_DIR — strix output itself (would always match).
-				#       Both the full path and basename are excluded so that
-				#       nested paths like "reports/strix_runs" are also caught.
-				#   .git             — VCS internals
-				#   node_modules     — JS/TS dependencies (may contain API strings)
-				#   vendor           — Go/PHP vendored deps
-				#   __pycache__      — Python bytecode cache
-				#   .venv            — Python virtualenv
-				#   target           — Rust/Java build artifacts
-				#   .mypy_cache      — mypy type-check cache
-				#   .pytest_cache    — pytest result cache
-				#   dist             — common build output directory
-				#   build            — common build output directory
-				#   .tox             — Python tox test environments
-				#   .ruff_cache      — Ruff linter cache
-				if grep -r -Fq \
-					--exclude-dir="$STRIX_REPORTS_DIR" \
-					--exclude-dir="$(basename "$STRIX_REPORTS_DIR")" \
-					--exclude-dir=".git" \
-					--exclude-dir="node_modules" \
-					--exclude-dir="vendor" \
-					--exclude-dir="__pycache__" \
-					--exclude-dir=".venv" \
-					--exclude-dir="target" \
-					--exclude-dir=".mypy_cache" \
-					--exclude-dir=".pytest_cache" \
-					--exclude-dir="dist" \
-					--exclude-dir="build" \
-					--exclude-dir=".tox" \
-					--exclude-dir=".ruff_cache" \
-					-- "$endpoint" "$search_dir"; then
-					endpoint_present_in_source=1
-					break
-				fi
-			done
-			if [ "$endpoint_present_in_source" -eq 1 ]; then
+		endpoint_seen=1
+		local search_dir
+		for search_dir in "${resolved_dirs[@]}"; do
+			# Exclude the strix reports directory and common non-source
+			# directories from the source search to prevent accidental
+			# matches and reduce runtime (especially when STRIX_TARGET_PATH=./).
+			#
+			# Each exclude-dir:
+			#   STRIX_REPORTS_DIR — strix output itself (would always match).
+			#       Both the full path and basename are excluded so that
+			#       nested paths like "reports/strix_runs" are also caught.
+			#   .git             — VCS internals
+			#   node_modules     — JS/TS dependencies (may contain API strings)
+			#   vendor           — Go/PHP vendored deps
+			#   __pycache__      — Python bytecode cache
+			#   .venv            — Python virtualenv
+			#   target           — Rust/Java build artifacts
+			#   .mypy_cache      — mypy type-check cache
+			#   .pytest_cache    — pytest result cache
+			#   dist             — common build output directory
+			#   build            — common build output directory
+			#   .tox             — Python tox test environments
+			#   .ruff_cache      — Ruff linter cache
+			if grep -r -Fq \
+				--exclude-dir="$STRIX_REPORTS_DIR" \
+				--exclude-dir="$(basename "$STRIX_REPORTS_DIR")" \
+				--exclude-dir=".git" \
+				--exclude-dir="node_modules" \
+				--exclude-dir="vendor" \
+				--exclude-dir="__pycache__" \
+				--exclude-dir=".venv" \
+				--exclude-dir="target" \
+				--exclude-dir=".mypy_cache" \
+				--exclude-dir=".pytest_cache" \
+				--exclude-dir="dist" \
+				--exclude-dir="build" \
+				--exclude-dir=".tox" \
+				--exclude-dir=".ruff_cache" \
+				-- "$endpoint" "$search_dir"; then
+				endpoint_present_in_source=1
 				break
 			fi
-		done < <(grep -Eo '/api/[[:alnum:]_./-]+' "$vuln_file" | sort -u)
-
+		done
 		if [ "$endpoint_present_in_source" -eq 1 ]; then
 			break
 		fi
-	done
+	done < <(python3 - "$vuln_file" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+endpoints = set()
+for line in text.splitlines():
+    if not re.search(r"\bEndpoint\b", line, re.IGNORECASE):
+        continue
+    endpoints.update(re.findall(r"/api/[A-Za-z0-9_./-]+", line))
+for endpoint in sorted(endpoints):
+    print(endpoint)
+PY
+	)
 
 	if [ "$endpoint_seen" -eq 0 ]; then
 		return 1
@@ -2404,6 +2421,139 @@ is_hallucinated_endpoint_finding() {
 
 	echo "Detected Strix report endpoint(s) absent from source; treating as retryable model inconsistency." >&2
 	return 0
+}
+
+is_hallucinated_endpoint_finding() {
+	local latest_report_dir
+	if ! latest_report_dir="$(latest_strix_report_dir)"; then
+		return 1
+	fi
+
+	local vuln_file
+
+	for vuln_file in "$latest_report_dir"/vulnerabilities/*.md; do
+		if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+source_file_has_encrypted_runner_registration_token() {
+	local source_file="$1"
+	python3 - "$source_file" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+source_path = Path(sys.argv[1])
+text = source_path.read_text(encoding="utf-8", errors="replace")
+class_match = re.search(
+    r"^class\s+WorkspaceRunnerConfig\b[\s\S]*?(?=^class\s+\w|\Z)",
+    text,
+    re.MULTILINE,
+)
+if not class_match:
+    raise SystemExit(1)
+class_body = class_match.group(0)
+encrypted_registration_token = re.search(
+    r"registration_token[\s\S]{0,260}mapped_column\(\s*EncryptedString\b",
+    class_body,
+)
+raise SystemExit(0 if encrypted_registration_token else 1)
+PY
+}
+
+report_claims_plain_runner_registration_token() {
+	local vuln_file="$1"
+	python3 - "$vuln_file" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+text = Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+if "WorkspaceRunnerConfig" not in text or "registration_token" not in text:
+    raise SystemExit(1)
+if "backend/db/models.py" not in text:
+    raise SystemExit(1)
+plain_string_claim = re.search(
+    r"registration_token[\s\S]{0,500}mapped_column\(\s*String\b",
+    text,
+)
+plain_text_claim = re.search(
+    r"registration_token[\s\S]{0,500}(plain text|plain string|stored as a plain)",
+    text,
+    re.IGNORECASE,
+)
+raise SystemExit(0 if plain_string_claim or plain_text_claim else 1)
+PY
+}
+
+runner_registration_token_source_candidates() {
+	local resolved_scan_target=""
+	resolved_scan_target="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null || true)"
+
+	if [ -n "$resolved_scan_target" ]; then
+		printf '%s\n' "$resolved_scan_target/backend/db/models.py"
+	fi
+	if pull_request_head_blob_required || [ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -eq 1 ]; then
+		return 0
+	fi
+	printf '%s\n' "$REPO_ROOT/backend/db/models.py"
+}
+
+vulnerability_file_has_hallucinated_source_claim() {
+	local vuln_file="$1"
+	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+		return 1
+	fi
+	if ! report_claims_plain_runner_registration_token "$vuln_file"; then
+		return 1
+	fi
+
+	local source_file
+	while IFS= read -r source_file; do
+		if [ -z "$source_file" ]; then
+			continue
+		fi
+		if [ ! -f "$source_file" ] || [ -L "$source_file" ]; then
+			continue
+		fi
+		if source_file_has_encrypted_runner_registration_token "$source_file"; then
+			echo "Detected Strix report contradicting scanned runner registration token encryption; treating as retryable model inconsistency." >&2
+			return 0
+		fi
+	done < <(runner_registration_token_source_candidates)
+
+	return 1
+}
+
+vulnerability_file_is_retryable_model_inconsistency() {
+	local vuln_file="$1"
+	if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
+		return 0
+	fi
+	if vulnerability_file_has_hallucinated_source_claim "$vuln_file"; then
+		return 0
+	fi
+	return 1
+}
+
+is_hallucinated_source_claim_finding() {
+	local latest_report_dir
+	if ! latest_report_dir="$(latest_strix_report_dir)"; then
+		return 1
+	fi
+
+	local vuln_file
+	for vuln_file in "$latest_report_dir"/vulnerabilities/*.md; do
+		if vulnerability_file_has_hallucinated_source_claim "$vuln_file"; then
+			return 0
+		fi
+	done
+
+	return 1
 }
 
 is_model_retryable_error() {
@@ -2433,7 +2583,19 @@ is_model_retryable_error() {
 		return 0
 	fi
 
+	if [ "$PR_FINDINGS_DECISION" = "retry_model_inconsistency" ]; then
+		return 0
+	fi
+
+	if is_pull_request_event; then
+		return 1
+	fi
+
 	if is_hallucinated_endpoint_finding; then
+		return 0
+	fi
+
+	if is_hallucinated_source_claim_finding; then
 		return 0
 	fi
 

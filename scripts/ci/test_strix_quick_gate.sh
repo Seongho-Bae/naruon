@@ -694,6 +694,109 @@ EOS
 			;;
 		esac
 		;;
+	pr-stale-source-claim-fallback-success)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-source-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-stale-source/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-stale-source/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			echo "Penetration test failed: stale HIGH finding on backend/db/models.py"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "scan ok after stale-source fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: stale-source scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 30
+			;;
+		esac
+		;;
+	pr-stale-source-plus-real-finding-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-source-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			cat >"$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities/vuln-0002.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/api/emails.py
+
+This is a concrete changed-file finding that must remain blocking.
+EOS
+			echo "Penetration test failed: mixed stale and real HIGH findings"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: mixed real findings must not reach fallback" >&2
+			exit 31
+			;;
+		*)
+			echo "Error: mixed-findings scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 32
+			;;
+		esac
+		;;
+	pr-changed-finding-with-retry-marker-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/changed-finding-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-changed-retry-marker/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-changed-retry-marker/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/api/emails.py
+
+This changed-file finding must remain blocking even when the model log also contains retryable provider text.
+EOS
+			echo "litellm.exceptions.Timeout: provider timed out after writing a HIGH changed-file finding"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: changed-file findings with retry markers must not reach fallback" >&2
+			exit 33
+			;;
+		*)
+			echo "Error: changed-retry-marker scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 34
+			;;
+		esac
+		;;
+	pr-stale-report-plus-inline-changed-finding-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-inline-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-stale-report-inline-changed/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-stale-report-inline-changed/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			echo "Severity: HIGH"
+			echo "Target: backend/api/emails.py"
+			echo "Penetration test failed: stale report plus inline changed-file HIGH finding"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: inline changed-file findings must not reach fallback" >&2
+			exit 35
+			;;
+		*)
+			echo "Error: stale-inline scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 36
+			;;
+		esac
+		;;
 	endpoint-in-excluded-dir)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/excluded-dir-primary)
@@ -1665,6 +1768,50 @@ EOF
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/.git/refs/leaked.txt"
 		mkdir -p "$repo_root_dir/node_modules/fake-pkg"
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/node_modules/fake-pkg/index.js"
+	elif [ "$scenario" = "pr-stale-source-claim-fallback-success" ]; then
+		mkdir -p "$repo_root_dir/backend/db"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+	elif [ "$scenario" = "pr-stale-source-plus-real-finding-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/db" "$repo_root_dir/backend/api"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-changed-finding-with-retry-marker-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/api"
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-stale-report-plus-inline-changed-finding-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/db" "$repo_root_dir/backend/api"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
 	elif [ "$scenario" = "pr-changed-scope-bounded" ]; then
 		echo 'class Unrelated {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
 	elif [ "$scenario" = "pr-python-scope-context" ]; then
@@ -1988,6 +2135,126 @@ EOF
 
 	assert_equals "0" "$rc" "case=$case_name exit code"
 	assert_file_contains "$output_log" "scan ok with PR head content" "case=$case_name output"
+
+	rm -rf "$tmp_dir"
+}
+
+run_pull_request_target_plaintext_runner_token_fails_closed_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/db/models.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${STRIX_LLM:-}" >> "${FAKE_STRIX_CALL_LOG:?}"
+case "${STRIX_LLM:-}" in
+vertex_ai/stale-source-primary)
+	mkdir -p "${STRIX_REPORTS_DIR:?}/fake-pr-head-plaintext/vulnerabilities"
+	cat >"$STRIX_REPORTS_DIR/fake-pr-head-plaintext/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+	echo "Penetration test failed: PR-head plaintext token finding"
+	exit 1
+	;;
+vertex_ai/fallback-one)
+	echo "Error: PR-head plaintext findings must not reach fallback" >&2
+	exit 31
+	;;
+*)
+	echo "Error: unexpected model (${STRIX_LLM:-})" >&2
+	exit 32
+	;;
+esac
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'vertex_ai/stale-source-primary' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")"
+		cat >"$changed_file" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		cat >"$changed_file" <<'EOS'
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(String, nullable=True)
+EOS
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_VERTEX_FALLBACK_MODELS="vertex_ai/fallback-one" \
+			STRIX_FAIL_ON_MIN_SEVERITY="HIGH" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "1" "$rc" "case=pull-request-target-plaintext-runner-token-fails-closed exit code"
+	assert_file_contains "$output_log" "Strix finding intersects files changed in this pull request." "case=pull-request-target-plaintext-runner-token-fails-closed output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "1" "$call_count" "case=pull-request-target-plaintext-runner-token-fails-closed strix call count"
 
 	rm -rf "$tmp_dir"
 }
@@ -3208,6 +3475,8 @@ run_pull_request_target_head_scope_case \
 	"BASE_BRACKET_ROUTE_CONTENT_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_BRACKET_ROUTE_CONTENT_SHOULD_BE_SCANNED"
 
+run_pull_request_target_plaintext_runner_token_fails_closed_case
+
 run_pull_request_target_rejects_unsafe_changed_path_case \
 	"pull-request-target-parent-directory-changed-path-fails-closed" \
 	"../outside.py"
@@ -3785,6 +4054,90 @@ run_gate_case "vertex-primary-existing-endpoint-nonrecoverable" \
 	"1" \
 	"vertex_ai/existing-endpoint-primary" \
 	"<unset>"
+
+run_gate_case "pr-stale-source-claim-fallback-success" \
+	"vertex_ai/stale-source-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after stale-source fallback" \
+	"2" \
+	"vertex_ai/stale-source-primary|vertex_ai/fallback-one" \
+	"<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/db/models.py"
+
+run_gate_case "pr-stale-source-plus-real-finding-blocks" \
+	"vertex_ai/stale-source-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/stale-source-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'backend/db/models.py\nbackend/api/emails.py'
+
+run_gate_case "pr-changed-finding-with-retry-marker-blocks" \
+	"vertex_ai/changed-finding-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/changed-finding-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/emails.py"
+
+run_gate_case "pr-stale-report-plus-inline-changed-finding-blocks" \
+	"vertex_ai/stale-inline-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/stale-inline-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'backend/db/models.py\nbackend/api/emails.py'
 
 run_gate_case "high-vuln-below-threshold" \
 	"vertex_ai/high-vuln-primary" \
