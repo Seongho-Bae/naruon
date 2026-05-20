@@ -1629,6 +1629,7 @@ EOF
 	set +e
 	local env_cmd=(
 		PATH="$bin_dir:$PATH"
+		STRIX_INPUT_FILE_ROOT="$tmp_dir"
 		GITHUB_EVENT_NAME=""
 		GITHUB_EVENT_PATH=""
 		FAKE_STRIX_SCENARIO="$scenario"
@@ -1901,6 +1902,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2005,6 +2007,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2148,6 +2151,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2301,6 +2305,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2412,6 +2417,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			REAL_GIT_PATH="$real_git" \
 			FAKE_GIT_FAIL_COMMAND="$fake_git_fail_command" \
 			GITHUB_EVENT_NAME="pull_request_target" \
@@ -2498,6 +2504,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2567,6 +2574,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u STRIX_TEST_PR_SCA_STATUS_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			GITHUB_EVENT_PATH="$event_payload_file" \
 			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
@@ -2649,6 +2657,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_CHILD_PID_FILE="$child_pid_file" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2719,6 +2728,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_CALL_COUNT_FILE="$call_count_file" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2786,6 +2796,7 @@ EOF
 	set +e
 	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 		STRIX_DISABLE_PR_SCOPING="0" \
 		STRIX_LLM_FILE="$strix_llm_file" \
 		LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2827,6 +2838,7 @@ EOF
 	set +e
 	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 		STRIX_DISABLE_PR_SCOPING="0" \
 		STRIX_LLM_FILE="$strix_llm_file" \
 		LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2843,6 +2855,183 @@ EOF
 	if [ "$rc" = "99" ]; then
 		record_failure "case=invalid-min-fail-severity should fail before fake strix exit code"
 	fi
+
+	rm -rf "$tmp_dir"
+}
+
+run_llm_api_base_file_outside_input_root_fails_closed_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
+	local allowed_input_dir="$tmp_dir/runner-temp"
+	local outside_dir="$tmp_dir/outside"
+	local output_log="$tmp_dir/output.log"
+	local fake_strix="$tmp_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$allowed_input_dir/strix_llm.txt"
+	local llm_api_key_file="$allowed_input_dir/llm_api_key.txt"
+	local llm_api_base_file="$outside_dir/llm_api_base.txt"
+
+	mkdir -p "$repo_root_dir/scripts/ci" "$allowed_input_dir" "$outside_dir"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >"${FAKE_STRIX_CALL_LOG:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'openai/gpt-4o-mini' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s' 'https://example.invalid/generateContent' >"$llm_api_base_file"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$tmp_dir:$PATH" \
+			RUNNER_TEMP="$allowed_input_dir" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			LLM_API_BASE_FILE="$llm_api_base_file" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=llm-api-base-file-outside-input-root exit code"
+	assert_file_contains "$output_log" "LLM_API_BASE_FILE must be inside the trusted input file root" "case=llm-api-base-file-outside-input-root output"
+	if [ -f "$call_log" ]; then
+		record_failure "case=llm-api-base-file-outside-input-root should reject before invoking strix"
+	fi
+
+	rm -rf "$tmp_dir"
+}
+
+run_required_input_file_outside_input_root_fails_closed_case() {
+	local file_env="$1"
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
+	local allowed_input_dir="$tmp_dir/runner-temp"
+	local outside_dir="$tmp_dir/outside"
+	local output_log="$tmp_dir/output.log"
+	local fake_strix="$tmp_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$allowed_input_dir/strix_llm.txt"
+	local llm_api_key_file="$allowed_input_dir/llm_api_key.txt"
+	local llm_api_base_file="$allowed_input_dir/llm_api_base.txt"
+	local outside_file="$outside_dir/${file_env}.txt"
+
+	mkdir -p "$repo_root_dir/scripts/ci" "$allowed_input_dir" "$outside_dir"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >"${FAKE_STRIX_CALL_LOG:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'openai/gpt-4o-mini' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s' 'https://example.invalid/generateContent' >"$llm_api_base_file"
+	case "$file_env" in
+	STRIX_LLM_FILE)
+		printf '%s' 'openai/gpt-4o-mini' >"$outside_file"
+		strix_llm_file="$outside_file"
+		;;
+	LLM_API_KEY_FILE)
+		printf '%s' 'dummy' >"$outside_file"
+		llm_api_key_file="$outside_file"
+		;;
+	*)
+		record_failure "unsupported required input file env: $file_env"
+		rm -rf "$tmp_dir"
+		return
+		;;
+	esac
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$tmp_dir:$PATH" \
+			RUNNER_TEMP="$allowed_input_dir" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			LLM_API_BASE_FILE="$llm_api_base_file" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=$file_env-outside-input-root exit code"
+	assert_file_contains "$output_log" "$file_env must be inside the trusted input file root" "case=$file_env-outside-input-root output"
+	if [ -f "$call_log" ]; then
+		record_failure "case=$file_env-outside-input-root should reject before invoking strix"
+	fi
+
+	rm -rf "$tmp_dir"
+}
+
+run_input_file_root_override_takes_precedence_over_runner_temp_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
+	local explicit_input_root="$tmp_dir/explicit-input-root"
+	local inherited_runner_temp="$tmp_dir/inherited-runner-temp"
+	local output_log="$tmp_dir/output.log"
+	local fake_strix="$tmp_dir/strix"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$explicit_input_root/strix_llm.txt"
+	local llm_api_key_file="$explicit_input_root/llm_api_key.txt"
+	local llm_api_base_file="$explicit_input_root/llm_api_base.txt"
+
+	mkdir -p "$repo_root_dir/scripts/ci" "$explicit_input_root" "$inherited_runner_temp"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'called\n' >"${FAKE_STRIX_CALL_LOG:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'openai/gpt-4o-mini' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+	printf '%s' 'https://example.invalid/generateContent' >"$llm_api_base_file"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$tmp_dir:$PATH" \
+			RUNNER_TEMP="$inherited_runner_temp" \
+			STRIX_INPUT_FILE_ROOT="$explicit_input_root" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			LLM_API_BASE_FILE="$llm_api_base_file" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=input-file-root-override-precedence exit code"
+	assert_file_contains "$call_log" "called" "case=input-file-root-override-precedence strix invocation"
 
 	rm -rf "$tmp_dir"
 }
@@ -2884,6 +3073,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$tmp_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2938,6 +3128,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$tmp_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2986,6 +3177,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$tmp_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -3037,6 +3229,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -4058,6 +4251,10 @@ run_gate_case "infra-error-sticky-flag" \
 	"1"
 
 run_invalid_min_fail_severity_case
+run_required_input_file_outside_input_root_fails_closed_case "STRIX_LLM_FILE"
+run_required_input_file_outside_input_root_fails_closed_case "LLM_API_KEY_FILE"
+run_llm_api_base_file_outside_input_root_fails_closed_case
+run_input_file_root_override_takes_precedence_over_runner_temp_case
 run_stale_report_case
 run_symlink_report_case
 run_unsafe_target_path_case

@@ -29,6 +29,7 @@ DEFAULT_PROVIDER_RAW="${STRIX_LLM_DEFAULT_PROVIDER:-}"
 # shellcheck disable=SC2034  # consumed indirectly by sourced model helper functions
 DEFAULT_PROVIDER=""
 LLM_API_BASE_FILE="${LLM_API_BASE_FILE:-}"
+STRIX_INPUT_FILE_ROOT="${STRIX_INPUT_FILE_ROOT:-${RUNNER_TEMP:-}}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
 STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
@@ -53,6 +54,49 @@ PULL_REQUEST_SCOPE_FILE_BATCHES=()
 CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
 TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
+
+resolve_trusted_input_file() {
+	local label="$1"
+	local input_file="$2"
+	if [ -z "$input_file" ] || [ ! -f "$input_file" ] || [ -L "$input_file" ]; then
+		echo "ERROR: $label must reference a regular file." >&2
+		return 2
+	fi
+	if [ -z "$STRIX_INPUT_FILE_ROOT" ] || [ ! -d "$STRIX_INPUT_FILE_ROOT" ] || [ -L "$STRIX_INPUT_FILE_ROOT" ]; then
+		echo "ERROR: STRIX_INPUT_FILE_ROOT or RUNNER_TEMP must reference a trusted input file root." >&2
+		return 2
+	fi
+
+	python3 - "$label" "$input_file" "$STRIX_INPUT_FILE_ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+label = sys.argv[1]
+input_path = Path(sys.argv[2])
+root_path = Path(sys.argv[3])
+
+try:
+    resolved_input = input_path.resolve(strict=True)
+    resolved_root = root_path.resolve(strict=True)
+except OSError as exc:
+    print(f"ERROR: {label} could not be canonicalized: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+
+if not resolved_root.is_dir():
+    print("ERROR: STRIX_INPUT_FILE_ROOT or RUNNER_TEMP must reference a trusted input file root.", file=sys.stderr)
+    raise SystemExit(2)
+if not resolved_input.is_file():
+    print(f"ERROR: {label} must reference a regular file.", file=sys.stderr)
+    raise SystemExit(2)
+try:
+    resolved_input.relative_to(resolved_root)
+except ValueError:
+    print(f"ERROR: {label} must be inside the trusted input file root.", file=sys.stderr)
+    raise SystemExit(2)
+
+print(resolved_input)
+PY
+}
 
 # shellcheck disable=SC2317,SC2329  # invoked from cleanup trap
 publish_artifact_reports() {
@@ -83,8 +127,15 @@ cleanup_runtime() {
 trap cleanup_runtime EXIT INT TERM
 
 STRIX_LLM_FILE="${STRIX_LLM_FILE:-}"
-if [ -z "$STRIX_LLM_FILE" ] || [ ! -f "$STRIX_LLM_FILE" ] || [ -L "$STRIX_LLM_FILE" ]; then
+if [ -z "$STRIX_LLM_FILE" ]; then
 	echo "ERROR: STRIX_LLM_FILE must reference a regular file containing the model." >&2
+	exit 2
+fi
+if [ ! -f "$STRIX_LLM_FILE" ] || [ -L "$STRIX_LLM_FILE" ]; then
+	echo "ERROR: STRIX_LLM_FILE must reference a regular file containing the model." >&2
+	exit 2
+fi
+if ! STRIX_LLM_FILE="$(resolve_trusted_input_file "STRIX_LLM_FILE" "$STRIX_LLM_FILE")"; then
 	exit 2
 fi
 STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"
@@ -94,14 +145,27 @@ if [ -z "$STRIX_LLM" ]; then
 fi
 
 LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
-if [ -z "$LLM_API_KEY_FILE" ] || [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+if [ -z "$LLM_API_KEY_FILE" ]; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
+	exit 2
+fi
+if [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
+	exit 2
+fi
+if ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
 	exit 2
 fi
 LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
 if [ -z "$LLM_API_KEY" ]; then
 	echo "ERROR: LLM_API_KEY_FILE must contain a non-empty API key." >&2
 	exit 2
+fi
+
+if [ -n "$LLM_API_BASE_FILE" ]; then
+	if ! LLM_API_BASE_FILE="$(resolve_trusted_input_file "LLM_API_BASE_FILE" "$LLM_API_BASE_FILE")"; then
+		exit 2
+	fi
 fi
 
 require_non_negative_integer() {
@@ -1666,13 +1730,13 @@ resolved_llm_api_base_for_model() {
 	if [ -z "$LLM_API_BASE_FILE" ]; then
 		return 0
 	fi
-	if [ ! -f "$LLM_API_BASE_FILE" ] || [ -L "$LLM_API_BASE_FILE" ]; then
-		echo "ERROR: LLM_API_BASE_FILE must reference a regular file." >&2
+	local resolved_llm_api_base_file
+	if ! resolved_llm_api_base_file="$(resolve_trusted_input_file "LLM_API_BASE_FILE" "$LLM_API_BASE_FILE")"; then
 		return 2
 	fi
 
 	local llm_api_base_value
-	llm_api_base_value="$(cat -- "$LLM_API_BASE_FILE")"
+	llm_api_base_value="$(cat -- "$resolved_llm_api_base_file")"
 	llm_api_base_value="${llm_api_base_value%%/generateContent*}"
 	llm_api_base_value="${llm_api_base_value%%:generateContent*}"
 	llm_api_base_value="$(trim_whitespace "$llm_api_base_value")"
