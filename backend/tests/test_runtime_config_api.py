@@ -2,13 +2,10 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 
-pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
-
 
 @pytest.fixture
 def client():
-    # Pass default headers for authentication
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app) as c:
         yield c
 
 

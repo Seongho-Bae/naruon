@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 from main import app
 
-client = TestClient(app, headers={"X-User-Id": "testuser"})
+client = TestClient(app)
 
 
 def test_read_root():

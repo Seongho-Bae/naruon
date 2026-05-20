@@ -164,6 +164,15 @@ access is claimed; see `docs/operations/auth-key-management.md`. The current
 Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
 
+Private `/api/*` routers are also registered in `backend/main.py` with the
+default `get_auth_context` dependency so newly added private endpoints inherit a
+signed-session requirement before endpoint-specific user, organization, role, or
+resource checks run. `/api/runtime-config`, `/`, and `/metrics` remain public
+because they expose only non-secret runtime/health metadata. LLM provider
+registry reads and writes are organization/platform admin operations; members use
+tenant-scoped configuration or approved AI workflows rather than provider
+inventory APIs.
+
 The browser API client reads `naruon_session_token` from local storage and sends
 it as the bearer session on signed routes. It does not synthesize or forward
 public identity headers such as `X-User-Id`, `X-Organization-Id`, `X-Group-Id`,

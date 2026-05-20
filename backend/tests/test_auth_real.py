@@ -7,6 +7,7 @@ import time
 
 import pytest
 from fastapi import HTTPException
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
@@ -39,6 +40,7 @@ RUNTIME_HEADER_PARAMS = {
     "x_group_ids",
     "x_dev_auth_token",
 }
+PUBLIC_API_ROUTES = {("/api/runtime-config", frozenset({"GET"}))}
 
 
 class _MockResult:
@@ -144,8 +146,58 @@ def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
         app.dependency_overrides.update(original_overrides)
 
 
+def _request_without_dependency_overrides(method: str, path: str):
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            return client.request(method, path)
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
 def _assert_runner_config_rejects_identity_headers(headers: dict[str, str]) -> None:
     response = _get_runner_config_without_dependency_overrides(headers)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+def test_private_api_routes_have_default_signed_session_dependency():
+    missing_default_auth: list[str] = []
+
+    for route in app.routes:
+        if not isinstance(route, APIRoute) or not route.path.startswith("/api/"):
+            continue
+        route_methods = frozenset(route.methods or set())
+        if (route.path, route_methods) in PUBLIC_API_ROUTES:
+            continue
+        route_level_dependencies = {
+            dependency.dependency for dependency in route.dependencies
+        }
+        if get_auth_context not in route_level_dependencies:
+            missing_default_auth.append(
+                f"{','.join(sorted(route_methods))} {route.path}"
+            )
+
+    assert missing_default_auth == []
+
+
+def test_explicit_public_routes_do_not_require_signed_session():
+    for method, path in (
+        ("GET", "/"),
+        ("GET", "/api/runtime-config"),
+        ("GET", "/metrics"),
+    ):
+        response = _request_without_dependency_overrides(method, path)
+        assert response.status_code == 200, f"{method} {path}: {response.text}"
+
+
+def test_private_api_route_rejects_missing_signed_session_by_default():
+    response = _request_without_dependency_overrides("GET", "/api/emails")
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}

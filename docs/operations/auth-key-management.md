@@ -80,6 +80,13 @@
 - Runtime claims must be signed and server-verifiable. Public headers from
   browsers or edge proxies are not identity material unless they are backed by a
   validated OIDC/JWT or internal signed session envelope.
+- Private FastAPI `/api/*` routers are included with a default
+  `get_auth_context` dependency so authentication is deny-by-default at router
+  registration time. Public endpoints must be explicit exceptions, currently
+  `/api/runtime-config`, `/`, and `/metrics`.
+- Authentication is not sufficient for privileged control-plane resources: LLM
+  provider registry reads and writes require `platform_admin` or
+  `organization_admin` signed role claims.
 - The browser API client sends the stored `naruon_session_token` as
   `Authorization: Bearer` and strips public identity headers (`X-User-Id`,
   `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,

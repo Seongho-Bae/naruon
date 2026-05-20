@@ -135,7 +135,7 @@ def test_llm_provider_crud_admin(admin_client):
 
 def test_llm_provider_member_rejected(member_client):
     response = member_client.get("/api/llm-providers")
-    assert response.status_code == 200
+    assert response.status_code == 403
 
     response = member_client.post(
         "/api/llm-providers",

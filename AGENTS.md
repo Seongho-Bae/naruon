@@ -45,6 +45,11 @@
   public identity headers such as `X-User-Id`, `X-Organization-Id`,
   `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
   tests/mocks must exercise the signed-session path.
+- Private backend `/api/*` routers must be registered with the default
+  `get_auth_context` signed-session dependency; only explicitly documented
+  public endpoints such as `/api/runtime-config`, `/`, and `/metrics` may omit
+  it. Admin/provider registry endpoints must enforce role checks in addition to
+  authentication.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks.
