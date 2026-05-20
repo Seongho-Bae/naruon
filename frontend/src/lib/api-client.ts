@@ -1,3 +1,13 @@
+const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
+  'authorization',
+  'x-dev-auth-token',
+  'x-group-id',
+  'x-group-ids',
+  'x-organization-id',
+  'x-user-id',
+  'x-user-role',
+]);
+
 export class ApiClient {
   private baseUrl: string;
 
@@ -14,11 +24,10 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
-    const userId = this.getCurrentUserId();
     const sessionToken = this.getSessionToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      ...init?.headers,
+      ...this.getSafeCallerHeaders(init?.headers),
     };
     if (sessionToken) {
       return {
@@ -26,13 +35,28 @@ export class ApiClient {
         Authorization: `Bearer ${sessionToken}`,
       };
     }
-    if (userId) {
-      return {
-        ...headers,
-        'X-User-Id': userId,
-      };
-    }
     return headers;
+  }
+
+  private getSafeCallerHeaders(headers?: HeadersInit): Record<string, string> {
+    const safeHeaders: Record<string, string> = {};
+    const includeHeader = (name: string, value: string) => {
+      if (CLIENT_CONTROLLED_AUTHORITY_HEADERS.has(name.toLowerCase())) return;
+      safeHeaders[name] = value;
+    };
+
+    if (!headers) return safeHeaders;
+    if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+      headers.forEach((value, name) => includeHeader(name, value));
+      return safeHeaders;
+    }
+    if (Array.isArray(headers)) {
+      headers.forEach(([name, value]) => includeHeader(name, value));
+      return safeHeaders;
+    }
+
+    Object.entries(headers).forEach(([name, value]) => includeHeader(name, value));
+    return safeHeaders;
   }
 
   getSessionToken() {
@@ -43,15 +67,24 @@ export class ApiClient {
   }
 
   getCurrentUserId() {
-    if (typeof window === 'undefined') return null;
+    const sessionToken = this.getSessionToken();
+    if (!sessionToken) return null;
 
-    const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-    const isPrivateLan = window.location.hostname.startsWith('192.168.');
-    const allowDevOverride = process.env.NODE_ENV !== 'production' || isLocalHost || isPrivateLan;
-    if (!allowDevOverride) return null;
+    const [, payloadSegment] = sessionToken.split('.');
+    if (!payloadSegment) return null;
 
-    const stored = localStorage.getItem('naruon_dev_user')?.trim();
-    return stored || 'testuser';
+    try {
+      const normalizedPayload = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+      const paddedPayload = normalizedPayload.padEnd(
+        Math.ceil(normalizedPayload.length / 4) * 4,
+        '=',
+      );
+      const decodedPayload = JSON.parse(atob(paddedPayload)) as { sub?: unknown };
+      if (typeof decodedPayload.sub !== 'string') return null;
+      return decodedPayload.sub.trim() || null;
+    } catch {
+      return null;
+    }
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {

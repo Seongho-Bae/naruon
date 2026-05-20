@@ -41,8 +41,10 @@
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
 - Browser frontend writes to signed backend routes must carry the stored
-  `naruon_session_token` as `Authorization: Bearer` before development fallback
-  headers, and tests/mocks must exercise that path.
+  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
+  public identity headers such as `X-User-Id`, `X-Organization-Id`,
+  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
+  tests/mocks must exercise the signed-session path.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks.

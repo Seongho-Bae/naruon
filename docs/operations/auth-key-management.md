@@ -80,6 +80,13 @@
 - Runtime claims must be signed and server-verifiable. Public headers from
   browsers or edge proxies are not identity material unless they are backed by a
   validated OIDC/JWT or internal signed session envelope.
+- The browser API client sends the stored `naruon_session_token` as
+  `Authorization: Bearer` and strips public identity headers (`X-User-Id`,
+  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
+  `X-Dev-Auth-Token`) from caller-provided request headers so copied frontend
+  code cannot reintroduce the development-header trust boundary.
+- Caller-provided `Authorization` is also discarded by the browser API client;
+  only the stored `naruon_session_token` may populate the backend bearer session.
 
 ## Keycloak/Casdoor decision path
 

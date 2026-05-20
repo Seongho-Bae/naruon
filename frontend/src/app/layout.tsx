@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { DevAuthSwitcher } from "@/components/DevAuthSwitcher";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import "./globals.css";
 
@@ -21,7 +20,6 @@ export default function RootLayout({
     <html lang="ko" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <DashboardLayout>{children}</DashboardLayout>
-        <DevAuthSwitcher />
       </body>
     </html>
   );

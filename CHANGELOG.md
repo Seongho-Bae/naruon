@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): frontend API client에서 `localStorage.naruon_dev_user`
+  기반 `X-User-Id` 개발용 header 주입을 제거하고, caller-provided public identity
+  headers를 strip하며, legacy 개발용 계정 스위처를 제거해 signed
+  `Authorization: Bearer` session 경로만 backend write/read에 쓰이도록
+  정리했습니다.
 - Seongho Bae (@seonghobae): runtime 인증 dependency에서 개발용 `X-User-*`,
   `X-Organization-*`, `X-Group-*`, `X-Dev-Auth-Token` 헤더 인증 경로를
   제거해, 배포 환경 변수 오설정만으로 공개 요청이 identity/role/scope를

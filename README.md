@@ -190,8 +190,10 @@ repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
 exist. Browser writes to signed backend routes use the stored
-`naruon_session_token` as an `Authorization: Bearer` session before any
-development fallback headers.
+`naruon_session_token` as an `Authorization: Bearer` session, and the frontend
+API client strips public identity headers such as `X-User-Id` and
+`X-Organization-Id`, including group and dev-token variants, rather than
+forwarding development identity fallbacks.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread

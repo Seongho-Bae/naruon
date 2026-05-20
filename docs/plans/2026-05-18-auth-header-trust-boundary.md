@@ -194,6 +194,36 @@ PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest -q back
 - [x] Keep production calendar credential lookup fail-closed until a connector
   registry provides trusted per-user credentials.
 
+## Task 11: Strix frontend identity-header blocker
+
+- [x] Root cause: latest Strix run `26142440689` found that
+  `frontend/src/lib/api-client.ts` could synthesize `X-User-Id` from
+  `localStorage.naruon_dev_user`, leaving a client-controlled public identity
+  header in the browser request path even after backend runtime auth ignored it.
+- [x] Add RED regression coverage proving the API client does not emit the
+  local-storage development identity header and strips caller-provided public
+  identity headers while preserving non-identity custom headers.
+- [x] Remove the `naruon_dev_user`/`getCurrentUserId()` fallback from the
+  frontend API client, re-scope `getCurrentUserId()` to decode only the stored
+  signed-session payload for UI request shaping, remove the legacy dev auth
+  switcher, sanitize caller headers, and update frontend E2E CORS mocks plus
+  architecture docs to keep fixtures aligned with signed-session authentication.
+- [x] RED evidence:
+
+```bash
+npm test -- src/lib/api-client.test.ts
+# 1 failed: expected headers not to have property "X-User-Id"; received "attacker-selected-user".
+
+npm test -- src/lib/api-client.test.ts
+# 1 failed: caller-supplied "X-User-Id" was forwarded.
+
+npm test -- src/lib/api-client.test.ts
+# 1 failed: caller-supplied "X-Group-Ids" was forwarded.
+
+npm test -- src/lib/api-client.test.ts
+# 1 failed: lowercase caller-supplied "authorization" shadow header survived.
+```
+
 ## Verification evidence
 
 ```bash
