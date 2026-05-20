@@ -11,9 +11,9 @@
   `AUTH_SESSION_HMAC_SECRET`. The secret must be explicitly configured,
   high-entropy generated material, and at least 32 bytes. Settings fail at
   startup in every runtime mode when this secret is missing, too short, or an
-  obvious repeated placeholder; runtime verification still fails closed with
-  `401 Authentication required` when an already-loaded configured value becomes
-  absent or weak.
+  obvious repeated placeholder or known public fixture value; runtime
+  verification still fails closed with `401 Authentication required` when an
+  already-loaded configured value becomes absent, weak, or public.
 - The signed session payload is versioned and must include
   `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
   `workspace`, `exp`, and organization/group scope claims. Tampered, expired,
@@ -23,6 +23,9 @@
 - Token issuers must mint the compact `header.payload.signature` form before this
   verifier rolls out, or the rollout must intentionally expire all legacy
   two-segment sessions.
+- Local smoke tests must generate a fresh local-only `AUTH_SESSION_HMAC_SECRET`
+  instead of copying a static fixture from docs or tests; reusable public fixture
+  secrets are denied by configuration and runtime verification.
 - Endpoint tests that need fixture identity use explicit FastAPI dependency
   overrides in `backend/tests/conftest.py`; those test overrides are not the
   production auth path.

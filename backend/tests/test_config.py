@@ -1,16 +1,18 @@
 import os
+import secrets
 from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
-TEST_AUTH_SESSION_HMAC_SECRET = "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test fixture secret
+TEST_AUTH_SESSION_HMAC_SECRET = os.environ.setdefault(
+    "AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48)
+)
 
 # Set required environment variables before importing settings
 os.environ["DATABASE_URL"] = "postgresql+asyncpg://test:test@localhost:5432/test_db"
-os.environ.setdefault("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
 
-from core.config import Settings, settings
+from core.config import Settings, settings  # noqa: E402
 
 
 def _settings_without_env_file() -> Settings:
@@ -76,6 +78,20 @@ def test_production_settings_reject_repeated_auth_session_hmac_secret(monkeypatc
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", "A" * 32)
 
     with pytest.raises(ValidationError, match="must not be a repeated character"):
+        _settings_without_env_file()
+
+
+def test_settings_reject_public_auth_session_hmac_fixture(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("RUNTIME_ENVIRONMENT", "production")
+    monkeypatch.setenv(
+        "AUTH_SESSION_HMAC_SECRET",
+        "naruon-session-hmac-token-32-byte-minimum",
+    )
+
+    with pytest.raises(ValidationError, match="public fixture value"):
         _settings_without_env_file()
 
 

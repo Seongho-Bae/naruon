@@ -3,6 +3,7 @@ import datetime
 import hashlib
 import hmac
 import json
+import os
 import time
 import uuid
 
@@ -17,9 +18,7 @@ from db.session import get_db
 from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
-TEST_SESSION_HMAC_SECRET = (
-    "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test-only secret
-)
+TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
 
 
 def _base64url_encode(raw: bytes) -> str:
@@ -132,12 +131,7 @@ class MockTaskSession:
                     return None
                 return source_email.message_id
 
-            return MockResult(
-                [
-                    (task, source_message_id(task))
-                    for task in self.tasks
-                ]
-            )
+            return MockResult([(task, source_message_id(task)) for task in self.tasks])
 
         return MockResult(self.tasks)
 
@@ -330,6 +324,23 @@ def test_create_ticket_tasks_sanitizes_nul_bytes_from_execution_items(auth_clien
     body = response.json()
     assert body["tasks"][0]["title"] == "담당자 확인"
     assert "\x00" not in mock_session.tasks[0].title
+
+
+def test_create_ticket_tasks_rejects_html_execution_item_titles(auth_client):
+    mock_session.emails[14] = make_email()
+
+    response = auth_client.post(
+        "/api/tasks/from-email",
+        json={
+            "source_email_id": "<message-14@example.com>",
+            "thread_id": "thread-123",
+            "items": ["<script>alert('XSS by Strix');</script>"],
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Execution items must be plain text"}
+    assert mock_session.tasks == []
 
 
 def test_create_ticket_tasks_rejects_email_owned_by_another_member(auth_client):

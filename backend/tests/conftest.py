@@ -1,11 +1,10 @@
 import os
+import secrets
 
 os.environ.setdefault(
     "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
 )
-os.environ.setdefault(
-    "AUTH_SESSION_HMAC_SECRET", "naruon-session-hmac-token-32-byte-minimum"
-)
+os.environ.setdefault("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
 os.environ.setdefault("ALLOWED_SMTP_HOSTS", "smtp.example.com")
 os.environ.setdefault("DISABLE_BACKGROUND_WORKERS", "1")
 

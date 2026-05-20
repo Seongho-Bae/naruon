@@ -70,7 +70,9 @@ responses use the opaque `task_uid` as their public id and expose source message
 provenance instead of private foreign keys. Task creation from email always
 checks the source email owner scope, copies the canonical thread provenance, and
 strips NUL bytes from titles before persistence so malformed LLM/email-derived
-strings cannot break PostgreSQL text writes.
+strings cannot break PostgreSQL text writes. Because task titles are plain text,
+the backend rejects HTML-like execution item markup before storage instead of
+returning stored tags to a future rendering surface.
 
 Customer-owned mail, CalDAV/CardDAV, and WebDAV systems remain the durable
 source-of-truth. Naruon can cache/index metadata and generate writeback intents,
@@ -154,9 +156,10 @@ FastAPI dependency in `backend/api/auth.py` accepts only `Authorization: Bearer`
 compact session tokens whose protected header pins `alg=HS256` and whose
 `header.payload` signing input is signed by the configured
 `AUTH_SESSION_HMAC_SECRET`; missing, weak, malformed, legacy two-segment,
-wrong-algorithm, tampered, or expired tokens fail closed with 401. The signed
-session envelope must carry explicit identity, role, organization/group, and
-workspace claims, so user ids such as `admin` do not imply elevated privileges.
+wrong-algorithm, tampered, expired, or public fixture-secret tokens fail closed
+with 401. The signed session envelope must carry explicit identity, role,
+organization/group, and workspace claims, so user ids such as `admin` do not
+imply elevated privileges.
 Endpoint tests use FastAPI dependency overrides for fixture identity only through
 explicit opt-in pytest fixtures, while a full Keycloak/Casdoor/OIDC provider and
 audited mailbox-owner migration remain required before production multi-user

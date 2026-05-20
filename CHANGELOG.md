@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): email-derived task 제목을 plain text 경계로 고정해
+  `/api/tasks/from-email`이 HTML-like 실행 항목을 저장하지 않도록 거부하고,
+  공개 문서/테스트 fixture용 `AUTH_SESSION_HMAC_SECRET` 재사용을 설정과 runtime
+  검증 양쪽에서 차단했습니다.
 - Seongho Bae (@seonghobae): private backend API router들을 `get_auth_context`
   signed-session dependency로 기본 등록하고, LLM provider registry 조회도
   organization/platform admin 전용으로 제한해 인증 누락과 member-level provider

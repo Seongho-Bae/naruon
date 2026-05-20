@@ -84,12 +84,17 @@ npm run dev
 
 ## API smoke examples
 
-The backend accepts only signed bearer sessions. For local smoke tests, start the
-API with the same `AUTH_SESSION_HMAC_SECRET` used below, then mint a short-lived
-fixture token:
+The backend accepts only signed bearer sessions. For local smoke tests, generate
+a local-only `AUTH_SESSION_HMAC_SECRET`, start the API with that exact value, and
+then mint a short-lived fixture token from the same shell:
 
 ```bash
-export AUTH_SESSION_HMAC_SECRET="naruon-session-hmac-token-32-byte-minimum"
+export AUTH_SESSION_HMAC_SECRET="$(python3 - <<'PY'
+import secrets
+
+print(secrets.token_urlsafe(48))
+PY
+)"
 export NARUON_DEV_BEARER="$(python3 - <<'PY'
 import base64, hashlib, hmac, json, os, time
 

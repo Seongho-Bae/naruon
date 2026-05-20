@@ -52,7 +52,9 @@
   authentication.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
-  opaque public ids for user-visible ticket tasks.
+  opaque public ids for user-visible ticket tasks. Task titles are plain text:
+  reject HTML-like execution item markup at the backend boundary rather than
+  storing user-supplied tags for later UI rendering.
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.

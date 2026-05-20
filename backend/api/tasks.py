@@ -1,4 +1,5 @@
 import datetime
+import re
 from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,7 @@ from db.models import Email, TicketTask
 from db.session import get_db
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+HTML_TAG_PATTERN = re.compile(r"<\s*/?\s*[A-Za-z][^>]*>")
 
 
 TaskStatus = Literal["open", "in_progress", "blocked", "done"]
@@ -50,6 +52,10 @@ def _normalize_execution_items(items: list[str]) -> list[str]:
     for item in items:
         trimmed = item.replace("\x00", "").strip()
         if trimmed:
+            if HTML_TAG_PATTERN.search(trimmed):
+                raise HTTPException(
+                    status_code=422, detail="Execution items must be plain text"
+                )
             normalized.append(trimmed)
     return normalized
 
