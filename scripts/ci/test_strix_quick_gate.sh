@@ -69,10 +69,15 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
 	assert_file_contains "$workflow_file" "Fetch pull request head for trusted scan" "strix workflow fetches PR head without checkout"
 	assert_file_contains "$workflow_file" "refs/remotes/pull" "strix workflow verifies fetched PR head ref"
+	assert_file_contains "$workflow_file" "for pr_head_fetch_attempt in 1 2 3 4 5 6" "strix workflow retries stale PR head ref propagation"
+	assert_file_contains "$workflow_file" "PR head ref did not resolve to expected commit" "strix workflow fails closed when PR head ref remains stale"
+	assert_file_contains "$workflow_file" "sleep 10" "strix workflow waits between stale PR head ref retries"
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
 	assert_file_contains "$workflow_file" "[ \"\$GITHUB_EVENT_NAME\" = \"pull_request_target\" ]" "strix workflow fails closed when PR target secrets are missing"
 	assert_file_contains "$workflow_file" "Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event" "strix workflow fails closed when PR target model auth is missing"
-	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 4" "strix workflow caps PR batches to avoid timeout-only rebalancing"
+	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
+	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
+	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
 	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
 		record_failure "strix workflow must not expose secrets on pull_request events"
 	fi
@@ -1469,6 +1474,10 @@ EOS
 		echo "Error: unexpected configured max-size batch layout attempt $attempt ($target_path)" >&2
 		exit 54
 		;;
+	pr-large-scope-four-batches)
+		echo "scan ok with large PR batch"
+		exit 0
+		;;
 	pr-changed-scope-includes-ci-dependency)
 		if [ -f "$target_path/scripts/ci/strix_quick_gate.sh" ] && [ -f "$target_path/scripts/ci/strix_model_utils.sh" ]; then
 			echo "scan ok with CI support dependency"
@@ -1609,6 +1618,12 @@ EOF
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
+	elif [ "$scenario" = "pr-large-scope-four-batches" ]; then
+		mkdir -p "$repo_root_dir/backend/large-scope"
+		local large_scope_index
+		for large_scope_index in $(seq 1 38); do
+			printf 'file %s\n' "$large_scope_index" >"$repo_root_dir/backend/large-scope/file-$large_scope_index.py"
+		done
 	fi
 
 	set +e
@@ -4007,6 +4022,38 @@ run_gate_case "pr-changed-scope-max-batches" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
 	"" \
 	"2"
+
+large_pr_changed_files=""
+for large_pr_index in $(seq 1 38); do
+	large_pr_path="backend/large-scope/file-$large_pr_index.py"
+	if [ -n "$large_pr_changed_files" ]; then
+		large_pr_changed_files+=$'\n'
+	fi
+	large_pr_changed_files+="$large_pr_path"
+done
+
+run_gate_case "pr-large-scope-four-batches" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Running pull request Strix batch 4/4." \
+	"4" \
+	"openai/gpt-4o-mini|openai/gpt-4o-mini|openai/gpt-4o-mini|openai/gpt-4o-mini" \
+	"https://example.invalid|https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"$large_pr_changed_files" \
+	"" \
+	"12"
 
 run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"openai/gpt-4o-mini" \
