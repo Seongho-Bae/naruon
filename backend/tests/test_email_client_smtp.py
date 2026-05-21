@@ -276,6 +276,93 @@ async def test_connect_validated_socket_uses_pre_resolved_address_without_dns(
     assert len(getaddrinfo_calls) == 1
 
 
+@pytest.mark.asyncio
+async def test_connect_validated_socket_rejects_unresolved_hostname_sockaddr(
+    monkeypatch,
+):
+    destination = email_client.ValidatedSmtpDestination(
+        hostname="smtp.example.com",
+        port=587,
+        family=socket.AF_INET,
+        socktype=socket.SOCK_STREAM,
+        proto=6,
+        sockaddr=("smtp.example.com", 587),
+    )
+
+    async def fail_sock_connect(*args, **kwargs):
+        raise AssertionError("hostname sockaddrs must fail before network egress")
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "sock_connect", fail_sock_connect)
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        await email_client._connect_validated_smtp_socket(destination)
+
+
+@pytest.mark.asyncio
+async def test_send_email_pins_first_validated_sockaddr_across_dns_rebinding(
+    monkeypatch,
+):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "587")
+    getaddrinfo_calls = []
+
+    def fake_getaddrinfo(*args, **kwargs):
+        getaddrinfo_calls.append((args, kwargs))
+        if len(getaddrinfo_calls) == 1:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 587))]
+        raise AssertionError("send_email must not perform a second DNS lookup")
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fake_getaddrinfo)
+    connected_sockaddrs = []
+
+    async def fake_sock_connect(sock, sockaddr):
+        connected_sockaddrs.append(sockaddr)
+
+    monkeypatch.setattr(asyncio.get_running_loop(), "sock_connect", fake_sock_connect)
+
+    async def fake_pinned_send(message, **kwargs):
+        assert kwargs["smtp_server"] == "smtp.example.com"
+        assert kwargs["smtp_socket"].fileno() != -1
+        return {"status": "sent", "simulated": False}
+
+    monkeypatch.setattr(email_client, "_send_pinned_smtp_message", fake_pinned_send)
+
+    result = await email_client.send_email(
+        to_address="test@example.com",
+        subject="Test",
+        body="Body",
+        smtp_server="smtp.example.com",
+        smtp_port=587,
+        smtp_username="testuser",
+    )
+
+    assert result == {"status": "sent", "simulated": False}
+    assert len(getaddrinfo_calls) == 1
+    assert connected_sockaddrs == [("8.8.8.8", 587)]
+
+
+def test_smtp_destination_rejects_rebound_private_answer_on_fresh_validation(
+    monkeypatch,
+):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "587")
+    answers = [
+        [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 587))],
+        [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.1", 587))],
+    ]
+
+    def fake_getaddrinfo(*args, **kwargs):
+        return answers.pop(0)
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fake_getaddrinfo)
+
+    destination = email_client.validate_smtp_destination("smtp.example.com", 587)
+    assert destination.sockaddr == ("8.8.8.8", 587)
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_destination("smtp.example.com", 587)
+
+
 def test_pinned_starttls_uses_existing_transport_helper():
     source = inspect.getsource(email_client._send_pinned_smtp_message)
 

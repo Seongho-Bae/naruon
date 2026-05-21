@@ -222,10 +222,18 @@ def _resolve_smtp_connect_address(
     return family, socktype, proto, sockaddr
 
 
+def _validate_pinned_smtp_sockaddr(sockaddr: tuple[Any, ...]) -> None:
+    """Ensure the connection target is a pre-resolved public IP, not a hostname."""
+    if not sockaddr:
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+    _validate_public_ip_address(str(sockaddr[0]))
+
+
 async def _connect_validated_smtp_socket(
     smtp_destination: ValidatedSmtpDestination,
 ) -> socket.socket:
     """Connect a non-blocking socket to the pre-resolved SMTP address."""
+    _validate_pinned_smtp_sockaddr(smtp_destination.sockaddr)
     smtp_socket = socket.socket(
         smtp_destination.family, smtp_destination.socktype, smtp_destination.proto
     )

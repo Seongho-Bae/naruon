@@ -64,6 +64,47 @@ def _looks_like_angle_email(value: str) -> bool:
     return True
 
 
+def _mask_angle_emails(value: str) -> tuple[str, dict[str, str]]:
+    placeholders: dict[str, str] = {}
+    parts: list[str] = []
+    cursor = 0
+
+    while cursor < len(value):
+        start = value.find("<", cursor)
+        if start == -1:
+            parts.append(value[cursor:])
+            break
+
+        end = value.find(">", start + 1)
+        if end == -1:
+            parts.append(value[cursor:])
+            break
+
+        candidate = value[start + 1 : end]
+        before_is_boundary = start == 0 or value[start - 1].isspace()
+        after_is_boundary = (
+            end + 1 == len(value)
+            or value[end + 1].isspace()
+            or value[end + 1] in ",.;:)]}"
+        )
+        if (
+            _looks_like_angle_email(candidate)
+            and before_is_boundary
+            and after_is_boundary
+        ):
+            token = f"\ue000email{len(placeholders)}\ue001"
+            placeholders[token] = value[start : end + 1]
+            parts.append(value[cursor:start])
+            parts.append(token)
+            cursor = end + 1
+            continue
+
+        parts.append(value[cursor : start + 1])
+        cursor = start + 1
+
+    return "".join(parts), placeholders
+
+
 def contains_html_markup(value: str) -> bool:
     decoded = _decode_entities(value)
     cursor = 0
@@ -107,6 +148,39 @@ def contains_html_markup(value: str) -> bool:
     return False
 
 
+def _is_tag_like_segment(value: str) -> bool:
+    candidate = value.strip()
+    if not candidate:
+        return False
+    if candidate.startswith("!--") or candidate[0] in {"!", "?"}:
+        return True
+    if candidate[0] == "/":
+        candidate = candidate[1:].lstrip()
+    return bool(candidate and candidate[0].isalpha())
+
+
+def _strip_tag_like_segments(value: str) -> str:
+    parts: list[str] = []
+    cursor = 0
+    while cursor < len(value):
+        start = value.find("<", cursor)
+        if start == -1:
+            parts.append(value[cursor:])
+            break
+
+        end = value.find(">", start + 1)
+        if end == -1:
+            parts.append(value[cursor:])
+            break
+
+        parts.append(value[cursor:start])
+        candidate = value[start + 1 : end]
+        if not _is_tag_like_segment(candidate):
+            parts.append(value[start : end + 1])
+        cursor = end + 1
+    return "".join(parts)
+
+
 class _PlainTextHTMLParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -131,7 +205,7 @@ class _PlainTextHTMLParser(HTMLParser):
 
     def handle_data(self, data: str) -> None:
         if self._raw_text_depth == 0:
-            self._parts.append(data)
+            self._parts.append(_strip_tag_like_segments(data))
 
     def get_text(self) -> str:
         lines = []
@@ -144,10 +218,11 @@ class _PlainTextHTMLParser(HTMLParser):
 
 def strip_html_markup(value: str) -> str:
     decoded = _decode_entities(value)
-    if not contains_html_markup(decoded):
-        return decoded
-
+    masked, placeholders = _mask_angle_emails(decoded)
     parser = _PlainTextHTMLParser()
-    parser.feed(decoded)
+    parser.feed(masked)
     parser.close()
-    return parser.get_text()
+    text = parser.get_text()
+    for token, original in placeholders.items():
+        text = text.replace(token, original)
+    return text
