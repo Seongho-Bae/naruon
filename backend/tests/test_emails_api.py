@@ -95,6 +95,16 @@ class QueryCapturingSession(MockSession):
         return await super().execute(query)
 
 
+class ScalarQueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.scalar_queries = []
+
+    async def scalar(self, query):
+        self.scalar_queries.append(query)
+        return await super().scalar(query)
+
+
 def compiled_query_text(query) -> str:
     return str(query).lower()
 
@@ -450,6 +460,44 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_config(
+    mock_send_email, monkeypatch, sample_email
+):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
+    session = ScalarQueryCapturingSession([sample_email])
+
+    async def tenant_db():
+        yield session
+
+    app.dependency_overrides[get_db] = tenant_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send?user_id=victim-user",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert compiled_query_params(session.scalar_queries[-1])["user_id_1"] == "testuser"
+    mock_send_email.assert_called_once()
 
 
 def test_send_email_endpoint_preserves_configuration_error(sample_email):

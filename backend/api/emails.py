@@ -193,13 +193,10 @@ class SendEmailRequest(BaseModel):
 @router.post("/send")
 async def send_email_endpoint(
     request: SendEmailRequest,
-    user_id: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: str = Depends(get_current_user),
 ):
-    if user_id and user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = current_user
 
     try:
         tenant_config = await db.scalar(
@@ -224,7 +221,10 @@ async def send_email_endpoint(
             if "ENCRYPTION_KEY is required" in str(exc):
                 raise HTTPException(
                     status_code=503,
-                    detail="Server encryption key is not configured. Contact your workspace administrator.",
+                    detail=(
+                        "Server encryption key is not configured. "
+                        "Contact your workspace administrator."
+                    ),
                 ) from exc
             if isinstance(exc, ValueError):
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
