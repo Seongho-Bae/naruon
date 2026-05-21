@@ -2638,6 +2638,20 @@ if [ -f "$target_path/backend/api/llm_providers.py" ]; then
 	exit 0
 fi
 
+if [ -f "$target_path/backend/services/email_parser.py" ]; then
+	if [ ! -f "$target_path/backend/services/text_safety.py" ]; then
+		echo "Error: email parser text safety context missing from PR scope ($target_path)" >&2
+		exit 76
+	fi
+	if ! grep -Fq -- 'HEAD_TEXT_SAFETY_SHOULD_BE_SCANNED' "$target_path/backend/services/text_safety.py"; then
+		echo "Error: email parser text safety context did not use PR-head content" >&2
+		cat -- "$target_path/backend/services/text_safety.py" >&2
+		exit 77
+	fi
+	echo "scan ok with PR-head email parser text safety context"
+	exit 0
+fi
+
 if [ "$calendar_context_seen" -eq 1 ]; then
 	exit 0
 fi
@@ -2689,6 +2703,14 @@ EOF
 def validate_llm_provider_base_url_async():
 	return 'HEAD_LLM_PROVIDER_URLS_SHOULD_BE_SCANNED'
 EOF
+		cat >backend/services/email_parser.py <<'EOF'
+from services.text_safety import strip_html_markup
+HEAD_EMAIL_PARSER_SHOULD_BE_SCANNED
+EOF
+		cat >backend/services/text_safety.py <<'EOF'
+def strip_html_markup(value):
+	return 'HEAD_TEXT_SAFETY_SHOULD_BE_SCANNED'
+EOF
 		cat >backend/api/mailbox_accounts.py <<'EOF'
 HEAD_MAILBOX_ACCOUNTS_CONTENT_SHOULD_BE_SCANNED
 EOF
@@ -2716,7 +2738,7 @@ EOF
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
-			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="4" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2732,7 +2754,8 @@ EOF
 	assert_file_contains "$output_log" "scan ok with calendar service backend context" "case=pull-request-target-changed-backend-context-includes-calendar-service output"
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
 	assert_file_contains "$output_log" "scan ok with PR-head LLM provider URL validation context" "case=pull-request-target-changed-backend-context-includes-llm-provider-url-validation output"
-	assert_equals "3" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
+	assert_file_contains "$output_log" "scan ok with PR-head email parser text safety context" "case=pull-request-target-changed-backend-context-includes-email-parser-text-safety output"
+	assert_equals "12" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
 
 	rm -rf "$tmp_dir"
 }
