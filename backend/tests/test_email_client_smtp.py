@@ -134,6 +134,28 @@ def test_smtp_host_rejects_mixed_public_and_private_dns_answers(monkeypatch):
         email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
 
 
+def test_smtp_destination_rejects_mixed_public_and_private_dns_answers(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "587")
+    monkeypatch.setattr(
+        email_client.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("8.8.8.8", 587)),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.168.1.1", 587)),
+        ],
+    )
+
+    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
+        email_client.validate_smtp_destination("smtp.example.com", 587)
+
+
+def test_smtp_connect_address_does_not_select_unvalidated_first_dns_answer():
+    source = inspect.getsource(email_client._resolve_smtp_connect_address)
+
+    assert "address_infos[0]" not in source
+
+
 def test_smtp_connect_address_uses_all_answer_validation_helper():
     source = inspect.getsource(email_client._resolve_smtp_connect_address)
 

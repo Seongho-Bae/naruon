@@ -217,9 +217,12 @@ def _resolve_smtp_connect_address(
     smtp_server: str, smtp_port: int
 ) -> tuple[int, int, int, tuple]:
     """Resolve SMTP host once and return a globally-routable socket target."""
-    address_infos = _resolve_all_public_smtp_addresses(smtp_server, smtp_port)
-    family, socktype, proto, _, sockaddr = address_infos[0]
-    return family, socktype, proto, sockaddr
+    fully_validated_address_infos = _resolve_all_public_smtp_addresses(
+        smtp_server, smtp_port
+    )
+    for family, socktype, proto, _, sockaddr in fully_validated_address_infos:
+        return family, socktype, proto, sockaddr
+    raise ValueError(SMTP_HOST_NOT_ALLOWED)
 
 
 def _validate_pinned_smtp_sockaddr(sockaddr: tuple[Any, ...]) -> None:
