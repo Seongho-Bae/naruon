@@ -1,4 +1,6 @@
 import logging
+
+import httpx
 from openai import AsyncOpenAI
 from core.config import settings
 from core.exceptions import LLMServiceError
@@ -27,6 +29,7 @@ async def extract_todos_and_summary(
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.beta.chat.completions.parse(
@@ -43,6 +46,8 @@ async def extract_todos_and_summary(
     except Exception as e:
         logger.error(f"Error calling LLM API for extraction: {e}")
         raise LLMServiceError(f"LLM API error during extraction: {e}") from e
+    finally:
+        await client.close()
 
     parsed = response.choices[0].message.parsed
     if not parsed:
@@ -62,6 +67,7 @@ async def draft_reply(
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.chat.completions.create(
@@ -77,6 +83,8 @@ async def draft_reply(
     except Exception as e:
         logger.error(f"Error calling LLM API for drafting: {e}")
         raise LLMServiceError(f"LLM API error during drafting: {e}") from e
+    finally:
+        await client.close()
 
     content = response.choices[0].message.content
     return content if content is not None else ""

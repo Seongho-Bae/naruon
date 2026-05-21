@@ -7,6 +7,9 @@ from db.models import PromptTemplate, LLMProvider, TenantConfig
 from api.auth import get_current_user
 from pydantic import BaseModel
 import datetime
+
+import httpx
+
 from services.llm_provider_urls import validate_llm_provider_base_url_async
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
@@ -51,6 +54,7 @@ async def execute_prompt_with_llm(
     client = AsyncOpenAI(
         api_key=api_key,
         base_url=validated_base_url,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.chat.completions.create(
@@ -68,6 +72,8 @@ async def execute_prompt_with_llm(
             status_code=502,
             detail="Failed to execute prompt with AI provider. Check provider status.",
         )
+    finally:
+        await client.close()
 
 
 @router.get("", response_model=List[PromptResponse])

@@ -1,5 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from core.config import settings
 from main import app
 from db.models import PromptTemplate
 from db.session import get_db
@@ -110,3 +113,48 @@ def test_prompt_test_execution_mocked(auth_client, monkeypatch):
 
     assert resp.status_code == 200
     assert resp.json()["result"] == "Mocked LLM result"
+
+
+@pytest.mark.asyncio
+async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_base_url(
+    monkeypatch,
+):
+    from api.prompts import execute_prompt_with_llm
+
+    monkeypatch.setattr(
+        settings, "ALLOWED_LLM_BASE_URL_HOSTS", "llm-gateway.example.com"
+    )
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "llm-gateway.example.com"
+        assert port == 443
+        return [(2, 1, 6, "", ("93.184.216.34", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    with patch("openai.AsyncOpenAI") as mock_async_openai:
+        mock_client = MagicMock()
+        mock_client.close = AsyncMock()
+        mock_response = MagicMock()
+        mock_message = MagicMock()
+        mock_message.content = "Prompt result"
+        mock_choice = MagicMock()
+        mock_choice.message = mock_message
+        mock_response.choices = [mock_choice]
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        mock_async_openai.return_value = mock_client
+
+        result = await execute_prompt_with_llm(
+            "Summarize this",
+            "test-key",
+            base_url="https://llm-gateway.example.com/v1",
+        )
+
+    assert result == {"result": "Prompt result"}
+    constructor_kwargs = mock_async_openai.call_args.kwargs
+    assert "http_client" in constructor_kwargs
+    assert constructor_kwargs["http_client"].follow_redirects is False
+    await constructor_kwargs["http_client"].aclose()
+    mock_client.close.assert_awaited_once()
