@@ -2233,6 +2233,7 @@ EOS
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2486,6 +2487,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
@@ -2524,6 +2526,7 @@ EOF
 		cd "$repo_root_dir"
 		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request" \
 			STRIX_TEST_CHANGED_FILES_OVERRIDE="$(printf '%s\n%s' '../outside.py' "$changed_file")" \
 			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
