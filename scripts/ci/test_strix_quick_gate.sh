@@ -2087,6 +2087,20 @@ if [ -f "$target_path/backend/api/emails.py" ]; then
 	exit 0
 fi
 
+if [ -f "$target_path/backend/api/llm_providers.py" ]; then
+	if [ ! -f "$target_path/backend/services/llm_provider_urls.py" ]; then
+		echo "Error: LLM provider URL validation context missing from PR scope ($target_path)" >&2
+		exit 74
+	fi
+	if ! grep -Fq -- 'HEAD_LLM_PROVIDER_URLS_SHOULD_BE_SCANNED' "$target_path/backend/services/llm_provider_urls.py"; then
+		echo "Error: LLM provider URL validation context did not use PR-head content" >&2
+		cat -- "$target_path/backend/services/llm_provider_urls.py" >&2
+		exit 75
+	fi
+	echo "scan ok with PR-head LLM provider URL validation context"
+	exit 0
+fi
+
 echo "scan ok with non-email backend batch"
 EOF
 	chmod +x "$fake_strix"
@@ -2102,6 +2116,8 @@ EOF
 		mkdir -p backend/api
 		printf '%s\n' 'BASE_AUTH_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
 		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
+		mkdir -p backend/services
+		printf '%s\n' 'BASE_LLM_PROVIDER_URLS_SHOULD_NOT_BE_SCANNED' >backend/services/llm_provider_urls.py
 		git add .
 		git commit -qm 'base commit'
 	)
@@ -2127,6 +2143,10 @@ HEAD_LLM_CONTENT_SHOULD_BE_SCANNED
 EOF
 		cat >backend/api/llm_providers.py <<'EOF'
 HEAD_LLM_PROVIDERS_CONTENT_SHOULD_BE_SCANNED
+EOF
+		cat >backend/services/llm_provider_urls.py <<'EOF'
+def validate_llm_provider_base_url_async():
+	return 'HEAD_LLM_PROVIDER_URLS_SHOULD_BE_SCANNED'
 EOF
 		cat >backend/api/mailbox_accounts.py <<'EOF'
 HEAD_MAILBOX_ACCOUNTS_CONTENT_SHOULD_BE_SCANNED
@@ -2169,6 +2189,7 @@ EOF
 
 	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
+	assert_file_contains "$output_log" "scan ok with PR-head LLM provider URL validation context" "case=pull-request-target-changed-backend-context-includes-llm-provider-url-validation output"
 	assert_equals "3" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
 
 	rm -rf "$tmp_dir"

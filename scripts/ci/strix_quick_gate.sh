@@ -1011,6 +1011,7 @@ backend/services/email_client.py
 backend/services/email_parser.py
 backend/services/embedding.py
 backend/services/exceptions.py
+backend/services/llm_provider_urls.py
 backend/services/threading_service.py
 EOF
 	fi
