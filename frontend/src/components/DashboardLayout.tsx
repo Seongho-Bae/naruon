@@ -282,7 +282,10 @@ export function DashboardLayout({
     window.dispatchEvent(new CustomEvent('naruon:header-action', { detail: { action } }));
   }
 
-  function handleStartupViewChange(view: WorkspaceStartupView) {
+  function handleStartupViewChange(
+    view: WorkspaceStartupView,
+    options: { syncMobileHash?: boolean } = {},
+  ) {
     setWorkspaceStartupView(view);
     closeMobileWorkspaceMenu();
     if (view === 'dashboard') {
@@ -292,10 +295,10 @@ export function DashboardLayout({
       setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'email') {
-      setMobileWorkspaceView('inbox', { updateHash: false });
+      setMobileWorkspaceView('inbox', { updateHash: options.syncMobileHash ?? false });
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar', { updateHash: false });
+      setMobileWorkspaceView('calendar', { updateHash: options.syncMobileHash ?? false });
     }
   }
 
@@ -569,7 +572,7 @@ export function DashboardLayout({
                     title={description}
                     popoverTarget="mobile-workspace-menu"
                     popoverTargetAction="hide"
-                    onClick={() => handleStartupViewChange(view)}
+                    onClick={() => handleStartupViewChange(view, { syncMobileHash: true })}
                     className={`min-h-11 rounded-2xl border px-2 text-xs font-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                       active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/70 text-foreground'
                     }`}

@@ -95,6 +95,12 @@ assert_changed_file_membership_uses_cached_normalized_paths() {
 	assert_file_contains "$GATE_SCRIPT" "for normalized_changed_file in \"\${NORMALIZED_CHANGED_FILES[@]}\"" "strix gate uses cached normalized paths for membership checks"
 }
 
+assert_absent_endpoint_search_uses_canonical_target_path() {
+	assert_file_contains "$GATE_SCRIPT" 'resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"' "absent-endpoint search resolves canonical target root"
+	assert_file_contains "$GATE_SCRIPT" 'candidate="${resolved_target_root%/}/$dir_entry"' "absent-endpoint search uses canonical target root"
+	assert_file_not_contains "$GATE_SCRIPT" 'candidate="${TARGET_PATH%/}/$dir_entry"' "absent-endpoint search avoids relative target path roots"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -3993,6 +3999,8 @@ assert_strix_workflow_pr_trigger_hardened
 assert_strix_gate_target_scope_separated
 
 assert_changed_file_membership_uses_cached_normalized_paths
+
+assert_absent_endpoint_search_uses_canonical_target_path
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

@@ -145,7 +145,7 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
-    if (path === '/api/tasks/from-email') {
+    if (path === '/api/tasks/from-email' && request.method() === 'POST') {
       await fulfillJson(route, {
         created: 2,
         tasks: [

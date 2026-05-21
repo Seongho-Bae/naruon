@@ -107,9 +107,10 @@ describe("DashboardLayout", () => {
     expect(main?.textContent ?? "").toContain("Inbox workspace content");
 
     const headerEvents: string[] = [];
-    window.addEventListener("naruon:header-action", ((event: Event) => {
+    const onHeaderAction: EventListener = (event) => {
       headerEvents.push((event as CustomEvent<{ action: string }>).detail.action);
-    }) as EventListener);
+    };
+    window.addEventListener("naruon:header-action", onHeaderAction);
 
     act(() => {
       banner?.querySelector<HTMLButtonElement>('button[data-header-action="reply-draft"]')?.click();
@@ -166,6 +167,7 @@ describe("DashboardLayout", () => {
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
+    expect(window.location.hash).toBe("#mobile-calendar");
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
 
     act(() => {
@@ -177,9 +179,10 @@ describe("DashboardLayout", () => {
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
 
     const events: string[] = [];
-    window.addEventListener("naruon:mobile-workspace", ((event: Event) => {
+    const onMobileWorkspace: EventListener = (event) => {
       events.push((event as CustomEvent<{ view: string }>).detail.view);
-    }) as EventListener);
+    };
+    window.addEventListener("naruon:mobile-workspace", onMobileWorkspace);
 
     act(() => {
       mobileQuickActionButton?.click();
@@ -201,6 +204,8 @@ describe("DashboardLayout", () => {
 
     expect(actionsClick.defaultPrevented).toBe(true);
     expect(events).toContain("actions");
+    window.removeEventListener("naruon:header-action", onHeaderAction);
+    window.removeEventListener("naruon:mobile-workspace", onMobileWorkspace);
   });
 
   it("keeps the desktop sidebar content reachable through an independent scroll region", () => {
@@ -273,12 +278,14 @@ describe("DashboardLayout", () => {
     });
     const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
 
+    window.history.replaceState(null, "", "/#mobile-actions");
+
     act(() => {
       mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')?.click();
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
-    expect(window.location.hash).toBe("");
+    expect(window.location.hash).toBe("#mobile-calendar");
     expect(window.__naruonMobileWorkspace?.view).toBe("calendar");
     expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="calendar"]')?.getAttribute("aria-current")).toBe("page");
 

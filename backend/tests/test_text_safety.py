@@ -12,6 +12,10 @@ from services.text_safety import contains_html_markup, strip_html_markup
         ('<a href="javascript:alert(1)">click me</a>', "click me"),
         ("<!--><script>alert(1)</script>-->", ""),
         ("<script@x.y>alert(1)</script@x.y>", "alert(1)"),
+        ("<xmp>raw legacy text</xmp>", "raw legacy text"),
+        ("&lt;XMP&gt;raw legacy text&lt;/XMP&gt;", "raw legacy text"),
+        ("<listing>raw legacy text</listing>", "raw legacy text"),
+        ("<plaintext>raw legacy text", "raw legacy text"),
     ],
 )
 def test_strip_html_markup_never_returns_raw_tag_like_payloads(payload, expected):
@@ -24,6 +28,7 @@ def test_strip_html_markup_never_returns_raw_tag_like_payloads(payload, expected
         "Alice <alice@example.com>",
         'AT&T: 2 < 3 and Tom "T"',
         "Compare a < b before saving",
+        "Track <BudgetReview> next",
     ],
 )
 def test_strip_html_markup_preserves_safe_angle_bracket_display_text(safe_text):
@@ -32,6 +37,10 @@ def test_strip_html_markup_preserves_safe_angle_bracket_display_text(safe_text):
 
 def test_contains_html_markup_allows_plain_alphabetic_comparison_text():
     assert contains_html_markup("Compare a < b before saving") is False
+
+
+def test_contains_html_markup_allows_plain_bracketed_labels():
+    assert contains_html_markup("Track <BudgetReview> next") is False
 
 
 @pytest.mark.parametrize(
@@ -43,6 +52,10 @@ def test_contains_html_markup_allows_plain_alphabetic_comparison_text():
         "<math/href=javascript:alert(1)@x>",
         "<script src=//attacker.example/xss.js",
         "&lt;script src=//attacker.example/xss.js",
+        "<xmp>raw legacy text</xmp>",
+        "&lt;XMP&gt;raw legacy text&lt;/XMP&gt;",
+        "<listing>raw legacy text</listing>",
+        "<plaintext>raw legacy text",
     ],
 )
 def test_contains_html_markup_flags_browser_tolerated_active_markup(payload):

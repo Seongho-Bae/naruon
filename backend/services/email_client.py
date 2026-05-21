@@ -96,11 +96,11 @@ def _normalize_smtp_host(host: str) -> str:
     candidate = host.strip().lower().rstrip(".")
     if not candidate:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    if any(character in candidate for character in " \t\r\n/"):
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
     if "://" in candidate:
         parsed = urlsplit(candidate)
         candidate = (parsed.hostname or "").lower().rstrip(".")
+    if any(character in candidate for character in " \t\r\n/"):
+        raise ValueError(SMTP_HOST_NOT_ALLOWED)
     if not candidate or candidate in {"localhost", "localhost.localdomain"}:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
     return candidate

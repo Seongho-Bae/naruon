@@ -2400,14 +2400,18 @@ vulnerability_file_has_absent_endpoint_finding() {
 	# without producing bogus double-nested paths like ./src/src.
 	# Set STRIX_SOURCE_DIRS (space-separated) to override.
 	local source_dirs_raw="${STRIX_SOURCE_DIRS:-.}"
+	local resolved_target_root=""
 	local resolved_dirs=()
 	local dir_entry
+	if ! resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"; then
+		return 1
+	fi
 
 	# Disable globbing so that entries like "*" or "[" in STRIX_SOURCE_DIRS
 	# are not expanded by pathname expansion during word-splitting.
 	set -f
 	for dir_entry in $source_dirs_raw; do
-		local candidate="${TARGET_PATH%/}/$dir_entry"
+		local candidate="${resolved_target_root%/}/$dir_entry"
 		if [ -d "$candidate" ] && [ ! -L "$candidate" ]; then
 			resolved_dirs+=("$candidate")
 		fi

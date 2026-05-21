@@ -32,6 +32,9 @@ TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
 WRONG_SESSION_HMAC_SECRET = (
     "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
 )
+PUBLIC_FIXTURE_SESSION_HMAC_SECRET = (
+    "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test-only secret
+)
 RUNTIME_HEADER_PARAMS = {
     "x_user_id",
     "x_user_role",
@@ -212,7 +215,7 @@ def test_runtime_auth_dependencies_do_not_declare_dev_header_api_surface():
 
 @pytest.mark.asyncio
 async def test_get_auth_context_rejects_missing_auth():
-    # It should raise HTTP 401 when no auth is provided, rather than defaulting to "default".
+    # It should raise HTTP 401 when auth is absent instead of defaulting.
     with pytest.raises(HTTPException) as exc:
         await get_auth_context()
     assert exc.value.status_code == 401
@@ -248,11 +251,10 @@ async def test_signed_bearer_session_rejects_tampered_payload():
     )
 
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            authorization=(
-                f"Bearer {header_segment}.{tampered_payload_segment}.{signature_segment}"
-            )
+        authorization = (
+            f"Bearer {header_segment}.{tampered_payload_segment}.{signature_segment}"
         )
+        await get_auth_context(authorization=authorization)
 
     assert exc.value.status_code == 401
 
@@ -271,11 +273,10 @@ async def test_signed_bearer_session_rejects_tampered_header():
     )
 
     with pytest.raises(HTTPException) as exc:
-        await get_auth_context(
-            authorization=(
-                f"Bearer {tampered_header_segment}.{payload_segment}.{signature_segment}"
-            )
+        authorization = (
+            f"Bearer {tampered_header_segment}.{payload_segment}.{signature_segment}"
         )
+        await get_auth_context(authorization=authorization)
 
     assert exc.value.status_code == 401
 
@@ -412,9 +413,10 @@ async def test_signed_bearer_session_rejects_repeated_configured_secret():
 
 @pytest.mark.asyncio
 async def test_signed_bearer_session_rejects_public_fixture_secret():
-    public_fixture_secret = "naruon-session-hmac-token-32-byte-minimum"
-    token = _signed_session_token(_valid_session_payload(), public_fixture_secret)
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(public_fixture_secret)
+    token = _signed_session_token(
+        _valid_session_payload(), PUBLIC_FIXTURE_SESSION_HMAC_SECRET
+    )
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(PUBLIC_FIXTURE_SESSION_HMAC_SECRET)
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(authorization=f"Bearer {token}")

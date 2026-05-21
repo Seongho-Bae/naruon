@@ -32,6 +32,129 @@ _LOCAL_PART_CHARACTERS = set(
     string.ascii_letters + string.digits + ".!#$%&*+-/=?^_`{|}~"
 )
 _DOMAIN_CHARACTERS = set(string.ascii_letters + string.digits + ".-")
+# Browser-recognized tags must win before preserving mixed-case bracketed labels.
+# Keep legacy tags here so entity-encoded or mixed-case HTML still fails closed.
+_KNOWN_HTML_TAGS = (
+    _RAW_TEXT_TAGS
+    | _BLOCK_TAGS
+    | {
+        "a",
+        "abbr",
+        "acronym",
+        "applet",
+        "area",
+        "audio",
+        "b",
+        "base",
+        "basefont",
+        "bdi",
+        "bdo",
+        "bgsound",
+        "big",
+        "blink",
+        "body",
+        "button",
+        "canvas",
+        "caption",
+        "center",
+        "code",
+        "col",
+        "colgroup",
+        "command",
+        "content",
+        "data",
+        "datalist",
+        "dd",
+        "del",
+        "details",
+        "dfn",
+        "dialog",
+        "dir",
+        "dl",
+        "dt",
+        "em",
+        "embed",
+        "fieldset",
+        "figcaption",
+        "figure",
+        "font",
+        "frame",
+        "frameset",
+        "form",
+        "head",
+        "hr",
+        "html",
+        "i",
+        "iframe",
+        "img",
+        "input",
+        "ins",
+        "isindex",
+        "kbd",
+        "keygen",
+        "label",
+        "legend",
+        "listing",
+        "link",
+        "map",
+        "mark",
+        "marquee",
+        "menu",
+        "menuitem",
+        "math",
+        "meta",
+        "meter",
+        "nav",
+        "nobr",
+        "noembed",
+        "noframes",
+        "noscript",
+        "object",
+        "optgroup",
+        "option",
+        "output",
+        "param",
+        "picture",
+        "plaintext",
+        "portal",
+        "progress",
+        "q",
+        "rb",
+        "rp",
+        "rt",
+        "rtc",
+        "ruby",
+        "s",
+        "samp",
+        "select",
+        "shadow",
+        "slot",
+        "small",
+        "source",
+        "span",
+        "strike",
+        "strong",
+        "sub",
+        "summary",
+        "sup",
+        "svg",
+        "tbody",
+        "td",
+        "textarea",
+        "tfoot",
+        "th",
+        "thead",
+        "time",
+        "title",
+        "track",
+        "tt",
+        "u",
+        "var",
+        "video",
+        "wbr",
+        "xmp",
+    }
+)
 
 
 def _decode_entities(value: str) -> str:
@@ -148,9 +271,56 @@ def contains_html_markup(value: str) -> bool:
             if _looks_like_angle_email(tag_content):
                 cursor = closing + 1 if closing != -1 else len(decoded)
                 continue
-            return True
+            if _is_tag_like_segment(tag_content):
+                return True
+            cursor = closing + 1 if closing != -1 else len(decoded)
+            continue
         cursor += 1
     return False
+
+
+def _split_tag_candidate(value: str) -> tuple[str, str]:
+    raw_tag_name, remainder = _split_raw_tag_candidate(value)
+    return raw_tag_name.lower(), remainder
+
+
+def _split_raw_tag_candidate(value: str) -> tuple[str, str]:
+    tag_name_chars: list[str] = []
+    cursor = 0
+    while cursor < len(value):
+        character = value[cursor]
+        if character.isalnum() or character in {":", "-"}:
+            tag_name_chars.append(character)
+            cursor += 1
+            continue
+        break
+    return "".join(tag_name_chars), value[cursor:]
+
+
+def _is_preservable_bracketed_label(value: str) -> bool:
+    raw_tag_name, remainder = _split_raw_tag_candidate(value.strip())
+    if not raw_tag_name or remainder:
+        return False
+    normalized = raw_tag_name.lower()
+    return (
+        normalized not in _KNOWN_HTML_TAGS
+        and "-" not in raw_tag_name
+        and ":" not in raw_tag_name
+        and any(character.isupper() for character in raw_tag_name)
+    )
+
+
+def _unknown_tag_segment_has_unsafe_markers(tag_name: str, remainder: str) -> bool:
+    if "-" in tag_name or ":" in tag_name:
+        return True
+
+    normalized_remainder = remainder.strip()
+    if not normalized_remainder or normalized_remainder == "/":
+        return True
+    if any(character in normalized_remainder for character in {'"', "'", "`", "="}):
+        return True
+    tokens = normalized_remainder.replace("/", " ").split()
+    return any(token.lower().startswith("on") for token in tokens)
 
 
 def _is_tag_like_segment(value: str) -> bool:
@@ -161,7 +331,29 @@ def _is_tag_like_segment(value: str) -> bool:
         return True
     if candidate[0] == "/":
         candidate = candidate[1:].lstrip()
-    return bool(candidate and candidate[0].isalpha())
+    if not candidate or not candidate[0].isalpha():
+        return False
+    tag_name, remainder = _split_tag_candidate(candidate)
+    if tag_name in _KNOWN_HTML_TAGS:
+        return True
+    if _is_preservable_bracketed_label(candidate):
+        return False
+    return _unknown_tag_segment_has_unsafe_markers(tag_name, remainder)
+
+
+def _preserve_unknown_start_tag(raw_start_tag: str | None, attrs) -> bool:
+    if raw_start_tag is None:
+        return False
+    tag_text = raw_start_tag.strip()
+    if not tag_text.startswith("<") or not tag_text.endswith(">"):
+        return False
+    candidate = tag_text[1:-1].strip().rstrip("/").strip()
+    if not _is_preservable_bracketed_label(candidate):
+        return False
+    for name, value in attrs:
+        if name.lower().startswith("on") or value is not None:
+            return False
+    return True
 
 
 def _strip_tag_like_segments(value: str) -> str:
@@ -202,6 +394,20 @@ class _PlainTextHTMLParser(HTMLParser):
             return
         if normalized in _BLOCK_TAGS:
             self._parts.append("\n")
+            return
+        if self._raw_text_depth == 0 and _preserve_unknown_start_tag(
+            self.get_starttag_text(), attrs
+        ):
+            self._parts.append(self.get_starttag_text() or f"<{tag}>")
+
+    def handle_startendtag(self, tag: str, attrs) -> None:
+        normalized = tag.lower()
+        if normalized in _RAW_TEXT_TAGS or normalized in _BLOCK_TAGS:
+            return
+        if self._raw_text_depth == 0 and _preserve_unknown_start_tag(
+            self.get_starttag_text(), attrs
+        ):
+            self._parts.append(self.get_starttag_text() or f"<{tag} />")
 
     def handle_endtag(self, tag: str) -> None:
         normalized = tag.lower()
@@ -210,6 +416,7 @@ class _PlainTextHTMLParser(HTMLParser):
             return
         if normalized in _BLOCK_TAGS:
             self._parts.append("\n")
+            return
 
     def handle_data(self, data: str) -> None:
         if self._raw_text_depth == 0:

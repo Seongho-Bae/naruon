@@ -56,6 +56,17 @@ def test_smtp_host_policy_rejects_wildcard_allowlist_entry(monkeypatch):
         email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
 
 
+def test_smtp_host_policy_normalizes_url_form_before_slash_filter(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
+
+    normalized_host = email_client.validate_smtp_host(
+        "smtp://SMTP.EXAMPLE.COM.",
+        resolve_host=False,
+    )
+
+    assert normalized_host == "smtp.example.com"
+
+
 def test_smtp_port_policy_rejects_configured_non_smtp_ports(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "465,587,80")
 

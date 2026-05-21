@@ -14,6 +14,14 @@ function jsonResponse(body: unknown) {
   };
 }
 
+function mockFetchResponse(body: unknown) {
+  return vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    void input;
+    void init;
+    return Promise.resolve(jsonResponse(body));
+  });
+}
+
 describe("ApiClient", () => {
   afterEach(() => {
     localStorage.clear();
@@ -36,7 +44,7 @@ describe("ApiClient", () => {
 
   it("sends the signed bearer session token when one is stored", async () => {
     localStorage.setItem("naruon_session_token", "signed.fixture.token");
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
+    const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient();
@@ -59,7 +67,7 @@ describe("ApiClient", () => {
 
   it("does not send client-controlled development identity headers", async () => {
     localStorage.setItem("naruon_dev_user", "attacker-selected-user");
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
+    const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient();
@@ -71,7 +79,7 @@ describe("ApiClient", () => {
   });
 
   it("drops caller-supplied public identity headers", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
+    const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient();
@@ -94,7 +102,7 @@ describe("ApiClient", () => {
   });
 
   it("strips all public identity headers from browser writes", async () => {
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
+    const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient();
@@ -130,7 +138,7 @@ describe("ApiClient", () => {
 
   it("keeps the stored signed session ahead of caller Authorization headers", async () => {
     localStorage.setItem("naruon_session_token", "signed.fixture.token");
-    const fetchMock = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
+    const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
     const client = new ApiClient();
