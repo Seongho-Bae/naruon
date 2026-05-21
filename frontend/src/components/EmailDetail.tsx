@@ -29,6 +29,14 @@ interface CreateTasksFromEmailResponse {
   created: number;
 }
 
+interface CalendarWritebackIntentResponse {
+  target_source_id: string;
+  protocol: string;
+  provenance: {
+    source_provider?: string;
+  };
+}
+
 type EmailDetailActionCommand = {
   id: number;
   action: string;
@@ -203,12 +211,20 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos });
+      const intents = await Promise.all(
+        llmData.todos.map((summary) =>
+          apiClient.post<CalendarWritebackIntentResponse>('/api/calendar/writeback-intent', {
+            action: 'create',
+            summary,
+          }),
+        ),
+      );
       if (!isCurrentEmail()) return;
-      setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
+      const targetSource = intents[0]?.provenance.source_provider || intents[0]?.target_source_id || '원본 캘린더';
+      setSyncStatus({ type: 'success', message: `${intents.length}개 일정 writeback intent를 ${targetSource} 원본에 요청했습니다.` });
     } catch {
       if (!isCurrentEmail()) return;
-      setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
+      setSyncStatus({ type: 'error', message: '캘린더 writeback intent 요청에 실패했습니다.' });
     } finally {
       if (isCurrentEmail()) setIsSyncing(false);
     }

@@ -558,7 +558,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("캘린더에 반영할 실행 항목이 없습니다.");
   });
 
-  it("waits for summary todos before consuming a calendar command", async () => {
+  it("waits for summary todos before requesting a server-authoritative calendar writeback intent", async () => {
     const email: TestEmail = {
       id: 9,
       message_id: "<calendar-command@example.com>",
@@ -575,10 +575,23 @@ describe("EmailDetail", () => {
       const url = String(input);
       if (url.endsWith("/api/emails/9")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) return summaryResponse.promise;
-      if (url.endsWith("/api/calendar/sync")) {
+      if (url.endsWith("/api/calendar/writeback-intent")) {
         expect(init?.method).toBe("POST");
-        expect(JSON.parse(String(init?.body))).toEqual({ todos: ["출시 회의 일정 잡기"] });
-        return Promise.resolve(jsonResponse({ synced: 1 }));
+        expect(JSON.parse(String(init?.body))).toEqual({ action: "create", summary: "출시 회의 일정 잡기" });
+        return Promise.resolve(jsonResponse({
+          workspace_id: "default",
+          target_source_id: "caldav-primary",
+          protocol: "caldav",
+          writeback_mode: "customer_owned",
+          requires_if_match: false,
+          if_match: null,
+          provenance: {
+            created_by: "default",
+            source_provider: "Customer CalDAV",
+            source_protocol: "caldav",
+          },
+          audit_event: "calendar.writeback_intent.created",
+        }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -593,6 +606,7 @@ describe("EmailDetail", () => {
     });
     await flushAsyncWork();
 
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/writeback-intent"))).toHaveLength(0);
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(0);
 
     await act(async () => {
@@ -601,8 +615,9 @@ describe("EmailDetail", () => {
     });
     await flushAsyncWork();
 
-    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(1);
-    expect(container.textContent).toContain("1개 일정이 캘린더에 반영되었습니다.");
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/writeback-intent"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(0);
+    expect(container.textContent).toContain("1개 일정 writeback intent를 Customer CalDAV 원본에 요청했습니다.");
   });
 
   it("ignores a late draft response after the selected email changes", async () => {

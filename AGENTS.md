@@ -67,3 +67,7 @@
   together so the same bug pattern does not reappear in copied examples.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
+- Calendar UI actions must request `/api/calendar/writeback-intent` with
+  server-authoritative source selection and provenance. Do not wire browser
+  actions back to legacy `/api/calendar/sync` unless a trusted backend credential
+  dependency and source-owner contract are explicitly in scope.

@@ -263,6 +263,10 @@ Open the generated PNGs and visually confirm no clipped menu, hidden bottom acti
   route smoke for `/mail`, `/calendar`, `/tasks`, `/data`, `/search`,
   `/security`, `/projects`, `/ai-hub`, and `/settings`, and screenshot capture
   for startup desktop/tablet/mobile plus the mobile drawer.
+- Calendar action follow-up: `EmailDetail` now requests
+  `/api/calendar/writeback-intent` and no longer calls `/api/calendar/sync` from
+  the browser action path. The user-facing status says a customer-owned source
+  intent was requested, not that the provider calendar write has completed.
 
 ## North-star work deliberately deferred from this slice
 

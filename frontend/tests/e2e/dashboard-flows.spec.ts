@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 
 import { mockDashboardApi } from './helpers';
 
-test('connects inbox selection to summary, execution, reply, calendar, and graph states', async ({ page }) => {
+test('connects inbox selection to summary, execution, reply, calendar, and graph states', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop shell flow has separate mobile detail coverage.');
   await mockDashboardApi(page);
 
   await page.goto('/');
@@ -15,7 +16,7 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await expect(page.getByText('1개 노드와 1개 관계')).toBeVisible();
 
   await page.getByRole('button', { name: '캘린더 반영' }).last().click();
-  await expect(page.getByText('2개 일정이 캘린더에 반영되었습니다.')).toBeVisible();
+  await expect(page.getByText('2개 일정 writeback intent를 Customer CalDAV 원본에 요청했습니다.')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI 답장 초안' }).last().click();
   await expect(page.getByLabel('답장 초안')).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
@@ -24,7 +25,8 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await expect(page.getByText('개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.')).toBeVisible();
 });
 
-test('submits branded inbox search against the search API', async ({ page }) => {
+test('submits branded inbox search against the search API', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'Desktop search box is covered by the desktop shell project.');
   await mockDashboardApi(page);
 
   await page.goto('/');

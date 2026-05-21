@@ -140,8 +140,21 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
-    if (path === '/api/calendar/sync') {
-      await fulfillJson(route, { synced: 2 });
+    if (path === '/api/calendar/writeback-intent' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        workspace_id: 'default',
+        target_source_id: 'caldav-primary',
+        protocol: 'caldav',
+        writeback_mode: 'customer_owned',
+        requires_if_match: false,
+        if_match: null,
+        provenance: {
+          created_by: 'default',
+          source_provider: 'Customer CalDAV',
+          source_protocol: 'caldav',
+        },
+        audit_event: 'calendar.writeback_intent.created',
+      });
       return;
     }
 

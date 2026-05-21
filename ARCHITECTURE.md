@@ -91,6 +91,10 @@ but provider writes must use server-authoritative source records, ownership
 checks, and conflict-aware provider revisions such as ETag/If-Match. The detailed
 contract is documented in
 `docs/operations/source-of-truth-and-writeback-sovereignty.md`.
+Frontend calendar actions follow the same boundary: `EmailDetail` requests
+`/api/calendar/writeback-intent` per extracted execution item and reports source
+provenance, while legacy `/api/calendar/sync` remains fail-closed unless a
+trusted backend credential dependency supplies an authorized provider token.
 
 Authorization is RBAC plus ABAC with deny precedence. Data-region, consent,
 workspace, group, source capability, and customer-policy denies still override

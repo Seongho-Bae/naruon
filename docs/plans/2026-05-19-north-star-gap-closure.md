@@ -91,3 +91,13 @@ connector, and PR governance is metadata-only.
   handling and source-level audit trails.
 - Add OpenTelemetry instrumentation and dashboards for connector heartbeat, sync
   lag, provider throttling, writeback conflicts, and AI action audit events.
+
+## Follow-up slice evidence
+
+- `EmailDetail` calendar actions now request `/api/calendar/writeback-intent` for
+  extracted execution items instead of the legacy `/api/calendar/sync` path, and
+  the UI reports the selected customer-owned source provenance as an intent
+  request rather than claiming provider write completion.
+- Frontend unit and E2E mocks assert that the mail-detail calendar action does
+  not call `/api/calendar/sync`, keeping the source-of-truth/writeback boundary
+  from regressing through copied fixtures.

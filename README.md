@@ -152,6 +152,13 @@ curl -s -X POST http://localhost:8000/api/tasks/from-email \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
   -d "$TASK_BODY"
+
+# Request a customer-owned calendar writeback intent. This selects a trusted
+# server-side source and returns no provider secret or direct write proof.
+curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
+  -H 'content-type: application/json' \
+  -d '{"action":"create","summary":"담당자 확인 회의"}'
 ```
 
 ## Error-message contract
@@ -172,6 +179,10 @@ Errors should tell a contributor what failed and avoid leaking internals:
   `404 {"detail":"Source email not found"}`.
 - Task creation without usable execution items:
   `422 {"detail":"At least one execution item is required"}`.
+- Calendar writeback with no trusted customer-owned CalDAV/CardDAV/WebDAV source:
+  `422 {"detail":"No customer-owned writeback source is available"}`. The
+  frontend must show this as a writeback-intent failure, not as a completed
+  provider calendar write.
 
 ## Current scope contract
 
@@ -206,6 +217,12 @@ provenance, sanitize NUL bytes from LLM/email-derived titles, and return opaque
 public task ids instead of exposing database integer surrogates. The new
 `ticket_tasks` table keeps database names two-word `snake_case` such as
 `task_id`, `task_title`, `status_code`, and `priority_code`.
+
+Calendar actions in `EmailDetail` now request `/api/calendar/writeback-intent`
+for each extracted execution item and display the selected trusted source
+provenance. The browser no longer claims `/api/calendar/sync` success from the
+mail-detail action path; direct provider writes stay deferred until connector and
+source registry work can enforce ETag/If-Match and owner capability checks.
 
 ## Operations and release docs
 
