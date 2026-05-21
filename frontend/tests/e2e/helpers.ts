@@ -158,6 +158,23 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/tasks' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          id: 'task-q2-owner',
+          title: '리소스 배정 검토 회의',
+          status: 'blocked',
+          priority: 'urgent',
+          source_type: 'email',
+          source_email_id: '<q2@example.com>',
+          related_thread_id: 'thread-q2',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+        },
+      ]);
+      return;
+    }
+
     if (path === '/api/tasks/from-email' && request.method() === 'POST') {
       await fulfillJson(route, {
         created: 2,

@@ -164,7 +164,7 @@ for (const viewport of responsiveViewports) {
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
   { path: '/calendar', heading: '일정 관리', marker: { text: '원본 계정 writeback 흐름' } },
-  { path: '/tasks', heading: '할 일 추적', marker: { text: '원본 시스템 추적' } },
+  { path: '/tasks', heading: '할 일 추적', marker: { text: '리소스 배정 검토 회의' } },
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
   { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },

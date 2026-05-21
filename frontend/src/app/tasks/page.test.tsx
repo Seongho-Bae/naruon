@@ -17,6 +17,22 @@ vi.mock("lucide-react", () => ({
 
 import TasksPage from "./page";
 
+function jsonResponse(body: unknown, ok = true) {
+  return {
+    ok,
+    status: ok ? 200 : 500,
+    statusText: ok ? "OK" : "Server Error",
+    json: async () => body,
+  } as Response;
+}
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 describe("TasksPage", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -26,16 +42,20 @@ describe("TasksPage", () => {
     root = null;
     container?.remove();
     container = null;
+    localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
-  it("renders ticket tracking screens with source-linked task details", () => {
+  it("renders ticket tracking screens with source-linked task details", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([])));
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(<TasksPage />);
     });
+    await flushAsyncWork();
 
     expect(container.querySelector("h1")?.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("내 작업");
@@ -50,5 +70,55 @@ describe("TasksPage", () => {
     expect(container.textContent).toContain("답변 추적");
     expect(container.textContent).not.toContain("Ticket tasks");
     expect(container.textContent).not.toContain("다음 구현 단계");
+  });
+
+  it("loads source-linked tickets from the signed session tasks API without public identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.tasks.session");
+    const fetchMock = vi.fn(async (...args: [RequestInfo | URL, RequestInit?]) => {
+      void args;
+      return jsonResponse([
+        {
+          id: "task_01HZXOPAQUE001",
+          title: "파트너 일정 후보 확인",
+          status: "blocked",
+          priority: "urgent",
+          source_type: "email",
+          source_email_id: "<partner-thread@example.com>",
+          related_thread_id: "thread-partner-q3",
+          created_at: "2026-05-19T00:00:00Z",
+          updated_at: "2026-05-21T00:00:00Z",
+        },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({
+      headers: expect.objectContaining({
+        Authorization: "Bearer signed.tasks.session",
+      }),
+    }));
+    const firstCall = fetchMock.mock.calls[0];
+    expect(firstCall).toBeDefined();
+    const [, init] = firstCall as [RequestInfo | URL, RequestInit?];
+    const headers = init?.headers as Record<string, string>;
+    expect(headers["X-User-Id"]).toBeUndefined();
+    expect(headers["X-Organization-Id"]).toBeUndefined();
+    expect(headers["X-Group-Id"]).toBeUndefined();
+    expect(headers["X-Group-Ids"]).toBeUndefined();
+    expect(headers["X-User-Role"]).toBeUndefined();
+    expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
+    expect(container.textContent).toContain("파트너 일정 후보 확인");
+    expect(container.textContent).toContain("긴급");
+    expect(container.textContent).toContain("차단");
+    expect(container.textContent).toContain("<partner-thread@example.com>");
+    expect(container.textContent).toContain("thread-partner-q3");
   });
 });
