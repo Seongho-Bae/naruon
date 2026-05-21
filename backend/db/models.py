@@ -32,7 +32,8 @@ def get_fernet() -> Fernet:
 
 class EncryptedString(TypeDecorator):
     """
-    Encrypts string values before saving to the database and decrypts them when retrieving.
+    Encrypts string values before saving to the database and decrypts them when
+    retrieving.
     Uses Fernet symmetric encryption.
     """
 
@@ -74,9 +75,18 @@ class AuditLog(Base):
 
 class LLMProvider(Base):
     __tablename__ = "llm_providers"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "name",
+            name="uq_llm_providers_org_name",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String, index=True, unique=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String, index=True)
     provider_type: Mapped[str] = mapped_column(
         String
     )  # e.g. openai, anthropic, gemini, ollama
@@ -223,7 +233,9 @@ class TicketTask(Base):
         String, index=True, nullable=True
     )
     title: Mapped[str] = mapped_column("task_title", String)
-    status: Mapped[str] = mapped_column("status_code", String, default="open", index=True)
+    status: Mapped[str] = mapped_column(
+        "status_code", String, default="open", index=True
+    )
     priority: Mapped[str] = mapped_column(
         "priority_code", String, default="normal", index=True
     )

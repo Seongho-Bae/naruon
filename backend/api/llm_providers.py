@@ -72,12 +72,24 @@ async def check_admin_access(
     return auth_context
 
 
+def _required_provider_organization(auth_context: AuthContext) -> str:
+    if not auth_context.organization_id:
+        raise HTTPException(status_code=403, detail="Organization scope required")
+    return auth_context.organization_id
+
+
+def _provider_owner_filter(auth_context: AuthContext):
+    return LLMProvider.organization_id == _required_provider_organization(auth_context)
+
+
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(check_admin_access),
 ):
-    result = await db.execute(select(LLMProvider))
+    result = await db.execute(
+        select(LLMProvider).where(_provider_owner_filter(auth_context))
+    )
     providers = result.scalars().all()
 
     responses = []
@@ -104,6 +116,8 @@ async def create_provider(
     auth_context: AuthContext = Depends(check_admin_access),
 ):
     provider = LLMProvider(
+        user_id=auth_context.user_id,
+        organization_id=_required_provider_organization(auth_context),
         name=data.name,
         provider_type=data.provider_type,
         base_url=await _validated_base_url(data.base_url),
@@ -144,7 +158,12 @@ async def update_provider(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(check_admin_access),
 ):
-    result = await db.execute(select(LLMProvider).where(LLMProvider.id == provider_id))
+    result = await db.execute(
+        select(LLMProvider).where(
+            LLMProvider.id == provider_id,
+            _provider_owner_filter(auth_context),
+        )
+    )
     provider = result.scalars().first()
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")
@@ -196,7 +215,12 @@ async def delete_provider(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(check_admin_access),
 ):
-    result = await db.execute(select(LLMProvider).where(LLMProvider.id == provider_id))
+    result = await db.execute(
+        select(LLMProvider).where(
+            LLMProvider.id == provider_id,
+            _provider_owner_filter(auth_context),
+        )
+    )
     provider = result.scalars().first()
     if not provider:
         raise HTTPException(status_code=404, detail="Provider not found")

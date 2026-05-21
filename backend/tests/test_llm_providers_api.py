@@ -40,7 +40,27 @@ class MockSession:
     async def execute(self, stmt):
         stmt_str = str(stmt).lower()
         if "llm_providers.id =" in stmt_str:
-            return MockResult(self.providers[:1])
+            provider_id = stmt.compile().params.get("id_1")
+            candidates = [
+                provider for provider in self.providers if provider.id == provider_id
+            ]
+            if "llm_providers.organization_id" in stmt_str:
+                organization_id = stmt.compile().params.get("organization_id_1")
+                candidates = [
+                    provider
+                    for provider in candidates
+                    if provider.organization_id == organization_id
+                ]
+            return MockResult(candidates[:1])
+        if "llm_providers.organization_id" in stmt_str:
+            organization_id = stmt.compile().params.get("organization_id_1")
+            return MockResult(
+                [
+                    provider
+                    for provider in self.providers
+                    if provider.organization_id == organization_id
+                ]
+            )
         return MockResult(self.providers)
 
     def add(self, obj):
@@ -119,6 +139,8 @@ def test_llm_provider_crud_admin(admin_client):
     assert data["configured"] is True
     assert data["fingerprint"] is not None
     assert "api_key" not in data
+    assert mock_session.providers[0].user_id == "admin"
+    assert mock_session.providers[0].organization_id == "org-acme"
 
     provider_id = data["id"]
 
@@ -233,3 +255,42 @@ def test_llm_provider_member_rejected(member_client):
         json={"name": "Malicious", "provider_type": "openai"},
     )
     assert response.status_code == 403
+
+
+def test_llm_provider_model_declares_owner_scope_columns():
+    column_names = {column.name for column in LLMProvider.__table__.columns}
+
+    assert {"user_id", "organization_id"}.issubset(column_names)
+    assert any(
+        constraint.name == "uq_llm_providers_org_name"
+        for constraint in LLMProvider.__table__.constraints
+    )
+
+
+def test_llm_provider_organization_admin_cannot_access_other_org_provider(
+    admin_client,
+):
+    provider = LLMProvider(
+        id=7,
+        user_id="rival-admin",
+        organization_id="org-rival",
+        name="Rival Provider",
+        provider_type="openai",
+        api_key="sk-rival",
+        is_active=True,
+        updated_at=datetime.datetime.now(datetime.timezone.utc),
+    )
+    mock_session.providers.append(provider)
+
+    response = admin_client.get("/api/llm-providers")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+    response = admin_client.put("/api/llm-providers/7", json={"is_active": False})
+    assert response.status_code == 404
+    assert provider.is_active is True
+
+    response = admin_client.delete("/api/llm-providers/7")
+    assert response.status_code == 404
+    assert mock_session.providers == [provider]

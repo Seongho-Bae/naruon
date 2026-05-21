@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
 from db.models import LLMProvider, PromptTemplate, TenantConfig
 from db.session import get_db
 from services.llm_provider_urls import validate_llm_provider_base_url_async
@@ -163,15 +163,20 @@ async def create_prompt(
 async def test_prompt(
     data: PromptTestRequest,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
+    user_id = auth_context.user_id
     prompt_text = _render_prompt_test_content(data)
 
-    # Find active provider
-    provider_result = await db.execute(
-        select(LLMProvider).where(LLMProvider.is_active.is_(True))
-    )
-    active_provider = provider_result.scalars().first()
+    active_provider = None
+    if auth_context.organization_id is not None:
+        provider_result = await db.execute(
+            select(LLMProvider).where(
+                LLMProvider.is_active.is_(True),
+                LLMProvider.organization_id == auth_context.organization_id,
+            )
+        )
+        active_provider = provider_result.scalars().first()
 
     api_key = None
     base_url = None

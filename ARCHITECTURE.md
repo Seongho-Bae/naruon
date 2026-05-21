@@ -62,6 +62,14 @@ not globally. Fixture import upserts and reply-thread lookup use the same owner
 scope so a reused RFC Message-ID from another organization cannot overwrite an
 email row or attach a reply to another tenant's thread.
 
+`llm_providers` is also owner-scoped. Provider rows carry non-null `user_id` and
+`organization_id`, provider names are unique only within an organization, and the
+registry/list/update/delete plus prompt-preview provider selection paths filter by
+the authenticated organization. Existing local databases get the same fail-closed
+owner backfill through `scripts/bootstrap_db.py`; legacy provider rows require
+explicit non-default `NARUON_IMPORT_USER_ID` and `NARUON_IMPORT_ORGANIZATION_ID`
+before bootstrap will set the new columns non-null.
+
 `ticket_tasks` stores email-derived execution items as ticket-like work records.
 The table and its new columns use at least two-word `snake_case` database names
 such as `task_id`, `task_title`, `status_code`, `priority_code`, `email_id`, and
@@ -122,11 +130,12 @@ smoke-test internal mail connectivity, but production relay/proxy access should
 use a connector artifact and never imply inbound MX hosting.
 
 LLM provider `base_url` is also a server-side egress boundary, not an arbitrary
-URL field. Provider registry create/update paths and LLM call sinks both validate
-custom OpenAI-compatible base URLs with HTTPS-only syntax, no userinfo/query or
-fragment, exact host membership in `ALLOWED_LLM_BASE_URL_HOSTS`, and DNS answers
-that are all globally routable. Missing allowlist configuration fails closed; the
-default provider path should leave `base_url` unset.
+URL field. Provider registry create/update paths are organization-admin scoped,
+and LLM call sinks validate custom OpenAI-compatible base URLs with HTTPS-only
+syntax, no userinfo/query or fragment, exact host membership in
+`ALLOWED_LLM_BASE_URL_HOSTS`, and DNS answers that are all globally routable.
+Missing allowlist configuration fails closed; the default provider path should
+leave `base_url` unset.
 
 ## CI security boundary
 
@@ -184,9 +193,11 @@ resource checks run. `/api/runtime-config`, `/`, and `/metrics` remain public
 because they expose only non-secret runtime/health metadata. LLM provider
 registry reads and writes are organization/platform admin operations; members use
 tenant-scoped configuration or approved AI workflows rather than provider
-inventory APIs. Custom provider endpoints additionally require an operator-owned
-egress allowlist so an organization admin cannot point LLM traffic at localhost,
-private networks, or cloud metadata services.
+inventory APIs. Provider rows remain scoped to the authenticated organization for
+ordinary provider registry operations and prompt-preview model selection. Custom
+provider endpoints additionally require an operator-owned egress allowlist so an
+organization admin cannot point LLM traffic at localhost, private networks, or
+cloud metadata services.
 
 The browser API client reads `naruon_session_token` from local storage and sends
 it as the bearer session on signed routes. It does not synthesize or forward

@@ -118,19 +118,22 @@ def contains_html_markup(value: str) -> bool:
             return False
 
         if decoded.startswith("!--", tag_start):
-            return decoded.find("-->", tag_start + 3) != -1
+            return True
 
         if decoded[tag_start].isspace():
             space_cursor = tag_start
             while space_cursor < len(decoded) and decoded[space_cursor].isspace():
                 space_cursor += 1
-            if space_cursor >= len(decoded) or decoded[space_cursor] != "/":
+            if space_cursor >= len(decoded):
+                cursor += 1
+                continue
+            if decoded[space_cursor] != "/":
                 cursor += 1
                 continue
             tag_start = space_cursor
 
         if decoded[tag_start] in {"!", "?"}:
-            return decoded.find(">", tag_start + 1) != -1
+            return True
 
         if decoded[tag_start] == "/":
             tag_start += 1
@@ -138,10 +141,12 @@ def contains_html_markup(value: str) -> bool:
                 tag_start += 1
 
         closing = decoded.find(">", tag_start + 1)
-        if tag_start < len(decoded) and decoded[tag_start].isalpha() and closing != -1:
-            tag_content = decoded[tag_start:closing].strip()
+        if tag_start < len(decoded) and decoded[tag_start].isalpha():
+            tag_content = decoded[
+                tag_start : closing if closing != -1 else None
+            ].strip()
             if _looks_like_angle_email(tag_content):
-                cursor = closing + 1
+                cursor = closing + 1 if closing != -1 else len(decoded)
                 continue
             return True
         cursor += 1
@@ -170,7 +175,10 @@ def _strip_tag_like_segments(value: str) -> str:
 
         end = value.find(">", start + 1)
         if end == -1:
-            parts.append(value[cursor:])
+            candidate = value[start + 1 :]
+            parts.append(value[cursor:start])
+            if not _is_tag_like_segment(candidate):
+                parts.append(value[start:])
             break
 
         parts.append(value[cursor:start])

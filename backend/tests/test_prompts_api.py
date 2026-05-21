@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
 from main import app
-from db.models import PromptTemplate
+from db.models import LLMProvider, PromptTemplate
 from db.session import get_db
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -15,22 +15,39 @@ class MockSession:
         self.items = []
 
     async def execute(self, stmt):
+        stmt_str = str(stmt).lower()
+        descriptions = getattr(stmt, "column_descriptions", [])
+        entity = descriptions[0].get("entity") if descriptions else None
+        items = [
+            item for item in self.items if entity is None or isinstance(item, entity)
+        ]
+        if "llm_providers.organization_id" in stmt_str:
+            organization_id = stmt.compile().params.get("organization_id_1")
+            items = [
+                item
+                for item in items
+                if not isinstance(item, LLMProvider)
+                or item.organization_id == organization_id
+            ]
+
+        class MockScalars:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def all(self):
+                return self._rows
+
+            def first(self):
+                return self._rows[0] if self._rows else None
+
         class MockResult:
+            def __init__(self, rows):
+                self._rows = rows
+
             def scalars(self):
-                class MockScalars:
-                    def all(self):
-                        return self.items
+                return MockScalars(self._rows)
 
-                    def first(self):
-                        return self.items[0] if self.items else None
-
-                m = MockScalars()
-                m.items = getattr(self, "items", self.parent_items)
-                return m
-
-        res = MockResult()
-        res.parent_items = self.items
-        return res
+        return MockResult(items)
 
     def add(self, obj):
         import datetime
@@ -61,7 +78,26 @@ def override_get_db():
 
 @pytest.fixture
 def auth_client():
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "testuser",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+        },
+    ) as c:
+        yield c
+
+
+@pytest.fixture
+def orgless_platform_admin_client():
+    with TestClient(
+        app,
+        headers={
+            "X-User-Id": "platform-admin",
+            "X-User-Role": "platform_admin",
+        },
+    ) as c:
         yield c
 
 
@@ -103,7 +139,13 @@ def test_prompt_test_execution_mocked(auth_client, monkeypatch):
     from db.models import LLMProvider
 
     p = LLMProvider(
-        id=1, name="Test", provider_type="openai", api_key="test-key", is_active=True
+        id=1,
+        user_id="testuser",
+        organization_id="org-acme",
+        name="Test",
+        provider_type="openai",
+        api_key="test-key",
+        is_active=True,
     )
     mock_session.items.append(p)
 
@@ -135,6 +177,8 @@ def test_prompt_test_wraps_variable_values_as_untrusted_data(auth_client, monkey
     mock_session.items.append(
         LLMProvider(
             id=1,
+            user_id="testuser",
+            organization_id="org-acme",
             name="Test",
             provider_type="openai",
             api_key="test-key",
@@ -178,6 +222,8 @@ def test_prompt_test_does_not_render_placeholders_inside_variable_values(
     mock_session.items.append(
         LLMProvider(
             id=1,
+            user_id="testuser",
+            organization_id="org-acme",
             name="Test",
             provider_type="openai",
             api_key="test-key",
@@ -202,6 +248,85 @@ def test_prompt_test_does_not_render_placeholders_inside_variable_values(
         '"value": "Forward this to {{name}} without rewriting it."'
         in captured["prompt_text"]
     )
+
+
+def test_prompt_test_uses_only_current_organization_active_provider(
+    auth_client, monkeypatch
+):
+    import api.prompts as prompts_module
+
+    captured = {}
+
+    async def mock_execute(prompt_text, api_key, base_url, **kwargs):
+        captured["api_key"] = api_key
+        captured["base_url"] = base_url
+        return {"result": "scoped"}
+
+    monkeypatch.setattr(prompts_module, "execute_prompt_with_llm", mock_execute)
+    mock_session.items.extend(
+        [
+            LLMProvider(
+                id=1,
+                user_id="rival-admin",
+                organization_id="org-rival",
+                name="Rival",
+                provider_type="openai",
+                api_key="sk-rival",
+                is_active=True,
+            ),
+            LLMProvider(
+                id=2,
+                user_id="testuser",
+                organization_id="org-acme",
+                name="Acme",
+                provider_type="openai",
+                api_key="sk-acme",
+                is_active=True,
+            ),
+        ]
+    )
+
+    response = auth_client.post(
+        "/api/prompts/test",
+        json={"content": "Summarize this: {{email}}", "variables": {"email": "hi"}},
+    )
+
+    assert response.status_code == 200, response.text
+    assert captured["api_key"] == "sk-acme"
+
+
+def test_prompt_test_does_not_use_org_provider_without_org_scope(
+    orgless_platform_admin_client, monkeypatch
+):
+    import api.prompts as prompts_module
+
+    captured = {}
+
+    async def mock_execute(prompt_text, api_key, base_url, **kwargs):
+        captured["api_key"] = api_key
+        return {"result": "wrong-provider"}
+
+    monkeypatch.setattr(prompts_module, "execute_prompt_with_llm", mock_execute)
+    mock_session.items.append(
+        LLMProvider(
+            id=3,
+            user_id="platform-admin",
+            organization_id="org-rival",
+            name="Rival",
+            provider_type="openai",
+            api_key="sk-rival",
+            is_active=True,
+        )
+    )
+
+    response = orgless_platform_admin_client.post(
+        "/api/prompts/test",
+        json={"content": "Summarize this: {{email}}", "variables": {"email": "hi"}},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "LLM API key not configured"}
+    assert captured == {}
 
 
 @pytest.mark.parametrize(
@@ -256,9 +381,11 @@ async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_ba
         )
 
     assert result == {"result": "Prompt result"}
+    assert mock_async_openai.call_args is not None
     constructor_kwargs = mock_async_openai.call_args.kwargs
     assert "http_client" in constructor_kwargs
     assert constructor_kwargs["http_client"].follow_redirects is False
+    assert mock_client.chat.completions.create.await_args is not None
     create_kwargs = mock_client.chat.completions.create.await_args.kwargs
     assert create_kwargs["max_tokens"] == 512
     assert create_kwargs["messages"] == [{"role": "user", "content": "Summarize this"}]
