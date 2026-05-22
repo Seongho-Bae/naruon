@@ -42,11 +42,12 @@
   `EncryptedString` type backed by Fernet.
 - `backend/db/models.py` no longer contains a fallback Fernet key or SHA256
   passphrase-derivation path. Secret-field encryption now requires an explicit
-  valid Fernet `ENCRYPTION_KEY` in every runtime mode, including `DEBUG=true`.
-  Decryption failures return `None` instead of ciphertext; user-facing routes
-  that touch encrypted fields should return the existing operator-facing
-  missing-key or unavailable-secret error rather than fallback encryption or raw
-  encrypted blobs.
+  valid, high-entropy Fernet `ENCRYPTION_KEY` in every runtime mode, including
+  `DEBUG=true`; known weak, repeated, and low-entropy Fernet-format keys are
+  rejected before encryption or decryption. Decryption failures return `None`
+  instead of ciphertext; user-facing routes that touch encrypted fields should
+  return the existing operator-facing missing-key or unavailable-secret error
+  rather than fallback encryption or raw encrypted blobs.
 - Email rows now have nullable `user_id` and `organization_id` owner keys, and
   email/search/network graph queries are scoped to the authenticated user plus
   organization. Existing local databases receive the columns and null-row
@@ -59,11 +60,13 @@
 - `DATABASE_URL` has no code default. Every runtime, test harness, and deployment
   path must inject the database URL explicitly instead of relying on a shared
   development credential fallback.
-- Tenant SMTP hosts are accepted only when the operator has placed the normalized
-  hostname in `ALLOWED_SMTP_HOSTS`, the port is in `ALLOWED_SMTP_PORTS`, and the
-  final send-time DNS answers are globally routable. Localhost, metadata,
-  private, link-local, reserved, multicast, and otherwise non-global addresses
-  are rejected before the backend opens a pinned SMTP socket.
+- Tenant SMTP hosts are denied by default through the `__deny_all__` marker and
+  are accepted only when the operator has placed the normalized hostname in
+  `ALLOWED_SMTP_HOSTS`, the port is in `ALLOWED_SMTP_PORTS`, and the final
+  send-time DNS answers are globally routable. Settings reject wildcard SMTP
+  hosts and non-SMTP ports; localhost, metadata, private, link-local, reserved,
+  multicast, and otherwise non-global addresses are rejected before the backend
+  opens a pinned SMTP socket.
 
 ## 가설 / Hypothesis
 

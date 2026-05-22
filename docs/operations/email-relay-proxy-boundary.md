@@ -6,11 +6,13 @@
   member-configured SMTP/IMAP providers.
 - `backend/api/emails.py` sends through `services.email_client.send_email` only
   when a tenant SMTP configuration exists; missing SMTP config returns a 400.
-- Tenant SMTP configuration is operator-bounded, not arbitrary egress. Config
-  writes and send requests must pass `ALLOWED_SMTP_HOSTS` and
-  `ALLOWED_SMTP_PORTS`; the final SMTP sink also rejects DNS answers that resolve
-  to loopback, link-local, private, reserved, multicast, or other non-global
-  addresses before opening a pinned socket to the selected global address.
+- Tenant SMTP configuration is operator-bounded, not arbitrary egress. SMTP
+  egress defaults to the explicit `__deny_all__` host marker; config writes and
+  send requests must pass `ALLOWED_SMTP_HOSTS` and `ALLOWED_SMTP_PORTS`, and
+  settings reject wildcard hosts or non-SMTP ports. The final SMTP sink also
+  rejects DNS answers that resolve to loopback, link-local, private, reserved,
+  multicast, or other non-global addresses before opening a pinned socket to the
+  selected global address.
 - `CONTROL_PLANE_DOMAIN` has no SMTP egress bypass. If an operator allowlists the
   control-plane hostname for SMTP, it is still resolved and subjected to the same
   public-address checks before any socket is opened.

@@ -122,11 +122,13 @@ described as real delivery.
 Tenant-provided SMTP destinations are not a general outbound socket primitive.
 `backend/api/tenant_config.py`, `backend/api/emails.py`, and the final
 `backend/services/email_client.py` network sink enforce the operator-controlled
-`ALLOWED_SMTP_HOSTS` and `ALLOWED_SMTP_PORTS` allowlists. The service also
-rejects loopback, link-local, private, reserved, and otherwise non-global DNS
-answers before opening a pinned socket to the selected global address, so stale
-database rows or direct service calls fail closed instead of reaching internal
-network targets or re-resolving DNS after validation.
+`ALLOWED_SMTP_HOSTS` and `ALLOWED_SMTP_PORTS` allowlists. SMTP egress defaults to
+the explicit `__deny_all__` host marker rather than an ambiguous empty string,
+and settings reject wildcard hosts and non-SMTP ports before startup. The service
+also rejects loopback, link-local, private, reserved, and otherwise non-global
+DNS answers before opening a pinned socket to the selected global address, so
+stale database rows or direct service calls fail closed instead of reaching
+internal network targets or re-resolving DNS after validation.
 
 Private-network IMAP/SMTP/CalDAV/CardDAV/WebDAV access belongs behind the
 outbound-only self-hosted connector boundary. GitHub self-hosted runners can
@@ -229,9 +231,10 @@ the built-in localhost-only origin defaults, so deployments must provide their
 actual frontend origins before cookie-backed writes work.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
-an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,
-OpenAI, SMTP, IMAP, Google, and runner registration token fields, even in debug
-mode. Invalid passphrase-style keys fail closed instead of being transformed into
+an explicit, valid, high-entropy Fernet `ENCRYPTION_KEY` before encrypting or
+decrypting OAuth, OpenAI, SMTP, IMAP, Google, and runner registration token
+fields, even in debug mode. Invalid passphrase-style, known weak, repeated, or
+low-entropy Fernet-format keys fail closed instead of being transformed into
 derived keys. Decryption failures return `None` rather than ciphertext, so routes
 that touch encrypted values must surface operator-facing missing-key or
 unavailable-secret behavior without exposing encrypted blobs.

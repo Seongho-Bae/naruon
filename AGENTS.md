@@ -56,6 +56,11 @@
   authentication. LLM provider `base_url` values must fail closed unless they are
   HTTPS, exact-host allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only
   to global addresses.
+- Tenant SMTP egress must default to `ALLOWED_SMTP_HOSTS=__deny_all__`, reject
+  wildcard host allowlists and non-SMTP ports at settings load, and still validate
+  every final DNS answer as globally routable before opening a pinned SMTP socket.
+  Secret-field encryption must reject missing, invalid, known weak, repeated, or
+  low-entropy Fernet `ENCRYPTION_KEY` values before encrypting or decrypting.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:

@@ -9,6 +9,7 @@ from core.config import settings
 TEST_OPENAI_KEY = "test_key2"  # noqa: S105
 TEST_IMAP_PASSWORD = "imap-secret"  # noqa: S105
 TEST_SMTP_PASSWORD = "smtp-secret"  # noqa: S105
+WEAK_FERNET_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 
 @pytest.fixture(autouse=True)
@@ -47,6 +48,13 @@ def test_get_fernet_rejects_non_fernet_key_without_derivation():
     settings.ENCRYPTION_KEY = SecretStr("test-encryption-key")
 
     with pytest.raises(RuntimeError, match="valid Fernet key"):
+        get_fernet()
+
+
+def test_get_fernet_rejects_low_entropy_fernet_key():
+    settings.ENCRYPTION_KEY = SecretStr(WEAK_FERNET_KEY)
+
+    with pytest.raises(RuntimeError, match="ENCRYPTION_KEY"):
         get_fernet()
 
 

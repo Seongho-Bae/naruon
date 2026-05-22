@@ -19,7 +19,7 @@ from aiosmtplib.errors import (
 from aiosmtplib.protocol import SMTPProtocol
 from aiosmtplib.status import SMTPStatus
 
-from core.config import settings
+from core.config import SMTP_DENY_ALL_HOST_MARKER, settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,11 @@ def _parse_allowed_smtp_ports() -> set[int]:
 
 
 def _parse_allowed_smtp_hosts() -> set[str]:
-    return _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
+    return {
+        host
+        for host in _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
+        if host != SMTP_DENY_ALL_HOST_MARKER
+    }
 
 
 def _validate_allowed_smtp_host(normalized_host: str) -> None:

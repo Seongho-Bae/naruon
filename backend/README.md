@@ -16,8 +16,10 @@ Set `DATABASE_URL` explicitly through `.env`, Docker Compose, CI secrets, or the
 runtime environment. The backend has no code default for the database URL and
 fails closed when it is missing.
 
-Outbound SMTP also fails closed unless the normalized tenant SMTP host is listed
-in `ALLOWED_SMTP_HOSTS` and the port is listed in `ALLOWED_SMTP_PORTS`.
+Outbound SMTP defaults to `ALLOWED_SMTP_HOSTS=__deny_all__` and fails closed
+unless the normalized tenant SMTP host is listed in `ALLOWED_SMTP_HOSTS` and the
+port is listed in `ALLOWED_SMTP_PORTS`. Wildcard hosts and non-SMTP ports are
+rejected by settings validation before startup.
 
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent,
 `import_fixtures.py` uses zero-vector embeddings so the local threading proof

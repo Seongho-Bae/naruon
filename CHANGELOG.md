@@ -1,6 +1,11 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): PR Strix가 지적한 SMTP SSRF/약한 암호화 키 경로를
+  fail-closed로 보강해, SMTP egress 기본값을 명시적 `__deny_all__` marker로
+  바꾸고 wildcard host/non-SMTP port 설정을 거부하며, `ENCRYPTION_KEY`는
+  Fernet 형식뿐 아니라 알려진 약한 값·반복 바이트·낮은 엔트로피까지 검증하도록
+  했습니다.
 - Seongho Bae (@seonghobae): post-merge Strix 실패를 막기 위해 LLM draft의 사용자
   instruction을 JSON user message로 system prompt에서 분리하고, 브라우저 세션을
   HttpOnly cookie 기반 `credentials: include` + `ALLOWED_BROWSER_ORIGINS` CSRF
