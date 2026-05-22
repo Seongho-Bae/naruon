@@ -77,7 +77,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event" "strix workflow fails closed when PR target model auth is missing"
 	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
 	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
-	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
+	assert_file_contains "$workflow_file" "STRIX_TRANSIENT_RETRY_PER_MODEL: \${{ github.event_name == 'pull_request_target' && '0' || '2' }}" "strix workflow avoids same-model timeout retries on PR scans"
+	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: \${{ github.event_name == 'pull_request_target' && '3' || '12' }}" "strix workflow starts PR scans with small trusted batches"
 	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
 		record_failure "strix workflow must not expose secrets on pull_request events"
 	fi
@@ -628,6 +629,19 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		*)
 			echo "Error: gemini zero-finding fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 40
+			;;
+		esac
+		;;
+	gemini-pr-total-budget-zero-timeout-blocks-pr)
+		case "${STRIX_LLM:-}" in
+		gemini/zero-slow-timeout-primary)
+			echo "Vulnerabilities 0"
+			sleep 11
+			exit 0
+			;;
+		*)
+			echo "Error: PR total-budget zero-timeout path unexpected (${STRIX_LLM:-})" >&2
 			exit 40
 			;;
 		esac
@@ -4435,6 +4449,27 @@ run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"" \
 	"1200" \
 	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+	run_gate_case "gemini-pr-total-budget-zero-timeout-blocks-pr" \
+	"gemini/zero-slow-timeout-primary" \
+	"gemini/fallback-one" \
+	"1" \
+	"Strix quick scan failed with a non-recoverable error." \
+	"1" \
+	"gemini/zero-slow-timeout-primary" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"10" \
+	"10" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 

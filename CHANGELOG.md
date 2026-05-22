@@ -7,6 +7,11 @@
   gate 경로로 전환하고 production localhost allowlist default를 fail-closed
   처리했으며, backend Docker image에서 `gcc`/`libpq-dev` build dependency를
   제거했습니다.
+- Seongho Bae (@seonghobae): PR Strix 스캔이 provider timeout에서 같은 모델을
+  반복 재시도하느라 required check budget을 소진하지 않도록 PR 이벤트의
+  same-model transient retry를 끄고 PR batch 크기를 줄였으며, 총 timeout으로
+  불완전하게 끝난 partial zero-finding 출력은 merge evidence로 인정하지 않고
+  required security gate가 fail-closed 되도록 명시했습니다.
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
   global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
   provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.

@@ -263,11 +263,11 @@ jobs:
           STRIX_LLM_MAX_RETRIES: 1
           LLM_TIMEOUT: 90
           STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
-          STRIX_TRANSIENT_RETRY_PER_MODEL: 2
+          STRIX_TRANSIENT_RETRY_PER_MODEL: ${{ github.event_name == 'pull_request_target' && '0' || '2' }}
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
           STRIX_PROCESS_TIMEOUT_SECONDS: ${{ github.event_name == 'pull_request_target' && '1200' || '2400' }}
           STRIX_TOTAL_TIMEOUT_SECONDS: 4800
-          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12
+          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: ${{ github.event_name == 'pull_request_target' && '3' || '12' }}
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ github.event_name == 'pull_request_target' && '0' || '1' }}
           GH_TOKEN: ${{ github.event_name == 'pull_request_target' && github.token || '' }}
