@@ -6,6 +6,10 @@
   바꾸고 wildcard host/non-SMTP port 설정을 거부하며, `ENCRYPTION_KEY`는
   Fernet 형식뿐 아니라 알려진 약한 값·반복 바이트·낮은 엔트로피까지 검증하도록
   했습니다.
+- Seongho Bae (@seonghobae): PR Strix가 Gemini/LiteLLM `BadRequestError`로
+  중단될 때 이를 취약점 우회가 아니라 model-route 장애로 분류해, 알려진 Gemini
+  fallback model로 재시도하되 실패한 시도에서 threshold finding이 보고되면 fallback
+  성공 뒤에도 required gate가 계속 실패하도록 했습니다.
 - Seongho Bae (@seonghobae): post-merge Strix 실패를 막기 위해 LLM draft의 사용자
   instruction을 JSON user message로 system prompt에서 분리하고, 브라우저 세션을
   HttpOnly cookie 기반 `credentials: include` + `ALLOWED_BROWSER_ORIGINS` CSRF

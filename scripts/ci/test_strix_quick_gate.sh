@@ -619,6 +619,47 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	gemini-primary-badrequest-fallback-success|gemini-badrequest-low-report-reaches-fallback|gemini-badrequest-threshold-report-blocks-fallback-success|gemini-badrequest-inline-threshold-blocks-fallback-success)
+		case "${STRIX_LLM:-}" in
+		gemini/badrequest-primary)
+			echo "LiteLLM.Info: If you need to debug this error, use litellm._turn_on_debug()."
+			echo "Penetration test failed: LLM request failed: BadRequestError"
+			exit 1
+			;;
+		gemini/badrequest-low-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-badrequest-low/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-badrequest-low/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: LOW
+EOS
+			echo "LiteLLM.Info: If you need to debug this error, use litellm._turn_on_debug()."
+			echo "Penetration test failed: LLM request failed: BadRequestError"
+			exit 1
+			;;
+		gemini/badrequest-medium-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-badrequest-medium/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-badrequest-medium/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: MEDIUM
+EOS
+			echo "LiteLLM.Info: If you need to debug this error, use litellm._turn_on_debug()."
+			echo "Penetration test failed: LLM request failed: BadRequestError"
+			exit 1
+			;;
+		gemini/badrequest-inline-medium-primary)
+			echo "Severity: MEDIUM"
+			echo "LiteLLM.Info: If you need to debug this error, use litellm._turn_on_debug()."
+			echo "Penetration test failed: LLM request failed: BadRequestError"
+			exit 1
+			;;
+		gemini/fallback-one)
+			echo "scan ok after gemini badrequest fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini badrequest fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 39
+			;;
+		esac
+		;;
 	gemini-zero-findings-timeout-fallback-allows-pr)
 		case "${STRIX_LLM:-}" in
 		gemini/zero-timeout-primary|gemini/fallback-one)
@@ -4430,6 +4471,52 @@ run_gate_case "gemini-generic-fallback-success" \
 	"" \
 	"__UNSET__" \
 	"gemini/fallback-one gemini/fallback-two"
+
+run_gate_case "gemini-primary-badrequest-fallback-success" \
+	"gemini/badrequest-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"0" \
+	"scan ok after gemini badrequest fallback" \
+	"2" \
+	"gemini/badrequest-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid"
+
+run_gate_case "gemini-badrequest-low-report-reaches-fallback" \
+	"gemini/badrequest-low-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"0" \
+	"scan ok after gemini badrequest fallback" \
+	"2" \
+	"gemini/badrequest-low-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid"
+
+run_gate_case "gemini-badrequest-threshold-report-blocks-fallback-success" \
+	"gemini/badrequest-medium-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"1" \
+	"Strix threshold findings were reported before fallback success; failing closed." \
+	"2" \
+	"gemini/badrequest-medium-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM"
+
+run_gate_case "gemini-badrequest-inline-threshold-blocks-fallback-success" \
+	"gemini/badrequest-inline-medium-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"1" \
+	"Strix threshold findings were reported before fallback success; failing closed." \
+	"2" \
+	"gemini/badrequest-inline-medium-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM"
 
 run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"gemini/zero-timeout-primary" \

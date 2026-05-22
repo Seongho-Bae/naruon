@@ -45,6 +45,7 @@ REPO_NAME="${REPO_ROOT##*/}"
 # from masking scan incompleteness — a successful strix run (exit 0) ignores
 # this flag because the scan itself produced a complete result set.
 INFRA_ERROR_DETECTED=0
+THRESHOLD_FINDING_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
@@ -1945,8 +1946,11 @@ PY
 	# would only see the *last* attempt's log — missing infrastructure errors
 	# from earlier attempts whose partial reports may still sit in the reports
 	# directory.
-	if has_detected_infrastructure_error; then
+	if has_detected_infrastructure_error "$model"; then
 		INFRA_ERROR_DETECTED=1
+	fi
+	if has_threshold_or_higher_vulnerabilities; then
+		THRESHOLD_FINDING_DETECTED=1
 	fi
 
 	return 1
@@ -1965,6 +1969,22 @@ is_llm_service_unavailable_error() {
 	if grep -Eiq 'litellm(\.exceptions)?\.ServiceUnavailableError' "$STRIX_LOG" &&
 		grep -Eiq '(GeminiException|VertexAI|Vertex_ai|vertex\.ai|openai|anthropic|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
 		grep -Eiq '("status"[[:space:]]*:[[:space:]]*"UNAVAILABLE"|(^|[^0-9])503([^0-9]|$)|high demand|Service Unavailable)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
+is_llm_bad_request_model_error() {
+	local model="${1-}"
+	# Gemini API BadRequestError commonly indicates an invalid/retired model name
+	# or request shape for that model.  Treat it as model-route retryable only
+	# when the active model is a Gemini route and the log has LLM-provider
+	# context, so target-application 400 responses stay non-recoverable.
+	if [ -n "$model" ] &&
+		is_gemini_model "$model" &&
+		grep -Eiq 'BadRequestError' "$STRIX_LOG" &&
+		grep -Eiq "$LLM_PROVIDER_ONLY_REGEX" "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2177,6 +2197,11 @@ LLM_PROVIDER_ONLY_REGEX='(litellm|openai|anthropic|VertexAI|Vertex_ai|vertex\.ai
 # was interrupted or incomplete.  Used as a guard to prevent the
 # below-threshold override from silently passing an aborted scan.
 has_detected_infrastructure_error() {
+	local model="${1-}"
+	if [ -n "$model" ] && is_llm_bad_request_model_error "$model"; then
+		return 0
+	fi
+
 	if is_timeout_error; then
 		return 0
 	fi
@@ -2318,6 +2343,65 @@ has_only_below_threshold_vulnerabilities() {
 
 	if [ "$global_max_rank" -lt "$threshold_rank" ]; then
 		echo "Strix findings are below configured fail threshold '$STRIX_FAIL_ON_MIN_SEVERITY'; allowing pipeline continuation." >&2
+		return 0
+	fi
+
+	return 1
+}
+
+has_threshold_or_higher_vulnerabilities() {
+	local threshold_rank
+	threshold_rank="$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")"
+
+	severity_stream_has_threshold_finding() {
+		local source_path="$1"
+		local line
+		local severity
+		local rank
+		while IFS= read -r line; do
+			if [[ "${line^^}" =~ SEVERITY[[:space:]]*:[[:space:][:punct:]]*(CRITICAL|HIGH|MEDIUM|LOW|INFO|INFORMATIONAL|NONE)([[:space:][:punct:]]|$) ]]; then
+				severity="${BASH_REMATCH[1]}"
+			else
+				continue
+			fi
+
+			rank="$(severity_rank "$severity")"
+			if [ "$rank" -ge "$threshold_rank" ]; then
+				return 0
+			fi
+		done < <(grep -Ei 'severity[[:space:]]*:' "$source_path" || true)
+
+		return 1
+	}
+
+	local run_dir
+	for run_dir in "$STRIX_REPORTS_DIR"/*; do
+		if [ ! -d "$run_dir" ] || [ -L "$run_dir" ]; then
+			continue
+		fi
+
+		if is_preexisting_report_dir "$run_dir"; then
+			continue
+		fi
+
+		local vulnerabilities_dir="$run_dir/vulnerabilities"
+		if [ ! -d "$vulnerabilities_dir" ] || [ -L "$vulnerabilities_dir" ]; then
+			continue
+		fi
+
+		local vuln_file
+		for vuln_file in "$vulnerabilities_dir"/*.md; do
+			if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+				continue
+			fi
+
+			if severity_stream_has_threshold_finding "$vuln_file"; then
+				return 0
+			fi
+		done
+	done
+
+	if severity_stream_has_threshold_finding "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2669,6 +2753,10 @@ is_model_retryable_error() {
 		return 0
 	fi
 
+	if is_llm_bad_request_model_error "$model"; then
+		return 0
+	fi
+
 	if [ "$PR_FINDINGS_DECISION" = "retry_model_inconsistency" ]; then
 		return 0
 	fi
@@ -2690,6 +2778,7 @@ is_model_retryable_error() {
 
 run_current_target_scan() {
 	INFRA_ERROR_DETECTED=0
+	THRESHOLD_FINDING_DETECTED=0
 	ZERO_FINDINGS_REPORTED=0
 
 	local primary_scan_rc=0
@@ -2748,6 +2837,10 @@ run_current_target_scan() {
 		local fallback_scan_rc=0
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		if [ "$fallback_scan_rc" -eq 0 ]; then
+			if [ "$PR_FINDINGS_DECISION" != "retry_model_inconsistency" ] && { [ "$THRESHOLD_FINDING_DETECTED" -eq 1 ] || has_threshold_or_higher_vulnerabilities; }; then
+				echo "Strix threshold findings were reported before fallback success; failing closed." >&2
+				return 1
+			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
 		fi
