@@ -5,10 +5,10 @@ from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
-from services.email_client import send_email
+from services.email_client import send_email, validate_smtp_destination
 from services.threading_service import normalize_message_id
 import logging
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,15 @@ def thread_lookup_values(thread_id: str) -> list[str]:
     return list({thread_id, normalized, f"<{normalized}>"})
 
 
+def email_owner_filters(auth_context: AuthContext):
+    organization_filter = (
+        Email.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else Email.organization_id.is_(None)
+    )
+    return (Email.user_id == auth_context.user_id, organization_filter)
+
+
 class EmailListItem(BaseModel):
     id: int
     thread_id: str | None = None
@@ -37,6 +46,7 @@ class EmailListItem(BaseModel):
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
+
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -56,11 +66,14 @@ class EmailDetailResponse(BaseModel):
 async def get_emails(
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
-        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+        select(Email)
+        .where(*email_owner_filters(auth_context))
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
     )
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
@@ -102,9 +115,11 @@ async def get_emails(
 async def get_email(
     email_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    result = await db.execute(select(Email).where(Email.id == email_id))
+    result = await db.execute(
+        select(Email).where(Email.id == email_id, *email_owner_filters(auth_context))
+    )
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -123,16 +138,23 @@ async def get_email(
     )
 
 
-@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get(
+    "/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]]
+)
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
-        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .where(
+            *email_owner_filters(auth_context),
+            or_(
+                Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
+            ),
+        )
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
@@ -164,22 +186,29 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None # O3: email threading support
+    in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
 
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+    request: SendEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
-    if user_id and user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
-        
-        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
+
+        if (
+            not tenant_config
+            or not tenant_config.smtp_server
+            or not tenant_config.smtp_port
+            or not tenant_config.smtp_username
+        ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
 
         try:
@@ -187,17 +216,23 @@ async def send_email_endpoint(
             smtp_port = tenant_config.smtp_port
             smtp_username = tenant_config.smtp_username
             smtp_password = tenant_config.smtp_password
+            validate_smtp_destination(smtp_server, smtp_port)
         except Exception as exc:
             if "ENCRYPTION_KEY is required" in str(exc):
                 raise HTTPException(
                     status_code=503,
-                    detail="Server encryption key is not configured. Contact your workspace administrator.",
+                    detail=(
+                        "Server encryption key is not configured. "
+                        "Contact your workspace administrator."
+                    ),
                 ) from exc
+            if isinstance(exc, ValueError):
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             raise
-        
+
         send_result = await send_email(
-            request.to, 
-            request.subject, 
+            request.to,
+            request.subject,
             request.body,
             smtp_server=smtp_server,
             smtp_port=smtp_port,

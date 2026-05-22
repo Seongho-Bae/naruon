@@ -21,7 +21,9 @@ For backend-only changes, run `cd backend && python3 -m pytest -q`. For frontend
 - Keep `backend/services/threading_service.py` as the only canonical thread assignment owner.
 - Keep fixtures in `backend/tests/fixtures` small and synthetic; do not commit real email data.
 - Preserve honest send semantics: simulated local send is not delivery proof.
-- Do not claim multi-user email isolation until the email owner/mailbox migration exists and queries are scoped.
+- Do not claim production multi-user email isolation until historical
+  `emails.user_id` values are audited/backfilled against verified mailbox
+  owners and the scoped query tests are kept green.
 
 ## Secrets and data
 

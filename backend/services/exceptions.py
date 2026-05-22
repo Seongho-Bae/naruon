@@ -38,3 +38,9 @@ class CalendarServiceError(Exception):
     """Raised when a calendar operation fails."""
 
     pass
+
+
+class UnsafeCalendarTodoError(CalendarServiceError):
+    """Raised when calendar todo text is unsafe for writeback."""
+
+    pass

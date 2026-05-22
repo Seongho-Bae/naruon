@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, ensure_organization_access, get_auth_context
+from core.config import settings
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 
@@ -19,6 +20,7 @@ class RunnerConfigResponse(BaseModel):
     configured: bool
     fingerprint: str | None = None
     updated_at: datetime.datetime | None = None
+    connector_manifest: dict[str, object]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -26,6 +28,18 @@ class RunnerConfigResponse(BaseModel):
 class RunnerRotateResponse(BaseModel):
     workspace_id: str
     registration_token: str
+    connector_manifest: dict[str, object]
+
+
+def _connector_manifest() -> dict[str, object]:
+    return {
+        "role": "self-hosted_connector",
+        "network_mode": "outbound_only",
+        "control_plane_domain": settings.CONTROL_PLANE_DOMAIN,
+        "local_protocols": ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+        "prohibited_roles": ["smtp_server", "imap_server", "mx_host"],
+        "runner_usage": "ci_smoke_only",
+    }
 
 
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
@@ -61,7 +75,13 @@ async def get_runner_config(
     config = result.scalar_one_or_none()
 
     if not config:
-        return RunnerConfigResponse(workspace_id=workspace_id, configured=False, fingerprint=None, updated_at=None)
+        return RunnerConfigResponse(
+            workspace_id=workspace_id,
+            configured=False,
+            fingerprint=None,
+            updated_at=None,
+            connector_manifest=_connector_manifest(),
+        )
 
     try:
         ensure_organization_access(auth_context, config.organization_id)
@@ -70,6 +90,7 @@ async def get_runner_config(
             configured=bool(config.registration_token),
             fingerprint=_fingerprint(config.registration_token),
             updated_at=config.updated_at,
+            connector_manifest=_connector_manifest(),
         )
     except Exception as exc:
         if "ENCRYPTION_KEY is required" not in str(exc):
@@ -114,4 +135,8 @@ async def rotate_runner_token(
             status_code=503,
             detail="Server encryption key is not configured. Contact your workspace administrator.",
         ) from exc
-    return RunnerRotateResponse(workspace_id=config.workspace_id, registration_token=token)
+    return RunnerRotateResponse(
+        workspace_id=config.workspace_id,
+        registration_token=token,
+        connector_manifest=_connector_manifest(),
+    )

@@ -2,11 +2,12 @@ import pytest
 from fastapi.testclient import TestClient
 from main import app
 
+
 @pytest.fixture
 def client():
-    # Pass default headers for authentication
-    with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
+    with TestClient(app) as c:
         yield c
+
 
 def test_runtime_config_returns_non_secret_data(client):
     response = client.get("/api/runtime-config")

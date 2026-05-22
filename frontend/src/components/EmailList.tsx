@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
+import { toSafeReactText } from "@/lib/safe-text";
 
 interface EmailItem {
   id: number;
@@ -17,6 +18,17 @@ interface EmailItem {
   unread?: boolean;
   thread_id?: string; // O3: email threading support
   reply_count?: number;
+}
+
+let inboxRequest: Promise<EmailItem[]> | null = null;
+
+async function fetchInboxEmails() {
+  inboxRequest ??= apiClient.get<{ emails: EmailItem[] }>('/api/emails')
+    .then((data) => data.emails || [])
+    .finally(() => {
+      inboxRequest = null;
+    });
+  return inboxRequest;
 }
 
 export function EmailList({
@@ -37,8 +49,7 @@ export function EmailList({
     setError(null);
     try {
       if (query.trim() === "") {
-        const data = await apiClient.get<{ emails: EmailItem[] }>('/api/emails');
-        setEmails(data.emails || []);
+        setEmails(await fetchInboxEmails());
       } else {
         setIsSearching(true);
         const data = await apiClient.post<{ results: EmailItem[] }>('/api/search', { query });
@@ -78,6 +89,11 @@ export function EmailList({
                 실행 항목
               </span>
             </div>
+            <div className="mt-3 rounded-2xl border border-primary/15 bg-background/80 px-3 py-2 text-xs leading-5 shadow-inner shadow-slate-950/[0.02]">
+              <span className="font-bold text-primary">오늘의 판단 포인트</span>
+              <span className="mx-2 text-muted-foreground">·</span>
+              <span className="font-semibold text-foreground">메일 데이터 기반으로 판단 포인트를 표시합니다</span>
+            </div>
           </div>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.28)]">
             <Mail className="size-5" aria-hidden="true" />
@@ -108,7 +124,7 @@ export function EmailList({
         </form>
       </div>
       <ScrollArea className="flex-1 w-full">
-        <div className="flex flex-col gap-2 p-3">
+        <div className="flex flex-col gap-2 p-3 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-3">
           {loading ? (
             <div role="status" aria-live="polite" className="rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">메일을 불러오는 중입니다...</div>
           ) : error ? (
@@ -121,6 +137,10 @@ export function EmailList({
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
+              const safeSender = toSafeReactText(email.sender);
+              const subject = email.subject?.trim() === '' ? undefined : email.subject;
+              const safeSubject = toSafeReactText(subject, '(제목 없음)');
+              const safeSnippet = toSafeReactText(email.snippet);
 
               return (
               <button 
@@ -134,16 +154,16 @@ export function EmailList({
                   <div className="flex items-center">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-8 w-8 border border-primary/10 bg-primary/10 text-primary">
-                        <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+                        <AvatarFallback>{safeSender ? safeSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
-                      <div className="max-w-[140px] truncate font-bold text-foreground">{email.sender}</div>
+                      <div className="max-w-[140px] truncate font-bold text-foreground">{safeSender}</div>
                     </div>
                     <div className="ml-auto max-w-24 truncate text-right text-xs text-muted-foreground">
                       {formatEmailDate(email.date)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 w-full">
-                    <div className="truncate text-sm font-bold flex-1 text-foreground">{email.subject || '(제목 없음)'}</div>
+                    <div className="truncate text-sm font-bold flex-1 text-foreground">{safeSubject}</div>
                     {email.reply_count && email.reply_count > 1 && (
                       <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
                         <MessagesSquare className="w-3 h-3" />
@@ -153,7 +173,7 @@ export function EmailList({
                   </div>
                 </div>
                 <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
-                  {email.snippet}
+                  {safeSnippet}
                 </div>
                 {email.unread && (
                   <div className="flex items-center gap-2">

@@ -22,6 +22,16 @@ class _SequentialSession:
         return _ScalarResult(value)
 
 
+class _QueryCapturingSession(_SequentialSession):
+    def __init__(self, values):
+        super().__init__(values)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+
 @pytest.mark.asyncio
 async def test_reply_before_root_uses_first_reference_as_deterministic_thread_id():
     session = _SequentialSession([None, None, None])
@@ -33,6 +43,8 @@ async def test_reply_before_root_uses_first_reference_as_deterministic_thread_id
             "in_reply_to": "<parent@example.com>",
             "references": "<root@example.com> <parent@example.com>",
         },
+        user_id="testuser",
+        organization_id="org-acme",
     )
 
     assert thread_id == "root@example.com"
@@ -49,6 +61,8 @@ async def test_reply_without_references_uses_in_reply_to_as_deterministic_thread
             "in_reply_to": "<parent@example.com>",
             "references": None,
         },
+        user_id="testuser",
+        organization_id="org-acme",
     )
 
     assert thread_id == "parent@example.com"
@@ -65,6 +79,8 @@ async def test_existing_parent_thread_id_wins_over_deterministic_fallback():
             "in_reply_to": "<parent@example.com>",
             "references": "<root@example.com> <parent@example.com>",
         },
+        user_id="testuser",
+        organization_id="org-acme",
     )
 
     assert thread_id == "thread-123"
@@ -81,6 +97,29 @@ async def test_existing_legacy_bracketed_thread_id_is_normalized():
             "in_reply_to": "<root@example.com>",
             "references": "<root@example.com>",
         },
+        user_id="testuser",
+        organization_id="org-acme",
     )
 
     assert thread_id == "root@example.com"
+
+
+@pytest.mark.asyncio
+async def test_existing_thread_lookup_is_scoped_to_owner_and_organization():
+    session = _QueryCapturingSession(["thread-123"])
+
+    thread_id = await assign_thread_id(
+        session,
+        {
+            "message_id": "<reply@example.com>",
+            "in_reply_to": "<parent@example.com>",
+            "references": None,
+        },
+        user_id="testuser",
+        organization_id="org-acme",
+    )
+
+    assert thread_id == "thread-123"
+    query_text = str(session.queries[-1]).lower()
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text

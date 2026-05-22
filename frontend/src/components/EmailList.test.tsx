@@ -70,10 +70,81 @@ describe("EmailList", () => {
     expect(container.textContent).toContain("받은편지함");
     expect(container.textContent).toContain("맥락 종합");
     expect(container.textContent).toContain("실행 항목");
+    expect(container.textContent).not.toContain("오늘의 판단 포인트·Q2 출시 계획 및 우선순위 조정");
+    expect(container.textContent).toContain("메일 데이터 기반으로 판단 포인트를 표시합니다");
     expect(container.textContent).toContain("(제목 없음)");
     expect(container.textContent).toContain("새 메일");
     expect(container.textContent).toContain("3개 메시지");
     expect(selectedThread).not.toBeNull();
     expect(selectedThread?.className).toContain("min-h-20");
+  });
+
+  it("uses the missing-title fallback for blank email subjects", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          emails: [
+            {
+              id: 9,
+              sender: "운영팀",
+              subject: "   ",
+              date: "2026-05-11T09:30:00Z",
+              snippet: "제목이 비어 있는 메일입니다.",
+              unread: false,
+              reply_count: 1,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailList onSelectEmail={vi.fn()} selectedEmailId={null} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("(제목 없음)");
+  });
+
+  it("keeps untrusted email fields on the React text-node path", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          emails: [
+            {
+              id: 8,
+              sender: '<img src=x onerror=alert(1)>',
+              subject: '<script>alert(1)</script>',
+              date: '2026-05-11T09:30:00Z',
+              snippet: 'hello\u0000<script>alert(2)</script>',
+              unread: false,
+              reply_count: 1,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailList onSelectEmail={vi.fn()} selectedEmailId={null} />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.textContent).toContain("<script>alert(1)</script>");
+    expect(container.textContent).toContain("hello�<script>alert(2)</script>");
   });
 });

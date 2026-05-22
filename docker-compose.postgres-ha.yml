@@ -4,9 +4,9 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-ai_email}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before running Postgres HA Compose}
       - POSTGRES_HOST_AUTH_METHOD=scram-sha-256
-    command: 
+    command:
       - "postgres"
       - "-c"
       - "wal_level=replica"
@@ -26,9 +26,9 @@ services:
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-ai_email}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before running Postgres HA Compose}
       - PGUSER=${POSTGRES_USER:-postgres}
-      - PGPASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - PGPASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before running Postgres HA Compose}
     command: >
       bash -c "
       until pg_isready -h db-primary -p 5432; do sleep 1; done;

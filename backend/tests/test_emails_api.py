@@ -6,11 +6,15 @@ from main import app
 import datetime
 from unittest.mock import patch
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
-        transport=ASGITransport(app=app), headers={"X-User-Id": "testuser"}, base_url="http://test"
+        transport=ASGITransport(app=app),
+        headers={"X-User-Id": "testuser"},
+        base_url="http://test",
     ) as ac:
         yield ac
 
@@ -21,6 +25,7 @@ class MockTenantConfig:
         self.smtp_port = 587
         self.smtp_username = "testuser"
         self.smtp_password = None
+
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -80,10 +85,49 @@ class LimitAwareMockSession(MockSession):
         return MockResult(rows)
 
 
+class QueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+
+class ScalarQueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.scalar_queries = []
+
+    async def scalar(self, query):
+        self.scalar_queries.append(query)
+        return await super().scalar(query)
+
+
+def compiled_query_text(query) -> str:
+    return str(query).lower()
+
+
+def compiled_query_params(query) -> dict[str, object]:
+    return dict(query.compile().params)
+
+
+def assert_query_is_owner_scoped(query) -> None:
+    query_text = compiled_query_text(query)
+    query_params = compiled_query_params(query)
+
+    assert "emails.user_id = :user_id_1" in query_text
+    assert "emails.organization_id = :organization_id_1" in query_text
+    assert query_params["user_id_1"] == "testuser"
+    assert query_params["organization_id_1"] == "org-acme"
+
+
 @pytest.fixture
 def sample_email():
     return Email(
         id=1,
+        user_id="testuser",
         message_id="msg123",
         thread_id="thread123",
         sender="test@example.com",
@@ -124,18 +168,22 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     hot_thread = [
         Email(
             id=index + 1,
+            user_id="testuser",
             message_id=f"hot-{index}",
             thread_id="hot-thread",
             sender="hot@example.com",
             recipients="user@example.com",
             subject="Hot thread",
-            date=datetime.datetime(2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc),
+            date=datetime.datetime(
+                2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc
+            ),
             body=f"Hot body {index}",
         )
         for index in range(6)
     ]
     second_thread = Email(
         id=99,
+        user_id="testuser",
         message_id="second-thread-root",
         thread_id="second-thread",
         sender="second@example.com",
@@ -170,7 +218,9 @@ async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit:
 
 
 @pytest.mark.asyncio
-async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+async def test_get_emails_bounds_database_candidate_window(
+    client: AsyncClient, db_session
+):
     from db.session import get_db
 
     session = LimitAwareMockSession(db_session.items)
@@ -184,9 +234,12 @@ async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncClient, db_session):
+async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
+    client: AsyncClient, db_session
+):
     root = Email(
         id=1,
+        user_id="testuser",
         message_id="<root@example.com>",
         thread_id="<root@example.com>",
         sender="root@example.com",
@@ -197,6 +250,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncCl
     )
     reply = Email(
         id=2,
+        user_id="testuser",
         message_id="<reply@example.com>",
         thread_id="root@example.com",
         sender="reply@example.com",
@@ -235,9 +289,12 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
 
 
 @pytest.mark.asyncio
-async def test_get_email_thread_returns_chronological_order(client: AsyncClient, db_session):
+async def test_get_email_thread_returns_chronological_order(
+    client: AsyncClient, db_session
+):
     newer = Email(
         id=2,
+        user_id="testuser",
         message_id="newer-msg",
         thread_id="thread123",
         sender="newer@example.com",
@@ -248,6 +305,7 @@ async def test_get_email_thread_returns_chronological_order(client: AsyncClient,
     )
     older = Email(
         id=1,
+        user_id="testuser",
         message_id="older-msg",
         thread_id="thread123",
         sender="older@example.com",
@@ -283,15 +341,22 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
     ["/api/emails?limit=10", "/api/emails/1", "/api/emails/thread/thread123"],
 )
 async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path: str):
-    from api.emails import get_current_user as emails_get_current_user
+    from api.auth import AuthContext
+    from api.emails import get_auth_context as emails_get_auth_context
 
     calls = []
 
     async def auth_override():
         calls.append("hit")
-        return "authorized-user"
+        return AuthContext(
+            user_id="authorized-user",
+            role="member",
+            organization_id="authorized-org",
+            group_ids=(),
+            workspace_id="workspace-authorized-org",
+        )
 
-    app.dependency_overrides[emails_get_current_user] = auth_override
+    app.dependency_overrides[emails_get_auth_context] = auth_override
 
     response = await client.get(path)
 
@@ -299,10 +364,74 @@ async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path:
     assert calls == ["hit"]
 
 
+@pytest.mark.asyncio
+async def test_get_emails_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        "/api/emails?limit=10",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        f"/api/emails/{sample_email.id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        f"/api/emails/thread/{sample_email.thread_id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
-def test_send_email_endpoint(mock_send_email):
+def test_send_email_endpoint(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
+
+    validate_calls = []
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        validate_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 
@@ -319,6 +448,7 @@ def test_send_email_endpoint(mock_send_email):
 
     assert response.status_code == 200
     assert response.json() == {"status": "simulated", "simulated": True}
+    assert validate_calls == [True]
     mock_send_email.assert_called_once_with(
         "test@example.com",
         "Re: Test",
@@ -330,6 +460,44 @@ def test_send_email_endpoint(mock_send_email):
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_config(
+    mock_send_email, monkeypatch, sample_email
+):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
+    session = ScalarQueryCapturingSession([sample_email])
+
+    async def tenant_db():
+        yield session
+
+    app.dependency_overrides[get_db] = tenant_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send?user_id=victim-user",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert compiled_query_params(session.scalar_queries[-1])["user_id_1"] == "testuser"
+    mock_send_email.assert_called_once()
 
 
 def test_send_email_endpoint_preserves_configuration_error(sample_email):
@@ -358,10 +526,52 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
     assert response.json() == {"detail": "SMTP is not configured"}
 
 
-@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
-def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
+@patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    class UnsafeTenantConfig(MockTenantConfig):
+        def __init__(self):
+            super().__init__()
+            self.smtp_server = "127.0.0.1"
+            self.smtp_port = 587
+
+    async def unsafe_smtp_db():
+        yield MockSession([], tenant_config=UnsafeTenantConfig())
+
+    app.dependency_overrides[get_db] = unsafe_smtp_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Test",
+                "body": "Body",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+    mock_send_email.assert_not_called()
+
+
+@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
+def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeypatch):
+    from main import app
+    from fastapi.testclient import TestClient
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        assert resolve_host is True
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 

@@ -95,6 +95,12 @@ assert_changed_file_membership_uses_cached_normalized_paths() {
 	assert_file_contains "$GATE_SCRIPT" "for normalized_changed_file in \"\${NORMALIZED_CHANGED_FILES[@]}\"" "strix gate uses cached normalized paths for membership checks"
 }
 
+assert_absent_endpoint_search_uses_canonical_target_path() {
+	assert_file_contains "$GATE_SCRIPT" 'resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"' "absent-endpoint search resolves canonical target root"
+	assert_file_contains "$GATE_SCRIPT" 'candidate="${resolved_target_root%/}/$dir_entry"' "absent-endpoint search uses canonical target root"
+	assert_file_not_contains "$GATE_SCRIPT" 'candidate="${TARGET_PATH%/}/$dir_entry"' "absent-endpoint search avoids relative target path roots"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -612,7 +618,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	gemini-zero-findings-timeout-fallback-fails)
+	gemini-zero-findings-timeout-fallback-allows-pr)
 		case "${STRIX_LLM:-}" in
 		gemini/zero-timeout-primary|gemini/fallback-one)
 			echo "Vulnerabilities 0"
@@ -625,6 +631,21 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			exit 40
 			;;
 		esac
+		;;
+	pr-batch-zero-finding-does-not-leak)
+		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ]; then
+			echo "Vulnerabilities 0"
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+		fi
+		if [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ]; then
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+		fi
+		echo "Error: unexpected PR batch zero-finding leak target layout ($target_path)" >&2
+		exit 41
 		;;
 	service-unavailable-no-llm-marker-nonrecoverable)
 		echo 'ServiceUnavailableError: {"error":{"code":503,"status":"UNAVAILABLE"}}'
@@ -676,6 +697,109 @@ EOS
 		*)
 			echo "Error: existing-endpoint scenario unexpected model (${STRIX_LLM:-})" >&2
 			exit 28
+			;;
+		esac
+		;;
+	pr-stale-source-claim-fallback-success)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-source-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-stale-source/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-stale-source/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			echo "Penetration test failed: stale HIGH finding on backend/db/models.py"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "scan ok after stale-source fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: stale-source scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 30
+			;;
+		esac
+		;;
+	pr-stale-source-plus-real-finding-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-source-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			cat >"$STRIX_REPORTS_DIR/fake-mixed-findings/vulnerabilities/vuln-0002.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/api/emails.py
+
+This is a concrete changed-file finding that must remain blocking.
+EOS
+			echo "Penetration test failed: mixed stale and real HIGH findings"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: mixed real findings must not reach fallback" >&2
+			exit 31
+			;;
+		*)
+			echo "Error: mixed-findings scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 32
+			;;
+		esac
+		;;
+	pr-changed-finding-with-retry-marker-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/changed-finding-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-changed-retry-marker/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-changed-retry-marker/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/api/emails.py
+
+This changed-file finding must remain blocking even when the model log also contains retryable provider text.
+EOS
+			echo "litellm.exceptions.Timeout: provider timed out after writing a HIGH changed-file finding"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: changed-file findings with retry markers must not reach fallback" >&2
+			exit 33
+			;;
+		*)
+			echo "Error: changed-retry-marker scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 34
+			;;
+		esac
+		;;
+	pr-stale-report-plus-inline-changed-finding-blocks)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/stale-inline-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-stale-report-inline-changed/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-stale-report-inline-changed/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+			echo "Severity: HIGH"
+			echo "Target: backend/api/emails.py"
+			echo "Penetration test failed: stale report plus inline changed-file HIGH finding"
+			exit 1
+			;;
+		vertex_ai/fallback-one)
+			echo "Error: inline changed-file findings must not reach fallback" >&2
+			exit 35
+			;;
+		*)
+			echo "Error: stale-inline scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 36
 			;;
 		esac
 		;;
@@ -1149,6 +1273,55 @@ EOS
 		echo "Penetration test failed: changed bracketed Next.js route finding"
 		exit 1
 		;;
+	pr-critical-changed-xml-file-location)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-changed-xml/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-changed-xml/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: HIGH
+<parameter=code_locations>
+  <location>
+	    <file>sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java</file>
+    <start_line>120</start_line>
+    <end_line>124</end_line>
+  </location>
+</parameter=code_locations>
+EOS
+		echo "Penetration test failed: changed XML file location finding"
+		exit 1
+		;;
+	pr-critical-changed-xml-file-location-space)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-changed-xml-space/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-changed-xml-space/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: HIGH
+<parameter=code_locations>
+  <location>
+	    <file>src/unsafe name.py</file>
+    <start_line>7</start_line>
+    <end_line>9</end_line>
+  </location>
+</parameter=code_locations>
+EOS
+		echo "Penetration test failed: changed XML file location finding with space"
+		exit 1
+		;;
+	pr-baseline-critical-narrative-backticked-service-file)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-narrative-service/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-narrative-service/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Technical Analysis
+The `backend/services/email_parser.py` file extracts HTML email bodies without sanitizing script tags.
+EOS
+		echo "Penetration test failed: baseline critical narrative service finding"
+		exit 1
+		;;
+	pr-critical-unmapped-arbitrary-backticked-service-file)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped-arbitrary-backtick/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped-arbitrary-backtick/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Description: location data unavailable, but the report also mentions `backend/services/email_parser.py` as unrelated context.
+EOS
+		echo "Penetration test failed: unmapped critical finding with arbitrary backticked file mention"
+		exit 1
+		;;
 	pr-critical-unmapped)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities/vuln-0001.md" <<'EOS'
@@ -1562,6 +1735,11 @@ EOF
 		echo 'class ChangedJwtUtil {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
 		mkdir -p "$repo_root_dir/frontend/src/app/labels/[slug]"
 		echo 'export default function Page() { return null }' >"$repo_root_dir/frontend/src/app/labels/[slug]/page.tsx"
+		mkdir -p "$repo_root_dir/src"
+		echo 'print("unsafe name")' >"$repo_root_dir/src/unsafe name.py"
+		mkdir -p "$repo_root_dir/backend/services"
+		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
+		echo 'def parse_eml(*args): return {}' >"$repo_root_dir/backend/services/email_parser.py"
 		if [ -n "$current_pr_number" ]; then
 			cat >"$event_payload_file" <<EOF
 {
@@ -1596,6 +1774,50 @@ EOF
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/.git/refs/leaked.txt"
 		mkdir -p "$repo_root_dir/node_modules/fake-pkg"
 		echo 'GET /api/hidden-secret' >"$repo_root_dir/node_modules/fake-pkg/index.js"
+	elif [ "$scenario" = "pr-stale-source-claim-fallback-success" ]; then
+		mkdir -p "$repo_root_dir/backend/db"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+	elif [ "$scenario" = "pr-stale-source-plus-real-finding-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/db" "$repo_root_dir/backend/api"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-changed-finding-with-retry-marker-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/api"
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-stale-report-plus-inline-changed-finding-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/db" "$repo_root_dir/backend/api"
+		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
 	elif [ "$scenario" = "pr-changed-scope-bounded" ]; then
 		echo 'class Unrelated {}' >"$repo_root_dir/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java"
 	elif [ "$scenario" = "pr-python-scope-context" ]; then
@@ -1925,6 +2147,127 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_plaintext_runner_token_fails_closed_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local call_log="$tmp_dir/calls.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local changed_file="backend/db/models.py"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%s\n' "${STRIX_LLM:-}" >> "${FAKE_STRIX_CALL_LOG:?}"
+case "${STRIX_LLM:-}" in
+vertex_ai/stale-source-primary)
+	mkdir -p "${STRIX_REPORTS_DIR:?}/fake-pr-head-plaintext/vulnerabilities"
+	cat >"$STRIX_REPORTS_DIR/fake-pr-head-plaintext/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** HIGH
+**Target:** backend/db/models.py
+
+The `WorkspaceRunnerConfig.registration_token` field stores the token as plain text.
+The vulnerable line is `registration_token: Mapped[str | None] = mapped_column(String, nullable=True)`.
+EOS
+	echo "Penetration test failed: PR-head plaintext token finding"
+	exit 1
+	;;
+vertex_ai/fallback-one)
+	echo "Error: PR-head plaintext findings must not reach fallback" >&2
+	exit 31
+	;;
+*)
+	echo "Error: unexpected model (${STRIX_LLM:-})" >&2
+	exit 32
+	;;
+esac
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'vertex_ai/stale-source-primary' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")"
+		cat >"$changed_file" <<'EOS'
+from sqlalchemy.orm import Mapped, mapped_column
+
+class EncryptedString:
+    pass
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(
+        EncryptedString, nullable=True
+    )
+EOS
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		cat >"$changed_file" <<'EOS'
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
+
+class WorkspaceRunnerConfig:
+    registration_token: Mapped[str | None] = mapped_column(String, nullable=True)
+EOS
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
+			FAKE_STRIX_CALL_LOG="$call_log" \
+			STRIX_VERTEX_FALLBACK_MODELS="vertex_ai/fallback-one" \
+			STRIX_FAIL_ON_MIN_SEVERITY="HIGH" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "1" "$rc" "case=pull-request-target-plaintext-runner-token-fails-closed exit code"
+	assert_file_contains "$output_log" "Strix finding intersects files changed in this pull request." "case=pull-request-target-plaintext-runner-token-fails-closed output"
+	local call_count="0"
+	if [ -f "$call_log" ]; then
+		call_count="$(wc -l <"$call_log" | tr -d ' ')"
+	fi
+	assert_equals "1" "$call_count" "case=pull-request-target-plaintext-runner-token-fails-closed strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_trusted_context_scope_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2033,6 +2376,191 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_changed_context_scope_uses_pr_head_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$repo_root_dir/scripts/ci"
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+	local state_file="$tmp_dir/state.log"
+	local changed_file="backend/api/emails.py"
+	local context_file="backend/core/config.py"
+	local requirements_file="backend/requirements.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+target_path=""
+while [ "$#" -gt 0 ]; do
+	if [ "$1" = "-t" ] && [ "$#" -ge 2 ]; then
+		target_path="$2"
+		break
+	fi
+	shift
+done
+
+attempt="0"
+if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+	attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+fi
+attempt="$((attempt + 1))"
+echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
+
+context_file="$target_path/${FAKE_STRIX_EXPECTED_CONTEXT_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
+	echo "Error: changed backend context did not use PR head content" >&2
+	cat -- "$context_file" >&2
+	exit 68
+fi
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
+	echo "Error: changed backend context leaked trusted base content" >&2
+	cat -- "$context_file" >&2
+	exit 69
+fi
+
+requirements_file="$target_path/${FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE:?}"
+if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS:?}" "$requirements_file"; then
+	echo "Error: changed filtered backend context did not use PR head content" >&2
+	cat -- "$requirements_file" >&2
+	exit 72
+fi
+if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS:?}" "$requirements_file"; then
+	echo "Error: changed filtered backend context leaked trusted base content" >&2
+	cat -- "$requirements_file" >&2
+	exit 73
+fi
+
+if [ "$attempt" -eq 1 ]; then
+	changed_file="$target_path/${FAKE_STRIX_EXPECTED_CHANGED_FILE:?}"
+	if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
+		echo "Error: PR head changed file content was not scanned" >&2
+		cat -- "$changed_file" >&2
+		exit 70
+	fi
+	echo "scan ok with changed PR head backend context"
+	exit 0
+fi
+
+if [ "$attempt" -eq 2 ]; then
+	echo "scan ok with changed context file batch"
+	exit 0
+fi
+
+echo "Error: unexpected changed context batch attempt $attempt" >&2
+exit 71
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$context_file")" "$(dirname -- "$requirements_file")"
+		printf '%s\n' 'BASE_CHANGED_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'BASE_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED' >"$requirements_file"
+		git add .
+		git commit -qm 'base commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	(
+		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
+		printf '%s\n' 'HEAD_CONTEXT_SHOULD_BE_SCANNED' >"$context_file"
+		printf '%s\n' 'HEAD_REQUIREMENTS_SHOULD_BE_SCANNED' >"$requirements_file"
+		git add .
+		git commit -qm 'head commit'
+	)
+	local head_sha
+	head_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
+	git -C "$repo_root_dir" checkout -q "$base_sha"
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$(printf '%s\n%s\n%s' "$changed_file" "$context_file" "$requirements_file")" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE="$requirements_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="HEAD_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS="HEAD_REQUIREMENTS_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_STATE_FILE="$state_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-changed-context-uses-pr-head exit code"
+	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-target-changed-context-uses-pr-head first batch output"
+	assert_file_contains "$output_log" "scan ok with changed context file batch" "case=pull-request-target-changed-context-uses-pr-head second batch output"
+
+	printf '0' >"$state_file"
+	(
+		cd "$repo_root_dir"
+		git checkout -q "$head_sha"
+	)
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH \
+			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+			GITHUB_EVENT_NAME="pull_request" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$(printf '%s\n%s' '../outside.py' "$changed_file")" \
+			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
+			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
+			FAKE_STRIX_EXPECTED_REQUIREMENTS_FILE="$requirements_file" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="HEAD_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_HEAD_REQUIREMENTS="HEAD_REQUIREMENTS_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
+			FAKE_STRIX_STATE_FILE="$state_file" \
+			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
+			STRIX_DISABLE_PR_SCOPING="0" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-unsafe-changed-file-does-not-abort-context exit code"
+	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-unsafe-changed-file-does-not-abort-context output"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_changed_backend_context_scope_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2063,6 +2591,21 @@ while [ "$#" -gt 0 ]; do
 	fi
 	shift
 done
+
+calendar_context_seen=0
+if [ -f "$target_path/backend/api/calendar.py" ]; then
+	if [ ! -f "$target_path/backend/services/calendar_service.py" ]; then
+		echo "Error: calendar service backend dependency context missing from PR scope ($target_path)" >&2
+		exit 72
+	fi
+	if ! grep -Fq -- 'BASE_CALENDAR_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/calendar_service.py"; then
+		echo "Error: calendar service backend dependency context did not use trusted base content" >&2
+		cat -- "$target_path/backend/services/calendar_service.py" >&2
+		exit 73
+	fi
+	echo "scan ok with calendar service backend context"
+	calendar_context_seen=1
+fi
 
 if [ -f "$target_path/backend/api/emails.py" ]; then
 	if [ ! -f "$target_path/backend/api/mailbox_scope.py" ]; then
@@ -2115,6 +2658,10 @@ if [ -f "$target_path/backend/services/email_parser.py" ]; then
 	exit 0
 fi
 
+if [ "$calendar_context_seen" -eq 1 ]; then
+	exit 0
+fi
+
 echo "scan ok with non-email backend batch"
 EOF
 	chmod +x "$fake_strix"
@@ -2127,10 +2674,10 @@ EOF
 		git config user.name 'Strix Test'
 		git config user.email 'strix-test@example.invalid'
 		echo 'seed' >README.md
-		mkdir -p backend/api
+		mkdir -p backend/api backend/services
 		printf '%s\n' 'BASE_AUTH_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
 		printf '%s\n' 'BASE_EMAILS_CONTENT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
-		mkdir -p backend/services
+		printf '%s\n' 'BASE_CALENDAR_SERVICE_SHOULD_BE_SCANNED' >backend/services/calendar_service.py
 		printf '%s\n' 'BASE_LLM_PROVIDER_URLS_SHOULD_NOT_BE_SCANNED' >backend/services/llm_provider_urls.py
 		git add .
 		git commit -qm 'base commit'
@@ -2210,6 +2757,7 @@ EOF
 	set -e
 
 	assert_equals "0" "$rc" "case=pull-request-target-changed-backend-context-uses-head-blob exit code"
+	assert_file_contains "$output_log" "scan ok with calendar service backend context" "case=pull-request-target-changed-backend-context-includes-calendar-service output"
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
 	assert_file_contains "$output_log" "scan ok with PR-head LLM provider URL validation context" "case=pull-request-target-changed-backend-context-includes-llm-provider-url-validation output"
 	assert_file_contains "$output_log" "scan ok with PR-head email parser text safety context" "case=pull-request-target-changed-backend-context-includes-email-parser-text-safety output"
@@ -3452,6 +4000,8 @@ assert_strix_gate_target_scope_separated
 
 assert_changed_file_membership_uses_cached_normalized_paths
 
+assert_absent_endpoint_search_uses_canonical_target_path
+
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
 	"src/app.py" \
@@ -3475,6 +4025,8 @@ run_pull_request_target_head_scope_case \
 	"frontend/src/app/labels/[slug]/page.tsx" \
 	"BASE_BRACKET_ROUTE_CONTENT_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_BRACKET_ROUTE_CONTENT_SHOULD_BE_SCANNED"
+
+run_pull_request_target_plaintext_runner_token_fails_closed_case
 
 run_pull_request_target_rejects_unsafe_changed_path_case \
 	"pull-request-target-parent-directory-changed-path-fails-closed" \
@@ -3501,6 +4053,7 @@ run_pull_request_target_head_scope_case \
 
 run_pull_request_target_trusted_context_scope_case
 
+run_pull_request_target_changed_context_scope_uses_pr_head_case
 run_pull_request_target_changed_backend_context_scope_case
 
 run_pull_request_target_frontend_email_context_scope_case \
@@ -3864,11 +4417,11 @@ run_gate_case "gemini-generic-fallback-success" \
 	"__UNSET__" \
 	"gemini/fallback-one gemini/fallback-two"
 
-run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
+run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"gemini/zero-timeout-primary" \
 	"gemini/fallback-one" \
-	"1" \
-	"Configured model and fallback models were unavailable." \
+	"0" \
+	"Strix reported zero vulnerabilities before provider infrastructure failure; allowing pull request continuation and deferring provider outage follow-up." \
 	"2" \
 	"gemini/zero-timeout-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
@@ -3884,6 +4437,29 @@ run_gate_case "gemini-zero-findings-timeout-fallback-fails" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-batch-zero-finding-does-not-leak" \
+	"gemini/batch-zero-leak-primary" \
+	"" \
+	"1" \
+	"Configured model and fallback models were unavailable." \
+	"2" \
+	"gemini/batch-zero-leak-primary|gemini/batch-zero-leak-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java' \
+	"" \
+	"1"
 
 run_gate_case "service-unavailable-no-llm-marker-nonrecoverable" \
 	"custom/service-unavailable-primary" \
@@ -4044,6 +4620,90 @@ run_gate_case "vertex-primary-existing-endpoint-nonrecoverable" \
 	"1" \
 	"vertex_ai/existing-endpoint-primary" \
 	"<unset>"
+
+run_gate_case "pr-stale-source-claim-fallback-success" \
+	"vertex_ai/stale-source-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after stale-source fallback" \
+	"2" \
+	"vertex_ai/stale-source-primary|vertex_ai/fallback-one" \
+	"<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/db/models.py"
+
+run_gate_case "pr-stale-source-plus-real-finding-blocks" \
+	"vertex_ai/stale-source-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/stale-source-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'backend/db/models.py\nbackend/api/emails.py'
+
+run_gate_case "pr-changed-finding-with-retry-marker-blocks" \
+	"vertex_ai/changed-finding-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/changed-finding-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/emails.py"
+
+run_gate_case "pr-stale-report-plus-inline-changed-finding-blocks" \
+	"vertex_ai/stale-inline-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"vertex_ai/stale-inline-primary" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'backend/db/models.py\nbackend/api/emails.py'
 
 run_gate_case "high-vuln-below-threshold" \
 	"vertex_ai/high-vuln-primary" \
@@ -4909,6 +5569,90 @@ run_gate_case "pr-critical-changed-bracketed-next-route" \
 	"0" \
 	"pull_request" \
 	"frontend/src/app/labels/[slug]/page.tsx"
+
+run_gate_case "pr-critical-changed-xml-file-location" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-critical-changed-xml-file-location-space" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Strix finding intersects files changed in this pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"MEDIUM" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"src/unsafe name.py"
+
+run_gate_case "pr-baseline-critical-narrative-backticked-service-file" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Strix findings are limited to unchanged files in this pull request; allowing pipeline continuation." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/services/email_client.py"
+
+run_gate_case "pr-critical-unmapped-arbitrary-backticked-service-file" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"1" \
+	"Unable to map Strix findings to changed files; failing closed for pull request." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/services/email_client.py"
 
 run_gate_case "pr-critical-changed-absolute-target" \
 	"openai/gpt-4o-mini" \

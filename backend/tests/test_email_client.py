@@ -1,5 +1,6 @@
 import base64
 import logging
+
 import pytest
 from services.email_client import (
     _sanitize_log_value,
@@ -30,6 +31,34 @@ def test_build_email_message_sets_reply_headers():
     assert message["References"] == "<root@example.com> <parent@example.com>"
     assert message["From"] == "sender@example.com"
     assert message["To"] == "test@example.com"
+
+
+@pytest.mark.parametrize(
+    ("field_name", "field_value"),
+    [
+        ("to_address", "victim@example.com\r\nBcc: attacker@example.com"),
+        ("from_address", "sender@example.com\nReply-To: attacker@example.com"),
+        ("subject", "Status\r\nX-Injected: true"),
+        ("in_reply_to", "<parent@example.com>\r\nBcc: attacker@example.com"),
+        ("references", "<root@example.com>\nBcc: attacker@example.com"),
+    ],
+)
+def test_build_email_message_rejects_newlines_in_header_fields(
+    field_name,
+    field_value,
+):
+    kwargs = {
+        "to_address": "victim@example.com",
+        "subject": "Status",
+        "body": "Body text\nwith allowed body newlines",
+        "from_address": "sender@example.com",
+        "in_reply_to": "<parent@example.com>",
+        "references": "<root@example.com> <parent@example.com>",
+    }
+    kwargs[field_name] = field_value
+
+    with pytest.raises(ValueError, match="Email header fields must not contain newlines"):
+        build_email_message(**kwargs)
 
 
 @pytest.mark.asyncio

@@ -22,27 +22,93 @@ const sibling = {
   body: '파트너 미팅 전까지 일정 확인이 필요합니다.',
 };
 
+const mobileAttachmentResult = {
+  ...email,
+  id: 17,
+  subject: '브랜드 에셋 검토 자료',
+  sender: '박서연 디자이너',
+  date: '2026-05-11T10:15:00Z',
+  snippet: '모바일 워크스페이스에 필요한 브랜드 에셋과 첨부 자료입니다.',
+};
+
+const mobilePeopleResult = {
+  ...email,
+  id: 18,
+  subject: '강민수 의사결정 메모',
+  sender: '강민수 리드',
+  date: '2026-05-11T11:00:00Z',
+  snippet: '일정과 사람 맥락을 함께 확인해야 하는 의사결정 메모입니다.',
+};
+
+const calendarCandidate = {
+  ...email,
+  id: 27,
+  subject: '파트너 미팅 일정 확정',
+  sender: '이지은 파트너',
+  date: '2026-05-12T13:00:00Z',
+  snippet: '파트너 미팅 일정을 확정하고 캘린더에 반영해야 합니다.',
+};
+
+const aiHubPrompts = [
+  { id: 101, title: 'Q2 출시 판단', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
+  { id: 102, title: '계약 리스크 점검', description: '계약서, 첨부, 메일 스레드를 판단 포인트로 정리합니다.' },
+  { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
+];
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
 async function fulfillJson(route: Route, body: unknown) {
   await route.fulfill({
     status: 200,
     contentType: 'application/json',
+    headers: CORS_HEADERS,
     body: JSON.stringify(body),
   });
 }
 
-export async function mockDashboardApi(page: Page) {
+export async function mockDashboardApi(page: Page, onApiRequest?: (path: string) => void) {
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
+    onApiRequest?.(path);
+
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: CORS_HEADERS,
+      });
+      return;
+    }
 
     if (path === '/api/emails' && request.method() === 'GET') {
       await fulfillJson(route, { emails: [email] });
       return;
     }
 
+    if (path === '/api/prompts' && request.method() === 'GET') {
+      await fulfillJson(route, aiHubPrompts);
+      return;
+    }
+
     if (path === '/api/search' && request.method() === 'POST') {
-      await fulfillJson(route, { results: [email] });
+      let body: { query?: string } = {};
+      try {
+        body = JSON.parse(request.postData() || '{}') as { query?: string };
+      } catch {
+        body = {};
+      }
+
+      if (body.query?.includes('회의')) {
+        await fulfillJson(route, { results: [calendarCandidate, sibling] });
+        return;
+      }
+
+      await fulfillJson(route, { results: [email, mobileAttachmentResult, mobilePeopleResult] });
       return;
     }
 
@@ -74,8 +140,69 @@ export async function mockDashboardApi(page: Page) {
       return;
     }
 
-    if (path === '/api/calendar/sync') {
-      await fulfillJson(route, { synced: 2 });
+    if (path === '/api/calendar/writeback-intent' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        workspace_id: 'default',
+        target_source_id: 'caldav-primary',
+        protocol: 'caldav',
+        writeback_mode: 'customer_owned',
+        requires_if_match: false,
+        if_match: null,
+        provenance: {
+          created_by: 'default',
+          source_provider: 'Customer CalDAV',
+          source_protocol: 'caldav',
+        },
+        audit_event: 'calendar.writeback_intent.created',
+      });
+      return;
+    }
+
+    if (path === '/api/tasks' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          id: 'task-q2-owner',
+          title: '리소스 배정 검토 회의',
+          status: 'blocked',
+          priority: 'urgent',
+          source_type: 'email',
+          source_email_id: '<q2@example.com>',
+          related_thread_id: 'thread-q2',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-21T00:00:00Z',
+        },
+      ]);
+      return;
+    }
+
+    if (path === '/api/tasks/from-email' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        created: 2,
+        tasks: [
+          {
+            id: 'task-q2-owner',
+            title: '리소스 배정 검토 회의',
+            status: 'open',
+            priority: 'normal',
+            source_type: 'email',
+            source_email_id: '<q2@example.com>',
+            related_thread_id: 'thread-q2',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+          },
+          {
+            id: 'task-q2-marketing',
+            title: '마케팅 캠페인 오프',
+            status: 'open',
+            priority: 'normal',
+            source_type: 'email',
+            source_email_id: '<q2@example.com>',
+            related_thread_id: 'thread-q2',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-19T00:00:00Z',
+          },
+        ],
+      });
       return;
     }
 
@@ -87,6 +214,6 @@ export async function mockDashboardApi(page: Page) {
       return;
     }
 
-    await route.fulfill({ status: 404, body: 'Not mocked' });
+    await route.fulfill({ status: 404, headers: CORS_HEADERS, body: 'Not mocked' });
   });
 }
