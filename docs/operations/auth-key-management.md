@@ -5,15 +5,24 @@
 - `backend/api/auth.py` no longer accepts public `X-User-*`,
   `X-Organization-*`, `X-Group-*`, or `X-Dev-Auth-Token` headers as runtime
   authentication material.
-- Runtime authentication accepts only `Authorization: Bearer` compact session
-  envelopes whose protected header pins `alg=HS256` and whose `header.payload`
-  signing input is signed with HMAC-SHA256 by the configured
+- Runtime authentication accepts compact session envelopes from either a
+  non-browser `Authorization: Bearer` header or the browser-only HttpOnly
+  `naruon_session_token` cookie. The protected header pins `alg=HS256`, and the
+  `header.payload` signing input is signed with HMAC-SHA256 by the configured
   `AUTH_SESSION_HMAC_SECRET`. The secret must be explicitly configured,
   high-entropy generated material, and at least 32 bytes. Settings fail at
   startup in every runtime mode when this secret is missing, too short, or an
   obvious repeated placeholder or known public fixture value; runtime
   verification still fails closed with `401 Authentication required` when an
   already-loaded configured value becomes absent, weak, or public.
+- Browser cookie sessions are ambient credentials, so unsafe methods (`POST`,
+  `PUT`, `PATCH`, `DELETE`) require an `Origin` or `Referer` whose normalized
+  origin exactly matches `ALLOWED_BROWSER_ORIGINS`; missing or cross-site origins
+  fail with `403 Cross-site request rejected`. Browser session issuers must set
+  `HttpOnly`, `Secure`, and `SameSite=Lax` or stricter on `naruon_session_token`.
+  Production rejects the built-in localhost-only default allowlist, so deployed
+  environments must set explicit non-localhost browser origins before unsafe
+  cookie-authenticated writes are accepted.
 - The signed session payload is versioned and must include
   `iss=naruon-control-plane`, `aud=naruon-api`, `sub`, explicit `role`,
   `workspace`, `exp`, and organization/group scope claims. Tampered, expired,
@@ -90,13 +99,18 @@
 - Authentication is not sufficient for privileged control-plane resources: LLM
   provider registry reads and writes require `platform_admin` or
   `organization_admin` signed role claims.
-- The browser API client sends the stored `naruon_session_token` as
-  `Authorization: Bearer` and strips public identity headers (`X-User-Id`,
+- The browser API client sends the HttpOnly `naruon_session_token` cookie with
+  `credentials: include` and strips public identity headers (`X-User-Id`,
   `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
   `X-Dev-Auth-Token`) from caller-provided request headers so copied frontend
   code cannot reintroduce the development-header trust boundary.
-- Caller-provided `Authorization` is also discarded by the browser API client;
-  only the stored `naruon_session_token` may populate the backend bearer session.
+- Browser code must not persist or read session tokens through
+  `localStorage`/`sessionStorage`. Caller-provided `Authorization` is discarded
+  by the browser API client; browser identity comes from the server-verifiable
+  HttpOnly cookie, while non-browser clients may still send bearer sessions.
+- Cookie-backed browser writes are CSRF-gated by `ALLOWED_BROWSER_ORIGINS` in the
+  backend dependency; bearer-authenticated non-browser automation does not use
+  that browser-origin gate.
 
 ## Keycloak/Casdoor decision path
 

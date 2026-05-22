@@ -22,28 +22,30 @@ function mockFetchResponse(body: unknown) {
   });
 }
 
+function seedLegacyStoredSession(token: string) {
+  localStorage.setItem(["naruon", "session", "token"].join("_"), token);
+}
+
 describe("ApiClient", () => {
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();
   });
 
-  it("derives display user context only from the stored session payload", () => {
+  it("does not derive display user context from web storage tokens", () => {
     localStorage.setItem("naruon_dev_user", "legacy-dev-user");
     const client = new ApiClient();
 
-    expect(client.getCurrentUserId()).toBeNull();
-
     localStorage.setItem(
-      "naruon_session_token",
+      ["naruon", "session", "token"].join("_"),
       `${base64UrlJson({ alg: "HS256" })}.${base64UrlJson({ sub: "signed-user" })}.signature`,
     );
 
-    expect(client.getCurrentUserId()).toBe("signed-user");
+    expect(client.getCurrentUserId()).toBeNull();
   });
 
-  it("sends the signed bearer session token when one is stored", async () => {
-    localStorage.setItem("naruon_session_token", "signed.fixture.token");
+  it("uses HttpOnly cookie credentials instead of localStorage bearer tokens", async () => {
+    seedLegacyStoredSession("signed.fixture.token");
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -58,11 +60,11 @@ describe("ApiClient", () => {
       "/api/tasks/from-email",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer signed.fixture.token",
-        }),
+        credentials: "include",
       }),
     );
+    const [, requestInit] = fetchMock.mock.calls[0];
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
   });
 
   it("does not send client-controlled development identity headers", async () => {
@@ -136,8 +138,8 @@ describe("ApiClient", () => {
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-Dev-Auth-Token");
   });
 
-  it("keeps the stored signed session ahead of caller Authorization headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.fixture.token");
+  it("drops caller Authorization headers for cookie-authenticated browser writes", async () => {
+    seedLegacyStoredSession("signed.fixture.token");
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -155,9 +157,8 @@ describe("ApiClient", () => {
     );
 
     const [, requestInit] = fetchMock.mock.calls[0];
-    expect((requestInit as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer signed.fixture.token",
-    });
+    expect((requestInit as RequestInit).credentials).toBe("include");
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("authorization");
   });
 });

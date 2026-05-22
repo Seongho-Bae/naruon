@@ -6,11 +6,19 @@ import json
 import math
 import time
 from dataclasses import dataclass
+from ipaddress import ip_address
 from typing import Annotated, Any, Literal, cast
+from urllib.parse import urlparse
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request
+from pydantic import BaseModel
 
-from core.config import settings, validate_auth_session_hmac_secret_value
+from core.config import (
+    DEFAULT_ALLOWED_BROWSER_ORIGINS,
+    allowed_browser_origins,
+    settings,
+    validate_auth_session_hmac_secret_value,
+)
 
 RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
 ALLOWED_ROLES: set[str] = {
@@ -23,10 +31,22 @@ SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
 MIN_SESSION_SECRET_BYTES = 32
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+COOKIE_CSRF_ERROR = "Cross-site request rejected"
+NO_REQUEST = cast(Request, None)
+router = APIRouter(prefix="/api/auth")
 
 
 @dataclass(frozen=True)
 class AuthContext:
+    user_id: str
+    role: RoleName
+    organization_id: str | None
+    group_ids: tuple[str, ...]
+    workspace_id: str
+
+
+class AuthContextResponse(BaseModel):
     user_id: str
     role: RoleName
     organization_id: str | None
@@ -44,27 +64,98 @@ def ensure_organization_access(auth_context: AuthContext, organization_id: str) 
 
 
 async def get_auth_context(
+    request: Request = NO_REQUEST,
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    naruon_session_token: Annotated[
+        str | None, Cookie(alias="naruon_session_token")
+    ] = None,
 ) -> AuthContext:
-    return build_auth_context(authorization=authorization)
+    _enforce_cookie_csrf_origin(request, authorization, naruon_session_token)
+    return build_auth_context(
+        authorization=authorization, session_cookie_token=naruon_session_token
+    )
 
 
-def build_auth_context(authorization: str | None = None) -> AuthContext:
+def build_auth_context(
+    authorization: str | None = None, session_cookie_token: str | None = None
+) -> AuthContext:
     """
     Build runtime identity from verified signed session material.
 
     Client-supplied identity metadata is not authentication material. Only a
-    bearer token signed by the configured control-plane HMAC secret can supply
-    identity, role, organization, group, and workspace claims in the runtime
-    dependency path. Endpoint tests that need fixture identities must continue to
-    use explicit FastAPI dependency overrides.
+    signed session token signed by the configured control-plane HMAC secret can
+    supply identity, role, organization, group, and workspace claims in the
+    runtime dependency path. Browser requests should use the HttpOnly
+    ``naruon_session_token`` cookie; non-browser clients may still use a bearer
+    token. Endpoint tests that need fixture identities must continue to use
+    explicit FastAPI dependency overrides.
     """
-    payload = _verify_signed_session_payload(authorization)
+    payload = _verify_signed_session_payload(
+        authorization=authorization, session_cookie_token=session_cookie_token
+    )
     return _auth_context_from_session_payload(payload)
 
 
 def _authentication_error() -> HTTPException:
     return HTTPException(status_code=401, detail="Authentication required")
+
+
+def _csrf_error() -> HTTPException:
+    return HTTPException(status_code=403, detail=COOKIE_CSRF_ERROR)
+
+
+def _normalized_origin(value: str) -> str | None:
+    parsed = urlparse(value.strip())
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+    if parsed.username or parsed.password:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _request_origin(request: Request) -> str | None:
+    origin = request.headers.get("origin")
+    if origin:
+        return _normalized_origin(origin)
+    referer = request.headers.get("referer")
+    if referer:
+        return _normalized_origin(referer)
+    return None
+
+
+def _is_local_browser_origin(origin: str) -> bool:
+    parsed = urlparse(origin.strip())
+    hostname = parsed.hostname
+    if hostname is None:
+        return False
+    normalized_hostname = hostname.lower()
+    if normalized_hostname == "localhost" or normalized_hostname.endswith(".localhost"):
+        return True
+    try:
+        return ip_address(normalized_hostname).is_loopback
+    except ValueError:
+        return False
+
+
+def _enforce_cookie_csrf_origin(
+    request: Request | None,
+    authorization: str | None,
+    session_cookie_token: str | None,
+) -> None:
+    if authorization is not None or session_cookie_token is None:
+        return
+    if request is None or request.method.upper() in SAFE_METHODS:
+        return
+
+    configured_origins = allowed_browser_origins(settings.ALLOWED_BROWSER_ORIGINS)
+    if settings.RUNTIME_ENVIRONMENT == "production" and (
+        configured_origins == DEFAULT_ALLOWED_BROWSER_ORIGINS
+        or any(_is_local_browser_origin(origin) for origin in configured_origins)
+    ):
+        raise _csrf_error()
+    allowed_origins = {origin.lower() for origin in configured_origins}
+    if _request_origin(request) not in allowed_origins:
+        raise _csrf_error()
 
 
 def _session_secret_bytes() -> bytes:
@@ -88,6 +179,16 @@ def _extract_bearer_token(authorization: str | None) -> str:
     if separator != " " or scheme.lower() != "bearer" or not token.strip():
         raise _authentication_error()
     return token.strip()
+
+
+def _extract_session_token(
+    authorization: str | None, session_cookie_token: str | None
+) -> str:
+    if authorization is not None:
+        return _extract_bearer_token(authorization)
+    if session_cookie_token is None or not session_cookie_token.strip():
+        raise _authentication_error()
+    return session_cookie_token.strip()
 
 
 def _base64url_decode(segment: str) -> bytes:
@@ -118,8 +219,10 @@ def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
     return decoded
 
 
-def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
-    token = _extract_bearer_token(authorization)
+def _verify_signed_session_payload(
+    authorization: str | None, session_cookie_token: str | None
+) -> dict[str, Any]:
+    token = _extract_session_token(authorization, session_cookie_token)
     token_segments = token.split(".")
     if len(token_segments) != 3:
         raise _authentication_error()
@@ -221,3 +324,16 @@ async def get_current_user_role(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> str:
     return auth_context.role
+
+
+@router.get("/context", response_model=AuthContextResponse)
+async def auth_context_endpoint(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> AuthContextResponse:
+    return AuthContextResponse(
+        user_id=auth_context.user_id,
+        role=auth_context.role,
+        organization_id=auth_context.organization_id,
+        group_ids=auth_context.group_ids,
+        workspace_id=auth_context.workspace_id,
+    )

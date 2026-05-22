@@ -39,6 +39,10 @@ interface RunnerConfig {
   updated_at: string | null;
 }
 
+interface AuthContext {
+  user_id: string;
+}
+
 function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackMessage: string) {
   const status = (err as Error & { status?: number }).status;
   if (status === 403) return forbiddenMessage;
@@ -47,7 +51,7 @@ function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackM
 }
 
 export default function SettingsPage() {
-  const currentUserId = apiClient.getCurrentUserId();
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [providers, setProviders] = useState<LLMProvider[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(true);
@@ -82,6 +86,15 @@ export default function SettingsPage() {
   const [runnerError, setRunnerError] = useState<string | null>(null);
   const [runnerToken, setRunnerToken] = useState<string | null>(null);
   const [runnerBusy, setRunnerBusy] = useState(false);
+
+  const fetchAuthContext = async () => {
+    try {
+      const data = await apiClient.get<AuthContext>('/api/auth/context');
+      setCurrentUserId(data.user_id);
+    } catch {
+      setPersonalLoading(false);
+    }
+  };
 
   const fetchProviders = async () => {
     try {
@@ -152,10 +165,18 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      void fetchAuthContext();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!currentUserId) return undefined;
+    const timer = window.setTimeout(() => {
       void fetchPersonalConfig();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [fetchPersonalConfig]);
+  }, [currentUserId, fetchPersonalConfig]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

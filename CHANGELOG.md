@@ -1,6 +1,12 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): post-merge Strix 실패를 막기 위해 LLM draft의 사용자
+  instruction을 JSON user message로 system prompt에서 분리하고, 브라우저 세션을
+  HttpOnly cookie 기반 `credentials: include` + `ALLOWED_BROWSER_ORIGINS` CSRF
+  gate 경로로 전환하고 production localhost allowlist default를 fail-closed
+  처리했으며, backend Docker image에서 `gcc`/`libpq-dev` build dependency를
+  제거했습니다.
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
   global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
   provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.
@@ -17,9 +23,8 @@
   inventory 노출을 방지했습니다.
 - Seongho Bae (@seonghobae): frontend API client에서 `localStorage.naruon_dev_user`
   기반 `X-User-Id` 개발용 header 주입을 제거하고, caller-provided public identity
-  headers를 strip하며, legacy 개발용 계정 스위처를 제거해 signed
-  `Authorization: Bearer` session 경로만 backend write/read에 쓰이도록
-  정리했습니다.
+  headers를 strip하며, legacy 개발용 계정 스위처를 제거해 signed session 경로만
+  backend write/read에 쓰이도록 정리했습니다.
 - Seongho Bae (@seonghobae): runtime 인증 dependency에서 개발용 `X-User-*`,
   `X-Organization-*`, `X-Group-*`, `X-Dev-Auth-Token` 헤더 인증 경로를
   제거해, 배포 환경 변수 오설정만으로 공개 요청이 identity/role/scope를

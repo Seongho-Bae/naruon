@@ -205,11 +205,16 @@ search result/detail graph timelines, project decision logs, document
 repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
-exist. Browser writes to signed backend routes use the stored
-`naruon_session_token` as an `Authorization: Bearer` session, and the frontend
-API client strips public identity headers such as `X-User-Id` and
-`X-Organization-Id`, including group and dev-token variants, rather than
-forwarding development identity fallbacks.
+exist. Browser writes to signed backend routes send the HttpOnly
+`naruon_session_token` cookie with `credentials: include`; the frontend API
+client does not read or persist session tokens in Web Storage, and it strips
+public identity headers such as `X-User-Id` and `X-Organization-Id`, including
+group and dev-token variants, rather than forwarding development identity
+fallbacks. Cookie-authenticated unsafe methods must also come from an allowed
+browser origin: set `ALLOWED_BROWSER_ORIGINS` to the exact comma-separated
+frontend origins that may send same-site writes. Production rejects the built-in
+localhost-only defaults so deployed cookie-backed writes fail closed until the
+real frontend origins are configured.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread

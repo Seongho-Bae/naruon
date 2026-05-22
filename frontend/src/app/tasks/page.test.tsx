@@ -73,7 +73,6 @@ describe("TasksPage", () => {
   });
 
   it("loads source-linked tickets from the signed session tasks API without public identity headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.tasks.session");
     const fetchMock = vi.fn(async (...args: [RequestInfo | URL, RequestInit?]) => {
       void args;
       return jsonResponse([
@@ -101,14 +100,13 @@ describe("TasksPage", () => {
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({
-      headers: expect.objectContaining({
-        Authorization: "Bearer signed.tasks.session",
-      }),
+      credentials: "include",
     }));
     const firstCall = fetchMock.mock.calls[0];
     expect(firstCall).toBeDefined();
     const [, init] = firstCall as [RequestInfo | URL, RequestInit?];
     const headers = init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
     expect(headers["X-User-Id"]).toBeUndefined();
     expect(headers["X-Organization-Id"]).toBeUndefined();
     expect(headers["X-Group-Id"]).toBeUndefined();

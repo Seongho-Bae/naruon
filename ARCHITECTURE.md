@@ -203,18 +203,24 @@ provider endpoints additionally require an operator-owned egress allowlist so an
 organization admin cannot point LLM traffic at localhost, private networks, or
 cloud metadata services.
 
-The browser API client reads `naruon_session_token` from local storage and sends
-it as the bearer session on signed routes. It does not synthesize or forward
-public identity headers such as `X-User-Id`, `X-Organization-Id`, `X-Group-Id`,
-`X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`; any local development
-identity-header flow is limited to explicit unsigned/test harness paths and is
-not accepted by authenticated runtime dependencies. UI flows that create
-source-linked tasks or other server-side writes must keep that signed-session
-path covered in fast tests and E2E mocks so authenticated backend behavior is
-not masked by stale fixtures.
-Caller-supplied `Authorization` headers are dropped before the stored signed
-session is applied, so browser code cannot shadow the bearer token with a
-case-variant header.
+The browser API client relies on the HttpOnly `naruon_session_token` cookie for
+signed routes and sends requests with `credentials: include`. It does not read or
+persist session tokens in `localStorage` or `sessionStorage`, and it does not
+synthesize or forward public identity headers such as `X-User-Id`,
+`X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or
+`X-Dev-Auth-Token`; any local development identity-header flow is limited to
+explicit unsigned/test harness paths and is not accepted by authenticated
+runtime dependencies. UI flows that create source-linked tasks or other
+server-side writes must keep that signed-session cookie path covered in fast
+tests and E2E mocks so authenticated backend behavior is not masked by stale
+fixtures. Caller-supplied `Authorization` headers are dropped so browser code
+cannot shadow the server-authoritative cookie session with a case-variant bearer
+header. Because cookies are ambient browser credentials, unsafe cookie-backed
+methods (`POST`, `PUT`, `PATCH`, `DELETE`) also require a same-site `Origin` or
+`Referer` whose origin exactly matches `ALLOWED_BROWSER_ORIGINS`; non-browser
+bearer sessions are not subject to that browser-origin gate. Production rejects
+the built-in localhost-only origin defaults, so deployments must provide their
+actual frontend origins before cookie-backed writes work.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
 an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,

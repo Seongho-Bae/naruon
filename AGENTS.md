@@ -40,11 +40,15 @@
   Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
-- Browser frontend writes to signed backend routes must carry the stored
-  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
-  public identity headers such as `X-User-Id`, `X-Organization-Id`,
-  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
-  tests/mocks must exercise the signed-session path.
+- Browser frontend writes to signed backend routes must rely on the HttpOnly
+  `naruon_session_token` cookie with `credentials: include`; browser code must
+  not persist or read that session token through `localStorage`/`sessionStorage`
+  and must not emit or forward public identity headers such as `X-User-Id`,
+  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or
+  `X-Dev-Auth-Token`; unsafe cookie-authenticated backend methods must pass the
+  server-side `Origin`/`Referer` allowlist in `ALLOWED_BROWSER_ORIGINS`; production
+  must set deployed non-localhost origins explicitly, and tests/mocks must
+  exercise the signed-session path.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/api/runtime-config`, `/`, and `/metrics` may omit

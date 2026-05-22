@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from starlette.requests import Request
 from api.auth import (
     AuthContext,
     ensure_organization_access,
@@ -84,6 +85,24 @@ def _signed_session_token(
     return f"{header_segment}.{payload_segment}.{_base64url_encode(signature)}"
 
 
+def _http_request(method: str, headers: dict[str, str] | None = None) -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": method,
+            "path": "/api/llm/draft",
+            "headers": [
+                (key.lower().encode("latin-1"), value.encode("latin-1"))
+                for key, value in (headers or {}).items()
+            ],
+            "query_string": b"",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("testclient", 50000),
+        }
+    )
+
+
 def _legacy_signed_session_token(
     payload: dict[str, object], secret: str = TEST_SESSION_HMAC_SECRET
 ) -> str:
@@ -118,12 +137,17 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
+    previous_allowed_browser_origins = getattr(
+        settings, "ALLOWED_BROWSER_ORIGINS", None
+    )
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
+    if previous_allowed_browser_origins is not None:
+        settings.ALLOWED_BROWSER_ORIGINS = previous_allowed_browser_origins
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -156,6 +180,27 @@ def _request_without_dependency_overrides(method: str, path: str):
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             return client.request(method, path)
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
+def _cookie_authenticated_request_without_dependency_overrides(
+    method: str,
+    path: str,
+    headers: dict[str, str] | None = None,
+    json_body: dict[str, str] | None = None,
+):
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client.cookies.set("naruon_session_token", token)
+            return client.request(method, path, headers=headers, json=json_body)
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -235,6 +280,151 @@ async def test_get_auth_context_accepts_signed_bearer_session():
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
     )
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_accepts_http_only_session_cookie():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    context = await get_auth_context(naruon_session_token=token)
+
+    assert context == AuthContext(
+        user_id="alice",
+        role="organization_admin",
+        organization_id="org-acme",
+        group_ids=("group-1", "group-2"),
+        workspace_id="workspace-org-acme",
+    )
+
+
+def test_auth_context_route_accepts_http_only_session_cookie():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            client.cookies.set("naruon_session_token", token)
+            response = client.get("/api/auth/context")
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "alice",
+        "role": "organization_admin",
+        "organization_id": "org-acme",
+        "group_ids": ["group-1", "group-2"],
+        "workspace_id": "workspace-org-acme",
+    }
+
+
+def test_cookie_authenticated_unsafe_api_rejects_missing_origin():
+    response = _cookie_authenticated_request_without_dependency_overrides(
+        "POST",
+        "/api/llm/draft",
+        json_body={"email_body": "Hello", "instruction": "Reply briefly"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Cross-site request rejected"}
+
+
+def test_cookie_authenticated_unsafe_api_rejects_cross_site_origin():
+    response = _cookie_authenticated_request_without_dependency_overrides(
+        "POST",
+        "/api/llm/draft",
+        headers={"Origin": "https://evil.example"},
+        json_body={"email_body": "Hello", "instruction": "Reply briefly"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Cross-site request rejected"}
+
+
+@pytest.mark.asyncio
+async def test_cookie_authenticated_unsafe_api_accepts_allowed_origin():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    settings.ALLOWED_BROWSER_ORIGINS = "https://app.naruon.example"
+    token = _signed_session_token(_valid_session_payload())
+
+    context = await get_auth_context(
+        request=_http_request("POST", {"Origin": "https://app.naruon.example"}),
+        naruon_session_token=token,
+    )
+
+    assert context.user_id == "alice"
+
+
+@pytest.mark.asyncio
+async def test_production_cookie_auth_rejects_default_localhost_origin_allowlist():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    _set_runtime_environment("production")
+    settings.ALLOWED_BROWSER_ORIGINS = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:8000,http://127.0.0.1:8000"
+    )
+    token = _signed_session_token(_valid_session_payload())
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            request=_http_request("POST", {"Origin": "http://localhost:3000"}),
+            naruon_session_token=token,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Cross-site request rejected"
+
+
+@pytest.mark.asyncio
+async def test_production_cookie_auth_rejects_single_localhost_origin_allowlist():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    _set_runtime_environment("production")
+    settings.ALLOWED_BROWSER_ORIGINS = "http://localhost:3000"
+    token = _signed_session_token(_valid_session_payload())
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            request=_http_request("POST", {"Origin": "http://localhost:3000"}),
+            naruon_session_token=token,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Cross-site request rejected"
+
+
+@pytest.mark.asyncio
+async def test_production_cookie_auth_rejects_loopback_origin_allowlist_variant():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    _set_runtime_environment("production")
+    settings.ALLOWED_BROWSER_ORIGINS = "HTTP://LOCALHOST:3000,http://127.0.0.1:8000"
+    token = _signed_session_token(_valid_session_payload())
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(
+            request=_http_request("POST", {"Origin": "http://127.0.0.1:8000"}),
+            naruon_session_token=token,
+        )
+
+    assert exc.value.status_code == 403
+    assert exc.value.detail == "Cross-site request rejected"
+
+
+@pytest.mark.asyncio
+async def test_bearer_authenticated_unsafe_api_does_not_require_browser_origin():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    context = await get_auth_context(
+        request=_http_request("POST"),
+        authorization=f"Bearer {token}",
+    )
+
+    assert context.user_id == "alice"
 
 
 @pytest.mark.asyncio

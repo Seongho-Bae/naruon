@@ -24,17 +24,10 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
-    const sessionToken = this.getSessionToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...this.getSafeCallerHeaders(init?.headers),
     };
-    if (sessionToken) {
-      return {
-        ...headers,
-        Authorization: `Bearer ${sessionToken}`,
-      };
-    }
     return headers;
   }
 
@@ -60,36 +53,17 @@ export class ApiClient {
   }
 
   getSessionToken() {
-    if (typeof window === 'undefined') return null;
-
-    const stored = localStorage.getItem('naruon_session_token')?.trim();
-    return stored || null;
+    return null;
   }
 
   getCurrentUserId() {
-    const sessionToken = this.getSessionToken();
-    if (!sessionToken) return null;
-
-    const [, payloadSegment] = sessionToken.split('.');
-    if (!payloadSegment) return null;
-
-    try {
-      const normalizedPayload = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-      const paddedPayload = normalizedPayload.padEnd(
-        Math.ceil(normalizedPayload.length / 4) * 4,
-        '=',
-      );
-      const decodedPayload = JSON.parse(atob(paddedPayload)) as { sub?: unknown };
-      if (typeof decodedPayload.sub !== 'string') return null;
-      return decodedPayload.sub.trim() || null;
-    } catch {
-      return null;
-    }
+    return null;
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
+      credentials: 'include',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
@@ -104,6 +78,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
+      credentials: 'include',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
@@ -119,6 +94,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'PUT',
+      credentials: 'include',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
@@ -136,6 +112,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'DELETE',
+      credentials: 'include',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {

@@ -4,6 +4,12 @@ from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 MIN_AUTH_SESSION_HMAC_SECRET_BYTES = 32
+DEFAULT_ALLOWED_BROWSER_ORIGINS = (
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+)
 _LOW_ENTROPY_PLACEHOLDER_TERMS = ("change", "example", "password", "secret")
 _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS = frozenset(
     {"naruon-session-hmac-token-32-byte-minimum"}
@@ -25,6 +31,14 @@ def validate_auth_session_hmac_secret_value(secret: str) -> None:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
 
 
+def allowed_browser_origins(value: str | None = None) -> tuple[str, ...]:
+    configured = ",".join(DEFAULT_ALLOWED_BROWSER_ORIGINS) if value is None else value
+    origins = tuple(
+        origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()
+    )
+    return origins or DEFAULT_ALLOWED_BROWSER_ORIGINS
+
+
 class Settings(BaseSettings):
     DATABASE_URL: str
     DEBUG: bool = False
@@ -32,6 +46,7 @@ class Settings(BaseSettings):
     AUTH_SESSION_HMAC_SECRET: SecretStr | None = None
     ENCRYPTION_KEY: SecretStr | None = None
     CONTROL_PLANE_DOMAIN: str = "naruon.net"
+    ALLOWED_BROWSER_ORIGINS: str = ",".join(DEFAULT_ALLOWED_BROWSER_ORIGINS)
     ALLOWED_SMTP_HOSTS: str = ""
     ALLOWED_SMTP_PORTS: str = "465,587"
     ALLOWED_LLM_BASE_URL_HOSTS: str = ""
