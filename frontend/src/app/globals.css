@@ -51,16 +51,16 @@
 :root {
   --font-naruon-sans: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   --font-naruon-mono: "SFMono-Regular", "Cascadia Code", "Liberation Mono", ui-monospace, monospace;
-  --naruon-ink: #0b1220;
-  --naruon-primary: #2563ff;
-  --naruon-indigo: #4f46e5;
-  --naruon-purple: #7c3aed;
-  --naruon-green: #22c55e;
-  --naruon-sky: #38bdf8;
-  --naruon-slate: #64748b;
-  --naruon-border: #e5e7eb;
-  --naruon-bg: #f8fafc;
-  --naruon-surface: #ffffff;
+  --naruon-ink: #0B132B;
+  --naruon-primary: #2563EB;
+  --naruon-indigo: #4F46E5;
+  --naruon-purple: #7C3AED;
+  --naruon-green: #22C55E;
+  --naruon-sky: #38BDF8;
+  --naruon-slate: #475569;
+  --naruon-border: #E5E7EB;
+  --naruon-bg: #F3F4F6;
+  --naruon-surface: #FFFFFF;
   --background: var(--naruon-bg);
   --foreground: var(--naruon-ink);
   --card: var(--naruon-surface);
