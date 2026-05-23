@@ -155,7 +155,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         </div>
 
         {/* Middle Grid */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">오늘의 판단 포인트</h2>
@@ -236,8 +236,8 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         </div>
 
         {/* Bottom Grid */}
-        <div className="grid grid-cols-3 gap-6">
-          <div className="col-span-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">최근 메일 <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">새 메일 12</span></h2>
             </div>
@@ -285,9 +285,9 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 { label: '문서 작성', icon: CheckCircle2, color: 'text-blue-500' },
                 { label: '파일 업로드', icon: Network, color: 'text-blue-500' },
               ].map((action, i) => (
-                <button key={i} className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card py-4 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
-                  <action.icon className={`size-5 ${action.color}`} />
-                  {action.label}
+                <button key={i} className="flex items-center justify-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+                  <action.icon className={`size-5 shrink-0 ${action.color}`} />
+                  <span className="truncate">{action.label}</span>
                 </button>
               ))}
             </div>

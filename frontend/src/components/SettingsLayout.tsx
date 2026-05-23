@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from 'react';
 import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor } from 'lucide-react';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
+import { useState } from 'react';
 
 export function SettingsLayout() {
   const [activeTab, setActiveTab] = useState<'기본 설정' | '커넥터 설정' | '프로필' | '알림' | '보안' | '모바일 기기'>('기본 설정');
   const startupView = useWorkspaceStartupView();
+
+  const handleStartupViewChange = (view: 'dashboard' | 'email' | 'calendar') => {
+    setWorkspaceStartupView(view);
+  };
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
