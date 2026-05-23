@@ -28,6 +28,11 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
+  
+## Agentic Ontology & Auto-Organization (Planned)
+
+- **DAG Ontology**: The system evaluates a Directed Acyclic Graph (DAG) for sender relationships to determine "what this sender means to the user", allowing the AI Agent to decide subsequent tasks based on dynamic relationship contexts.
+- **Self-Sent Knowledge Indexing**: Emails sent to oneself are automatically parsed and structured into the connected WebDAV/Notes repository, creating a seamless personal knowledge base.
 
 ## Five-minute local path
 

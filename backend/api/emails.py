@@ -111,6 +111,66 @@ async def get_emails(
     return {"emails": items}
 
 
+@router.get("/pending-replies", response_model=dict[str, list[EmailListItem]])
+async def get_pending_replies(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+    current_user: str = Depends(get_current_user),
+):
+    tenant_config = await db.scalar(
+        select(TenantConfig).where(TenantConfig.user_id == current_user)
+    )
+    my_email = tenant_config.smtp_username if tenant_config else None
+    if not my_email:
+        return {"emails": []}
+
+    candidate_window = min(max(limit * 10, 200), 2000)
+    result = await db.execute(
+        select(Email)
+        .where(*email_owner_filters(auth_context))
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
+    )
+    emails = result.scalars().all()
+    emails = sorted(emails, key=lambda item: item.date)
+
+    grouped = {}
+    reply_counts = {}
+    for email in emails:
+        group_key = canonical_thread_key(email)
+        if group_key not in grouped:
+            grouped[group_key] = email
+            reply_counts[group_key] = 1
+        else:
+            reply_counts[group_key] += 1
+            if email.date > grouped[group_key].date:
+                grouped[group_key] = email
+
+    sorted_groups = sorted(grouped.values(), key=lambda x: x.date, reverse=True)
+    
+    items = []
+    for email in sorted_groups:
+        if email.sender == my_email:
+            group_key = canonical_thread_key(email)
+            snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
+            items.append(
+                EmailListItem(
+                    id=email.id,
+                    subject=email.subject,
+                    sender=email.sender,
+                    reply_to=email.reply_to,
+                    date=email.date,
+                    snippet=snippet,
+                    thread_id=group_key,
+                    reply_count=reply_counts[group_key],
+                )
+            )
+            if len(items) >= limit:
+                break
+    return {"emails": items}
+
+
 @router.get("/{email_id}", response_model=EmailDetailResponse)
 async def get_email(
     email_id: int,

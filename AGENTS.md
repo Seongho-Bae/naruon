@@ -62,9 +62,8 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
-- When reviews find public/private identifier leaks or stale API fixture shapes,
-  update tests, frontend mocks, E2E mocks, README examples, and architecture docs
-  together so the same bug pattern does not reappear in copied examples.
+- When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
 - Calendar UI actions must request `/api/calendar/writeback-intent` with
