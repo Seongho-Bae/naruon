@@ -161,10 +161,14 @@ Pull request scans split scoped changed files into small bounded batches before
 the timeout-driven rebalance path, so large PRs do not spend the whole required
 check budget on one oversized Strix invocation. PR scans also disable same-model
 transient retries: timeout budget is spent on smaller scan scopes or distinct
-fallback models instead of retrying the same slow provider path. Gemini
-`BadRequestError` output with LiteLLM/provider context is treated as model-route
-retryable, so an invalid or retired configured model can fall forward to the
-known Gemini fallback list without suppressing findings. Threshold findings
+fallback models instead of retrying the same slow provider path. The default
+Strix model route uses LiteLLM's GitHub Models provider (`github/*`) with the
+same secret material forwarded as `GITHUB_API_KEY`, while Vertex/Gemini-specific
+routes remain available when explicitly configured. Gemini `BadRequestError`
+output with LiteLLM/provider context is treated as model-route retryable, so an
+invalid or retired configured model can fall forward to the known Gemini fallback
+list without suppressing findings. GitHub Models routes use their own fallback
+list before falling back to the generic list. Threshold findings
 emitted by any failed attempt remain blocking even if a later fallback model
 succeeds, except for PR findings that the gate has already classified as
 retryable model inconsistency. If a PR batch exhausts the total Strix budget

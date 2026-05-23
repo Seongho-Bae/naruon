@@ -64,6 +64,13 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "Collect Strix reports for artifact upload" "strix workflow preserves reports from trusted workspace"
 	assert_file_contains "$workflow_file" ". \"\$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh\"" "strix workflow reuses trusted model auth helpers"
 	assert_file_contains "$workflow_file" "model_requires_vertex_auth \"\$strix_llm\"" "strix workflow delegates Vertex auth detection"
+	assert_file_contains "$workflow_file" "STRIX_LLM_DEFAULT_PROVIDER: github" "strix workflow defaults to GitHub Models provider"
+	assert_file_contains "$workflow_file" "github/gpt-5.4" "strix workflow defaults to a GitHub Models route"
+	assert_file_contains "$GATE_SCRIPT" 'child_env["GITHUB_API_KEY"]' "strix gate exposes GitHub Models API key only to LiteLLM child process"
+	assert_file_contains "$workflow_file" "STRIX_GITHUB_FALLBACK_MODELS" "strix workflow configures GitHub Models fallbacks"
+	assert_file_contains "$workflow_file" 'if [ -z "$llm_api_key" ]; then' "strix workflow allows empty STRIX_LLM to use the GitHub Models default"
+	assert_file_not_contains "$workflow_file" '[ -z "$strix_llm" ] || [ -z "$llm_api_key" ]' "strix workflow must not require STRIX_LLM when a default model is configured"
+	assert_file_not_contains "$workflow_file" 'GITHUB_API_KEY: ${{ secrets.LLM_API_KEY }}' "strix workflow keeps GitHub Models API key out of the shell step env"
 	assert_file_not_contains "$workflow_file" "actions/checkout" "strix workflow avoids checkout in privileged context"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/test_strix_quick_gate.sh" "strix workflow avoids direct repo self-test execution on privileged trigger"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
@@ -167,6 +174,7 @@ run_gate_case() {
 	local authoritative_sca_runs_json="${26-}"
 	local gemini_fallback_models="${27-__SAME_AS_FALLBACK_MODELS__}"
 	local generic_fallback_models="${28-}"
+	local github_fallback_models="${29-}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -213,12 +221,13 @@ set -euo pipefail
 printf '%s\n' "${STRIX_LLM:-}" >> "${FAKE_STRIX_CALL_LOG:?}"
 printf '%s\n' "${LLM_API_BASE:-<unset>}" >> "${FAKE_STRIX_API_BASE_LOG:?}"
 if [ -n "${FAKE_STRIX_RUNTIME_ENV_LOG:-}" ]; then
-	printf 'LLM_TIMEOUT=%s;STRIX_MEMORY_COMPRESSOR_TIMEOUT=%s;STRIX_REASONING_EFFORT=%s;STRIX_LLM_MAX_RETRIES=%s;GEMINI_LOCATION=%s;UNRELATED_SECRET=%s\n' \
+	printf 'LLM_TIMEOUT=%s;STRIX_MEMORY_COMPRESSOR_TIMEOUT=%s;STRIX_REASONING_EFFORT=%s;STRIX_LLM_MAX_RETRIES=%s;GEMINI_LOCATION=%s;GITHUB_API_KEY=%s;UNRELATED_SECRET=%s\n' \
 		"${LLM_TIMEOUT:-<unset>}" \
 		"${STRIX_MEMORY_COMPRESSOR_TIMEOUT:-<unset>}" \
 		"${STRIX_REASONING_EFFORT:-<unset>}" \
 		"${STRIX_LLM_MAX_RETRIES:-<unset>}" \
 		"${GEMINI_LOCATION:-<unset>}" \
+		"${GITHUB_API_KEY:-<unset>}" \
 		"${UNRELATED_SECRET:-<unset>}" >> "${FAKE_STRIX_RUNTIME_ENV_LOG:?}"
 fi
 
@@ -235,7 +244,7 @@ printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
 
 case "${FAKE_STRIX_SCENARIO:?}" in
-	success|runtime-env-forwarding|vertex-primary-success-timing-message)
+	success|runtime-env-forwarding|github-models-api-key-forwarding|vertex-primary-success-timing-message)
 		echo "scan ok"
 		exit 0
 		;;
@@ -373,6 +382,23 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		fi
 		echo "Error: non-vertex slash model was rewritten (${STRIX_LLM:-})" >&2
 		exit 18
+		;;
+	github-primary-route-error-fallback-success)
+		case "${STRIX_LLM:-}" in
+		github/missing-primary)
+			echo "LLM CONNECTION FAILED"
+			echo "litellm.exceptions.NotFoundError: GitHub Models provider reported model_not_found for github/missing-primary"
+			exit 1
+			;;
+		github/fallback-one)
+			echo "scan ok after GitHub Models fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 19
+			;;
+		esac
 		;;
 	primary-duplicate-in-fallback)
 		case "${STRIX_LLM:-}" in
@@ -1983,6 +2009,9 @@ EOS
 	if [ -n "$generic_fallback_models" ]; then
 		env_cmd+=(STRIX_FALLBACK_MODELS="$generic_fallback_models")
 	fi
+	if [ -n "$github_fallback_models" ]; then
+		env_cmd+=(STRIX_GITHUB_FALLBACK_MODELS="$github_fallback_models")
+	fi
 	if [ -n "$custom_source_dirs" ]; then
 		env_cmd+=(STRIX_SOURCE_DIRS="$custom_source_dirs")
 	fi
@@ -2024,6 +2053,7 @@ EOS
 			-u STRIX_TEST_CHANGED_FILES_OVERRIDE \
 			-u STRIX_VERTEX_FALLBACK_MODELS \
 			-u STRIX_GEMINI_FALLBACK_MODELS \
+			-u STRIX_GITHUB_FALLBACK_MODELS \
 			-u STRIX_FALLBACK_MODELS \
 			"${env_cmd[@]}" \
 			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
@@ -2077,8 +2107,13 @@ EOS
 	if [ "$scenario" = "runtime-env-forwarding" ]; then
 		assert_file_contains \
 			"$runtime_env_log" \
-			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;UNRELATED_SECRET=<unset>" \
+			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;GITHUB_API_KEY=<unset>;UNRELATED_SECRET=<unset>" \
 			"scenario=$scenario runtime env forwarding"
+	elif [ "$scenario" = "github-models-api-key-forwarding" ]; then
+		assert_file_contains \
+			"$runtime_env_log" \
+			"GITHUB_API_KEY=dummy" \
+			"scenario=$scenario forwards LLM_API_KEY as GitHub Models API key"
 	fi
 
 	if [ "$scenario" = "pr-changed-scope-max-batches" ]; then
@@ -4198,6 +4233,17 @@ run_gate_case "runtime-env-forwarding" \
 	"gemini" \
 	""
 
+run_gate_case "github-models-api-key-forwarding" \
+	"github/gpt-5.4" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"github/gpt-5.4" \
+	"<unset>" \
+	"github" \
+	""
+
 run_gate_case "vertex-primary-notfound-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
@@ -4309,6 +4355,36 @@ run_gate_case "nonvertex-slash-model-passthrough" \
 	"1" \
 	"foo/bar" \
 	"https://example.invalid"
+
+run_gate_case "github-primary-route-error-fallback-success" \
+	"github/missing-primary" \
+	"" \
+	"0" \
+	"Strix quick scan succeeded with fallback model 'github/fallback-one'." \
+	"2" \
+	"github/missing-primary|github/fallback-one" \
+	"<unset>|<unset>" \
+	"github" \
+	"" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"" \
+	"github/fallback-one github/fallback-two"
 
 run_gate_case "primary-duplicate-in-fallback" \
 	"missing-primary" \

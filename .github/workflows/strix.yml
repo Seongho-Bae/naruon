@@ -84,15 +84,15 @@ jobs:
         run: |
           strix_llm="$(printf '%s' "$STRIX_LLM" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           llm_api_key="$(printf '%s' "$LLM_API_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          if [ -z "$strix_llm" ] || [ -z "$llm_api_key" ]; then
+          if [ -z "$llm_api_key" ]; then
             # On protected/privileged events, fail-closed: missing secrets must
             # not silently produce a green check.
             if [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "schedule" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then
-              echo '::error::Strix secrets not configured on protected or privileged event; failing closed.'
+              echo '::error::Strix LLM_API_KEY secret not configured on protected or privileged event; failing closed.'
               exit 1
             fi
             echo 'enabled=false' >> "$GITHUB_OUTPUT"
-            echo 'Strix secrets not configured; skipping.'
+            echo 'Strix LLM_API_KEY secret not configured; skipping.'
           else
             echo 'enabled=true' >> "$GITHUB_OUTPUT"
           fi
@@ -115,7 +115,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         env:
           STRIX_LLM: ${{ secrets.STRIX_LLM }}
-          DEFAULT_PROVIDER: gemini
+          DEFAULT_PROVIDER: github
         run: |
           . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
           strix_llm="$(trim_whitespace "$STRIX_LLM")"
@@ -231,7 +231,7 @@ jobs:
           if [ -n "$STRIX_LLM_SECRET" ]; then
             printf '%s' "$STRIX_LLM_SECRET" > "$strix_llm_file"
           else
-            printf '%s' "gemini/gemini-pro-3.1-preview" > "$strix_llm_file"
+            printf '%s' "github/gpt-5.4" > "$strix_llm_file"
           fi
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
@@ -251,10 +251,11 @@ jobs:
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
-          STRIX_LLM_DEFAULT_PROVIDER: gemini
+          STRIX_LLM_DEFAULT_PROVIDER: github
           GEMINI_LOCATION: GLOBAL
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
           LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
+          STRIX_GITHUB_FALLBACK_MODELS: "github/gpt-5.4-mini github/gpt-4o"
           STRIX_GEMINI_FALLBACK_MODELS: "gemini/gemini-2.5-flash gemini/gemini-2.5-pro"
           STRIX_VERTEX_FALLBACK_MODELS: "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
           STRIX_TARGET_PATH: ./

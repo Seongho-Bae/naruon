@@ -1697,6 +1697,17 @@ is_gemini_model() {
 	esac
 }
 
+is_github_model() {
+	case "$1" in
+	github/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 fallback_models_raw_for_model() {
 	local model="$1"
 
@@ -1712,6 +1723,15 @@ fallback_models_raw_for_model() {
 	if is_gemini_model "$model"; then
 		if [ -n "${STRIX_GEMINI_FALLBACK_MODELS+x}" ]; then
 			printf '%s\n' "$STRIX_GEMINI_FALLBACK_MODELS"
+		else
+			printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
+		fi
+		return 0
+	fi
+
+	if is_github_model "$model"; then
+		if [ -n "${STRIX_GITHUB_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "$STRIX_GITHUB_FALLBACK_MODELS"
 		else
 			printf '%s\n' "${STRIX_FALLBACK_MODELS:-}"
 		fi
@@ -1734,6 +1754,15 @@ fallback_models_config_name_for_model() {
 			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS"
 		else
 			printf '%s\n' "STRIX_GEMINI_FALLBACK_MODELS or STRIX_FALLBACK_MODELS"
+		fi
+		return 0
+	fi
+
+	if is_github_model "$model"; then
+		if [ -n "${STRIX_GITHUB_FALLBACK_MODELS+x}" ]; then
+			printf '%s\n' "STRIX_GITHUB_FALLBACK_MODELS"
+		else
+			printf '%s\n' "STRIX_GITHUB_FALLBACK_MODELS or STRIX_FALLBACK_MODELS"
 		fi
 		return 0
 	fi
@@ -1850,6 +1879,8 @@ for key in (
 child_env["STRIX_LLM"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_MODEL"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
+if os.environ["STRIX_CHILD_MODEL"].startswith("github/"):
+    child_env["GITHUB_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
 child_env["STRIX_REPORTS_DIR"] = os.environ["STRIX_CHILD_REPORTS_DIR"]
 for key, value in os.environ.items():
     if key.startswith("FAKE_STRIX_") and value:
@@ -1977,12 +2008,12 @@ is_llm_service_unavailable_error() {
 
 is_llm_bad_request_model_error() {
 	local model="${1-}"
-	# Gemini API BadRequestError commonly indicates an invalid/retired model name
+	# Gemini/GitHub API BadRequestError commonly indicates an invalid/retired model name
 	# or request shape for that model.  Treat it as model-route retryable only
-	# when the active model is a Gemini route and the log has LLM-provider
+	# when the active model is a known provider route and the log has LLM-provider
 	# context, so target-application 400 responses stay non-recoverable.
 	if [ -n "$model" ] &&
-		is_gemini_model "$model" &&
+		{ is_gemini_model "$model" || is_github_model "$model"; } &&
 		grep -Eiq 'BadRequestError' "$STRIX_LOG" &&
 		grep -Eiq "$LLM_PROVIDER_ONLY_REGEX" "$STRIX_LOG"; then
 		return 0
@@ -2096,6 +2127,15 @@ is_vertex_not_found_error() {
 	fi
 
 	if grep -Eq 'Publisher Model .*was not found' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
+is_github_model_route_error() {
+	if grep -Eiq 'litellm(\.exceptions)?\.(NotFoundError|BadRequestError|APIStatusError)' "$STRIX_LOG" &&
+		grep -Eiq '(github|GitHub Models|model[_ -]?not[_ -]?found|invalid model|(^|[^0-9])(400|404)([^0-9]|$))' "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2730,6 +2770,10 @@ is_model_retryable_error() {
 	local model="$1"
 
 	if is_vertex_model "$model" && is_vertex_not_found_error; then
+		return 0
+	fi
+
+	if is_github_model "$model" && is_github_model_route_error; then
 		return 0
 	fi
 

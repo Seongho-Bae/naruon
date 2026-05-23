@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### 수정
+- Seongho Bae (@seonghobae): PR Strix required gate가 Gemini 권한 오류에 막히지
+  않도록 기본 LLM route를 LiteLLM GitHub Models(`github/gpt-5.4`)로 전환하고,
+  `LLM_API_KEY`를 GitHub provider용 `GITHUB_API_KEY`로 전달하며 별도 GitHub
+  fallback model 목록을 검증하도록 했습니다.
 - Seongho Bae (@seonghobae): PR Strix가 지적한 SMTP SSRF/약한 암호화 키 경로를
   fail-closed로 보강해, SMTP egress 기본값을 명시적 `__deny_all__` marker로
   바꾸고 wildcard host/non-SMTP port 설정을 거부하며, `ENCRYPTION_KEY`는
