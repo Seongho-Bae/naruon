@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from 'react';
-import { Settings, User, Mail, Bell, Shield, Smartphone, Plus } from 'lucide-react';
+import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor } from 'lucide-react';
+import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 
 export function SettingsLayout() {
-  const [activeTab, setActiveTab] = useState<'커넥터 설정' | '프로필' | '알림' | '모바일 기기'>('커넥터 설정');
+  const [activeTab, setActiveTab] = useState<'기본 설정' | '커넥터 설정' | '프로필' | '알림' | '보안' | '모바일 기기'>('기본 설정');
+  const startupView = useWorkspaceStartupView();
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
@@ -19,6 +21,7 @@ export function SettingsLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
             {[
+              { id: '기본 설정', icon: Monitor },
               { id: '커넥터 설정', icon: Mail },
               { id: '프로필', icon: User },
               { id: '알림', icon: Bell },
@@ -40,6 +43,46 @@ export function SettingsLayout() {
         <main className="flex-1 overflow-y-auto p-8 bg-background">
           <div className="max-w-3xl space-y-8">
             
+            {activeTab === '기본 설정' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-xl">기본 설정</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Naruon의 전반적인 동작과 시작 화면을 설정합니다.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                    <h3 className="font-bold text-lg mb-4">시작 화면 설정</h3>
+                    <p className="text-sm text-muted-foreground mb-4">로그인 시 처음 보여질 메인 화면을 선택하세요.</p>
+                    <div className="grid grid-cols-3 gap-4">
+                      {[
+                        { label: '대시보드', value: 'dashboard', desc: '오늘의 요약과 실행 항목' },
+                        { label: '이메일', value: 'email', desc: '인박스 중심으로 확인' },
+                        { label: '일정 관리', value: 'calendar', desc: '오늘의 회의와 스케줄 확인' }
+                      ].map((view) => (
+                        <button
+                          key={view.value}
+                          onClick={() => setWorkspaceStartupView(view.value as any)}
+                          className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                            startupView === view.value
+                              ? 'border-primary bg-primary/5 shadow-sm'
+                              : 'border-border hover:bg-secondary hover:border-primary/50'
+                          }`}
+                        >
+                          <span className={`font-bold ${startupView === view.value ? 'text-primary' : 'text-foreground'}`}>
+                            {view.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{view.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {activeTab === '커넥터 설정' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
@@ -99,7 +142,7 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab !== '커넥터 설정' && (
+            {activeTab !== '커넥터 설정' && activeTab !== '기본 설정' && (
               <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border bg-card">
                 <p className="text-muted-foreground font-semibold">{activeTab} 메뉴는 준비 중입니다.</p>
               </div>

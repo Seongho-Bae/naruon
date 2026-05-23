@@ -38,10 +38,10 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(header.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
   await header.getByRole('button', { name: '답장 초안' }).click();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
-  await expect(page.getByRole('region', { name: '오늘의 실행 대시보드' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '이메일 작업공간 열기' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '일정관리 열기' })).toBeVisible();
-  await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+  await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '메일함 바로가기' }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '일정 확인하기' }).first()).toBeVisible();
+  await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
   await expect(desktopWorkspace.getByText('메일을 선택하세요')).toBeVisible();
   await expect(page).not.toHaveURL(/#mobile-detail$/);
@@ -132,8 +132,8 @@ for (const viewport of responsiveViewports) {
 
     await expect(page.locator('main#main-content')).toBeVisible();
     await expect(page.locator('header[aria-label="Naruon workspace header"]')).toBeVisible();
-    await expect(page.getByRole('region', { name: '오늘의 실행 대시보드' })).toBeVisible();
-    await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
 
@@ -199,7 +199,7 @@ test('captures responsive startup evidence for desktop tablet mobile and the mob
   ] as const) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto('/');
-    await expect(page.getByRole('region', { name: '오늘의 실행 대시보드' })).toBeVisible();
+    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`startup-${viewport.name}.png`), fullPage: true });
     if (viewport.name === 'mobile') {
       await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
@@ -338,7 +338,7 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+  await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   await page.getByRole('button', { name: /김지현 PM/ }).click();
 
   const detailRegion = page.getByRole('region', { name: '모바일 메일 상세' });

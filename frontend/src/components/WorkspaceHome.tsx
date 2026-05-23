@@ -235,6 +235,65 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           </div>
         </div>
 
+        {/* Bottom Grid */}
+        <div className="grid grid-cols-3 gap-6">
+          <div className="col-span-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">최근 메일 <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">새 메일 12</span></h2>
+            </div>
+            <div className="space-y-3">
+              {[
+                { name: '박지민 PM', subject: 'Q2 출시 계획 및 고객사 제안 일정 공유', snippet: '안녕하세요, 나루님. 지난 회의에서 논의드린...', time: '10:23', unread: true },
+                { name: '이준호 DA', subject: '데이터 분석 리포트 공유 - 5월 인사이트', snippet: '안녕하세요. 5월 데이터 분석 리포트를 공유드립니다...', time: '09:48', unread: true },
+                { name: '김미소 Designer', subject: '웹사이트 리뉴얼 디자인 시안 전달', snippet: '안녕하세요. 웹사이트 리뉴얼 시안 1차 전달드립니다...', time: '09:15', unread: true },
+                { name: '최서연 Developer', subject: 'API 연동 테스트 결과 및 이슈 공유', snippet: '테스트 결과와 개선이 필요한 이슈 항목을 정리했습니다...', time: '05.24', unread: false },
+                { name: '파트너십팀', subject: '파트너사 혜택 프로그램 업데이트 안내', snippet: '안녕하세요. 2024 파트너사 혜택 프로그램이 업데이트되었습니다...', time: '05.23', unread: true },
+              ].map((mail, i) => (
+                <div key={i} className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="size-8 shrink-0 rounded-full bg-secondary grid place-items-center font-bold text-xs">
+                      {mail.name.charAt(0)}
+                    </div>
+                    <div className="min-w-0 flex-1 flex items-center gap-2">
+                      <span className="text-sm font-bold truncate w-32 shrink-0">{mail.name}</span>
+                      <span className="text-sm font-bold truncate">{mail.subject}</span>
+                      <span className="text-sm text-muted-foreground truncate hidden lg:inline">{mail.snippet}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
+                    {mail.time}
+                    {mail.unread && <span className="size-2 rounded-full bg-primary" />}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => onOpenView('email')} className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">메일함 바로가기</button>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold">빠른 실행</h2>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: '새 메일 작성', icon: Inbox, color: 'text-blue-500' },
+                { label: '일정 추가', icon: CalendarDays, color: 'text-blue-500' },
+                { label: '새 프로젝트', icon: Network, color: 'text-purple-500' },
+                { label: '작업 만들기', icon: CheckCircle2, color: 'text-green-500' },
+                { label: 'AI 허브로 이동', icon: Network, color: 'text-purple-500' },
+                { label: '데이터 대시보드', icon: Network, color: 'text-purple-500' },
+                { label: '문서 작성', icon: CheckCircle2, color: 'text-blue-500' },
+                { label: '파일 업로드', icon: Network, color: 'text-blue-500' },
+              ].map((action, i) => (
+                <button key={i} className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card py-4 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+                  <action.icon className={`size-5 ${action.color}`} />
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
     </section>
   );
