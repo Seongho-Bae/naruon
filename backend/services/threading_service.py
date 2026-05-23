@@ -97,6 +97,21 @@ async def assign_thread_id(
     if in_reply_to:
         return in_reply_to
 
+    # Subject fallback for FWD / ZIP imports
+    subject = email_data.get("subject", "")
+    if subject:
+        base_subject = re.sub(r"^(?i)(re|fwd|fw):\s*", "", subject).strip()
+        if base_subject and base_subject != subject:
+            result = await session.execute(
+                select(Email.thread_id).where(
+                    *email_owner_filters(user_id, organization_id),
+                    Email.subject.ilike(f"%{base_subject}%")
+                ).order_by(Email.date.desc()).limit(1)
+            )
+            subj_thread_id = result.scalar_one_or_none()
+            if subj_thread_id:
+                return normalize_message_id(subj_thread_id) or subj_thread_id
+
     msg_id = normalize_message_id(email_data.get("message_id"))
     if msg_id:
         return msg_id
