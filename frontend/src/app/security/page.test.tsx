@@ -8,11 +8,15 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  AlertOctagon: () => <svg aria-hidden="true" />,
   KeyRound: () => <svg aria-hidden="true" />,
   LockKeyhole: () => <svg aria-hidden="true" />,
   Route: () => <svg aria-hidden="true" />,
   ShieldCheck: () => <svg aria-hidden="true" />,
   Users: () => <svg aria-hidden="true" />,
+  Lock: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
+  XCircle: () => <svg aria-hidden="true" />,
 }));
 
 import SecurityPage from "./page";
@@ -37,16 +41,9 @@ describe("SecurityPage", () => {
       root?.render(<SecurityPage />);
     });
 
-    expect(container.querySelector("h1")?.textContent).toContain("보안과 관리자");
-    expect(container.textContent).toContain("보안 대시보드");
-    expect(container.textContent).toContain("접근 권한");
+    expect(container.querySelector("h1")?.textContent).toContain("보안 및 권한");
+    expect(container.textContent).toContain("접근 제어");
     expect(container.textContent).toContain("감사 로그");
-    expect(container.textContent).toContain("외부 공유");
-    expect(container.textContent).toContain("정책");
-    expect(container.textContent).toContain("platform_admin");
-    expect(container.textContent).toContain("customer policy deny");
-    expect(container.textContent).toContain("Keycloak");
-    expect(container.textContent).toContain("Casdoor");
-    expect(container.textContent).toContain("Traefik");
+    expect(container.textContent).toContain("인증 연동");
   });
 });

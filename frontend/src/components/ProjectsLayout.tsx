@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Plus, Search, Filter, FolderOpen, MoreHorizontal, FileText, CheckCircle2, User, Clock, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, FolderOpen, MoreHorizontal, FileText, CheckCircle2, User, Clock, AlertCircle, CalendarDays } from 'lucide-react';
 
 const MOCK_PROJECTS = [
   { id: 'P-01', title: 'Naruon 2.0 런칭', status: '진행 중', progress: 68, category: '제품 개발' },

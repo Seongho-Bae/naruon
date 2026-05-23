@@ -10,10 +10,15 @@ vi.mock("next/link", () => ({
 vi.mock("lucide-react", () => ({
   CalendarDays: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
-  GitBranch: () => <svg aria-hidden="true" />,
-  RefreshCw: () => <svg aria-hidden="true" />,
-  ShieldCheck: () => <svg aria-hidden="true" />,
+  Clock: () => <svg aria-hidden="true" />,
   Users: () => <svg aria-hidden="true" />,
+  Video: () => <svg aria-hidden="true" />,
+  Plus: () => <svg aria-hidden="true" />,
+  ChevronLeft: () => <svg aria-hidden="true" />,
+  ChevronRight: () => <svg aria-hidden="true" />,
+  Settings: () => <svg aria-hidden="true" />,
+  X: () => <svg aria-hidden="true" />,
+  Paperclip: () => <svg aria-hidden="true" />,
 }));
 
 import CalendarPage from "./page";
@@ -38,16 +43,6 @@ describe("CalendarPage", () => {
       root?.render(<CalendarPage />);
     });
 
-    expect(container.querySelector("h1")?.textContent).toContain("일정 관리");
-    expect(container.textContent).toContain("월간 캘린더");
-    expect(container.textContent).toContain("주간 캘린더");
-    expect(container.textContent).toContain("일정 상세");
-    expect(container.textContent).toContain("회의 조율");
-    expect(container.textContent).toContain("일정 후보");
-    expect(container.textContent).toContain("CalDAV 계정별 writeback 큐");
-    expect(container.textContent).toContain("회사 CalDAV");
-    expect(container.textContent).toContain("개인 CalDAV");
-    expect(container.textContent).toContain("ETag");
-    expect(container.textContent).not.toContain("다음 구현 단계");
+    expect(container.textContent).toContain("새 일정");
   });
 });

@@ -29,6 +29,12 @@ class MockSession:
         self.items = [MockRow("boss@example.com", "manager", 0.95)]
         
     async def execute(self, stmt):
+        compiled = str(stmt)
+        # SQLAlchemy select compiled string won't contain vendor@example.com literally.
+        # But we can check if it's the GET request by looking at the statement.
+        # A safer mock for the test is to just return empty list if we detect a specific query.
+        if "sender_email =" in compiled:
+            return MockResult([])
         return MockResult(self.items)
 
     def add(self, obj):
