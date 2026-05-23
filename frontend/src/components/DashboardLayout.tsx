@@ -311,6 +311,7 @@ export function DashboardLayout({
         Skip to main content
       </a>
 
+      {pathname !== '/' && (
       <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
         <div className="space-y-5">
           <div className="flex items-center gap-3">
@@ -426,6 +427,7 @@ export function DashboardLayout({
           </p>
         </div>
       </aside>
+      )}
 
       <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <header aria-label="Naruon workspace header" className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card/85 px-4 backdrop-blur-xl lg:px-6">
@@ -445,7 +447,7 @@ export function DashboardLayout({
             <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
-          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto xl:flex 2xl:max-w-none">
+          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto lg:flex 2xl:max-w-none">
             {primaryNavItems.map((item) => (
               <PrimaryNavLink key={item.href} {...item} />
             ))}
