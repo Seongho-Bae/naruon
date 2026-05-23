@@ -16,6 +16,7 @@ from api.prompts import router as prompts_router
 from api.tasks import router as tasks_router
 from api.ontology import router as ontology_router
 from api.runner_ws import router as runner_ws_router
+from api.dav import router as dav_router
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -88,6 +89,7 @@ app.include_router(prompts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(tasks_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(runner_ws_router)
+app.include_router(dav_router)
 
 
 app.add_middleware(
