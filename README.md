@@ -283,3 +283,14 @@ bash scripts/ci/test_pr_governance_gate.sh
 Known local warnings: backend tests emit dependency/toolchain deprecation warnings
 from Starlette multipart and compiled SWIG metadata. They are not caused by
 threading code.
+
+## Phase 10 development rules
+
+- **Stepwise execution**: Each phase requires an atomic PR, GitHub PR Tracking, Push, and Robot Review. A phase only ends when merged. Do not proceed without merge.
+- **TDD + DDD**: Practice TDD, micro TDD, nano TDD, Domain Driven Development, and Context Driven Development.
+- **API Wiring**: Always work with API wiring completed.
+- **Collaboration**: Respect other agents' concurrent work; do not overwrite or dismiss unfamiliar changes.
+- **Subagent Delegation**: Actively delegate tasks to Subagents.
+- **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
+- **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
+- **Goal**: Actively manage tasks to ensure open PR counts converge to 0.

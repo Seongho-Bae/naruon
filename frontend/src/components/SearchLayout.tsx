@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { Search, Filter, Mail, CalendarDays, FileText, UserRound, Network, Clock, ChevronRight, CheckCircle2 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
 const MOCK_RESULTS = [
   { id: 'R-01', title: 'Q2 런칭 캠페인 기획안.pdf', type: '문서', source: 'WebDAV / marketing', date: '오늘 오전 10:30', icon: FileText },
@@ -103,25 +106,14 @@ export function SearchLayout() {
             </div>
 
             <div className="grid grid-cols-2 gap-6">
-              {/* Relationship Graph Mock */}
+              {/* Relationship Graph */}
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex flex-col">
                 <div className="flex items-center gap-2 mb-4">
                   <Network className="size-5 text-primary" />
-                  <h2 className="font-bold text-lg">관계 그래프와 타임라인</h2>
+                  <h2 className="font-bold text-lg">관계 그래프 (Relationship)</h2>
                 </div>
-                <div className="flex-1 relative min-h-[250px] bg-secondary/10 rounded-xl border border-dashed border-border flex items-center justify-center overflow-hidden">
-                  {/* SVG Nodes Mock */}
-                  <svg className="absolute inset-0 w-full h-full pointer-events-none">
-                    <line x1="50%" y1="50%" x2="20%" y2="20%" stroke="var(--naruon-border)" strokeWidth="2" strokeDasharray="4" />
-                    <line x1="50%" y1="50%" x2="80%" y2="30%" stroke="var(--naruon-border)" strokeWidth="2" strokeDasharray="4" />
-                    <line x1="50%" y1="50%" x2="50%" y2="80%" stroke="var(--naruon-border)" strokeWidth="2" />
-                  </svg>
-                  <div className="absolute top-[15%] left-[15%] size-12 rounded-full bg-blue-100 border-2 border-blue-500 grid place-items-center z-10"><UserRound className="size-5 text-blue-700" /></div>
-                  <div className="absolute top-[25%] right-[15%] size-12 rounded-full bg-green-100 border-2 border-green-500 grid place-items-center z-10"><Mail className="size-5 text-green-700" /></div>
-                  <div className="absolute bottom-[15%] left-[45%] size-12 rounded-full bg-purple-100 border-2 border-purple-500 grid place-items-center z-10"><CalendarDays className="size-5 text-purple-700" /></div>
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-16 rounded-full bg-primary border-4 border-card grid place-items-center shadow-lg z-20">
-                    <activeResult.icon className="size-6 text-primary-foreground" />
-                  </div>
+                <div className="flex-1 relative min-h-[300px] bg-background rounded-xl border border-border flex items-center justify-center overflow-hidden shadow-inner">
+                  <NetworkGraph />
                 </div>
               </div>
 

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, CheckCircle2, X } from 'lucide-react';
 
 export function CalendarLayout() {
-  const [viewMode, setViewMode] = useState<'월' | '주' | '일' | '일정목록'>('월');
+  const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -53,10 +53,10 @@ export function CalendarLayout() {
           </div>
           <div className="flex items-center gap-3">
             <div className="flex overflow-hidden rounded-md border border-border">
-              {['월', '주', '일', '일정목록'].map((mode) => (
+              {['월간 캘린더', '주간 캘린더', '일정 상세', '회의 조율', '일정 후보'].map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => setViewMode(mode as '월' | '주' | '일' | '일정목록')}
+                  onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
                   className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
@@ -71,7 +71,7 @@ export function CalendarLayout() {
 
         <div className="flex-1 overflow-y-auto p-6">
           <p className="sr-only">원본 계정 writeback 흐름</p>
-          {viewMode === '월' && (
+          {viewMode === '월간 캘린더' && (
             <div className="h-full rounded-2xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
               <div className="grid grid-cols-7 border-b border-border bg-secondary/50 text-center text-sm font-semibold py-3">
                 <div className="text-red-500">일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div className="text-blue-500">토</div>
@@ -88,7 +88,37 @@ export function CalendarLayout() {
               </div>
             </div>
           )}
-          {viewMode !== '월' && (
+          {viewMode === '회의 조율' && (
+            <div className="flex h-full flex-col gap-4">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <h3 className="text-lg font-bold mb-4">회의 조율 (Coordination)</h3>
+                <p className="text-sm text-muted-foreground mb-4">참석자들의 캘린더(CalDAV)를 종합 분석하여 최적의 시간을 제안합니다.</p>
+                <div className="grid gap-3 max-w-lg">
+                  <button className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-8 place-items-center rounded-lg bg-primary/20 text-primary font-bold">1안</span>
+                      <div className="text-left">
+                        <p className="font-bold">5월 23일 (목) 14:00 - 15:00</p>
+                        <p className="text-xs text-muted-foreground">모든 참석자 참석 가능</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-primary">제안하기</span>
+                  </button>
+                  <button className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-secondary transition-colors">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-8 place-items-center rounded-lg bg-secondary text-muted-foreground font-bold">2안</span>
+                      <div className="text-left">
+                        <p className="font-bold">5월 24일 (금) 10:00 - 11:00</p>
+                        <p className="text-xs text-muted-foreground">1명(김개발) 불참 예상</p>
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-muted-foreground">제안하기</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {viewMode !== '월간 캘린더' && viewMode !== '회의 조율' && (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               {viewMode} 뷰는 아직 구현 중입니다.
             </div>

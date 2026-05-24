@@ -18,6 +18,8 @@ interface EmailItem {
   unread?: boolean;
   thread_id?: string; // O3: email threading support
   reply_count?: number;
+  has_draft?: boolean;
+  is_self_sent?: boolean;
 }
 
 let inboxRequest: Promise<EmailItem[]> | null = null;
@@ -175,9 +177,11 @@ export function EmailList({
                 <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
                   {safeSnippet}
                 </div>
-                {email.unread && (
+                {(email.unread || email.has_draft || email.is_self_sent) && (
                   <div className="flex items-center gap-2">
-                    <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>
+                    {email.unread && <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>}
+                    {email.has_draft && <Badge variant="secondary" className="border-blue-500/20 bg-blue-500/10 text-[10px] text-blue-700">답장 초안</Badge>}
+                    {email.is_self_sent && <Badge variant="secondary" className="border-purple-500/20 bg-purple-500/10 text-[10px] text-purple-700">지식 정리</Badge>}
                   </div>
                 )}
               </button>

@@ -22,6 +22,7 @@ const MOCK_DECISIONS = [
 
 export function ProjectsLayout() {
   const [activeProject, setActiveProject] = useState(MOCK_PROJECTS[0]);
+  const [viewMode, setViewMode] = useState<'프로젝트 상세' | '마일스톤' | '의사결정 로그'>('프로젝트 상세');
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground overflow-x-hidden">
@@ -72,68 +73,84 @@ export function ProjectsLayout() {
             </div>
             <h2 className="text-2xl font-bold">{activeProject.title}</h2>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
-              <Filter className="size-4" /> 필터
-            </button>
-            <button className="flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-              보고서 생성
-            </button>
+          <div className="flex items-center gap-6">
+            <div className="flex overflow-hidden rounded-md border border-border">
+              {['프로젝트 상세', '마일스톤', '의사결정 로그'].map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode as any)}
+                  className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <button className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
+                <Filter className="size-4" /> 필터
+              </button>
+              <button className="flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+                보고서 생성
+              </button>
+            </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
-            {/* Milestones */}
-            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-              <div className="border-b border-border p-5 flex items-center justify-between">
-                <h2 className="font-bold text-lg">마일스톤 (Milestones)</h2>
-                <button className="text-sm text-primary font-semibold hover:underline">추가</button>
-              </div>
-              <div className="p-5">
-                <div className="relative border-l-2 border-border ml-3 space-y-6">
-                  {MOCK_MILESTONES.map((ms, idx) => (
-                    <div key={idx} className="relative pl-6">
-                      <div className={`absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card ${ms.status === '완료' ? 'bg-green-500' : ms.status === '진행 중' ? 'bg-primary' : 'bg-border'}`}></div>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h3 className="font-bold text-sm">{ms.title}</h3>
-                          <p className="text-xs text-muted-foreground mt-1"><Clock className="inline size-3 mr-1" />{ms.date}</p>
+            {/* View Logic */}
+            {(viewMode === '프로젝트 상세' || viewMode === '마일스톤') && (
+              <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden mb-6">
+                <div className="border-b border-border p-5 flex items-center justify-between">
+                  <h2 className="font-bold text-lg">마일스톤 (Milestones)</h2>
+                  <button className="text-sm text-primary font-semibold hover:underline">추가</button>
+                </div>
+                <div className="p-5">
+                  <div className="relative border-l-2 border-border ml-3 space-y-6">
+                    {MOCK_MILESTONES.map((ms, idx) => (
+                      <div key={idx} className="relative pl-6">
+                        <div className={`absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card ${ms.status === '완료' ? 'bg-green-500' : ms.status === '진행 중' ? 'bg-primary' : 'bg-border'}`}></div>
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h3 className="font-bold text-sm">{ms.title}</h3>
+                            <p className="text-xs text-muted-foreground mt-1"><Clock className="inline size-3 mr-1" />{ms.date}</p>
+                          </div>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${ms.status === '완료' ? 'bg-green-100 text-green-700' : ms.status === '진행 중' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>{ms.status}</span>
                         </div>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${ms.status === '완료' ? 'bg-green-100 text-green-700' : ms.status === '진행 중' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>{ms.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {(viewMode === '프로젝트 상세' || viewMode === '의사결정 로그') && (
+              <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="border-b border-border p-5 flex items-center justify-between bg-primary/5">
+                  <h2 className="font-bold text-lg text-primary">의사결정 로그</h2>
+                  <button className="text-sm text-primary font-semibold hover:underline">기록 추가</button>
+                </div>
+                <div className="divide-y divide-border">
+                  {MOCK_DECISIONS.map((log) => (
+                    <div key={log.id} className="p-5 hover:bg-secondary/20 transition-colors">
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="font-bold text-base flex items-center gap-2">
+                          <CheckCircle2 className="size-4 text-emerald-500" />
+                          {log.title}
+                        </h3>
+                        <span className="text-xs text-muted-foreground">{log.date}</span>
+                      </div>
+                      <div className="rounded-lg bg-background border border-border p-3 text-sm text-foreground">
+                        {log.decision}
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground font-semibold">
+                        <User className="size-3.5" /> 승인자: {log.author}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
-
-            {/* Decision Logs */}
-            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-              <div className="border-b border-border p-5 flex items-center justify-between bg-primary/5">
-                <h2 className="font-bold text-lg text-primary">의사결정 로그</h2>
-                <button className="text-sm text-primary font-semibold hover:underline">기록 추가</button>
-              </div>
-              <div className="divide-y divide-border">
-                {MOCK_DECISIONS.map((log) => (
-                  <div key={log.id} className="p-5 hover:bg-secondary/20 transition-colors">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-bold text-base flex items-center gap-2">
-                        <CheckCircle2 className="size-4 text-emerald-500" />
-                        {log.title}
-                      </h3>
-                      <span className="text-xs text-muted-foreground">{log.date}</span>
-                    </div>
-                    <div className="rounded-lg bg-background border border-border p-3 text-sm text-foreground">
-                      {log.decision}
-                    </div>
-                    <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground font-semibold">
-                      <User className="size-3.5" /> 승인자: {log.author}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Right Column - Project Metadata */}

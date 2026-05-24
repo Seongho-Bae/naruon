@@ -46,6 +46,8 @@ class EmailListItem(BaseModel):
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
+    has_draft: bool = False
+    is_self_sent: bool = False
 
 
 class EmailDetailResponse(BaseModel):

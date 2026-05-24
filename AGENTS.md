@@ -78,3 +78,14 @@
 - Next.js 15+ Turbopack resolves workspace roots by scanning upward for `package-lock.json`. Do not create or leave a `package-lock.json` in the user's home directory (`~/`), as it will cause Turbopack to spawn infinite background worker node processes attempting to compile the entire home directory.
 - `pydantic-settings` strictly rejects unexpected environment variables by default. When sharing a common `.env` file between frontend and backend services, you must explicitly set `extra="ignore"` in the `SettingsConfigDict` to prevent fatal startup crashes.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
+
+## Phase 10 development rules
+
+- **Stepwise execution**: Each phase requires an atomic PR, GitHub PR Tracking, Push, and Robot Review. A phase only ends when merged. Do not proceed without merge.
+- **TDD + DDD**: Practice TDD, micro TDD, nano TDD, Domain Driven Development, and Context Driven Development.
+- **API Wiring**: Always work with API wiring completed.
+- **Collaboration**: Respect other agents' concurrent work; do not overwrite or dismiss unfamiliar changes.
+- **Subagent Delegation**: Actively delegate tasks to Subagents.
+- **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
+- **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
+- **Goal**: Actively manage tasks to ensure open PR counts converge to 0.

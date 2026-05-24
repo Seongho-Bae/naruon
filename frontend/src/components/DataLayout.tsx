@@ -98,10 +98,94 @@ export function DataLayout() {
             </div>
           )}
 
-          {activeTab !== '문서 저장소' && (
+          {activeTab === '수집 파이프라인' && (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="font-bold text-lg mb-6">현재 파이프라인 진행률</h2>
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold">1. 데이터 추출 (WebDAV / IMAP)</span>
+                      <span className="text-sm text-muted-foreground font-semibold">100% 완료</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-green-500 w-full"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold">2. 청크 분할 (Chunking)</span>
+                      <span className="text-sm text-primary font-semibold">진행 중 (85%)</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-primary w-[85%]"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold text-muted-foreground">3. 벡터 임베딩 (Embedding)</span>
+                      <span className="text-sm text-muted-foreground font-semibold">대기 중</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-slate-300 w-0"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === '임베딩' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">활성 모델</p>
+                  <p className="text-lg font-bold text-primary">text-embedding-3-large</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">벡터 차원 (Dimensions)</p>
+                  <p className="text-lg font-bold">3,072</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">총 인덱싱 건수</p>
+                  <p className="text-lg font-bold">28,401</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">QPS (초당 쿼리)</p>
+                  <p className="text-lg font-bold">4.2</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <h2 className="font-bold text-lg mb-4">임베딩 컬렉션 상태</h2>
+                <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-4 bg-secondary/50 p-3 text-xs font-bold text-muted-foreground">
+                    <div>컬렉션 명</div>
+                    <div>청크 수</div>
+                    <div>마지막 업데이트</div>
+                    <div>상태</div>
+                  </div>
+                  <div className="grid grid-cols-4 p-3 text-sm items-center">
+                    <div className="font-bold">emails_naruon</div>
+                    <div>12,400</div>
+                    <div className="text-muted-foreground">10분 전</div>
+                    <div><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">정상</span></div>
+                  </div>
+                  <div className="grid grid-cols-4 p-3 text-sm items-center">
+                    <div className="font-bold">docs_webdav</div>
+                    <div>16,001</div>
+                    <div className="text-muted-foreground">1시간 전</div>
+                    <div><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">업데이트 중</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === '품질 점검' && (
             <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
               <Database className="size-10 text-muted-foreground mb-4 opacity-50" />
-              <h2 className="text-xl font-bold mb-2">{activeTab} 패널</h2>
+              <h2 className="text-xl font-bold mb-2">품질 점검 패널</h2>
               <p className="text-muted-foreground max-w-sm">
                 Naruon AI가 접근할 수 있는 데이터 구조와 인덱싱 현황을 관리하는 패널이 곧 업데이트 됩니다.
               </p>
