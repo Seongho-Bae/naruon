@@ -50,6 +50,13 @@ services:
     networks:
       - naruon-network
 
+  casdoor:
+    image: casdoor/casdoor:latest
+    ports:
+      - "8000:8000"
+    networks:
+      - naruon-network
+
 networks:
   naruon-network:
     driver: bridge
