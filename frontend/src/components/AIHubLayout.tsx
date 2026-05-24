@@ -136,13 +136,57 @@ export function AIHubLayout() {
             </div>
           )}
 
-          {(activeTab === 'AI 에이전트' || activeTab === '실행 이력') && (
-            <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
-              <Sparkles className="size-10 text-muted-foreground mb-4 opacity-50" />
-              <h2 className="text-xl font-bold mb-2">{activeTab} 패널</h2>
-              <p className="text-muted-foreground max-w-sm">
-                Naruon AI가 접근할 수 있는 모델 관리와 워크플로우를 담당하는 구역입니다.
-              </p>
+          {activeTab === 'AI 에이전트' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-bold">등록된 에이전트</h2>
+                <button className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-bold">새 에이전트 등록</button>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { name: '일정 조율 에이전트', model: 'GPT-4o', status: '활성' },
+                  { name: '의사결정 추출 에이전트', model: 'Claude 3.5 Sonnet', status: '활성' },
+                  { name: '티켓 분류 에이전트', model: 'Gemini 1.5 Pro', status: '대기 중' },
+                ].map((agent, i) => (
+                  <div key={i} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <h3 className="font-bold">{agent.name}</h3>
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold ${agent.status === '활성' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-700'}`}>{agent.status}</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">사용 모델: <span className="font-semibold text-foreground">{agent.model}</span></p>
+                    <div className="flex gap-2">
+                      <button className="flex-1 border border-border rounded-lg py-1.5 text-xs font-bold hover:bg-secondary">설정</button>
+                      <button className="flex-1 border border-border rounded-lg py-1.5 text-xs font-bold hover:bg-secondary">테스트</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === '실행 이력' && (
+            <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+              <div className="p-5 border-b border-border bg-secondary/30 flex justify-between items-center">
+                <h2 className="font-bold text-lg">최근 실행 로그</h2>
+              </div>
+              <div className="divide-y divide-border">
+                {[
+                  { id: 'LOG-001', agent: '일정 조율 에이전트', trigger: '새 이메일', time: '5분 전', status: '성공' },
+                  { id: 'LOG-002', agent: '의사결정 추출 에이전트', trigger: '스레드 업데이트', time: '12분 전', status: '성공' },
+                  { id: 'LOG-003', agent: '티켓 분류 에이전트', trigger: '수동 실행', time: '1시간 전', status: '실패' },
+                ].map((log, i) => (
+                  <div key={i} className="p-4 flex items-center justify-between hover:bg-secondary/10">
+                    <div>
+                      <p className="font-bold text-sm">{log.agent} <span className="text-xs text-muted-foreground ml-2">{log.id}</span></p>
+                      <p className="text-xs text-muted-foreground mt-1">트리거: {log.trigger}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${log.status === '성공' ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>{log.status}</span>
+                      <p className="text-xs text-muted-foreground mt-1">{log.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
