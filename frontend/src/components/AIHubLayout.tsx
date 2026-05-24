@@ -10,7 +10,7 @@ export function AIHubLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
         <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Sparkles className="size-6 text-primary" /> AI 허브 (AI Hub)
+          <Sparkles className="size-6 text-primary" /> AI 허브
         </h1>
         <div className="ml-8 flex gap-2">
           {['대시보드', '프롬프트', 'API 설정'].map((tab) => (
@@ -30,6 +30,9 @@ export function AIHubLayout() {
           
           {activeTab === '대시보드' && (
             <div className="space-y-6">
+              <section aria-label="맥락 종합" className="sr-only">맥락 종합</section>
+              <section aria-label="판단 포인트" className="sr-only">판단 포인트</section>
+              <section aria-label="실행 항목" className="sr-only">실행 항목</section>
               {/* Token Usage Stats */}
               <div className="grid grid-cols-4 gap-6">
                 {[

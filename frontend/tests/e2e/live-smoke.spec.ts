@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test('live dashboard renders seeded inbox through real HTTP', async ({ page }) => {
   await page.goto('/');
 
-  await expect(page.getByText('Naruon Mail')).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Naruon' })).toBeVisible();
   await expect(page.getByText('Live E2E Release')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('Failed to load emails.')).toHaveCount(0);
 });

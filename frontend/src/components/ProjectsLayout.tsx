@@ -64,12 +64,13 @@ export function ProjectsLayout() {
       <main className="flex min-w-0 flex-1 flex-col bg-background">
         <header className="flex h-20 shrink-0 items-center justify-between border-b border-border px-6 bg-card">
           <div>
+            <h1 className="sr-only">프로젝트 워크스페이스</h1>
             <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-1">
               <span>{activeProject.category}</span>
               <span>/</span>
               <span>{activeProject.id}</span>
             </div>
-            <h1 className="text-2xl font-bold">{activeProject.title}</h1>
+            <h2 className="text-2xl font-bold">{activeProject.title}</h2>
           </div>
           <div className="flex items-center gap-3">
             <button className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
@@ -110,7 +111,7 @@ export function ProjectsLayout() {
             {/* Decision Logs */}
             <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
               <div className="border-b border-border p-5 flex items-center justify-between bg-primary/5">
-                <h2 className="font-bold text-lg text-primary">의사결정 로그 (Decision Logs)</h2>
+                <h2 className="font-bold text-lg text-primary">의사결정 로그</h2>
                 <button className="text-sm text-primary font-semibold hover:underline">기록 추가</button>
               </div>
               <div className="divide-y divide-border">

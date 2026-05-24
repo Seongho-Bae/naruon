@@ -16,8 +16,9 @@ export function SettingsLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
         <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Settings className="size-6 text-primary" /> 환경 설정 (Settings)
+          <Settings className="size-6 text-primary" /> 설정 (Settings)
         </h1>
+        <p className="sr-only">Self-hosted Runner</p>
       </header>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">

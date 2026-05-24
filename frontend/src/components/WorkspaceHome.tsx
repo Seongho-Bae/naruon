@@ -53,6 +53,49 @@ function useStartupSearch(query: string, limit: number) {
   return { results, status };
 }
 
+type TaskItem = {
+  id: string;
+  title: string;
+  status: 'open' | 'in_progress' | 'blocked' | 'done';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_at: string;
+  updated_at: string;
+};
+
+interface EmailItem {
+  id: number;
+  subject: string | null;
+  sender: string;
+  date?: string;
+  snippet: string;
+  unread?: boolean;
+}
+
+function useDashboardData() {
+  const [emails, setEmails] = useState<EmailItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      apiClient.get<{ emails: EmailItem[] }>('/api/emails').catch(() => ({ emails: [] })),
+      apiClient.get<TaskItem[]>('/api/tasks').catch(() => [])
+    ]).then(([emailRes, tasksRes]) => {
+      if (cancelled) return;
+      setEmails(emailRes.emails || []);
+      setTasks(tasksRes || []);
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { emails, tasks, loading };
+}
+
 function formatStartupDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '날짜 미정';
@@ -70,7 +113,7 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
           <article key={result.id} className="rounded-3xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-base font-black text-foreground">{subject}</h2>
-              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">{formatStartupDate(result.date)}</span>
+              <span suppressHydrationWarning className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">{formatStartupDate(result.date)}</span>
             </div>
             <p className="mt-1 text-xs font-bold text-primary">{sender}</p>
             <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted-foreground">{snippet}</p>
@@ -82,8 +125,21 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 }
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
+  const { emails, tasks, loading } = useDashboardData();
+  const unreadCount = emails.filter((e) => e.unread).length;
+  const pendingTasks = tasks.filter((t) => t.status !== 'done');
+  
+  const mapPriorityToKorean = (p: string) => {
+    switch(p) {
+      case 'urgent': return '긴급';
+      case 'high': return '높음';
+      case 'normal': return '보통';
+      case 'low': return '낮음';
+      default: return p;
+    }
+  };
   return (
-    <section aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-6">
+    <section role="region" aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         
         {/* Header Section */}
@@ -93,7 +149,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <p className="mt-1 text-sm text-muted-foreground">오늘도 Naruon과 함께 더 나은 판단과 실행을 이어가세요.</p>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
+            <span suppressHydrationWarning className="text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
             <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
               <span className="grid size-4 place-items-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20v-8m0 0V4m0 8h8m-8 0H4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
               홈 설정
@@ -104,9 +160,9 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         {/* KPI Cards */}
         <div className="grid grid-cols-5 gap-4">
           {[
-            { title: '받은 메일', value: '248', diff: '+18', diffText: '어제 대비', icon: Inbox, color: 'text-primary' },
+            { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
             { title: '오늘 일정', value: '5', diff: '+1', diffText: '어제 대비', icon: CalendarDays, color: 'text-blue-500' },
-            { title: '대기 중 작업', value: '18', diff: '-3', diffText: '어제 대비', icon: CheckCircle2, color: 'text-green-500' },
+            { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: '변동 없음', icon: CheckCircle2, color: 'text-green-500' },
             { title: '진행 중 프로젝트', value: '7', diff: '-', diffText: '변동 없음', icon: Network, color: 'text-purple-500' },
             { title: '이번 주 목표 진행률', value: '68%', diff: '+6%', diffText: '지난주 대비', icon: CheckCircle2, color: 'text-emerald-500' },
           ].map((stat, i) => (
@@ -130,7 +186,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <div className="flex gap-4">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-purple-100 text-purple-600"><Inbox className="size-5" /></div>
               <div>
-                <p className="font-bold">중요 메일 18건</p>
+                <p className="font-bold">중요 메일 {loading ? '-' : unreadCount}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 확인이 필요한 메일이 있어요.</p>
                 <button onClick={() => onOpenView('email')} className="mt-2 text-xs font-semibold text-primary hover:underline">메일 바로가기</button>
               </div>
@@ -146,7 +202,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <div className="flex gap-4 pl-6">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-green-100 text-green-600"><CheckCircle2 className="size-5" /></div>
               <div>
-                <p className="font-bold">완료 가능 작업 6건</p>
+                <p className="font-bold">완료 가능 작업 {loading ? '-' : pendingTasks.length}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 마감 전 완료해보세요.</p>
                 <button className="mt-2 text-xs font-semibold text-primary hover:underline">작업 바로가기</button>
               </div>
@@ -187,25 +243,28 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">대기 중 작업 <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">18건</span></h2>
+              <h2 className="text-base font-bold">대기 중 작업 {pendingTasks.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{pendingTasks.length}건</span>}</h2>
             </div>
             <div className="space-y-3">
-              {[
-                { title: '고객사 A 제안서 검토', priority: '높음', date: '오늘 마감' },
-                { title: '디자인 시스템 업데이트 리뷰', priority: '중간', date: '내일 마감' },
-                { title: 'Q2 리스크 점검 회의록 작성', priority: '낮음', date: '5/27 마감' },
-              ].map((task, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <input type="checkbox" className="size-4 rounded border-border text-primary" />
-                    <span className="text-sm font-medium">{task.title}</span>
+              {loading ? (
+                <div className="text-sm text-muted-foreground p-2">작업을 불러오는 중...</div>
+              ) : pendingTasks.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2">대기 중인 작업이 없습니다.</div>
+              ) : pendingTasks.slice(0, 3).map((task) => {
+                const pKor = mapPriorityToKorean(task.priority);
+                const pClass = pKor === '긴급' || pKor === '높음' ? 'text-red-500' : pKor === '보통' ? 'text-green-500' : 'text-muted-foreground';
+                return (
+                  <div key={task.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="size-4 rounded border-border text-primary" />
+                      <span className="text-sm font-medium">{task.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={`font-semibold ${pClass}`}>{pKor}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className={`font-semibold ${task.priority === '높음' ? 'text-red-500' : task.priority === '중간' ? 'text-orange-500' : 'text-green-500'}`}>{task.priority}</span>
-                    <span className="text-muted-foreground">{task.date}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">전체 작업 보기</button>
           </div>
@@ -239,29 +298,27 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
           <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">최근 메일 <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">새 메일 12</span></h2>
+              <h2 className="text-base font-bold">최근 메일 {unreadCount > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">새 메일 {unreadCount}</span>}</h2>
             </div>
             <div className="space-y-3">
-              {[
-                { name: '박지민 PM', subject: 'Q2 출시 계획 및 고객사 제안 일정 공유', snippet: '안녕하세요, 나루님. 지난 회의에서 논의드린...', time: '10:23', unread: true },
-                { name: '이준호 DA', subject: '데이터 분석 리포트 공유 - 5월 인사이트', snippet: '안녕하세요. 5월 데이터 분석 리포트를 공유드립니다...', time: '09:48', unread: true },
-                { name: '김미소 Designer', subject: '웹사이트 리뉴얼 디자인 시안 전달', snippet: '안녕하세요. 웹사이트 리뉴얼 시안 1차 전달드립니다...', time: '09:15', unread: true },
-                { name: '최서연 Developer', subject: 'API 연동 테스트 결과 및 이슈 공유', snippet: '테스트 결과와 개선이 필요한 이슈 항목을 정리했습니다...', time: '05.24', unread: false },
-                { name: '파트너십팀', subject: '파트너사 혜택 프로그램 업데이트 안내', snippet: '안녕하세요. 2024 파트너사 혜택 프로그램이 업데이트되었습니다...', time: '05.23', unread: true },
-              ].map((mail, i) => (
-                <div key={i} className="flex items-center justify-between gap-4">
+              {loading ? (
+                <div className="text-sm text-muted-foreground p-2">메일을 불러오는 중...</div>
+              ) : emails.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2">수신된 메일이 없습니다.</div>
+              ) : emails.slice(0, 5).map((mail) => (
+                <div key={mail.id} className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="size-8 shrink-0 rounded-full bg-secondary grid place-items-center font-bold text-xs">
-                      {mail.name.charAt(0)}
+                      {toSafeReactText(mail.sender).charAt(0).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1 flex items-center gap-2">
-                      <span className="text-sm font-bold truncate w-32 shrink-0">{mail.name}</span>
-                      <span className="text-sm font-bold truncate">{mail.subject}</span>
-                      <span className="text-sm text-muted-foreground truncate hidden lg:inline">{mail.snippet}</span>
+                      <span className="text-sm font-bold truncate w-32 shrink-0">{toSafeReactText(mail.sender)}</span>
+                      <span className="text-sm font-bold truncate">{toSafeReactText(mail.subject, '(제목 없음)')}</span>
+                      <span className="text-sm text-muted-foreground truncate hidden lg:inline">{toSafeReactText(mail.snippet)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
-                    {mail.time}
+                  <div suppressHydrationWarning className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
+                    {formatStartupDate(mail.date || '')}
                     {mail.unread && <span className="size-2 rounded-full bg-primary" />}
                   </div>
                 </div>
@@ -346,6 +403,7 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
   const [mobileWorkspaceOverrideReady, setMobileWorkspaceOverrideReady] = useState(false);
   const activeStartupView = startupViewOverride ?? startupView;
   const showMobileDashboard = activeStartupView === 'dashboard' && mobileWorkspaceOverrideReady && !mobileWorkspaceOverride;
+
   const mobileView = useMobileWorkspaceView();
   const effectiveMobileView = mobileView === 'detail' && selectedEmail === null ? 'inbox' : mobileView;
   const openStartupView = (view: WorkspaceStartupView) => {

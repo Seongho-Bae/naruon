@@ -10,8 +10,9 @@ export function DataLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
         <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Database className="size-6 text-primary" /> 데이터 관리 (Data)
+          <Database className="size-6 text-primary" /> 데이터와 파일
         </h1>
+        <p className="sr-only">중복 반입과 thread 정리</p>
         <div className="ml-8 flex gap-2">
           {['저장소', '수집 큐', 'WebDAV 매핑'].map((tab) => (
             <button

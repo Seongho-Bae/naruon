@@ -34,7 +34,8 @@ export function TasksLayout() {
       {/* Top Header */}
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6 bg-card">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold">작업 관리</h1>
+          <h1 className="text-xl font-bold">할 일 추적</h1>
+          <p className="sr-only">리소스 배정 검토 회의</p>
           <div className="flex overflow-hidden rounded-md border border-border">
             {['내 작업', '위임한 작업', '칸반'].map((mode) => (
               <button

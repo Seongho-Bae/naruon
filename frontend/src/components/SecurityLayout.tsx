@@ -10,8 +10,9 @@ export function SecurityLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
         <h1 className="text-2xl font-bold flex items-center gap-3">
-          <ShieldCheck className="size-6 text-primary" /> 보안 및 권한 (Security)
+          <ShieldCheck className="size-6 text-primary" /> 보안과 관리자
         </h1>
+        <p className="sr-only">관리자 경계</p>
         <div className="ml-8 flex gap-2">
           {['접근 제어 (RBAC/ABAC)', '감사 로그', '세션 관리'].map((tab) => (
             <button

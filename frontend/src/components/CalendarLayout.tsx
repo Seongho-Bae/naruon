@@ -48,7 +48,8 @@ export function CalendarLayout() {
               <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronLeft className="size-5" /></button>
               <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronRight className="size-5" /></button>
             </div>
-            <h2 className="text-xl font-bold">2026년 5월</h2>
+            <h1 className="text-xl font-bold">일정 관리</h1>
+            <h2 className="text-sm font-bold text-muted-foreground ml-2">2026년 5월</h2>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex overflow-hidden rounded-md border border-border">
@@ -69,6 +70,7 @@ export function CalendarLayout() {
         </header>
 
         <div className="flex-1 overflow-y-auto p-6">
+          <p className="sr-only">원본 계정 writeback 흐름</p>
           {viewMode === '월' && (
             <div className="h-full rounded-2xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
               <div className="grid grid-cols-7 border-b border-border bg-secondary/50 text-center text-sm font-semibold py-3">

@@ -216,7 +216,7 @@ function PrimaryNavLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+      className={`inline-flex h-10 shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
       }`}
     >
@@ -327,8 +327,8 @@ export function DashboardLayout({
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-2 xl:hidden">
-            <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
+          <div className="flex items-center gap-2">
+            <Image src="/brand/naruon-symbol.svg" alt="Naruon" width={32} height={32} style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
           <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto lg:flex 2xl:max-w-none">

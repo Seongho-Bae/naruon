@@ -17,6 +17,7 @@ export function SearchLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       {/* Top Search Bar */}
       <header className="flex h-20 shrink-0 items-center justify-center border-b border-border bg-card px-8">
+        <h1 className="sr-only">맥락 검색</h1>
         <div className="relative w-full max-w-3xl">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-primary" />
           <input 
@@ -106,7 +107,7 @@ export function SearchLayout() {
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex flex-col">
                 <div className="flex items-center gap-2 mb-4">
                   <Network className="size-5 text-primary" />
-                  <h2 className="font-bold text-lg">관계 그래프 (Context Graph)</h2>
+                  <h2 className="font-bold text-lg">관계 그래프와 타임라인</h2>
                 </div>
                 <div className="flex-1 relative min-h-[250px] bg-secondary/10 rounded-xl border border-dashed border-border flex items-center justify-center overflow-hidden">
                   {/* SVG Nodes Mock */}

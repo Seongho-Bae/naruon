@@ -100,7 +100,7 @@ async def assign_thread_id(
     # Subject fallback for FWD / ZIP imports
     subject = email_data.get("subject", "")
     if subject:
-        base_subject = re.sub(r"^(?i)(re|fwd|fw):\s*", "", subject).strip()
+        base_subject = re.sub(r"^(re|fwd|fw):\s*", "", subject, flags=re.IGNORECASE).strip()
         if base_subject and base_subject != subject:
             result = await session.execute(
                 select(Email.thread_id).where(
