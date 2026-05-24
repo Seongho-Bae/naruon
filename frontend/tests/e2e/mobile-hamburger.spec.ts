@@ -38,11 +38,6 @@ test.describe('Mobile Responsive & Hamburger Menu', () => {
     
     const menu = page.locator('#mobile-workspace-menu');
     await expect(menu).toBeVisible();
-
-    // Ensure it prevents body scroll
-    const overflow = await page.evaluate(() => document.body.style.overflow);
-    // Depending on implementation, it may use popover or explicit overflow hidden
-    // We will just verify the close button works
     
     // Close by clicking the close button
     const closeBtn = page.getByRole('button', { name: '모바일 워크스페이스 메뉴 닫기' });
@@ -61,6 +56,6 @@ test.describe('Mobile Responsive & Hamburger Menu', () => {
     await expect(bottomNav).toBeVisible();
     
     const bottomVal = await bottomNav.evaluate((el) => window.getComputedStyle(el).bottom);
-    expect(bottomVal).not.toBe('0px');
+    expect(parseFloat(bottomVal) || 0).toBeGreaterThanOrEqual(12);
   });
 });
