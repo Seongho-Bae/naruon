@@ -146,7 +146,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">안녕하세요, 김나루님 👋</h1>
-            <p className="mt-1 text-sm text-muted-foreground">오늘도 Naruon과 함께 더 나은 판단과 실행을 이어가세요.</p>
           </div>
           <div className="flex items-center gap-4">
             <span suppressHydrationWarning className="text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>

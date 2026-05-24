@@ -12,7 +12,8 @@ async def dav_handler(request: Request, path: str):
     In the future, this will parse XML namespaces and bridge
     Naruon's Tasks and Events into DAV compliant responses.
     """
-    logger.info(f"DAV Request: {request.method} /{path}")
+    safe_path = path.replace("\n", "").replace("\r", "")
+    logger.info(f"DAV Request: {request.method} /{safe_path}")
     
     if request.method == "OPTIONS":
         headers = {
@@ -42,9 +43,9 @@ async def dav_handler(request: Request, path: str):
         return Response(content=xml_response, media_type="application/xml", status_code=207)
 
     if request.method == "PUT":
-        # Simulate accepting .ics file
         body = await request.body()
-        logger.info(f"DAV PUT received {len(body)} bytes at /{path}")
+        safe_path = path.replace("\n", "").replace("\r", "")
+        logger.info(f"DAV PUT received {len(body)} bytes at /{safe_path}")
         return Response(status_code=201) # Created
 
     return Response(content="Not Implemented", status_code=501)

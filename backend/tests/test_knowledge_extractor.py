@@ -1,5 +1,5 @@
 import pytest
-from db.models import Email, TicketTask
+from db.models import Email
 from services.knowledge_extractor import extract_knowledge_from_self_sent
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock

@@ -183,12 +183,32 @@ export function DataLayout() {
           )}
 
           {activeTab === '품질 점검' && (
-            <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
-              <Database className="size-10 text-muted-foreground mb-4 opacity-50" />
-              <h2 className="text-xl font-bold mb-2">품질 점검 패널</h2>
-              <p className="text-muted-foreground max-w-sm">
-                Naruon AI가 접근할 수 있는 데이터 구조와 인덱싱 현황을 관리하는 패널이 곧 업데이트 됩니다.
-              </p>
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">인덱싱 실패</p>
+                  <p className="text-xl font-bold text-red-500">23건</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">재시도</button>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">고아(Orphaned) 청크</p>
+                  <p className="text-xl font-bold text-orange-500">105건</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">정리하기</button>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">임베딩 일치율 평균</p>
+                  <p className="text-xl font-bold text-green-600">92.4%</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">상세 리포트</button>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-border bg-secondary/30">
+                  <h2 className="font-bold text-lg">품질 문제 항목</h2>
+                </div>
+                <div className="p-5 text-sm text-muted-foreground text-center">
+                  발견된 심각한 데이터 품질 문제가 없습니다.
+                </div>
+              </div>
             </div>
           )}
           
