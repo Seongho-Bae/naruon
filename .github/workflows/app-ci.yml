@@ -66,4 +66,7 @@ jobs:
         run: cd frontend && npm run lint
 
       - name: Build frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NODE_OPTIONS: "--max-old-space-size=4096"
         run: cd frontend && npm run build

@@ -10,6 +10,7 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
+- Strix Security Scan must use `github_models/gpt-4o` as the default model to bypass Vertex AI GCP credential prerequisites in PR bounds.
 
 ## PR automation and review defaults
 

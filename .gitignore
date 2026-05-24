@@ -23,6 +23,8 @@ frontend/build/
 # Python / Backend
 backend/venv/
 backend/.venv/
+venv/
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class

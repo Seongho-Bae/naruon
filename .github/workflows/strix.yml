@@ -232,7 +232,7 @@ jobs:
           if [ -n "$STRIX_LLM_SECRET" ]; then
             printf '%s' "$STRIX_LLM_SECRET" > "$strix_llm_file"
           else
-            printf '%s' "gemini/gemini-2.5-pro" > "$strix_llm_file"
+            printf '%s' "github_models/gpt-4o" > "$strix_llm_file"
           fi
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
