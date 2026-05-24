@@ -144,7 +144,66 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && (
+            {activeTab === '멤버' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-xl">조직 멤버 관리 (RBAC)</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Naruon 시스템 및 조직의 권한(Roles)을 멤버별로 할당합니다.</p>
+                  </div>
+                  <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+                    <Plus className="size-4" /> 멤버 초대
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-secondary/50 border-b border-border">
+                      <tr>
+                        <th className="px-6 py-4 font-bold text-muted-foreground">이름 / 이메일</th>
+                        <th className="px-6 py-4 font-bold text-muted-foreground">시스템 역할</th>
+                        <th className="px-6 py-4 font-bold text-muted-foreground">조직 역할</th>
+                        <th className="px-6 py-4 font-bold text-muted-foreground text-right">관리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      <tr className="hover:bg-secondary/20 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold">김나루 (Naru Kim)</div>
+                          <div className="text-xs text-muted-foreground">naru@naruon.com</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded bg-purple-100 text-purple-700 px-2 py-1 text-xs font-bold">Platform Admin</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded bg-blue-100 text-blue-700 px-2 py-1 text-xs font-bold">Org Admin</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button className="text-sm font-semibold text-primary hover:underline">수정</button>
+                        </td>
+                      </tr>
+                      <tr className="hover:bg-secondary/20 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="font-bold">최서연 (Seoyeon Choi)</div>
+                          <div className="text-xs text-muted-foreground">seoyeon@naruon.com</div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded bg-slate-100 text-slate-700 px-2 py-1 text-xs font-bold">User</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded bg-emerald-100 text-emerald-700 px-2 py-1 text-xs font-bold">Manager</span>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button className="text-sm font-semibold text-primary hover:underline">수정</button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && activeTab !== '멤버' && (
               <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
                 <Settings className="size-10 text-muted-foreground mb-4 opacity-50" />
                 <h2 className="text-xl font-bold mb-2">{activeTab} 메뉴</h2>
