@@ -64,7 +64,7 @@ describe("TasksPage", () => {
     });
     await flushAsyncWork();
 
-    expect(container.querySelector("h1")?.textContent).toContain("작업 관리");
+    expect(container.querySelector("h1")?.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("위임한 작업");
   });
