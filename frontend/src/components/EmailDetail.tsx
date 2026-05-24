@@ -18,8 +18,10 @@ import {
   type ThreadEmailData,
 } from "@/lib/email-threading";
 
-type EmailData = ThreadEmailData;
-
+type EmailData = ThreadEmailData & {
+  requires_reply?: boolean;
+  schedule_conflict?: boolean;
+};
 interface LlmData {
   summary: string;
   todos: string[];
@@ -320,8 +322,16 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               답장 주소: {email.reply_to || email.sender}
             </div>
           </div>
-          <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
-            {formatEmailDate(email.date)}
+          <div className="flex flex-col items-end gap-2">
+            <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
+              {formatEmailDate(email.date)}
+            </div>
+            {email.requires_reply && (
+              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5 text-[10px]">응답 대기 중</Badge>
+            )}
+            {email.schedule_conflict && (
+              <Badge variant="outline" className="border-emerald-500/30 text-emerald-700 bg-emerald-500/5 text-[10px]">일정 충돌 조율</Badge>
+            )}
           </div>
         </div>
       </div>

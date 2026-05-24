@@ -50,6 +50,18 @@ services:
     networks:
       - naruon-network
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.0
+    command: start-dev
+    environment:
+      KC_DB: dev-file
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+    networks:
+      - naruon-network
+
 networks:
   naruon-network:
     driver: bridge
