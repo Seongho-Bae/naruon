@@ -4,21 +4,21 @@ import { useState } from 'react';
 import { ShieldCheck, Lock, Users, AlertOctagon, CheckCircle2, XCircle } from 'lucide-react';
 
 export function SecurityLayout() {
-  const [activeTab, setActiveTab] = useState<'접근 제어 (RBAC/ABAC)' | '감사 로그' | '세션 관리'>('접근 제어 (RBAC/ABAC)');
+  const [activeTab, setActiveTab] = useState<'보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책'>('접근 권한');
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
-      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <ShieldCheck className="size-6 text-primary" /> 보안과 관리자
+      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
+        <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
+          <ShieldCheck className="size-6 text-primary" /> <span className="hidden sm:inline">보안과 관리자</span>
         </h1>
         <p className="sr-only">관리자 경계</p>
-        <div className="ml-8 flex gap-2">
-          {['접근 제어 (RBAC/ABAC)', '감사 로그', '세션 관리'].map((tab) => (
+        <div className="ml-4 md:ml-8 flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {['보안 대시보드', '접근 권한', '감사 로그', '외부 공유', '정책'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              className={`whitespace-nowrap px-3 md:px-4 py-2 text-sm font-bold rounded-lg transition-colors shrink-0 ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}
             </button>
@@ -29,7 +29,7 @@ export function SecurityLayout() {
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto space-y-8">
           
-          {activeTab === '접근 제어 (RBAC/ABAC)' && (
+          {activeTab === '접근 권한' && (
             <div className="space-y-6">
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                 <div className="flex items-center justify-between mb-6">
@@ -119,9 +119,13 @@ export function SecurityLayout() {
             </div>
           )}
 
-          {activeTab !== '접근 제어 (RBAC/ABAC)' && (
-            <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border bg-card">
-              <p className="text-muted-foreground font-semibold">{activeTab} 메뉴는 준비 중입니다.</p>
+          {activeTab !== '접근 권한' && (
+            <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
+              <ShieldCheck className="size-10 text-muted-foreground mb-4 opacity-50" />
+              <h2 className="text-xl font-bold mb-2">{activeTab} 패널</h2>
+              <p className="text-muted-foreground max-w-sm">
+                조직 내 보안 현황, 감사 로그, 외부 공유 제한 등을 통제할 수 있는 기능이 곧 제공됩니다.
+              </p>
             </div>
           )}
 

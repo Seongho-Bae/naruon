@@ -4,21 +4,21 @@ import { useState } from 'react';
 import { Database, HardDrive, RefreshCw, FolderOpen, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
 
 export function DataLayout() {
-  const [activeTab, setActiveTab] = useState<'저장소' | '수집 큐' | 'WebDAV 매핑'>('저장소');
+  const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
-      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Database className="size-6 text-primary" /> 데이터와 파일
+      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
+        <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
+          <Database className="size-6 text-primary" /> <span className="hidden sm:inline">데이터와 파일</span>
         </h1>
         <p className="sr-only">중복 반입과 thread 정리</p>
-        <div className="ml-8 flex gap-2">
-          {['저장소', '수집 큐', 'WebDAV 매핑'].map((tab) => (
+        <div className="ml-4 md:ml-8 flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {['문서 저장소', '수집 파이프라인', '임베딩', '품질 점검'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
-              className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+              className={`whitespace-nowrap px-3 md:px-4 py-2 text-sm font-bold rounded-lg transition-colors shrink-0 ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}
             </button>
@@ -29,7 +29,7 @@ export function DataLayout() {
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto space-y-8">
           
-          {activeTab === '저장소' && (
+          {activeTab === '문서 저장소' && (
             <div className="space-y-6">
               <div className="grid grid-cols-3 gap-6">
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -98,9 +98,13 @@ export function DataLayout() {
             </div>
           )}
 
-          {activeTab !== '저장소' && (
-            <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border bg-card">
-              <p className="text-muted-foreground font-semibold">{activeTab} 메뉴는 준비 중입니다.</p>
+          {activeTab !== '문서 저장소' && (
+            <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
+              <Database className="size-10 text-muted-foreground mb-4 opacity-50" />
+              <h2 className="text-xl font-bold mb-2">{activeTab} 패널</h2>
+              <p className="text-muted-foreground max-w-sm">
+                Naruon AI가 접근할 수 있는 데이터 구조와 인덱싱 현황을 관리하는 패널이 곧 업데이트 됩니다.
+              </p>
             </div>
           )}
           

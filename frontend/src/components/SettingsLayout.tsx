@@ -5,7 +5,7 @@ import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspac
 import { useState } from 'react';
 
 export function SettingsLayout() {
-  const [activeTab, setActiveTab] = useState<'기본 설정' | '커넥터 설정' | '프로필' | '알림' | '보안' | '모바일 기기'>('기본 설정');
+  const [activeTab, setActiveTab] = useState<'워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자'>('워크스페이스');
   const startupView = useWorkspaceStartupView();
 
   const handleStartupViewChange = (view: 'dashboard' | 'email' | 'calendar') => {
@@ -14,9 +14,9 @@ export function SettingsLayout() {
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
-      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-8">
-        <h1 className="text-2xl font-bold flex items-center gap-3">
-          <Settings className="size-6 text-primary" /> 설정 (Settings)
+      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
+        <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
+          <Settings className="size-6 text-primary" /> <span className="hidden sm:inline">설정 (Settings)</span>
         </h1>
         <p className="sr-only">Self-hosted Runner</p>
       </header>
@@ -26,12 +26,13 @@ export function SettingsLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
             {[
-              { id: '기본 설정', icon: Monitor },
-              { id: '커넥터 설정', icon: Mail },
-              { id: '프로필', icon: User },
+              { id: '워크스페이스', icon: Monitor },
+              { id: '멤버', icon: User },
+              { id: '연결 계정', icon: Mail },
               { id: '알림', icon: Bell },
-              { id: '보안', icon: Shield },
-              { id: '모바일 기기', icon: Smartphone },
+              { id: '자동화', icon: Settings },
+              { id: '결제', icon: Shield },
+              { id: '개발자', icon: Smartphone },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -48,11 +49,11 @@ export function SettingsLayout() {
         <main className="flex-1 overflow-y-auto p-8 bg-background">
           <div className="max-w-3xl space-y-8">
             
-            {activeTab === '기본 설정' && (
+            {activeTab === '워크스페이스' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h2 className="font-bold text-xl">기본 설정</h2>
+                    <h2 className="font-bold text-xl">워크스페이스 설정</h2>
                     <p className="text-sm text-muted-foreground mt-1">Naruon의 전반적인 동작과 시작 화면을 설정합니다.</p>
                   </div>
                 </div>
@@ -88,7 +89,7 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab === '커넥터 설정' && (
+            {activeTab === '연결 계정' && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -147,9 +148,13 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab !== '커넥터 설정' && activeTab !== '기본 설정' && (
-              <div className="flex h-64 items-center justify-center rounded-2xl border border-dashed border-border bg-card">
-                <p className="text-muted-foreground font-semibold">{activeTab} 메뉴는 준비 중입니다.</p>
+            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && (
+              <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
+                <Settings className="size-10 text-muted-foreground mb-4 opacity-50" />
+                <h2 className="text-xl font-bold mb-2">{activeTab} 메뉴</h2>
+                <p className="text-muted-foreground max-w-sm">
+                  사용자 및 조직 관리를 위한 세부 설정 화면이 다음 릴리즈에 포함될 예정입니다.
+                </p>
               </div>
             )}
             
