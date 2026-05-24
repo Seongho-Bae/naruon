@@ -90,7 +90,7 @@ def test_search_reply_counts_group_by_coalesced_thread_key():
     assert "coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
     assert "nullif(btrim(btrim(emails.message_id)" in sql
     assert "coalesce(emails.thread_id, emails.message_id)" not in sql
-    assert "count(emails.id)" in sql
+    assert "count(emails.email_id)" in sql
     assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
 
 

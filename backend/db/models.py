@@ -62,15 +62,15 @@ class EncryptedString(TypeDecorator):
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("log_id", primary_key=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.datetime.utcnow
+        "log_timestamp", DateTime(timezone=True), default=datetime.datetime.utcnow
     )
     user_id: Mapped[str] = mapped_column(String, index=True)
-    action: Mapped[str] = mapped_column(String)
+    action: Mapped[str] = mapped_column("action_type", String)
     resource_type: Mapped[str] = mapped_column(String)
     resource_id: Mapped[str | None] = mapped_column(String, nullable=True)
-    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[str | None] = mapped_column("action_details", Text, nullable=True)
 
 
 class LLMProvider(Base):
@@ -78,15 +78,15 @@ class LLMProvider(Base):
     __table_args__ = (
         UniqueConstraint(
             "organization_id",
-            "name",
+            "provider_name",
             name="uq_llm_providers_org_name",
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("provider_id", primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    name: Mapped[str] = mapped_column(String, index=True)
+    name: Mapped[str] = mapped_column("provider_name", String, index=True)
     provider_type: Mapped[str] = mapped_column(
         String
     )  # e.g. openai, anthropic, gemini, ollama
@@ -103,7 +103,7 @@ class LLMProvider(Base):
 class WorkspaceRunnerConfig(Base):
     __tablename__ = "workspace_runner_configs"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("config_id", primary_key=True)
     organization_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     workspace_id: Mapped[str] = mapped_column(String, unique=True, index=True)
     registration_token: Mapped[str | None] = mapped_column(
@@ -119,8 +119,8 @@ class WorkspaceRunnerConfig(Base):
 class Organization(Base):
     __tablename__ = "organizations"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    id: Mapped[str] = mapped_column("org_id", String, primary_key=True)
+    name: Mapped[str | None] = mapped_column("org_name", String, nullable=True)
 
     groups: Mapped[list["OrganizationGroup"]] = relationship(
         back_populates="organization"
@@ -133,11 +133,11 @@ class Organization(Base):
 class OrganizationGroup(Base):
     __tablename__ = "organization_groups"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
+    id: Mapped[str] = mapped_column("group_id", String, primary_key=True)
     organization_id: Mapped[str] = mapped_column(
-        ForeignKey("organizations.id"), index=True
+        ForeignKey("organizations.org_id"), index=True
     )
-    name: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str | None] = mapped_column("group_name", String, nullable=True)
 
     organization: Mapped["Organization"] = relationship(back_populates="groups")
     role_assignments: Mapped[list["ScopedRoleAssignment"]] = relationship(
@@ -148,14 +148,14 @@ class OrganizationGroup(Base):
 class ScopedRoleAssignment(Base):
     __tablename__ = "scoped_role_assignments"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("assignment_id", primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True)
-    role: Mapped[str] = mapped_column(String, index=True)
+    role: Mapped[str] = mapped_column("role_name", String, index=True)
     organization_id: Mapped[str | None] = mapped_column(
-        ForeignKey("organizations.id"), nullable=True, index=True
+        ForeignKey("organizations.org_id"), nullable=True, index=True
     )
     group_id: Mapped[str | None] = mapped_column(
-        ForeignKey("organization_groups.id"), nullable=True, index=True
+        ForeignKey("organization_groups.group_id"), nullable=True, index=True
     )
 
     organization: Mapped["Organization | None"] = relationship(
@@ -169,10 +169,10 @@ class ScopedRoleAssignment(Base):
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    title: Mapped[str] = mapped_column(String, index=True)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    content: Mapped[str] = mapped_column(Text)
+    id: Mapped[int] = mapped_column("template_id", primary_key=True)
+    title: Mapped[str] = mapped_column("template_title", String, index=True)
+    description: Mapped[str | None] = mapped_column("template_description", Text, nullable=True)
+    content: Mapped[str] = mapped_column("template_content", Text)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str] = mapped_column(String, index=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -197,22 +197,22 @@ class Email(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("email_id", primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     message_id: Mapped[str] = mapped_column(String, index=True)
     thread_id: Mapped[str | None] = mapped_column(
         String, index=True, nullable=True
     )  # O3: email threading support
-    sender: Mapped[str] = mapped_column(String)
+    sender: Mapped[str] = mapped_column("sender_address", String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
-    recipients: Mapped[str | None] = mapped_column(String, nullable=True)
-    subject: Mapped[str | None] = mapped_column(String, nullable=True)
+    recipients: Mapped[str | None] = mapped_column("recipient_list", String, nullable=True)
+    subject: Mapped[str | None] = mapped_column("email_subject", String, nullable=True)
     in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
-    references: Mapped[str | None] = mapped_column(String, nullable=True)
-    date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
-    body: Mapped[str] = mapped_column(Text)
-    embedding = mapped_column(Vector(1536))
+    references: Mapped[str | None] = mapped_column("email_references", String, nullable=True)
+    date: Mapped[datetime.datetime] = mapped_column("received_date", DateTime(timezone=True))
+    body: Mapped[str] = mapped_column("email_body", Text)
+    embedding = mapped_column("email_embedding", Vector(1536))
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
@@ -241,7 +241,7 @@ class TicketTask(Base):
     )
     source_type: Mapped[str] = mapped_column(String, default="email", index=True)
     related_email_id: Mapped[int | None] = mapped_column(
-        "email_id", ForeignKey("emails.id"), nullable=True, index=True
+        "email_id", ForeignKey("emails.email_id"), nullable=True, index=True
     )
     related_thread_id: Mapped[str | None] = mapped_column(
         "thread_id", String, nullable=True, index=True
@@ -262,11 +262,11 @@ class TicketTask(Base):
 class Attachment(Base):
     __tablename__ = "attachments"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    email_id: Mapped[int] = mapped_column(ForeignKey("emails.id"))
-    filename: Mapped[str] = mapped_column(String)
-    content: Mapped[str] = mapped_column(Text)
-    embedding = mapped_column(Vector(1536))
+    id: Mapped[int] = mapped_column("attachment_id", primary_key=True)
+    email_id: Mapped[int] = mapped_column(ForeignKey("emails.email_id"))
+    filename: Mapped[str] = mapped_column("file_name", String)
+    content: Mapped[str] = mapped_column("file_content", Text)
+    embedding = mapped_column("file_embedding", Vector(1536))
 
     email: Mapped["Email"] = relationship(back_populates="attachments")
 
@@ -274,7 +274,7 @@ class Attachment(Base):
 class TenantConfig(Base):
     __tablename__ = "tenant_configs"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("config_id", primary_key=True)
     user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
 
     # Email settings
@@ -324,7 +324,7 @@ class SenderRelationship(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column("relationship_id", primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
