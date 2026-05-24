@@ -14,12 +14,14 @@ class ConnectionManager:
         await ws.accept()
         # In a real scenario, validate token against WorkspaceRunnerConfig
         self.active_connections[token] = ws
-        logger.info(f"Runner connected with token {token}")
+        safe_token = token.replace("\n", "").replace("\r", "")
+        logger.info(f"Runner connected with token {safe_token}")
 
     def disconnect(self, token: str):
         if token in self.active_connections:
             del self.active_connections[token]
-            logger.info(f"Runner disconnected: {token}")
+            safe_token = token.replace("\n", "").replace("\r", "")
+            logger.info(f"Runner disconnected: {safe_token}")
 
 manager = ConnectionManager()
 

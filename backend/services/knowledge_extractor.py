@@ -1,6 +1,5 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from db.models import Email, TicketTask
 
 logger = logging.getLogger(__name__)
