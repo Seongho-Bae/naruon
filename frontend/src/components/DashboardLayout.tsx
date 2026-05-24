@@ -15,20 +15,15 @@ import {
   Home,
   Inbox,
   Menu,
-  Network,
   PenLine,
   Search,
   Send,
   Sparkles,
   Star,
-  Target,
-  FolderOpen,
   MoreHorizontal,
   Settings,
   ShieldCheck,
-  TrendingUp,
-  UserCircle,
-  Edit3
+  UserCircle
 } from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
@@ -40,34 +35,6 @@ const mailNavItems = [
   { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent', available: false },
   { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts', available: false },
   { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all', available: false },
-];
-
-const aiHubItems = [
-  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub#context', available: true },
-  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub#decisions', available: true },
-  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub#actions', available: true },
-];
-
-const projectItems = [
-  { label: '런칭 프로젝트', description: '출시 메일·일정·파일', icon: FolderOpen, href: '/projects#launch', available: true },
-  { label: '벤더 관리', description: '계약·보안·운영', icon: FolderOpen, href: '/projects#vendor', available: true },
-  { label: '마케팅 캠페인', description: '캠페인·성과·후속', icon: FolderOpen, href: '/projects#marketing', available: true },
-];
-
-const labelItems = [
-  { label: '긴급', color: 'bg-red-500', href: '/labels/urgent' },
-  { label: '회의', color: 'bg-yellow-500', href: '/labels/meeting' },
-  { label: '계약', color: 'bg-green-500', href: '/labels/contract' },
-  { label: '디자인', color: 'bg-purple-500', href: '/labels/design' },
-  { label: '개발', color: 'bg-blue-500', href: '/labels/dev' },
-];
-
-const aiNavItems = [
-  { label: '받은편지함', description: '메일 스레드', icon: Inbox, active: true, mobileView: 'inbox' as const },
-  { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Network, mobileView: 'detail' as const },
-  { label: '판단 포인트', description: '의사결정 기준', icon: Target, mobileView: 'detail' as const },
-  { label: '실행 항목', description: '다음 행동 추적', icon: CheckCircle2, mobileView: 'actions' as const },
-  { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays, mobileView: 'calendar' as const },
 ];
 
 const mobileWorkspaceItems = [
@@ -128,7 +95,7 @@ function isActivePath(pathname: string | null, href: string, currentHash = '') {
     : pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function NavLink({
+export function NavLink({
   label,
   description,
   icon: Icon,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Sparkles, MessageSquare, Zap, Activity, Cpu, Key, FileCode2 } from 'lucide-react';
+import { Sparkles, Zap, Activity, Cpu, Key, FileCode2 } from 'lucide-react';
 
 export function AIHubLayout() {
   const [activeTab, setActiveTab] = useState<'프롬프트 스튜디오' | '워크플로우' | 'AI 에이전트' | '평가' | '실행 이력'>('워크플로우');
@@ -16,7 +16,7 @@ export function AIHubLayout() {
           {['프롬프트 스튜디오', '워크플로우', 'AI 에이전트', '평가', '실행 이력'].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab as any)}
+              onClick={() => setActiveTab(tab as '프롬프트 스튜디오' | '워크플로우' | 'AI 에이전트' | '평가' | '실행 이력')}
               className={`whitespace-nowrap px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}

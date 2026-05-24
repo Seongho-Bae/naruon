@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, CheckCircle2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
 
 export function CalendarLayout() {
   const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');

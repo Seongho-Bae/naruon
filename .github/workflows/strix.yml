@@ -225,7 +225,7 @@ jobs:
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
-            printf '%s' "github_models/gpt-5" > "$strix_llm_file"
+            printf '%s' "github_models/gpt-5.4" > "$strix_llm_file"
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
       - name: Prepare LLM API base input file

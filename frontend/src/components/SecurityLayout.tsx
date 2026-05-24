@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { ShieldCheck, Lock, Users, AlertOctagon, CheckCircle2, XCircle } from 'lucide-react';
+import { ShieldCheck, Lock, AlertOctagon, CheckCircle2, XCircle } from 'lucide-react';
 
 export function SecurityLayout() {
   const [activeTab, setActiveTab] = useState<'보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책'>('접근 권한');

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Plus, Search, Filter, FolderOpen, MoreHorizontal, FileText, CheckCircle2, User, Clock, AlertCircle, CalendarDays } from 'lucide-react';
+import { Plus, Search, Filter, FolderOpen, CheckCircle2, User, Clock, CalendarDays } from 'lucide-react';
 
 const MOCK_PROJECTS = [
   { id: 'P-01', title: 'Naruon 2.0 런칭', status: '진행 중', progress: 68, category: '제품 개발' },
@@ -78,7 +78,7 @@ export function ProjectsLayout() {
               {['프로젝트 상세', '마일스톤', '의사결정 로그'].map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => setViewMode(mode as any)}
+                  onClick={() => setViewMode(mode as '프로젝트 상세' | '마일스톤' | '의사결정 로그')}
                   className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}

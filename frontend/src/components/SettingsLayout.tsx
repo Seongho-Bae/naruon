@@ -8,10 +8,6 @@ export function SettingsLayout() {
   const [activeTab, setActiveTab] = useState<'워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자'>('워크스페이스');
   const startupView = useWorkspaceStartupView();
 
-  const handleStartupViewChange = (view: 'dashboard' | 'email' | 'calendar') => {
-    setWorkspaceStartupView(view);
-  };
-
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">

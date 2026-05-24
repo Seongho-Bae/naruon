@@ -19,13 +19,6 @@ const MOCK_TASKS = {
   ],
 };
 
-const KANBAN_COLUMNS = [
-  { id: 'open', title: '접수', count: MOCK_TASKS.open.length, color: 'bg-blue-100 text-blue-700' },
-  { id: 'in_progress', title: '진행', count: MOCK_TASKS.in_progress.length, color: 'bg-orange-100 text-orange-700' },
-  { id: 'blocked', title: '차단', count: MOCK_TASKS.blocked.length, color: 'bg-red-100 text-red-700' },
-  { id: 'done', title: '완료', count: MOCK_TASKS.done.length, color: 'bg-green-100 text-green-700' },
-];
-
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
   const [tasks, setTasks] = useState(MOCK_TASKS);

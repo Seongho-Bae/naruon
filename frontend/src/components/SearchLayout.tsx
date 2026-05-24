@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { Search, Filter, Mail, CalendarDays, FileText, UserRound, Network, Clock, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, Mail, CalendarDays, FileText, UserRound, Network, Clock, CheckCircle2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
