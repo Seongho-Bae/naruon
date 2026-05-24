@@ -1,16 +1,18 @@
+import os
 from pathlib import Path
 
+ROOT_DIR = Path(__file__).parent.parent.parent
 
 def test_observability_compose_file_exists():
-    assert Path("../docker-compose.observability.yml").exists()
+    assert (ROOT_DIR / "docker-compose.observability.yml").exists()
 
 
 def test_observability_provisioning_exists():
-    assert Path(
-        "../observability/grafana/provisioning/datasources/datasources.yaml"
+    assert (
+        ROOT_DIR / "observability/grafana/provisioning/datasources/datasources.yaml"
     ).exists()
-    assert Path("../observability/prometheus.yml").exists()
-    assert Path("../observability/tempo.yaml").exists()
+    assert (ROOT_DIR / "observability/prometheus.yml").exists()
+    assert (ROOT_DIR / "observability/tempo.yaml").exists()
 
 
 def test_backend_exposes_metrics_endpoint():
