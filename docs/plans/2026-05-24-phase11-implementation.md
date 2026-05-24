@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Email Threading and Deduplication Pipeline
+## Task 1: Email Threading and Deduplication Pipeline
 
 **Files:**
 - Modify: `backend/services/threading_service.py` (or create if needed)
@@ -22,7 +22,7 @@
 - [ ] **Step 3: If fingerprint exists, update existing thread instead of inserting duplicate**
 - [ ] **Step 4: Verify tests pass**
 
-### Task 2: DAG Ontology & Self-to-Self Knowledge Extraction
+## Task 2: DAG Ontology & Self-to-Self Knowledge Extraction
 
 **Files:**
 - Modify: `backend/services/ontology_service.py`
@@ -30,11 +30,11 @@
 - Test: `backend/tests/test_ontology_pipeline.py`
 
 - [ ] **Step 1: Write a test that inserts a `SenderRelationship` to DB based on `analyze_sender_relationship`**
-- [ ] **Step 2: Update `ontology_service.py` to accept DB session and save the relationship**
-- [ ] **Step 3: If `process_self_to_self` is true, trigger a knowledge extraction task**
-- [ ] **Step 4: Create/Update `/api/ontology/relationships` to fetch the DAG for the frontend**
+- [ ] **Step 2: Update `ontology_service.py` to accept DB session and save the relationship including explicit tenant_id and source_id/thread_id fields**
+- [ ] **Step 3: If `process_self_to_self` is true, trigger a knowledge extraction task passing tenant and source context**
+- [ ] **Step 4: Create/Update `/api/ontology/relationships` to fetch the DAG for the frontend, filtering by tenant_id and source_id. Explicitly require the default signed-session authentication by registering the router with the `get_auth_context` dependency.**
 
-### Task 3: Reply Tracking Background Job
+## Task 3: Reply Tracking Background Job
 
 **Files:**
 - Modify: `backend/services/reply_tracking_service.py`
@@ -43,9 +43,9 @@
 
 - [ ] **Step 1: Write a test for identifying sent emails awaiting replies**
 - [ ] **Step 2: Implement a background task that runs daily (or periodically) to flag missing replies**
-- [ ] **Step 3: Expose `requires_reply` and `schedule_conflict` in `/api/emails` response**
+- [ ] **Step 3: Expose `requires_reply` and `schedule_conflict` in `/api/emails` response, verifying the router remains protected by `get_auth_context` and uses the authenticated context.**
 
-### Task 4: CalDAV/WebDAV Background Sync
+## Task 4: CalDAV/WebDAV Background Sync
 
 **Files:**
 - Modify: `backend/services/caldav_service.py`

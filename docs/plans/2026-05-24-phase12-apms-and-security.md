@@ -14,7 +14,7 @@
 
 ---
 
-### Task 1: OpenTelemetry Instrumentation
+## Task 1: OpenTelemetry Instrumentation
 
 **Files:**
 - Modify: `backend/requirements.txt`
@@ -26,7 +26,7 @@
 - [ ] **Step 3: Wire up `FastAPIInstrumentor.instrument_app(app)` in `main.py`**
 - [ ] **Step 4: Verify test passes without warnings**
 
-### Task 2: Grafana & APM Infrastructure Definition
+## Task 2: Grafana & APM Infrastructure Definition
 
 **Files:**
 - Modify: `docker-compose.infra.yml`
@@ -39,7 +39,7 @@
 - [ ] **Step 3: Create the config files for the observability stack**
 - [ ] **Step 4: Verify tests pass**
 
-### Task 3: RBAC Endpoint Enforcement
+## Task 3: RBAC Endpoint Enforcement
 
 **Files:**
 - Modify: `backend/api/tenant_config.py`
