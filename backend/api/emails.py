@@ -48,6 +48,8 @@ class EmailListItem(BaseModel):
     reply_count: int | None = None
     has_draft: bool = False
     is_self_sent: bool = False
+    requires_reply: bool = False
+    schedule_conflict: bool = False
 
 
 class EmailDetailResponse(BaseModel):
@@ -62,6 +64,8 @@ class EmailDetailResponse(BaseModel):
     body: str
     in_reply_to: str | None = None
     references: str | None = None
+    requires_reply: bool = False
+    schedule_conflict: bool = False
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
