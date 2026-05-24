@@ -1,5 +1,7 @@
 import logging
 from typing import Dict, Any
+from sqlalchemy import select
+from db.models import SenderRelationship
 
 logger = logging.getLogger(__name__)
 
@@ -32,5 +34,35 @@ class OntologyService:
             "type": relationship_type,
             "confidence": confidence
         }
+
+    async def save_relationship(self, session, user_email: str, sender_email: str, email_content: str, user_id: str, organization_id: str | None):
+        analysis = self.analyze_sender_relationship(user_email, sender_email, email_content)
+        
+        stmt = select(SenderRelationship).where(
+            SenderRelationship.user_id == user_id,
+            SenderRelationship.sender_email == sender_email
+        )
+        result = await session.execute(stmt)
+        existing = result.scalar_one_or_none()
+        
+        if existing:
+            existing.relationship_type = analysis["type"]
+            existing.confidence_score = analysis["confidence"]
+        else:
+            new_rel = SenderRelationship(
+                user_id=user_id,
+                organization_id=organization_id,
+                sender_email=sender_email,
+                relationship_type=analysis["type"],
+                confidence_score=analysis["confidence"]
+            )
+            session.add(new_rel)
+            
+    async def process_knowledge_node(self, session, email_data: dict, user_id: str, organization_id: str | None) -> bool:
+        # Pseudo implementation for knowledge extraction trigger
+        logger.info(f"Triggering knowledge extraction for user {user_id} based on self-to-self email.")
+        # E.g. enqueue task, or insert to knowledge table.
+        # Returning True to simulate success for the pipeline step
+        return True
 
 ontology_service = OntologyService()

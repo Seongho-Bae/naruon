@@ -6,6 +6,25 @@ from db.models import Email
 from services.email_parser import EmailData
 
 
+import hashlib
+
+def generate_email_fingerprint(
+    subject: str | None,
+    date_str: str | None,
+    sender: str | None,
+    recipient: str | None,
+) -> str:
+    """Generate a deterministic fingerprint for an email based on key fields."""
+    components = [
+        str(subject or "").strip(),
+        str(date_str or "").strip(),
+        str(sender or "").strip(),
+        str(recipient or "").strip(),
+    ]
+    raw = "|".join(components).lower()
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def normalize_message_id(value: str | None) -> str | None:
     """Return the canonical persisted form for a Message-ID-like header."""
     if value is None:

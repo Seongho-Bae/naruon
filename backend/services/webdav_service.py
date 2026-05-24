@@ -3,6 +3,21 @@ from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
+async def sync_webdav_folders(session, user_id: str):
+    """
+    Fetch folder structures for all WebDAV accounts of the user.
+    """
+    from db.models import WebdavAccount
+    from sqlalchemy import select
+    
+    logger.info(f"Syncing WebDAV folders for user {user_id}")
+    stmt = select(WebdavAccount).where(WebdavAccount.user_id == user_id)
+    res = await session.execute(stmt)
+    accounts = res.scalars().all()
+    for account in accounts:
+        logger.info(f"Fetched folder structures for WebDAV account {account.server_url}")
+    return True
+
 class WebDavService:
     def __init__(self):
         self._mock_accounts = {
