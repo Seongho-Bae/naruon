@@ -117,7 +117,7 @@ def schema_backfill_sql():
             ),
             text(
                 "CREATE UNIQUE INDEX IF NOT EXISTS uq_llm_providers_org_name "
-                "ON llm_providers (organization_id, name)"
+                "ON llm_providers (organization_id, provider_name)"
             ),
             text(
                 "CREATE INDEX IF NOT EXISTS ix_emails_thread_id ON emails (thread_id)"
