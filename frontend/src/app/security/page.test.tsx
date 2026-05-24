@@ -42,7 +42,7 @@ describe("SecurityPage", () => {
     });
 
     expect(container.querySelector("h1")?.textContent).toContain("보안 및 권한");
-    expect(container.textContent).toContain("접근 제어");
+    expect(container.textContent).toContain("보안과 관리자");
     expect(container.textContent).toContain("감사 로그");
     expect(container.textContent).toContain("인증 연동");
   });

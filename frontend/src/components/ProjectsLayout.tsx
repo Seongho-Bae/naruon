@@ -24,7 +24,7 @@ export function ProjectsLayout() {
   const [activeProject, setActiveProject] = useState(MOCK_PROJECTS[0]);
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground">
+    <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground overflow-x-hidden">
       {/* Left Sidebar - Project List */}
       <aside className="w-72 shrink-0 flex-col overflow-y-auto border-r border-border bg-card hidden lg:flex">
         <div className="p-4 border-b border-border">

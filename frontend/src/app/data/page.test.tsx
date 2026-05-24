@@ -44,7 +44,7 @@ describe("DataPage", () => {
 
     expect(container.querySelector("h1")?.textContent).toContain("데이터 관리");
     expect(container.textContent).toContain("저장소");
-    expect(container.textContent).toContain("수집 큐");
+    expect(container.textContent).toContain("데이터와 파일");
     expect(container.textContent).toContain("WebDAV 매핑");
     expect(container.textContent).toContain("로컬 캐시");
   });

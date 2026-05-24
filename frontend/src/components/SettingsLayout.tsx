@@ -13,7 +13,7 @@ export function SettingsLayout() {
   };
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
+    <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
           <Settings className="size-6 text-primary" /> <span className="hidden sm:inline">설정 (Settings)</span>
@@ -46,7 +46,7 @@ export function SettingsLayout() {
         </aside>
 
         {/* Main Settings Area */}
-        <main className="flex-1 overflow-y-auto p-8 bg-background">
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8 bg-background">
           <div className="max-w-3xl space-y-8">
             
             {activeTab === '워크스페이스' && (

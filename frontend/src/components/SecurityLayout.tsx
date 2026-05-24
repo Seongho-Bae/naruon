@@ -7,7 +7,7 @@ export function SecurityLayout() {
   const [activeTab, setActiveTab] = useState<'보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책'>('접근 권한');
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
+    <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
           <ShieldCheck className="size-6 text-primary" /> <span className="hidden sm:inline">보안과 관리자</span>
@@ -26,7 +26,7 @@ export function SecurityLayout() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-8">
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8">
         <div className="max-w-5xl mx-auto space-y-8">
           
           {activeTab === '접근 권한' && (
