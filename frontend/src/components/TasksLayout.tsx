@@ -5,22 +5,23 @@ import { Plus, Search, Filter, MoreHorizontal, User, CalendarDays, Inbox, AlertC
 
 const MOCK_TASKS = {
   open: [
-    { id: 'T-101', title: '고객사 A 제안서 검토', tags: ['우선순위 높음', '제안'], due: '오늘 마감', assignee: '김나루', source: 'Inbox' },
-    { id: 'T-102', title: '디자인 시스템 업데이트 리뷰', tags: ['디자인', '리뷰'], due: '내일 마감', assignee: '김나루', source: 'Design Thread' },
+    { id: 'T-101', title: '고객사 A 제안서 검토', tags: ['우선순위 높음', '제안'], due: '오늘 마감', assignee: '김나루', source: 'Inbox', priority: 'high', status: 'open' },
+    { id: 'T-102', title: '디자인 시스템 업데이트 리뷰', tags: ['디자인', '리뷰'], due: '내일 마감', assignee: '김나루', source: 'Design Thread', priority: 'normal', status: 'open' },
   ],
   in_progress: [
-    { id: 'T-103', title: 'Q2 리스크 점검 회의록 작성', tags: ['회의록', '리스크'], due: '5/27 마감', assignee: '김나루', source: 'Meeting' },
+    { id: 'T-103', title: 'Q2 리스크 점검 회의록 작성', tags: ['회의록', '리스크'], due: '5/27 마감', assignee: '김나루', source: 'Meeting', priority: 'normal', status: 'in_progress' },
   ],
   blocked: [
-    { id: 'T-104', title: '외부 API 연동 권한 승인 대기', tags: ['권한', '개발'], due: '기한 없음', assignee: '박지현', source: 'IT Support' },
+    { id: 'T-104', title: '외부 API 연동 권한 승인 대기', tags: ['권한', '개발'], due: '기한 없음', assignee: '박지현', source: 'IT Support', priority: 'urgent', status: 'blocked' },
   ],
   done: [
-    { id: 'T-105', title: '주간 파트 미팅 준비', tags: ['미팅'], due: '완료됨', assignee: '김나루', source: 'Calendar' },
+    { id: 'T-105', title: '주간 파트 미팅 준비', tags: ['미팅'], due: '완료됨', assignee: '김나루', source: 'Calendar', priority: 'low', status: 'done' },
   ],
 };
 
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState(MOCK_TASKS);
   const [draggedTask, setDraggedTask] = useState<{id: string, sourceCol: string} | null>(null);
 
@@ -46,7 +47,7 @@ export function TasksLayout() {
       if (taskIndex === -1) return prev;
       
       const [movedTask] = sourceList.splice(taskIndex, 1);
-      targetList.push(movedTask);
+      targetList.push({ ...movedTask, status: targetCol });
 
       return {
         ...prev,
@@ -156,11 +157,108 @@ export function TasksLayout() {
             ))}
           </div>
         )}
-        {viewMode !== '칸반' && (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            {viewMode} 뷰는 아직 구현 중입니다.
+        {viewMode === '내 작업' && (
+          <div className="space-y-4 max-w-4xl mx-auto">
+            <h2 className="font-bold text-lg mb-4">내 작업 (My Tasks)</h2>
+            {Object.values(tasks).flat().filter(t => t.assignee === '김나루').map(task => (
+              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
+                <div className="flex items-center gap-4">
+                  <div className={`size-3 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                  <div>
+                    <h3 className="font-bold text-sm">{task.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">마감: {task.due} | 출처: {task.source}</p>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${task.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-secondary text-secondary-foreground'}`}>{task.status}</span>
+              </div>
+            ))}
           </div>
         )}
+
+        {viewMode === '위임한 작업' && (
+          <div className="space-y-4 max-w-4xl mx-auto">
+            <h2 className="font-bold text-lg mb-4">위임한 작업 (Delegation)</h2>
+            {Object.values(tasks).flat().filter(t => t.assignee !== '김나루').map(task => (
+              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
+                <div className="flex items-center gap-4">
+                  <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
+                  <div>
+                    <h3 className="font-bold text-sm">{task.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">담당자: {task.assignee} | 마감: {task.due}</p>
+                  </div>
+                </div>
+                <span className="px-2 py-1 rounded-full text-xs font-bold bg-secondary text-secondary-foreground">{task.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {viewMode === '작업 상세' && (() => {
+          const task = Object.values(tasks).flat().find(t => t.id === selectedTaskId);
+          if (!task) return <div className="p-6 text-center text-muted-foreground">작업을 선택해주세요.</div>;
+          
+          const priorityText = task.priority === 'urgent' ? '긴급' : task.priority === 'high' ? '우선순위 높음' : task.priority === 'normal' ? '보통' : '낮음';
+          const priorityColor = task.priority === 'urgent' ? 'text-red-500 bg-red-100' : task.priority === 'high' ? 'text-orange-500 bg-orange-100' : 'text-blue-500 bg-blue-100';
+
+          return (
+          <div className="max-w-4xl mx-auto bg-card border border-border rounded-2xl shadow-sm p-6">
+            <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">{task.id}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${priorityColor}`}>{priorityText}</span>
+                </div>
+                <h2 className="text-2xl font-bold">{task.title}</h2>
+              </div>
+              <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90">상태 변경</button>
+            </div>
+            
+            <div className="grid grid-cols-3 gap-6 mb-6">
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold mb-1">담당자</p>
+                <div className="flex items-center gap-2">
+                  <div className="size-6 rounded-full bg-primary/10 text-primary grid place-items-center"><User className="size-3" /></div>
+                  <span className="text-sm font-bold">{task.assignee}</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold mb-1">마감일</p>
+                <div className={`flex items-center gap-2 text-sm font-bold ${task.due.includes('오늘') ? 'text-red-500' : ''}`}>
+                  <CalendarDays className="size-4" /> {task.due}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground font-semibold mb-1">출처</p>
+                <div className="flex items-center gap-2 text-sm font-bold hover:text-primary cursor-pointer underline underline-offset-2 decoration-muted-foreground/30">
+                  <Inbox className="size-4" /> {task.source}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-base">작업 설명</h3>
+              <div className="p-4 bg-secondary/30 rounded-xl text-sm leading-relaxed border border-border/50">
+                {task.title}와 관련된 상세 작업 설명입니다.
+              </div>
+            </div>
+
+            <div className="mt-8 pt-6 border-t border-border">
+              <h3 className="font-bold text-base mb-4">활동 기록</h3>
+              <div className="space-y-4">
+                <div className="flex gap-3">
+                  <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0 text-xs font-bold">시</div>
+                  <div className="flex-1 bg-secondary/30 rounded-xl p-3 border border-border/50">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold">시스템</span>
+                      <span className="text-xs text-muted-foreground">방금 전</span>
+                    </div>
+                    <p className="text-sm">작업이 생성되었습니다.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );})()}
       </main>
     </div>
   );

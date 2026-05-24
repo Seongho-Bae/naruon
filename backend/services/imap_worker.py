@@ -3,7 +3,55 @@ import logging
 import aioimaplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
-from db.models import TenantConfig
+from db.models import TenantConfig, Email
+from services.threading_service import generate_email_fingerprint, assign_thread_id
+from services.email_parser import EmailData
+import datetime
+
+async def process_fetched_email(session, email_data: EmailData, user_id: str, organization_id: str | None):
+    subject = email_data.get("subject", "")
+    date_obj = email_data.get("date")
+    if hasattr(date_obj, "isoformat"):
+        date_str = date_obj.isoformat()
+    else:
+        date_str = str(date_obj) if date_obj else ""
+    sender = email_data.get("sender", "")
+    recipients_list = email_data.get("recipients", [])
+    recipients = ",".join(recipients_list) if recipients_list else ""
+    
+    fingerprint = generate_email_fingerprint(subject, date_str, sender, recipients)
+    
+    # Check if duplicate
+    stmt = select(Email).where(
+        Email.user_id == user_id,
+        Email.organization_id == (organization_id if organization_id else None),
+        Email.fingerprint == fingerprint
+    )
+    result = await session.execute(stmt)
+    existing_email = result.scalar_one_or_none()
+    
+    if existing_email:
+        logger.info(f"Email with fingerprint {fingerprint} already exists. Skipping duplicate insertion.")
+        return existing_email
+    
+    thread_id = await assign_thread_id(session, email_data, user_id=user_id, organization_id=organization_id)
+    
+    new_email = Email(
+        user_id=user_id,
+        organization_id=organization_id or "",
+        message_id=email_data.get("message_id", ""),
+        thread_id=thread_id,
+        fingerprint=fingerprint,
+        sender=sender,
+        recipients=recipients,
+        subject=subject,
+        date=datetime.datetime.now(datetime.timezone.utc), # simplified for this example
+        body=email_data.get("body", ""),
+        embedding=[0.0] * 1536 # Dummy embedding
+    )
+    
+    session.add(new_email)
+    return new_email
 
 logger = logging.getLogger(__name__)
 

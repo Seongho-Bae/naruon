@@ -1,10 +1,36 @@
 "use client";
 
-import { useState } from 'react';
-import { Database, HardDrive, RefreshCw, FolderOpen, AlertCircle, FileText, CheckCircle2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Database, HardDrive, RefreshCw, FolderOpen, AlertCircle, FileText, CheckCircle2, Server } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
+  
+  interface WebdavAccount {
+    account_id: number;
+    server_url: string;
+    username: string;
+  }
+  
+  interface ProjectFolder {
+    folder_id: number;
+    project_name: string;
+    webdav_path: string;
+  }
+  
+  const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
+  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
+
+  useEffect(() => {
+    apiClient.get<WebdavAccount[]>('/api/webdav/accounts')
+      .then(data => Array.isArray(data) && setWebdavAccounts(data))
+      .catch(console.error);
+
+    apiClient.get<ProjectFolder[]>('/api/webdav/folders')
+      .then(data => Array.isArray(data) && setProjectFolders(data))
+      .catch(console.error);
+  }, []);
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -50,12 +76,17 @@ export function DataLayout() {
                     <div className="rounded-xl bg-green-100 p-3"><FolderOpen className="size-5 text-green-700" /></div>
                     <div>
                       <h2 className="font-bold text-sm text-muted-foreground">WebDAV 원본 (연동됨)</h2>
-                      <p className="text-xl font-bold">1.2 TB <span className="text-sm font-normal text-muted-foreground">/ 무제한</span></p>
+                      <p className="text-xl font-bold">
+                        {webdavAccounts.length > 0 ? `${webdavAccounts.length}개 계정` : '연결 없음'}
+                      </p>
                     </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-border overflow-hidden">
-                    <div className="h-full bg-green-500 w-[45%]"></div>
-                  </div>
+                  {webdavAccounts.map(acc => (
+                    <div key={acc.account_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
+                      <Server className="size-4" />
+                      <span className="font-medium">{acc.server_url}</span> ({acc.username})
+                    </div>
+                  ))}
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex items-center justify-between">
@@ -66,6 +97,25 @@ export function DataLayout() {
                   <button className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold shadow-sm hover:bg-secondary">
                     수동 최적화
                   </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+                <div className="p-5 border-b border-border bg-secondary/30">
+                  <h2 className="font-bold text-lg flex items-center gap-2"><FolderOpen className="size-5" /> AI 프로젝트 구조화된 첨부파일 (WebDAV)</h2>
+                </div>
+                <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {projectFolders.length > 0 ? projectFolders.map(folder => (
+                    <div key={folder.folder_id} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors">
+                      <div className="flex items-center gap-3 mb-2">
+                        <FolderOpen className="size-5 text-primary" />
+                        <span className="font-bold truncate">{folder.project_name}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground break-all">{folder.webdav_path}</p>
+                    </div>
+                  )) : (
+                    <p className="text-sm text-muted-foreground col-span-full">AI가 구조화한 프로젝트 폴더가 없습니다.</p>
+                  )}
                 </div>
               </div>
 

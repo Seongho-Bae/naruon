@@ -18,6 +18,7 @@ from api.ontology import router as ontology_router
 from api.runner_ws import router as runner_ws_router
 from api.dav import router as dav_router
 from api.accounts import router as accounts_router
+from api.webdav import router as webdav_router
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -92,6 +93,7 @@ app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(runner_ws_router)
 app.include_router(dav_router)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 
 
 app.add_middleware(
