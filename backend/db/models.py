@@ -339,3 +339,30 @@ class SenderRelationship(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+
+
+class WebdavAccount(Base):
+    __tablename__ = "webdav_accounts"
+
+    id: Mapped[int] = mapped_column("account_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    server_url: Mapped[str] = mapped_column(String, nullable=False)
+    username: Mapped[str] = mapped_column(String, nullable=False)
+    credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class ProjectFolder(Base):
+    __tablename__ = "project_folders"
+
+    id: Mapped[int] = mapped_column("folder_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    project_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    webdav_path: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
