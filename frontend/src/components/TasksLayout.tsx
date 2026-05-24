@@ -40,7 +40,7 @@ export function TasksLayout() {
             {['내 작업', '위임한 작업', '칸반'].map((mode) => (
               <button
                 key={mode}
-                onClick={() => setViewMode(mode as unknown)}
+                onClick={() => setViewMode(mode as '내 작업' | '위임한 작업' | '칸반')}
                 className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
               >
                 {mode}

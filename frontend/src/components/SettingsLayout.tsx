@@ -36,7 +36,7 @@ export function SettingsLayout() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as unknown)}
+                onClick={() => setActiveTab(tab.id as '워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자')}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${activeTab === tab.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
               >
                 <tab.icon className="size-4" /> {tab.id}
@@ -70,7 +70,7 @@ export function SettingsLayout() {
                       ].map((view) => (
                         <button
                           key={view.value}
-                          onClick={() => setWorkspaceStartupView(view.value as unknown)}
+                          onClick={() => setWorkspaceStartupView(view.value as 'dashboard' | 'email' | 'calendar')}
                           className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                             startupView === view.value
                               ? 'border-primary bg-primary/5 shadow-sm'
