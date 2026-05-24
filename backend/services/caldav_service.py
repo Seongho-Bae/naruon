@@ -15,7 +15,7 @@ class CalDavService:
         # Basic ontology/context mock logic
         source_email = task_context.get("source_email", "")
         if isinstance(source_email, str) and "@" in source_email:
-            source_domain = source_email.split("@")[1].lower().strip()
+            source_domain = source_email.strip().lower().rsplit("@", 1)[-1]
             for account in connected_accounts:
                 account_domain = str(account.get("domain", "")).lower().strip()
                 if account_domain and source_domain == account_domain:

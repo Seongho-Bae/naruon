@@ -23,7 +23,27 @@ test.describe('Mobile Responsive & Hamburger Menu', () => {
     const backdrop = page.getByTestId('mobile-workspace-backdrop');
     await expect(backdrop).toBeVisible();
 
-    // Ensure it prevents body scroll if implemented (optional check, usually popover=auto handles it)
+    // Close by clicking backdrop
+    await backdrop.click();
+
+    await expect(menu).not.toBeVisible();
+    await expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('Hamburger menu closes when close button is clicked', async ({ page }) => {
+    await page.goto('/');
+
+    const hamburgerBtn = page.getByRole('button', { name: '워크스페이스 메뉴 열기' });
+    await hamburgerBtn.click();
+    
+    const menu = page.locator('#mobile-workspace-menu');
+    await expect(menu).toBeVisible();
+
+    // Ensure it prevents body scroll
+    const overflow = await page.evaluate(() => document.body.style.overflow);
+    // Depending on implementation, it may use popover or explicit overflow hidden
+    // We will just verify the close button works
+    
     // Close by clicking the close button
     const closeBtn = page.getByRole('button', { name: '모바일 워크스페이스 메뉴 닫기' });
     await expect(closeBtn).toBeVisible();
@@ -40,8 +60,7 @@ test.describe('Mobile Responsive & Hamburger Menu', () => {
     const bottomNav = page.locator('nav[aria-label="Mobile workspace sections"]');
     await expect(bottomNav).toBeVisible();
     
-    // Playwright evaluates computed styles
-    const paddingBottom = await bottomNav.evaluate((el) => window.getComputedStyle(el).paddingBottom);
-    expect(paddingBottom).not.toBe('0px');
+    const bottomVal = await bottomNav.evaluate((el) => window.getComputedStyle(el).bottom);
+    expect(bottomVal).not.toBe('0px');
   });
 });

@@ -31,12 +31,20 @@ def process_self_to_self(email_data: Dict[str, Any], user_email: str) -> bool:
     Detects if an email is sent from the user to themselves, turning it into a knowledge node.
     """
     sender_raw = str(email_data.get("sender") or "")
-    recipients_raw = str(email_data.get("recipients") or "")
+    recipients_raw = email_data.get("recipients") or []
+    recipient_inputs = recipients_raw if isinstance(recipients_raw, list) else [recipients_raw]
+    recipient_inputs = [str(v) for v in recipient_inputs]
     
     _, sender_addr = email.utils.parseaddr(sender_raw)
-    parsed_recipients = [addr for _, addr in email.utils.getaddresses([recipients_raw])]
+    normalized_user = user_email.strip().lower()
+    normalized_sender = sender_addr.strip().lower()
+    parsed_recipients = {
+        addr.strip().lower()
+        for _, addr in email.utils.getaddresses(recipient_inputs)
+        if addr
+    }
     
-    if user_email == sender_addr and user_email in parsed_recipients:
+    if normalized_user and normalized_user == normalized_sender and normalized_user in parsed_recipients:
         logger.info("Self-to-self email detected. Organizing as knowledge node.")
         return True
     return False

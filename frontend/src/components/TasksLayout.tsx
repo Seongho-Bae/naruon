@@ -21,6 +21,7 @@ const MOCK_TASKS = {
 
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState(MOCK_TASKS);
   const [draggedTask, setDraggedTask] = useState<{id: string, sourceCol: string} | null>(null);
 
@@ -46,7 +47,7 @@ export function TasksLayout() {
       if (taskIndex === -1) return prev;
       
       const [movedTask] = sourceList.splice(taskIndex, 1);
-      targetList.push(movedTask);
+      targetList.push({ ...movedTask, status: targetCol });
 
       return {
         ...prev,
@@ -160,7 +161,7 @@ export function TasksLayout() {
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">내 작업 (My Tasks)</h2>
             {Object.values(tasks).flat().filter(t => t.assignee === '김나루').map(task => (
-              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => setViewMode('작업 상세')}>
+              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className={`size-3 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
                   <div>
@@ -178,7 +179,7 @@ export function TasksLayout() {
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">위임한 작업 (Delegation)</h2>
             {Object.values(tasks).flat().filter(t => t.assignee !== '김나루').map(task => (
-              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => setViewMode('작업 상세')}>
+              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
                   <div>
@@ -192,15 +193,22 @@ export function TasksLayout() {
           </div>
         )}
 
-        {viewMode === '작업 상세' && (
+        {viewMode === '작업 상세' && (() => {
+          const task = Object.values(tasks).flat().find(t => t.id === selectedTaskId);
+          if (!task) return <div className="p-6 text-center text-muted-foreground">작업을 선택해주세요.</div>;
+          
+          const priorityText = task.priority === 'urgent' ? '긴급' : task.priority === 'high' ? '우선순위 높음' : task.priority === 'normal' ? '보통' : '낮음';
+          const priorityColor = task.priority === 'urgent' ? 'text-red-500 bg-red-100' : task.priority === 'high' ? 'text-orange-500 bg-orange-100' : 'text-blue-500 bg-blue-100';
+
+          return (
           <div className="max-w-4xl mx-auto bg-card border border-border rounded-2xl shadow-sm p-6">
             <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">T-101</span>
-                  <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded">우선순위 높음</span>
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">{task.id}</span>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded ${priorityColor}`}>{priorityText}</span>
                 </div>
-                <h2 className="text-2xl font-bold">고객사 A 제안서 검토</h2>
+                <h2 className="text-2xl font-bold">{task.title}</h2>
               </div>
               <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90">상태 변경</button>
             </div>
@@ -210,19 +218,19 @@ export function TasksLayout() {
                 <p className="text-xs text-muted-foreground font-semibold mb-1">담당자</p>
                 <div className="flex items-center gap-2">
                   <div className="size-6 rounded-full bg-primary/10 text-primary grid place-items-center"><User className="size-3" /></div>
-                  <span className="text-sm font-bold">김나루</span>
+                  <span className="text-sm font-bold">{task.assignee}</span>
                 </div>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold mb-1">마감일</p>
-                <div className="flex items-center gap-2 text-sm font-bold text-red-500">
-                  <CalendarDays className="size-4" /> 오늘 마감
+                <div className={`flex items-center gap-2 text-sm font-bold ${task.due.includes('오늘') ? 'text-red-500' : ''}`}>
+                  <CalendarDays className="size-4" /> {task.due}
                 </div>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold mb-1">출처</p>
                 <div className="flex items-center gap-2 text-sm font-bold hover:text-primary cursor-pointer underline underline-offset-2 decoration-muted-foreground/30">
-                  <Inbox className="size-4" /> Inbox
+                  <Inbox className="size-4" /> {task.source}
                 </div>
               </div>
             </div>
@@ -230,14 +238,7 @@ export function TasksLayout() {
             <div className="space-y-4">
               <h3 className="font-bold text-base">작업 설명</h3>
               <div className="p-4 bg-secondary/30 rounded-xl text-sm leading-relaxed border border-border/50">
-                고객사 A에서 요청한 2분기 클라우드 인프라 구축 제안서의 초안이 작성되었습니다.
-                <br/><br/>
-                주요 검토 사항:
-                <ul className="list-disc list-inside mt-2 ml-4 space-y-1">
-                  <li>보안 요구사항(ISMS-P) 충족 여부 확인</li>
-                  <li>TCO 비용 산정 적절성 검토</li>
-                  <li>하반기 마이그레이션 일정 현실성 점검</li>
-                </ul>
+                {task.title}와 관련된 상세 작업 설명입니다.
               </div>
             </div>
 
@@ -245,19 +246,19 @@ export function TasksLayout() {
               <h3 className="font-bold text-base mb-4">활동 기록</h3>
               <div className="space-y-4">
                 <div className="flex gap-3">
-                  <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0 text-xs font-bold">박</div>
+                  <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center shrink-0 text-xs font-bold">시</div>
                   <div className="flex-1 bg-secondary/30 rounded-xl p-3 border border-border/50">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold">박지현 (PM)</span>
-                      <span className="text-xs text-muted-foreground">2시간 전</span>
+                      <span className="text-xs font-bold">시스템</span>
+                      <span className="text-xs text-muted-foreground">방금 전</span>
                     </div>
-                    <p className="text-sm">보안 섹션은 수정 완료했습니다. 비용 부분 확인 부탁드립니다.</p>
+                    <p className="text-sm">작업이 생성되었습니다.</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        )}
+        );})()}
       </main>
     </div>
   );

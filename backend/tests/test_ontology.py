@@ -12,3 +12,4 @@ def test_analyze_sender_relationship():
 
     result3 = ontology_service.analyze_sender_relationship("seongho@company.com", "Boss@Company.com", "Hello")
     assert result3["type"] == "Colleague"
+    assert result3["confidence"] == 0.85
