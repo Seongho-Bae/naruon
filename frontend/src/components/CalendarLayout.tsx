@@ -56,7 +56,7 @@ export function CalendarLayout() {
               {['월', '주', '일', '일정목록'].map((mode) => (
                 <button
                   key={mode}
-                  onClick={() => setViewMode(mode as any)}
+                  onClick={() => setViewMode(mode as unknown)}
                   className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}

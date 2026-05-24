@@ -17,7 +17,7 @@ export function DataLayout() {
           {['문서 저장소', '수집 파이프라인', '임베딩', '품질 점검'].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab as any)}
+              onClick={() => setActiveTab(tab as unknown)}
               className={`whitespace-nowrap px-3 md:px-4 py-2 text-sm font-bold rounded-lg transition-colors shrink-0 ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}

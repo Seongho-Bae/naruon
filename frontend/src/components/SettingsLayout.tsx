@@ -36,7 +36,7 @@ export function SettingsLayout() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as unknown)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${activeTab === tab.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
               >
                 <tab.icon className="size-4" /> {tab.id}
@@ -70,7 +70,7 @@ export function SettingsLayout() {
                       ].map((view) => (
                         <button
                           key={view.value}
-                          onClick={() => setWorkspaceStartupView(view.value as any)}
+                          onClick={() => setWorkspaceStartupView(view.value as unknown)}
                           className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                             startupView === view.value
                               ? 'border-primary bg-primary/5 shadow-sm'

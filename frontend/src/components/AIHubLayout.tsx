@@ -16,7 +16,7 @@ export function AIHubLayout() {
           {['대시보드', '프롬프트', 'API 설정'].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab as any)}
+              onClick={() => setActiveTab(tab as unknown as '대시보드' | '프롬프트' | 'API 설정')}
               className={`px-4 py-2 text-sm font-bold rounded-lg transition-colors ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}

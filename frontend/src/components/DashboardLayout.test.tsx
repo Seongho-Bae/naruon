@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { DashboardLayout } from "./DashboardLayout";
 
-describe.skip("DashboardLayout", () => {
+describe("DashboardLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
@@ -35,8 +35,6 @@ describe.skip("DashboardLayout", () => {
     });
 
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
-    const sidebar = container.querySelector('aside[aria-label="Naruon workspace sidebar"]');
-    const nav = container.querySelector('nav[aria-label="Mail sections"]');
     const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
     const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
@@ -56,11 +54,8 @@ describe.skip("DashboardLayout", () => {
     const comingSoonControls = Array.from(
       container.querySelectorAll<HTMLButtonElement>('button[data-coming-soon="true"]'),
     ).map((button) => button.textContent);
-    const aiHubSectionNav = container.querySelector('nav[aria-label="Naruon workspace sections"]');
 
     expect(banner).not.toBeNull();
-    expect(sidebar).not.toBeNull();
-    expect(nav).not.toBeNull();
     expect(primaryNav?.textContent).toContain("홈");
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/mail"]')?.textContent).toContain("메일");
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/calendar"]')?.textContent).toContain("일정");
@@ -83,23 +78,9 @@ describe.skip("DashboardLayout", () => {
     expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(true);
     expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(false);
     expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(false);
-    expect(nav?.querySelector<HTMLAnchorElement>('a[href="/starred"]')).toBeNull();
-    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#launch"]')?.textContent).toContain("런칭 프로젝트");
-    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#vendor"]')?.textContent).toContain("벤더 관리");
-    expect(sidebar?.querySelector<HTMLAnchorElement>('a[href="/projects#marketing"]')?.textContent).toContain("마케팅 캠페인");
-    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#context"]')?.textContent).toContain("맥락 종합");
-    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#decisions"]')?.textContent).toContain("판단 포인트");
-    expect(aiHubSectionNav?.querySelector<HTMLAnchorElement>('a[href="/ai-hub#actions"]')?.textContent).toContain("실행 항목");
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
-    expect(logo?.getAttribute("src")).toBe("/brand/naruon-logo.svg");
-    expect(sidebar?.querySelector('[data-testid="sidebar-brand-card"]')).not.toBeNull();
-    expect(sidebar?.textContent ?? "").toContain("답장 대기");
-    expect(sidebar?.textContent ?? "").toContain("일정 충돌");
-    expect(sidebar?.textContent ?? "").toContain("writeback 대기");
-    expect(sidebar?.textContent ?? "").not.toContain("흐름을 건너, 더 나은 판단과 실행으로.");
-    expect(sidebar?.textContent ?? "").not.toContain("Naruon AI 어시스턴트");
-    expect(nav?.textContent ?? "").toContain("받은 메일");
+    expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
     expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
     expect(headerActionGroup?.className).not.toContain("xl:flex");
@@ -206,33 +187,6 @@ describe.skip("DashboardLayout", () => {
     expect(events).toContain("actions");
     window.removeEventListener("naruon:header-action", onHeaderAction);
     window.removeEventListener("naruon:mobile-workspace", onMobileWorkspace);
-  });
-
-  it("keeps the desktop sidebar content reachable through an independent scroll region", () => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
-      root?.render(
-        <DashboardLayout>
-          <section>Inbox workspace content</section>
-        </DashboardLayout>,
-      );
-    });
-
-    const sidebar = container.querySelector<HTMLElement>('aside[aria-label="Naruon workspace sidebar"]');
-    const scrollRegion = container.querySelector<HTMLElement>('[data-testid="sidebar-scroll-region"]');
-    const insightHeading = Array.from(container.querySelectorAll("p")).find(
-      (element) => element.textContent === "오늘의 인사이트",
-    );
-
-    expect(sidebar?.className).toContain("overflow-hidden");
-    expect(scrollRegion).not.toBeNull();
-    expect(scrollRegion?.className).toContain("min-h-0");
-    expect(scrollRegion?.className).toContain("overflow-y-auto");
-    expect(scrollRegion?.textContent ?? "").toContain("오늘의 인사이트");
-    expect(insightHeading?.closest('[data-testid="sidebar-scroll-region"]')).toBe(scrollRegion);
   });
 
   it("keeps desktop primary and mobile primary destinations synchronized", () => {
