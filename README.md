@@ -28,6 +28,11 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
+  
+## Agentic Ontology & Auto-Organization (Planned)
+
+- **DAG Ontology**: The system evaluates a Directed Acyclic Graph (DAG) for sender relationships to determine "what this sender means to the user", allowing the AI Agent to decide subsequent tasks based on dynamic relationship contexts.
+- **Self-Sent Knowledge Indexing**: Emails sent to oneself are automatically parsed and structured into the connected WebDAV/Notes repository, creating a seamless personal knowledge base.
 
 ## Five-minute local path
 
@@ -278,3 +283,14 @@ bash scripts/ci/test_pr_governance_gate.sh
 Known local warnings: backend tests emit dependency/toolchain deprecation warnings
 from Starlette multipart and compiled SWIG metadata. They are not caused by
 threading code.
+
+## Phase 10 development rules
+
+- **Stepwise execution**: Each phase requires an atomic PR, GitHub PR Tracking, Push, and Robot Review. A phase only ends when merged. Do not proceed without merge.
+- **TDD + DDD**: Practice TDD, micro TDD, nano TDD, Domain Driven Development, and Context Driven Development.
+- **API Wiring**: Always work with API wiring completed.
+- **Collaboration**: Respect other agents' concurrent work; do not overwrite or dismiss unfamiliar changes.
+- **Subagent Delegation**: Actively delegate tasks to Subagents.
+- **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
+- **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
+- **Goal**: Actively manage tasks to ensure open PR counts converge to 0.

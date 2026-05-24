@@ -12,6 +12,12 @@ vi.mock("lucide-react", () => ({
   FileArchive: () => <svg aria-hidden="true" />,
   FolderTree: () => <svg aria-hidden="true" />,
   ShieldCheck: () => <svg aria-hidden="true" />,
+  HardDrive: () => <svg aria-hidden="true" />,
+  FolderOpen: () => <svg aria-hidden="true" />,
+  RefreshCw: () => <svg aria-hidden="true" />,
+  AlertCircle: () => <svg aria-hidden="true" />,
+  FileText: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
@@ -37,12 +43,9 @@ describe("DataPage", () => {
     });
 
     expect(container.querySelector("h1")?.textContent).toContain("데이터와 파일");
-    expect(container.textContent).toContain("문서 저장소");
-    expect(container.textContent).toContain("수집 파이프라인");
-    expect(container.textContent).toContain("임베딩");
-    expect(container.textContent).toContain("품질 점검");
-    expect(container.textContent).toContain("WebDAV writeback 큐");
-    expect(container.textContent).toContain("중복 반입");
-    expect(container.textContent).toContain("unique email");
+    expect(container.textContent).toContain("저장소");
+    expect(container.textContent).toContain("데이터와 파일");
+    expect(container.textContent).toContain("WebDAV 원본");
+    expect(container.textContent).toContain("로컬 캐시");
   });
 });

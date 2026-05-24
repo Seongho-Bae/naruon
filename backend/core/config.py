@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_MODEL: str = "gpt-4o"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
     def validate_session_secret(self) -> "Settings":
