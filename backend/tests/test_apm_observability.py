@@ -3,7 +3,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent.parent.parent
 
 def test_observability_compose_file_exists():
-    assert (ROOT_DIR / "docker-compose.observability.yml").exists()
+    assert (ROOT_DIR / "docker-compose.infra.yml").exists()
 
 
 def test_observability_provisioning_exists():
