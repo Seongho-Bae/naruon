@@ -14,9 +14,12 @@ class CalDavService:
         """
         # Basic ontology/context mock logic
         source_email = task_context.get("source_email", "")
-        for account in connected_accounts:
-            if account.get("domain") in source_email:
-                return account.get("account_id")
+        if isinstance(source_email, str) and "@" in source_email:
+            source_domain = source_email.split("@")[1].lower().strip()
+            for account in connected_accounts:
+                account_domain = str(account.get("domain", "")).lower().strip()
+                if account_domain and source_domain == account_domain:
+                    return account.get("account_id")
                 
         # Fallback to the primary account
         if connected_accounts:

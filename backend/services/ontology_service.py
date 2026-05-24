@@ -21,8 +21,8 @@ class OntologyService:
             relationship_type = "Newsletter"
             confidence = 0.9
         elif "@" in user_email and "@" in sender_email:
-            user_domain = user_email.split("@")[1]
-            sender_domain = sender_email.split("@")[1]
+            user_domain = user_email.split("@")[1].lower()
+            sender_domain = sender_email.split("@")[1].lower()
             if user_domain == sender_domain:
                 relationship_type = "Colleague"
                 confidence = 0.85
