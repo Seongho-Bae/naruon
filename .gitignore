@@ -70,3 +70,4 @@ secret_fixtures/
 frontend/test-results/
 frontend/playwright-report/
 frontend/playwright/.cache/
+frontend/trace_output/
