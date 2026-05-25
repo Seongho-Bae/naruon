@@ -45,3 +45,22 @@ def test_get_project_folders(auth_client):
     assert len(body) == 2
     assert body[0]["project_name"] == "Naruon Roadmap 2026"
     assert body[1]["project_name"] == "Marketing Assets"
+
+def test_get_webdav_writeback_intent(auth_client):
+    response = auth_client.post("/api/webdav/writeback-intent", json={})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["intent"] == "writeback"
+    assert body["requires_if_match"] is True
+    assert body["source_id"] == 1
+    assert body["server_url"] == "https://webdav.naruon.net"
+    assert body["provenance"] == "server-authoritative"
+
+def test_get_webdav_writeback_intent_no_accounts():
+    with TestClient(
+        app,
+        headers={"X-User-Id": "bob", "X-Organization-Id": "org-acme"},
+    ) as client:
+        response = client.post("/api/webdav/writeback-intent", json={})
+        assert response.status_code == 422
+        assert response.json()["detail"] == "No connected WebDAV accounts found."

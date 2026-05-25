@@ -65,4 +65,27 @@ class WebDavService:
         # Mock implementation: in reality, this would download from storage and upload via webdavclient3
         return True
 
+    def determine_webdav_writeback_intent(self, user_id: str, target_account_id: int | None = None) -> Dict[str, Any]:
+        """
+        Server-authoritative WebDAV writeback source selection.
+        """
+        accounts = self.get_connected_accounts(user_id)
+        if not accounts:
+            return {"status": "error", "message": "No connected WebDAV accounts found."}
+            
+        selected_account = accounts[0]
+        if target_account_id:
+            for acc in accounts:
+                if acc["account_id"] == target_account_id:
+                    selected_account = acc
+                    break
+                    
+        return {
+            "intent": "writeback",
+            "source_id": selected_account["account_id"],
+            "server_url": selected_account["server_url"],
+            "requires_if_match": True,
+            "provenance": "server-authoritative"
+        }
+
 webdav_service = WebDavService()
