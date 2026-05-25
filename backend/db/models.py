@@ -331,8 +331,42 @@ class SenderRelationship(Base):
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    parent_sender_email: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     relationship_type: Mapped[str] = mapped_column(String, nullable=False)
     confidence_score: Mapped[float] = mapped_column(default=1.0)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class CaldavAccount(Base):
+    __tablename__ = "caldav_accounts"
+
+    id: Mapped[int] = mapped_column("account_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    server_url: Mapped[str] = mapped_column(String, nullable=False)
+    username: Mapped[str] = mapped_column(String, nullable=False)
+    credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class ReplyTracker(Base):
+    __tablename__ = "reply_trackers"
+
+    id: Mapped[int] = mapped_column("tracker_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    message_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    status_code: Mapped[str] = mapped_column(String, default="waiting", index=True)
+    follow_up_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

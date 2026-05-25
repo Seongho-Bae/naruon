@@ -7,12 +7,21 @@ async def sync_caldav_accounts(session, user_id: str):
     """
     Fetch and store events locally for all CalDAV accounts of the user.
     """
-    # Pseudo implementation to parse events and store them
-    from db.models import TenantConfig # Actually we would use a CaldavAccount model but using something for demo
-    # The actual implementation would query Caldav accounts for the user_id
+    from db.models import CaldavAccount
+    from sqlalchemy import select
+    
     logger.info(f"Syncing CalDAV accounts for user {user_id}")
-    # Simulating N-accounts fetching
-    logger.info(f"Parsed 0 events for user {user_id}")
+    stmt = select(CaldavAccount).where(CaldavAccount.user_id == user_id)
+    result = await session.execute(stmt)
+    accounts = result.scalars().all()
+    
+    total_parsed = 0
+    for account in accounts:
+        # Pseudo implementation to parse events for each account
+        logger.debug(f"Syncing CalDAV account {account.id} at {account.server_url}")
+        total_parsed += 0 # Placeholder
+        
+    logger.info(f"Parsed {total_parsed} events for user {user_id}")
     return True
 
 class CalDavService:

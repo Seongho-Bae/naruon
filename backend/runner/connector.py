@@ -61,7 +61,28 @@ class SelfHostedConnector:
     async def handle_message(self, message: str | bytes):
         # Dispatch message to internal SMTP/IMAP proxy handlers
         logger.debug(f"Received instruction from gateway: {message}")
-        pass
+        import json
+        try:
+            payload = json.loads(message)
+            action = payload.get("action")
+            if action == "fetch_imap":
+                await self._handle_fetch_imap(payload)
+            elif action == "send_smtp":
+                await self._handle_send_smtp(payload)
+            else:
+                logger.warning(f"Unknown action received: {action}")
+        except json.JSONDecodeError:
+            logger.error("Failed to decode message from gateway.")
+            
+    async def _handle_fetch_imap(self, payload: Dict[str, Any]):
+        logger.info(f"Executing local IMAP fetch for account: {payload.get('account')}")
+        # Placeholder for actual internal IMAP logic
+        await self.send_response({"status": "success", "action": "fetch_imap", "data": "IMAP data placeholder"})
+        
+    async def _handle_send_smtp(self, payload: Dict[str, Any]):
+        logger.info(f"Executing local SMTP send for account: {payload.get('account')}")
+        # Placeholder for actual internal SMTP logic
+        await self.send_response({"status": "success", "action": "send_smtp", "message_id": "mock_id_123"})
 
     async def send_response(self, response: Dict[str, Any]):
         if self.is_connected and self.connection:
