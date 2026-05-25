@@ -10,7 +10,7 @@ import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { toSafeReactText } from '@/lib/safe-text';
-import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
+import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
@@ -126,6 +126,7 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   const { emails, tasks, loading } = useDashboardData();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
   
@@ -147,12 +148,30 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           <div>
             <h1 className="text-2xl font-bold text-foreground">안녕하세요, 김나루님 👋</h1>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 relative">
             <span suppressHydrationWarning className="text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
+            <button 
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
               <span className="grid size-4 place-items-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20v-8m0 0V4m0 8h8m-8 0H4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
               홈 설정
             </button>
+            {isSettingsOpen && (
+              <div className="absolute right-0 top-full mt-2 w-48 rounded-xl border border-border bg-card p-2 shadow-lg z-50">
+                <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
+                <div className="mt-1 flex flex-col gap-1">
+                  <button onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    대시보드
+                  </button>
+                  <button onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    이메일 우선
+                  </button>
+                  <button onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    일정 우선
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

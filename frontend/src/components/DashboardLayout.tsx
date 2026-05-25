@@ -437,70 +437,7 @@ export function DashboardLayout({
             </div>
           </section>
 
-          <nav aria-label="Mobile workspace menu" className="grid gap-2">
-            <p className="px-1 text-[11px] font-black text-muted-foreground">메일</p>
-          {mailNavItems.map(({ label, description, icon: Icon, href, available }) => {
-            const active = isActivePath(pathname, href);
-            if (!available) {
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  disabled
-                  data-coming-soon="true"
-                  className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
-                >
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
-                  <span className="flex flex-col leading-tight">
-                    <span>{label} <span className="text-[10px]">준비 중</span></span>
-                    <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
-                  </span>
-                </button>
-              );
-            }
-            return (
-            <Link
-              key={label}
-              href={href}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => {
-                closeMobileWorkspaceMenu();
-                setMobileWorkspaceView('inbox');
-              }}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-            >
-              <Icon className="size-4 text-primary" aria-hidden="true" />
-              <span className="flex flex-col leading-tight">
-                <span>{label}</span>
-                <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
-              </span>
-              </Link>
-           )})}
-          </nav>
 
-          <nav aria-label="Mobile workspace destinations" className="grid gap-2">
-            <p className="px-1 text-[11px] font-black text-muted-foreground">워크스페이스</p>
-            {mobileWorkspaceMenuItems.map(({ label, description, icon: Icon, href, view }) => {
-              const active = activeMobileView === view;
-              return (
-                <a
-                  key={view}
-                  href={href}
-                  aria-current={active ? 'page' : undefined}
-                  onClick={(event) => handleMobileWorkspaceChange(view, event)}
-                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
-                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
-                  }`}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                  <span className="flex flex-col leading-tight">
-                    <span>{label}</span>
-                    <span className={`text-[11px] font-medium ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{description}</span>
-                  </span>
-                </a>
-              );
-            })}
-          </nav>
 
           <nav aria-label="Mobile primary destinations" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">주요 작업공간</p>

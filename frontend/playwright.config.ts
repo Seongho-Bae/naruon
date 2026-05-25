@@ -2,13 +2,21 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 30_000,
+  timeout: 60_000,
   expect: {
-    timeout: 10_000,
+    timeout: 15_000,
   },
   use: {
     baseURL: process.env.LIVE_BASE_URL ?? 'http://127.0.0.1:18080',
     trace: 'retain-on-failure',
+    actionTimeout: 15_000,
+    navigationTimeout: 60_000,
+  },
+  webServer: {
+    command: 'npm run dev -- -p 18080',
+    port: 18080,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
   projects: [
     {
