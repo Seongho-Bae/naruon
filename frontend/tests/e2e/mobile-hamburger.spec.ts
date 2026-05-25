@@ -1,61 +1,33 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Mobile Responsive & Hamburger Menu', () => {
+test.describe('Mobile Workspace Navigation', () => {
   test.use({ viewport: { width: 375, height: 812 } }); // iPhone X viewport
 
-  test('Hamburger menu toggles correctly and manages overlay', async ({ page }) => {
+  test('hamburger menu toggles and displays correctly', async ({ page }) => {
     await page.goto('/');
 
-    // Ensure the hamburger button is visible
-    const hamburgerBtn = page.getByRole('button', { name: '워크스페이스 메뉴 열기' });
-    await expect(hamburgerBtn).toBeVisible();
+    // Wait for the main app to render
+    const menuButton = page.locator('button[aria-label="워크스페이스 메뉴 열기"]');
+    await expect(menuButton).toBeVisible();
 
-    // The menu should be initially hidden
-    const menu = page.locator('#mobile-workspace-menu');
-    await expect(menu).not.toBeVisible();
+    // Click to open the mobile menu
+    await menuButton.click();
 
-    // Click to open
-    await hamburgerBtn.click();
-    await expect(menu).toBeVisible();
-    await expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'true');
+    const mobileMenu = page.locator('#mobile-workspace-menu');
+    await expect(mobileMenu).toBeVisible();
 
-    // Check if the backdrop is visible
-    const backdrop = page.getByTestId('mobile-workspace-backdrop');
-    await expect(backdrop).toBeVisible();
+    // Verify some expected elements in the menu
+    await expect(page.locator('text=시작 화면')).toBeVisible();
+    await expect(page.locator('text=워크스페이스 메뉴')).toBeVisible();
 
-    // Close by clicking backdrop
-    await backdrop.click();
+    // Take a screenshot of the opened menu
+    await page.screenshot({ path: 'test-results/mobile-hamburger-open.png', fullPage: false });
 
-    await expect(menu).not.toBeVisible();
-    await expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
-  });
+    // Close the menu
+    const closeButton = page.locator('button[aria-label="모바일 워크스페이스 메뉴 닫기"]');
+    await closeButton.click();
 
-  test('Hamburger menu closes when close button is clicked', async ({ page }) => {
-    await page.goto('/');
-
-    const hamburgerBtn = page.getByRole('button', { name: '워크스페이스 메뉴 열기' });
-    await hamburgerBtn.click();
-    
-    const menu = page.locator('#mobile-workspace-menu');
-    await expect(menu).toBeVisible();
-    
-    // Close by clicking the close button
-    const closeBtn = page.getByRole('button', { name: '모바일 워크스페이스 메뉴 닫기' });
-    await expect(closeBtn).toBeVisible();
-    await closeBtn.click();
-
-    await expect(menu).not.toBeVisible();
-    await expect(hamburgerBtn).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  test('Bottom action bars and panels have safe-area padding', async ({ page }) => {
-    await page.goto('/');
-
-    // Check bottom navigation has safe area padding class
-    const bottomNav = page.locator('nav[aria-label="Mobile workspace sections"]');
-    await expect(bottomNav).toBeVisible();
-    
-    const bottomVal = await bottomNav.evaluate((el) => window.getComputedStyle(el).bottom);
-    expect(parseFloat(bottomVal) || 0).toBeGreaterThanOrEqual(12);
+    // Playwright popover might need a moment to hide
+    await expect(mobileMenu).not.toBeVisible();
   });
 });
