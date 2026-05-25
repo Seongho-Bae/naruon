@@ -82,7 +82,7 @@ jobs:
         env:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
         run: |
-          strix_llm="github/gpt-4o"
+          strix_llm="github/gpt-5.4"
           llm_api_key="$(printf '%s' "$LLM_API_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           if [ -z "$llm_api_key" ]; then
             # On protected/privileged events, fail-closed: missing secrets must
@@ -114,10 +114,10 @@ jobs:
         id: auth_gate
         if: steps.gate.outputs.enabled == 'true'
         env:
-          DEFAULT_PROVIDER: gemini
+          DEFAULT_PROVIDER: github
         run: |
           . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
-          strix_llm="github/gpt-4o"
+          strix_llm="github/gpt-5.4"
           requires_vertex_auth='false'
           model_auth_rc=0
           model_requires_vertex_auth "$strix_llm" || model_auth_rc=$?
@@ -225,7 +225,7 @@ jobs:
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
-            printf '%s' "github/gpt-4o" > "$strix_llm_file"
+            printf '%s' "github/gpt-5.4" > "$strix_llm_file"
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
       - name: Prepare LLM API base input file
@@ -244,7 +244,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
-          STRIX_LLM_DEFAULT_PROVIDER: gemini
+          STRIX_LLM_DEFAULT_PROVIDER: github
           GEMINI_LOCATION: GLOBAL
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
           LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
