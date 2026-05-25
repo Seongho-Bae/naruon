@@ -662,3 +662,42 @@ def test_ensure_organization_access_rejects_cross_scope_resource():
 
     assert exc.value.status_code == 403
     assert exc.value.detail == "Resource belongs to a different organization"
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_with_oidc(monkeypatch):
+    import jwt
+    from api.auth import jwks_client
+    
+    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    
+    class MockJWKSClient:
+        def get_signing_key_from_jwt(self, token):
+            class MockKey:
+                key = "public_key"
+            return MockKey()
+    
+    monkeypatch.setattr("api.auth.jwks_client", MockJWKSClient())
+    
+    def mock_jwt_decode(*args, **kwargs):
+        return {
+            "iss": "http://localhost:8081/realms/naruon",
+            "aud": "naruon-api",
+            "sub": "alice",
+            "role": "organization_admin",
+            "org": "org-acme",
+            "groups": ["group-1", "group-2"],
+            "workspace": "workspace-org-acme",
+            "exp": int(time.time()) + 300,
+        }
+    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
+
+    token = "header.payload.signature"
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.user_id == "alice"
+    assert context.role == "organization_admin"
+    assert context.organization_id == "org-acme"
+
+    settings.OIDC_ISSUER_URL = None

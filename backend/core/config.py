@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_MODEL: str = "gpt-4o"
 
+    # OIDC Settings
+    OIDC_ISSUER_URL: str | None = None
+    OIDC_CLIENT_ID: str | None = None
+    OIDC_JWKS_URL: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")

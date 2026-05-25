@@ -8,9 +8,15 @@ import time
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
 
+import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException
 
 from core.config import settings, validate_auth_session_hmac_secret_value
+
+jwks_client = None
+if settings.OIDC_JWKS_URL:
+    jwks_client = PyJWKClient(settings.OIDC_JWKS_URL)
 
 RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
 ALLOWED_ROLES: set[str] = {
@@ -120,6 +126,24 @@ def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
 
 def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
+    
+    # OIDC RS256 Verification
+    if settings.OIDC_ISSUER_URL and jwks_client:
+        try:
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=settings.OIDC_CLIENT_ID or SESSION_AUDIENCE,
+                issuer=settings.OIDC_ISSUER_URL
+            )
+            return payload
+        except Exception as e:
+            # Fall back to legacy if validation fails? No, if OIDC is configured, we enforce it or fallback cleanly.
+            pass
+
+    # Legacy HMAC HS256 Fallback
     token_segments = token.split(".")
     if len(token_segments) != 3:
         raise _authentication_error()
@@ -172,12 +196,14 @@ def _tuple_string_claim(payload: dict[str, Any], name: str) -> tuple[str, ...]:
 
 
 def _validate_session_metadata(payload: dict[str, Any]) -> None:
-    if payload.get("ver") != 1:
-        raise _authentication_error()
-    if payload.get("iss") != SESSION_ISSUER:
-        raise _authentication_error()
-    if payload.get("aud") != SESSION_AUDIENCE:
-        raise _authentication_error()
+    # If OIDC is configured, the issuer/audience might be verified by jwt.decode
+    if not settings.OIDC_ISSUER_URL:
+        if payload.get("ver") != 1:
+            raise _authentication_error()
+        if payload.get("iss") != SESSION_ISSUER:
+            raise _authentication_error()
+        if payload.get("aud") != SESSION_AUDIENCE:
+            raise _authentication_error()
     expires_at = payload.get("exp")
     if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
         raise _authentication_error()

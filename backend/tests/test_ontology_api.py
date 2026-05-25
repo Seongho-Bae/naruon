@@ -6,10 +6,11 @@ from db.session import get_db
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
 class MockRow:
-    def __init__(self, sender_email, relationship_type, confidence_score):
+    def __init__(self, sender_email, relationship_type, confidence_score, parent_sender_email=None):
         self.sender_email = sender_email
         self.relationship_type = relationship_type
         self.confidence_score = confidence_score
+        self.parent_sender_email = parent_sender_email
 
 class MockResult:
     def __init__(self, items):

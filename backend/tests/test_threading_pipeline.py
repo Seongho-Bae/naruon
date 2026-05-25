@@ -38,6 +38,7 @@ async def test_email_deduplication():
     from datetime import datetime, timezone
     
     session_mock = AsyncMock()
+    session_mock.add = MagicMock()
     # Assume select returns nothing (no duplicate)
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = None

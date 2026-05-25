@@ -7,6 +7,7 @@ from services.ontology_service import OntologyService
 async def test_sender_relationship_insertion():
     ontology_service = OntologyService()
     session_mock = AsyncMock()
+    session_mock.add = MagicMock()
     
     # Assume select returns nothing (no existing relationship)
     execute_result = MagicMock()
