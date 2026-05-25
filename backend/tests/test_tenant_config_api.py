@@ -113,7 +113,7 @@ def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
         json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
         },
     )
@@ -180,7 +180,7 @@ def test_tenant_config_get_rejects_cross_user_access(client):
         params={"user_id": "member-user"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-acme",
         },
     )
@@ -208,7 +208,7 @@ def test_global_config_allows_admin(client):
         "/api/config/global",
         headers={
             "X-User-Id": "admin-user",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
             "X-Workspace-Id": "ws-1",
         },

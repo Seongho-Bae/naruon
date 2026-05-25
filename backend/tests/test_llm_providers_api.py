@@ -104,7 +104,7 @@ def admin_client():
         app,
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
         },
     ) as client:
@@ -267,7 +267,7 @@ def test_llm_provider_model_declares_owner_scope_columns():
     )
 
 
-def test_llm_provider_organization_admin_cannot_access_other_org_provider(
+def test_llm_provider_tenant_admin_cannot_access_other_org_provider(
     admin_client,
 ):
     provider = LLMProvider(

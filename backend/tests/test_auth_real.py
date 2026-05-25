@@ -103,7 +103,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "organization_admin",
+        "role": "tenant_admin",
         "org": "org-acme",
         "groups": ["group-1", "group-2"],
         "workspace": "workspace-org-acme",
@@ -230,7 +230,7 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 
     assert context == AuthContext(
         user_id="alice",
-        role="organization_admin",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
@@ -244,7 +244,7 @@ async def test_signed_bearer_session_rejects_tampered_payload():
     header_segment, _payload_segment, signature_segment = token.split(".")
     tampered_payload_segment = _base64url_encode(
         json.dumps(
-            _valid_session_payload(role="platform_admin"),
+            _valid_session_payload(role="system_admin"),
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
@@ -436,7 +436,7 @@ async def test_signed_bearer_session_rejects_invalid_role_claim():
 
 
 @pytest.mark.asyncio
-async def test_admin_subject_does_not_imply_platform_admin_role():
+async def test_admin_subject_does_not_imply_system_admin_role():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload(sub="admin", role="member"))
 
@@ -447,18 +447,18 @@ async def test_admin_subject_does_not_imply_platform_admin_role():
 
 
 @pytest.mark.asyncio
-async def test_platform_admin_requires_explicit_signed_role_claim():
+async def test_system_admin_requires_explicit_signed_role_claim():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(
         _valid_session_payload(
-            role="platform_admin", org=None, workspace="workspace-root"
+            role="system_admin", org=None, workspace="workspace-root"
         )
     )
 
     context = await get_auth_context(authorization=f"Bearer {token}")
 
     assert context.user_id == "alice"
-    assert context.role == "platform_admin"
+    assert context.role == "system_admin"
     assert context.organization_id is None
     assert context.workspace_id == "workspace-root"
 
@@ -481,7 +481,7 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
                 headers={
                     "Authorization": f"Bearer {token}",
                     "X-User-Id": "attacker",
-                    "X-User-Role": "platform_admin",
+                    "X-User-Role": "system_admin",
                     "X-Organization-Id": "org-victim",
                     "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
                 },
@@ -507,7 +507,7 @@ async def test_debug_mode_does_not_trust_unsigned_identity_headers():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
         }
     )
@@ -519,7 +519,7 @@ def test_dev_header_trust_requires_configured_token():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
         }
     )
@@ -531,7 +531,7 @@ def test_dev_header_trust_rejects_wrong_token():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
             "X-Dev-Auth-Token": WRONG_DEV_AUTH_TOKEN,
         }
@@ -544,7 +544,7 @@ def test_dev_auth_token_does_not_work_when_header_trust_is_disabled():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
             "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
         }
@@ -557,7 +557,7 @@ def test_dev_header_trust_is_rejected_in_production_environment():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
             "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
         }
@@ -570,7 +570,7 @@ def test_dev_header_trust_requires_strong_token():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
             "X-Dev-Auth-Token": WEAK_DEV_AUTH_TOKEN,
         }
@@ -594,7 +594,7 @@ def test_http_route_rejects_dev_token_and_forged_role_even_when_flags_enabled():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
             "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
         }
@@ -605,7 +605,7 @@ def test_http_route_rejects_public_identity_headers_without_dev_token():
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "attacker",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-victim",
         }
     )
@@ -625,13 +625,13 @@ def test_runtime_auth_rejects_scoped_enterprise_role_headers():
     )
 
 
-def test_runtime_auth_rejects_platform_admin_role_headers():
+def test_runtime_auth_rejects_system_admin_role_headers():
     _enable_local_dev_headers()
 
     _assert_runner_config_rejects_identity_headers(
         {
             "X-User-Id": "root",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Dev-Auth-Token": TEST_DEV_AUTH_TOKEN,
         }
     )
@@ -651,7 +651,7 @@ def test_admin_user_id_is_rejected_without_verified_identity_provider():
 def test_ensure_organization_access_rejects_cross_scope_resource():
     context = AuthContext(
         user_id="alice",
-        role="organization_admin",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1",),
         workspace_id="workspace-org-acme",
@@ -685,7 +685,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
             "iss": "http://localhost:8081/realms/naruon",
             "aud": "naruon-api",
             "sub": "alice",
-            "role": "organization_admin",
+            "role": "tenant_admin",
             "org": "org-acme",
             "groups": ["group-1", "group-2"],
             "workspace": "workspace-org-acme",
@@ -697,7 +697,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     context = await get_auth_context(authorization=f"Bearer {token}")
 
     assert context.user_id == "alice"
-    assert context.role == "organization_admin"
+    assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
 
     settings.OIDC_ISSUER_URL = None

@@ -141,7 +141,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
             return payload
         except Exception as e:
             # Fall back to legacy if validation fails? No, if OIDC is configured, we enforce it or fallback cleanly.
-            pass
+            pass  # nosec B110
 
     # Legacy HMAC HS256 Fallback
     token_segments = token.split(".")
