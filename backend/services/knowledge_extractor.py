@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Email, TicketTask
+from schema.knowledge import KnowledgeNode
 
 logger = logging.getLogger(__name__)
 
@@ -30,4 +31,13 @@ async def extract_knowledge_from_self_sent(db: AsyncSession, email: Email):
     )
     db.add(task)
     await db.commit()
-    return task
+    
+    # Create a KnowledgeNode
+    node = KnowledgeNode(
+        title=email.subject or "Self-note",
+        content=email.body,
+        tags=["self-memo"],
+        source_email_id=email.id
+    )
+    
+    return task, node

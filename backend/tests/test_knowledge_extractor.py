@@ -1,6 +1,7 @@
 import pytest
 from db.models import Email
 from services.knowledge_extractor import extract_knowledge_from_self_sent
+from schema.knowledge import KnowledgeNode
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock
 
@@ -13,7 +14,7 @@ async def test_extract_knowledge_from_self_sent():
     email = Email(
         id=1,
         user_id="testuser",
-        organization_id=None,
+        organization_id="org1",
         message_id="msg1",
         thread_id="thread1",
         sender="testuser@example.com",
@@ -22,7 +23,12 @@ async def test_extract_knowledge_from_self_sent():
         body="Don't forget to buy milk later."
     )
     
-    task = await extract_knowledge_from_self_sent(db, email)
+    result = await extract_knowledge_from_self_sent(db, email)
+    
+    # The new implementation should return a tuple of (TicketTask, KnowledgeNode)
+    assert isinstance(result, tuple)
+    assert len(result) == 2
+    task, node = result
     
     assert task is not None
     assert task.title == "[Memo] Buy milk"
@@ -30,6 +36,11 @@ async def test_extract_knowledge_from_self_sent():
     assert task.related_email_id == 1
     assert task.related_thread_id == "thread1"
     
-    # Verify it was added and committed
+    assert isinstance(node, KnowledgeNode)
+    assert node.title == "Buy milk"
+    assert "milk" in node.content.lower()
+    assert node.source_email_id == 1
+    
+    # Verify task was added and committed
     db.add.assert_called_once_with(task)
     db.commit.assert_awaited_once()
