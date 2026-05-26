@@ -36,6 +36,11 @@ connector, and PR governance is metadata-only.
   the exact `Strix Security Scan` workflow, runs a trusted-base governance script,
   separates pending/waiting states from failures, and updates an idempotent marker
   comment instead of posting duplicates.
+- [x] Strix GPT-5 hardening: direct inference checks showed the repo's GitHub
+  Models token sees `openai/gpt-5` in the catalog but cannot invoke it yet, so
+  the workflow keeps GPT-5 as the model requirement and uses configured direct
+  GPT-5 credentials before GitHub-token fallback rather than downgrading the
+  scanner to GPT-4-era models.
 
 ## Verification evidence
 

@@ -28,9 +28,12 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
-- Strix PR/security evidence runs through GitHub Models with an OpenAI GPT-5+
-  model and the workflow `models: read` permission; pending CodeRabbit or check
-  evidence is a wait state, not a hard blocker.
+- Strix PR/security evidence requires an OpenAI GPT-5+ model. The workflow
+  prefers GitHub Models with `models: read`, verifies real inference
+  availability, and uses configured direct GPT-5 credentials instead of
+  downgrading to GPT-4-era models when GitHub Models has not enabled GPT-5 for
+  the repo token. Pending CodeRabbit or check evidence is a wait state, not a
+  hard blocker.
   
 ## Agentic Ontology & Auto-Organization
 
