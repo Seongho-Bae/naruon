@@ -18,6 +18,8 @@ class MockTenantConfig:
         self.imap_password = None
         self.pop3_server = None
         self.pop3_port = None
+        self.pop3_username = None
+        self.pop3_password = None
         self.oauth_client_id = None
         self.oauth_client_secret = None
         self.oauth_redirect_uri = None
@@ -65,7 +67,11 @@ def test_get_and_update_tenant_config(client: TestClient):
     update_data = {
         "smtp_server": "smtp.example.com",
         "smtp_port": 587,
-        "smtp_username": "user@example.com"
+        "smtp_username": "user@example.com",
+        "pop3_server": "pop3.example.com",
+        "pop3_port": 995,
+        "pop3_username": "pop3-user",
+        "pop3_password": "pop3-secret",
     }
     response = client.put("/api/accounts/config", json=update_data)
     assert response.status_code == 200
@@ -73,3 +79,7 @@ def test_get_and_update_tenant_config(client: TestClient):
     assert data["smtp_server"] == "smtp.example.com"
     assert data["smtp_port"] == 587
     assert data["smtp_username"] == "user@example.com"
+    assert data["pop3_server"] == "pop3.example.com"
+    assert data["pop3_port"] == 995
+    assert data["pop3_username"] == "pop3-user"
+    assert data["has_pop3_password"] is True

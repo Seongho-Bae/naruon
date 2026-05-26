@@ -83,9 +83,13 @@ class Pop3SyncWorker:
         pop3_port = int(config.pop3_port)  # type: ignore
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
         try:
-            # Note: Real implementation would use OAuth or password.
-            # pop3_client.user(config.pop3_username)
-            # pop3_client.pass_(config.pop3_password)
-            pass
+            if config.pop3_username and config.pop3_password:
+                pop3_client.user(config.pop3_username)
+                pop3_client.pass_(config.pop3_password)
+            else:
+                logger.info(
+                    "No POP3 credentials provided for user %s, skipping login.",
+                    config.user_id,
+                )
         finally:
             pop3_client.quit()

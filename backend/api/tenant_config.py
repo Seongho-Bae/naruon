@@ -36,6 +36,8 @@ class TenantConfigCreate(BaseModel):
     imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
+    pop3_username: Optional[str] = None
+    pop3_password: Optional[str] = None
     oauth_client_id: Optional[str] = None
     oauth_client_secret: Optional[str] = None
     oauth_redirect_uri: Optional[str] = None
@@ -56,6 +58,8 @@ class TenantConfigResponse(BaseModel):
     imap_password: Optional[str] = None
     pop3_server: Optional[str] = None
     pop3_port: Optional[int] = None
+    pop3_username: Optional[str] = None
+    pop3_password: Optional[str] = None
     oauth_client_id: Optional[str] = None
     oauth_client_secret: Optional[str] = None
     oauth_redirect_uri: Optional[str] = None
@@ -69,6 +73,7 @@ class TenantConfigResponse(BaseModel):
 SECRET_FIELDS = {
     "smtp_password",
     "imap_password",
+    "pop3_password",
     "oauth_client_secret",
     "openai_api_key",
     "google_client_secret",

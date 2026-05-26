@@ -3,7 +3,7 @@
 ## 확인된 사실 / Confirmed
 
 - Naruon is not an email server. It is a web client server that can relay/proxy
-  member-configured SMTP/IMAP providers.
+  member-configured SMTP/IMAP/POP3 providers.
 - `backend/api/emails.py` sends through `services.email_client.send_email` only
   when a tenant SMTP configuration exists; missing SMTP config returns a 400.
 - Tenant SMTP configuration is operator-bounded, not arbitrary egress. Config
@@ -16,6 +16,10 @@
   public-address checks before any socket is opened.
 - `backend/services/imap_worker.py` connects to configured IMAP endpoints as a
   client; it does not listen for inbound mail or own MX records.
+- Tenant mailbox configuration stores POP3 host/port plus encrypted
+  username/password fields, matching the IMAP/SMTP credential pattern. POP3 sync
+  still behaves as a client-side connector path and does not provide mailbox
+  capacity inside Naruon.
 - `backend/api/auth.py` rejects public identity headers at runtime and accepts
   only signed bearer session envelopes. Email reads are scoped by `emails.user_id`,
   but production tenancy still needs verified OIDC/JWT identity plus an audited

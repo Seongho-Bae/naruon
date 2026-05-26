@@ -37,10 +37,13 @@
   metadata: self-sent notes are excluded from pending replies, answered threads
   are excluded, and `/api/emails` exposes `requires_reply`/`is_self_sent` for
   the UI badges.
+- POP3 credential onboarding now matches SMTP/IMAP shape in tenant config:
+  nullable `pop3_username` and encrypted `pop3_password` are accepted, masked,
+  and bootstrapped for existing databases.
 - The remaining connector/writeback items stay as explicit future episodes:
-  real CalDAV/WebDAV mutation, POP3 runtime sync, durable reply-tracking
-  notifications, WebDAV/Notes materialization of self-sent knowledge, and
-  source-id filtered sender DAG views.
+  real CalDAV/WebDAV mutation, full POP3 message import/runtime sync, durable
+  reply-tracking notifications, WebDAV/Notes materialization of self-sent
+  knowledge, and source-id filtered sender DAG views.
 
 ## Task 1: Governance wait-state correction
 

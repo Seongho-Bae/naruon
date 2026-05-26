@@ -74,6 +74,10 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
         "imap_port": 993,
         "imap_username": "imap-user",
         "imap_password": "imap-secret",
+        "pop3_server": "pop3.example.com",
+        "pop3_port": 995,
+        "pop3_username": "pop3-user",
+        "pop3_password": "pop3-secret",
         "oauth_client_secret": "secret-456",
     }
     response = client.post(
@@ -98,12 +102,16 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     assert data["oauth_client_secret"] == "********"
     assert data["smtp_password"] == "********"
     assert data["imap_password"] == "********"
+    assert data["pop3_password"] == "********"
     assert data["smtp_server"] == "smtp.example.com"
     assert data["smtp_port"] == 587
     assert data["smtp_username"] == "sender@example.com"
     assert data["imap_server"] == "imap.example.com"
     assert data["imap_port"] == 993
     assert data["imap_username"] == "imap-user"
+    assert data["pop3_server"] == "pop3.example.com"
+    assert data["pop3_port"] == 995
+    assert data["pop3_username"] == "pop3-user"
     assert data["google_client_secret"] is None
 
 

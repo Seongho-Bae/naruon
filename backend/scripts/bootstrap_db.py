@@ -30,6 +30,8 @@ def schema_backfill_sql():
         text(
             "ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
+        text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"),
+        text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
         text('ALTER TABLE emails ADD COLUMN IF NOT EXISTS "references" varchar'),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS reply_to varchar"),
