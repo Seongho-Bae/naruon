@@ -320,9 +320,12 @@ async def test_get_emails_marks_self_sent_and_pending_reply_threads(
 @pytest.mark.asyncio
 async def test_get_emails_reply_tracking_real_postgres_smoke():
     from core.config import settings
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
     from db.models import Base, TenantConfig
     from db.session import get_db
     from sqlalchemy import delete, text
+    from sqlalchemy.exc import OperationalError
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     engine = create_async_engine(settings.DATABASE_URL)
@@ -331,13 +334,19 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
             await conn.execute(text("SELECT 1"))
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
-    except Exception as exc:
+    except (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+        OperationalError,
+        OSError,
+    ) as exc:
         await engine.dispose()
         pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
 
     Session = async_sessionmaker(engine, expire_on_commit=False)
     user_id = "reply-smoke-user"
     organization_id = "reply-smoke-org"
+    now = datetime.datetime.now(datetime.timezone.utc)
 
     async def cleanup_seed_rows():
         async with Session() as session:
@@ -366,9 +375,7 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
                     sender="reply-smoke@example.com",
                     recipients="target@example.com",
                     subject="Can you confirm?",
-                    date=datetime.datetime(
-                        2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc
-                    ),
+                    date=now - datetime.timedelta(days=3),
                     body="Please reply when you can.",
                 ),
                 Email(
@@ -379,9 +386,7 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
                     sender="reply-smoke@example.com",
                     recipients="reply-smoke@example.com",
                     subject="Note to self",
-                    date=datetime.datetime(
-                        2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc
-                    ),
+                    date=now - datetime.timedelta(days=2),
                     body="Organize this as knowledge.",
                 ),
                 Email(
@@ -392,9 +397,7 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
                     sender="reply-smoke@example.com",
                     recipients="target@example.com",
                     subject="Answered",
-                    date=datetime.datetime(
-                        2026, 4, 27, 12, 0, tzinfo=datetime.timezone.utc
-                    ),
+                    date=now - datetime.timedelta(days=1, hours=1),
                     body="Please reply when you can.",
                 ),
                 Email(
@@ -405,9 +408,7 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
                     sender="target@example.com",
                     recipients="reply-smoke@example.com",
                     subject="Re: Answered",
-                    date=datetime.datetime(
-                        2026, 4, 27, 13, 0, tzinfo=datetime.timezone.utc
-                    ),
+                    date=now - datetime.timedelta(days=1),
                     body="Confirmed.",
                 ),
             ]
