@@ -301,9 +301,24 @@ jobs:
       - name: Collect Strix reports for artifact upload
         if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' }}
         run: |
-          if [ -d "$TRUSTED_WORKSPACE/strix_runs" ]; then
-            mkdir -p "$GITHUB_WORKSPACE/strix_runs"
-            cp -R "$TRUSTED_WORKSPACE/strix_runs"/. "$GITHUB_WORKSPACE/strix_runs"/
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/strix_runs"
+          copied_reports=0
+          for candidate_dir in "$TRUSTED_WORKSPACE/strix_runs" "$RUNNER_TEMP/strix_runs"; do
+            if [ -d "$candidate_dir" ] && [ -n "$(find "$candidate_dir" -mindepth 1 -print -quit)" ]; then
+              cp -R "$candidate_dir"/. "$GITHUB_WORKSPACE/strix_runs"/
+              copied_reports=1
+            fi
+          done
+          if [ -n "$(find "$GITHUB_WORKSPACE/strix_runs" -mindepth 1 -print -quit)" ]; then
+            copied_reports=1
+          fi
+          if [ "$copied_reports" -eq 0 ]; then
+            {
+              echo "Strix scan completed without structured report files."
+              echo "run_id=$GITHUB_RUN_ID"
+              echo "head_sha=$GITHUB_SHA"
+            } > "$GITHUB_WORKSPACE/strix_runs/scan-summary.txt"
           fi
 
       - name: Upload Strix reports artifact

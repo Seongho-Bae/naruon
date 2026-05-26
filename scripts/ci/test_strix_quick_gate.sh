@@ -63,6 +63,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE_TEST\"" "strix workflow self-test executes trusted temp script"
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE\"" "strix workflow executes trusted temp gate script"
 	assert_file_contains "$workflow_file" "Collect Strix reports for artifact upload" "strix workflow preserves reports from trusted workspace"
+	assert_file_contains "$workflow_file" "scan-summary.txt" "strix workflow creates a fallback artifact when Strix emits no report files"
 	assert_file_contains "$workflow_file" ". \"\$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh\"" "strix workflow reuses trusted model auth helpers"
 	assert_file_contains "$workflow_file" "model_requires_vertex_auth \"\$strix_llm\"" "strix workflow delegates Vertex auth detection"
 	assert_file_not_contains "$workflow_file" "actions/checkout" "strix workflow avoids checkout in privileged context"
