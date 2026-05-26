@@ -2,8 +2,8 @@
 
 ## 확인된 사실 / Confirmed
 
-- `backend/main.py` exposes Prometheus metrics and optional OpenTelemetry
-  FastAPI instrumentation.
+- `backend/main.py` wires optional OpenTelemetry FastAPI instrumentation and
+  exposes Prometheus `/metrics` only when `ENABLE_PROMETHEUS_METRICS=true`.
 - `backend/requirements.txt` includes `prometheus-fastapi-instrumentator` and
   OpenTelemetry dependencies used by the FastAPI app.
 - `docker-compose.observability.yml`, `docker-compose.apm.yml`, and
@@ -32,8 +32,10 @@
 
 ## 도입 기준
 
-- Keep instrumentation behind explicit environment variables where tracing can
-  export outside the process.
+- Keep instrumentation and scrape endpoints behind explicit environment
+  variables where telemetry can export outside the process. `/metrics` must stay
+  disabled by default and enabled only behind a trusted scrape path or reverse
+  proxy access policy.
 - Keep `/healthz`, `/readyz`, and `/metrics` semantics separate as the stack
   matures.
 - Do not claim APM production readiness until a live stack shows trace, metric,

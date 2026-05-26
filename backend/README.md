@@ -22,6 +22,10 @@ listed in the matching `ALLOWED_*_PORTS` setting. The defaults allow SMTP
 submission ports `465,587`, IMAP TLS port `993`, and POP3 TLS port `995`, but
 operators must explicitly allow each provider hostname.
 
+Prometheus `/metrics` is disabled by default. Set
+`ENABLE_PROMETHEUS_METRICS=true` only behind a trusted scrape path or reverse
+proxy access policy.
+
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent,
 `import_fixtures.py` uses zero-vector embeddings so the local threading proof
 path does not need network access.

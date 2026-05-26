@@ -54,11 +54,13 @@
   tests/mocks must exercise the signed-session path.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
-  public endpoints such as `/api/runtime-config`, `/`, and `/metrics` may omit
-  it. Admin/provider registry endpoints must enforce role checks in addition to
-  authentication. LLM provider `base_url` values must fail closed unless they are
-  HTTPS, exact-host allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only
-  to global addresses.
+  public endpoints such as `/api/runtime-config` and `/` may omit it.
+  Prometheus `/metrics` must stay disabled by default and, when enabled, sit
+  behind a trusted scrape path or reverse proxy access policy. Admin/provider
+  registry endpoints must enforce role checks in addition to authentication. LLM
+  provider `base_url` values must fail closed unless they are HTTPS, exact-host
+  allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
+  addresses.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
