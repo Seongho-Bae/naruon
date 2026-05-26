@@ -146,9 +146,6 @@ def validate_mail_config_update(
         ) from exc
 
 
-_validate_mail_config_update = validate_mail_config_update
-
-
 @router.post("")
 async def create_or_update_config(
     config: TenantConfigCreate,
