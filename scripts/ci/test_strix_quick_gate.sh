@@ -83,7 +83,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "STRIX_LLM must select an OpenAI GPT-5 or newer model" "strix workflow rejects non-GPT-5 inputs"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow can use configured OpenAI GPT-5 credentials"
 	assert_file_contains "$workflow_file" "provider_mode=github_models" "strix workflow can use GitHub Models when direct credentials are absent"
-	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ secrets.LLM_API_KEY || github.token }}' "strix workflow uses direct GPT-5 credentials before GitHub token"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow uses explicit direct GPT-5 credentials before GitHub token"
 	assert_file_contains "$workflow_file" "steps.gate.outputs.provider_mode == 'github_models'" "strix workflow limits GitHub Models API base to GitHub Models mode"
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes Strix through GitHub Models inference"
 	assert_file_contains "$workflow_file" "STRIX_LLM_DEFAULT_PROVIDER: openai" "strix workflow uses the OpenAI-compatible provider for GitHub Models"

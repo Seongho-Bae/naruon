@@ -82,7 +82,7 @@ jobs:
         id: gate
         env:
           STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5' }}
-          STRIX_OPENAI_API_KEY: ${{ secrets.LLM_API_KEY }}
+          STRIX_OPENAI_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
           strix_model="$(printf '%s' "$STRIX_GITHUB_MODELS_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           case "$strix_model" in
@@ -200,7 +200,7 @@ jobs:
       - name: Mask LLM API key
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY || github.token }}
+          LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY || github.token }}
         run: |
           # Sanitize CR/LF before masking to prevent broken ::add-mask::
           # commands and potential workflow command injection.
@@ -216,7 +216,7 @@ jobs:
       - name: Prepare LLM API key input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY_SECRET: ${{ secrets.LLM_API_KEY || github.token }}
+          LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY || github.token }}
         run: |
           if [ -n "$LLM_API_KEY_SECRET" ]; then
             umask 077

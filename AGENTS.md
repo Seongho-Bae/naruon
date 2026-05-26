@@ -12,9 +12,11 @@
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan must use an OpenAI GPT-5-or-newer model. Prefer GitHub
   Models with `models: read`, but verify actual inference availability, not only
-  catalog presence. If the repo token cannot invoke GitHub Models GPT-5, use a
-  configured direct OpenAI GPT-5 credential rather than downgrading to Gemini,
-  GPT-4o, or GPT-4.1; record the inference evidence in the PR.
+  catalog presence. If the repo token cannot invoke GitHub Models GPT-5, use
+  only an explicitly named `STRIX_OPENAI_API_KEY` direct GPT-5 credential rather
+  than downgrading to Gemini, GPT-4o, or GPT-4.1; record the inference evidence
+  in the PR. Do not repurpose generic `LLM_API_KEY` for direct OpenAI Strix
+  calls, because it may hold a GitHub Models token or PAT.
 
 ## PR automation and review defaults
 
