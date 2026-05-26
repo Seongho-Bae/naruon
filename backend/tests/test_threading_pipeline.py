@@ -62,6 +62,8 @@ async def test_email_deduplication():
     
     # Check that session.add was called since it's not a duplicate
     session_mock.add.assert_called_once()
+    added_email = session_mock.add.call_args[0][0]
+    assert added_email.date == datetime(2023, 10, 27, 10, 0, tzinfo=timezone.utc)
     
     # Now simulate a duplicate
     session_mock.reset_mock()
@@ -107,8 +109,47 @@ async def test_email_pipeline_triggers_self_sent_knowledge_extraction():
         new_callable=AsyncMock,
     ) as extract_mock:
         new_email = await process_fetched_email(
-            session_mock, email_data, "user_1", "org_1"
+            session_mock,
+            email_data,
+            "user_1",
+            "org_1",
+            owner_addresses=["user_1@example.com"],
         )
 
     session_mock.flush.assert_awaited_once()
-    extract_mock.assert_awaited_once_with(session_mock, new_email)
+    extract_mock.assert_awaited_once_with(
+        session_mock, new_email, ["user_1@example.com"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_email_pipeline_preserves_personal_scope_as_null():
+    from services.imap_worker import process_fetched_email
+    from services.email_parser import EmailData
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    session_mock = AsyncMock()
+    session_mock.add = MagicMock()
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    session_mock.execute.return_value = execute_result
+
+    email_data: EmailData = {
+        "subject": "Personal mailbox",
+        "date": datetime(2026, 5, 26, 10, 0, tzinfo=timezone.utc),
+        "sender": "friend@example.com",
+        "recipients": "user@example.com",
+        "body": "Hello",
+        "message_id": "<personal-msg-1>",
+        "in_reply_to": None,
+        "references": None,
+        "thread_id": None,
+        "reply_to": None,
+        "attachments": [],
+    }
+
+    await process_fetched_email(session_mock, email_data, "user@example.com", None)
+
+    added_email = session_mock.add.call_args[0][0]
+    assert added_email.organization_id is None

@@ -83,6 +83,7 @@ class OntologyService:
 
         stmt = select(SenderRelationship).where(
             SenderRelationship.user_id == user_id,
+            SenderRelationship.organization_id == organization_id,
             SenderRelationship.sender_email == sender_email,
         )
         result = await session.execute(stmt)
@@ -125,7 +126,9 @@ class OntologyService:
             or source_email.organization_id != organization_id
         ):
             return None
-        return await extract_knowledge_from_self_sent(session, source_email)
+        return await extract_knowledge_from_self_sent(
+            session, source_email, [sender_address]
+        )
 
 
 ontology_service = OntologyService()

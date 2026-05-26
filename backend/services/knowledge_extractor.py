@@ -1,5 +1,6 @@
 import logging
 from email import utils as email_utils
+from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Email, TicketTask
@@ -22,9 +23,25 @@ def _self_sender_address(email: Email) -> str:
     return sender_address.strip().lower()
 
 
-def is_self_sent_email(email: Email) -> bool:
+def _normalized_owner_addresses(email: Email, owner_addresses: Iterable[str] | None):
+    candidates = list(owner_addresses or [])
+    if "@" in str(email.user_id):
+        candidates.append(str(email.user_id))
+    return {
+        address.strip().lower()
+        for _, address in email_utils.getaddresses(candidates)
+        if address
+    }
+
+
+def is_self_sent_email(
+    email: Email, owner_addresses: Iterable[str] | None = None
+) -> bool:
     sender_address = _self_sender_address(email)
     if not sender_address:
+        return False
+    tenant_addresses = _normalized_owner_addresses(email, owner_addresses)
+    if sender_address not in tenant_addresses:
         return False
     return process_self_to_self(
         {
@@ -65,11 +82,16 @@ async def _existing_knowledge_task(db: AsyncSession, email: Email) -> TicketTask
     return result.scalar_one_or_none()
 
 
-async def extract_knowledge_from_self_sent(db: AsyncSession, email: Email):
+async def extract_knowledge_from_self_sent(
+    db: AsyncSession, email: Email, owner_addresses: Iterable[str] | None = None
+):
     """
     Extract knowledge from a self-sent email into a source-linked TicketTask.
     """
-    if not email.body or not is_self_sent_email(email):
+    has_note_content = bool(
+        _single_line_plain_text(email.subject) or _single_line_plain_text(email.body)
+    )
+    if not has_note_content or not is_self_sent_email(email, owner_addresses):
         return None
 
     existing_task = await _existing_knowledge_task(db, email)

@@ -38,7 +38,9 @@ async def test_extract_knowledge_from_self_sent():
     # Mock self-sent email
     email = _make_email()
     
-    task = await extract_knowledge_from_self_sent(db, email)
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
     
     assert task is not None
     assert task.title == "Memo: Buy milk"
@@ -56,7 +58,9 @@ async def test_extract_knowledge_from_self_sent_skips_non_self_address():
     db = AsyncMock(spec=AsyncSession)
     email = _make_email(recipients="teammate@example.com")
 
-    task = await extract_knowledge_from_self_sent(db, email)
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is None
     db.execute.assert_not_awaited()
@@ -79,7 +83,9 @@ async def test_extract_knowledge_from_self_sent_reuses_existing_task():
     )
     db.execute.return_value = _ScalarResult(existing_task)
 
-    task = await extract_knowledge_from_self_sent(db, _make_email())
+    task = await extract_knowledge_from_self_sent(
+        db, _make_email(), ["testuser@example.com"]
+    )
 
     assert task is existing_task
     db.add.assert_not_called()
@@ -95,9 +101,43 @@ async def test_extract_knowledge_from_self_sent_sanitizes_markup_title():
         body="<h1>Quarter plan</h1>",
     )
 
-    task = await extract_knowledge_from_self_sent(db, email)
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is not None
     assert task.title == "Memo: Quarter plan"
     assert "<" not in task.title
     assert "script" not in task.title.lower()
+
+
+@pytest.mark.asyncio
+async def test_extract_knowledge_from_self_sent_requires_tenant_owned_address():
+    db = AsyncMock(spec=AsyncSession)
+    email = _make_email(
+        sender="Other User <other@example.com>",
+        recipients="other@example.com",
+    )
+
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
+
+    assert task is None
+    db.execute.assert_not_awaited()
+    db.add.assert_not_called()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_extract_knowledge_from_self_sent_allows_subject_only_note():
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.return_value = _ScalarResult()
+    email = _make_email(body="")
+
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
+
+    assert task is not None
+    assert task.title == "Memo: Buy milk"

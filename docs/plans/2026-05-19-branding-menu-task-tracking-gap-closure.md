@@ -40,6 +40,10 @@
 - POP3 credential onboarding now matches SMTP/IMAP shape in tenant config:
   nullable `pop3_username` and encrypted `pop3_password` are accepted, masked,
   and bootstrapped for existing databases.
+- Self-sent knowledge capture now creates idempotent, source-linked ticket tasks
+  only after proving a true self-to-self message from a tenant-owned address; it
+  preserves email/thread provenance, stores plain-text titles, and skips raw
+  payloads without a source email row.
 - The remaining connector/writeback items stay as explicit future episodes:
   real CalDAV/WebDAV mutation, full POP3 message import/runtime sync, durable
   reply-tracking notifications, WebDAV/Notes materialization of self-sent
@@ -150,7 +154,10 @@ The response is:
 }
 ```
 
-Fail closed with 422 for empty items and 404 when the email does not belong to the authenticated owner.
+Fail closed with 422 for empty items or HTML-like/script-like task titles at the
+backend ingestion boundary. Invalid markup returns
+`{"detail":"Execution items must be plain text"}`. Return 404 only when the
+`source_email_id` does not belong to the authenticated owner.
 
 - [ ] **Step 4: Write failing frontend test**
 

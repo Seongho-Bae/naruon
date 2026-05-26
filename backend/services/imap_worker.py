@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import logging
+from collections.abc import Iterable
 
 import aioimaplib
 from sqlalchemy import select
@@ -16,7 +17,11 @@ from services.threading_service import assign_thread_id, generate_email_fingerpr
 
 
 async def process_fetched_email(
-    session, email_data: EmailData, user_id: str, organization_id: str | None
+    session,
+    email_data: EmailData,
+    user_id: str,
+    organization_id: str | None,
+    owner_addresses: Iterable[str] | None = None,
 ):
     subject = email_data.get("subject", "")
     date_obj = email_data.get("date")
@@ -24,6 +29,14 @@ async def process_fetched_email(
         date_str = date_obj.isoformat()
     else:
         date_str = str(date_obj) if date_obj else ""
+    if isinstance(date_obj, datetime.datetime):
+        persisted_date = (
+            date_obj.astimezone(datetime.timezone.utc)
+            if date_obj.tzinfo is not None
+            else date_obj.replace(tzinfo=datetime.timezone.utc)
+        )
+    else:
+        persisted_date = datetime.datetime.now(datetime.timezone.utc)
     sender = email_data.get("sender", "")
     recipients_list = email_data.get("recipients", [])
     recipients = (
@@ -56,22 +69,22 @@ async def process_fetched_email(
 
     new_email = Email(
         user_id=user_id,
-        organization_id=organization_id or "",
+        organization_id=organization_id or None,
         message_id=email_data.get("message_id", ""),
         thread_id=thread_id,
         fingerprint=fingerprint,
         sender=sender,
         recipients=recipients,
         subject=subject,
-        date=datetime.datetime.now(datetime.timezone.utc),
+        date=persisted_date,
         body=email_data.get("body", ""),
         embedding=[0.0] * 1536,
     )
 
     session.add(new_email)
-    if is_self_sent_email(new_email):
+    if is_self_sent_email(new_email, owner_addresses):
         await session.flush()
-        await extract_knowledge_from_self_sent(session, new_email)
+        await extract_knowledge_from_self_sent(session, new_email, owner_addresses)
     return new_email
 
 logger = logging.getLogger(__name__)

@@ -28,6 +28,7 @@ async def test_sender_relationship_insertion():
     assert isinstance(added_rel, SenderRelationship)
     assert added_rel.relationship_type == "Colleague"
     assert added_rel.user_id == "user_1"
+    assert added_rel.organization_id == "org_1"
     assert added_rel.sender_email == "colleague@test.com"
     assert relationship["next_action"] == "track_reply_and_tasks"
 
