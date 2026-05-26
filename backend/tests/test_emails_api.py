@@ -53,6 +53,9 @@ class MockSession:
             def scalar_one_or_none(self):
                 return self.rows[0] if self.rows else None
 
+        if "tenant_configs" in compiled_query_text(query):
+            rows = [] if self.tenant_config is None else [self.tenant_config]
+            return MockResult(rows)
         return MockResult(self.items)
 
     async def scalar(self, query):
@@ -268,6 +271,186 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
     assert len(data) == 1
     assert data[0]["thread_id"] == "root@example.com"
     assert data[0]["reply_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_emails_marks_self_sent_and_pending_reply_threads(
+    client: AsyncClient, db_session
+):
+    class MailTenantConfig:
+        smtp_username = "Me <testuser@example.com>"
+        imap_username = None
+
+    sent_waiting = Email(
+        id=10,
+        user_id="testuser",
+        message_id="waiting-msg",
+        thread_id="waiting-thread",
+        sender="Test User <testuser@example.com>",
+        recipients="target@example.com",
+        subject="Can you confirm?",
+        date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    self_note = Email(
+        id=11,
+        user_id="testuser",
+        message_id="note-msg",
+        thread_id="note-thread",
+        sender="testuser@example.com",
+        recipients="testuser@example.com",
+        subject="Note to self",
+        date=datetime.datetime(2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Summarize this as knowledge.",
+    )
+    db_session.tenant_config = MailTenantConfig()
+    db_session.items = [self_note, sent_waiting]
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
+    assert by_thread["waiting-thread"]["requires_reply"] is True
+    assert by_thread["waiting-thread"]["is_self_sent"] is False
+    assert by_thread["note-thread"]["is_self_sent"] is True
+    assert by_thread["note-thread"]["requires_reply"] is False
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_get_emails_reply_tracking_real_postgres_smoke():
+    from core.config import settings
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
+    from db.models import Base, TenantConfig
+    from db.session import get_db
+    from sqlalchemy import delete, text
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+    except (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+        OperationalError,
+        OSError,
+    ) as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = "reply-smoke-user"
+    organization_id = "reply-smoke-org"
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    async def cleanup_seed_rows():
+        async with Session() as session:
+            await session.execute(delete(Email).where(Email.user_id == user_id))
+            await session.execute(
+                delete(TenantConfig).where(TenantConfig.user_id == user_id)
+            )
+            await session.commit()
+
+    await cleanup_seed_rows()
+    async with Session() as session:
+        session.add(
+            TenantConfig(
+                user_id=user_id,
+                smtp_username="Smoke User <reply-smoke@example.com>",
+                imap_username=None,
+            )
+        )
+        session.add_all(
+            [
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="waiting-smoke-msg",
+                    thread_id="<waiting-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Can you confirm?",
+                    date=now - datetime.timedelta(days=3),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="note-smoke-msg",
+                    thread_id="note-smoke-thread",
+                    sender="reply-smoke@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Note to self",
+                    date=now - datetime.timedelta(days=2),
+                    body="Organize this as knowledge.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answered-smoke-msg",
+                    thread_id="<answered-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Answered",
+                    date=now - datetime.timedelta(days=1, hours=1),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answer-smoke-msg",
+                    thread_id="answered-smoke-thread",
+                    sender="target@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Re: Answered",
+                    date=now - datetime.timedelta(days=1),
+                    body="Confirmed.",
+                ),
+            ]
+        )
+        await session.commit()
+
+    async def real_db_override():
+        async with Session() as session:
+            yield session
+
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = real_db_override
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            headers={
+                "X-User-Id": user_id,
+                "X-Organization-Id": organization_id,
+            },
+            base_url="http://test",
+        ) as real_client:
+            inbox_response = await real_client.get("/api/emails?limit=10")
+            pending_response = await real_client.get("/api/emails/pending-replies")
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+        await cleanup_seed_rows()
+        await engine.dispose()
+
+    assert inbox_response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in inbox_response.json()["emails"]}
+    assert by_thread["waiting-smoke-thread"]["requires_reply"] is True
+    assert by_thread["note-smoke-thread"]["is_self_sent"] is True
+    assert by_thread["answered-smoke-thread"]["requires_reply"] is False
+
+    assert pending_response.status_code == 200
+    pending_threads = {
+        item["thread_id"] for item in pending_response.json()["emails"]
+    }
+    assert pending_threads == {"waiting-smoke-thread"}
 
 
 @pytest.mark.asyncio
@@ -597,6 +780,7 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     # Create MockTenantConfig with smtp_username set to match one email
     class SentTenantConfig:
         smtp_username = "testuser@example.com"
+        imap_username = None
         
     db_session.tenant_config = SentTenantConfig()
 
@@ -609,10 +793,32 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
         recipients="target@example.com",
         subject="Did you get this?",
         date=datetime.datetime(2026, 4, 28, 10, 0, tzinfo=datetime.timezone.utc),
-        body="Waiting for your reply",
+        body="Please reply when you can.",
+    )
+    answered_sent_email = Email(
+        id=4,
+        user_id="testuser",
+        message_id="msg4",
+        thread_id="thread4",
+        sender="testuser@example.com",
+        recipients="target@example.com",
+        subject="Answered thread",
+        date=datetime.datetime(2026, 4, 28, 9, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    external_reply = Email(
+        id=5,
+        user_id="testuser",
+        message_id="msg5",
+        thread_id="thread4",
+        sender="target@example.com",
+        recipients="testuser@example.com",
+        subject="Re: Answered thread",
+        date=datetime.datetime(2026, 4, 28, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Confirmed.",
     )
     
-    db_session.items = [sent_email]
+    db_session.items = [sent_email, answered_sent_email, external_reply]
 
     app.dependency_overrides[get_db] = lambda: db_session
 
@@ -621,3 +827,5 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     data = response.json()
     assert len(data["emails"]) == 1
     assert data["emails"][0]["sender"] == "testuser@example.com"
+    assert data["emails"][0]["thread_id"] == "thread3"
+    assert data["emails"][0]["requires_reply"] is True

@@ -19,6 +19,7 @@ from api.runner_ws import router as runner_ws_router
 from api.dav import router as dav_router
 from api.accounts import router as accounts_router
 from api.webdav import router as webdav_router
+from core.config import settings
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -59,8 +60,12 @@ if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
     trace_provider.add_span_processor(processor)
     trace.set_tracer_provider(trace_provider)
 
-# Instrument Prometheus Metrics
-Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
+# Prometheus metrics are operational telemetry. Keep them opt-in so public
+# deployments do not expose route labels and process details by default.
+if settings.ENABLE_PROMETHEUS_METRICS:
+    Instrumentator().instrument(app).expose(
+        app, include_in_schema=False, should_gzip=True
+    )
 
 # Instrument OpenTelemetry
 FastAPIInstrumentor.instrument_app(app)
@@ -90,8 +95,8 @@ app.include_router(llm_providers_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(prompts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(tasks_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
-app.include_router(runner_ws_router)
-app.include_router(dav_router)
+app.include_router(runner_ws_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(dav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 

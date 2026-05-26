@@ -3,19 +3,25 @@
 ## 확인된 사실 / Confirmed
 
 - Naruon is not an email server. It is a web client server that can relay/proxy
-  member-configured SMTP/IMAP providers.
+  member-configured SMTP/IMAP/POP3 providers.
 - `backend/api/emails.py` sends through `services.email_client.send_email` only
   when a tenant SMTP configuration exists; missing SMTP config returns a 400.
-- Tenant SMTP configuration is operator-bounded, not arbitrary egress. Config
-  writes and send requests must pass `ALLOWED_SMTP_HOSTS` and
-  `ALLOWED_SMTP_PORTS`; the final SMTP sink also rejects DNS answers that resolve
-  to loopback, link-local, private, reserved, multicast, or other non-global
+- Tenant SMTP/IMAP/POP3 configuration is operator-bounded, not arbitrary egress.
+  Config writes and runtime connector paths must pass the matching
+  `ALLOWED_*_HOSTS` and `ALLOWED_*_PORTS` settings before opening a client
+  connection. The final SMTP sink also rejects DNS answers that resolve to
+  loopback, link-local, private, reserved, multicast, or other non-global
   addresses before opening a pinned socket to the selected global address.
 - `CONTROL_PLANE_DOMAIN` has no SMTP egress bypass. If an operator allowlists the
   control-plane hostname for SMTP, it is still resolved and subjected to the same
   public-address checks before any socket is opened.
 - `backend/services/imap_worker.py` connects to configured IMAP endpoints as a
-  client; it does not listen for inbound mail or own MX records.
+  client only after IMAP host/port policy validation; it does not listen for
+  inbound mail or own MX records.
+- Tenant mailbox configuration stores POP3 host/port plus encrypted
+  username/password fields, matching the IMAP/SMTP credential pattern. POP3 sync
+  still behaves as a policy-checked client-side connector path and does not
+  provide mailbox capacity inside Naruon.
 - `backend/api/auth.py` rejects public identity headers at runtime and accepts
   only signed bearer session envelopes. Email reads are scoped by `emails.user_id`,
   but production tenancy still needs verified OIDC/JWT identity plus an audited

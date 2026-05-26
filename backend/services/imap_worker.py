@@ -1,56 +1,91 @@
 import asyncio
+import datetime
 import logging
+from collections.abc import Iterable
+
 import aioimaplib
 from sqlalchemy import select
-from db.session import AsyncSessionLocal
-from db.models import TenantConfig, Email
-from services.threading_service import generate_email_fingerprint, assign_thread_id
-from services.email_parser import EmailData
-import datetime
 
-async def process_fetched_email(session, email_data: EmailData, user_id: str, organization_id: str | None):
+from db.models import Email, TenantConfig
+from db.session import AsyncSessionLocal
+from services.email_parser import EmailData
+from services.knowledge_extractor import (
+    extract_knowledge_from_self_sent,
+    is_self_sent_email,
+)
+from services.email_client import validate_imap_destination
+from services.threading_service import assign_thread_id, generate_email_fingerprint
+
+
+async def process_fetched_email(
+    session,
+    email_data: EmailData,
+    user_id: str,
+    organization_id: str | None,
+    owner_addresses: Iterable[str] | None = None,
+):
     subject = email_data.get("subject", "")
     date_obj = email_data.get("date")
     if hasattr(date_obj, "isoformat"):
         date_str = date_obj.isoformat()
     else:
         date_str = str(date_obj) if date_obj else ""
+    if isinstance(date_obj, datetime.datetime):
+        persisted_date = (
+            date_obj.astimezone(datetime.timezone.utc)
+            if date_obj.tzinfo is not None
+            else date_obj.replace(tzinfo=datetime.timezone.utc)
+        )
+    else:
+        persisted_date = datetime.datetime.now(datetime.timezone.utc)
     sender = email_data.get("sender", "")
     recipients_list = email_data.get("recipients", [])
-    recipients = ",".join(recipients_list) if recipients_list else ""
-    
+    recipients = (
+        ",".join(recipients_list)
+        if isinstance(recipients_list, list)
+        else str(recipients_list or "")
+    )
+
     fingerprint = generate_email_fingerprint(subject, date_str, sender, recipients)
-    
+
     # Check if duplicate
     stmt = select(Email).where(
         Email.user_id == user_id,
         Email.organization_id == (organization_id if organization_id else None),
-        Email.fingerprint == fingerprint
+        Email.fingerprint == fingerprint,
     )
     result = await session.execute(stmt)
     existing_email = result.scalar_one_or_none()
-    
+
     if existing_email:
-        logger.info(f"Email with fingerprint {fingerprint} already exists. Skipping duplicate insertion.")
+        logger.info(
+            "Email with fingerprint %s already exists. Skipping duplicate insertion.",
+            fingerprint,
+        )
         return existing_email
-    
-    thread_id = await assign_thread_id(session, email_data, user_id=user_id, organization_id=organization_id)
-    
+
+    thread_id = await assign_thread_id(
+        session, email_data, user_id=user_id, organization_id=organization_id
+    )
+
     new_email = Email(
         user_id=user_id,
-        organization_id=organization_id or "",
+        organization_id=organization_id or None,
         message_id=email_data.get("message_id", ""),
         thread_id=thread_id,
         fingerprint=fingerprint,
         sender=sender,
         recipients=recipients,
         subject=subject,
-        date=datetime.datetime.now(datetime.timezone.utc), # simplified for this example
+        date=persisted_date,
         body=email_data.get("body", ""),
-        embedding=[0.0] * 1536 # Dummy embedding
+        embedding=[0.0] * 1536,
     )
-    
+
     session.add(new_email)
+    if is_self_sent_email(new_email, owner_addresses):
+        await session.flush()
+        await extract_knowledge_from_self_sent(session, new_email, owner_addresses)
     return new_email
 
 logger = logging.getLogger(__name__)
@@ -116,9 +151,20 @@ class ImapSyncWorker:
         # Already verified not None in caller
         imap_server = str(config.imap_server)
         imap_port = int(config.imap_port)  # type: ignore
+        try:
+            imap_server, imap_port = validate_imap_destination(imap_server, imap_port)
+        except ValueError:
+            logger.info(
+                "Skipping IMAP sync for user %s due to mail destination policy",
+                config.user_id,
+            )
+            return
         
         logger.info(
-            f"Connecting to IMAP server {imap_server}:{imap_port} for user {config.user_id}"
+            "Connecting to IMAP server %s:%s for user %s",
+            imap_server,
+            imap_port,
+            config.user_id,
         )
         imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
 

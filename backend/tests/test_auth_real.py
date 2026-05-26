@@ -192,10 +192,15 @@ def test_explicit_public_routes_do_not_require_signed_session():
     for method, path in (
         ("GET", "/"),
         ("GET", "/api/runtime-config"),
-        ("GET", "/metrics"),
     ):
         response = _request_without_dependency_overrides(method, path)
         assert response.status_code == 200, f"{method} {path}: {response.text}"
+
+
+def test_metrics_route_is_not_registered_by_default():
+    response = _request_without_dependency_overrides("GET", "/metrics")
+
+    assert response.status_code == 404
 
 
 def test_private_api_route_rejects_missing_signed_session_by_default():

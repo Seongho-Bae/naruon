@@ -75,7 +75,7 @@ describe("DashboardLayout", () => {
     expect(mobileQuickActionButton).not.toBeNull();
     expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(true);
+    expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(false);
     expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(false);
     expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(false);
     expect(main).not.toBeNull();
@@ -132,6 +132,7 @@ describe("DashboardLayout", () => {
     expect(mobileMenu?.textContent ?? "").toContain("도움");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/"]')?.textContent).toContain("홈");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail"]')?.textContent).toContain("메일");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=sent"]')?.textContent).toContain("보낸 메일");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/calendar"]')?.textContent).toContain("일정");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/tasks"]')?.textContent).toContain("작업");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/projects"]')?.textContent).toContain("프로젝트");
@@ -140,6 +141,8 @@ describe("DashboardLayout", () => {
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/data"]')?.textContent).toContain("데이터");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/security"]')?.textContent).toContain("보안");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings#help"]')?.textContent).toContain("도움말");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/settings#profile"]')?.textContent).toContain("프로필");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="#mobile-calendar"]')?.textContent).toContain("일정");
     expect(mobileMenu?.querySelector<HTMLButtonElement>('button[data-startup-view="calendar"]')).not.toBeNull();
 
@@ -148,7 +151,7 @@ describe("DashboardLayout", () => {
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
-    expect(window.location.hash).toBe("#mobile-calendar");
+    expect(window.location.hash).toBe("");
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
 
     act(() => {
@@ -239,7 +242,7 @@ describe("DashboardLayout", () => {
     });
 
     expect(localStorage.getItem("naruon_startup_view")).toBe("calendar");
-    expect(window.location.hash).toBe("#mobile-calendar");
+    expect(window.location.hash).toBe("");
     expect(window.__naruonMobileWorkspace?.view).toBe("calendar");
     expect(container.querySelector<HTMLAnchorElement>('[data-mobile-view="calendar"]')?.getAttribute("aria-current")).toBe("page");
 

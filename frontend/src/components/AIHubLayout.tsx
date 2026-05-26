@@ -3,6 +3,33 @@
 import { useState } from 'react';
 import { Sparkles, Zap, Activity, Cpu, Key, FileCode2 } from 'lucide-react';
 
+const EXECUTION_SECTIONS = [
+  {
+    id: 'context',
+    title: '맥락 종합',
+    status: '7개 근거 연결',
+    primary: '메일 thread-892, 회사 CalDAV 일정, WebDAV 산출물을 하나의 실행 후보로 묶었습니다.',
+    secondary: '중복 메일과 전달본은 원본 메시지 식별자 기준으로 thread에 귀속됩니다.',
+    action: '근거 열기',
+  },
+  {
+    id: 'decisions',
+    title: '판단 포인트',
+    status: '3건 검토 대기',
+    primary: '발신자 DAG와 프로젝트 의사결정 로그를 비교해 승인자, 위임자, 참조자를 분리합니다.',
+    secondary: '조직, 개인, SOHO 계정의 RBAC/ABAC 경계를 함께 평가합니다.',
+    action: '판단 기록',
+  },
+  {
+    id: 'actions',
+    title: '실행 항목',
+    status: '5개 워크플로우',
+    primary: '일정 후보, 티켓형 작업, 답장 추적을 원본 계정 writeback 대상과 함께 큐에 올립니다.',
+    secondary: 'Naruon 저장소만 남기는 항목은 만들지 않고 원본 CalDAV/WebDAV/메일 계정을 우선합니다.',
+    action: '큐 확인',
+  },
+] as const;
+
 export function AIHubLayout() {
   const [activeTab, setActiveTab] = useState<'프롬프트 스튜디오' | '워크플로우' | 'AI 에이전트' | '평가' | '실행 이력'>('워크플로우');
 
@@ -27,12 +54,43 @@ export function AIHubLayout() {
 
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto space-y-8">
+          <nav aria-label="AI hub execution checkpoints" className="flex scroll-smooth gap-2 overflow-x-auto pb-1">
+            {EXECUTION_SECTIONS.map((section) => (
+              <a
+                key={section.id}
+                href={`#${section.id}`}
+                className="shrink-0 rounded-lg border border-border bg-card px-3 py-2 text-sm font-bold text-foreground hover:border-primary hover:text-primary"
+              >
+                {section.title}
+              </a>
+            ))}
+          </nav>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {EXECUTION_SECTIONS.map((section) => (
+              <section
+                id={section.id}
+                key={section.id}
+                aria-label={section.title}
+                className="scroll-mt-24 rounded-2xl border border-border bg-card p-5 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold">{section.title}</h2>
+                    <p className="mt-1 text-xs font-bold text-primary">{section.status}</p>
+                  </div>
+                  <button type="button" className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold hover:bg-secondary">
+                    {section.action}
+                  </button>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-foreground">{section.primary}</p>
+                <p className="mt-3 text-xs leading-5 text-muted-foreground">{section.secondary}</p>
+              </section>
+            ))}
+          </div>
           
           {activeTab === '평가' && (
             <div className="space-y-6">
-              <section aria-label="맥락 종합" className="sr-only">맥락 종합</section>
-              <section aria-label="판단 포인트" className="sr-only">판단 포인트</section>
-              <section aria-label="실행 항목" className="sr-only">실행 항목</section>
               {/* Token Usage Stats */}
               <div className="grid grid-cols-4 gap-6">
                 {[

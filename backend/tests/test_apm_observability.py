@@ -14,13 +14,17 @@ def test_observability_provisioning_exists():
     assert (ROOT_DIR / "observability/tempo.yaml").exists()
 
 
-def test_backend_exposes_metrics_endpoint():
+def test_backend_metrics_endpoint_is_disabled_by_default():
     from main import app
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
-        # Before instrumentation, it might be 404, but after it should be 200
         response = client.get("/metrics")
-        # Ensure it is added as part of the APM implementation
-        assert response.status_code == 200
-        assert "python_info" in response.text or "process_" in response.text
+        assert response.status_code == 404
+
+
+def test_metrics_exposure_requires_explicit_environment_gate():
+    main_source = (ROOT_DIR / "backend/main.py").read_text()
+
+    assert "ENABLE_PROMETHEUS_METRICS" in main_source
+    assert "Instrumentator().instrument(app).expose" in main_source

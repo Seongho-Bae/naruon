@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, Filter, MoreHorizontal, User, CalendarDays, Inbox, AlertCircle } from 'lucide-react';
+
+import { apiClient } from '@/lib/api-client';
 
 const MOCK_TASKS = {
   open: [
@@ -19,11 +21,69 @@ const MOCK_TASKS = {
   ],
 };
 
+type TicketTask = {
+  id: string;
+  title: string;
+  status: 'open' | 'in_progress' | 'blocked' | 'done';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  source_type: string;
+  source_email_id: string | null;
+  related_thread_id: string | null;
+  updated_at: string;
+};
+
+const taskStatusLabels: Record<TicketTask['status'], string> = {
+  open: '접수',
+  in_progress: '진행',
+  blocked: '차단',
+  done: '완료',
+};
+
+const taskPriorityLabels: Record<TicketTask['priority'], string> = {
+  low: '낮음',
+  normal: '보통',
+  high: '높음',
+  urgent: '긴급',
+};
+
+type TicketStatus = 'loading' | 'ready' | 'empty' | 'auth' | 'error';
+
+function getApiErrorStatus(error: unknown) {
+  const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
+  if (typeof shapedError?.status === 'number') return shapedError.status;
+  if (typeof shapedError?.response?.status === 'number') return shapedError.response.status;
+  return null;
+}
+
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState(MOCK_TASKS);
   const [draggedTask, setDraggedTask] = useState<{id: string, sourceCol: string} | null>(null);
+  const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
+  const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void apiClient
+      .get<TicketTask[]>('/api/tasks')
+      .then((apiTasks) => {
+        if (cancelled) return;
+        setTicketTasks(apiTasks);
+        setTicketStatus(apiTasks.length > 0 ? 'ready' : 'empty');
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const status = getApiErrorStatus(error);
+        setTicketTasks([]);
+        setTicketStatus(status === 401 || status === 403 ? 'auth' : 'error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, id: string, sourceCol: string) => {
     setDraggedTask({ id, sourceCol });
@@ -65,6 +125,16 @@ export function TasksLayout() {
     { id: 'done', title: '완료', count: tasks.done.length, color: 'bg-green-100 text-green-700' },
   ];
 
+  const liveBoardCounts = useMemo(() => {
+    return ticketTasks.reduce<Record<TicketTask['status'], number>>(
+      (acc, task) => {
+        acc[task.status] += 1;
+        return acc;
+      },
+      { open: 0, in_progress: 0, blocked: 0, done: 0 },
+    );
+  }, [ticketTasks]);
+
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       {/* Top Header */}
@@ -99,9 +169,83 @@ export function TasksLayout() {
       </header>
 
       {/* Kanban Board Area */}
-      <main className="flex-1 overflow-x-auto overflow-y-hidden p-6 bg-secondary/20">
+      <main className="flex-1 overflow-x-auto overflow-y-auto p-6 bg-secondary/20">
+        <section aria-label="API 연결 작업" className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold">실제 티켓 큐</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                `/api/tasks`에서 원본 메일, 스레드, 상태와 우선순위를 읽어 티켓 보드와 함께 추적합니다.
+              </p>
+            </div>
+            <div role="status" aria-live="polite" className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+              {ticketStatus === 'loading' ? '작업 불러오는 중' : null}
+              {ticketStatus === 'ready' ? `${ticketTasks.length}개 티켓 연결` : null}
+              {ticketStatus === 'empty' ? '연결된 티켓 없음' : null}
+              {ticketStatus === 'auth' ? '인증된 세션 필요' : null}
+              {ticketStatus === 'error' ? '작업 API 오류' : null}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {(Object.keys(taskStatusLabels) as TicketTask['status'][]).map((status) => (
+              <div key={status} className="rounded-lg border border-border bg-background/70 p-3">
+                <p className="text-xs font-bold text-muted-foreground">{taskStatusLabels[status]}</p>
+                <p className="mt-1 text-xl font-bold text-foreground">{liveBoardCounts[status]}</p>
+              </div>
+            ))}
+          </div>
+
+          {ticketStatus === 'ready' ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {ticketTasks.slice(0, 4).map((task) => (
+                <article key={task.id} className="rounded-lg border border-border bg-background/75 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-bold text-foreground">{task.title}</h3>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                      {taskStatusLabels[task.status]} · {taskPriorityLabels[task.priority]}
+                    </span>
+                  </div>
+                  <dl className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                    <div>
+                      <dt className="font-bold text-foreground">원본</dt>
+                      <dd>{task.source_email_id ?? task.source_type}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-foreground">스레드</dt>
+                      <dd>{task.related_thread_id ?? '비공개'}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-bold text-foreground">업데이트</dt>
+                      <dd suppressHydrationWarning>{new Date(task.updated_at).toLocaleString('ko-KR')}</dd>
+                    </div>
+                  </dl>
+                </article>
+              ))}
+            </div>
+          ) : null}
+
+          {ticketStatus === 'empty' ? (
+            <p className="mt-4 rounded-lg border border-dashed border-border bg-background/70 p-3 text-sm text-muted-foreground">
+              메일 상세에서 실행 항목을 만들면 source-linked 티켓으로 표시됩니다.
+            </p>
+          ) : null}
+
+          {ticketStatus === 'auth' ? (
+            <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+              작업 API는 signed session이 있을 때만 읽습니다. 공개 identity header는 사용하지 않습니다.
+            </p>
+          ) : null}
+
+          {ticketStatus === 'error' ? (
+            <p className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-900">
+              작업 API를 불러오지 못했습니다. 서버 상태를 확인한 뒤 다시 시도합니다.
+            </p>
+          ) : null}
+        </section>
+
         {viewMode === '칸반' && (
-          <div className="flex h-full gap-6">
+          <div className="flex min-h-[560px] gap-6">
             {currentColumns.map((col) => (
               <div
                 key={col.id}

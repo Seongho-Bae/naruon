@@ -25,8 +25,14 @@ logger = logging.getLogger(__name__)
 
 SMTP_HOST_NOT_ALLOWED = "SMTP server is not allowed"
 SMTP_PORT_NOT_ALLOWED = "SMTP port is not allowed"
+IMAP_HOST_NOT_ALLOWED = "IMAP server is not allowed"
+IMAP_PORT_NOT_ALLOWED = "IMAP port is not allowed"
+POP3_HOST_NOT_ALLOWED = "POP3 server is not allowed"
+POP3_PORT_NOT_ALLOWED = "POP3 port is not allowed"
 SMTP_TIMEOUT_SECONDS = 60
 SMTP_EGRESS_PORTS = {25, 465, 587}
+IMAP_EGRESS_PORTS = {143, 993}
+POP3_EGRESS_PORTS = {110, 995}
 EMAIL_HEADER_NEWLINE_ERROR = "Email header fields must not contain newlines"
 
 
@@ -62,55 +68,94 @@ def _parse_csv_values(value: str) -> set[str]:
     return {item.strip().lower() for item in value.split(",") if item.strip()}
 
 
-def _parse_allowed_smtp_ports() -> set[int]:
+def _parse_allowed_ports(
+    configured_ports: str, protocol_name: str, egress_ports: set[int]
+) -> set[int]:
     allowed_ports = set()
-    for item in _parse_csv_values(settings.ALLOWED_SMTP_PORTS):
+    for item in _parse_csv_values(configured_ports):
         try:
             port = int(item)
         except ValueError:
-            logger.warning("Ignoring invalid SMTP port policy entry")
+            logger.warning("Ignoring invalid %s port policy entry", protocol_name)
             continue
-        if port in SMTP_EGRESS_PORTS:
+        if port in egress_ports:
             allowed_ports.add(port)
         else:
-            logger.warning("Ignoring non-SMTP port policy entry")
+            logger.warning("Ignoring non-%s port policy entry", protocol_name)
     return allowed_ports
+
+
+def _parse_allowed_smtp_ports() -> set[int]:
+    return _parse_allowed_ports(
+        settings.ALLOWED_SMTP_PORTS, "SMTP", SMTP_EGRESS_PORTS
+    )
+
+
+def _parse_allowed_imap_ports() -> set[int]:
+    return _parse_allowed_ports(
+        settings.ALLOWED_IMAP_PORTS, "IMAP", IMAP_EGRESS_PORTS
+    )
+
+
+def _parse_allowed_pop3_ports() -> set[int]:
+    return _parse_allowed_ports(
+        settings.ALLOWED_POP3_PORTS, "POP3", POP3_EGRESS_PORTS
+    )
 
 
 def _parse_allowed_smtp_hosts() -> set[str]:
     return _parse_csv_values(settings.ALLOWED_SMTP_HOSTS)
 
 
-def _validate_allowed_smtp_host(normalized_host: str) -> None:
-    """Fail closed unless the SMTP host is explicitly operator-allowlisted."""
-    allowed_hosts = _parse_allowed_smtp_hosts()
+def _parse_allowed_imap_hosts() -> set[str]:
+    return _parse_csv_values(settings.ALLOWED_IMAP_HOSTS)
+
+
+def _parse_allowed_pop3_hosts() -> set[str]:
+    return _parse_csv_values(settings.ALLOWED_POP3_HOSTS)
+
+
+def _validate_allowed_mail_host(
+    normalized_host: str, allowed_hosts: set[str], host_error: str
+) -> None:
+    """Fail closed unless the mail host is explicitly operator-allowlisted."""
     if not allowed_hosts:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     if any("*" in allowed_host for allowed_host in allowed_hosts):
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     if normalized_host not in allowed_hosts:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
 
 
-def _normalize_smtp_host(host: str) -> str:
+def _validate_allowed_smtp_host(normalized_host: str) -> None:
+    _validate_allowed_mail_host(
+        normalized_host, _parse_allowed_smtp_hosts(), SMTP_HOST_NOT_ALLOWED
+    )
+
+
+def _normalize_mail_host(host: str, host_error: str) -> str:
     candidate = host.strip().lower().rstrip(".")
     if not candidate:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     if "://" in candidate:
         parsed = urlsplit(candidate)
         candidate = (parsed.hostname or "").lower().rstrip(".")
     if any(character in candidate for character in " \t\r\n/"):
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     if not candidate or candidate in {"localhost", "localhost.localdomain"}:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     return candidate
 
 
-def _validate_public_ip_address(address: str) -> None:
+def _normalize_smtp_host(host: str) -> str:
+    return _normalize_mail_host(host, SMTP_HOST_NOT_ALLOWED)
+
+
+def _validate_public_ip_address(address: str, host_error: str) -> None:
     try:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
+        raise ValueError(host_error) from exc
     if (
         ip_address.is_private
         or ip_address.is_loopback
@@ -120,7 +165,7 @@ def _validate_public_ip_address(address: str) -> None:
         or ip_address.is_multicast
         or not ip_address.is_global
     ):
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
 
 
 def _is_ip_literal(candidate: str) -> bool:
@@ -140,25 +185,33 @@ def _looks_like_ip_literal(candidate: str) -> bool:
     )
 
 
-def _resolve_all_public_smtp_addresses(
-    smtp_server: str, smtp_port: int | None
+def _resolve_all_public_mail_addresses(
+    mail_server: str, mail_port: int | None, host_error: str
 ) -> list[tuple[Any, ...]]:
     """Resolve a host and reject the entire hostname if any answer is non-global."""
     try:
         address_infos = socket.getaddrinfo(
-            smtp_server, smtp_port, type=socket.SOCK_STREAM
+            mail_server, mail_port, type=socket.SOCK_STREAM
         )
     except socket.gaierror as exc:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED) from exc
+        raise ValueError(host_error) from exc
 
     validated_address_infos = []
     for address_info in address_infos:
         sockaddr = address_info[4]
-        _validate_public_ip_address(str(sockaddr[0]))
+        _validate_public_ip_address(str(sockaddr[0]), host_error)
         validated_address_infos.append(address_info)
     if not validated_address_infos:
-        raise ValueError(SMTP_HOST_NOT_ALLOWED)
+        raise ValueError(host_error)
     return validated_address_infos
+
+
+def _resolve_all_public_smtp_addresses(
+    smtp_server: str, smtp_port: int | None
+) -> list[tuple[Any, ...]]:
+    return _resolve_all_public_mail_addresses(
+        smtp_server, smtp_port, SMTP_HOST_NOT_ALLOWED
+    )
 
 
 def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
@@ -167,7 +220,7 @@ def validate_smtp_host(host: str, *, resolve_host: bool) -> str:
     _validate_allowed_smtp_host(normalized_host)
 
     if _is_ip_literal(normalized_host):
-        _validate_public_ip_address(normalized_host)
+        _validate_public_ip_address(normalized_host, SMTP_HOST_NOT_ALLOWED)
     elif _looks_like_ip_literal(normalized_host):
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
     elif resolve_host:
@@ -181,6 +234,74 @@ def validate_smtp_port(port: int) -> int:
     if port not in allowed_ports:
         raise ValueError(SMTP_PORT_NOT_ALLOWED)
     return port
+
+
+def validate_imap_host(host: str, *, resolve_host: bool) -> str:
+    """Validate an outbound IMAP host against operator policy and SSRF guards."""
+    normalized_host = _normalize_mail_host(host, IMAP_HOST_NOT_ALLOWED)
+    _validate_allowed_mail_host(
+        normalized_host, _parse_allowed_imap_hosts(), IMAP_HOST_NOT_ALLOWED
+    )
+
+    if _is_ip_literal(normalized_host):
+        _validate_public_ip_address(normalized_host, IMAP_HOST_NOT_ALLOWED)
+    elif _looks_like_ip_literal(normalized_host):
+        raise ValueError(IMAP_HOST_NOT_ALLOWED)
+    elif resolve_host:
+        _resolve_all_public_mail_addresses(normalized_host, None, IMAP_HOST_NOT_ALLOWED)
+    return normalized_host
+
+
+def validate_imap_port(port: int) -> int:
+    """Validate an outbound IMAP port against operator policy."""
+    if port not in _parse_allowed_imap_ports():
+        raise ValueError(IMAP_PORT_NOT_ALLOWED)
+    return port
+
+
+def validate_imap_destination(
+    imap_server: str,
+    imap_port: int,
+    *,
+    resolve_host: bool = True,
+) -> tuple[str, int]:
+    """Validate IMAP destination before any server-side network connection."""
+    normalized_host = validate_imap_host(imap_server, resolve_host=resolve_host)
+    return normalized_host, validate_imap_port(imap_port)
+
+
+def validate_pop3_host(host: str, *, resolve_host: bool) -> str:
+    """Validate an outbound POP3 host against operator policy and SSRF guards."""
+    normalized_host = _normalize_mail_host(host, POP3_HOST_NOT_ALLOWED)
+    _validate_allowed_mail_host(
+        normalized_host, _parse_allowed_pop3_hosts(), POP3_HOST_NOT_ALLOWED
+    )
+
+    if _is_ip_literal(normalized_host):
+        _validate_public_ip_address(normalized_host, POP3_HOST_NOT_ALLOWED)
+    elif _looks_like_ip_literal(normalized_host):
+        raise ValueError(POP3_HOST_NOT_ALLOWED)
+    elif resolve_host:
+        _resolve_all_public_mail_addresses(normalized_host, None, POP3_HOST_NOT_ALLOWED)
+    return normalized_host
+
+
+def validate_pop3_port(port: int) -> int:
+    """Validate an outbound POP3 port against operator policy."""
+    if port not in _parse_allowed_pop3_ports():
+        raise ValueError(POP3_PORT_NOT_ALLOWED)
+    return port
+
+
+def validate_pop3_destination(
+    pop3_server: str,
+    pop3_port: int,
+    *,
+    resolve_host: bool = True,
+) -> tuple[str, int]:
+    """Validate POP3 destination before any server-side network connection."""
+    normalized_host = validate_pop3_host(pop3_server, resolve_host=resolve_host)
+    return normalized_host, validate_pop3_port(pop3_port)
 
 
 def validate_smtp_destination(
@@ -229,7 +350,7 @@ def _validate_pinned_smtp_sockaddr(sockaddr: tuple[Any, ...]) -> None:
     """Ensure the connection target is a pre-resolved public IP, not a hostname."""
     if not sockaddr:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    _validate_public_ip_address(str(sockaddr[0]))
+    _validate_public_ip_address(str(sockaddr[0]), SMTP_HOST_NOT_ALLOWED)
 
 
 async def _connect_validated_smtp_socket(
