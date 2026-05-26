@@ -119,6 +119,40 @@ async def test_missing_reply_tracking_excludes_answered_and_non_intent_threads()
 
 
 @pytest.mark.asyncio
+async def test_missing_reply_tracking_groups_bracketed_thread_ids():
+    from services.reply_tracking_service import check_missing_replies
+
+    sent_answered = Email(
+        id=6,
+        user_id="user_1",
+        organization_id="org_1",
+        message_id="<sent@example.com>",
+        thread_id="<root@example.com>",
+        sender="my@email.com",
+        recipients="other@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3),
+        body="Please reply by tomorrow.",
+    )
+    external_reply = Email(
+        id=7,
+        user_id="user_1",
+        organization_id="org_1",
+        message_id="<reply@example.com>",
+        thread_id="root@example.com",
+        sender="other@email.com",
+        recipients="my@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2),
+        body="I replied.",
+    )
+    config_mock = TenantConfig(user_id="user_1", smtp_username="my@email.com")
+    session = ReplyTrackingSession(config_mock, [sent_answered, external_reply])
+
+    flagged_emails = await check_missing_replies(session, "user_1", "org_1")
+
+    assert flagged_emails == []
+
+
+@pytest.mark.asyncio
 async def test_missing_reply_tracking_scopes_email_query_to_user_and_org():
     from services.reply_tracking_service import check_missing_replies
 

@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import Email, TenantConfig
 from services.email_service import detect_reply_tracking
+from services.threading_service import normalize_message_id
 import datetime
 import email.utils as email_utils
 
@@ -51,7 +52,10 @@ def message_is_self_sent(email_message: Email, user_addresses: set[str]) -> bool
 
 
 def reply_tracking_thread_key(email_message: Email) -> str:
-    return email_message.thread_id or email_message.message_id
+    normalized_key = normalize_message_id(email_message.thread_id) or normalize_message_id(
+        email_message.message_id
+    )
+    return normalized_key or email_message.message_id
 
 
 def thread_reply_candidate(

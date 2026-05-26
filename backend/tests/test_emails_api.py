@@ -316,6 +316,142 @@ async def test_get_emails_marks_self_sent_and_pending_reply_threads(
     assert by_thread["note-thread"]["requires_reply"] is False
 
 
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_get_emails_reply_tracking_real_postgres_smoke():
+    from core.config import settings
+    from db.models import Base, TenantConfig
+    from db.session import get_db
+    from sqlalchemy import delete, text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = "reply-smoke-user"
+    organization_id = "reply-smoke-org"
+
+    async def cleanup_seed_rows():
+        async with Session() as session:
+            await session.execute(delete(Email).where(Email.user_id == user_id))
+            await session.execute(
+                delete(TenantConfig).where(TenantConfig.user_id == user_id)
+            )
+            await session.commit()
+
+    await cleanup_seed_rows()
+    async with Session() as session:
+        session.add(
+            TenantConfig(
+                user_id=user_id,
+                smtp_username="Smoke User <reply-smoke@example.com>",
+                imap_username=None,
+            )
+        )
+        session.add_all(
+            [
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="waiting-smoke-msg",
+                    thread_id="<waiting-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Can you confirm?",
+                    date=datetime.datetime(
+                        2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc
+                    ),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="note-smoke-msg",
+                    thread_id="note-smoke-thread",
+                    sender="reply-smoke@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Note to self",
+                    date=datetime.datetime(
+                        2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc
+                    ),
+                    body="Organize this as knowledge.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answered-smoke-msg",
+                    thread_id="<answered-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Answered",
+                    date=datetime.datetime(
+                        2026, 4, 27, 12, 0, tzinfo=datetime.timezone.utc
+                    ),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answer-smoke-msg",
+                    thread_id="answered-smoke-thread",
+                    sender="target@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Re: Answered",
+                    date=datetime.datetime(
+                        2026, 4, 27, 13, 0, tzinfo=datetime.timezone.utc
+                    ),
+                    body="Confirmed.",
+                ),
+            ]
+        )
+        await session.commit()
+
+    async def real_db_override():
+        async with Session() as session:
+            yield session
+
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = real_db_override
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            headers={
+                "X-User-Id": user_id,
+                "X-Organization-Id": organization_id,
+            },
+            base_url="http://test",
+        ) as real_client:
+            inbox_response = await real_client.get("/api/emails?limit=10")
+            pending_response = await real_client.get("/api/emails/pending-replies")
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+        await cleanup_seed_rows()
+        await engine.dispose()
+
+    assert inbox_response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in inbox_response.json()["emails"]}
+    assert by_thread["waiting-smoke-thread"]["requires_reply"] is True
+    assert by_thread["note-smoke-thread"]["is_self_sent"] is True
+    assert by_thread["answered-smoke-thread"]["requires_reply"] is False
+
+    assert pending_response.status_code == 200
+    pending_threads = {
+        item["thread_id"] for item in pending_response.json()["emails"]
+    }
+    assert pending_threads == {"waiting-smoke-thread"}
+
+
 @pytest.mark.asyncio
 async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Email):
     response = await client.get(f"/api/emails/{sample_email.id}")
