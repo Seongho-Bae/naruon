@@ -6,6 +6,7 @@ from sqlalchemy import select
 from db.session import get_db
 from db.models import TenantConfig
 from api.auth import AuthContext, get_auth_context
+from api.tenant_config import validate_mail_config_update
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -94,6 +95,7 @@ async def update_tenant_config(
         db.add(config)
         
     update_dict = update_data.model_dump(exclude_unset=True)
+    validate_mail_config_update(update_dict, config)
     for key, value in update_dict.items():
         setattr(config, key, value)
         

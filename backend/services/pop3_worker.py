@@ -4,6 +4,7 @@ import poplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
 from db.models import TenantConfig
+from services.email_client import validate_pop3_destination
 
 logger = logging.getLogger(__name__)
 
@@ -66,14 +67,22 @@ class Pop3SyncWorker:
 
     async def _sync_tenant(self, config: TenantConfig, semaphore: asyncio.Semaphore):
         async with semaphore:
-            pop3_server = str(config.pop3_server)
-            pop3_port = int(config.pop3_port)  # type: ignore
+            try:
+                pop3_server, pop3_port = self._validated_destination(config)
+            except ValueError:
+                logger.info(
+                    "Skipping POP3 sync for user %s due to mail destination policy",
+                    config.user_id,
+                )
+                return
             logger.info(
                 f"Connecting to POP3 server {pop3_server}:{pop3_port} for user {config.user_id}"
             )
             try:
                 # We use asyncio.to_thread for synchronous poplib
-                await asyncio.to_thread(self._do_pop3_sync, config)
+                await asyncio.to_thread(
+                    self._do_pop3_sync, config, pop3_server, pop3_port
+                )
                 logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
             except Exception as e:
                 logger.error(
@@ -82,9 +91,20 @@ class Pop3SyncWorker:
                     type(e).__name__,
                 )
 
-    def _do_pop3_sync(self, config: TenantConfig):
-        pop3_server = str(config.pop3_server)
-        pop3_port = int(config.pop3_port)  # type: ignore
+    def _validated_destination(self, config: TenantConfig) -> tuple[str, int]:
+        return validate_pop3_destination(
+            str(config.pop3_server),
+            int(config.pop3_port),  # type: ignore[arg-type]
+        )
+
+    def _do_pop3_sync(
+        self,
+        config: TenantConfig,
+        pop3_server: str | None = None,
+        pop3_port: int | None = None,
+    ):
+        if pop3_server is None or pop3_port is None:
+            pop3_server, pop3_port = self._validated_destination(config)
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
         try:
             if not config.pop3_username:

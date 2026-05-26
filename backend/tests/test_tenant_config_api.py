@@ -51,6 +51,8 @@ def client(mock_db):
 def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     host_resolve_calls = []
     destination_resolve_calls = []
+    imap_destination_calls = []
+    pop3_destination_calls = []
 
     def fake_validate_smtp_host(smtp_server, *, resolve_host=True):
         host_resolve_calls.append(resolve_host)
@@ -60,11 +62,28 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
         destination_resolve_calls.append(resolve_host)
         return smtp_server, smtp_port
 
+    def fake_validate_imap_destination(imap_server, imap_port, *, resolve_host=True):
+        imap_destination_calls.append((imap_server, imap_port, resolve_host))
+        return imap_server, imap_port
+
+    def fake_validate_pop3_destination(pop3_server, pop3_port, *, resolve_host=True):
+        pop3_destination_calls.append((pop3_server, pop3_port, resolve_host))
+        return pop3_server, pop3_port
+
     monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
     monkeypatch.setattr(
         "api.tenant_config.validate_smtp_destination",
         fake_validate_smtp_destination,
     )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_imap_destination",
+        fake_validate_imap_destination,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
+    monkeypatch.setattr("api.tenant_config.validate_pop3_port", lambda port: port)
 
     post_payload = {
         "user_id": "test_user",
@@ -88,8 +107,10 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-    assert host_resolve_calls == [True, True]
+    assert host_resolve_calls == [True]
     assert destination_resolve_calls == [True]
+    assert imap_destination_calls == [("imap.example.com", 993, True)]
+    assert pop3_destination_calls == [("pop3.example.com", 995, True)]
 
     assert "test_user" in mock_db.objects
 
@@ -200,11 +221,98 @@ def test_tenant_config_rejects_private_pop3_host(client):
     assert "pop3_server" in response.json()["detail"]
 
 
-def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
-    def fake_validate_smtp_host(host, *, resolve_host=True):
-        return host
+def test_tenant_config_rejects_private_imap_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "127.0.0.1",
+            "imap_port": 993,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
 
-    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+    assert response.status_code == 400
+    assert "imap_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.email_client.settings.ALLOWED_IMAP_HOSTS",
+        "mail.example.com",
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "imap.example.com",
+            "imap_port": 993,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "imap_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.email_client.settings.ALLOWED_POP3_HOSTS",
+        "mail.example.com",
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "pop3.example.com",
+            "pop3_port": 995,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
+    def fake_validate_imap_destination(host, port, *, resolve_host=True):
+        from services.email_client import validate_imap_port
+
+        validate_imap_port(port)
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_imap_destination",
+        fake_validate_imap_destination,
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "imap.example.com",
+            "imap_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "imap_port" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
+    def fake_validate_pop3_destination(host, port, *, resolve_host=True):
+        from services.email_client import validate_pop3_port
+
+        validate_pop3_port(port)
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
 
     response = client.post(
         "/api/config",
@@ -274,10 +382,13 @@ async def test_create_read_pop3_postgres_smoke(monkeypatch):
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    def fake_validate_smtp_host(host, *, resolve_host=True):
-        return host
+    def fake_validate_pop3_destination(host, port, *, resolve_host=True):
+        return host, port
 
-    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
 
     old_encryption_key = settings.ENCRYPTION_KEY
     settings.ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))

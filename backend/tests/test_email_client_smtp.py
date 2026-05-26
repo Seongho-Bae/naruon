@@ -32,7 +32,7 @@ def test_smtp_allowed_host_helper_fails_closed_when_allowlist_empty(monkeypatch)
 
 
 def test_smtp_host_policy_keeps_empty_allowlist_guard_explicit():
-    source = inspect.getsource(email_client._validate_allowed_smtp_host)
+    source = inspect.getsource(email_client._validate_allowed_mail_host)
 
     assert "if not allowed_hosts:" in source
     assert "if normalized_host not in allowed_hosts:" in source
@@ -101,11 +101,11 @@ def test_smtp_control_plane_hostname_is_resolved_before_ip_policy(monkeypatch):
     original_validate_public_ip_address = email_client._validate_public_ip_address
     validated_addresses = []
 
-    def fake_validate_public_ip_address(address):
+    def fake_validate_public_ip_address(address, host_error):
         validated_addresses.append(address)
         if address == "naruon.net":
             raise AssertionError("raw hostnames must be resolved before IP checks")
-        original_validate_public_ip_address(address)
+        original_validate_public_ip_address(address, host_error)
 
     monkeypatch.setattr(
         email_client,
@@ -148,6 +148,78 @@ def test_smtp_destination_rejects_mixed_public_and_private_dns_answers(monkeypat
 
     with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
         email_client.validate_smtp_destination("smtp.example.com", 587)
+
+
+def test_imap_host_policy_denies_empty_allowlist_before_dns(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_IMAP_HOSTS", "")
+
+    def fail_getaddrinfo(*args, **kwargs):
+        raise AssertionError("empty IMAP allowlist must fail before DNS resolution")
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
+
+    with pytest.raises(ValueError, match=email_client.IMAP_HOST_NOT_ALLOWED):
+        email_client.validate_imap_destination("imap.example.com", 993)
+
+
+def test_pop3_host_policy_denies_empty_allowlist_before_dns(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_HOSTS", "")
+
+    def fail_getaddrinfo(*args, **kwargs):
+        raise AssertionError("empty POP3 allowlist must fail before DNS resolution")
+
+    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
+
+    with pytest.raises(ValueError, match=email_client.POP3_HOST_NOT_ALLOWED):
+        email_client.validate_pop3_destination("pop3.example.com", 995)
+
+
+def test_imap_host_policy_rejects_wildcard_allowlist_entry(monkeypatch):
+    monkeypatch.setattr(
+        email_client.settings,
+        "ALLOWED_IMAP_HOSTS",
+        "imap.example.com,*",
+    )
+
+    with pytest.raises(ValueError, match=email_client.IMAP_HOST_NOT_ALLOWED):
+        email_client.validate_imap_destination(
+            "imap.example.com", 993, resolve_host=False
+        )
+
+
+def test_imap_destination_rejects_non_imap_port(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_IMAP_HOSTS", "imap.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_IMAP_PORTS", "993,22")
+
+    with pytest.raises(ValueError, match=email_client.IMAP_PORT_NOT_ALLOWED):
+        email_client.validate_imap_destination(
+            "imap.example.com", 22, resolve_host=False
+        )
+
+
+def test_pop3_destination_rejects_non_pop3_port(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_HOSTS", "pop3.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_PORTS", "995,22")
+
+    with pytest.raises(ValueError, match=email_client.POP3_PORT_NOT_ALLOWED):
+        email_client.validate_pop3_destination(
+            "pop3.example.com", 22, resolve_host=False
+        )
+
+
+def test_pop3_destination_rejects_private_dns_answer(monkeypatch):
+    monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_HOSTS", "pop3.example.com")
+    monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_PORTS", "995")
+    monkeypatch.setattr(
+        email_client.socket,
+        "getaddrinfo",
+        lambda *args, **kwargs: [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.10", 995))
+        ],
+    )
+
+    with pytest.raises(ValueError, match=email_client.POP3_HOST_NOT_ALLOWED):
+        email_client.validate_pop3_destination("pop3.example.com", 995)
 
 
 def test_smtp_connect_address_does_not_select_unvalidated_first_dns_answer():

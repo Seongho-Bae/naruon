@@ -16,8 +16,11 @@ Set `DATABASE_URL` explicitly through `.env`, Docker Compose, CI secrets, or the
 runtime environment. The backend has no code default for the database URL and
 fails closed when it is missing.
 
-Outbound SMTP also fails closed unless the normalized tenant SMTP host is listed
-in `ALLOWED_SMTP_HOSTS` and the port is listed in `ALLOWED_SMTP_PORTS`.
+Outbound SMTP/IMAP/POP3 connector destinations fail closed unless the normalized
+tenant host is listed in the matching `ALLOWED_*_HOSTS` setting and the port is
+listed in the matching `ALLOWED_*_PORTS` setting. The defaults allow SMTP
+submission ports `465,587`, IMAP TLS port `993`, and POP3 TLS port `995`, but
+operators must explicitly allow each provider hostname.
 
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent,
 `import_fixtures.py` uses zero-vector embeddings so the local threading proof

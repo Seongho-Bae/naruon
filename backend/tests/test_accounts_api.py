@@ -56,7 +56,20 @@ def client():
         yield c
     app.dependency_overrides.clear()
 
-def test_get_and_update_tenant_config(client: TestClient):
+def test_get_and_update_tenant_config(client: TestClient, monkeypatch):
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_host",
+        lambda host, *, resolve_host=True: host,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_destination",
+        lambda host, port, *, resolve_host=True: (host, port),
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        lambda host, port, *, resolve_host=True: (host, port),
+    )
+
     # Get config (should create empty one)
     response = client.get("/api/accounts/config")
     assert response.status_code == 200
@@ -83,3 +96,62 @@ def test_get_and_update_tenant_config(client: TestClient):
     assert data["pop3_port"] == 995
     assert data["pop3_username"] == "pop3-user"
     assert data["has_pop3_password"] is True
+
+
+def test_accounts_config_rejects_private_imap_host(client: TestClient):
+    response = client.put(
+        "/api/accounts/config",
+        json={"imap_server": "127.0.0.1", "imap_port": 993},
+    )
+
+    assert response.status_code == 400
+    assert "imap_server" in response.json()["detail"]
+
+
+def test_accounts_config_rejects_private_pop3_host(client: TestClient):
+    response = client.put(
+        "/api/accounts/config",
+        json={"pop3_server": "127.0.0.1", "pop3_port": 995},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_server" in response.json()["detail"]
+
+
+def test_accounts_config_rejects_unsafe_imap_port(client: TestClient, monkeypatch):
+    def reject_imap_port(host, port, *, resolve_host=True):
+        from services.email_client import validate_imap_port
+
+        validate_imap_port(port)
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_imap_destination",
+        reject_imap_port,
+    )
+
+    response = client.put(
+        "/api/accounts/config",
+        json={"imap_server": "imap.example.com", "imap_port": 22},
+    )
+
+    assert response.status_code == 400
+    assert "imap_port" in response.json()["detail"]
+
+
+def test_accounts_config_rejects_unsafe_pop3_port(client: TestClient, monkeypatch):
+    def reject_pop3_port(host, port, *, resolve_host=True):
+        raise ValueError("POP3 port is not allowed")
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        reject_pop3_port,
+    )
+
+    response = client.put(
+        "/api/accounts/config",
+        json={"pop3_server": "pop3.example.com", "pop3_port": 22},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_port" in response.json()["detail"]

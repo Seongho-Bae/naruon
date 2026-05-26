@@ -66,8 +66,9 @@
   storing user-supplied tags for later UI rendering. Parsed email display fields
   must not persist active HTML/script markup; preserve message/thread identifiers
   separately from UI-safe subject/body, address, and attachment display text.
-- Mail connection updates must validate server-side SMTP, POP3, IMAP, and relay
-  destinations before persistence. POP3 credentials are required for POP3 sync;
+- Mail connection updates and workers must validate server-side SMTP, POP3,
+  IMAP, and relay destinations before persistence or network connection. POP3
+  credentials are required for POP3 sync;
   missing credentials must fail the sync path instead of logging a successful
   no-op. Do not place sensitive credential values, secret-derived values, or
   password-shaped field names in logs or raised exception text; use static

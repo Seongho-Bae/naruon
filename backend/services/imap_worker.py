@@ -13,6 +13,7 @@ from services.knowledge_extractor import (
     extract_knowledge_from_self_sent,
     is_self_sent_email,
 )
+from services.email_client import validate_imap_destination
 from services.threading_service import assign_thread_id, generate_email_fingerprint
 
 
@@ -150,9 +151,20 @@ class ImapSyncWorker:
         # Already verified not None in caller
         imap_server = str(config.imap_server)
         imap_port = int(config.imap_port)  # type: ignore
+        try:
+            imap_server, imap_port = validate_imap_destination(imap_server, imap_port)
+        except ValueError:
+            logger.info(
+                "Skipping IMAP sync for user %s due to mail destination policy",
+                config.user_id,
+            )
+            return
         
         logger.info(
-            f"Connecting to IMAP server {imap_server}:{imap_port} for user {config.user_id}"
+            "Connecting to IMAP server %s:%s for user %s",
+            imap_server,
+            imap_port,
+            config.user_id,
         )
         imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
 
