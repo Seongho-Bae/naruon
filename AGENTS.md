@@ -80,3 +80,9 @@
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
   dependency and source-owner contract are explicitly in scope.
+- Long destination pages rendered inside `DashboardLayout` must provide their own
+  `max-h-full overflow-y-auto` content region, because the shell intentionally
+  uses viewport-height overflow containment. Do not leave Settings/Data/Security
+  style pages as clipped legacy `bg-white` islands; use tokenized `bg-card`
+  surfaces and persistent labels for provider, IMAP, SMTP, CalDAV, and WebDAV
+  credentials so typed values do not erase field meaning.

@@ -44,6 +44,10 @@ conversation. `/api/emails` returns one threaded inbox item with `reply_count`
 greater than 1, and the frontend shows conversation history oldest to newest.
 First-run frontend sessions open the Today execution dashboard by default, with
 explicit entry points to the email workspace and calendar-first workspace.
+The committed `frontend/branding/` PNG boards are design-reference artifacts for
+review traceability; runtime branding stays on project-local SVG assets under
+`frontend/public/brand/` so localhost and air-gapped flows do not fetch external
+fonts or images.
 
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is
 set. With the default empty key it writes local zero-vector embeddings so the
@@ -215,6 +219,11 @@ browser origin: set `ALLOWED_BROWSER_ORIGINS` to the exact comma-separated
 frontend origins that may send same-site writes. Production rejects the built-in
 localhost-only defaults so deployed cookie-backed writes fail closed until the
 real frontend origins are configured.
+
+Settings is part of the branded workspace surface, not a separate legacy form
+island. It owns its own vertical scroll region inside the `DashboardLayout`, uses
+tokenized `bg-card` surfaces, preserves persistent SMTP/IMAP labels, and keeps
+long BYOK/Runner tab labels reachable on mobile and tablet widths.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread

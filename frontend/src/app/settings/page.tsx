@@ -50,6 +50,21 @@ function getScopedErrorMessage(err: unknown, forbiddenMessage: string, fallbackM
   return message || fallbackMessage;
 }
 
+function AccountField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="space-y-1.5 text-xs font-semibold text-muted-foreground">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
 export default function SettingsPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -280,7 +295,8 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
+      <div data-testid="settings-page-scroll" className="max-h-full overflow-y-auto px-4 py-6 lg:px-8">
+        <div className="mx-auto max-w-5xl space-y-6 pb-8">
       <div>
         <h1 className="text-2xl font-black text-foreground flex items-center gap-2 mb-2">
           <Settings className="w-6 h-6 text-primary" />
@@ -289,31 +305,31 @@ export default function SettingsPage() {
         <p className="text-muted-foreground text-sm">워크스페이스 단위의 통합 관리 및 개인 계정 설정을 구성합니다.</p>
       </div>
 
-      <Tabs defaultValue="personal" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
-          <TabsTrigger value="personal" className="font-bold"><Mail className="w-4 h-4 mr-2" /> 개인 이메일 계정</TabsTrigger>
-          <TabsTrigger value="workspace-llm" className="font-bold"><Key className="w-4 h-4 mr-2" /> 워크스페이스 BYOK (관리자)</TabsTrigger>
-          <TabsTrigger value="workspace-runner" className="font-bold"><Activity className="w-4 h-4 mr-2" /> Self-hosted Runner (관리자)</TabsTrigger>
+        <Tabs defaultValue="personal" className="w-full">
+        <TabsList data-testid="settings-tab-list" className="mb-8 grid h-auto w-full grid-cols-[repeat(3,minmax(13rem,1fr))] overflow-x-auto rounded-2xl p-1">
+          <TabsTrigger value="personal" className="min-h-10 whitespace-normal px-3 text-xs font-bold sm:text-sm"><Mail className="w-4 h-4 mr-2" /> 개인 이메일 계정</TabsTrigger>
+          <TabsTrigger value="workspace-llm" className="min-h-10 whitespace-normal px-3 text-xs font-bold sm:text-sm"><Key className="w-4 h-4 mr-2" /> 워크스페이스 BYOK (관리자)</TabsTrigger>
+          <TabsTrigger value="workspace-runner" className="min-h-10 whitespace-normal px-3 text-xs font-bold sm:text-sm"><Activity className="w-4 h-4 mr-2" /> Self-hosted Runner (관리자)</TabsTrigger>
         </TabsList>
 
         <TabsContent value="personal" className="space-y-6">
-          <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
+          <section data-testid="settings-card" className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="font-bold text-lg mb-2">개인 이메일 계정 연결</h2>
             <p className="text-sm text-muted-foreground mb-6">Naruon 워크스페이스에서 사용할 본인의 IMAP/SMTP 이메일 계정을 연결합니다. (개인 단위 설정)</p>
             <form onSubmit={handlePersonalSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h3 className="font-bold text-sm">SMTP 발송 설정</h3>
-                <Input placeholder="smtp.example.com" value={personalForm.smtp_server} onChange={(e) => setPersonalForm({ ...personalForm, smtp_server: e.target.value })} />
-                <Input placeholder="587" value={personalForm.smtp_port} onChange={(e) => setPersonalForm({ ...personalForm, smtp_port: e.target.value })} />
-                <Input placeholder="smtp 사용자명" value={personalForm.smtp_username} onChange={(e) => setPersonalForm({ ...personalForm, smtp_username: e.target.value })} />
-                <Input type="password" placeholder="smtp 비밀번호 또는 앱 비밀번호" value={personalForm.smtp_password} onChange={(e) => setPersonalForm({ ...personalForm, smtp_password: e.target.value })} />
+                <AccountField label="SMTP 서버"><Input placeholder="smtp.example.com" value={personalForm.smtp_server} onChange={(e) => setPersonalForm({ ...personalForm, smtp_server: e.target.value })} /></AccountField>
+                <AccountField label="SMTP 포트"><Input placeholder="587" value={personalForm.smtp_port} onChange={(e) => setPersonalForm({ ...personalForm, smtp_port: e.target.value })} /></AccountField>
+                <AccountField label="SMTP 사용자명"><Input placeholder="smtp 사용자명" value={personalForm.smtp_username} onChange={(e) => setPersonalForm({ ...personalForm, smtp_username: e.target.value })} /></AccountField>
+                <AccountField label="SMTP 비밀번호 또는 앱 비밀번호"><Input type="password" placeholder="smtp 비밀번호 또는 앱 비밀번호" value={personalForm.smtp_password} onChange={(e) => setPersonalForm({ ...personalForm, smtp_password: e.target.value })} /></AccountField>
               </div>
               <div className="space-y-4">
                 <h3 className="font-bold text-sm">IMAP 수신 설정</h3>
-                <Input placeholder="imap.example.com" value={personalForm.imap_server} onChange={(e) => setPersonalForm({ ...personalForm, imap_server: e.target.value })} />
-                <Input placeholder="993" value={personalForm.imap_port} onChange={(e) => setPersonalForm({ ...personalForm, imap_port: e.target.value })} />
-                <Input placeholder="imap 사용자명" value={personalForm.imap_username} onChange={(e) => setPersonalForm({ ...personalForm, imap_username: e.target.value })} />
-                <Input type="password" placeholder="imap 비밀번호 또는 앱 비밀번호" value={personalForm.imap_password} onChange={(e) => setPersonalForm({ ...personalForm, imap_password: e.target.value })} />
+                <AccountField label="IMAP 서버"><Input placeholder="imap.example.com" value={personalForm.imap_server} onChange={(e) => setPersonalForm({ ...personalForm, imap_server: e.target.value })} /></AccountField>
+                <AccountField label="IMAP 포트"><Input placeholder="993" value={personalForm.imap_port} onChange={(e) => setPersonalForm({ ...personalForm, imap_port: e.target.value })} /></AccountField>
+                <AccountField label="IMAP 사용자명"><Input placeholder="imap 사용자명" value={personalForm.imap_username} onChange={(e) => setPersonalForm({ ...personalForm, imap_username: e.target.value })} /></AccountField>
+                <AccountField label="IMAP 비밀번호 또는 앱 비밀번호"><Input type="password" placeholder="imap 비밀번호 또는 앱 비밀번호" value={personalForm.imap_password} onChange={(e) => setPersonalForm({ ...personalForm, imap_password: e.target.value })} /></AccountField>
               </div>
               <div className="lg:col-span-2 space-y-3">
                 {personalSubmitError && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded">{personalSubmitError}</div>}
@@ -338,7 +354,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <section className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden flex flex-col">
+              <section data-testid="settings-card" className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
                 <div className="border-b border-border bg-secondary/30 p-4">
                   <h2 className="font-bold text-foreground flex items-center gap-2">
                     <Server className="w-4 h-4" /> 등록된 조직 LLM 제공자
@@ -419,7 +435,7 @@ export default function SettingsPage() {
                 </div>
               </section>
 
-              <section className="bg-white rounded-2xl border border-border shadow-sm p-5 h-fit">
+              <section data-testid="settings-card" className="rounded-2xl border border-border bg-card p-5 h-fit shadow-sm">
                 <h3 className="font-bold mb-4">{editingId !== null ? '제공자 수정' : '새 제공자 추가 (BYOK)'}</h3>
                 <form onSubmit={handleProviderSubmit} className="space-y-4">
                   <div className="space-y-1.5">
@@ -478,7 +494,7 @@ export default function SettingsPage() {
               </div>
             </div>
           ) : (
-            <section className="bg-white rounded-2xl border border-border shadow-sm p-6">
+            <section data-testid="settings-card" className="rounded-2xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-start gap-4 mb-6">
                 <div className="bg-primary/10 p-3 rounded-xl text-primary">
                   <Activity className="w-6 h-6" />
@@ -514,6 +530,7 @@ export default function SettingsPage() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+        </div>
+      </div>
   );
 }

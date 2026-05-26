@@ -1,4 +1,6 @@
-.worktrees
 secret_fixtures/
 .worktrees/
-.worktrees/
+__pycache__/
+*.py[cod]
+venv/
+.venv/
