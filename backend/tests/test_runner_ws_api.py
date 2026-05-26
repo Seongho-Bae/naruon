@@ -1,0 +1,166 @@
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+
+import pytest
+from fastapi import WebSocketException, status
+from fastapi.routing import APIWebSocketRoute
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+from starlette.websockets import WebSocketDisconnect
+
+from api import runner_ws
+from api.auth import AuthContext, get_auth_context
+from core.config import settings
+from main import app
+
+TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
+
+
+class _MockResult:
+    def __init__(self, token: str | None):
+        self.token = token
+
+    def scalar_one_or_none(self):
+        return self.token
+
+
+class _MockRunnerSession:
+    def __init__(self, token: str | None):
+        self.token = token
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, traceback):
+        return None
+
+    async def execute(self, query):
+        return _MockResult(self.token)
+
+
+def _base64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(payload: dict[str, object]) -> str:
+    header_segment = _base64url_encode(
+        json.dumps(
+            {"alg": "HS256", "typ": "JWT"},
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    payload_segment = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    )
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        TEST_SESSION_HMAC_SECRET.encode("utf-8"),
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{header_segment}.{payload_segment}.{_base64url_encode(signature)}"
+
+
+def _valid_session_headers() -> dict[str, str]:
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        {
+            "ver": 1,
+            "iss": "naruon-control-plane",
+            "aud": "naruon-api",
+            "sub": "alice",
+            "role": "organization_admin",
+            "org": "org-acme",
+            "groups": ["group-1"],
+            "workspace": "workspace-org-acme",
+            "exp": int(time.time()) + 300,
+        }
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _auth_context() -> AuthContext:
+    return AuthContext(
+        user_id="alice",
+        role="organization_admin",
+        organization_id="org-acme",
+        group_ids=("group-1",),
+        workspace_id="workspace-org-acme",
+    )
+
+
+@pytest.fixture(autouse=True)
+def restore_session_secret():
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    yield
+    settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+
+@pytest.mark.asyncio
+async def test_runner_connection_key_validates_registered_token(monkeypatch):
+    monkeypatch.setattr(
+        runner_ws,
+        "AsyncSessionLocal",
+        lambda: _MockRunnerSession("nrn_registered-token"),
+    )
+
+    connection_key = await runner_ws._runner_connection_key(
+        "nrn_registered-token", _auth_context()
+    )
+
+    assert connection_key.startswith("org-acme:")
+    assert "nrn_registered-token" not in connection_key
+
+
+@pytest.mark.asyncio
+async def test_runner_connection_key_rejects_unknown_token(monkeypatch):
+    monkeypatch.setattr(
+        runner_ws,
+        "AsyncSessionLocal",
+        lambda: _MockRunnerSession("nrn_registered-token"),
+    )
+
+    with pytest.raises(WebSocketException) as exc:
+        await runner_ws._runner_connection_key("nrn_other-token", _auth_context())
+
+    assert exc.value.code == status.WS_1008_POLICY_VIOLATION
+
+
+def test_runner_ws_rejects_missing_auth():
+    with TestClient(app) as client:
+        with pytest.raises(WebSocketDisconnect) as exc:
+            with client.websocket_connect("/ws/runner/nrn_registered-token"):
+                pass
+
+    assert exc.value.status_code == 401
+
+
+def test_runner_ws_route_uses_signed_session_dependency():
+    for route in app.routes:
+        if isinstance(route, APIWebSocketRoute) and route.path == "/ws/runner/{token}":
+            dependencies = {dependency.dependency for dependency in route.dependencies}
+            assert get_auth_context in dependencies
+            return
+
+    raise AssertionError("Runner WebSocket route is not registered")
+
+
+def test_runner_ws_accepts_signed_session_and_registered_token(monkeypatch):
+    async def registered_key(token: str, auth_context: AuthContext) -> str:
+        assert token == "nrn_registered-token"
+        assert auth_context.organization_id == "org-acme"
+        return "org-acme:registered"
+
+    monkeypatch.setattr(runner_ws, "_runner_connection_key", registered_key)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/ws/runner/nrn_registered-token", headers=_valid_session_headers()
+        ) as websocket:
+            websocket.send_text("ping")
+            assert websocket.receive_text() == "Naruon ack: ping"

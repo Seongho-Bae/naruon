@@ -82,6 +82,14 @@
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
+- DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
+  documented otherwise. Register them with the default signed-session dependency,
+  escape XML response fields before interpolation, and keep path values separate
+  from log-safe display values.
+- Self-hosted runner WebSocket routes must validate both a signed bearer session
+  and a server-side WorkspaceRunnerConfig registration token before accepting the
+  socket. Do not use the raw path token as identity, a log value, or the sole
+  active-connection key.
 - Calendar UI actions must request `/api/calendar/writeback-intent` with
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
