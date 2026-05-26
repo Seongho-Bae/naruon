@@ -8,11 +8,18 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("lucide-react", () => ({
+  AlertCircle: () => <svg aria-hidden="true" />,
+  CalendarDays: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
+  Filter: () => <svg aria-hidden="true" />,
   Inbox: () => <svg aria-hidden="true" />,
   ListChecks: () => <svg aria-hidden="true" />,
+  MoreHorizontal: () => <svg aria-hidden="true" />,
+  Search: () => <svg aria-hidden="true" />,
   ShieldCheck: () => <svg aria-hidden="true" />,
+  User: () => <svg aria-hidden="true" />,
   UserRoundCheck: () => <svg aria-hidden="true" />,
+  Plus: () => <svg aria-hidden="true" />,
 }));
 
 import TasksPage from "./page";
@@ -58,7 +65,7 @@ describe("TasksPage", () => {
     await flushAsyncWork();
 
     expect(container.querySelector("h1")?.textContent).toContain("할 일 추적");
-    expect(container.textContent).toContain("내 작업");
+    expect(container.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("위임한 작업");
     expect(container.textContent).toContain("칸반");
     expect(container.textContent).toContain("작업 상세");

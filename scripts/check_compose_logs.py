@@ -9,7 +9,6 @@ import sys
 from dataclasses import dataclass
 from typing import Iterable
 
-
 FORBIDDEN_LOG_RE = re.compile(
     r"\b(?:warning|warn|deprecated|notice|fatal|denied|unable)\b", re.IGNORECASE
 )
@@ -131,7 +130,9 @@ def main(argv: list[str] | None = None) -> int:
     parse_args(sys.argv[1:] if argv is None else argv)
     unexpected, allowed = scan_lines(sys.stdin.read().splitlines())
     if unexpected:
-        print("FAIL compose log policy: unexpected warning-class lines", file=sys.stderr)
+        print(
+            "FAIL compose log policy: unexpected warning-class lines", file=sys.stderr
+        )
         for line in unexpected[:80]:
             print(line, file=sys.stderr)
         print(f"unexpected_count={len(unexpected)}", file=sys.stderr)

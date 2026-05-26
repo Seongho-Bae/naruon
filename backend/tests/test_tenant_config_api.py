@@ -189,3 +189,31 @@ def test_tenant_config_get_rejects_cross_user_access(client):
     assert response.json() == {
         "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
     }
+
+
+def test_global_config_requires_admin(client):
+    response = client.get(
+        "/api/config/global",
+        headers={
+            "X-User-Id": "member-user",
+            "X-User-Role": "member",
+            "X-Organization-Id": "org-acme",
+            "X-Workspace-Id": "ws-1",
+        },
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not enough privileges"}
+
+
+def test_global_config_allows_admin(client):
+    response = client.get(
+        "/api/config/global",
+        headers={
+            "X-User-Id": "admin-user",
+            "X-User-Role": "organization_admin",
+            "X-Organization-Id": "org-acme",
+            "X-Workspace-Id": "ws-1",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"

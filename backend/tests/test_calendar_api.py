@@ -335,7 +335,7 @@ def test_calendar_writeback_targeted_authorization_hides_source_existence(
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="cross-org-etag",
-            )
+            ),
         ]
     )
 

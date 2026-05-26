@@ -6,6 +6,26 @@ from db.models import Email
 from services.email_parser import EmailData
 
 
+import hashlib
+
+
+def generate_email_fingerprint(
+    subject: str | None,
+    date_str: str | None,
+    sender: str | None,
+    recipient: str | None,
+) -> str:
+    """Generate a deterministic fingerprint for an email based on key fields."""
+    components = [
+        str(subject or "").strip(),
+        str(date_str or "").strip(),
+        str(sender or "").strip(),
+        str(recipient or "").strip(),
+    ]
+    raw = "|".join(components).lower()
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def normalize_message_id(value: str | None) -> str | None:
     """Return the canonical persisted form for a Message-ID-like header."""
     if value is None:
@@ -96,6 +116,26 @@ async def assign_thread_id(
 
     if in_reply_to:
         return in_reply_to
+
+    # Subject fallback for FWD / ZIP imports
+    subject = email_data.get("subject", "")
+    if subject:
+        base_subject = re.sub(
+            r"^(re|fwd|fw):\s*", "", subject, flags=re.IGNORECASE
+        ).strip()
+        if base_subject and base_subject != subject:
+            result = await session.execute(
+                select(Email.thread_id)
+                .where(
+                    *email_owner_filters(user_id, organization_id),
+                    Email.subject.ilike(f"%{base_subject}%"),
+                )
+                .order_by(Email.date.desc())
+                .limit(1)
+            )
+            subj_thread_id = result.scalar_one_or_none()
+            if subj_thread_id:
+                return normalize_message_id(subj_thread_id) or subj_thread_id
 
     msg_id = normalize_message_id(email_data.get("message_id"))
     if msg_id:

@@ -6,7 +6,7 @@ from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
-from api.auth import get_current_user
+from api.auth import get_current_user, get_current_user_role
 from services.email_client import (
     validate_smtp_destination,
     validate_smtp_host,
@@ -14,6 +14,13 @@ from services.email_client import (
 )
 
 router = APIRouter(prefix="/api/config")
+
+
+@router.get("/global")
+async def get_global_config(role: str = Depends(get_current_user_role)):
+    if role not in ["platform_admin", "organization_admin"]:
+        raise HTTPException(status_code=403, detail="Not enough privileges")
+    return {"status": "ok", "global_settings": {}}
 
 
 class TenantConfigCreate(BaseModel):

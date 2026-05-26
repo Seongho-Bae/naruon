@@ -52,15 +52,17 @@ class Pop3SyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            configs = await session.execute(select(TenantConfig).where(TenantConfig.pop3_server.isnot(None)))
-            
+            configs = await session.execute(
+                select(TenantConfig).where(TenantConfig.pop3_server.isnot(None))
+            )
+
         semaphore = asyncio.Semaphore(10)
         tasks = []
         for config in configs.scalars():
             if not config.pop3_server or not config.pop3_port:
                 continue
             tasks.append(self._sync_tenant(config, semaphore))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -74,9 +76,13 @@ class Pop3SyncWorker:
             try:
                 # We use asyncio.to_thread for synchronous poplib
                 await asyncio.to_thread(self._do_pop3_sync, config)
-                logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
+                logger.info(
+                    f"Successfully connected to POP3 server for user {config.user_id}."
+                )
             except Exception as e:
-                logger.error(f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}")
+                logger.error(
+                    f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}"
+                )
 
     def _do_pop3_sync(self, config: TenantConfig):
         pop3_server = str(config.pop3_server)

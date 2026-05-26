@@ -10,6 +10,9 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
+- Strix Security Scan must use GitHub Models with `github/gpt-5.4` or a newer
+  GPT-5.4-family route as the default model to bypass Vertex AI GCP credential
+  prerequisites in PR bounds.
 
 ## PR automation and review defaults
 
@@ -71,9 +74,8 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
-- When reviews find public/private identifier leaks or stale API fixture shapes,
-  update tests, frontend mocks, E2E mocks, README examples, and architecture docs
-  together so the same bug pattern does not reappear in copied examples.
+- When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
 - Calendar UI actions must request `/api/calendar/writeback-intent` with
@@ -86,3 +88,21 @@
   style pages as clipped legacy `bg-white` islands; use tokenized `bg-card`
   surfaces and persistent labels for provider, IMAP, SMTP, CalDAV, and WebDAV
   credentials so typed values do not erase field meaning.
+
+## Development environment and tooling defaults
+
+- StepSecurity `harden-runner` will trigger false-positive `suspicious_file_access` lockouts on Next.js build and dev server executions (e.g., `router_init.js` checksum matches). Configure `disable-file-monitoring: true` in the `harden-runner` step rather than disabling the workflow or using `continue-on-error`.
+- Next.js 15+ Turbopack resolves workspace roots by scanning upward for `package-lock.json`. Do not create or leave a `package-lock.json` in the user's home directory (`~/`), as it will cause Turbopack to spawn infinite background worker node processes attempting to compile the entire home directory.
+- `pydantic-settings` strictly rejects unexpected environment variables by default. When sharing a common `.env` file between frontend and backend services, you must explicitly set `extra="ignore"` in the `SettingsConfigDict` to prevent fatal startup crashes.
+- Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
+
+## Phase 10 development rules
+
+- **Stepwise execution**: Each phase requires an atomic PR, GitHub PR Tracking, Push, and Robot Review. A phase only ends when merged. Do not proceed without merge.
+- **TDD + DDD**: Practice TDD, micro TDD, nano TDD, Domain Driven Development, and Context Driven Development.
+- **API Wiring**: Always work with API wiring completed.
+- **Collaboration**: Respect other agents' concurrent work; do not overwrite or dismiss unfamiliar changes.
+- **Subagent Delegation**: Actively delegate tasks to Subagents.
+- **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
+- **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
+- **Goal**: Actively manage tasks to ensure open PR counts converge to 0.

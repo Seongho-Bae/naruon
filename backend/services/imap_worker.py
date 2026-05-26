@@ -3,7 +3,65 @@ import logging
 import aioimaplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
-from db.models import TenantConfig
+from db.models import TenantConfig, Email
+from services.threading_service import generate_email_fingerprint, assign_thread_id
+from services.email_parser import EmailData
+import datetime
+
+
+async def process_fetched_email(
+    session, email_data: EmailData, user_id: str, organization_id: str | None
+):
+    subject = email_data.get("subject", "")
+    date_obj = email_data.get("date")
+    if hasattr(date_obj, "isoformat"):
+        date_str = date_obj.isoformat()
+    else:
+        date_str = str(date_obj) if date_obj else ""
+    sender = email_data.get("sender", "")
+    recipients_list = email_data.get("recipients", [])
+    recipients = ",".join(recipients_list) if recipients_list else ""
+
+    fingerprint = generate_email_fingerprint(subject, date_str, sender, recipients)
+
+    # Check if duplicate
+    stmt = select(Email).where(
+        Email.user_id == user_id,
+        Email.organization_id == (organization_id if organization_id else None),
+        Email.fingerprint == fingerprint,
+    )
+    result = await session.execute(stmt)
+    existing_email = result.scalar_one_or_none()
+
+    if existing_email:
+        logger.info(
+            f"Email with fingerprint {fingerprint} already exists. Skipping duplicate insertion."
+        )
+        return existing_email
+
+    thread_id = await assign_thread_id(
+        session, email_data, user_id=user_id, organization_id=organization_id
+    )
+
+    new_email = Email(
+        user_id=user_id,
+        organization_id=organization_id or "",
+        message_id=email_data.get("message_id", ""),
+        thread_id=thread_id,
+        fingerprint=fingerprint,
+        sender=sender,
+        recipients=recipients,
+        subject=subject,
+        date=datetime.datetime.now(
+            datetime.timezone.utc
+        ),  # simplified for this example
+        body=email_data.get("body", ""),
+        embedding=[0.0] * 1536,  # Dummy embedding
+    )
+
+    session.add(new_email)
+    return new_email
+
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +111,16 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            configs = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
-            
+            configs = await session.execute(
+                select(TenantConfig).where(TenantConfig.imap_server.isnot(None))
+            )
+
         tasks = []
         for config in configs.scalars():
             if not config.imap_server or not config.imap_port:
                 continue
             tasks.append(self._sync_tenant(config))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -68,7 +128,7 @@ class ImapSyncWorker:
         # Already verified not None in caller
         imap_server = str(config.imap_server)
         imap_port = int(config.imap_port)  # type: ignore
-        
+
         logger.info(
             f"Connecting to IMAP server {imap_server}:{imap_port} for user {config.user_id}"
         )
@@ -76,31 +136,41 @@ class ImapSyncWorker:
 
         try:
             await imap_client.wait_hello_from_server()
-            logger.info(f"Successfully connected to IMAP server for user {config.user_id}.")
-            
+            logger.info(
+                f"Successfully connected to IMAP server for user {config.user_id}."
+            )
+
             # Since this is a test/demo setup, we expect real IMAP to fail if invalid or missing creds.
-            # But the requirement is to actually connect. 
+            # But the requirement is to actually connect.
             if config.imap_username and config.imap_password:
-                resp, data = await imap_client.login(config.imap_username, config.imap_password)
+                resp, data = await imap_client.login(
+                    config.imap_username, config.imap_password
+                )
                 if resp != "OK":
                     raise Exception(f"IMAP login failed: {data}")
-                
+
                 await imap_client.select("INBOX")
-                
+
                 # Search for recent emails (e.g., last 10)
                 # For simplicity, we just fetch a small batch to prove connectivity
                 # Real parser logic would go here.
             else:
-                logger.info(f"No IMAP credentials provided for user {config.user_id}, skipping login.")
+                logger.info(
+                    f"No IMAP credentials provided for user {config.user_id}, skipping login."
+                )
 
             # Actual sync logic will be added here later
 
         except Exception as e:
-            logger.error(f"Failed to connect or sync with IMAP server for user {config.user_id}: {e}")
+            logger.error(
+                f"Failed to connect or sync with IMAP server for user {config.user_id}: {e}"
+            )
             raise Exception(f"IMAP Sync failed for user {config.user_id}: {e}") from e
         finally:
             try:
                 if hasattr(imap_client, "protocol") and imap_client.protocol:
                     await imap_client.logout()
             except Exception as logout_err:
-                logger.warning(f"Error during IMAP logout for user {config.user_id}: {logout_err}")
+                logger.warning(
+                    f"Error during IMAP logout for user {config.user_id}: {logout_err}"
+                )

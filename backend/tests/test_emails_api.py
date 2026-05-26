@@ -587,3 +587,37 @@ def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeyp
     assert response.status_code == 500
     assert response.json() == {"detail": "Failed to send email"}
     mock_send_email.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_replies(client: AsyncClient, db_session):
+    from main import app
+    from db.session import get_db
+
+    # Create MockTenantConfig with smtp_username set to match one email
+    class SentTenantConfig:
+        smtp_username = "testuser@example.com"
+
+    db_session.tenant_config = SentTenantConfig()
+
+    sent_email = Email(
+        id=3,
+        user_id="testuser",
+        message_id="msg3",
+        thread_id="thread3",
+        sender="testuser@example.com",
+        recipients="target@example.com",
+        subject="Did you get this?",
+        date=datetime.datetime(2026, 4, 28, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Waiting for your reply",
+    )
+
+    db_session.items = [sent_email]
+
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    response = await client.get("/api/emails/pending-replies")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["emails"]) == 1
+    assert data["emails"][0]["sender"] == "testuser@example.com"

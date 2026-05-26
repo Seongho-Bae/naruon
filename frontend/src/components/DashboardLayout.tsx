@@ -15,20 +15,15 @@ import {
   Home,
   Inbox,
   Menu,
-  Network,
   PenLine,
   Search,
   Send,
   Sparkles,
   Star,
-  Target,
-  FolderOpen,
   MoreHorizontal,
   Settings,
   ShieldCheck,
-  TrendingUp,
-  UserCircle,
-  Edit3
+  UserCircle
 } from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
@@ -40,34 +35,6 @@ const mailNavItems = [
   { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent', available: false },
   { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts', available: false },
   { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all', available: false },
-];
-
-const aiHubItems = [
-  { label: '맥락 종합', description: '분산된 흐름 통합', icon: Network, href: '/ai-hub#context', available: true },
-  { label: '판단 포인트', description: '주요 의사결정 요인', icon: Target, href: '/ai-hub#decisions', available: true },
-  { label: '실행 항목', description: '추출된 업무(Action Items)', icon: CheckCircle2, href: '/ai-hub#actions', available: true },
-];
-
-const projectItems = [
-  { label: '런칭 프로젝트', description: '출시 메일·일정·파일', icon: FolderOpen, href: '/projects#launch', available: true },
-  { label: '벤더 관리', description: '계약·보안·운영', icon: FolderOpen, href: '/projects#vendor', available: true },
-  { label: '마케팅 캠페인', description: '캠페인·성과·후속', icon: FolderOpen, href: '/projects#marketing', available: true },
-];
-
-const labelItems = [
-  { label: '긴급', color: 'bg-red-500', href: '/labels/urgent' },
-  { label: '회의', color: 'bg-yellow-500', href: '/labels/meeting' },
-  { label: '계약', color: 'bg-green-500', href: '/labels/contract' },
-  { label: '디자인', color: 'bg-purple-500', href: '/labels/design' },
-  { label: '개발', color: 'bg-blue-500', href: '/labels/dev' },
-];
-
-const aiNavItems = [
-  { label: '받은편지함', description: '메일 스레드', icon: Inbox, active: true, mobileView: 'inbox' as const },
-  { label: '맥락 종합', description: '흩어진 흐름 연결', icon: Network, mobileView: 'detail' as const },
-  { label: '판단 포인트', description: '의사결정 기준', icon: Target, mobileView: 'detail' as const },
-  { label: '실행 항목', description: '다음 행동 추적', icon: CheckCircle2, mobileView: 'actions' as const },
-  { label: '일정 연결', description: '캘린더 반영', icon: CalendarDays, mobileView: 'calendar' as const },
 ];
 
 const mobileWorkspaceItems = [
@@ -128,7 +95,7 @@ function isActivePath(pathname: string | null, href: string, currentHash = '') {
     : pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function NavLink({
+export function NavLink({
   label,
   description,
   icon: Icon,
@@ -216,7 +183,7 @@ function PrimaryNavLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`inline-flex h-10 items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+      className={`inline-flex h-10 shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
       }`}
     >
@@ -311,121 +278,7 @@ export function DashboardLayout({
         Skip to main content
       </a>
 
-      <aside aria-label="Naruon workspace sidebar" className="hidden w-60 shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar/95 px-4 py-5 shadow-[8px_0_32px_rgba(15,23,42,0.04)] lg:flex">
-        <div className="space-y-5">
-          <div className="flex items-center gap-3">
-            <Image src="/brand/naruon-logo.svg" alt="Naruon" width={150} height={40} style={{ width: '150px', height: '40px' }} />
-          </div>
-          <div data-testid="sidebar-brand-card" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 shadow-sm">
-            <p className="text-sm font-bold text-foreground">처리 상태 유형</p>
-            <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
-              <div className="rounded-xl bg-background/80 p-2">
-                <dt className="text-[10px] font-bold text-muted-foreground">답장 대기</dt>
-                <dd className="text-[11px] font-black text-primary">추적</dd>
-              </div>
-              <div className="rounded-xl bg-background/80 p-2">
-                <dt className="text-[10px] font-bold text-muted-foreground">일정 충돌</dt>
-                <dd className="text-[11px] font-black text-amber-600">조율</dd>
-              </div>
-              <div className="rounded-xl bg-background/80 p-2">
-                <dt className="text-[10px] font-bold text-muted-foreground">writeback 대기</dt>
-                <dd className="text-[11px] font-black text-emerald-700">확인</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        <div data-testid="sidebar-scroll-region" className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <div className="px-3 pb-4 pt-6">
-            <button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold rounded-lg py-2.5 px-4 flex items-center justify-center gap-2 transition-colors">
-              <Edit3 className="w-4 h-4" />
-              메일 작성
-            </button>
-          </div>
-
-          <nav aria-label="Mail sections" className="space-y-0.5">
-            {mailNavItems.map((item) => (
-              <NavLink key={item.label} {...item} />
-            ))}
-          </nav>
-
-          <nav aria-label="Naruon workspace sections" className="mt-6 space-y-0.5">
-            <div className="mb-1 flex items-center justify-between px-3">
-              <p className="text-[11px] font-bold text-muted-foreground">AI 허브</p>
-              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">BETA</span>
-            </div>
-            {aiHubItems.map((item) => (
-              <NavLink key={item.label} {...item} />
-            ))}
-          </nav>
-
-          <nav aria-label="Projects sections" className="mt-6 space-y-0.5">
-            <div className="mb-1 flex cursor-pointer items-center justify-between rounded-md py-1 px-3 hover:bg-secondary/50">
-              <p className="text-[11px] font-bold text-muted-foreground">프로젝트</p>
-              <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M4 6H11L7.5 10.5L4 6Z" fill="currentColor"></path></svg>
-            </div>
-            {projectItems.map((item) => (
-              <NavLink key={item.label} {...item} />
-            ))}
-          </nav>
-
-          <nav aria-label="Labels sections" className="mt-6 space-y-0.5">
-            <div className="mb-1 flex cursor-pointer items-center justify-between rounded-md py-1 px-3 hover:bg-secondary/50">
-              <p className="text-[11px] font-bold text-muted-foreground">라벨</p>
-              <svg width="10" height="10" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground"><path d="M7 7V2H8V7H13V8H8V13H7V8H2V7H7Z" fill="currentColor"></path></svg>
-            </div>
-            {labelItems.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                disabled
-                data-coming-soon="true"
-                className="group flex min-h-8 w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-1 text-left text-sm text-sidebar-foreground/55"
-              >
-                <div className={`h-2 w-2 rounded-full ${item.color}`} aria-hidden="true" />
-                <span className="flex min-w-0 items-center gap-2">
-                  {item.label}
-                  <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">준비 중</span>
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="px-3 pb-4 pt-6">
-            <div className="rounded-xl border border-border bg-secondary/30 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-[11px] font-bold text-foreground">오늘의 인사이트</p>
-                <TrendingUp className="w-3 h-3 text-muted-foreground" />
-              </div>
-              <p className="mb-1 text-xs text-muted-foreground">업무 집중 시간</p>
-              <p className="text-xs font-bold">오전 10:00 - 12:00</p>
-              <div className="mt-3 flex h-12 items-end gap-1 opacity-60">
-                <div className="h-[20%] w-full rounded-t-sm bg-primary/40"></div>
-                <div className="h-[40%] w-full rounded-t-sm bg-primary/40"></div>
-                <div className="h-[80%] w-full rounded-t-sm bg-primary/80"></div>
-                <div className="h-[100%] w-full rounded-t-sm bg-primary"></div>
-                <div className="h-[60%] w-full rounded-t-sm bg-primary/60"></div>
-              </div>
-            </div>
-          </div>
-
-          <nav aria-label="AI workspace sections" className="sr-only">
-            {aiNavItems.map(({ label }) => (
-              <a key={label} href="#main-content">{label}</a>
-            ))}
-          </nav>
-        </div>
-
-        <div className="mt-auto rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
-          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Sparkles className="size-4 text-primary" aria-hidden="true" />
-            실행 큐
-          </div>
-          <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            미응답 메일, 위임 작업, CalDAV/WebDAV writeback intent 점검을 다음 액션 기준으로 묶습니다.
-          </p>
-        </div>
-      </aside>
+      {/* Sidebar removed to match branding assets */}
 
       <main id="main-content" className="flex min-w-0 flex-1 flex-col overflow-hidden pb-16 lg:pb-0">
         <header aria-label="Naruon workspace header" className="flex min-h-16 items-center gap-3 border-b border-border/70 bg-card/85 px-4 backdrop-blur-xl lg:px-6">
@@ -441,11 +294,11 @@ export function DashboardLayout({
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-2 xl:hidden">
-            <Image src="/brand/naruon-symbol.svg" alt="" width={32} height={32} aria-hidden="true" style={{ width: '32px', height: '32px' }} />
+          <div className="flex items-center gap-2">
+            <Image src="/brand/naruon-symbol.svg" alt="Naruon" width={32} height={32} style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
-          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto xl:flex 2xl:max-w-none">
+          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto lg:flex 2xl:max-w-none">
             {primaryNavItems.map((item) => (
               <PrimaryNavLink key={item.href} {...item} />
             ))}

@@ -18,6 +18,10 @@ interface EmailItem {
   unread?: boolean;
   thread_id?: string; // O3: email threading support
   reply_count?: number;
+  has_draft?: boolean;
+  is_self_sent?: boolean;
+  requires_reply?: boolean;
+  schedule_conflict?: boolean;
 }
 
 let inboxRequest: Promise<EmailItem[]> | null = null;
@@ -106,12 +110,12 @@ export function EmailList({
           }}
           className="flex gap-2"
         >
-          <label htmlFor="email-search" className="sr-only">Search emails</label>
+          <label htmlFor="email-search" className="sr-only">이메일 검색</label>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               id="email-search"
-              aria-label="Search emails"
+              aria-label="이메일 검색"
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
@@ -175,9 +179,13 @@ export function EmailList({
                 <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
                   {safeSnippet}
                 </div>
-                {email.unread && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>
+                {(email.unread || email.has_draft || email.is_self_sent || email.requires_reply || email.schedule_conflict) && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {email.unread && <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>}
+                    {email.has_draft && <Badge variant="secondary" className="border-blue-500/20 bg-blue-500/10 text-[10px] text-blue-700">답장 초안</Badge>}
+                    {email.is_self_sent && <Badge variant="secondary" className="border-purple-500/20 bg-purple-500/10 text-[10px] text-purple-700">지식 정리</Badge>}
+                    {email.requires_reply && <Badge variant="outline" className="border-primary/30 text-[10px] text-primary bg-primary/5">응답 대기 중</Badge>}
+                    {email.schedule_conflict && <Badge variant="outline" className="border-emerald-500/30 text-[10px] text-emerald-700 bg-emerald-500/5">일정 충돌 조율</Badge>}
                   </div>
                 )}
               </button>

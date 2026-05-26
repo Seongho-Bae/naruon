@@ -10,7 +10,6 @@ from sqlalchemy import delete
 from db.models import Email
 from db.session import AsyncSessionLocal
 
-
 THREAD_ID = "<live-e2e-root@example.test>"
 LIVE_E2E_USER_ID = "testuser"
 LIVE_E2E_ORGANIZATION_ID = "org-acme"

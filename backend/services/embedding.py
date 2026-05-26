@@ -17,10 +17,12 @@ def chunk_text(
     return splitter.split_text(text)
 
 
-async def generate_embeddings(texts: list[str], openai_api_key: str) -> list[list[float]]:
+async def generate_embeddings(
+    texts: list[str], openai_api_key: str
+) -> list[list[float]]:
     if not openai_api_key:
         raise ValueError("OPENAI_API_KEY is not set")
-    
+
     # Instantiate client locally to avoid global state race conditions across tenants
     client = AsyncOpenAI(api_key=openai_api_key)
 

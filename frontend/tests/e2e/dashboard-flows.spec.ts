@@ -7,7 +7,7 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+  await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   await page.getByRole('button', { name: /김지현 PM/ }).click();
 
   await expect(page.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
@@ -30,7 +30,7 @@ test('submits branded inbox search against the search API', async ({ page }, tes
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+  await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
   await desktopWorkspace.getByLabel('Search emails').fill('출시');
   await desktopWorkspace.getByRole('button', { name: '검색' }).click();
@@ -43,7 +43,7 @@ test('selects an email on mobile and executes visible detail task actions', asyn
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: '이메일 작업공간 열기' }).click();
+  await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   await page.getByRole('button', { name: /김지현 PM/ }).click();
 
   const detailRegion = page.getByRole('region', { name: '모바일 메일 상세' });

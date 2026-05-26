@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Activity, AlertCircle, CheckCircle2, Key, Mail, Server, Settings, Shield } from 'lucide-react';

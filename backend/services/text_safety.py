@@ -324,6 +324,8 @@ def _unknown_tag_segment_has_unsafe_markers(tag_name: str, remainder: str) -> bo
 
 
 def _is_tag_like_segment(value: str) -> bool:
+    if not value or value[0].isspace():
+        return False
     candidate = value.strip()
     if not candidate:
         return False
@@ -438,6 +440,12 @@ def strip_html_markup(value: str) -> str:
     parser.feed(masked)
     parser.close()
     text = parser.get_text()
+
+    cleaned_lines = []
+    for line in text.splitlines():
+        cleaned_lines.append(_strip_tag_like_segments(line))
+    text = "\n".join(cleaned_lines).strip()
+
     for token, original in placeholders.items():
         text = text.replace(token, original)
     return text
