@@ -54,7 +54,7 @@ export function AIHubLayout() {
 
       <main className="flex-1 overflow-y-auto p-8">
         <div className="max-w-5xl mx-auto space-y-8">
-          <nav aria-label="AI hub execution checkpoints" className="flex gap-2 overflow-x-auto pb-1">
+          <nav aria-label="AI hub execution checkpoints" className="flex scroll-smooth gap-2 overflow-x-auto pb-1">
             {EXECUTION_SECTIONS.map((section) => (
               <a
                 key={section.id}
@@ -79,7 +79,7 @@ export function AIHubLayout() {
                     <h2 className="text-lg font-bold">{section.title}</h2>
                     <p className="mt-1 text-xs font-bold text-primary">{section.status}</p>
                   </div>
-                  <button className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold hover:bg-secondary">
+                  <button type="button" className="shrink-0 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-bold hover:bg-secondary">
                     {section.action}
                   </button>
                 </div>

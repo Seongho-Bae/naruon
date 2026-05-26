@@ -40,6 +40,6 @@ ZIP imports, POP3/IMAP mailbox sync, and forwarded copies are provenance sources
 not new canonical mail objects. Dedupe must compare owner scope, source account,
 RFC `Message-ID`, `In-Reply-To`/`References`, normalized sender/recipient/date,
 body fingerprints, forwarded-chain markers, and attachment hashes before
-creating a new canonical message. Duplicate copies should attach provenance to
+creating a new canonical message. Duplicates should attach provenance to
 the canonical thread rather than exposing sequential database ids through task or
 mail APIs.

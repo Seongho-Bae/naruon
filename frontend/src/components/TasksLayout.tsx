@@ -46,13 +46,22 @@ const taskPriorityLabels: Record<TicketTask['priority'], string> = {
   urgent: '긴급',
 };
 
+type TicketStatus = 'loading' | 'ready' | 'empty' | 'auth' | 'error';
+
+function getApiErrorStatus(error: unknown) {
+  const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
+  if (typeof shapedError?.status === 'number') return shapedError.status;
+  if (typeof shapedError?.response?.status === 'number') return shapedError.response.status;
+  return null;
+}
+
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [tasks, setTasks] = useState(MOCK_TASKS);
   const [draggedTask, setDraggedTask] = useState<{id: string, sourceCol: string} | null>(null);
   const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
-  const [ticketStatus, setTicketStatus] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
+  const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
 
   useEffect(() => {
     let cancelled = false;
@@ -64,10 +73,11 @@ export function TasksLayout() {
         setTicketTasks(apiTasks);
         setTicketStatus(apiTasks.length > 0 ? 'ready' : 'empty');
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (cancelled) return;
+        const status = getApiErrorStatus(error);
         setTicketTasks([]);
-        setTicketStatus('error');
+        setTicketStatus(status === 401 || status === 403 ? 'auth' : 'error');
       });
 
     return () => {
@@ -172,7 +182,8 @@ export function TasksLayout() {
               {ticketStatus === 'loading' ? '작업 불러오는 중' : null}
               {ticketStatus === 'ready' ? `${ticketTasks.length}개 티켓 연결` : null}
               {ticketStatus === 'empty' ? '연결된 티켓 없음' : null}
-              {ticketStatus === 'error' ? '인증된 세션 필요' : null}
+              {ticketStatus === 'auth' ? '인증된 세션 필요' : null}
+              {ticketStatus === 'error' ? '작업 API 오류' : null}
             </div>
           </div>
 
@@ -220,9 +231,15 @@ export function TasksLayout() {
             </p>
           ) : null}
 
-          {ticketStatus === 'error' ? (
+          {ticketStatus === 'auth' ? (
             <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">
               작업 API는 signed session이 있을 때만 읽습니다. 공개 identity header는 사용하지 않습니다.
+            </p>
+          ) : null}
+
+          {ticketStatus === 'error' ? (
+            <p className="mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm font-semibold text-red-900">
+              작업 API를 불러오지 못했습니다. 서버 상태를 확인한 뒤 다시 시도합니다.
             </p>
           ) : null}
         </section>

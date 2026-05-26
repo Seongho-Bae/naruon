@@ -137,8 +137,11 @@ for (const viewport of responsiveViewports) {
         .getByRole('article', { name: '받은 메일' })
         .first()
         .getByText('받은 메일', { exact: true });
+      await expect(metricLabel).toBeVisible();
       const metricLabelBox = await metricLabel.boundingBox();
-      expect(metricLabelBox?.height ?? 0).toBeLessThan(48);
+      expect(metricLabelBox).not.toBeNull();
+      if (!metricLabelBox) throw new Error('Metric label bounding box was unavailable.');
+      expect(metricLabelBox.height).toBeLessThan(48);
     }
     await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -172,7 +175,7 @@ for (const viewport of responsiveViewports) {
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
   { path: '/calendar', heading: '일정 관리', marker: { text: '원본 계정 writeback 흐름' } },
-  { path: '/tasks', heading: '할 일 추적', marker: { text: '리소스 배정 검토 회의' } },
+  { path: '/tasks', heading: '할 일 추적', marker: { name: '리소스 배정 검토 회의' } },
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
   { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },
