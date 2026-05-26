@@ -8,13 +8,16 @@ pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
 
 class MockTenantConfig:
-    def __init__(self):
-        self.openai_api_key = "test-key"
+    def __init__(self, openai_api_key="test-key"):
+        self.openai_api_key = openai_api_key
 
 
 class MockSession:
+    def __init__(self, tenant_config=None):
+        self.tenant_config = tenant_config or MockTenantConfig()
+
     async def scalar(self, stmt):
-        return MockTenantConfig()
+        return self.tenant_config
 
 
 @pytest.fixture
@@ -74,3 +77,26 @@ def test_draft_endpoint(mock_draft, client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
+
+
+def test_llm_endpoints_preserve_missing_key_400():
+    async def override_get_db():
+        yield MockSession(MockTenantConfig(openai_api_key=None))
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app, headers={"X-User-Id": "testuser"}) as test_client:
+            summarize = test_client.post(
+                "/api/llm/summarize", json={"email_body": "test email"}
+            )
+            draft = test_client.post(
+                "/api/llm/draft",
+                json={"email_body": "test email", "instruction": "reply nicely"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert summarize.status_code == 400
+    assert summarize.json() == {"detail": "OpenAI API key not configured"}
+    assert draft.status_code == 400
+    assert draft.json() == {"detail": "OpenAI API key not configured"}

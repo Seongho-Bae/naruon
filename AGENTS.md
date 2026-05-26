@@ -10,7 +10,9 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan must use `github/gpt-4o` as the default model to bypass Vertex AI GCP credential prerequisites in PR bounds.
+- Strix Security Scan must use GitHub Models with an OpenAI GPT-5-or-newer
+  model through `models: read`; do not silently fall back to Gemini, GPT-4o, or
+  other providers when this gate is configured for PR evidence.
 
 ## PR automation and review defaults
 
@@ -64,6 +66,9 @@
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When reviews find inert navigation/dead-space controls, either wire them to an
+  implemented workspace route/API or remove the control; do not leave
+  high-traffic drawer/sidebar entries as permanent `준비 중` copy.
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.

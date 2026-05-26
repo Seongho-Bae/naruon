@@ -51,11 +51,19 @@ mailbox owners.
 
 ## Warning classification
 
-Current backend test warnings are known dependency/toolchain warnings:
+Backend evidence should be collected with warnings promoted to errors whenever
+the slice is under active change:
+
+```bash
+PYTHONWARNINGS=error python3 -m pytest -q
+```
+
+Historical third-party dependency warnings should be isolated or filtered with
+an explicit rationale before merge evidence is accepted:
 
 - `starlette.formparsers` imports `multipart`, which emits a pending deprecation
   warning.
 - Compiled SWIG metadata emits `__module__` deprecation warnings during import.
 
-Threading code should not add new warnings. Treat any new warning from
-application modules as a regression.
+Threading code should not add new warnings. Treat any new application warning
+or log output containing `Timeout`, `Fatal`, `Warn`, or `Denied` as a regression.

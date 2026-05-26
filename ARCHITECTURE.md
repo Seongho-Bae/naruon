@@ -158,8 +158,9 @@ it must never fall back to scanning trusted-base content for a modified PR path.
 Pull request scans split scoped changed files into small bounded batches before
 the timeout-driven rebalance path, so large PRs do not spend the whole required
 check budget on one oversized Strix invocation. Strix remains a required
-Medium-or-higher gate, while third-party LLM/provider warnings are tracked
-separately unless they make the scan incomplete.
+Medium-or-higher gate. The workflow uses GitHub Models through `models: read`,
+the OpenAI-compatible GitHub Models endpoint, and an OpenAI GPT-5-or-newer
+model; non-GPT-5 provider fallbacks are not valid PR evidence for this gate.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
 

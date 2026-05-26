@@ -16,13 +16,25 @@
 
 | Area | Evidence | Status | First implementation action |
 | --- | --- | --- | --- |
-| Startup choice | `frontend/src/lib/workspace-preferences.ts` supports `dashboard \| email \| calendar` but defaults to email. | Partial | Make Today dashboard the first-run default while preserving user override. |
-| Branding menu IA | `frontend/branding/uiux/*.png` show full workspace IA; `DashboardLayout.tsx` still has disabled mail items and mobile menu omits Mail/Context Search/Projects/AI Hub/Data/Security parity. | Partial | Centralize IA, expose desktop and tablet/mobile drawers with full destinations, and reduce inert copy. |
-| Ticket-like work tracking | `EmailDetail.tsx` only shows a local “할 일로 정리했습니다” status. | Missing | Add `TicketTask` persistence and `/api/tasks` create/list contracts linked to email/thread. |
+| Startup choice | `frontend/src/lib/workspace-preferences.ts` supports `dashboard \| email \| calendar` and first-run sessions open the dashboard. | Implemented | Preserve explicit user overrides and keep screenshot evidence current. |
+| Branding menu IA | `frontend/branding/uiux/*.png` show full workspace IA; `DashboardLayout.tsx` exposes desktop and tablet/mobile destinations with live mail folder links. | Implemented | Keep desktop primary nav and tablet/mobile drawer destinations synchronized. |
+| Ticket-like work tracking | `/tasks` reads `/api/tasks` and displays source-linked ticket status, priority, email, and thread provenance. | Implemented | Continue expanding persistence/writeback evidence in DB-affecting slices. |
 | CalDAV/WebDAV source of truth | `docs/plans/2026-05-18-calendar-writeback-sovereignty.md` and `ARCHITECTURE.md` require source records/ETag/writeback. | Partial | Keep writeback design documented here, but do not fake provider writes in this slice. |
 | Private-network mail | `docs/plans/2026-05-18-self-hosted-connector-bootstrap.md` requires outbound connector design. | Partial | Document that GitHub self-hosted runner is CI smoke only; production connector remains outbound-only. |
 | PR automation | `scripts/ci/pr_governance_gate.sh` treats missing CodeRabbit evidence as a blocker and `STARTUP_FAILURE` as waiting. | Partial | Treat missing robot evidence as wait-state and startup failure as terminal blocker. |
-| Responsive evidence | `frontend/tests/e2e/dashboard-branding.spec.ts` checks viewports and scroll, but Playwright config only has desktop Chromium. | Partial | Add mobile/tablet/desktop Playwright projects and screenshot-backed verification. |
+| Responsive evidence | `frontend/tests/e2e/dashboard-branding.spec.ts` covers desktop/tablet/mobile viewport, scroll, and hamburger capture evidence. | Implemented | Keep reviewing generated screenshots, not only pass/fail output. |
+
+## 2026-05-26 verification update
+
+- Startup selection is now treated as implemented: first-run sessions open the
+  dashboard while explicit dashboard/email/calendar choices are preserved.
+- Mail drawer items that were previously dead controls now link to `/mail`
+  folder states, and Help/Profile route to Settings anchors.
+- `/tasks` keeps the ticket-like board surface and reads `/api/tasks` so source
+  email/thread provenance appears in the workspace.
+- The remaining connector/writeback items stay as explicit future episodes:
+  real CalDAV/WebDAV mutation, POP3 runtime sync, sent-mail reply tracking
+  persistence, self-sent knowledge capture, and sender DAG action selection.
 
 ## Task 1: Governance wait-state correction
 

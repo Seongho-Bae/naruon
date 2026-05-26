@@ -55,6 +55,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
+	assert_file_contains "$workflow_file" "models: read" "strix workflow grants GitHub Models read permission"
 	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE_SHA" "strix workflow pins trusted workspace SHA"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE=\$trusted_workspace" "strix workflow exports a trusted workspace path"
@@ -73,11 +74,19 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "PR head ref did not resolve to expected commit" "strix workflow fails closed when PR head ref remains stale"
 	assert_file_contains "$workflow_file" "sleep 10" "strix workflow waits between stale PR head ref retries"
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
-	assert_file_contains "$workflow_file" "[ \"\$GITHUB_EVENT_NAME\" = \"pull_request_target\" ]" "strix workflow fails closed when PR target secrets are missing"
+	assert_file_contains "$workflow_file" "GITHUB_EVENT_NAME\" = 'pull_request_target'" "strix workflow fails closed when PR target model auth is missing"
 	assert_file_contains "$workflow_file" "Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event" "strix workflow fails closed when PR target model auth is missing"
 	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
 	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
 	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
+	assert_file_contains "$workflow_file" 'STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || '"'"'openai/gpt-5'"'"' }}' "strix workflow defaults to GitHub Models GPT-5"
+	assert_file_contains "$workflow_file" "STRIX_LLM must select a GitHub Models OpenAI GPT-5 or newer model" "strix workflow rejects non-GPT-5 GitHub Models inputs"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ github.token }}' "strix workflow uses the GitHub token for GitHub Models"
+	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes Strix through GitHub Models inference"
+	assert_file_contains "$workflow_file" "STRIX_LLM_DEFAULT_PROVIDER: openai" "strix workflow uses the OpenAI-compatible provider for GitHub Models"
+	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to GPT-4o when GPT-5 is required"
+	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to Gemini when GitHub Models is required"
+	assert_file_not_contains "$workflow_file" "if-no-files-found: warn" "strix workflow must not downgrade missing security artifacts to warnings"
 	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
 		record_failure "strix workflow must not expose secrets on pull_request events"
 	fi

@@ -28,6 +28,23 @@
 - GitHub self-hosted runners remain CI smoke infrastructure. They can validate
   internal connectivity, but they are not the production relay component.
 
+## Source registry contract
+
+Every writeback-capable account should resolve through a server-authoritative
+source registry before any provider mutation is attempted. The registry record
+must include an opaque `source_id`, tenant/workspace owner scope, protocol
+(`imap`, `smtp`, `pop3`, `caldav`, `carddav`, `webdav`), provider host, capability
+flags, consent state, data region, connector route, credential reference, and
+conflict metadata such as remote ids or ETags. Browser requests may reference
+`source_id`, but must never supply ownership, credential, region, or capability
+claims.
+
+Implemented slices currently cover signed task/mail provenance, dedupe/threading
+contracts, source-linked ticket tasks, and writeback intent documentation. Real
+CalDAV/WebDAV mutation, POP3 runtime sync, sent-mail reply tracking persistence,
+self-sent knowledge capture, and sender DAG/ontology action selection remain
+episode work and must preserve this registry boundary.
+
 ## Policy and audit requirements
 
 - RBAC grants are necessary but never sufficient when ABAC denies apply. Region,

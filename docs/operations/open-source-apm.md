@@ -2,10 +2,12 @@
 
 ## 확인된 사실 / Confirmed
 
-- `backend/main.py` currently exposes the FastAPI app and routers, but no
-  OpenTelemetry instrumentation is wired yet.
-- `docker-compose.yml` currently contains db/backend/frontend only; it does not
-  run Prometheus, Grafana, Loki, Tempo, Jaeger, or an OpenTelemetry Collector.
+- `backend/main.py` exposes Prometheus metrics and optional OpenTelemetry
+  FastAPI instrumentation.
+- `backend/requirements.txt` includes `prometheus-fastapi-instrumentator` and
+  OpenTelemetry dependencies used by the FastAPI app.
+- `docker-compose.observability.yml`, `docker-compose.apm.yml`, and
+  `docker-compose.infra.yml` document local Prometheus/APM stack entry points.
 - `docker-compose.live-e2e.yml` proves the image-based smoke path before any APM
   stack is claimed as production-ready.
 
@@ -30,8 +32,16 @@
 
 ## 도입 기준
 
-- Add instrumentation behind explicit environment variables.
-- Keep `/healthz`, `/readyz`, and `/metrics` semantics separate if those endpoints
-  are added later.
+- Keep instrumentation behind explicit environment variables where tracing can
+  export outside the process.
+- Keep `/healthz`, `/readyz`, and `/metrics` semantics separate as the stack
+  matures.
 - Do not claim APM production readiness until a live stack shows trace, metric,
   and log evidence without leaking user email content.
+
+## Remaining gaps
+
+- Add connector heartbeat, sync lag, writeback conflict, and AI action audit
+  dashboards.
+- Add log and trace redaction tests for email bodies, provider tokens, DSNs, and
+  calendar/file descriptions.

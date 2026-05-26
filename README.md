@@ -28,6 +28,9 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
+- Strix PR/security evidence runs through GitHub Models with an OpenAI GPT-5+
+  model and the workflow `models: read` permission; pending CodeRabbit or check
+  evidence is a wait state, not a hard blocker.
   
 ## Agentic Ontology & Auto-Organization (Planned)
 
@@ -76,6 +79,12 @@ npm run lint
 npm run build
 npm run dev
 ```
+
+`next.config.ts` caps static generation concurrency by default
+(`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
+`NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER=50`) so constrained CI/build
+machines do not fan out excessive Node/PostCSS workers. Raise those values only
+with explicit build evidence.
 
 ## Threading proof points
 

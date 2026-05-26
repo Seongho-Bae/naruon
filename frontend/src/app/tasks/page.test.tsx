@@ -67,5 +67,39 @@ describe("TasksPage", () => {
     expect(container.querySelector("h1")?.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("할 일 추적");
     expect(container.textContent).toContain("위임한 작업");
+    expect(container.textContent).toContain("실제 티켓 큐");
+    expect(container.textContent).toContain("연결된 티켓 없음");
+  });
+
+  it("loads source-linked tickets from the signed task API", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse([
+      {
+        id: "task_public_123",
+        title: "보낸 메일 회신 추적",
+        status: "in_progress",
+        priority: "high",
+        source_type: "email",
+        source_email_id: "mail_public_456",
+        related_thread_id: "thread_public_789",
+        updated_at: "2026-05-26T09:00:00.000Z",
+      },
+    ]));
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({
+      headers: expect.objectContaining({ "Content-Type": "application/json" }),
+    }));
+    expect(container.textContent).toContain("1개 티켓 연결");
+    expect(container.textContent).toContain("보낸 메일 회신 추적");
+    expect(container.textContent).toContain("mail_public_456");
+    expect(container.textContent).toContain("thread_public_789");
   });
 });

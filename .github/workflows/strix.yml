@@ -18,6 +18,7 @@ concurrency:
 permissions:
   actions: read
   contents: read
+  models: read
 
 jobs:
   strix:
@@ -80,22 +81,19 @@ jobs:
       - name: Gate Strix secrets
         id: gate
         env:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5' }}
         run: |
-          strix_llm="github/gpt-4o"
-          llm_api_key="$(printf '%s' "$LLM_API_KEY" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          if [ -z "$llm_api_key" ]; then
-            # On protected/privileged events, fail-closed: missing secrets must
-            # not silently produce a green check.
-            if [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$GITHUB_EVENT_NAME" = "schedule" ] || [ "$GITHUB_EVENT_NAME" = "pull_request_target" ]; then
-              echo '::error::Strix secrets not configured on protected or privileged event; failing closed.'
+          strix_model="$(printf '%s' "$STRIX_GITHUB_MODELS_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          case "$strix_model" in
+            openai/gpt-5 | openai/gpt-5-* | openai/gpt-5.[0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+            openai/openai/gpt-5 | openai/openai/gpt-5-* | openai/openai/gpt-5.[0-9]* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]*)
+              echo 'enabled=true' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo '::error::STRIX_LLM must select a GitHub Models OpenAI GPT-5 or newer model, for example openai/gpt-5.'
               exit 1
-            fi
-            echo 'enabled=false' >> "$GITHUB_OUTPUT"
-            echo 'Strix secrets not configured; skipping.'
-          else
-            echo 'enabled=true' >> "$GITHUB_OUTPUT"
-          fi
+              ;;
+          esac
 
       - name: Gate GCP credentials
         id: gcp_gate
@@ -114,10 +112,11 @@ jobs:
         id: auth_gate
         if: steps.gate.outputs.enabled == 'true'
         env:
-          DEFAULT_PROVIDER: gemini
+          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5' }}
+          DEFAULT_PROVIDER: openai
         run: |
           . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
-          strix_llm="github/gpt-4o"
+          strix_llm="$(trim_whitespace "$STRIX_GITHUB_MODELS_MODEL")"
           requires_vertex_auth='false'
           model_auth_rc=0
           model_requires_vertex_auth "$strix_llm" || model_auth_rc=$?
@@ -195,7 +194,7 @@ jobs:
       - name: Mask LLM API key
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_API_KEY: ${{ github.token }}
         run: |
           # Sanitize CR/LF before masking to prevent broken ::add-mask::
           # commands and potential workflow command injection.
@@ -211,7 +210,7 @@ jobs:
       - name: Prepare LLM API key input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY_SECRET: ${{ secrets.LLM_API_KEY }}
+          LLM_API_KEY_SECRET: ${{ github.token }}
         run: |
           if [ -n "$LLM_API_KEY_SECRET" ]; then
             umask 077
@@ -222,37 +221,44 @@ jobs:
 
       - name: Prepare Strix model input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        env:
+          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5' }}
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
-            printf '%s' "github/gpt-4o" > "$strix_llm_file"
+          strix_model="$(printf '%s' "$STRIX_GITHUB_MODELS_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          case "$strix_model" in
+            openai/gpt-5 | openai/gpt-5-* | openai/gpt-5.[0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+              printf 'openai/%s' "$strix_model" > "$strix_llm_file"
+              ;;
+            openai/openai/gpt-5 | openai/openai/gpt-5-* | openai/openai/gpt-5.[0-9]* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]*)
+              printf '%s' "$strix_model" > "$strix_llm_file"
+              ;;
+            *)
+              echo '::error::STRIX_LLM must select a GitHub Models OpenAI GPT-5 or newer model, for example openai/gpt-5.'
+              exit 1
+              ;;
+          esac
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
       - name: Prepare LLM API base input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
-        env:
-          LLM_API_BASE_SECRET: ${{ secrets.LLM_API_BASE }}
         run: |
-          if [ -n "$LLM_API_BASE_SECRET" ]; then
-            umask 077
-            llm_api_base_file="$RUNNER_TEMP/llm_api_base.txt"
-            printf '%s' "$LLM_API_BASE_SECRET" > "$llm_api_base_file"
-            echo "LLM_API_BASE_FILE=$llm_api_base_file" >> "$GITHUB_ENV"
-          fi
+          umask 077
+          llm_api_base_file="$RUNNER_TEMP/llm_api_base.txt"
+          printf '%s' "https://models.github.ai/inference" > "$llm_api_base_file"
+          echo "LLM_API_BASE_FILE=$llm_api_base_file" >> "$GITHUB_ENV"
 
       - name: Run Strix (quick)
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
-          STRIX_LLM_DEFAULT_PROVIDER: gemini
-          GEMINI_LOCATION: GLOBAL
+          STRIX_LLM_DEFAULT_PROVIDER: openai
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
           LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
-          STRIX_GEMINI_FALLBACK_MODELS: "gemini/gemini-2.5-flash gemini/gemini-2.5-pro"
-          STRIX_VERTEX_FALLBACK_MODELS: "vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash"
           STRIX_TARGET_PATH: ./
           STRIX_SOURCE_DIRS: .
-          STRIX_REASONING_EFFORT: ${{ github.event_name == 'push' && 'low' || 'minimal' }}
+          STRIX_REASONING_EFFORT: low
           STRIX_LLM_MAX_RETRIES: 1
           LLM_TIMEOUT: 90
           STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
@@ -285,5 +291,5 @@ jobs:
         with:
           name: strix-reports
           path: strix_runs/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 5
