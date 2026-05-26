@@ -69,7 +69,9 @@
 - Mail connection updates must validate server-side SMTP, POP3, IMAP, and relay
   destinations before persistence. POP3 credentials are required for POP3 sync;
   missing credentials must fail the sync path instead of logging a successful
-  no-op.
+  no-op. Do not place sensitive credential values, secret-derived values, or
+  password-shaped field names in logs or raised exception text; use static
+  non-secret labels such as "credential secret" instead.
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.

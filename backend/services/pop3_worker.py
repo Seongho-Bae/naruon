@@ -76,30 +76,27 @@ class Pop3SyncWorker:
                 await asyncio.to_thread(self._do_pop3_sync, config)
                 logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
             except Exception as e:
-                logger.error(f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}")
+                logger.error(
+                    "Failed to connect or sync with POP3 server for user %s: %s",
+                    config.user_id,
+                    type(e).__name__,
+                )
 
     def _do_pop3_sync(self, config: TenantConfig):
         pop3_server = str(config.pop3_server)
         pop3_port = int(config.pop3_port)  # type: ignore
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
         try:
-            missing_fields = [
-                field_name
-                for field_name, value in (
-                    ("pop3_username", config.pop3_username),
-                    ("pop3_password", config.pop3_password),
-                )
-                if not value
-            ]
-            if missing_fields:
-                missing = ", ".join(missing_fields)
+            if not config.pop3_username:
                 logger.error(
-                    "Missing POP3 credentials for user %s: %s",
+                    "Missing POP3 username for user %s; credential secret presence was not logged.",
                     config.user_id,
-                    missing,
                 )
+                raise RuntimeError(f"Missing POP3 username for user {config.user_id}")
+            if not config.pop3_password:
+                logger.error("Missing POP3 credential secret for user %s.", config.user_id)
                 raise RuntimeError(
-                    f"Missing POP3 credentials for user {config.user_id}: {missing}"
+                    f"Missing POP3 credential secret for user {config.user_id}"
                 )
             pop3_client.user(config.pop3_username)
             pop3_client.pass_(config.pop3_password)
