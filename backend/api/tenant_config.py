@@ -85,17 +85,32 @@ MAILBOX_MANAGE_FORBIDDEN = (
 MAILBOX_VIEW_FORBIDDEN = (
     "Mailbox settings are personal and can only be viewed by the authenticated user"
 )
+POP3_EGRESS_PORTS = {110, 995}
 
 
-def _validate_smtp_config_update(
+def _validate_pop3_port(pop3_port: int) -> int:
+    if pop3_port not in POP3_EGRESS_PORTS:
+        raise ValueError("pop3_port is not allowed")
+    return pop3_port
+
+
+def _field_value(
+    config_data: dict, db_config: TenantConfig | None, field_name: str
+):
+    if field_name in config_data:
+        return config_data[field_name]
+    if db_config is not None:
+        return getattr(db_config, field_name)
+    return None
+
+
+def _validate_mail_config_update(
     config_data: dict, db_config: TenantConfig | None
 ) -> None:
-    smtp_server = config_data.get(
-        "smtp_server", db_config.smtp_server if db_config is not None else None
-    )
-    smtp_port = config_data.get(
-        "smtp_port", db_config.smtp_port if db_config is not None else None
-    )
+    smtp_server = _field_value(config_data, db_config, "smtp_server")
+    smtp_port = _field_value(config_data, db_config, "smtp_port")
+    pop3_server = _field_value(config_data, db_config, "pop3_server")
+    pop3_port = _field_value(config_data, db_config, "pop3_port")
 
     try:
         if smtp_server is not None:
@@ -106,6 +121,17 @@ def _validate_smtp_config_update(
             validate_smtp_destination(smtp_server, smtp_port)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
+        if pop3_server is not None:
+            validate_smtp_host(pop3_server, resolve_host=True)
+        if pop3_port is not None:
+            _validate_pop3_port(pop3_port)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"pop3_server/pop3_port validation failed: {exc}",
+        ) from exc
 
 
 @router.post("")
@@ -123,7 +149,7 @@ async def create_or_update_config(
     db_config = result.scalar_one_or_none()
 
     config_data = config.model_dump(exclude_unset=True)
-    _validate_smtp_config_update(config_data, db_config)
+    _validate_mail_config_update(config_data, db_config)
 
     if db_config:
         for key, value in config_data.items():

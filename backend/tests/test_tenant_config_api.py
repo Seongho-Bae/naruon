@@ -1,5 +1,8 @@
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 from main import app
 from db.session import get_db
 
@@ -85,7 +88,7 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
-    assert host_resolve_calls == [True]
+    assert host_resolve_calls == [True, True]
     assert destination_resolve_calls == [True]
 
     assert "test_user" in mock_db.objects
@@ -182,6 +185,41 @@ def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
     assert "SMTP port is not allowed" in response.json()["detail"]
 
 
+def test_tenant_config_rejects_private_pop3_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "127.0.0.1",
+            "pop3_port": 995,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
+    def fake_validate_smtp_host(host, *, resolve_host=True):
+        return host
+
+    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "pop3.example.com",
+            "pop3_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_port" in response.json()["detail"]
+
+
 def test_tenant_config_get_rejects_cross_user_access(client):
     response = client.get(
         "/api/config",
@@ -223,3 +261,107 @@ def test_global_config_allows_admin(client):
     )
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_create_read_pop3_postgres_smoke(monkeypatch):
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
+    from core.config import settings
+    from db.models import Base
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    def fake_validate_smtp_host(host, *, resolve_host=True):
+        return host
+
+    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+
+    old_encryption_key = settings.ENCRYPTION_KEY
+    settings.ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                await conn.run_sync(Base.metadata.create_all)
+        except (
+            InvalidAuthorizationSpecificationError,
+            InvalidPasswordError,
+            OperationalError,
+            OSError,
+        ) as exc:
+            await engine.dispose()
+            pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+        user_id = "pop3-smoke-user"
+        pop3_password = "pop3-smoke-secret"
+
+        async def cleanup_seed_rows():
+            async with Session() as session:
+                await session.execute(
+                    text("DELETE FROM tenant_configs WHERE user_id = :user_id"),
+                    {"user_id": user_id},
+                )
+                await session.commit()
+
+        async def real_db_override():
+            async with Session() as session:
+                yield session
+
+        await cleanup_seed_rows()
+        previous_db_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = real_db_override
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                headers={"X-User-Id": user_id},
+                base_url="http://test",
+            ) as real_client:
+                post_response = await real_client.post(
+                    "/api/config",
+                    json={
+                        "user_id": user_id,
+                        "pop3_server": "pop3.example.com",
+                        "pop3_port": 995,
+                        "pop3_username": "pop3-user",
+                        "pop3_password": pop3_password,
+                    },
+                )
+                get_response = await real_client.get(
+                    "/api/config", params={"user_id": user_id}
+                )
+        finally:
+            if previous_db_override is None:
+                app.dependency_overrides.pop(get_db, None)
+            else:
+                app.dependency_overrides[get_db] = previous_db_override
+
+        async with Session() as session:
+            raw_pop3_password = (
+                await session.execute(
+                    text(
+                        "SELECT pop3_password FROM tenant_configs "
+                        "WHERE user_id = :user_id"
+                    ),
+                    {"user_id": user_id},
+                )
+            ).scalar_one()
+
+        await cleanup_seed_rows()
+    finally:
+        await engine.dispose()
+        settings.ENCRYPTION_KEY = old_encryption_key
+
+    assert post_response.status_code == 200
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert data["pop3_server"] == "pop3.example.com"
+    assert data["pop3_port"] == 995
+    assert data["pop3_username"] == "pop3-user"
+    assert data["pop3_password"] == "********"
+    assert raw_pop3_password != pop3_password

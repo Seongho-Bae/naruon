@@ -83,13 +83,25 @@ class Pop3SyncWorker:
         pop3_port = int(config.pop3_port)  # type: ignore
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
         try:
-            if config.pop3_username and config.pop3_password:
-                pop3_client.user(config.pop3_username)
-                pop3_client.pass_(config.pop3_password)
-            else:
-                logger.info(
-                    "No POP3 credentials provided for user %s, skipping login.",
-                    config.user_id,
+            missing_fields = [
+                field_name
+                for field_name, value in (
+                    ("pop3_username", config.pop3_username),
+                    ("pop3_password", config.pop3_password),
                 )
+                if not value
+            ]
+            if missing_fields:
+                missing = ", ".join(missing_fields)
+                logger.error(
+                    "Missing POP3 credentials for user %s: %s",
+                    config.user_id,
+                    missing,
+                )
+                raise RuntimeError(
+                    f"Missing POP3 credentials for user {config.user_id}: {missing}"
+                )
+            pop3_client.user(config.pop3_username)
+            pop3_client.pass_(config.pop3_password)
         finally:
             pop3_client.quit()

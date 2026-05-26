@@ -72,6 +72,7 @@ async def test_self_to_self_triggers_knowledge_extraction():
         email_data,
         user_id="user_1",
         organization_id="org_1",
+        owner_addresses=["user@test.com"],
         source_email=source_email,
     )
     assert knowledge_task is not None

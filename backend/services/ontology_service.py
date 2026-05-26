@@ -1,5 +1,5 @@
 import logging
-from email import utils as email_utils
+from collections.abc import Iterable
 from typing import Any, Dict
 from sqlalchemy import select
 from db.models import Email, SenderRelationship
@@ -109,11 +109,16 @@ class OntologyService:
         email_data: dict,
         user_id: str,
         organization_id: str | None,
+        owner_addresses: Iterable[str] | None = None,
         source_email: Email | None = None,
     ):
-        sender = str(email_data.get("sender") or "")
-        _, sender_address = email_utils.parseaddr(sender)
-        if not process_self_to_self(email_data, sender_address):
+        owner_address_list = _owner_address_list(owner_addresses)
+        if not owner_address_list and "@" in str(user_id):
+            owner_address_list = [str(user_id)]
+        is_owner_self_sent = any(
+            process_self_to_self(email_data, address) for address in owner_address_list
+        )
+        if not is_owner_self_sent:
             return None
         if source_email is None:
             logger.info(
@@ -127,8 +132,16 @@ class OntologyService:
         ):
             return None
         return await extract_knowledge_from_self_sent(
-            session, source_email, [sender_address]
+            session, source_email, owner_address_list
         )
+
+
+def _owner_address_list(owner_addresses: Iterable[str] | None) -> list[str]:
+    if owner_addresses is None:
+        return []
+    if isinstance(owner_addresses, str):
+        return [owner_addresses]
+    return list(owner_addresses)
 
 
 ontology_service = OntologyService()

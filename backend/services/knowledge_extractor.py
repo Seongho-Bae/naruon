@@ -24,7 +24,12 @@ def _self_sender_address(email: Email) -> str:
 
 
 def _normalized_owner_addresses(email: Email, owner_addresses: Iterable[str] | None):
-    candidates = list(owner_addresses or [])
+    if owner_addresses is None:
+        candidates: list[str] = []
+    elif isinstance(owner_addresses, str):
+        candidates = [owner_addresses]
+    else:
+        candidates = list(owner_addresses)
     if "@" in str(email.user_id):
         candidates.append(str(email.user_id))
     return {

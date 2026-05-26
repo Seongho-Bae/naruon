@@ -141,3 +141,16 @@ async def test_extract_knowledge_from_self_sent_allows_subject_only_note():
 
     assert task is not None
     assert task.title == "Memo: Buy milk"
+
+
+@pytest.mark.asyncio
+async def test_extract_knowledge_from_self_sent_accepts_single_owner_address_string():
+    db = AsyncMock(spec=AsyncSession)
+    db.execute.return_value = _ScalarResult()
+
+    task = await extract_knowledge_from_self_sent(
+        db, _make_email(), "testuser@example.com"
+    )
+
+    assert task is not None
+    assert task.related_email_id == 1
