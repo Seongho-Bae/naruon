@@ -19,6 +19,7 @@
 | Startup choice | `frontend/src/lib/workspace-preferences.ts` supports `dashboard \| email \| calendar` and first-run sessions open the dashboard. | Implemented | Preserve explicit user overrides and keep screenshot evidence current. |
 | Branding menu IA | `frontend/branding/uiux/*.png` show full workspace IA; `DashboardLayout.tsx` exposes desktop and tablet/mobile destinations with live mail folder links. | Implemented | Keep desktop primary nav and tablet/mobile drawer destinations synchronized. |
 | Ticket-like work tracking | `/tasks` reads `/api/tasks` and displays source-linked ticket status, priority, email, and thread provenance. | Implemented | Continue expanding persistence/writeback evidence in DB-affecting slices. |
+| Sent-mail reply tracking | `/api/emails/pending-replies` uses the authenticated user's configured mail addresses, owner scope, reply-intent detection, and later external-reply checks. | Implemented | Provider-side sent-folder sync and durable notification scheduling remain connector slices. |
 | CalDAV/WebDAV source of truth | `docs/plans/2026-05-18-calendar-writeback-sovereignty.md` and `ARCHITECTURE.md` require source records/ETag/writeback. | Partial | Keep writeback design documented here, but do not fake provider writes in this slice. |
 | Private-network mail | `docs/plans/2026-05-18-self-hosted-connector-bootstrap.md` requires outbound connector design. | Partial | Document that GitHub self-hosted runner is CI smoke only; production connector remains outbound-only. |
 | PR automation | `scripts/ci/pr_governance_gate.sh` treats missing CodeRabbit evidence as a blocker and `STARTUP_FAILURE` as waiting. | Partial | Treat missing robot evidence as wait-state and startup failure as terminal blocker. |
@@ -32,9 +33,13 @@
   folder states, and Help/Profile route to Settings anchors.
 - `/tasks` keeps the ticket-like board surface and reads `/api/tasks` so source
   email/thread provenance appears in the workspace.
+- Sent-mail reply tracking is now calculated from customer-owned mailbox
+  metadata: self-sent notes are excluded from pending replies, answered threads
+  are excluded, and `/api/emails` exposes `requires_reply`/`is_self_sent` for
+  the UI badges.
 - The remaining connector/writeback items stay as explicit future episodes:
-  real CalDAV/WebDAV mutation, POP3 runtime sync, sent-mail reply tracking
-  persistence, self-sent knowledge capture, and sender DAG action selection.
+  real CalDAV/WebDAV mutation, POP3 runtime sync, durable reply-tracking
+  notifications, self-sent knowledge capture, and sender DAG action selection.
 
 ## Task 1: Governance wait-state correction
 

@@ -1,57 +1,140 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 import datetime
 from api.emails import EmailListItem
 from db.models import Email, TenantConfig
 
+
+class ReplyTrackingResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
+
+    def scalar_one_or_none(self):
+        return self.rows[0] if self.rows else None
+
+
+class ReplyTrackingSession:
+    def __init__(self, tenant_config, emails):
+        self.tenant_config = tenant_config
+        self.emails = emails
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        if "tenant_configs" in str(query).lower():
+            rows = [] if self.tenant_config is None else [self.tenant_config]
+            return ReplyTrackingResult(rows)
+        return ReplyTrackingResult(self.emails)
+
+
+def compiled_query_text(query) -> str:
+    return str(query).lower()
+
+
+def compiled_query_params(query) -> dict[str, object]:
+    return dict(query.compile().params)
+
+
 @pytest.mark.asyncio
 async def test_identifying_sent_emails_awaiting_replies():
-    # Write a test for the background job service
-    # that flags missing replies.
     from services.reply_tracking_service import check_missing_replies
-    
-    session_mock = AsyncMock()
-    
-    # Let's say we have one email sent 3 days ago expecting a reply,
-    # and no replies are found in the thread.
-    
+
     email_awaiting = Email(
         id=1,
         user_id="user_1",
+        organization_id="org_1",
+        sender="Me <my@email.com>",
+        recipients="other@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3),
+        body="Please reply by tomorrow.",
+        thread_id="thread_1",
+    )
+    config_mock = TenantConfig(user_id="user_1", smtp_username="my@email.com")
+    session = ReplyTrackingSession(config_mock, [email_awaiting])
+
+    flagged_emails = await check_missing_replies(session, "user_1", "org_1")
+
+    assert len(flagged_emails) == 1
+    assert flagged_emails[0].id == 1
+
+
+@pytest.mark.asyncio
+async def test_missing_reply_tracking_excludes_answered_and_non_intent_threads():
+    from services.reply_tracking_service import check_missing_replies
+
+    sent_answered = Email(
+        id=2,
+        user_id="user_1",
+        organization_id="org_1",
         sender="my@email.com",
         recipients="other@email.com",
         date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=3),
         body="Please reply by tomorrow.",
-        thread_id="thread_1"
+        thread_id="thread_answered",
     )
-    
-    # We mock the query returning this email
-    execute_result = MagicMock()
+    external_reply = Email(
+        id=3,
+        user_id="user_1",
+        organization_id="org_1",
+        sender="other@email.com",
+        recipients="my@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2),
+        body="I replied.",
+        thread_id="thread_answered",
+    )
+    sent_without_reply_intent = Email(
+        id=4,
+        user_id="user_1",
+        organization_id="org_1",
+        sender="my@email.com",
+        recipients="other@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1),
+        body="FYI only.",
+        thread_id="thread_fyi",
+    )
+    self_sent_note = Email(
+        id=5,
+        user_id="user_1",
+        organization_id="org_1",
+        sender="my@email.com",
+        recipients="my@email.com",
+        date=datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1),
+        body="Please reply is not a real external follow-up here.",
+        thread_id="thread_self",
+    )
     config_mock = TenantConfig(user_id="user_1", smtp_username="my@email.com")
-    
-    def side_effect(stmt):
-        stmt_str = str(stmt)
-        if "tenant_configs" in stmt_str:
-            mock_res = MagicMock()
-            mock_res.scalar_one_or_none.return_value = config_mock
-            return mock_res
-        elif "emails.sender = " in stmt_str and "emails.date > " in stmt_str:
-            mock_res = MagicMock()
-            mock_res.scalars.return_value.all.return_value = [email_awaiting]
-            return mock_res
-        else:
-            mock_res = MagicMock()
-            mock_res.scalars.return_value.first.return_value = None
-            return mock_res
-            
-    session_mock.execute.side_effect = side_effect
-    
-    flagged_emails = await check_missing_replies(session_mock, "user_1", "org_1")
-    
-    # The background job should return a list of flagged emails or update DB.
-    # We'll assert it returns the flagged email ID.
-    assert len(flagged_emails) == 1
-    assert flagged_emails[0].id == 1
+    session = ReplyTrackingSession(
+        config_mock,
+        [sent_answered, external_reply, sent_without_reply_intent, self_sent_note],
+    )
+
+    flagged_emails = await check_missing_replies(session, "user_1", "org_1")
+
+    assert flagged_emails == []
+
+
+@pytest.mark.asyncio
+async def test_missing_reply_tracking_scopes_email_query_to_user_and_org():
+    from services.reply_tracking_service import check_missing_replies
+
+    config_mock = TenantConfig(user_id="user_1", smtp_username="my@email.com")
+    session = ReplyTrackingSession(config_mock, [])
+
+    await check_missing_replies(session, "user_1", "org_1")
+
+    email_query = session.queries[-1]
+    query_text = compiled_query_text(email_query)
+    query_params = compiled_query_params(email_query)
+    assert "emails.user_id = :user_id_1" in query_text
+    assert "emails.organization_id = :organization_id_1" in query_text
+    assert query_params["user_id_1"] == "user_1"
+    assert query_params["organization_id_1"] == "org_1"
+
 
 @pytest.mark.asyncio
 async def test_requires_reply_in_email_response():
@@ -63,7 +146,7 @@ async def test_requires_reply_in_email_response():
         date=datetime.datetime.now(datetime.timezone.utc),
         snippet="Test",
         requires_reply=True,
-        schedule_conflict=False
+        schedule_conflict=False,
     )
     assert item.requires_reply is True
     assert item.schedule_conflict is False

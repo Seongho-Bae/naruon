@@ -53,6 +53,9 @@ class MockSession:
             def scalar_one_or_none(self):
                 return self.rows[0] if self.rows else None
 
+        if "tenant_configs" in compiled_query_text(query):
+            rows = [] if self.tenant_config is None else [self.tenant_config]
+            return MockResult(rows)
         return MockResult(self.items)
 
     async def scalar(self, query):
@@ -268,6 +271,49 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
     assert len(data) == 1
     assert data[0]["thread_id"] == "root@example.com"
     assert data[0]["reply_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_emails_marks_self_sent_and_pending_reply_threads(
+    client: AsyncClient, db_session
+):
+    class MailTenantConfig:
+        smtp_username = "Me <testuser@example.com>"
+        imap_username = None
+
+    sent_waiting = Email(
+        id=10,
+        user_id="testuser",
+        message_id="waiting-msg",
+        thread_id="waiting-thread",
+        sender="Test User <testuser@example.com>",
+        recipients="target@example.com",
+        subject="Can you confirm?",
+        date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    self_note = Email(
+        id=11,
+        user_id="testuser",
+        message_id="note-msg",
+        thread_id="note-thread",
+        sender="testuser@example.com",
+        recipients="testuser@example.com",
+        subject="Note to self",
+        date=datetime.datetime(2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Summarize this as knowledge.",
+    )
+    db_session.tenant_config = MailTenantConfig()
+    db_session.items = [self_note, sent_waiting]
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
+    assert by_thread["waiting-thread"]["requires_reply"] is True
+    assert by_thread["waiting-thread"]["is_self_sent"] is False
+    assert by_thread["note-thread"]["is_self_sent"] is True
+    assert by_thread["note-thread"]["requires_reply"] is False
 
 
 @pytest.mark.asyncio
@@ -597,6 +643,7 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     # Create MockTenantConfig with smtp_username set to match one email
     class SentTenantConfig:
         smtp_username = "testuser@example.com"
+        imap_username = None
         
     db_session.tenant_config = SentTenantConfig()
 
@@ -609,10 +656,32 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
         recipients="target@example.com",
         subject="Did you get this?",
         date=datetime.datetime(2026, 4, 28, 10, 0, tzinfo=datetime.timezone.utc),
-        body="Waiting for your reply",
+        body="Please reply when you can.",
+    )
+    answered_sent_email = Email(
+        id=4,
+        user_id="testuser",
+        message_id="msg4",
+        thread_id="thread4",
+        sender="testuser@example.com",
+        recipients="target@example.com",
+        subject="Answered thread",
+        date=datetime.datetime(2026, 4, 28, 9, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    external_reply = Email(
+        id=5,
+        user_id="testuser",
+        message_id="msg5",
+        thread_id="thread4",
+        sender="target@example.com",
+        recipients="testuser@example.com",
+        subject="Re: Answered thread",
+        date=datetime.datetime(2026, 4, 28, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Confirmed.",
     )
     
-    db_session.items = [sent_email]
+    db_session.items = [sent_email, answered_sent_email, external_reply]
 
     app.dependency_overrides[get_db] = lambda: db_session
 
@@ -621,3 +690,5 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     data = response.json()
     assert len(data["emails"]) == 1
     assert data["emails"][0]["sender"] == "testuser@example.com"
+    assert data["emails"][0]["thread_id"] == "thread3"
+    assert data["emails"][0]["requires_reply"] is True
