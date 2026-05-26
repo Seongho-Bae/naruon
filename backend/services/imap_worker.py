@@ -1,14 +1,23 @@
 import asyncio
+import datetime
 import logging
+
 import aioimaplib
 from sqlalchemy import select
-from db.session import AsyncSessionLocal
-from db.models import TenantConfig, Email
-from services.threading_service import generate_email_fingerprint, assign_thread_id
-from services.email_parser import EmailData
-import datetime
 
-async def process_fetched_email(session, email_data: EmailData, user_id: str, organization_id: str | None):
+from db.models import Email, TenantConfig
+from db.session import AsyncSessionLocal
+from services.email_parser import EmailData
+from services.knowledge_extractor import (
+    extract_knowledge_from_self_sent,
+    is_self_sent_email,
+)
+from services.threading_service import assign_thread_id, generate_email_fingerprint
+
+
+async def process_fetched_email(
+    session, email_data: EmailData, user_id: str, organization_id: str | None
+):
     subject = email_data.get("subject", "")
     date_obj = email_data.get("date")
     if hasattr(date_obj, "isoformat"):
@@ -17,25 +26,34 @@ async def process_fetched_email(session, email_data: EmailData, user_id: str, or
         date_str = str(date_obj) if date_obj else ""
     sender = email_data.get("sender", "")
     recipients_list = email_data.get("recipients", [])
-    recipients = ",".join(recipients_list) if recipients_list else ""
-    
+    recipients = (
+        ",".join(recipients_list)
+        if isinstance(recipients_list, list)
+        else str(recipients_list or "")
+    )
+
     fingerprint = generate_email_fingerprint(subject, date_str, sender, recipients)
-    
+
     # Check if duplicate
     stmt = select(Email).where(
         Email.user_id == user_id,
         Email.organization_id == (organization_id if organization_id else None),
-        Email.fingerprint == fingerprint
+        Email.fingerprint == fingerprint,
     )
     result = await session.execute(stmt)
     existing_email = result.scalar_one_or_none()
-    
+
     if existing_email:
-        logger.info(f"Email with fingerprint {fingerprint} already exists. Skipping duplicate insertion.")
+        logger.info(
+            "Email with fingerprint %s already exists. Skipping duplicate insertion.",
+            fingerprint,
+        )
         return existing_email
-    
-    thread_id = await assign_thread_id(session, email_data, user_id=user_id, organization_id=organization_id)
-    
+
+    thread_id = await assign_thread_id(
+        session, email_data, user_id=user_id, organization_id=organization_id
+    )
+
     new_email = Email(
         user_id=user_id,
         organization_id=organization_id or "",
@@ -45,12 +63,15 @@ async def process_fetched_email(session, email_data: EmailData, user_id: str, or
         sender=sender,
         recipients=recipients,
         subject=subject,
-        date=datetime.datetime.now(datetime.timezone.utc), # simplified for this example
+        date=datetime.datetime.now(datetime.timezone.utc),
         body=email_data.get("body", ""),
-        embedding=[0.0] * 1536 # Dummy embedding
+        embedding=[0.0] * 1536,
     )
-    
+
     session.add(new_email)
+    if is_self_sent_email(new_email):
+        await session.flush()
+        await extract_knowledge_from_self_sent(session, new_email)
     return new_email
 
 logger = logging.getLogger(__name__)

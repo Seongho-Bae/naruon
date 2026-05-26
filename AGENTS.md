@@ -76,6 +76,10 @@
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
   dependency and source-owner contract are explicitly in scope.
+- Self-sent knowledge extraction must first prove true self-to-self addressing,
+  stay idempotent per source email, preserve email/thread provenance, and store
+  only plain-text task titles. Do not create unlinked knowledge tasks from raw
+  dict payloads when the source email row is unavailable.
 
 ## Development environment and tooling defaults
 

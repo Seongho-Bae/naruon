@@ -32,10 +32,16 @@ mail/calendar/file systems.
   model and the workflow `models: read` permission; pending CodeRabbit or check
   evidence is a wait state, not a hard blocker.
   
-## Agentic Ontology & Auto-Organization (Planned)
+## Agentic Ontology & Auto-Organization
 
-- **DAG Ontology**: The system evaluates a Directed Acyclic Graph (DAG) for sender relationships to determine "what this sender means to the user", allowing the AI Agent to decide subsequent tasks based on dynamic relationship contexts.
-- **Self-Sent Knowledge Indexing**: Emails sent to oneself are automatically parsed and structured into the connected WebDAV/Notes repository, creating a seamless personal knowledge base.
+- **Sender ontology**: The backend classifies sender relationships and returns a
+  deterministic next-action hint, such as reply/task tracking for colleagues or
+  summary-first handling for newsletters. Source-id filtered graph persistence is
+  still an episode task.
+- **Self-sent knowledge capture**: IMAP-imported emails sent from a user to the
+  same address now create one idempotent, source-linked `self_sent_knowledge`
+  ticket task with a plain-text memo title. WebDAV/Notes materialization remains
+  future work and must write back to customer-owned sources.
 
 ## Five-minute local path
 

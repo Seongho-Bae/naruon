@@ -1,30 +1,93 @@
 import logging
+from email import utils as email_utils
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Email, TicketTask
+from services.email_service import process_self_to_self
+from services.text_safety import strip_html_markup
 
 logger = logging.getLogger(__name__)
 
+SELF_SENT_KNOWLEDGE_SOURCE = "self_sent_knowledge"
+_TITLE_LIMIT = 140
+
+
+def _single_line_plain_text(value: str | None) -> str:
+    text = strip_html_markup(str(value or "").replace("\x00", ""))
+    return " ".join(text.split())
+
+
+def _self_sender_address(email: Email) -> str:
+    _, sender_address = email_utils.parseaddr(email.sender or "")
+    return sender_address.strip().lower()
+
+
+def is_self_sent_email(email: Email) -> bool:
+    sender_address = _self_sender_address(email)
+    if not sender_address:
+        return False
+    return process_self_to_self(
+        {
+            "sender": email.sender,
+            "recipients": email.recipients or "",
+            "subject": email.subject or "",
+            "body": email.body or "",
+        },
+        sender_address,
+    )
+
+
+def _knowledge_task_title(email: Email) -> str:
+    subject = _single_line_plain_text(email.subject)
+    if subject:
+        title_basis = subject
+    else:
+        title_basis = _single_line_plain_text(email.body).splitlines()[0:1]
+        title_basis = title_basis[0] if title_basis else "Self note"
+
+    title_basis = title_basis[:_TITLE_LIMIT].strip() or "Self note"
+    return f"Memo: {title_basis}"
+
+
+async def _existing_knowledge_task(db: AsyncSession, email: Email) -> TicketTask | None:
+    if email.id is None:
+        return None
+    result = await db.execute(
+        select(TicketTask).where(
+            TicketTask.user_id == email.user_id,
+            TicketTask.organization_id == email.organization_id,
+            TicketTask.related_email_id == email.id,
+            TicketTask.source_type == SELF_SENT_KNOWLEDGE_SOURCE,
+        )
+        .order_by(TicketTask.created_at.desc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none()
+
+
 async def extract_knowledge_from_self_sent(db: AsyncSession, email: Email):
     """
-    Extracts knowledge from a self-sent email and creates a TicketTask.
-    In a real implementation, this would call an LLM service.
+    Extract knowledge from a self-sent email into a source-linked TicketTask.
     """
-    if not email.body:
+    if not email.body or not is_self_sent_email(email):
         return None
-        
-    logger.info(f"Extracting knowledge from self-sent email: {email.subject}")
-    
-    # Mock LLM extraction
-    title = f"[Memo] {email.subject or 'Self-note'}"
-    
-    # Create a TicketTask
+
+    existing_task = await _existing_knowledge_task(db, email)
+    if existing_task is not None:
+        return existing_task
+
+    if email.id is None:
+        return None
+
+    logger.info("Extracting self-sent knowledge from email %s", email.message_id)
+
     task = TicketTask(
         user_id=email.user_id,
         organization_id=email.organization_id,
-        title=title,
+        title=_knowledge_task_title(email),
         status="open",
         priority="normal",
-        source_type="email_auto_extract",
+        source_type=SELF_SENT_KNOWLEDGE_SOURCE,
         related_email_id=email.id,
         related_thread_id=email.thread_id,
     )

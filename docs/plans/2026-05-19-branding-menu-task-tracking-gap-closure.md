@@ -39,7 +39,8 @@
   the UI badges.
 - The remaining connector/writeback items stay as explicit future episodes:
   real CalDAV/WebDAV mutation, POP3 runtime sync, durable reply-tracking
-  notifications, self-sent knowledge capture, and sender DAG action selection.
+  notifications, WebDAV/Notes materialization of self-sent knowledge, and
+  source-id filtered sender DAG views.
 
 ## Task 1: Governance wait-state correction
 

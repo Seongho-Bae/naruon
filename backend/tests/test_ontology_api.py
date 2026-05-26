@@ -64,6 +64,7 @@ def test_get_relationships(client: TestClient):
     assert len(items) == 1
     assert items[0]["sender_email"] == "boss@example.com"
     assert items[0]["relationship_type"] == "manager"
+    assert items[0]["next_action"] == "classify_sender"
 
 def test_create_relationship(client: TestClient):
     resp = client.post(
@@ -78,3 +79,4 @@ def test_create_relationship(client: TestClient):
     data = resp.json()
     assert data["sender_email"] == "vendor@example.com"
     assert data["relationship_type"] == "vendor"
+    assert data["next_action"] == "prepare_response_draft"

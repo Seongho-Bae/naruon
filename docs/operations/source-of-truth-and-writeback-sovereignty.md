@@ -40,9 +40,11 @@ conflict metadata such as remote ids or ETags. Browser requests may reference
 claims.
 
 Implemented slices currently cover signed task/mail provenance, dedupe/threading
-contracts, source-linked ticket tasks, and writeback intent documentation. Real
-CalDAV/WebDAV mutation, POP3 runtime sync, sent-mail reply tracking persistence,
-self-sent knowledge capture, and sender DAG/ontology action selection remain
+contracts, source-linked ticket tasks, self-sent knowledge capture into
+idempotent ticket tasks, deterministic sender ontology action hints, and
+writeback intent documentation. Real CalDAV/WebDAV mutation, WebDAV/Notes
+materialization of synthesized knowledge, POP3 runtime sync, durable
+reply-tracking notifications, and source-id filtered sender graph views remain
 episode work and must preserve this registry boundary.
 
 ## Policy and audit requirements

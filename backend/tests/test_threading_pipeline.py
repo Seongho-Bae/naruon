@@ -38,6 +38,7 @@ async def test_email_deduplication():
     from datetime import datetime, timezone
     
     session_mock = AsyncMock()
+    session_mock.add = MagicMock()
     # Assume select returns nothing (no duplicate)
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = None
@@ -73,3 +74,41 @@ async def test_email_deduplication():
     # or some update happens
     session_mock.add.assert_not_called()
 
+
+@pytest.mark.asyncio
+async def test_email_pipeline_triggers_self_sent_knowledge_extraction():
+    from services.imap_worker import process_fetched_email
+    from services.email_parser import EmailData
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    session_mock = AsyncMock()
+    session_mock.add = MagicMock()
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    session_mock.execute.return_value = execute_result
+
+    email_data: EmailData = {
+        "subject": "Note to self",
+        "date": datetime(2026, 5, 26, 10, 0, tzinfo=timezone.utc),
+        "sender": "user_1@example.com",
+        "recipients": "user_1@example.com",
+        "body": "Remember this decision.",
+        "message_id": "<self-note-1>",
+        "in_reply_to": None,
+        "references": None,
+        "thread_id": None,
+        "reply_to": None,
+        "attachments": [],
+    }
+
+    with patch(
+        "services.imap_worker.extract_knowledge_from_self_sent",
+        new_callable=AsyncMock,
+    ) as extract_mock:
+        new_email = await process_fetched_email(
+            session_mock, email_data, "user_1", "org_1"
+        )
+
+    session_mock.flush.assert_awaited_once()
+    extract_mock.assert_awaited_once_with(session_mock, new_email)
