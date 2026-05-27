@@ -46,6 +46,13 @@ class CreateTasksFromEmailResponse(BaseModel):
     tasks: list[TicketTaskResponse]
 
 
+class UpdateTicketTaskRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: TaskStatus | None = None
+    priority: TaskPriority | None = None
+
+
 def _normalize_execution_items(items: list[str]) -> list[str]:
     normalized = []
     for item in items:
@@ -105,6 +112,50 @@ async def list_ticket_tasks(
     return [
         _task_response(task, source_email_id) for task, source_email_id in result.all()
     ]
+
+
+@router.patch("/{task_uid}", response_model=TicketTaskResponse)
+async def update_ticket_task(
+    task_uid: str,
+    request: UpdateTicketTaskRequest,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> TicketTaskResponse:
+    if request.status is None and request.priority is None:
+        raise HTTPException(
+            status_code=422, detail="At least one ticket field is required"
+        )
+
+    result = await db.execute(
+        select(TicketTask, Email.message_id)
+        .outerjoin(
+            Email,
+            and_(
+                TicketTask.related_email_id == Email.id,
+                Email.user_id == auth_context.user_id,
+                Email.organization_id == auth_context.organization_id,
+            ),
+        )
+        .where(
+            TicketTask.task_uid == task_uid,
+            TicketTask.user_id == auth_context.user_id,
+            TicketTask.organization_id == auth_context.organization_id,
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    task, source_email_id = row
+    if request.status is not None:
+        task.status = request.status
+    if request.priority is not None:
+        task.priority = request.priority
+    task.updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+    await db.commit()
+    await db.refresh(task)
+    return _task_response(task, source_email_id)
 
 
 @router.post("/from-email", response_model=CreateTasksFromEmailResponse)

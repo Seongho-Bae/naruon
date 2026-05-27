@@ -96,6 +96,9 @@ class MockTaskSession:
                     raise AssertionError("Mock result expected at most one row")
                 return self._items[0]
 
+            def one_or_none(self):
+                return self.scalar_one_or_none()
+
         if descriptions and descriptions[0].get("entity") is Email:
             params = stmt.compile().params
             source_email_id = params.get("message_id_1")
@@ -113,6 +116,10 @@ class MockTaskSession:
 
         if descriptions and descriptions[0].get("entity") is TicketTask:
             statement_text = str(stmt).lower()
+            params = stmt.compile().params
+            task_uid = params.get("task_uid_1")
+            user_id = params.get("user_id_1")
+            organization_id = params.get("organization_id_1")
             scoped_email_join = (
                 "emails.user_id" in statement_text
                 and "emails.organization_id" in statement_text
@@ -131,7 +138,18 @@ class MockTaskSession:
                     return None
                 return source_email.message_id
 
-            return MockResult([(task, source_message_id(task)) for task in self.tasks])
+            return MockResult(
+                [
+                    (task, source_message_id(task))
+                    for task in self.tasks
+                    if (task_uid is None or task.task_uid == task_uid)
+                    and (user_id is None or task.user_id == user_id)
+                    and (
+                        organization_id is None
+                        or task.organization_id == organization_id
+                    )
+                ]
+            )
 
         return MockResult(self.tasks)
 
@@ -235,6 +253,80 @@ def test_list_ticket_tasks_does_not_leak_cross_tenant_source_email(auth_client):
     assert body[0]["id"] == "opaque-task-id"
     assert body[0]["source_email_id"] is None
     assert body[0]["related_thread_id"] is None
+
+
+def test_update_ticket_task_status_uses_opaque_id_and_keeps_source(auth_client):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    mock_session.emails[14] = make_email()
+    mock_session.tasks.append(
+        TicketTask(
+            id=1,
+            task_uid="opaque-task-update-id",
+            user_id="alice",
+            organization_id="org-acme",
+            title="회신 상태 추적",
+            status="open",
+            priority="normal",
+            source_type="email",
+            related_email_id=14,
+            related_thread_id="thread-123",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    response = auth_client.patch(
+        "/api/tasks/opaque-task-update-id",
+        json={"status": "in_progress", "priority": "high"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["id"] == "opaque-task-update-id"
+    assert body["status"] == "in_progress"
+    assert body["priority"] == "high"
+    assert body["source_email_id"] == "<message-14@example.com>"
+    assert body["related_thread_id"] == "thread-123"
+    assert "task_id" not in body
+    assert "related_email_id" not in body
+    assert mock_session.tasks[0].status == "in_progress"
+    assert mock_session.tasks[0].priority == "high"
+    assert mock_session.tasks[0].updated_at > now
+
+
+def test_update_ticket_task_rejects_cross_tenant_task(auth_client):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    mock_session.tasks.append(
+        TicketTask(
+            id=1,
+            task_uid="opaque-rival-task",
+            user_id="bob",
+            organization_id="org-rival",
+            title="권한 밖 작업",
+            status="open",
+            priority="normal",
+            source_type="email",
+            related_email_id=None,
+            related_thread_id=None,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+    response = auth_client.patch(
+        "/api/tasks/opaque-rival-task", json={"status": "done"}
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
+    assert mock_session.tasks[0].status == "open"
+
+
+def test_update_ticket_task_rejects_empty_payload(auth_client):
+    response = auth_client.patch("/api/tasks/missing-fields", json={})
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "At least one ticket field is required"}
 
 
 def make_email(

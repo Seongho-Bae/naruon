@@ -259,6 +259,67 @@ test('renders sent mail reply tracking route with signed API headers', async ({ 
   await page.screenshot({ path: testInfo.outputPath('sent-mail-reply-tracking-mobile-scroll.png'), fullPage: false });
 });
 
+test('updates source-linked task ticket status with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-task-status-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const patchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks/task-q2-owner' && request.method() === 'PATCH';
+  });
+
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
+  await page.getByRole('button', { name: '리소스 배정 검토 회의 상태를 완료로 변경' }).click();
+  const requestHeaders = (await patchRequest).headers();
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(requestHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByText('리소스 배정 검토 회의 상태를 완료로 변경했습니다.')).toBeVisible();
+  await expect(page.getByRole('button', { name: '리소스 배정 검토 회의 상태를 완료로 변경' })).toHaveAttribute('aria-pressed', 'true');
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('task-ticket-status-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
+  await expect(page.getByText('실제 티켓 큐')).toBeVisible();
+  await expect(page.getByText('4개 티켓 연결')).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('task-ticket-status-mobile.png'), fullPage: false });
+  const taskScrollMetrics = await page.locator('main').nth(1).evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(taskScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(taskScrollMetrics.after).toBeGreaterThan(taskScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('task-ticket-status-mobile-scroll.png'), fullPage: false });
+});
+
 test('renders the settings self-hosted connector manifest with mobile scrolling', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockDashboardApi(page);
