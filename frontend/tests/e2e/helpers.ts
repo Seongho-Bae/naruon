@@ -1,4 +1,4 @@
-import type { Page, Route } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 
 const email = {
   id: 7,
@@ -218,10 +218,29 @@ const operationalSignals = {
   ],
 };
 
+const accountConfig = {
+  user_id: 'default',
+  smtp_server: 'smtp.example.com',
+  smtp_port: 587,
+  smtp_username: 'sender@example.com',
+  has_smtp_password: true,
+  imap_server: 'imap.example.com',
+  imap_port: 993,
+  imap_username: 'inbox@example.com',
+  has_imap_password: true,
+  pop3_server: 'pop3.example.com',
+  pop3_port: 995,
+  pop3_username: 'archive@example.com',
+  has_pop3_password: false,
+  oauth_client_id: 'oauth-client-id',
+  oauth_redirect_uri: 'https://naruon.net/oauth/mail/callback',
+  has_oauth_client_secret: true,
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, OPTIONS',
 };
 
 async function fulfillJson(route: Route, body: unknown) {
@@ -233,12 +252,12 @@ async function fulfillJson(route: Route, body: unknown) {
   });
 }
 
-export async function mockDashboardApi(page: Page, onApiRequest?: (path: string) => void) {
+export async function mockDashboardApi(page: Page, onApiRequest?: (path: string, request: Request) => void) {
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
     const path = url.pathname;
-    onApiRequest?.(path);
+    onApiRequest?.(path, request);
 
     if (request.method() === 'OPTIONS') {
       await route.fulfill({
@@ -269,6 +288,30 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
 
     if (path === '/api/observability/operational-signals' && request.method() === 'GET') {
       await fulfillJson(route, operationalSignals);
+      return;
+    }
+
+    if (path === '/api/accounts/config' && request.method() === 'GET') {
+      await fulfillJson(route, accountConfig);
+      return;
+    }
+
+    if (path === '/api/accounts/config' && request.method() === 'PUT') {
+      const body = JSON.parse(request.postData() || '{}') as Record<string, unknown>;
+      await fulfillJson(route, {
+        ...accountConfig,
+        smtp_server: body.smtp_server,
+        smtp_port: body.smtp_port,
+        smtp_username: body.smtp_username,
+        imap_server: body.imap_server,
+        imap_port: body.imap_port,
+        imap_username: body.imap_username,
+        pop3_server: body.pop3_server,
+        pop3_port: body.pop3_port,
+        pop3_username: body.pop3_username,
+        oauth_client_id: body.oauth_client_id,
+        oauth_redirect_uri: body.oauth_redirect_uri,
+      });
       return;
     }
 
