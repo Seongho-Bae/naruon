@@ -211,8 +211,10 @@ export function TasksLayout() {
       });
       if (result.tasks.length > 0) {
         setTicketStatus('ready');
-      } else if (ticketStatus === 'loading' || ticketStatus === 'error') {
-        setTicketStatus('empty');
+      } else {
+        setTicketStatus((currentStatus) => (
+          currentStatus === 'loading' || currentStatus === 'error' ? 'empty' : currentStatus
+        ));
       }
       setReplySlaStatus('ready');
       setTicketActionStatus(`${result.created}개 답변 SLA 티켓을 생성했습니다. ${result.evaluated}개 대기 메일을 ${result.policy.overdue_hours}시간 기준으로 확인했습니다.`);

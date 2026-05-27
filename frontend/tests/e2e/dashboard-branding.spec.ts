@@ -124,7 +124,11 @@ test('renders Today dashboard pending reply lane with signed API headers', async
     return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
   });
   await mobileDashboard.getByRole('button', { name: '홈에서 보낸 메일 답변 SLA 티켓 생성' }).click();
-  expect((await mobileEscalationRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  const mobileEscalationHeaders = (await mobileEscalationRequest).headers();
+  expect(mobileEscalationHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileEscalationHeaders[headerName]).toBeUndefined();
+  }
   await expect(mobileDashboard.getByText('1개 SLA 티켓 생성, 2개 답변 대기 확인')).toBeVisible();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
@@ -454,7 +458,11 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   await page.goto('/tasks');
   await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
-  expect((await mobileEscalationRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  const mobileRequestHeaders = (await mobileEscalationRequest).headers();
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileRequestHeaders[headerName]).toBeUndefined();
+  }
   await expect(page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
   await page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' }).scrollIntoViewIfNeeded();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

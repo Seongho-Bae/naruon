@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
+from sqlalchemy.exc import IntegrityError
 
 from api.auth import get_auth_context
 from core.config import settings
@@ -187,6 +188,14 @@ class MockTaskSession:
 
     def add(self, obj):
         if isinstance(obj, TicketTask):
+            if obj.source_type == "reply_sla" and any(
+                task.user_id == obj.user_id
+                and task.organization_id == obj.organization_id
+                and task.source_type == obj.source_type
+                and task.related_email_id == obj.related_email_id
+                for task in self.tasks
+            ):
+                raise IntegrityError("duplicate reply_sla task", {}, None)
             obj.id = len(self.tasks) + 1
             if not getattr(obj, "task_uid", None):
                 obj.task_uid = uuid.uuid4().hex
@@ -196,6 +205,9 @@ class MockTaskSession:
             self.tasks.append(obj)
 
     async def commit(self):
+        pass
+
+    async def rollback(self):
         pass
 
     async def refresh(self, obj):
@@ -690,6 +702,22 @@ def test_ticket_task_database_columns_use_two_word_snake_case():
         "updated_at",
     }
     assert all("_" in column_name for column_name in column_names)
+
+
+def test_ticket_task_model_declares_reply_sla_unique_index():
+    indexes = {index.name: index for index in TicketTask.__table__.indexes}
+
+    reply_sla_index = indexes["uq_ticket_tasks_reply_sla_email"]
+
+    assert reply_sla_index.unique is True
+    expression_text = " ".join(
+        str(expression).lower() for expression in reply_sla_index.expressions
+    )
+    assert "user_id" in expression_text
+    assert "coalesce" in expression_text
+    assert "organization_id" in expression_text
+    assert "source_type" in expression_text
+    assert "email_id" in expression_text
 
 
 def test_create_ticket_tasks_from_email_links_source_email_and_thread(auth_client):

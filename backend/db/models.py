@@ -298,6 +298,20 @@ class TicketTask(Base):
     related_email: Mapped["Email | None"] = relationship(back_populates="ticket_tasks")
 
 
+Index(
+    "uq_ticket_tasks_reply_sla_email",
+    TicketTask.user_id,
+    func.coalesce(TicketTask.organization_id, ""),
+    TicketTask.source_type,
+    TicketTask.related_email_id,
+    unique=True,
+    postgresql_where=(
+        (TicketTask.source_type == "reply_sla")
+        & (TicketTask.related_email_id.is_not(None))
+    ),
+)
+
+
 class Attachment(Base):
     __tablename__ = "attachments"
 

@@ -209,6 +209,29 @@ def schema_backfill_sql():
                 "(user_id, coalesce(organization_id, ''), sender_email, "
                 "coalesce(source_message_id, ''), coalesce(source_thread_id, ''))"
             ),
+            text(
+                "WITH ranked_tasks AS ("
+                "SELECT ctid, row_number() OVER ("
+                "PARTITION BY user_id, coalesce(organization_id, ''), "
+                "source_type, email_id "
+                "ORDER BY updated_at DESC NULLS LAST, "
+                "created_at DESC NULLS LAST, task_id DESC"
+                ") AS row_rank "
+                "FROM ticket_tasks "
+                "WHERE source_type = 'reply_sla' AND email_id IS NOT NULL"
+                ") "
+                "DELETE FROM ticket_tasks "
+                "USING ranked_tasks "
+                "WHERE ticket_tasks.ctid = ranked_tasks.ctid "
+                "AND ranked_tasks.row_rank > 1"
+            ),
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_ticket_tasks_reply_sla_email "
+                "ON ticket_tasks "
+                "(user_id, coalesce(organization_id, ''), source_type, email_id) "
+                "WHERE source_type = 'reply_sla' AND email_id IS NOT NULL"
+            ),
         ]
     )
     return statements
