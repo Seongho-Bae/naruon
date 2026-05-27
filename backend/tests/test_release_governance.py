@@ -195,6 +195,13 @@ def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge
     assert ".base.sha" in workflow
     assert "github.sha" not in workflow
     assert "tarball/${trusted_ref}" in workflow
+    assert "gh_api_with_retry" in workflow
+    assert "GitHub API request attempt" in workflow
+    assert "Trusted governance ref must be a full commit SHA" in workflow
+    assert "trusted_archive_candidate" in workflow
+    assert "tar -tzf" in workflow
+    assert "Trusted governance archive materialization attempt" in workflow
+    assert "after 4 attempts" in workflow
     assert 'bash "$GOVERNANCE_GATE"' in workflow
     assert "CHECK_RUN_PR_NUMBER" in workflow
     assert "headRefOid" in gate_script
@@ -218,4 +225,5 @@ def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge
     assert "git clone" not in combined
     assert "--admin" not in combined
     assert "contents: write" not in combined
+    assert "continue-on-error: true" not in combined
     assert "dismiss" not in combined.lower()
