@@ -3,6 +3,7 @@ import type { Page, Route } from '@playwright/test';
 const email = {
   id: 7,
   message_id: '<q2@example.com>',
+  source_message_id: '<q2@example.com>',
   thread_id: 'thread-q2',
   sender: '김지현 PM',
   recipients: 'user@naruon.ai',
@@ -405,6 +406,22 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
         ],
         edges: [{ source: 'sender-1', target: 'owner-1', weight: 2, title: '관련 메일' }],
       });
+      return;
+    }
+
+    if (path === '/api/ontology/relationships' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          sender_email: 'jihyun@naruon.ai',
+          parent_sender_email: 'user@naruon.ai',
+          source_message_id: '<q2@example.com>',
+          source_thread_id: 'thread-q2',
+          relationship_type: 'colleague',
+          confidence_score: 0.85,
+          next_action: 'track_reply_and_tasks',
+          action_reason: 'Same-domain sender; preserve reply and task follow-up.',
+        },
+      ]);
       return;
     }
 

@@ -20,6 +20,7 @@ class SearchRequest(BaseModel):
 
 class SearchResultItem(BaseModel):
     id: int
+    source_message_id: str | None = None
     subject: str | None
     sender: str
     date: datetime.datetime
@@ -107,6 +108,7 @@ async def hybrid_search(
         stmt_email = (
             select(
                 Email.id,
+                Email.message_id.label("source_message_id"),
                 Email.subject,
                 Email.sender,
                 Email.date,
@@ -130,6 +132,7 @@ async def hybrid_search(
         stmt_att = (
             select(
                 Email.id,
+                Email.message_id.label("source_message_id"),
                 Email.subject,
                 Email.sender,
                 Email.date,
@@ -149,6 +152,7 @@ async def hybrid_search(
         stmt = (
             select(
                 combined.c.id,
+                combined.c.source_message_id,
                 combined.c.subject,
                 combined.c.sender,
                 combined.c.date,
@@ -182,6 +186,7 @@ async def hybrid_search(
             search_results.append(
                 SearchResultItem(
                     id=row.id,
+                    source_message_id=row.source_message_id,
                     subject=row.subject,
                     sender=row.sender,
                     date=row.date,

@@ -11,6 +11,7 @@ pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 class MockRow:
     def __init__(self, id, subject, sender, content, score):
         self.id = id
+        self.source_message_id = "<test@example.com>"
         self.subject = subject
         self.sender = sender
         self.content = content
@@ -77,6 +78,7 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
     assert data["results"][0]["id"] == 1
     assert data["results"][0]["subject"] == "Test Subject"
     assert data["results"][0]["date"] == "2026-04-27T10:00:00Z"
+    assert data["results"][0]["source_message_id"] == "<test@example.com>"
     assert data["results"][0]["thread_id"] == "thread-123"
     assert data["results"][0]["reply_count"] == 2
 

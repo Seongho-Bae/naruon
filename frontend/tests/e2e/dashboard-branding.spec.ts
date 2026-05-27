@@ -529,15 +529,26 @@ test('renders API-backed context search sender DAG and reply tracking', async ({
     const url = new URL(request.url());
     return url.pathname === '/api/network/graph' && request.method() === 'GET';
   });
+  const ontologyRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/ontology/relationships' && request.method() === 'GET';
+  });
 
   await page.goto('/search');
   const searchHeaders = (await searchRequest).headers();
   const graphHeaders = (await graphRequest).headers();
+  const ontologyCall = await ontologyRequest;
+  const ontologyHeaders = ontologyCall.headers();
   expect(searchHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   expect(graphHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(ontologyHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  const ontologyUrl = new URL(ontologyCall.url());
+  expect(ontologyUrl.searchParams.get('source_message_id')).toBe('<q2@example.com>');
+  expect(ontologyUrl.searchParams.get('source_thread_id')).toBe('thread-q2');
   for (const headerName of publicIdentityHeaders) {
     expect(searchHeaders[headerName]).toBeUndefined();
     expect(graphHeaders[headerName]).toBeUndefined();
+    expect(ontologyHeaders[headerName]).toBeUndefined();
   }
 
   await expect(page.getByRole('heading', { name: '맥락 검색' })).toBeAttached();
@@ -545,6 +556,9 @@ test('renders API-backed context search sender DAG and reply tracking', async ({
   await expect(page.getByText('thread-q2').first()).toBeVisible();
   await expect(page.getByText('답장 2건').first()).toBeVisible();
   await expect(page.getByText('관계 그래프와 타임라인')).toBeVisible();
+  await expect(page.getByText('발신자 DAG (Ontology)')).toBeVisible();
+  await expect(page.getByText('track_reply_and_tasks')).toBeVisible();
+  await expect(page.getByText('source=<q2@example.com> / thread=thread-q2')).toBeVisible();
   await expect(page.getByText('김지현 PM').first()).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
@@ -580,6 +594,10 @@ test('renders API-backed context search sender DAG and reply tracking', async ({
   });
   expect(detailScrollMetrics.maxScroll).toBeGreaterThan(0);
   expect(detailScrollMetrics.after).toBeGreaterThan(detailScrollMetrics.before);
+  await page.getByText('발신자 DAG (Ontology)').scrollIntoViewIfNeeded();
+  await expect(page.getByText('track_reply_and_tasks')).toBeVisible();
+  await page.getByText('track_reply_and_tasks').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('search-dag-reply-mobile-dag.png'), fullPage: false });
   await page.getByText('관계 이해').scrollIntoViewIfNeeded();
   await expect(page.getByText('관계 이해')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('search-dag-reply-mobile-scroll.png'), fullPage: false });

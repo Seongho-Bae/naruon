@@ -4,7 +4,16 @@ import uuid
 
 from cryptography.fernet import Fernet, InvalidToken
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -185,7 +194,6 @@ class PromptTemplate(Base):
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-
 class Email(Base):
     __tablename__ = "emails"
     __table_args__ = (
@@ -322,19 +330,14 @@ class TenantConfig(Base):
 
 class SenderRelationship(Base):
     __tablename__ = "sender_relationships"
-    __table_args__ = (
-        UniqueConstraint(
-            "user_id",
-            "sender_email",
-            name="uq_sender_relationships_user_email",
-        ),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
     parent_sender_email: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    source_message_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    source_thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     relationship_type: Mapped[str] = mapped_column(String, nullable=False)
     confidence_score: Mapped[float] = mapped_column(default=1.0)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -345,6 +348,17 @@ class SenderRelationship(Base):
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    __table_args__ = (
+        Index(
+            "uq_sender_relationships_scope_source",
+            "user_id",
+            func.coalesce(organization_id, ""),
+            "sender_email",
+            func.coalesce(source_message_id, ""),
+            func.coalesce(source_thread_id, ""),
+            unique=True,
+        ),
     )
 
 

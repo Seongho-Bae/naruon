@@ -20,7 +20,9 @@ async def test_sender_relationship_insertion():
         sender_email="colleague@test.com",
         email_content="Hey let's talk about the project",
         user_id="user_1",
-        organization_id="org_1"
+        organization_id="org_1",
+        source_message_id="<project@test.com>",
+        source_thread_id="thread-project",
     )
     
     session_mock.add.assert_called_once()
@@ -30,6 +32,8 @@ async def test_sender_relationship_insertion():
     assert added_rel.user_id == "user_1"
     assert added_rel.organization_id == "org_1"
     assert added_rel.sender_email == "colleague@test.com"
+    assert added_rel.source_message_id == "<project@test.com>"
+    assert added_rel.source_thread_id == "thread-project"
     assert relationship["next_action"] == "track_reply_and_tasks"
 
 @pytest.mark.asyncio

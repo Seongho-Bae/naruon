@@ -108,6 +108,10 @@
   stay idempotent per source email, preserve email/thread provenance, and store
   only plain-text task titles. Do not create unlinked knowledge tasks from raw
   dict payloads when the source email row is unavailable.
+- Sender ontology and relationship DAG APIs must stay scoped to the signed
+  session owner and organization. Source-backed UI panels must request
+  `source_message_id` and `source_thread_id` filters instead of presenting a
+  global relationship graph as if it were current-thread evidence.
 
 ## Development environment and tooling defaults
 
