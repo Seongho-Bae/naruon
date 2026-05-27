@@ -35,6 +35,11 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
 - GitHub rulesets must use `required_approving_review_count=0` so GitHub does
   not require a human `APPROVED` review when robot-review policy applies.
 - GitHub rulesets must keep `required_review_thread_resolution=true`.
+- CodeRabbit `request_changes_workflow` must stay disabled. Current-head
+  CodeRabbit status/comment evidence is the robot-review gate; GitHub
+  `CHANGES_REQUESTED` review objects are too coarse for this repo because they
+  can stay stale after comments are resolved when an unrelated required scanner
+  is temporarily failing.
 - Bypass actors must not be configured for routine delivery.
 - Security workflows and scanners are required gates, not optional paths.
 

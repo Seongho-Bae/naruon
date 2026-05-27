@@ -1,5 +1,5 @@
 reviews:
-  request_changes_workflow: true
+  request_changes_workflow: false
   pre_merge_checks:
     docstrings:
       mode: off
