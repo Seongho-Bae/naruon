@@ -55,6 +55,21 @@ const aiHubPrompts = [
   { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
 ];
 
+const runnerConfig = {
+  workspace_id: 'workspace-org-acme',
+  configured: true,
+  fingerprint: '***abc12345',
+  updated_at: '2026-05-27T06:00:00Z',
+  connector_manifest: {
+    role: 'self-hosted_connector',
+    network_mode: 'outbound_only',
+    control_plane_domain: 'naruon.net',
+    local_protocols: ['imap', 'pop3', 'smtp', 'caldav', 'carddav', 'webdav'],
+    prohibited_roles: ['smtp_server', 'imap_server', 'mx_host'],
+    runner_usage: 'ci_smoke_only',
+  },
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -92,6 +107,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
 
     if (path === '/api/prompts' && request.method() === 'GET') {
       await fulfillJson(route, aiHubPrompts);
+      return;
+    }
+
+    if (path === '/api/runner-config' && request.method() === 'GET') {
+      await fulfillJson(route, runnerConfig);
       return;
     }
 

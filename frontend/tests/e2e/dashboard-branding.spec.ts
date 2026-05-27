@@ -199,6 +199,42 @@ for (const destination of [
   });
 }
 
+test('renders the settings self-hosted connector manifest with mobile scrolling', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockDashboardApi(page);
+
+  await page.goto('/settings');
+  await page.getByRole('button', { name: '개발자' }).first().click();
+
+  await expect(page.getByText('Self-hosted connector manifest')).toBeVisible();
+  await expect(page.getByText('Naruon은 이메일 서버가 아닙니다')).toBeVisible();
+  await expect(page.getByText('naruon.net', { exact: true })).toBeVisible();
+  await expect(page.getByText('ci_smoke_only')).toBeVisible();
+  await expect(page.getByText('smtp_server')).toBeVisible();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('settings-runner-mobile-manifest.png'), fullPage: false });
+
+  const scrollMetrics = await page.evaluate(() => {
+    const scroller = Array.from(document.querySelectorAll('body, body *')).find((element) => {
+      const style = window.getComputedStyle(element);
+      return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
+    });
+    if (!scroller) return null;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(scrollMetrics).not.toBeNull();
+  expect(scrollMetrics?.maxScroll).toBeGreaterThan(0);
+  expect(scrollMetrics?.after).toBeGreaterThan(scrollMetrics?.before ?? 0);
+  await page.screenshot({ path: testInfo.outputPath('settings-runner-mobile-scroll.png'), fullPage: false });
+});
+
 test('captures responsive startup evidence for desktop tablet mobile and the mobile drawer', async ({ page }, testInfo) => {
   await mockDashboardApi(page);
   for (const viewport of [

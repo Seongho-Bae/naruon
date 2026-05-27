@@ -1,38 +1,150 @@
 "use client";
 
 import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
+import { apiClient } from '@/lib/api-client';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+type SettingsTab = '워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
+
+interface RunnerConfig {
+  workspace_id: string;
+  configured: boolean;
+  fingerprint: string | null;
+  updated_at: string | null;
+  connector_manifest: {
+    role: string;
+    network_mode: string;
+    control_plane_domain: string;
+    local_protocols: string[];
+    prohibited_roles: string[];
+    runner_usage: string;
+  };
+}
+
+const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
+  { id: '워크스페이스', icon: Monitor },
+  { id: '멤버', icon: User },
+  { id: '연결 계정', icon: Mail },
+  { id: '알림', icon: Bell },
+  { id: '자동화', icon: Settings },
+  { id: '결제', icon: Shield },
+  { id: '개발자', icon: Smartphone },
+];
+
+const settingsDetailSurfaces: Partial<Record<SettingsTab, {
+  heading: string;
+  copy: string;
+  items: { title: string; detail: string; status: string }[];
+}>> = {
+  멤버: {
+    heading: '멤버와 역할',
+    copy: '조직 관리자, 보안 담당자, 팀 리드, 개인 사용자의 역할과 ABAC 조건을 한 화면에서 점검합니다.',
+    items: [
+      { title: '관리자 경계', detail: 'platform_admin과 organization_admin 권한을 분리하고 customer-policy deny를 우선 적용합니다.', status: 'RBAC/ABAC' },
+      { title: '팀 스코프', detail: '그룹/본부/팀 단위 멤버십과 workspace scope를 감사 로그와 함께 추적합니다.', status: '조직 계층' },
+      { title: '초대 검토', detail: '외부 공유와 신규 초대는 보안 정책, consent, data-region 조건을 통과해야 합니다.', status: '정책 점검' },
+    ],
+  },
+  알림: {
+    heading: '알림 정책',
+    copy: '메일 회신 추적, 일정 충돌, writeback conflict, connector health 이벤트를 사용자별 채널 정책으로 정리합니다.',
+    items: [
+      { title: '답변 추적', detail: '보낸 메일 SLA가 지연되면 홈 대기 작업과 알림 큐에 같은 사건으로 표시합니다.', status: '메일 연동' },
+      { title: '일정 충돌', detail: 'CalDAV writeback 후보가 충돌하거나 ETag가 맞지 않으면 재확인 알림을 생성합니다.', status: '캘린더' },
+      { title: 'Connector health', detail: 'self-hosted connector heartbeat, sync lag, provider throttling을 운영 알림으로 묶습니다.', status: '운영' },
+    ],
+  },
+  자동화: {
+    heading: '자동화 규칙',
+    copy: '메일, 일정, 할 일, 프로젝트 상태를 source-linked rule로 연결하되 provider write는 명시적 intent로 남깁니다.',
+    items: [
+      { title: '메일에서 작업 생성', detail: '실행 항목을 ticket task로 만들고 원본 message/thread provenance를 유지합니다.', status: 'source-linked' },
+      { title: '캘린더 writeback', detail: 'AI가 정리한 일정은 source capability와 owner policy를 확인한 뒤 원천 계정에 반영합니다.', status: 'intent-first' },
+      { title: '지식 정리', detail: '내가 나에게 보낸 메일은 개인 지식 후보로 분류하고 연결 프로젝트를 제안합니다.', status: 'knowledge' },
+    ],
+  },
+  결제: {
+    heading: '결제와 사용량',
+    copy: 'B2C, SOHO, 조직 계정이 같은 tenant 구조에서 quota, connector, AI 사용량을 분리해 봅니다.',
+    items: [
+      { title: '워크스페이스 quota', detail: '메일 본문 저장소가 아니라 metadata/index/action intent 중심으로 사용량을 계산합니다.', status: 'data sovereignty' },
+      { title: 'Connector seat', detail: '사내망 connector는 조직 스코프별 등록 토큰과 운영 감사 대상으로 계산합니다.', status: 'B2B2C' },
+      { title: 'AI 사용량', detail: '프롬프트 실행, 평가, 요약, writeback 제안을 provider별 비용 항목으로 분리합니다.', status: 'BYOK' },
+    ],
+  },
+};
 
 export function SettingsLayout() {
-  const [activeTab, setActiveTab] = useState<'워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자'>('워크스페이스');
+  const [activeTab, setActiveTab] = useState<SettingsTab>('워크스페이스');
+  const [runnerConfig, setRunnerConfig] = useState<RunnerConfig | null>(null);
+  const [runnerError, setRunnerError] = useState<string | null>(null);
+  const [runnerLoading, setRunnerLoading] = useState(true);
   const startupView = useWorkspaceStartupView();
+  const connectorManifest = runnerConfig?.connector_manifest;
+  const detailSurface = settingsDetailSurfaces[activeTab];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void apiClient
+      .get<RunnerConfig>('/api/runner-config')
+      .then((config) => {
+        if (cancelled) return;
+        setRunnerConfig(config);
+        setRunnerError(null);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setRunnerError(error.message || 'Self-hosted connector 설정을 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!cancelled) setRunnerLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
-          <Settings className="size-6 text-primary" /> <span className="hidden sm:inline">설정 (Settings)</span>
+          <Settings className="size-6 text-primary" />
+          <span className="sm:hidden">설정</span>
+          <span className="hidden sm:inline">설정 (Settings)</span>
         </h1>
         <p className="sr-only">Self-hosted Runner</p>
       </header>
+
+      <nav aria-label="설정 섹션" className="md:hidden border-b border-border bg-card px-3 py-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {settingsTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                activeTab === tab.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-background text-muted-foreground hover:bg-secondary hover:text-foreground'
+              }`}
+            >
+              {tab.id}
+            </button>
+          ))}
+        </div>
+      </nav>
 
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left Sidebar - Settings Tabs */}
         <aside className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
-            {[
-              { id: '워크스페이스', icon: Monitor },
-              { id: '멤버', icon: User },
-              { id: '연결 계정', icon: Mail },
-              { id: '알림', icon: Bell },
-              { id: '자동화', icon: Settings },
-              { id: '결제', icon: Shield },
-              { id: '개발자', icon: Smartphone },
-            ].map((tab) => (
+            {settingsTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as '워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자')}
+                onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${activeTab === tab.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
               >
                 <tab.icon className="size-4" /> {tab.id}
@@ -152,6 +264,67 @@ export function SettingsLayout() {
                     <p className="text-sm text-muted-foreground mt-1">Naruon 인프라 모니터링, 추적 및 보안 로그에 접근합니다.</p>
                   </div>
                 </div>
+
+                <section aria-label="Self-hosted connector manifest" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold text-lg">Self-hosted connector manifest</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Naruon은 이메일 서버가 아닙니다. 고객망의 self-hosted connector가 outbound-only로 naruon.net control plane에 연결해 IMAP/SMTP/CalDAV/WebDAV 접근을 중계합니다.
+                      </p>
+                    </div>
+                    {connectorManifest ? (
+                      <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
+                        {connectorManifest.role}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {runnerLoading ? (
+                    <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">connector manifest를 불러오는 중입니다.</p>
+                  ) : null}
+                  {runnerError ? (
+                    <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{runnerError}</p>
+                  ) : null}
+                  {connectorManifest ? (
+                    <div className="mt-5 space-y-4">
+                      <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">network_mode</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.network_mode}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">control_plane_domain</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.control_plane_domain}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">runner_usage</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.runner_usage}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="grid gap-4 border-t border-border pt-4 md:grid-cols-2">
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">local_protocols</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {connectorManifest.local_protocols.map((protocol) => (
+                              <span key={protocol} className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{protocol}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">prohibited_roles</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {connectorManifest.prohibited_roles.map((role) => (
+                              <span key={role} className="rounded-full bg-red-50 px-2.5 py-1 font-mono text-xs font-semibold text-red-700">{role}</span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
                   <a href="http://localhost:3000" target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-primary/50 transition-colors">
                     <Monitor className="size-8 text-orange-500 mb-2" />
@@ -177,15 +350,23 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && activeTab !== '개발자' && (
-              <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
-                <Settings className="size-10 text-muted-foreground mb-4 opacity-50" />
-                <h2 className="text-xl font-bold mb-2">{activeTab} 메뉴</h2>
-                <p className="text-muted-foreground max-w-sm">
-                  사용자 및 조직 관리를 위한 세부 설정 화면이 다음 릴리즈에 포함될 예정입니다.
-                </p>
-              </div>
-            )}
+            {detailSurface ? (
+              <section aria-label={`${activeTab} 상세 설정`} className="space-y-5">
+                <div>
+                  <h2 className="font-bold text-xl">{detailSurface.heading}</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{detailSurface.copy}</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  {detailSurface.items.map((item) => (
+                    <article key={item.title} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                      <p className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary inline-flex">{item.status}</p>
+                      <h3 className="mt-4 font-bold text-base">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.detail}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
             
           </div>
         </main>
