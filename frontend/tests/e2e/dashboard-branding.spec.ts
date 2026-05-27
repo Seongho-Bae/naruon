@@ -309,6 +309,81 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
+test('renders data WebDAV writeback intent status without direct provider writes', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-webdav-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.goto('/data');
+  const desktopWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
+  const desktopHeaders = (await desktopWritebackRequest).headers();
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByText('writeback', { exact: true })).toBeVisible();
+  await expect(page.getByText('server-authoritative')).toBeVisible();
+  await expect(page.getByText('https://webdav.naruon.net').first()).toBeVisible();
+  await expect(page.getByText('required', { exact: true })).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/data');
+  await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
+  const mobileWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
+  const mobileHeaders = (await mobileWritebackRequest).headers();
+  expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileHeaders[headerName]).toBeUndefined();
+  }
+  await expect(page.getByText('server-authoritative')).toBeVisible();
+  await page.getByText('server-authoritative').scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 140);
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-mobile.png'), fullPage: false });
+  const dataScrollMetrics = await page.evaluate(() => {
+    const scroller = Array.from(document.querySelectorAll('main, main *')).find((element) => {
+      const style = window.getComputedStyle(element);
+      return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
+    });
+    if (!scroller) return null;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(dataScrollMetrics).not.toBeNull();
+  expect(dataScrollMetrics?.maxScroll).toBeGreaterThan(0);
+  expect(dataScrollMetrics?.after).toBeGreaterThan(dataScrollMetrics?.before ?? 0);
+  await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-mobile-scroll.png'), fullPage: false });
+});
+
 test('captures responsive startup evidence for desktop tablet mobile and the mobile drawer', async ({ page }, testInfo) => {
   await mockDashboardApi(page);
   for (const viewport of [

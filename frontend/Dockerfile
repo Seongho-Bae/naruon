@@ -5,7 +5,12 @@ WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY frontend/package*.json ./
-RUN npm ci
+ARG TARGETARCH
+RUN npm ci \
+    && if [ "$TARGETARCH" = "arm64" ] \
+      && [ ! -f node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node ]; then \
+      npm install --no-save --package-lock=false lightningcss-linux-arm64-gnu@1.32.0; \
+    fi
 
 COPY frontend ./
 

@@ -18,9 +18,52 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
   FileText: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
+  Server: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
+
+function jsonResponse(body: unknown) {
+  return {
+    ok: true,
+    json: async () => body,
+  };
+}
+
+function mockWebdavFetch() {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    if (path === "/api/webdav/accounts") {
+      return jsonResponse([
+        {
+          account_id: 1,
+          server_url: "https://webdav.naruon.net",
+          username: "demo_user",
+        },
+      ]);
+    }
+    if (path === "/api/webdav/folders") {
+      return jsonResponse([
+        {
+          folder_id: 1,
+          project_name: "Naruon Roadmap 2026",
+          webdav_path: "/Projects/Naruon_Roadmap_2026",
+        },
+      ]);
+    }
+    if (path === "/api/webdav/writeback-intent") {
+      void init;
+      return jsonResponse({
+        intent: "writeback",
+        source_id: 1,
+        server_url: "https://webdav.naruon.net",
+        requires_if_match: true,
+        provenance: "server-authoritative",
+      });
+    }
+    throw new Error(`Unhandled fetch: ${path}`);
+  });
+}
 
 describe("DataPage", () => {
   let root: Root | null = null;
@@ -31,14 +74,17 @@ describe("DataPage", () => {
     root = null;
     container?.remove();
     container = null;
+    localStorage.clear();
+    vi.unstubAllGlobals();
   });
 
-  it("renders document repository ingestion embeddings quality and WebDAV writeback details", () => {
+  it("renders document repository ingestion embeddings quality and WebDAV writeback details", async () => {
+    vi.stubGlobal("fetch", mockWebdavFetch());
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(<DataPage />);
     });
 
@@ -47,5 +93,57 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("데이터와 파일");
     expect(container.textContent).toContain("WebDAV 원본");
     expect(container.textContent).toContain("로컬 캐시");
+    expect(container.textContent).toContain("WebDAV writeback intent 승인");
+  });
+
+  it("creates a signed customer-owned WebDAV writeback intent", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-session");
+    const fetchMock = mockWebdavFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
+    );
+    expect(button).toBeDefined();
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const writebackCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/webdav/writeback-intent");
+    expect(writebackCall).toBeDefined();
+    const [, init] = writebackCall ?? [];
+    expect(init?.method).toBe("POST");
+    const headerEntries =
+      init?.headers instanceof Headers
+        ? Array.from(init.headers.entries())
+        : Object.entries((init?.headers as Record<string, string>) ?? {});
+    const requestHeaders = Object.fromEntries(
+      headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
+    );
+    expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-webdav-session",
+      "content-type": "application/json",
+    }));
+    for (const publicHeader of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(requestHeaders[publicHeader]).toBeUndefined();
+    }
+    expect(JSON.parse(String(init?.body))).toEqual({ target_account_id: 1 });
+    expect(container.textContent).toContain("server-authoritative");
+    expect(container.textContent).toContain("https://webdav.naruon.net");
   });
 });
