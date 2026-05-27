@@ -301,7 +301,7 @@ test('updates source-linked task ticket status with signed API headers', async (
   await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
   await expect(page.getByText('실제 티켓 큐')).toBeVisible();
-  await expect(page.getByText('4개 티켓 연결')).toBeVisible();
+  await expect(page.getByText('5개 티켓 연결')).toBeVisible();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('task-ticket-status-mobile.png'), fullPage: false });
@@ -318,6 +318,79 @@ test('updates source-linked task ticket status with signed API headers', async (
   expect(taskScrollMetrics.maxScroll).toBeGreaterThan(0);
   expect(taskScrollMetrics.after).toBeGreaterThan(taskScrollMetrics.before);
   await page.screenshot({ path: testInfo.outputPath('task-ticket-status-mobile-scroll.png'), fullPage: false });
+});
+
+test('creates self-sent knowledge WebDAV intent with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-self-sent-knowledge-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const desktopIntentRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/knowledge-materialization-intent' && request.method() === 'POST';
+  });
+
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'self-sent knowledge WebDAV materialization' })).toBeVisible();
+  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
+  const request = await desktopIntentRequest;
+  const requestHeaders = request.headers();
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(requestHeaders[headerName]).toBeUndefined();
+  }
+  expect(request.postDataJSON()).toEqual({ source_task_id: 'task-self-knowledge' });
+
+  await expect(page.getByText('/Naruon/Notes/task-self-knowledge.md')).toBeVisible();
+  await expect(page.getByText('provider_write_executed=false')).toBeVisible();
+  await expect(page.getByText('webdav.self_sent_knowledge_intent.created')).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('self-sent-knowledge-webdav-intent-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileIntentRequest = page.waitForRequest((mobileRequest) => {
+    const url = new URL(mobileRequest.url());
+    return url.pathname === '/api/webdav/knowledge-materialization-intent' && mobileRequest.method() === 'POST';
+  });
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
+  const mobileRequest = await mobileIntentRequest;
+  expect(mobileRequest.headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  await expect(page.getByText('/Naruon/Notes/task-self-knowledge.md')).toBeVisible();
+  await page.getByText('webdav.self_sent_knowledge_intent.created').scrollIntoViewIfNeeded();
+  await page.locator('main').nth(1).evaluate((scroller) => {
+    scroller.scrollTop += 96;
+  });
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('self-sent-knowledge-webdav-intent-mobile.png'), fullPage: false });
+  const taskScrollMetrics = await page.locator('main').nth(1).evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(taskScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(taskScrollMetrics.after).toBeGreaterThan(taskScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('self-sent-knowledge-webdav-intent-mobile-scroll.png'), fullPage: false });
 });
 
 test('renders the settings self-hosted connector manifest with mobile scrolling', async ({ page }, testInfo) => {

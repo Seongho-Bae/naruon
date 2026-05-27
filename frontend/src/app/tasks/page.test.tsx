@@ -161,6 +161,84 @@ describe("TasksPage", () => {
     expect(doneButton?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("creates self-sent knowledge WebDAV materialization intent with signed headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.knowledge.intent");
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/webdav/knowledge-materialization-intent") {
+        const headers = init?.headers as Record<string, string>;
+        expect(init?.method).toBe("POST");
+        expect(headers.Authorization).toBe("Bearer signed.knowledge.intent");
+        expect(headers["Content-Type"]).toBe("application/json");
+        for (const headerName of publicIdentityHeaders) {
+          expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+        }
+        expect(JSON.parse(String(init?.body))).toEqual({ source_task_id: "task-self-knowledge" });
+        return jsonResponse({
+          intent: "knowledge_materialization",
+          status: "intent_ready",
+          task_id: "task-self-knowledge",
+          source_type: "self_sent_knowledge",
+          source_email_id: "<self-note@example.com>",
+          source_thread_id: "thread-self-note",
+          source_id: 1,
+          server_url: "https://webdav.naruon.net",
+          target_path: "/Naruon/Notes/task-self-knowledge.md",
+          requires_if_match: true,
+          provenance: "server-authoritative",
+          provider_write_executed: false,
+          audit_event: "webdav.self_sent_knowledge_intent.created",
+        });
+      }
+      return jsonResponse([
+        {
+          id: "task-self-knowledge",
+          title: "나에게 보낸 지식 메모 정리",
+          status: "open",
+          priority: "normal",
+          source_type: "self_sent_knowledge",
+          source_email_id: "<self-note@example.com>",
+          related_thread_id: "thread-self-note",
+          updated_at: "2026-05-26T09:00:00.000Z",
+        },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    const intentButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성"]',
+    );
+    expect(intentButton).not.toBeNull();
+    await act(async () => {
+      intentButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/webdav/knowledge-materialization-intent", expect.objectContaining({
+      method: "POST",
+    }));
+    expect(container.textContent).toContain("/Naruon/Notes/task-self-knowledge.md");
+    expect(container.textContent).toContain("https://webdav.naruon.net");
+    expect(container.textContent).toContain("provider_write_executed=false");
+    expect(container.textContent).toContain("webdav.self_sent_knowledge_intent.created");
+  });
+
   it("distinguishes signed-session authorization failures from generic task API errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ detail: "forbidden" }, false, 403)));
     container = document.createElement("div");

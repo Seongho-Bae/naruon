@@ -1,19 +1,64 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
 import uuid
 
 import asyncpg
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
 from main import app
+from api.auth import get_auth_context
+from db.models import TicketTask
 from db.session import get_db
 from services.webdav_service import WebDavService, webdav_service
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+TEST_SESSION_HMAC_SECRET = "webdav-knowledge-hmac-material-32-bytes"  # noqa: S105
+
+
+def _base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(payload: dict[str, object]) -> str:
+    header_segment = _base64url_encode(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+    )
+    payload_segment = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    )
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        TEST_SESSION_HMAC_SECRET.encode("utf-8"),
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{signing_input}.{_base64url_encode(signature)}"
+
+
+def _valid_session_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ver": 1,
+        "iss": "naruon-control-plane",
+        "aud": "naruon-api",
+        "sub": "alice",
+        "role": "tenant_admin",
+        "org": "org-acme",
+        "groups": ["group-1", "group-2"],
+        "workspace": "workspace-org-acme",
+        "exp": int(time.time()) + 300,
+    }
+    payload.update(overrides)
+    return payload
 
 @pytest.fixture(autouse=True)
 def stub_webdav_service(monkeypatch):
@@ -38,12 +83,54 @@ def stub_webdav_service(monkeypatch):
             target_account_id=target_account_id,
         )
 
+    async def fake_knowledge_intent(
+        db,
+        user_id,
+        organization_id,
+        source_task_id,
+        target_account_id=None,
+    ):
+        if source_task_id == "task-email":
+            return {
+                "status": "error",
+                "message": "Task is not self-sent knowledge.",
+            }
+        if source_task_id != "task-self-knowledge":
+            return {
+                "status": "error",
+                "message": "Self-sent knowledge task was not found.",
+            }
+        result = await fake_intent(db, user_id, target_account_id=target_account_id)
+        if result.get("status") == "error":
+            return result
+        return {
+            **result,
+            "intent": "knowledge_materialization",
+            "status": "intent_ready",
+            "task_id": source_task_id,
+            "source_type": "self_sent_knowledge",
+            "source_email_id": "<self-note@example.com>",
+            "source_thread_id": "thread-self-note",
+            "source_id": result["source_id"],
+            "server_url": result["server_url"],
+            "target_path": f"/Naruon/Notes/{source_task_id}.md",
+            "requires_if_match": result["requires_if_match"],
+            "provenance": result["provenance"],
+            "provider_write_executed": False,
+            "audit_event": "webdav.self_sent_knowledge_intent.created",
+        }
+
     monkeypatch.setattr(webdav_service, "get_connected_accounts_from_db", fake_accounts)
     monkeypatch.setattr(webdav_service, "get_project_folders_from_db", fake_folders)
     monkeypatch.setattr(
         webdav_service,
         "determine_webdav_writeback_intent_from_db",
         fake_intent,
+    )
+    monkeypatch.setattr(
+        webdav_service,
+        "determine_knowledge_materialization_intent_from_db",
+        fake_knowledge_intent,
     )
 
 @pytest.fixture
@@ -102,6 +189,134 @@ def test_get_webdav_writeback_intent_with_invalid_target_account(auth_client):
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Requested WebDAV account was not found."
+
+
+def test_get_self_sent_knowledge_webdav_intent(auth_client):
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={
+            "target_account_id": 1,
+            "source_task_id": "task-self-knowledge",
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["intent"] == "knowledge_materialization"
+    assert body["status"] == "intent_ready"
+    assert body["task_id"] == "task-self-knowledge"
+    assert body["source_type"] == "self_sent_knowledge"
+    assert body["source_email_id"] == "<self-note@example.com>"
+    assert body["source_thread_id"] == "thread-self-note"
+    assert body["target_path"] == "/Naruon/Notes/task-self-knowledge.md"
+    assert body["provider_write_executed"] is False
+    assert body["audit_event"] == "webdav.self_sent_knowledge_intent.created"
+    assert "related_email_id" not in body
+    assert "user_id" not in body
+    assert "organization_id" not in body
+
+
+def test_self_sent_knowledge_webdav_intent_requires_source_task(auth_client):
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={},
+    )
+    assert response.status_code == 422
+
+
+def test_self_sent_knowledge_webdav_intent_returns_not_found_for_other_owner_task(
+    auth_client,
+):
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={"source_task_id": "task-other-owner"},
+    )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Self-sent knowledge task was not found."
+
+
+def test_self_sent_knowledge_webdav_intent_rejects_non_self_sent_task(auth_client):
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={"source_task_id": "task-email"},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Task is not self-sent knowledge."
+
+
+def test_self_sent_knowledge_webdav_intent_requires_connected_webdav_account():
+    with TestClient(
+        app,
+        headers={"X-User-Id": "bob", "X-Organization-Id": "org-acme"},
+    ) as client:
+        response = client.post(
+            "/api/webdav/knowledge-materialization-intent",
+            json={"source_task_id": "task-self-knowledge"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "No connected WebDAV accounts found."
+
+
+def test_get_self_sent_knowledge_webdav_intent_accepts_signed_bearer_session():
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    previous_override = app.dependency_overrides.pop(get_auth_context, None)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/webdav/knowledge-materialization-intent",
+                json={
+                    "target_account_id": 1,
+                    "source_task_id": "task-self-knowledge",
+                },
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        if previous_override is not None:
+            app.dependency_overrides[get_auth_context] = previous_override
+
+    assert response.status_code == 200, response.text
+    assert response.json()["task_id"] == "task-self-knowledge"
+
+
+@pytest.mark.asyncio
+async def test_knowledge_materialization_rejects_non_self_sent_task(monkeypatch):
+    task = TicketTask(
+        user_id="alice",
+        organization_id="org-acme",
+        title="Ordinary task",
+        source_type="email",
+    )
+    task.task_uid = "task-email"
+    task.related_thread_id = "thread-email"
+
+    class Result:
+        def one_or_none(self):
+            return (task, "<email@example.com>")
+
+    class Session:
+        async def execute(self, stmt):
+            return Result()
+
+    monkeypatch.setattr(
+        webdav_service,
+        "get_connected_accounts_from_db",
+        lambda session, user_id: [],
+    )
+
+    result = await webdav_service.determine_knowledge_materialization_intent_from_db(
+        Session(),
+        "alice",
+        "org-acme",
+        "task-email",
+    )
+
+    assert result == {
+        "status": "error",
+        "message": "Task is not self-sent knowledge.",
+    }
 
 
 def test_get_webdav_writeback_intent_no_accounts():

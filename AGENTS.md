@@ -108,6 +108,10 @@
   stay idempotent per source email, preserve email/thread provenance, and store
   only plain-text task titles. Do not create unlinked knowledge tasks from raw
   dict payloads when the source email row is unavailable.
+- Self-sent knowledge WebDAV/Notes materialization requests must start from an
+  opaque task uid, re-check owner and organization scope server-side, reject
+  non-`self_sent_knowledge` tasks, and return intent metadata only until the
+  connector/provider write path has source-backed ETag conflict handling.
 - Sender ontology and relationship DAG APIs must stay scoped to the signed
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a

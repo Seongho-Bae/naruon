@@ -32,6 +32,22 @@ type TicketTask = {
   updated_at: string;
 };
 
+type KnowledgeMaterializationIntent = {
+  intent: 'knowledge_materialization';
+  status: 'intent_ready';
+  task_id: string;
+  source_type: 'self_sent_knowledge';
+  source_email_id: string | null;
+  source_thread_id: string | null;
+  source_id: number | null;
+  server_url: string | null;
+  target_path: string;
+  requires_if_match: boolean;
+  provenance: string;
+  provider_write_executed: boolean;
+  audit_event: string;
+};
+
 const taskStatusLabels: Record<TicketTask['status'], string> = {
   open: '접수',
   in_progress: '진행',
@@ -72,6 +88,11 @@ export function TasksLayout() {
   const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
   const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
   const [ticketActionStatus, setTicketActionStatus] = useState<string | null>(null);
+  const [knowledgeIntentStatus, setKnowledgeIntentStatus] = useState<{
+    state: 'idle' | 'loading' | 'ready' | 'error';
+    taskId: string | null;
+    result: KnowledgeMaterializationIntent | null;
+  }>({ state: 'idle', taskId: null, result: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +162,19 @@ export function TasksLayout() {
     }
   };
 
+  const handleKnowledgeIntentCreate = async (taskId: string) => {
+    setKnowledgeIntentStatus({ state: 'loading', taskId, result: null });
+    try {
+      const result = await apiClient.post<KnowledgeMaterializationIntent>(
+        '/api/webdav/knowledge-materialization-intent',
+        { source_task_id: taskId },
+      );
+      setKnowledgeIntentStatus({ state: 'ready', taskId, result });
+    } catch {
+      setKnowledgeIntentStatus({ state: 'error', taskId, result: null });
+    }
+  };
+
   const currentColumns = [
     { id: 'open', title: '접수', count: tasks.open.length, color: 'bg-blue-100 text-blue-700' },
     { id: 'in_progress', title: '진행', count: tasks.in_progress.length, color: 'bg-orange-100 text-orange-700' },
@@ -157,6 +191,11 @@ export function TasksLayout() {
       { open: 0, in_progress: 0, blocked: 0, done: 0 },
     );
   }, [ticketTasks]);
+
+  const selfSentKnowledgeTasks = useMemo(
+    () => ticketTasks.filter((task) => task.source_type === 'self_sent_knowledge'),
+    [ticketTasks],
+  );
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
@@ -192,7 +231,7 @@ export function TasksLayout() {
       </header>
 
       {/* Kanban Board Area */}
-      <main className="flex-1 overflow-x-auto overflow-y-auto p-6 bg-secondary/20">
+      <main className="flex-1 overflow-x-auto overflow-y-auto bg-secondary/20 px-4 py-4 pb-28 sm:p-6">
         <section aria-label="source-linked ticket status board" className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -264,6 +303,77 @@ export function TasksLayout() {
                 </article>
               ))}
             </div>
+          ) : null}
+
+          {ticketStatus === 'ready' && selfSentKnowledgeTasks.length > 0 ? (
+            <section aria-label="self-sent knowledge WebDAV materialization" className="mt-4 border-t border-border pt-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">나에게 보낸 지식 노트</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    self-sent 메일 task를 고객 WebDAV/Notes target intent로만 준비하고 provider write는 실행하지 않습니다.
+                  </p>
+                </div>
+                <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-secondary-foreground">
+                  {selfSentKnowledgeTasks.length}개 self-sent task
+                </span>
+              </div>
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                {selfSentKnowledgeTasks.map((task) => {
+                  const isActiveTask = knowledgeIntentStatus.taskId === task.id;
+                  const currentIntent = isActiveTask ? knowledgeIntentStatus.result : null;
+                  return (
+                    <article key={task.id} className="rounded-lg border border-border bg-background/75 p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h4 className="font-bold text-foreground">{task.title}</h4>
+                          <p className="mt-1 text-xs text-muted-foreground">{task.source_email_id ?? 'self-sent source'} · {task.related_thread_id ?? 'thread pending'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={`${task.title} WebDAV 지식 노트 intent 생성`}
+                          disabled={knowledgeIntentStatus.state === 'loading' && isActiveTask}
+                          onClick={() => void handleKnowledgeIntentCreate(task.id)}
+                          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+                        >
+                          <Plus className="size-3.5" />
+                          {knowledgeIntentStatus.state === 'loading' && isActiveTask ? '준비 중' : 'intent 생성'}
+                        </button>
+                      </div>
+                      {knowledgeIntentStatus.state === 'error' && isActiveTask ? (
+                        <p role="status" className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-xs font-semibold text-red-900">
+                          WebDAV/Notes intent를 만들지 못했습니다.
+                        </p>
+                      ) : null}
+                      {currentIntent ? (
+                        <dl className="mt-3 grid gap-2 rounded-md border border-border bg-card p-3 text-xs sm:grid-cols-2">
+                          <div>
+                            <dt className="font-bold text-foreground">target_path</dt>
+                            <dd className="break-all text-muted-foreground">{currentIntent.target_path}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-bold text-foreground">server_url</dt>
+                            <dd className="break-all text-muted-foreground">{currentIntent.server_url ?? 'unassigned'}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-bold text-foreground">write policy</dt>
+                            <dd className="text-muted-foreground">requires_if_match={String(currentIntent.requires_if_match)}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-bold text-foreground">execution</dt>
+                            <dd className="text-muted-foreground">provider_write_executed={String(currentIntent.provider_write_executed)}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="font-bold text-foreground">audit_event</dt>
+                            <dd className="break-all text-muted-foreground">{currentIntent.audit_event}</dd>
+                          </div>
+                        </dl>
+                      ) : null}
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
           ) : null}
 
           {ticketActionStatus ? (
