@@ -35,10 +35,23 @@ def schema_backfill_sql():
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
         text('ALTER TABLE emails ADD COLUMN IF NOT EXISTS "references" varchar'),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS reply_to varchar"),
+        text(
+            "ALTER TABLE sender_relationships "
+            "ADD COLUMN IF NOT EXISTS source_message_id varchar"
+        ),
+        text(
+            "ALTER TABLE sender_relationships "
+            "ADD COLUMN IF NOT EXISTS source_thread_id varchar"
+        ),
         text("CREATE INDEX IF NOT EXISTS ix_emails_user_id ON emails (user_id)"),
         text(
             "CREATE INDEX IF NOT EXISTS ix_emails_organization_id "
             "ON emails (organization_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_sender_relationships_owner_source "
+            "ON sender_relationships "
+            "(user_id, organization_id, source_message_id, source_thread_id)"
         ),
         text(
             "CREATE INDEX IF NOT EXISTS ix_llm_providers_user_id "
@@ -49,6 +62,10 @@ def schema_backfill_sql():
             "ON llm_providers (organization_id)"
         ),
         text("ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_message_id_key"),
+        text(
+            "ALTER TABLE sender_relationships "
+            "DROP CONSTRAINT IF EXISTS uq_sender_relationships_user_email"
+        ),
         text(
             "ALTER TABLE llm_providers DROP CONSTRAINT IF EXISTS llm_providers_name_key"
         ),
@@ -123,6 +140,13 @@ def schema_backfill_sql():
             ),
             text(
                 "CREATE INDEX IF NOT EXISTS ix_emails_thread_id ON emails (thread_id)"
+            ),
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS "
+                "uq_sender_relationships_scope_source "
+                "ON sender_relationships "
+                "(user_id, coalesce(organization_id, ''), sender_email, "
+                "coalesce(source_message_id, ''), coalesce(source_thread_id, ''))"
             ),
         ]
     )

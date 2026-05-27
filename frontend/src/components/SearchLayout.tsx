@@ -13,6 +13,7 @@ const DEFAULT_QUERY = '런칭 캠페인';
 
 type SearchResultItem = {
   id: number;
+  source_message_id?: string | null;
   subject: string | null;
   sender: string;
   date: string;
@@ -24,6 +25,23 @@ type SearchResultItem = {
 
 type SearchResponse = {
   results: SearchResultItem[];
+};
+
+type SenderRelationship = {
+  sender_email: string;
+  parent_sender_email: string | null;
+  source_message_id: string | null;
+  source_thread_id: string | null;
+  relationship_type: string;
+  confidence_score: number;
+  next_action: string;
+  action_reason: string;
+};
+
+type RelationshipState = {
+  sourceKey: string | null;
+  items: SenderRelationship[];
+  error: string | null;
 };
 
 type ResultFilter = 'all' | 'thread' | 'single';
@@ -50,12 +68,100 @@ function resultTitle(result: SearchResultItem) {
   return result.subject?.trim() || '(제목 없음)';
 }
 
+function ontologySourceKey(result: SearchResultItem | null) {
+  if (!result) return null;
+  return `${result.id}:${result.source_message_id ?? ''}:${result.thread_id ?? ''}`;
+}
+
+function buildOntologyUrl(result: SearchResultItem) {
+  const params = new URLSearchParams();
+  if (result.source_message_id) params.set('source_message_id', result.source_message_id);
+  if (result.thread_id) params.set('source_thread_id', result.thread_id);
+  const query = params.toString();
+  return query ? `/api/ontology/relationships?${query}` : '/api/ontology/relationships';
+}
+
+function SenderDagPanel({
+  relationships,
+  loading,
+  error,
+}: {
+  relationships: SenderRelationship[];
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <div role="status" aria-live="polite" className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+        발신자 DAG를 불러오는 중입니다.
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+        {error}
+      </div>
+    );
+  }
+
+  if (relationships.length === 0) {
+    return (
+      <div className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+        이 검색 결과에 연결된 발신자 관계가 아직 없습니다.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {relationships.map((relationship) => (
+        <article
+          key={`${relationship.sender_email}:${relationship.source_message_id ?? 'global'}:${relationship.source_thread_id ?? 'none'}`}
+          className="rounded-lg border border-border bg-background p-4"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-foreground">{relationship.sender_email}</p>
+              <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                상위 맥락: {relationship.parent_sender_email ?? '사용자 직접 관계'}
+              </p>
+            </div>
+            <div className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+              {relationship.relationship_type} · {(relationship.confidence_score * 100).toFixed(0)}%
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
+            <div className="rounded border border-border bg-card px-3 py-2">
+              <p className="break-all text-foreground">{relationship.next_action}</p>
+              <p className="mt-1">Agent next action</p>
+            </div>
+            <div className="rounded border border-border bg-card px-3 py-2">
+              <p className="break-words text-foreground">{relationship.action_reason}</p>
+              <p className="mt-1">판단 근거</p>
+            </div>
+          </div>
+          <p className="mt-3 break-words rounded bg-secondary/40 px-3 py-2 text-[11px] font-semibold text-muted-foreground">
+            source={relationship.source_message_id ?? 'global'} / thread={relationship.source_thread_id ?? 'none'}
+          </p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export function SearchLayout() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
   const [activeFilter, setActiveFilter] = useState<ResultFilter>('all');
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [activeResultId, setActiveResultId] = useState<number | null>(null);
+  const [relationshipState, setRelationshipState] = useState<RelationshipState>({
+    sourceKey: null,
+    items: [],
+    error: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,6 +198,40 @@ export function SearchLayout() {
   }, [activeFilter, results]);
 
   const activeResult = filteredResults.find((result) => result.id === activeResultId) ?? filteredResults[0] ?? null;
+  const activeOntologySourceKey = ontologySourceKey(activeResult);
+  const activeOntologyUrl = activeResult ? buildOntologyUrl(activeResult) : null;
+  const relationshipsLoading = Boolean(
+    activeOntologySourceKey && relationshipState.sourceKey !== activeOntologySourceKey,
+  );
+  const relationships = relationshipsLoading ? [] : relationshipState.items;
+  const relationshipError = relationshipsLoading ? null : relationshipState.error;
+
+  useEffect(() => {
+    if (!activeOntologyUrl || !activeOntologySourceKey) return;
+
+    const controller = new AbortController();
+
+    apiClient
+      .get<SenderRelationship[]>(activeOntologyUrl, { signal: controller.signal })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setRelationshipState({
+          sourceKey: activeOntologySourceKey,
+          items: response,
+          error: null,
+        });
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setRelationshipState({
+          sourceKey: activeOntologySourceKey,
+          items: [],
+          error: '발신자 DAG를 불러오지 못했습니다.',
+        });
+      });
+
+    return () => controller.abort();
+  }, [activeOntologySourceKey, activeOntologyUrl]);
 
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -230,7 +370,7 @@ export function SearchLayout() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-muted-foreground">
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
-                        <p className="text-foreground">{activeResult.thread_id ?? 'thread 없음'}</p>
+                        <p className="break-all text-foreground">{activeResult.thread_id ?? 'thread 없음'}</p>
                         <p className="mt-1">THREAD_ID</p>
                       </div>
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
@@ -251,7 +391,7 @@ export function SearchLayout() {
                 <div className="flex items-center justify-between gap-3">
                   <h2 className="text-lg font-bold">관계 그래프와 타임라인</h2>
                   <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-                    API 근거 연결
+                    source/thread API 연결
                   </span>
                 </div>
 
@@ -259,8 +399,11 @@ export function SearchLayout() {
                   <section className="flex min-h-[420px] flex-col rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
                     <div className="mb-4 flex items-center gap-2">
                       <Network className="size-5 text-primary" aria-hidden="true" />
-                      <h3 className="text-lg font-bold">관계 그래프 (Relationship)</h3>
+                      <h3 className="text-lg font-bold">발신자 DAG (Ontology)</h3>
                     </div>
+                    <SenderDagPanel relationships={relationships} loading={relationshipsLoading} error={relationshipError} />
+                    <div className="my-4 border-t border-border" />
+                    <h4 className="mb-3 text-sm font-black text-foreground">네트워크 그래프</h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
                       <NetworkGraph />
                     </div>

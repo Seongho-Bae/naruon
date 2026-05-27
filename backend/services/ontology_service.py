@@ -76,6 +76,8 @@ class OntologyService:
         email_content: str,
         user_id: str,
         organization_id: str | None,
+        source_message_id: str | None = None,
+        source_thread_id: str | None = None,
     ):
         analysis = self.analyze_sender_relationship(
             user_email, sender_email, email_content
@@ -85,6 +87,8 @@ class OntologyService:
             SenderRelationship.user_id == user_id,
             SenderRelationship.organization_id == organization_id,
             SenderRelationship.sender_email == sender_email,
+            SenderRelationship.source_message_id == source_message_id,
+            SenderRelationship.source_thread_id == source_thread_id,
         )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -92,11 +96,15 @@ class OntologyService:
         if existing:
             existing.relationship_type = analysis["type"]
             existing.confidence_score = analysis["confidence"]
+            existing.source_message_id = source_message_id
+            existing.source_thread_id = source_thread_id
         else:
             new_rel = SenderRelationship(
                 user_id=user_id,
                 organization_id=organization_id,
                 sender_email=sender_email,
+                source_message_id=source_message_id,
+                source_thread_id=source_thread_id,
                 relationship_type=analysis["type"],
                 confidence_score=analysis["confidence"],
             )

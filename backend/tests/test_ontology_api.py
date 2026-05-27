@@ -6,11 +6,21 @@ from db.session import get_db
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
 class MockRow:
-    def __init__(self, sender_email, relationship_type, confidence_score, parent_sender_email=None):
+    def __init__(
+        self,
+        sender_email,
+        relationship_type,
+        confidence_score,
+        parent_sender_email=None,
+        source_message_id=None,
+        source_thread_id=None,
+    ):
         self.sender_email = sender_email
         self.relationship_type = relationship_type
         self.confidence_score = confidence_score
         self.parent_sender_email = parent_sender_email
+        self.source_message_id = source_message_id
+        self.source_thread_id = source_thread_id
 
 class MockResult:
     def __init__(self, items):
@@ -27,9 +37,20 @@ class MockResult:
 
 class MockSession:
     def __init__(self):
-        self.items = [MockRow("boss@example.com", "manager", 0.95, "ceo@example.com")]
+        self.items = [
+            MockRow(
+                "boss@example.com",
+                "manager",
+                0.95,
+                "ceo@example.com",
+                "<q2@example.com>",
+                "thread-q2",
+            )
+        ]
+        self.statements = []
         
     async def execute(self, stmt):
+        self.statements.append(stmt)
         compiled = str(stmt)
         # SQLAlchemy select compiled string won't contain vendor@example.com literally.
         # But we can check if it's the GET request by looking at the statement.
@@ -67,14 +88,46 @@ def client():
 
 
 def test_get_relationships(client: TestClient):
-    resp = client.get("/api/ontology/relationships")
+    resp = client.get(
+        "/api/ontology/relationships",
+        params={"source_message_id": "<q2@example.com>", "source_thread_id": "thread-q2"},
+    )
     assert resp.status_code == 200
     items = resp.json()
     assert len(items) == 1
     assert items[0]["sender_email"] == "boss@example.com"
     assert items[0]["parent_sender_email"] == "ceo@example.com"
+    assert items[0]["source_message_id"] == "<q2@example.com>"
+    assert items[0]["source_thread_id"] == "thread-q2"
     assert items[0]["relationship_type"] == "manager"
     assert items[0]["next_action"] == "classify_sender"
+
+
+def test_get_relationships_filters_by_source_and_owner_scope():
+    session = MockSession()
+
+    async def override_scoped_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_scoped_get_db
+    try:
+        with TestClient(app, headers={"X-User-Id": "testuser"}) as test_client:
+            resp = test_client.get(
+                "/api/ontology/relationships",
+                params={
+                    "source_message_id": "<q2@example.com>",
+                    "source_thread_id": "thread-q2",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    query_text = str(session.statements[-1]).lower()
+    assert "sender_relationships.user_id" in query_text
+    assert "sender_relationships.organization_id" in query_text
+    assert "sender_relationships.source_message_id" in query_text
+    assert "sender_relationships.source_thread_id" in query_text
 
 def test_create_relationship(client: TestClient):
     resp = client.post(
@@ -82,6 +135,8 @@ def test_create_relationship(client: TestClient):
         json={
             "sender_email": "vendor@example.com",
             "parent_sender_email": "buyer@example.com",
+            "source_message_id": "<vendor@example.com>",
+            "source_thread_id": "thread-vendor",
             "relationship_type": "vendor",
             "confidence_score": 0.8
         }
@@ -90,6 +145,8 @@ def test_create_relationship(client: TestClient):
     data = resp.json()
     assert data["sender_email"] == "vendor@example.com"
     assert data["parent_sender_email"] == "buyer@example.com"
+    assert data["source_message_id"] == "<vendor@example.com>"
+    assert data["source_thread_id"] == "thread-vendor"
     assert data["relationship_type"] == "vendor"
     assert data["next_action"] == "prepare_response_draft"
 

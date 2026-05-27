@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -14,6 +14,8 @@ router = APIRouter(prefix="/api/ontology", tags=["ontology"])
 class RelationshipResponse(BaseModel):
     sender_email: str
     parent_sender_email: str | None = None
+    source_message_id: str | None = None
+    source_thread_id: str | None = None
     relationship_type: str
     confidence_score: float
     next_action: str
@@ -22,22 +24,45 @@ class RelationshipResponse(BaseModel):
 class RelationshipCreate(BaseModel):
     sender_email: str
     parent_sender_email: str | None = None
+    source_message_id: str | None = None
+    source_thread_id: str | None = None
     relationship_type: str
     confidence_score: float = 1.0
 
 @router.get("/relationships", response_model=List[RelationshipResponse])
 async def get_relationships(
+    source_message_id: str | None = Query(default=None),
+    source_thread_id: str | None = Query(default=None),
     auth_ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db)
 ):
-    user_id = auth_ctx.user_id
-    stmt = select(SenderRelationship).where(SenderRelationship.user_id == user_id)
+    organization_filter = (
+        SenderRelationship.organization_id == auth_ctx.organization_id
+        if auth_ctx.organization_id is not None
+        else SenderRelationship.organization_id.is_(None)
+    )
+    filters = [SenderRelationship.user_id == auth_ctx.user_id, organization_filter]
+    if source_message_id is not None:
+        filters.append(SenderRelationship.source_message_id == source_message_id)
+    if source_thread_id is not None:
+        filters.append(SenderRelationship.source_thread_id == source_thread_id)
+
+    stmt = (
+        select(SenderRelationship)
+        .where(*filters)
+        .order_by(
+            SenderRelationship.confidence_score.desc(),
+            SenderRelationship.updated_at.desc(),
+        )
+    )
     result = await db.execute(stmt)
     rels = result.scalars().all()
     return [
         RelationshipResponse(
             sender_email=r.sender_email,
             parent_sender_email=r.parent_sender_email,
+            source_message_id=r.source_message_id,
+            source_thread_id=r.source_thread_id,
             relationship_type=r.relationship_type,
             confidence_score=r.confidence_score,
             **ontology_service.next_action_for_relationship(r.relationship_type),
@@ -51,11 +76,17 @@ async def create_relationship(
     auth_ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db)
 ):
-    user_id = auth_ctx.user_id
-    
+    organization_filter = (
+        SenderRelationship.organization_id == auth_ctx.organization_id
+        if auth_ctx.organization_id is not None
+        else SenderRelationship.organization_id.is_(None)
+    )
     stmt = select(SenderRelationship).where(
-        SenderRelationship.user_id == user_id,
-        SenderRelationship.sender_email == req.sender_email
+        SenderRelationship.user_id == auth_ctx.user_id,
+        organization_filter,
+        SenderRelationship.sender_email == req.sender_email,
+        SenderRelationship.source_message_id == req.source_message_id,
+        SenderRelationship.source_thread_id == req.source_thread_id,
     )
     result = await db.execute(stmt)
     rel = result.scalars().first()
@@ -65,11 +96,16 @@ async def create_relationship(
         rel.confidence_score = req.confidence_score
         if "parent_sender_email" in req.model_fields_set:
             rel.parent_sender_email = req.parent_sender_email
+        rel.source_message_id = req.source_message_id
+        rel.source_thread_id = req.source_thread_id
     else:
         rel = SenderRelationship(
-            user_id=user_id,
+            user_id=auth_ctx.user_id,
+            organization_id=auth_ctx.organization_id,
             sender_email=req.sender_email,
             parent_sender_email=req.parent_sender_email,
+            source_message_id=req.source_message_id,
+            source_thread_id=req.source_thread_id,
             relationship_type=req.relationship_type,
             confidence_score=req.confidence_score
         )
@@ -81,6 +117,8 @@ async def create_relationship(
     return RelationshipResponse(
         sender_email=rel.sender_email,
         parent_sender_email=rel.parent_sender_email,
+        source_message_id=rel.source_message_id,
+        source_thread_id=rel.source_thread_id,
         relationship_type=rel.relationship_type,
         confidence_score=rel.confidence_score,
         **ontology_service.next_action_for_relationship(rel.relationship_type),

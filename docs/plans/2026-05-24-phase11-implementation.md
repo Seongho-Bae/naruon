@@ -30,15 +30,19 @@
 - Test: `backend/tests/test_ontology_pipeline.py`
 
 - [x] **Step 1: Write a test that inserts a `SenderRelationship` to DB based on `analyze_sender_relationship`**
-- [ ] **Step 2: Update `ontology_service.py` to accept DB session and save the relationship including explicit tenant_id and source_id/thread_id fields**
+- [x] **Step 2: Update `ontology_service.py` to accept DB session and save the relationship including explicit tenant_id and source_id/thread_id fields**
 - [x] **Step 3: If `process_self_to_self` is true, trigger a knowledge extraction task passing tenant and source context**
-- [ ] **Step 4: Create/Update `/api/ontology/relationships` to fetch the DAG for the frontend, filtering by tenant_id and source_id. Explicitly require the default signed-session authentication by registering the router with the `get_auth_context` dependency.**
+- [x] **Step 4: Create/Update `/api/ontology/relationships` to fetch the DAG for the frontend, filtering by tenant_id and source_id. Explicitly require the default signed-session authentication by registering the router with the `get_auth_context` dependency.**
 
 2026-05-26 implementation note: IMAP import now triggers idempotent
 `self_sent_knowledge` ticket-task capture for true self-to-self messages, and
 ontology analysis/API responses include deterministic `next_action` metadata.
-The remaining gap is durable source/thread graph fields plus source-id filtered
-relationship reads.
+2026-05-27 implementation note: Search detail now receives `source_message_id`
+from `/api/search`, reads `/api/ontology/relationships` with signed-session
+Authorization and source/thread filters, and renders the source-backed sender DAG
+with deterministic `next_action` metadata. `sender_relationships` now has
+durable `source_message_id` and `source_thread_id` fields plus owner/source
+backfill indexes.
 
 ## Task 3: Reply Tracking Background Job
 

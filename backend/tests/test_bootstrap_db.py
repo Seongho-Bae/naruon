@@ -1,4 +1,5 @@
 from scripts.bootstrap_db import schema_backfill_sql
+from db.models import SenderRelationship
 
 
 def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
@@ -25,6 +26,30 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     )
     assert any(
         "alter table emails add column if not exists in_reply_to" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table sender_relationships add column if not exists source_message_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table sender_relationships add column if not exists source_thread_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "drop constraint if exists uq_sender_relationships_user_email" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_sender_relationships_owner_source"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_sender_relationships_scope_source"
+        in statement
         for statement in statements
     )
     assert any(
@@ -151,3 +176,20 @@ def test_schema_backfill_rejects_default_owner_ids(monkeypatch):
     assert not any(
         "update emails set organization_id" in statement for statement in statements
     )
+
+
+def test_sender_relationship_model_declares_source_unique_index():
+    indexes = {index.name: index for index in SenderRelationship.__table__.indexes}
+
+    source_index = indexes["uq_sender_relationships_scope_source"]
+
+    assert source_index.unique is True
+    expression_text = " ".join(
+        str(expression).lower() for expression in source_index.expressions
+    )
+    assert "user_id" in expression_text
+    assert "coalesce" in expression_text
+    assert "organization_id" in expression_text
+    assert "sender_email" in expression_text
+    assert "source_message_id" in expression_text
+    assert "source_thread_id" in expression_text

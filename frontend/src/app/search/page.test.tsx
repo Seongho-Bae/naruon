@@ -75,6 +75,7 @@ describe("SearchPage", () => {
             results: [
               {
                 id: 7,
+                source_message_id: "<q2@example.com>",
                 subject: "Q2 출시 계획 및 우선순위 조정",
                 sender: "김지현 PM",
                 date: "2026-05-11T09:30:00Z",
@@ -85,6 +86,22 @@ describe("SearchPage", () => {
               },
             ],
           }),
+        );
+      }
+      if (url.includes("/api/ontology/relationships")) {
+        return Promise.resolve(
+          jsonResponse([
+            {
+              sender_email: "jihyun@naruon.ai",
+              parent_sender_email: "user@naruon.ai",
+              source_message_id: "<q2@example.com>",
+              source_thread_id: "thread-q2",
+              relationship_type: "colleague",
+              confidence_score: 0.85,
+              next_action: "track_reply_and_tasks",
+              action_reason: "Same-domain sender; preserve reply and task follow-up.",
+            },
+          ]),
         );
       }
       if (url.endsWith("/api/network/graph")) {
@@ -112,6 +129,9 @@ describe("SearchPage", () => {
     expect(container.textContent).toContain("thread-q2");
     expect(container.textContent).toContain("답장 3건");
     expect(container.textContent).toContain("관계 그래프와 타임라인");
+    expect(container.textContent).toContain("발신자 DAG");
+    expect(container.textContent).toContain("track_reply_and_tasks");
+    expect(container.textContent).toContain("source=<q2@example.com>");
 
     const searchCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/search"));
     expect(searchCall).toBeDefined();
@@ -122,6 +142,16 @@ describe("SearchPage", () => {
     for (const headerName of ["x-user-id", "x-organization-id", "x-group-id", "x-group-ids", "x-user-role", "x-dev-auth-token"]) {
       expect(headers[headerName]).toBeUndefined();
     }
+
+    const ontologyCall = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/ontology/relationships"));
+    expect(ontologyCall).toBeDefined();
+    expect(String(ontologyCall?.[0])).toContain("source_message_id=%3Cq2%40example.com%3E");
+    expect(String(ontologyCall?.[0])).toContain("source_thread_id=thread-q2");
+    const ontologyHeaders = lowerCaseHeaders(ontologyCall?.[1]?.headers);
+    expect(ontologyHeaders.authorization).toBe("Bearer signed-search-session");
+    for (const headerName of ["x-user-id", "x-organization-id", "x-group-id", "x-group-ids", "x-user-role", "x-dev-auth-token"]) {
+      expect(ontologyHeaders[headerName]).toBeUndefined();
+    }
   });
 
   it("renders a fail-closed error state when the search API rejects the query", async () => {
@@ -130,6 +160,7 @@ describe("SearchPage", () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
         if (url.endsWith("/api/search")) return Promise.resolve(jsonResponse({ detail: "OpenAI API key not configured" }, false, 400));
+        if (url.includes("/api/ontology/relationships")) return Promise.resolve(jsonResponse([]));
         if (url.endsWith("/api/network/graph")) return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
         return Promise.resolve(jsonResponse({}, false, 404));
       }),
