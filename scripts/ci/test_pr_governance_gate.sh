@@ -13,6 +13,7 @@ set -euo pipefail
 printf '%s\n' "$*" >> "$GH_LOG"
 
 head_sha="0123456789abcdef0123456789abcdef01234567"
+args="$*"
 
 if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
   case "${GH_SCENARIO:-pass}" in
@@ -27,7 +28,7 @@ if [ "$1" = "pr" ] && [ "$2" = "view" ]; then
 fi
 
 if [ "$1" = "api" ] && [[ "$2" == repos/*/pulls/42 ]]; then
-  if printf '%s\n' "$*" | grep -q -- '.base.sha'; then
+  if [[ "$args" == *".base.sha"* ]]; then
     printf 'abcdefabcdefabcdefabcdefabcdefabcdefabcd'
   else
     printf '%s' "$head_sha"
@@ -90,14 +91,14 @@ if [ "$1" = "api" ] && [[ "$2" == repos/*/commits/*/check-runs ]]; then
   exit 0
 fi
 
-if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/issues/42/comments'; then
-  if printf '%s\n' "$*" | grep -q -- '--jq'; then
+if [ "$1" = "api" ] && [[ "$args" == *repos/*/issues/42/comments* ]]; then
+  if [[ "$args" == *"--jq"* ]]; then
     if [ "${GH_SCENARIO:-pass}" = "failed_existing" ]; then
       printf '555\n'
     fi
     exit 0
   fi
-  if printf '%s\n' "$*" | grep -q -- '--paginate'; then
+  if [[ "$args" == *"--paginate"* ]]; then
     case "${GH_SCENARIO:-pass}" in
       coderabbit_blocking_comment)
         printf '[{"id":777,"user":{"login":"coderabbitai[bot]"},"created_at":"2026-05-19T00:01:00Z","body":"Pre-merge warning for 0123456789abcdef0123456789abcdef01234567"}]'
@@ -115,7 +116,7 @@ if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/issues/42/comments
   exit 0
 fi
 
-if [ "$1" = "api" ] && printf '%s\n' "$*" | grep -q 'repos/.*/pulls/42/comments'; then
+if [ "$1" = "api" ] && [[ "$args" == *repos/*/pulls/42/comments* ]]; then
   case "${GH_SCENARIO:-pass}" in
     coderabbit_current_review_comment)
       printf '[{"id":888,"user":{"login":"coderabbitai[bot]"},"commit_id":"0123456789abcdef0123456789abcdef01234567","original_commit_id":"old","created_at":"2026-05-19T00:01:00Z","body":"Potential issue on current head"}]'

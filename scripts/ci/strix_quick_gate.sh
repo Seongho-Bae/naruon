@@ -477,6 +477,29 @@ is_preexisting_report_dir() {
 	return 1
 }
 
+is_github_models_model() {
+	case "$1" in
+	openai/openai/* | github_models/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_github_models_api_base() {
+	local api_base="$1"
+	case "$api_base" in
+	https://models.github.ai | https://models.github.ai/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 # shellcheck disable=SC2034  # consumed indirectly by sourced model helper functions
 if DEFAULT_PROVIDER_SANITIZED="$(sanitize_provider_name "$DEFAULT_PROVIDER_RAW")"; then
 	DEFAULT_PROVIDER="$DEFAULT_PROVIDER_SANITIZED"
@@ -494,6 +517,10 @@ fi
 PRIMARY_MODEL="$(normalize_model "$STRIX_LLM")"
 if [ "$PRIMARY_MODEL" != "$STRIX_LLM" ]; then
 	echo "Normalized STRIX_LLM to provider-qualified model '$PRIMARY_MODEL'."
+fi
+if is_github_models_model "$PRIMARY_MODEL"; then
+	echo "ERROR: STRIX_LLM must not use GitHub Models model prefixes; use direct OpenAI Platform model names such as openai/gpt-5.4." >&2
+	exit 2
 fi
 
 require_non_negative_integer "$STRIX_TRANSIENT_RETRY_PER_MODEL" "STRIX_TRANSIENT_RETRY_PER_MODEL"
@@ -1799,6 +1826,10 @@ resolved_llm_api_base_for_model() {
 		echo "ERROR: LLM_API_BASE must be an https URL when configured." >&2
 		return 2
 	fi
+	if is_github_models_api_base "$llm_api_base_value"; then
+		echo "ERROR: LLM_API_BASE must not route Strix through GitHub Models; use direct OpenAI Platform routing." >&2
+		return 2
+	fi
 	printf '%s\n' "$llm_api_base_value"
 }
 
@@ -2760,6 +2791,10 @@ run_current_target_scan() {
 	fallback_tried=0
 	for candidate_raw in "${FALLBACK_MODELS[@]}"; do
 		candidate="$(normalize_model "$candidate_raw")"
+		if is_github_models_model "$candidate"; then
+			echo "ERROR: Strix fallback models must not use GitHub Models model prefixes; use direct OpenAI Platform model names." >&2
+			return 2
+		fi
 		if [ -z "$candidate" ] || [ "$candidate" = "$PRIMARY_MODEL" ]; then
 			if [ -n "$candidate" ]; then
 				echo "Skipping fallback model '$candidate' — same as primary model." >&2

@@ -44,7 +44,8 @@ contracts, source-linked ticket tasks, self-sent knowledge capture into
 idempotent ticket tasks, deterministic sender ontology action hints, generic
 WebDAV writeback intent, self-sent knowledge WebDAV/Notes materialization
 intent, DB-backed CalDAV intent source selection through opaque
-`calendar_writeback_sources.source_uid` rows, and WebDAV intent selection through
+`calendar_writeback_sources.source_uid` rows exposed to the Calendar workspace
+through a signed source-registry read, and WebDAV intent selection through
 opaque, organization-scoped `webdav_accounts.source_uid` rows with persisted
 writeback eligibility. Real CalDAV/WebDAV mutation,
 ETag-aware WebDAV/Notes provider execution for synthesized knowledge, POP3

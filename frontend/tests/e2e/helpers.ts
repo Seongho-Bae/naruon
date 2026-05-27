@@ -301,6 +301,22 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/calendar/writeback-sources' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          source_id: 'caldav-primary',
+          provider: 'Customer CalDAV',
+          protocol: 'caldav',
+          owner_id: 'default',
+          organization_id: 'org-acme',
+          capabilities: ['read', 'write', 'etag'],
+          writeback_enabled: true,
+          etag: 'etag-caldav-primary',
+        },
+      ]);
+      return;
+    }
+
     if (path === '/api/calendar/writeback-intent' && request.method() === 'POST') {
       await fulfillJson(route, {
         workspace_id: 'default',

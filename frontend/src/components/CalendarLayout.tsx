@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -16,6 +16,17 @@ type CalendarWritebackIntentResponse = {
   audit_event: string;
 };
 
+type CalendarWritebackSource = {
+  source_id: string;
+  provider: string;
+  protocol: 'caldav' | 'carddav' | 'webdav' | 'local';
+  owner_id: string;
+  organization_id: string | null;
+  capabilities: string[];
+  writeback_enabled: boolean;
+  etag: string | null;
+};
+
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
 
 function getApiErrorStatus(error: unknown) {
@@ -29,8 +40,49 @@ export function CalendarLayout() {
   const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
   const [writebackResult, setWritebackResult] = useState<CalendarWritebackIntentResponse | null>(null);
+  const [writebackSources, setWritebackSources] = useState<CalendarWritebackSource[]>([]);
+  const [sourceLoadStatus, setSourceLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let isMounted = true;
+    void apiClient.get<CalendarWritebackSource[]>('/api/calendar/writeback-sources')
+      .then((sources) => {
+        if (!isMounted) return;
+        setWritebackSources(sources);
+        setSourceLoadStatus('ready');
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setWritebackSources([]);
+        setSourceLoadStatus('error');
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const selectedWritebackSource = useMemo(
+    () => writebackSources.find((source) => (
+      source.writeback_enabled
+      && source.protocol !== 'local'
+      && source.capabilities.includes('write')
+    )) ?? null,
+    [writebackSources],
+  );
+  const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
+    if (!isSourceRegistryReady) {
+      setWritebackResult(null);
+      setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
+      return;
+    }
+    if (selectedWritebackSource === null) {
+      setWritebackResult(null);
+      setWritebackStatus('no_source');
+      return;
+    }
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
@@ -39,6 +91,7 @@ export function CalendarLayout() {
         summary: action === 'create'
           ? 'Naruon 일정 후보 writeback intent 점검'
           : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
+        ...(selectedWritebackSource ? { target_source_id: selectedWritebackSource.source_id } : {}),
       });
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -54,9 +107,10 @@ export function CalendarLayout() {
         setWritebackStatus('error');
       }
     }
-  }, []);
+  }, [isSourceRegistryReady, selectedWritebackSource, sourceLoadStatus]);
 
   const isWritebackLoading = writebackStatus === 'loading';
+  const isWritebackActionDisabled = isWritebackLoading || !isSourceRegistryReady;
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -137,7 +191,7 @@ export function CalendarLayout() {
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
-                  disabled={isWritebackLoading}
+                  disabled={isWritebackActionDisabled}
                   className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
                   새 일정 intent 점검
@@ -145,12 +199,44 @@ export function CalendarLayout() {
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
-                  disabled={isWritebackLoading}
+                  disabled={isWritebackActionDisabled}
                   className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                 >
                   ETag 업데이트 점검
                 </button>
               </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {writebackSources.map((source) => (
+                <article
+                  key={source.source_id}
+                  className="rounded-xl border border-border bg-background/70 p-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-mono text-xs font-bold text-primary">{source.source_id}</p>
+                      <p className="mt-1 break-words text-sm font-bold">{source.provider}</p>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-xs font-black ${source.writeback_enabled ? 'bg-green-100 text-green-700' : 'bg-secondary text-muted-foreground'}`}>
+                      {source.writeback_enabled ? 'write' : 'read_only'}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                    {source.protocol} · {source.capabilities.join(', ')}
+                  </p>
+                </article>
+              ))}
+              {sourceLoadStatus === 'loading' && (
+                <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-primary">
+                  CalDAV source registry 확인 중입니다.
+                </p>
+              )}
+              {sourceLoadStatus === 'error' && (
+                <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-amber-700">
+                  signed session으로 CalDAV source registry를 확인할 수 없습니다.
+                </p>
+              )}
             </div>
 
             <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">

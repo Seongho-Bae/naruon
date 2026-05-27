@@ -259,6 +259,41 @@ def test_calendar_writeback_intent_uses_customer_owned_caldav_account(
     }
 
 
+def test_calendar_writeback_sources_endpoint_lists_authoritative_sources(
+    writeback_source_override,
+):
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.get("/api/calendar/writeback-sources")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "source_id": "calendar-primary",
+            "provider": "fastmail",
+            "protocol": "caldav",
+            "owner_id": "testuser",
+            "organization_id": "org-acme",
+            "capabilities": ["read", "write", "etag"],
+            "writeback_enabled": True,
+            "etag": "abc123",
+        }
+    ]
+
+
 def test_calendar_writeback_update_requires_etag_if_match(writeback_source_override):
     writeback_source_override(
         [

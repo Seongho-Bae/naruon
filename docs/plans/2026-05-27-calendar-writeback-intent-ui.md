@@ -13,6 +13,9 @@ is the calendar server or directly writing provider data from the browser.
 - Customer CalDAV/CardDAV/WebDAV accounts remain the source of truth.
 - Calendar actions create server-authoritative intent through
   `POST /api/calendar/writeback-intent`.
+- The Calendar workspace first loads server-owned source registry rows through
+  `GET /api/calendar/writeback-sources`; the browser may pass only the opaque
+  `target_source_id`, never owner or capability claims.
 - The UI must show `writeback_mode`, `protocol`, `target_source_id`,
   `if_match`, and `audit_event` when the intent is accepted.
 - `422` means no customer-owned source is available.
@@ -23,6 +26,8 @@ is the calendar server or directly writing provider data from the browser.
 ## Implemented Slice
 
 - `/calendar` now exposes a CalDAV/CardDAV/WebDAV intent check panel.
+- The intent panel lists signed-session CalDAV registry sources and chooses an
+  eligible write-capable customer source before posting intent.
 - The monthly, weekly, detail, coordination, and candidate calendar tabs all
   render concrete surfaces instead of an inert "under implementation" state.
 - Mobile layout keeps the header and monthly grid bounded, and adds bottom safe
@@ -34,6 +39,7 @@ is the calendar server or directly writing provider data from the browser.
 
 ```bash
 npm test -- src/app/calendar/page.test.tsx src/components/EmailDetail.test.tsx src/lib/api-client.test.ts
+PYTHONDONTWRITEBYTECODE=1 DISABLE_BACKGROUND_WORKERS=1 python3 -m pytest backend/tests/test_calendar_api.py -q
 npm test -- src/components/mobile-workspace-panels.test.tsx
 npm run typecheck
 npm run build

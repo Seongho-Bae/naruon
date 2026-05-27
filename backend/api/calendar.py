@@ -131,6 +131,13 @@ async def get_writeback_sources(
     )
 
 
+@router.get("/writeback-sources", response_model=tuple[WritebackSource, ...])
+async def list_writeback_sources(
+    available_sources: tuple[WritebackSource, ...] = Depends(get_writeback_sources),
+) -> tuple[WritebackSource, ...]:
+    return available_sources
+
+
 async def get_calendar_user_token(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> dict | None:
