@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import uuid
 
 import asyncpg
 from fastapi.testclient import TestClient
@@ -196,6 +197,15 @@ def test_operational_signals_include_durable_connector_history(admin_client, moc
     )
     mock_db.events = [
         ConnectorSignalEvent(
+            event_uid="connector_evt_other_signal",
+            organization_id="org-acme",
+            workspace_id="workspace-org-acme",
+            signal_key="sync_lag",
+            state_code="heartbeat",
+            detail_text="non-heartbeat signal must not backfill heartbeat time",
+            observed_at=datetime(2026, 5, 27, 12, 3, tzinfo=timezone.utc),
+        ),
+        ConnectorSignalEvent(
             event_uid="connector_evt_disconnect",
             organization_id="org-acme",
             workspace_id="workspace-org-acme",
@@ -225,6 +235,13 @@ def test_operational_signals_include_durable_connector_history(admin_client, moc
     assert data["connector"]["last_disconnect_at"] == "2026-05-27T12:02:00Z"
     assert data["connector"]["recent_events"] == [
         {
+            "event_uid": "connector_evt_other_signal",
+            "signal_key": "sync_lag",
+            "state_code": "heartbeat",
+            "detail_text": "non-heartbeat signal must not backfill heartbeat time",
+            "observed_at": "2026-05-27T12:03:00Z",
+        },
+        {
             "event_uid": "connector_evt_disconnect",
             "signal_key": "connector_heartbeat",
             "state_code": "disconnected",
@@ -244,9 +261,10 @@ def test_operational_signals_include_durable_connector_history(admin_client, moc
 @pytest.mark.asyncio
 @pytest.mark.postgres
 async def test_operational_signals_real_postgres_connector_history_smoke():
-    event_uid = "connector_evt_pg_smoke"
-    organization_id = "org-acme"
-    workspace_id = "workspace-org-acme"
+    smoke_uid = uuid.uuid4().hex[:16]
+    event_uid = f"connector_evt_pg_{smoke_uid}"
+    organization_id = f"org-pg-smoke-{smoke_uid}"
+    workspace_id = f"workspace-{organization_id}"
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with engine.begin() as conn:
@@ -282,9 +300,24 @@ async def test_operational_signals_real_postgres_connector_history_smoke():
             await conn.execute(
                 text(
                     "DELETE FROM connector_signal_events "
-                    "WHERE event_uid = :event_uid"
+                    "WHERE organization_id = :organization_id "
+                    "AND workspace_id = :workspace_id"
                 ),
-                {"event_uid": event_uid},
+                {
+                    "organization_id": organization_id,
+                    "workspace_id": workspace_id,
+                },
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM workspace_runner_configs "
+                    "WHERE organization_id = :organization_id "
+                    "OR workspace_id = :workspace_id"
+                ),
+                {
+                    "organization_id": organization_id,
+                    "workspace_id": workspace_id,
+                },
             )
             await conn.execute(
                 text(
@@ -355,9 +388,24 @@ async def test_operational_signals_real_postgres_connector_history_smoke():
             await conn.execute(
                 text(
                     "DELETE FROM connector_signal_events "
-                    "WHERE event_uid = :event_uid"
+                    "WHERE organization_id = :organization_id "
+                    "AND workspace_id = :workspace_id"
                 ),
-                {"event_uid": event_uid},
+                {
+                    "organization_id": organization_id,
+                    "workspace_id": workspace_id,
+                },
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM workspace_runner_configs "
+                    "WHERE organization_id = :organization_id "
+                    "OR workspace_id = :workspace_id"
+                ),
+                {
+                    "organization_id": organization_id,
+                    "workspace_id": workspace_id,
+                },
             )
         await engine.dispose()
 

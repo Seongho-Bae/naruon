@@ -13,6 +13,7 @@ from fastapi import (
     status,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 
 from api.auth import AuthContext, build_auth_context
 from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
@@ -208,7 +209,7 @@ async def _record_connector_signal_event_safely(
             state_code=state_code,
             detail_text=detail_text,
         )
-    except Exception:
+    except SQLAlchemyError:
         logger.debug("Runner signal event persistence skipped", exc_info=True)
 
 

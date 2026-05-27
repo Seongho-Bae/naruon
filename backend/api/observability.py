@@ -97,10 +97,12 @@ def _datetime_to_utc_iso(value: datetime) -> str:
 
 
 def _latest_event_time(
-    recent_events: list[ConnectorSignalEventResponse], state_codes: set[str]
+    recent_events: list[ConnectorSignalEventResponse],
+    signal_key: str,
+    state_codes: set[str],
 ) -> str | None:
     for event in recent_events:
-        if event.state_code in state_codes:
+        if event.signal_key == signal_key and event.state_code in state_codes:
             return event.observed_at
     return None
 
@@ -210,9 +212,11 @@ def _connector_state(
         runner_usage=str(manifest["runner_usage"]),
         local_protocols=list(manifest["local_protocols"]),
         last_heartbeat_at=connection_snapshot.last_seen_at
-        or _latest_event_time(recent_events, {"connected", "heartbeat"}),
+        or _latest_event_time(
+            recent_events, "connector_heartbeat", {"connected", "heartbeat"}
+        ),
         last_disconnect_at=connection_snapshot.last_disconnect_at
-        or _latest_event_time(recent_events, {"disconnected"}),
+        or _latest_event_time(recent_events, "connector_heartbeat", {"disconnected"}),
         queue_depth_state="not_reported",
         recent_events=recent_events,
     )

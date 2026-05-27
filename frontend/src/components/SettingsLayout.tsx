@@ -447,9 +447,9 @@ export function SettingsLayout() {
                         </div>
                       </dl>
 
-                      <div aria-label="Connector heartbeat history" className="border-t border-border pt-4">
+                      <div aria-labelledby="recent-connector-signals-heading" className="border-t border-border pt-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 className="font-bold text-sm">Recent connector signals</h4>
+                          <h4 id="recent-connector-signals-heading" className="font-bold text-sm">Recent connector signals</h4>
                           <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{connectorEvents.length} events</span>
                         </div>
                         {connectorEvents.length > 0 ? (
