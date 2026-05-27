@@ -28,6 +28,10 @@
   only because the current head has not been reviewed yet.
 - `STARTUP_FAILURE` in required PR governance/check metadata is a hard blocker
   and should use the same idempotent metadata-gate comment path.
+- Trusted-base governance materialization must tolerate transient GitHub API
+  truncation such as `unexpected end of JSON input` with bounded retries and
+  archive validation; do not convert that infrastructure flake into a CodeRabbit
+  or review blocker.
 
 ## Workspace and task tracking defaults
 

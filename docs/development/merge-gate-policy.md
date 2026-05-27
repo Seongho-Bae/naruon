@@ -21,6 +21,9 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
   current-head gates are satisfied.
 - PR Governance runs trusted-base logic only. The workflow materializes the base
   repository script from a trusted tarball and must not execute PR-head scripts.
+  Trusted tarball materialization uses bounded retry plus archive validation for
+  transient GitHub API truncation and fails closed instead of falling back to
+  PR-head or local scripts.
 - Pending, queued, requested, waiting, or in-progress checks are wait states, not
   hard failure findings. Failed, cancelled, timed-out, and action-required states
   are blockers.
