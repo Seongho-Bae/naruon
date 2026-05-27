@@ -178,6 +178,44 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/webdav/accounts' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          account_id: 1,
+          server_url: 'https://webdav.naruon.net',
+          username: 'demo_user',
+        },
+      ]);
+      return;
+    }
+
+    if (path === '/api/webdav/folders' && request.method() === 'GET') {
+      await fulfillJson(route, [
+        {
+          folder_id: 1,
+          project_name: 'Naruon Roadmap 2026',
+          webdav_path: '/Projects/Naruon_Roadmap_2026',
+        },
+        {
+          folder_id: 2,
+          project_name: 'Marketing Assets',
+          webdav_path: '/Projects/Marketing_Assets',
+        },
+      ]);
+      return;
+    }
+
+    if (path === '/api/webdav/writeback-intent' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        intent: 'writeback',
+        source_id: 1,
+        server_url: 'https://webdav.naruon.net',
+        requires_if_match: true,
+        provenance: 'server-authoritative',
+      });
+      return;
+    }
+
     if (path === '/api/tasks' && request.method() === 'GET') {
       await fulfillJson(route, [
         {

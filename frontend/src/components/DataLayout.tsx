@@ -1,8 +1,27 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Database, HardDrive, RefreshCw, FolderOpen, AlertCircle, FileText, CheckCircle2, Server } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+
+type WebdavWritebackIntentResponse = {
+  intent: string;
+  source_id: number | null;
+  server_url: string | null;
+  requires_if_match: boolean;
+  provenance: string;
+  status?: string | null;
+  message?: string | null;
+};
+
+type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'auth' | 'error';
+
+function getApiErrorStatus(error: unknown) {
+  const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
+  if (typeof shapedError?.status === 'number') return shapedError.status;
+  if (typeof shapedError?.response?.status === 'number') return shapedError.response.status;
+  return null;
+}
 
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
@@ -21,6 +40,8 @@ export function DataLayout() {
   
   const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
   const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
+  const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
+  const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
 
   useEffect(() => {
     apiClient.get<WebdavAccount[]>('/api/webdav/accounts')
@@ -32,11 +53,36 @@ export function DataLayout() {
       .catch(console.error);
   }, []);
 
+  const requestWebdavWritebackIntent = useCallback(async () => {
+    setWritebackStatus('loading');
+    setWritebackResult(null);
+    try {
+      const targetAccountId = webdavAccounts[0]?.account_id;
+      const result = await apiClient.post<WebdavWritebackIntentResponse>(
+        '/api/webdav/writeback-intent',
+        typeof targetAccountId === 'number' ? { target_account_id: targetAccountId } : {},
+      );
+      setWritebackResult(result);
+      setWritebackStatus('success');
+    } catch (error: unknown) {
+      const status = getApiErrorStatus(error);
+      if (status === 422) {
+        setWritebackStatus('no_source');
+      } else if (status === 401 || status === 403) {
+        setWritebackStatus('auth');
+      } else {
+        setWritebackStatus('error');
+      }
+    }
+  }, [webdavAccounts]);
+
+  const isWritebackLoading = writebackStatus === 'loading';
+
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
       <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
-          <Database className="size-6 text-primary" /> <span className="hidden sm:inline">데이터와 파일</span>
+          <Database className="size-6 text-primary" /> <span className="sr-only sm:not-sr-only sm:inline">데이터와 파일</span>
         </h1>
         <p className="sr-only">중복 반입과 thread 정리</p>
         <div className="ml-4 md:ml-8 flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -52,12 +98,12 @@ export function DataLayout() {
         </div>
       </header>
 
-      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8 bg-background">
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-8 bg-background">
         <div className="max-w-5xl mx-auto space-y-8">
           
           {activeTab === '문서 저장소' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="rounded-xl bg-blue-100 p-3"><HardDrive className="size-5 text-blue-700" /></div>
@@ -100,11 +146,72 @@ export function DataLayout() {
                 </div>
               </div>
 
+              <section aria-label="WebDAV writeback intent 승인" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase text-primary">Customer-owned file intent</p>
+                    <h2 className="mt-1 text-lg font-black">WebDAV writeback intent 승인</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                      첨부파일과 AI가 구조화한 산출물은 Naruon 저장소에만 남기지 않고 고객 WebDAV 원본에 반영할 intent로 점검합니다.
+                      실제 provider write는 원본 계정, If-Match 충돌 조건, provenance를 통과한 뒤 별도 실행됩니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void requestWebdavWritebackIntent()}
+                    disabled={isWritebackLoading}
+                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  >
+                    WebDAV intent 승인 점검
+                  </button>
+                </div>
+
+                <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
+                  {writebackStatus === 'idle' && (
+                    <p className="text-muted-foreground">아직 WebDAV provider write는 실행하지 않았습니다. 원본 source와 충돌 조건만 확인합니다.</p>
+                  )}
+                  {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV writeback intent 요청 중입니다.</p>}
+                  {writebackStatus === 'no_source' && (
+                    <p className="font-bold text-amber-700">연결된 고객 WebDAV 원본 계정이 없어 writeback intent를 만들 수 없습니다.</p>
+                  )}
+                  {writebackStatus === 'auth' && (
+                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>
+                  )}
+                  {writebackStatus === 'error' && (
+                    <p className="font-bold text-red-700">WebDAV writeback intent 점검에 실패했습니다.</p>
+                  )}
+                  {writebackStatus === 'success' && writebackResult && (
+                    <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                      <div>
+                        <dt className="font-black text-muted-foreground">INTENT</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.intent}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-muted-foreground">SOURCE_ID</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.source_id ?? 'none'}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-muted-foreground">IF_MATCH</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.requires_if_match ? 'required' : 'not_required'}</dd>
+                      </div>
+                      <div>
+                        <dt className="font-black text-muted-foreground">PROVENANCE</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.provenance}</dd>
+                      </div>
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                        <dt className="font-black text-muted-foreground">SERVER_URL</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{writebackResult.server_url ?? 'none'}</dd>
+                      </div>
+                    </dl>
+                  )}
+                </div>
+              </section>
+
               <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-border bg-secondary/30">
                   <h2 className="font-bold text-lg flex items-center gap-2"><FolderOpen className="size-5" /> AI 프로젝트 구조화된 첨부파일 (WebDAV)</h2>
                 </div>
-                <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                <div className="p-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                   {projectFolders.length > 0 ? projectFolders.map(folder => (
                     <div key={folder.folder_id} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors">
                       <div className="flex items-center gap-3 mb-2">
@@ -234,7 +341,7 @@ export function DataLayout() {
 
           {activeTab === '품질 점검' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <p className="text-xs font-bold text-muted-foreground mb-1">인덱싱 실패</p>
                   <p className="text-xl font-bold text-red-500">23건</p>
