@@ -20,9 +20,9 @@ from api.dav import router as dav_router
 from api.accounts import router as accounts_router
 from api.webdav import router as webdav_router
 from core.config import settings
+from core.telemetry import setup_telemetry
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 imap_worker = ImapSyncWorker()
 
@@ -45,20 +45,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# OpenTelemetry Tracing Setup (if enabled)
-if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"):
-    from opentelemetry import trace
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.sdk.resources import Resource, SERVICE_NAME
-
-    resource = Resource(attributes={SERVICE_NAME: "naruon-backend"})
-
-    trace_provider = TracerProvider(resource=resource)
-    processor = BatchSpanProcessor(OTLPSpanExporter())
-    trace_provider.add_span_processor(processor)
-    trace.set_tracer_provider(trace_provider)
+setup_telemetry(app)
 
 # Prometheus metrics are operational telemetry. Keep them opt-in so public
 # deployments do not expose route labels and process details by default.
@@ -66,9 +53,6 @@ if settings.ENABLE_PROMETHEUS_METRICS:
     Instrumentator().instrument(app).expose(
         app, include_in_schema=False, should_gzip=True
     )
-
-# Instrument OpenTelemetry
-FastAPIInstrumentor.instrument_app(app)
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,15 +83,6 @@ app.include_router(runner_ws_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(dav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
-
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/")

@@ -1,6 +1,11 @@
 import logging
 from typing import Dict, Any, List
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import ProjectFolder, WebdavAccount
+
 logger = logging.getLogger(__name__)
 
 async def sync_webdav_folders(session, user_id: str):
@@ -57,6 +62,38 @@ class WebDavService:
         """
         return self._mock_folders.get(user_id, [])
 
+    async def get_connected_accounts_from_db(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> List[Dict[str, Any]]:
+        stmt = select(WebdavAccount).where(WebdavAccount.user_id == user_id)
+        result = await session.execute(stmt)
+        return [
+            {
+                "account_id": account.id,
+                "server_url": account.server_url,
+                "username": account.username,
+            }
+            for account in result.scalars().all()
+        ]
+
+    async def get_project_folders_from_db(
+        self,
+        session: AsyncSession,
+        user_id: str,
+    ) -> List[Dict[str, Any]]:
+        stmt = select(ProjectFolder).where(ProjectFolder.user_id == user_id)
+        result = await session.execute(stmt)
+        return [
+            {
+                "folder_id": folder.id,
+                "project_name": folder.project_name,
+                "webdav_path": folder.webdav_path,
+            }
+            for folder in result.scalars().all()
+        ]
+
     def sync_attachments_to_folder(self, email_id: str, project_name: str) -> bool:
         """
         Organizes an email's attachments into the specified WebDAV project folder.
@@ -70,6 +107,28 @@ class WebDavService:
         Server-authoritative WebDAV writeback source selection.
         """
         accounts = self.get_connected_accounts(user_id)
+        return self.determine_webdav_writeback_intent_from_accounts(
+            accounts,
+            target_account_id=target_account_id,
+        )
+
+    async def determine_webdav_writeback_intent_from_db(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        target_account_id: int | None = None,
+    ) -> Dict[str, Any]:
+        accounts = await self.get_connected_accounts_from_db(session, user_id)
+        return self.determine_webdav_writeback_intent_from_accounts(
+            accounts,
+            target_account_id=target_account_id,
+        )
+
+    def determine_webdav_writeback_intent_from_accounts(
+        self,
+        accounts: List[Dict[str, Any]],
+        target_account_id: int | None = None,
+    ) -> Dict[str, Any]:
         if not accounts:
             return {"status": "error", "message": "No connected WebDAV accounts found."}
             

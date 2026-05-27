@@ -11,6 +11,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def _get_account_name(payload: Dict[str, Any]) -> str | None:
+    account = payload.get("account")
+    if not isinstance(account, str):
+        return None
+    account = account.strip()
+    return account or None
+
+
 class SelfHostedConnector:
     def __init__(self, target_ws_url: str, token: str):
         self.target_ws_url = target_ws_url
@@ -96,7 +104,7 @@ class SelfHostedConnector:
             })
             
     async def _handle_fetch_imap(self, payload: Dict[str, Any]):
-        if not payload.get("account"):
+        if _get_account_name(payload) is None:
             logger.error("IMAP fetch instruction is missing account.")
             await self.send_response({
                 "status": "error",
@@ -109,7 +117,7 @@ class SelfHostedConnector:
         await self.send_response({"status": "success", "action": "fetch_imap", "data": "IMAP data placeholder"})
         
     async def _handle_send_smtp(self, payload: Dict[str, Any]):
-        if not payload.get("account"):
+        if _get_account_name(payload) is None:
             logger.error("SMTP send instruction is missing account.")
             await self.send_response({
                 "status": "error",

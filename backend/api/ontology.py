@@ -63,7 +63,8 @@ async def create_relationship(
     if rel:
         rel.relationship_type = req.relationship_type
         rel.confidence_score = req.confidence_score
-        rel.parent_sender_email = req.parent_sender_email
+        if "parent_sender_email" in req.model_fields_set:
+            rel.parent_sender_email = req.parent_sender_email
     else:
         rel = SenderRelationship(
             user_id=user_id,

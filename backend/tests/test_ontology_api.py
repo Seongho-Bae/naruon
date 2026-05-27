@@ -47,6 +47,13 @@ class MockSession:
     async def refresh(self, obj):
         pass
 
+class ExistingRelationshipSession(MockSession):
+    def __init__(self):
+        self.items = [MockRow("vendor@example.com", "vendor", 0.5, "buyer@example.com")]
+
+    async def execute(self, stmt):
+        return MockResult(self.items)
+
 async def override_get_db():
     yield MockSession()
 
@@ -84,3 +91,28 @@ def test_create_relationship(client: TestClient):
     assert data["parent_sender_email"] == "buyer@example.com"
     assert data["relationship_type"] == "vendor"
     assert data["next_action"] == "prepare_response_draft"
+
+
+def test_update_relationship_preserves_existing_parent_when_omitted():
+    async def override_existing_get_db():
+        yield ExistingRelationshipSession()
+
+    app.dependency_overrides[get_db] = override_existing_get_db
+    try:
+        with TestClient(app, headers={"X-User-Id": "testuser"}) as test_client:
+            resp = test_client.post(
+                "/api/ontology/relationships",
+                json={
+                    "sender_email": "vendor@example.com",
+                    "relationship_type": "customer",
+                    "confidence_score": 0.7,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["sender_email"] == "vendor@example.com"
+    assert data["parent_sender_email"] == "buyer@example.com"
+    assert data["relationship_type"] == "customer"
