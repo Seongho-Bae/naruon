@@ -286,6 +286,12 @@ describe("SettingsLayout", () => {
 
     const putCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/accounts/config" && init?.method === "PUT");
     expect(putCall).toBeTruthy();
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
+    expect(putCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     const putBody = JSON.parse(String(putCall?.[1]?.body));
     expect(putBody).toMatchObject({
       smtp_server: "smtp.example.com",

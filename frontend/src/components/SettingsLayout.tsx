@@ -166,8 +166,9 @@ function optionalText(value: string) {
 function optionalPort(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return null;
+  if (!/^\d+$/.test(trimmed)) return null;
   const parsed = Number.parseInt(trimmed, 10);
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : null;
 }
 
 function buildAccountUpdate(form: AccountFormState): AccountConfigUpdate {
@@ -273,6 +274,7 @@ export function SettingsLayout() {
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
   const connectorEvents = operationalSignals?.connector.recent_events ?? [];
+  const accountReady = !accountLoading && !accountError && accountConfig !== null;
   const accountProtocols = [
     {
       label: 'SMTP 송신',
@@ -311,6 +313,7 @@ export function SettingsLayout() {
 
   const handleAccountSave = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!accountReady) return;
     setAccountSaving(true);
     setAccountError(null);
     setAccountStatus(null);
@@ -529,7 +532,8 @@ export function SettingsLayout() {
                     </div>
                     <button
                       type="submit"
-                      disabled={accountSaving}
+                      disabled={accountSaving || !accountReady}
+                      aria-disabled={accountSaving || !accountReady}
                       className="rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {accountSaving ? '저장 중' : '계정 설정 저장'}
