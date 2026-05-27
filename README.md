@@ -30,9 +30,9 @@ mail/calendar/file systems.
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence requires an OpenAI GPT-5.4-or-newer model through
   an explicit `STRIX_OPENAI_API_KEY` OpenAI Platform credential. The workflow
-  fails closed rather than falling back to GitHub Models, `github.token`, or
-  GPT-4-era models. Pending CodeRabbit or check evidence is a wait state, not a
-  hard blocker.
+  fails closed rather than falling back to GitHub Models, Google/Vertex/Gemini,
+  `github.token`, or GPT-4-era models. Pending CodeRabbit or check evidence is
+  a wait state, not a hard blocker.
   
 ## Agentic Ontology & Auto-Organization
 
