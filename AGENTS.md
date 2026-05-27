@@ -54,7 +54,10 @@
   tests/mocks must exercise the signed-session path.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
-  public endpoints such as `/api/runtime-config` and `/` may omit it.
+  public endpoints such as `/` may omit it. Keep runtime feature/configuration
+  endpoints signed-session protected; if the browser needs unauthenticated
+  bootstrap data, add a narrowly scoped non-`/api` endpoint that cannot reveal
+  operational feature flags or provider state.
   Prometheus `/metrics` must stay disabled by default and, when enabled, sit
   behind a trusted scrape path or reverse proxy access policy. Admin/provider
   registry endpoints must enforce role checks in addition to authentication. LLM
