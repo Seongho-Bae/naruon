@@ -1,7 +1,11 @@
+import uuid
+
+import asyncpg
 import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
@@ -112,6 +116,8 @@ def test_get_webdav_writeback_intent_no_accounts():
 
 @pytest.mark.asyncio
 async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
+    account_id = 10_000 + (uuid.uuid4().int % 1_000_000)
+    user_id = f"webdav-smoke-{account_id}"
     monkeypatch.setattr(
         webdav_service,
         "get_connected_accounts_from_db",
@@ -151,10 +157,10 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                 text(
                     """
                     DELETE FROM webdav_accounts
-                    WHERE account_id = :account_id OR user_id = :user_id
+                    WHERE account_id = :account_id
                     """
                 ),
-                {"account_id": 8871, "user_id": "alice"},
+                {"account_id": account_id},
             )
             await conn.execute(
                 text(
@@ -176,16 +182,27 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     """
                 ),
                 {
-                    "account_id": 8871,
-                    "user_id": "alice",
+                    "account_id": account_id,
+                    "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
-                    "username": "alice",
+                    "username": user_id,
                     "credentials_encrypted": "test-only-placeholder",
                 },
             )
-    except Exception as exc:
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ):
         await engine.dispose()
-        pytest.skip(f"PostgreSQL smoke path unavailable: {exc}")
+        pytest.skip("PostgreSQL smoke path unavailable")
+    except Exception:
+        await engine.dispose()
+        raise
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
@@ -199,23 +216,23 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
-            headers={"X-User-Id": "alice", "X-Organization-Id": "org-acme"},
+            headers={"X-User-Id": user_id, "X-Organization-Id": "org-acme"},
         ) as client:
             response = await client.post(
                 "/api/webdav/writeback-intent",
-                json={"target_account_id": 8871},
+                json={"target_account_id": account_id},
             )
     finally:
         app.dependency_overrides.pop(get_db, None)
         async with engine.begin() as conn:
             await conn.execute(
                 text("DELETE FROM webdav_accounts WHERE account_id = :account_id"),
-                {"account_id": 8871},
+                {"account_id": account_id},
             )
         await engine.dispose()
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["source_id"] == 8871
+    assert body["source_id"] == account_id
     assert body["server_url"] == "https://real-webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
