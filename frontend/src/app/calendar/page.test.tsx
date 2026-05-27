@@ -76,15 +76,16 @@ describe("CalendarPage", () => {
         Authorization: "Bearer signed-calendar-session",
       }));
       const requestHeaders = init?.headers as Record<string, string>;
+      const normalizedHeaderNames = new Set(Object.keys(requestHeaders).map((headerName) => headerName.toLowerCase()));
       for (const publicHeader of [
-        "X-User-Id",
-        "X-Organization-Id",
-        "X-Group-Id",
-        "X-Group-Ids",
-        "X-User-Role",
-        "X-Dev-Auth-Token",
+        "x-user-id",
+        "x-organization-id",
+        "x-group-id",
+        "x-group-ids",
+        "x-user-role",
+        "x-dev-auth-token",
       ]) {
-        expect(requestHeaders).not.toHaveProperty(publicHeader);
+        expect(normalizedHeaderNames.has(publicHeader)).toBe(false);
       }
       expect(JSON.parse(String(init?.body))).toEqual({
         action: "create",
