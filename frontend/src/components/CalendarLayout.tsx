@@ -70,9 +70,15 @@ export function CalendarLayout() {
     )) ?? null,
     [writebackSources],
   );
+  const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
-    if (sourceLoadStatus === 'ready' && selectedWritebackSource === null) {
+    if (!isSourceRegistryReady) {
+      setWritebackResult(null);
+      setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
+      return;
+    }
+    if (selectedWritebackSource === null) {
       setWritebackResult(null);
       setWritebackStatus('no_source');
       return;
@@ -101,9 +107,10 @@ export function CalendarLayout() {
         setWritebackStatus('error');
       }
     }
-  }, [selectedWritebackSource, sourceLoadStatus]);
+  }, [isSourceRegistryReady, selectedWritebackSource, sourceLoadStatus]);
 
   const isWritebackLoading = writebackStatus === 'loading';
+  const isWritebackActionDisabled = isWritebackLoading || !isSourceRegistryReady;
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -184,7 +191,7 @@ export function CalendarLayout() {
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
-                  disabled={isWritebackLoading}
+                  disabled={isWritebackActionDisabled}
                   className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
                   새 일정 intent 점검
@@ -192,7 +199,7 @@ export function CalendarLayout() {
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
-                  disabled={isWritebackLoading}
+                  disabled={isWritebackActionDisabled}
                   className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                 >
                   ETag 업데이트 점검

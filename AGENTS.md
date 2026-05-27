@@ -106,6 +106,9 @@
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
   dependency and source-owner contract are explicitly in scope.
+- Calendar writeback UI must fail closed while the signed source registry is
+  loading or errored; do not emit intent POSTs without a confirmed opaque
+  `target_source_id`, and keep tests covering the loading/error boundary.
 - Calendar and WebDAV writeback source selection must resolve through opaque
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.

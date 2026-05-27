@@ -153,8 +153,12 @@ describe("CalendarPage", () => {
     expect(container.textContent).toContain("calendar.writeback_intent.created");
   });
 
-  it("shows a loading state while writeback intent is pending", async () => {
-    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
+  it("does not post writeback intent before source registry readiness", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      expect(String(input)).toBe("/api/calendar/writeback-sources");
+      return new Promise<Response>(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -168,6 +172,35 @@ describe("CalendarPage", () => {
       button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/calendar/writeback-sources");
+    expect(container.textContent).toContain("CalDAV source registry 확인 중입니다.");
+  });
+
+  it("shows a loading state while writeback intent is pending", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === "/api/calendar/writeback-sources") {
+        return Promise.resolve(jsonResponse(calendarSourceList));
+      }
+      return new Promise(() => undefined);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<CalendarPage />);
+    });
+    await flushAsyncWork();
+
+    const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/calendar/writeback-intent");
     expect(container.textContent).toContain("writeback intent 요청 중입니다.");
   });
 
