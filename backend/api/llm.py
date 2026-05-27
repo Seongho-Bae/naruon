@@ -43,6 +43,8 @@ async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = No
             status_code=500,
             detail="An internal server error occurred while processing the request.",
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -69,6 +71,8 @@ async def draft_endpoint(request: DraftRequest, user_id: str | None = None, db: 
             status_code=500,
             detail="An internal server error occurred while processing the request.",
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=500,

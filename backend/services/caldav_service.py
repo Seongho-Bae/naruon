@@ -1,7 +1,16 @@
 import logging
 from typing import Dict, Any
+from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
+
+
+def _log_safe_url(raw_url: str) -> str:
+    parsed = urlsplit(raw_url)
+    host = parsed.hostname or ""
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
 
 async def sync_caldav_accounts(session, user_id: str):
     """
@@ -18,7 +27,11 @@ async def sync_caldav_accounts(session, user_id: str):
     total_parsed = 0
     for account in accounts:
         # Pseudo implementation to parse events for each account
-        logger.debug(f"Syncing CalDAV account {account.id} at {account.server_url}")
+        logger.debug(
+            "Syncing CalDAV account %s at %s",
+            account.id,
+            _log_safe_url(account.server_url),
+        )
         total_parsed += 0 # Placeholder
         
     logger.info(f"Parsed {total_parsed} events for user {user_id}")

@@ -8,6 +8,7 @@ from core.config import settings
 
 TEST_OPENAI_KEY = "test_key2"  # noqa: S105
 TEST_IMAP_PASSWORD = "imap-secret"  # noqa: S105
+TEST_POP3_PASSWORD = "pop3-secret"  # noqa: S105
 TEST_SMTP_PASSWORD = "smtp-secret"  # noqa: S105
 
 
@@ -80,6 +81,8 @@ def test_tenant_config_model_encryption(db_session):
         openai_api_key=TEST_OPENAI_KEY,
         imap_username="mail-user",
         imap_password=TEST_IMAP_PASSWORD,
+        pop3_username="pop3-user",
+        pop3_password=TEST_POP3_PASSWORD,
         smtp_password=TEST_SMTP_PASSWORD,
     )
     db_session.add(config)
@@ -105,17 +108,25 @@ def test_tenant_config_model_encryption(db_session):
     smtp_pw = db_session.execute(
         text("SELECT smtp_password FROM tenant_configs WHERE user_id='test_user2'")
     ).scalar()
+    pop3_pw = db_session.execute(
+        text("SELECT pop3_password FROM tenant_configs WHERE user_id='test_user2'")
+    ).scalar()
     assert imap_pw != TEST_IMAP_PASSWORD
     assert smtp_pw != TEST_SMTP_PASSWORD
+    assert pop3_pw != TEST_POP3_PASSWORD
     assert saved_config.imap_username == "mail-user"
     assert saved_config.imap_password == TEST_IMAP_PASSWORD
+    assert saved_config.pop3_username == "pop3-user"
+    assert saved_config.pop3_password == TEST_POP3_PASSWORD
     assert saved_config.smtp_password == TEST_SMTP_PASSWORD
 
     # Verify __repr__ does not expose sensitive keys
     repr_str = repr(saved_config)
     assert TEST_OPENAI_KEY not in repr_str
     assert TEST_IMAP_PASSWORD not in repr_str
+    assert TEST_POP3_PASSWORD not in repr_str
     assert TEST_SMTP_PASSWORD not in repr_str
     assert "has_openai_key=True" in repr_str
     assert "has_imap_password=True" in repr_str
+    assert "has_pop3_password=True" in repr_str
     assert "has_smtp_password=True" in repr_str

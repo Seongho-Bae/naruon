@@ -291,6 +291,8 @@ class TenantConfig(Base):
     imap_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     pop3_server: Mapped[str | None] = mapped_column(String, nullable=True)
     pop3_port: Mapped[int | None] = mapped_column(nullable=True)
+    pop3_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    pop3_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
 
     # OAuth and Third Party Settings
     oauth_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -311,6 +313,7 @@ class TenantConfig(Base):
             f"smtp_server='{self.smtp_server}', imap_server='{self.imap_server}', "
             f"has_smtp_password={self.smtp_password is not None}, "
             f"has_imap_password={self.imap_password is not None}, "
+            f"has_pop3_password={self.pop3_password is not None}, "
             f"has_oauth_secret={self.oauth_client_secret is not None}, "
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from db.models import SenderRelationship
+from db.models import Email, SenderRelationship
 from services.ontology_service import OntologyService
 
 @pytest.mark.asyncio
@@ -14,7 +14,7 @@ async def test_sender_relationship_insertion():
     execute_result.scalar_one_or_none.return_value = None
     session_mock.execute.return_value = execute_result
     
-    await ontology_service.save_relationship(
+    relationship = await ontology_service.save_relationship(
         session_mock,
         user_email="user@test.com",
         sender_email="colleague@test.com",
@@ -28,7 +28,9 @@ async def test_sender_relationship_insertion():
     assert isinstance(added_rel, SenderRelationship)
     assert added_rel.relationship_type == "Colleague"
     assert added_rel.user_id == "user_1"
+    assert added_rel.organization_id == "org_1"
     assert added_rel.sender_email == "colleague@test.com"
+    assert relationship["next_action"] == "track_reply_and_tasks"
 
 @pytest.mark.asyncio
 async def test_self_to_self_triggers_knowledge_extraction():
@@ -36,6 +38,7 @@ async def test_self_to_self_triggers_knowledge_extraction():
     from services.email_service import process_self_to_self
     ontology_service = OntologyService()
     session_mock = AsyncMock()
+    session_mock.add = MagicMock()
     
     email_data = {
         "sender": "user@test.com",
@@ -47,8 +50,31 @@ async def test_self_to_self_triggers_knowledge_extraction():
     is_self = process_self_to_self(email_data, "user@test.com")
     assert is_self is True
     
-    # Check that ontology_service handles it
-    knowledge_extracted = await ontology_service.process_knowledge_node(
-        session_mock, email_data, user_id="user_1", organization_id="org_1"
+    # Check that ontology_service handles self-sent knowledge only when a
+    # source email row is available for provenance.
+    source_email = Email(
+        id=44,
+        user_id="user_1",
+        organization_id="org_1",
+        message_id="<self-note@test.com>",
+        thread_id="self-thread",
+        sender="user@test.com",
+        recipients="user@test.com",
+        subject="Note to self",
+        body="Remember to buy milk",
     )
-    assert knowledge_extracted is True
+    execute_result = MagicMock()
+    execute_result.scalar_one_or_none.return_value = None
+    session_mock.execute.return_value = execute_result
+
+    knowledge_task = await ontology_service.process_knowledge_node(
+        session_mock,
+        email_data,
+        user_id="user_1",
+        organization_id="org_1",
+        owner_addresses=["user@test.com"],
+        source_email=source_email,
+    )
+    assert knowledge_task is not None
+    assert knowledge_task.source_type == "self_sent_knowledge"
+    assert knowledge_task.related_email_id == 44

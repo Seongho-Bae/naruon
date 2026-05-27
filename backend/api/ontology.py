@@ -7,6 +7,7 @@ from typing import List
 from db.session import get_db
 from db.models import SenderRelationship
 from api.auth import get_auth_context, AuthContext
+from services.ontology_service import ontology_service
 
 router = APIRouter(prefix="/api/ontology", tags=["ontology"])
 
@@ -15,6 +16,8 @@ class RelationshipResponse(BaseModel):
     parent_sender_email: str | None = None
     relationship_type: str
     confidence_score: float
+    next_action: str
+    action_reason: str
 
 class RelationshipCreate(BaseModel):
     sender_email: str
@@ -36,7 +39,8 @@ async def get_relationships(
             sender_email=r.sender_email,
             parent_sender_email=r.parent_sender_email,
             relationship_type=r.relationship_type,
-            confidence_score=r.confidence_score
+            confidence_score=r.confidence_score,
+            **ontology_service.next_action_for_relationship(r.relationship_type),
         )
         for r in rels
     ]
@@ -77,5 +81,6 @@ async def create_relationship(
         sender_email=rel.sender_email,
         parent_sender_email=rel.parent_sender_email,
         relationship_type=rel.relationship_type,
-        confidence_score=rel.confidence_score
+        confidence_score=rel.confidence_score,
+        **ontology_service.next_action_for_relationship(rel.relationship_type),
     )

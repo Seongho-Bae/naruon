@@ -86,7 +86,8 @@
 - Private FastAPI `/api/*` routers are included with a default
   `get_auth_context` dependency so authentication is deny-by-default at router
   registration time. Public endpoints must be explicit exceptions, currently
-  `/api/runtime-config`, `/`, and `/metrics`.
+  `/api/runtime-config` and `/`. Prometheus `/metrics` is opt-in and must stay
+  behind a trusted scrape path or reverse proxy access policy when enabled.
 - Authentication is not sufficient for privileged control-plane resources: LLM
   provider registry reads and writes require `platform_admin` or
   `organization_admin` signed role claims.

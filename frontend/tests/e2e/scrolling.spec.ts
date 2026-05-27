@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+import { mockDashboardApi } from './helpers';
+
 test.describe('Scrolling behavior', () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
   test('main content should be scrollable on mobile', async ({ page }) => {
+    await mockDashboardApi(page);
     await page.goto('/');
 
     // Wait for the main app to render
@@ -19,12 +22,20 @@ test.describe('Scrolling behavior', () => {
     const heading = page.locator('h1', { hasText: '안녕하세요' });
     await expect(heading).toBeVisible();
     
-    // Evaluate if the scroll container has overflow auto or scroll
     const scrollContainer = page.locator('[role="region"][aria-label="홈 개요 대시보드"]');
-    const isScrollable = await scrollContainer.evaluate((node) => {
-      return window.getComputedStyle(node).overflowY === 'auto' || window.getComputedStyle(node).overflowY === 'scroll';
+    const scrollState = await scrollContainer.evaluate((node) => {
+      const element = node as HTMLElement;
+      const previousTop = element.scrollTop;
+      element.scrollTop = element.scrollHeight;
+      return {
+        clientHeight: element.clientHeight,
+        previousTop,
+        scrollHeight: element.scrollHeight,
+        scrollTop: element.scrollTop,
+      };
     });
-    
-    expect(isScrollable).toBe(true);
+
+    expect(scrollState.scrollHeight).toBeGreaterThan(scrollState.clientHeight);
+    expect(scrollState.scrollTop).toBeGreaterThan(scrollState.previousTop);
   });
 });

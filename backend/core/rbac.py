@@ -20,15 +20,17 @@ def check_tenant_access(user_role: RoleName, required_role: RoleName) -> bool:
     Check if the user's role satisfies the required role.
     Higher privileges include lower privileges.
     Universal mapping:
-    - platform_admin: SaaS Provider / System Admin
-    - organization_admin: Corporate Admin / Tenant Owner
+    - system_admin/platform_admin: SaaS Provider / System Admin
+    - tenant_admin/organization_admin: Corporate Admin / Tenant Owner
     - group_admin: IT Operator / Department Head
     - member: B2B2C User or B2C Individual
     """
     hierarchy = {
         "member": 0,
         "group_admin": 1,
+        "tenant_admin": 2,
         "organization_admin": 2,
+        "system_admin": 3,
         "platform_admin": 3
     }
     

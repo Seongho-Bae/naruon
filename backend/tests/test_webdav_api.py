@@ -56,6 +56,30 @@ def test_get_webdav_writeback_intent(auth_client):
     assert body["server_url"] == "https://webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
 
+
+def test_get_webdav_writeback_intent_with_target_account(auth_client):
+    response = auth_client.post(
+        "/api/webdav/writeback-intent",
+        json={"target_account_id": 1},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["intent"] == "writeback"
+    assert body["source_id"] == 1
+    assert body["server_url"] == "https://webdav.naruon.net"
+    assert body["requires_if_match"] is True
+    assert body["provenance"] == "server-authoritative"
+
+
+def test_get_webdav_writeback_intent_with_invalid_target_account(auth_client):
+    response = auth_client.post(
+        "/api/webdav/writeback-intent",
+        json={"target_account_id": 999},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Requested WebDAV account was not found."
+
+
 def test_get_webdav_writeback_intent_no_accounts():
     with TestClient(
         app,

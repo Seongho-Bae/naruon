@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 PolicyRoleName = Literal[
-    "platform_admin", "organization_admin", "group_admin", "member"
+    "system_admin",
+    "tenant_admin",
+    "platform_admin",
+    "organization_admin",
+    "group_admin",
+    "member",
 ]
 DecisionReason = Literal[
     "allowed",
@@ -45,17 +50,41 @@ class AccessDecision:
     reason: DecisionReason
 
 
+ROLE_EQUIVALENTS: dict[str, frozenset[str]] = {
+    "system_admin": frozenset({"system_admin", "platform_admin"}),
+    "platform_admin": frozenset({"system_admin", "platform_admin"}),
+    "tenant_admin": frozenset({"tenant_admin", "organization_admin"}),
+    "organization_admin": frozenset({"tenant_admin", "organization_admin"}),
+    "group_admin": frozenset({"group_admin"}),
+    "member": frozenset({"member"}),
+}
+
+
+def _equivalent_roles(role: str) -> frozenset[str]:
+    return ROLE_EQUIVALENTS.get(role, frozenset({role}))
+
+
+def _role_allowed(role: str, permitted_roles: tuple[PolicyRoleName, ...]) -> bool:
+    request_roles = _equivalent_roles(role)
+    permitted = set().union(*(_equivalent_roles(item) for item in permitted_roles))
+    return bool(request_roles & permitted)
+
+
+def _is_system_admin_role(role: str) -> bool:
+    return role in {"system_admin", "platform_admin"}
+
+
 def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessDecision:
     """Evaluate resource access with ABAC denials before RBAC allows."""
-    role_allowed = request.role in resource.permitted_roles
+    role_allowed = _role_allowed(request.role, resource.permitted_roles)
     group_allowed = bool(set(request.group_ids) & set(resource.permitted_group_ids))
-    platform_admin_allowed = request.role == "platform_admin" and role_allowed
+    system_admin_allowed = _is_system_admin_role(request.role) and role_allowed
 
-    if request.role == "platform_admin" and not role_allowed:
+    if _is_system_admin_role(request.role) and not role_allowed:
         return AccessDecision(allowed=False, reason="rbac_denied")
 
     if (
-        not platform_admin_allowed
+        not system_admin_allowed
         and request.organization_id != resource.organization_id
     ):
         return AccessDecision(allowed=False, reason="organization_denied")
@@ -71,7 +100,7 @@ def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessD
 
     owns_resource = request.user_id == resource.owner_id
     has_delegation = request.user_id in resource.delegated_user_ids
-    if not platform_admin_allowed and not owns_resource and not has_delegation:
+    if not system_admin_allowed and not owns_resource and not has_delegation:
         return AccessDecision(allowed=False, reason="ownership_denied")
 
     if not role_allowed and not group_allowed:

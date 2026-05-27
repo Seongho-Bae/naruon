@@ -192,10 +192,15 @@ def test_explicit_public_routes_do_not_require_signed_session():
     for method, path in (
         ("GET", "/"),
         ("GET", "/api/runtime-config"),
-        ("GET", "/metrics"),
     ):
         response = _request_without_dependency_overrides(method, path)
         assert response.status_code == 200, f"{method} {path}: {response.text}"
+
+
+def test_metrics_route_is_not_registered_by_default():
+    response = _request_without_dependency_overrides("GET", "/metrics")
+
+    assert response.status_code == 404
 
 
 def test_private_api_route_rejects_missing_signed_session_by_default():
@@ -666,8 +671,10 @@ def test_ensure_organization_access_rejects_cross_scope_resource():
 @pytest.mark.asyncio
 async def test_signed_bearer_session_with_oidc(monkeypatch):
     import jwt
-    from api.auth import jwks_client
     
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
@@ -693,11 +700,41 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
         }
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 
-    token = "header.payload.signature"
-    context = await get_auth_context(authorization=f"Bearer {token}")
+    try:
+        token = "header.payload.signature"
+        context = await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
     assert context.user_id == "alice"
     assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
 
-    settings.OIDC_ISSUER_URL = None
+
+@pytest.mark.asyncio
+async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monkeypatch):
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+
+    class RejectingJWKSClient:
+        def get_signing_key_from_jwt(self, token):
+            raise RuntimeError("oidc rejected")
+
+    monkeypatch.setattr("api.auth.jwks_client", RejectingJWKSClient())
+    token = _signed_session_token(_valid_session_payload())
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert exc.value.status_code == 401

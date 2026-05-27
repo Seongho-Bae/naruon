@@ -6,6 +6,7 @@ from sqlalchemy import select
 from db.session import get_db
 from db.models import TenantConfig
 from api.auth import AuthContext, get_auth_context
+from api.tenant_config import validate_mail_config_update
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -21,6 +22,8 @@ class TenantConfigUpdate(BaseModel):
     imap_password: str | None = None
     pop3_server: str | None = None
     pop3_port: int | None = None
+    pop3_username: str | None = None
+    pop3_password: str | None = None
     oauth_client_id: str | None = None
     oauth_client_secret: str | None = None
     oauth_redirect_uri: str | None = None
@@ -37,6 +40,8 @@ class TenantConfigResponse(BaseModel):
     has_imap_password: bool
     pop3_server: str | None
     pop3_port: int | None
+    pop3_username: str | None
+    has_pop3_password: bool
     oauth_client_id: str | None
     oauth_redirect_uri: str | None
     has_oauth_client_secret: bool
@@ -68,6 +73,8 @@ async def get_tenant_config(
         has_imap_password=bool(config.imap_password),
         pop3_server=config.pop3_server,
         pop3_port=config.pop3_port,
+        pop3_username=config.pop3_username,
+        has_pop3_password=bool(config.pop3_password),
         oauth_client_id=config.oauth_client_id,
         oauth_redirect_uri=config.oauth_redirect_uri,
         has_oauth_client_secret=bool(config.oauth_client_secret),
@@ -88,6 +95,7 @@ async def update_tenant_config(
         db.add(config)
         
     update_dict = update_data.model_dump(exclude_unset=True)
+    validate_mail_config_update(update_dict, config)
     for key, value in update_dict.items():
         setattr(config, key, value)
         
@@ -106,6 +114,8 @@ async def update_tenant_config(
         has_imap_password=bool(config.imap_password),
         pop3_server=config.pop3_server,
         pop3_port=config.pop3_port,
+        pop3_username=config.pop3_username,
+        has_pop3_password=bool(config.pop3_password),
         oauth_client_id=config.oauth_client_id,
         oauth_redirect_uri=config.oauth_redirect_uri,
         has_oauth_client_secret=bool(config.oauth_client_secret),

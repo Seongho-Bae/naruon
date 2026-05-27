@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import AuthContext, get_auth_context
+from api.auth import AuthContext, get_auth_context, is_admin_role
 from db.models import AuditLog, LLMProvider
 from db.session import get_db
 from services.llm_provider_urls import (
@@ -65,7 +65,7 @@ async def _validated_base_url(value: str | None) -> str | None:
 async def check_admin_access(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> AuthContext:
-    if auth_context.role not in {"platform_admin", "organization_admin"}:
+    if not is_admin_role(auth_context.role):
         raise HTTPException(
             status_code=403, detail="Organization admin access required"
         )

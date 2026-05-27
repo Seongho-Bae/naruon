@@ -27,7 +27,7 @@ class MockResult:
 
 class MockSession:
     def __init__(self):
-        self.items = [MockRow("boss@example.com", "manager", 0.95)]
+        self.items = [MockRow("boss@example.com", "manager", 0.95, "ceo@example.com")]
         
     async def execute(self, stmt):
         compiled = str(stmt)
@@ -64,13 +64,16 @@ def test_get_relationships(client: TestClient):
     items = resp.json()
     assert len(items) == 1
     assert items[0]["sender_email"] == "boss@example.com"
+    assert items[0]["parent_sender_email"] == "ceo@example.com"
     assert items[0]["relationship_type"] == "manager"
+    assert items[0]["next_action"] == "classify_sender"
 
 def test_create_relationship(client: TestClient):
     resp = client.post(
         "/api/ontology/relationships",
         json={
             "sender_email": "vendor@example.com",
+            "parent_sender_email": "buyer@example.com",
             "relationship_type": "vendor",
             "confidence_score": 0.8
         }
@@ -78,4 +81,6 @@ def test_create_relationship(client: TestClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["sender_email"] == "vendor@example.com"
+    assert data["parent_sender_email"] == "buyer@example.com"
     assert data["relationship_type"] == "vendor"
+    assert data["next_action"] == "prepare_response_draft"

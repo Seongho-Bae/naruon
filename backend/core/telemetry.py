@@ -11,7 +11,7 @@ from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 logger = logging.getLogger(__name__)
 
 def setup_telemetry(app: FastAPI):
-    # Only setup if OTEL is enabled or endpoint is provided
+    # Only set up tracing when ENABLE_OTEL is true.
     otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317")
     enable_otel = os.getenv("ENABLE_OTEL", "true").lower() == "true"
     

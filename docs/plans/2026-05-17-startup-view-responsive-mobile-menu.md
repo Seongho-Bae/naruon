@@ -32,7 +32,7 @@
 
 - [x] **Step 1: Write failing unit tests**
 
-Update `frontend/src/app/page.test.tsx` with tests that seed `localStorage.setItem('naruon_startup_view', 'calendar')` and expect the mobile calendar region to be the active startup panel, seed `dashboard` and expect a dashboard overview region, and verify the default remains the email workspace.
+Update `frontend/src/app/page.test.tsx` with tests that seed `localStorage.setItem('naruon_startup_view', 'calendar')` and expect the mobile calendar region to be the active startup panel, seed `dashboard` and expect a dashboard overview region, and verify the default opens the dashboard workspace.
 
 - [x] **Step 2: Verify RED**
 

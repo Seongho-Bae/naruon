@@ -18,13 +18,25 @@ jwks_client = None
 if settings.OIDC_JWKS_URL:
     jwks_client = PyJWKClient(settings.OIDC_JWKS_URL)
 
-RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
+RoleName = Literal[
+    "system_admin",
+    "tenant_admin",
+    "platform_admin",
+    "organization_admin",
+    "group_admin",
+    "member",
+]
 ALLOWED_ROLES: set[str] = {
+    "system_admin",
+    "tenant_admin",
     "platform_admin",
     "organization_admin",
     "group_admin",
     "member",
 }
+SYSTEM_ADMIN_ROLES = frozenset({"system_admin", "platform_admin"})
+TENANT_ADMIN_ROLES = frozenset({"tenant_admin", "organization_admin"})
+ADMIN_ROLES = SYSTEM_ADMIN_ROLES | TENANT_ADMIN_ROLES
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
@@ -41,12 +53,24 @@ class AuthContext:
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
-    if auth_context.role == "platform_admin":
+    if is_system_admin_role(auth_context.role):
         return
     if auth_context.organization_id != organization_id:
         raise HTTPException(
             status_code=403, detail="Resource belongs to a different organization"
         )
+
+
+def is_system_admin_role(role: str) -> bool:
+    return role in SYSTEM_ADMIN_ROLES
+
+
+def is_tenant_admin_role(role: str) -> bool:
+    return role in TENANT_ADMIN_ROLES
+
+
+def is_admin_role(role: str) -> bool:
+    return role in ADMIN_ROLES
 
 
 async def get_auth_context(
@@ -127,8 +151,10 @@ def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
 def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
     
-    # OIDC RS256 Verification
-    if settings.OIDC_ISSUER_URL and jwks_client:
+    # OIDC RS256 verification is authoritative when configured.
+    if settings.OIDC_ISSUER_URL:
+        if jwks_client is None:
+            raise _authentication_error()
         try:
             signing_key = jwks_client.get_signing_key_from_jwt(token)
             payload = jwt.decode(
@@ -139,9 +165,8 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
                 issuer=settings.OIDC_ISSUER_URL
             )
             return payload
-        except Exception as e:
-            # Fall back to legacy if validation fails? No, if OIDC is configured, we enforce it or fallback cleanly.
-            pass  # nosec B110
+        except Exception:
+            raise _authentication_error() from None
 
     # Legacy HMAC HS256 Fallback
     token_segments = token.split(".")
@@ -220,7 +245,7 @@ def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
         raise _authentication_error()
     role = cast(RoleName, role_value)
     organization_id = _optional_string_claim(payload, "org")
-    if role != "platform_admin" and organization_id is None:
+    if not is_system_admin_role(role) and organization_id is None:
         raise _authentication_error()
     return AuthContext(
         user_id=_required_string_claim(payload, "sub"),

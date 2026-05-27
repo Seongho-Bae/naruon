@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test';
 
+import { mockDashboardApi } from './helpers';
+
 test.describe('Mobile Workspace Navigation', () => {
   test.use({ viewport: { width: 375, height: 812 } }); // iPhone X viewport
 
-  test('hamburger menu toggles and displays correctly', async ({ page }) => {
+  test('hamburger menu toggles and displays correctly', async ({ page }, testInfo) => {
+    await mockDashboardApi(page);
     await page.goto('/');
 
     // Wait for the main app to render
@@ -17,11 +20,11 @@ test.describe('Mobile Workspace Navigation', () => {
     await expect(mobileMenu).toBeVisible();
 
     // Verify some expected elements in the menu
-    await expect(page.locator('text=시작 화면')).toBeVisible();
-    await expect(page.locator('text=워크스페이스 메뉴')).toBeVisible();
+    await expect(mobileMenu.getByText('시작 화면', { exact: true })).toBeVisible();
+    await expect(mobileMenu.getByText('워크스페이스 메뉴', { exact: true })).toBeVisible();
 
     // Take a screenshot of the opened menu
-    await page.screenshot({ path: 'test-results/mobile-hamburger-open.png', fullPage: false });
+    await page.screenshot({ path: testInfo.outputPath('mobile-hamburger-open.png'), fullPage: false });
 
     // Close the menu
     const closeButton = page.locator('button[aria-label="모바일 워크스페이스 메뉴 닫기"]');

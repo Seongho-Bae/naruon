@@ -74,11 +74,17 @@ class WebDavService:
             return {"status": "error", "message": "No connected WebDAV accounts found."}
             
         selected_account = accounts[0]
-        if target_account_id:
+        if target_account_id is not None:
+            selected_account = None
             for acc in accounts:
                 if acc["account_id"] == target_account_id:
                     selected_account = acc
                     break
+            if selected_account is None:
+                return {
+                    "status": "error",
+                    "message": "Requested WebDAV account was not found.",
+                }
                     
         return {
             "intent": "writeback",

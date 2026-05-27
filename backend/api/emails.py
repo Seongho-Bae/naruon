@@ -6,6 +6,12 @@ from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
 from services.email_client import send_email, validate_smtp_destination
+from services.reply_tracking_service import (
+    check_missing_replies,
+    configured_email_addresses,
+    message_is_self_sent,
+    thread_requires_reply,
+)
 from services.threading_service import normalize_message_id
 import logging
 from api.auth import AuthContext, get_auth_context, get_current_user
@@ -74,6 +80,10 @@ async def get_emails(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    tenant_config = await db.scalar(
+        select(TenantConfig).where(TenantConfig.user_id == auth_context.user_id)
+    )
+    user_addresses = configured_email_addresses(tenant_config)
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
         select(Email)
@@ -86,8 +96,10 @@ async def get_emails(
 
     grouped = {}
     reply_counts = {}
+    thread_messages = {}
     for email in emails:
         group_key = canonical_thread_key(email)
+        thread_messages.setdefault(group_key, []).append(email)
         if group_key not in grouped:
             grouped[group_key] = email
             reply_counts[group_key] = 1
@@ -112,6 +124,10 @@ async def get_emails(
                 snippet=snippet,
                 thread_id=group_key,
                 reply_count=reply_counts[group_key],
+                is_self_sent=message_is_self_sent(email, user_addresses),
+                requires_reply=thread_requires_reply(
+                    thread_messages[group_key], user_addresses
+                ),
             )
         )
     return {"emails": items}
@@ -122,58 +138,27 @@ async def get_pending_replies(
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
-    current_user: str = Depends(get_current_user),
 ):
-    tenant_config = await db.scalar(
-        select(TenantConfig).where(TenantConfig.user_id == current_user)
+    pending_emails = await check_missing_replies(
+        db, auth_context.user_id, auth_context.organization_id
     )
-    my_email = tenant_config.smtp_username if tenant_config else None
-    if not my_email:
-        return {"emails": []}
-
-    candidate_window = min(max(limit * 10, 200), 2000)
-    result = await db.execute(
-        select(Email)
-        .where(*email_owner_filters(auth_context))
-        .order_by(Email.date.desc())
-        .limit(candidate_window)
-    )
-    emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
-
-    grouped = {}
-    reply_counts = {}
-    for email in emails:
-        group_key = canonical_thread_key(email)
-        if group_key not in grouped:
-            grouped[group_key] = email
-            reply_counts[group_key] = 1
-        else:
-            reply_counts[group_key] += 1
-            if email.date > grouped[group_key].date:
-                grouped[group_key] = email
-
-    sorted_groups = sorted(grouped.values(), key=lambda x: x.date, reverse=True)
-    
     items = []
-    for email in sorted_groups:
-        if email.sender == my_email:
-            group_key = canonical_thread_key(email)
-            snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
-            items.append(
-                EmailListItem(
-                    id=email.id,
-                    subject=email.subject,
-                    sender=email.sender,
-                    reply_to=email.reply_to,
-                    date=email.date,
-                    snippet=snippet,
-                    thread_id=group_key,
-                    reply_count=reply_counts[group_key],
-                )
+    for email in pending_emails[:limit]:
+        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
+        items.append(
+            EmailListItem(
+                id=email.id,
+                subject=email.subject,
+                sender=email.sender,
+                reply_to=email.reply_to,
+                date=email.date,
+                snippet=snippet,
+                thread_id=canonical_thread_key(email),
+                reply_count=None,
+                is_self_sent=False,
+                requires_reply=True,
             )
-            if len(items) >= limit:
-                break
+        )
     return {"emails": items}
 
 

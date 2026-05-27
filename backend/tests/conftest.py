@@ -6,6 +6,8 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
 os.environ.setdefault("ALLOWED_SMTP_HOSTS", "smtp.example.com")
+os.environ.setdefault("ALLOWED_IMAP_HOSTS", "imap.example.com")
+os.environ.setdefault("ALLOWED_POP3_HOSTS", "pop3.example.com")
 os.environ.setdefault("DISABLE_BACKGROUND_WORKERS", "1")
 
 import pytest

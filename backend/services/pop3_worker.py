@@ -4,6 +4,7 @@ import poplib
 from sqlalchemy import select
 from db.session import AsyncSessionLocal
 from db.models import TenantConfig
+from services.email_client import validate_pop3_destination
 
 logger = logging.getLogger(__name__)
 
@@ -66,26 +67,58 @@ class Pop3SyncWorker:
 
     async def _sync_tenant(self, config: TenantConfig, semaphore: asyncio.Semaphore):
         async with semaphore:
-            pop3_server = str(config.pop3_server)
-            pop3_port = int(config.pop3_port)  # type: ignore
+            try:
+                pop3_server, pop3_port = self._validated_destination(config)
+            except ValueError:
+                logger.info(
+                    "Skipping POP3 sync for user %s due to mail destination policy",
+                    config.user_id,
+                )
+                return
             logger.info(
                 f"Connecting to POP3 server {pop3_server}:{pop3_port} for user {config.user_id}"
             )
             try:
                 # We use asyncio.to_thread for synchronous poplib
-                await asyncio.to_thread(self._do_pop3_sync, config)
+                await asyncio.to_thread(
+                    self._do_pop3_sync, config, pop3_server, pop3_port
+                )
                 logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
             except Exception as e:
-                logger.error(f"Failed to connect or sync with POP3 server for user {config.user_id}: {e}")
+                logger.error(
+                    "Failed to connect or sync with POP3 server for user %s: %s",
+                    config.user_id,
+                    type(e).__name__,
+                )
 
-    def _do_pop3_sync(self, config: TenantConfig):
-        pop3_server = str(config.pop3_server)
-        pop3_port = int(config.pop3_port)  # type: ignore
+    def _validated_destination(self, config: TenantConfig) -> tuple[str, int]:
+        return validate_pop3_destination(
+            str(config.pop3_server),
+            int(config.pop3_port),  # type: ignore[arg-type]
+        )
+
+    def _do_pop3_sync(
+        self,
+        config: TenantConfig,
+        pop3_server: str | None = None,
+        pop3_port: int | None = None,
+    ):
+        if pop3_server is None or pop3_port is None:
+            pop3_server, pop3_port = self._validated_destination(config)
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
         try:
-            # Note: Real implementation would use OAuth or password.
-            # pop3_client.user(config.pop3_username)
-            # pop3_client.pass_(config.pop3_password)
-            pass
+            if not config.pop3_username:
+                logger.error(
+                    "Missing POP3 username for user %s; credential secret presence was not logged.",
+                    config.user_id,
+                )
+                raise RuntimeError(f"Missing POP3 username for user {config.user_id}")
+            if not config.pop3_password:
+                logger.error("Missing POP3 credential secret for user %s.", config.user_id)
+                raise RuntimeError(
+                    f"Missing POP3 credential secret for user {config.user_id}"
+                )
+            pop3_client.user(config.pop3_username)
+            pop3_client.pass_(config.pop3_password)
         finally:
             pop3_client.quit()
