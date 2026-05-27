@@ -269,6 +269,17 @@ pull_request_head_blob_required() {
 	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]
 }
 
+is_valid_git_commit_sha() {
+	local sha="$1"
+	[[ "$sha" =~ ^[0-9a-fA-F]{40}$ || "$sha" =~ ^[0-9a-fA-F]{64}$ ]]
+}
+
+invalid_pull_request_sha() {
+	local label="$1"
+	echo "ERROR: pull request $label commit SHA is invalid; failing closed." >&2
+	return 2
+}
+
 pr_head_regular_file_mode() {
 	local relative_path="$1"
 	local head_sha tree_output line_count metadata tree_path mode object_type _object_hash
@@ -276,7 +287,10 @@ pr_head_regular_file_mode() {
 	if [ -z "$head_sha" ]; then
 		return 2
 	fi
-	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+	if ! is_valid_git_commit_sha "$head_sha"; then
+		return 2
+	fi
+	if ! git rev-parse --verify --quiet "$head_sha^{commit}" >/dev/null; then
 		return 2
 	fi
 	if ! tree_output="$(git ls-tree "$head_sha" -- "$relative_path")"; then
@@ -703,14 +717,28 @@ PY
 		fi
 		return 1
 	fi
-	if ! git cat-file -e "$base_sha^{commit}" 2>/dev/null; then
+	if ! is_valid_git_commit_sha "$base_sha"; then
+		if pull_request_head_blob_required; then
+			invalid_pull_request_sha "base"
+			return 2
+		fi
+		return 1
+	fi
+	if ! is_valid_git_commit_sha "$head_sha"; then
+		if pull_request_head_blob_required; then
+			invalid_pull_request_sha "head"
+			return 2
+		fi
+		return 1
+	fi
+	if ! git rev-parse --verify --quiet "$base_sha^{commit}" >/dev/null; then
 		if pull_request_head_blob_required; then
 			echo "ERROR: pull request base commit could not be read; failing closed: $base_sha" >&2
 			return 2
 		fi
 		return 1
 	fi
-	if ! git cat-file -e "$head_sha^{commit}" 2>/dev/null; then
+	if ! git rev-parse --verify --quiet "$head_sha^{commit}" >/dev/null; then
 		if pull_request_head_blob_required; then
 			echo "ERROR: pull request head commit could not be read; failing closed: $head_sha" >&2
 			return 2
@@ -719,7 +747,7 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha")"; then
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
 		if pull_request_head_blob_required; then
 			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
 			return 2
@@ -1077,7 +1105,7 @@ PY
 		local copy_rc=1
 		local head_sha_for_copy
 		head_sha_for_copy="$(trim_whitespace "${PR_HEAD_SHA:-}")"
-		if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && git cat-file -e "$head_sha_for_copy^{commit}" 2>/dev/null; }; then
+		if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && is_valid_git_commit_sha "$head_sha_for_copy" && git rev-parse --verify --quiet "$head_sha_for_copy^{commit}" >/dev/null; }; then
 			copy_rc=0
 			copy_pr_head_blob_to_file "$relative_path" "$dst_path" || copy_rc=$?
 		fi
@@ -1126,7 +1154,7 @@ PY
 			local copy_rc=1
 			local head_sha_for_copy
 			head_sha_for_copy="$(trim_whitespace "${PR_HEAD_SHA:-}")"
-			if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && git cat-file -e "$head_sha_for_copy^{commit}" 2>/dev/null; }; then
+			if pull_request_head_blob_required || { [ -n "$head_sha_for_copy" ] && is_valid_git_commit_sha "$head_sha_for_copy" && git rev-parse --verify --quiet "$head_sha_for_copy^{commit}" >/dev/null; }; then
 				copy_rc=0
 				copy_pr_head_blob_to_file "$relative_path" "$dst_path" || copy_rc=$?
 			fi
