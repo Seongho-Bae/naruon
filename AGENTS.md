@@ -88,6 +88,10 @@
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
   stored `naruon_session_token` bearer path and must not add public identity
   headers.
+- Reply-wait task escalation must reuse the server-authoritative pending reply
+  path, create or update source-linked `reply_sla` ticket tasks by opaque task
+  id, and sanitize generated task titles from email subjects before persistence.
+  Do not create duplicate reminder tasks for the same pending sent-mail message.
 - Mail connection updates and workers must validate server-side SMTP, POP3,
   IMAP, and relay destinations before persistence or network connection. POP3
   credentials are required for POP3 sync;

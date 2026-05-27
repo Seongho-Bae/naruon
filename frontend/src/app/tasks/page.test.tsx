@@ -161,6 +161,75 @@ describe("TasksPage", () => {
     expect(doneButton?.getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("creates reply SLA ticket escalations with signed headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.reply.sla");
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/tasks/reply-sla-escalations") {
+        const headers = init?.headers as Record<string, string>;
+        expect(init?.method).toBe("POST");
+        expect(headers.Authorization).toBe("Bearer signed.reply.sla");
+        expect(headers["Content-Type"]).toBe("application/json");
+        for (const headerName of publicIdentityHeaders) {
+          expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+        }
+        expect(JSON.parse(String(init?.body))).toEqual({ overdue_hours: 48 });
+        return jsonResponse({
+          evaluated: 2,
+          created: 1,
+          policy: { overdue_hours: 48 },
+          tasks: [
+            {
+              id: "task-reply-sla-urgent",
+              title: "답변 SLA 확인: 벤더 계약 답변 요청",
+              status: "blocked",
+              priority: "urgent",
+              source_type: "reply_sla",
+              source_email_id: "<sent-q2@example.com>",
+              related_thread_id: "thread-sent-q2",
+              updated_at: "2026-05-26T11:00:00.000Z",
+            },
+          ],
+        });
+      }
+      return jsonResponse([]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    const escalationButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="보낸 메일 답변 SLA 티켓 생성"]',
+    );
+    expect(escalationButton).not.toBeNull();
+    await act(async () => {
+      escalationButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks/reply-sla-escalations", expect.objectContaining({
+      method: "POST",
+    }));
+    expect(container.textContent).toContain("1개 답변 SLA 티켓을 생성했습니다. 2개 대기 메일을 48시간 기준으로 확인했습니다.");
+    expect(container.textContent).toContain("답변 SLA 확인: 벤더 계약 답변 요청");
+    expect(container.textContent).toContain("<sent-q2@example.com>");
+    expect(container.textContent).toContain("thread-sent-q2");
+  });
+
   it("creates self-sent knowledge WebDAV materialization intent with signed headers", async () => {
     localStorage.setItem("naruon_session_token", "signed.knowledge.intent");
     const publicIdentityHeaders = [

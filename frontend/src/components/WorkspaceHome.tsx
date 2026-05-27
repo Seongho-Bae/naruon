@@ -63,6 +63,14 @@ type TaskItem = {
   updated_at: string;
 };
 
+type ReplySlaEscalationResponse = {
+  evaluated: number;
+  created: number;
+  policy: {
+    overdue_hours: number;
+  };
+};
+
 interface EmailItem {
   id: number;
   subject: string | null;
@@ -143,6 +151,8 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   const { emails, pendingReplies, tasks, loading } = useDashboardData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
+  const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [replySlaMessage, setReplySlaMessage] = useState<string | null>(null);
   const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingReplyCount = pendingReplies.length;
@@ -164,6 +174,23 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
       default: return p;
     }
   };
+
+  const handleReplySlaEscalation = async () => {
+    setReplySlaStatus('loading');
+    setReplySlaMessage(null);
+    try {
+      const result = await apiClient.post<ReplySlaEscalationResponse>(
+        '/api/tasks/reply-sla-escalations',
+        { overdue_hours: 48 },
+      );
+      setReplySlaStatus('ready');
+      setReplySlaMessage(`${result.created}개 SLA 티켓 생성, ${result.evaluated}개 답변 대기 확인`);
+    } catch {
+      setReplySlaStatus('error');
+      setReplySlaMessage('답변 SLA 티켓 생성 실패');
+    }
+  };
+
   return (
     <section role="region" aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -236,7 +263,23 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div>
                 <p className="break-keep font-bold">답변 대기 {loading ? '-' : pendingReplyCount}건</p>
                 <p className="text-xs text-muted-foreground mt-1">보낸 메일 중 회신 확인이 필요한 항목입니다.</p>
-                <a href="/mail?folder=sent" className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline">보낸 메일 보기</a>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <a href="/mail?folder=sent" className="inline-flex text-xs font-semibold text-primary hover:underline">보낸 메일 보기</a>
+                  <button
+                    type="button"
+                    aria-label="홈에서 보낸 메일 답변 SLA 티켓 생성"
+                    disabled={loading || pendingReplyCount === 0 || replySlaStatus === 'loading'}
+                    onClick={() => void handleReplySlaEscalation()}
+                    className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+                  >
+                    {replySlaStatus === 'loading' ? 'SLA 확인 중' : 'SLA 티켓 생성'}
+                  </button>
+                </div>
+                {replySlaMessage ? (
+                  <p role="status" className={`mt-2 text-xs font-semibold ${replySlaStatus === 'error' ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    {replySlaMessage}
+                  </p>
+                ) : null}
               </div>
             </div>
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
