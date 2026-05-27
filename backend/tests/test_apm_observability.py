@@ -28,3 +28,30 @@ def test_metrics_exposure_requires_explicit_environment_gate():
 
     assert "ENABLE_PROMETHEUS_METRICS" in main_source
     assert "Instrumentator().instrument(app).expose" in main_source
+
+
+def test_open_telemetry_setup_is_centralized_and_opt_in_by_default():
+    main_source = (ROOT_DIR / "backend/main.py").read_text()
+    telemetry_source = (ROOT_DIR / "backend/core/telemetry.py").read_text()
+
+    assert "setup_telemetry(app)" in main_source
+    assert "FastAPIInstrumentor.instrument_app(app)" not in main_source
+    assert '_env_flag("ENABLE_OTEL")' in telemetry_source
+    assert 'os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")' in telemetry_source
+    assert '"http://localhost:4317"' not in telemetry_source
+    assert "OTEL_EXPORTER_OTLP_INSECURE" in telemetry_source
+    assert "insecure=otlp_insecure" in telemetry_source
+    assert "except Exception" in telemetry_source
+
+
+def test_telemetry_does_not_instrument_without_explicit_endpoint(monkeypatch):
+    from fastapi import FastAPI
+    from core import telemetry
+
+    app = FastAPI()
+    monkeypatch.delenv("ENABLE_OTEL", raising=False)
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+
+    telemetry.setup_telemetry(app)
+
+    assert getattr(app.state, "naruon_telemetry_configured", False) is False

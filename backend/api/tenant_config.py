@@ -6,7 +6,7 @@ from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
-from api.auth import get_current_user, get_current_user_role
+from api.auth import get_current_user, get_current_user_role, is_admin_role
 from services.email_client import (
     validate_imap_destination,
     validate_imap_port,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api/config")
 async def get_global_config(
     role: str = Depends(get_current_user_role)
 ):
-    if role not in ["platform_admin", "organization_admin"]:
+    if not is_admin_role(role):
         raise HTTPException(status_code=403, detail="Not enough privileges")
     return {"status": "ok", "global_settings": {}}
 

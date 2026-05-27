@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_MODEL: str = "gpt-4o"
 
+    # OIDC Settings
+    OIDC_ISSUER_URL: str | None = None
+    OIDC_CLIENT_ID: str | None = None
+    OIDC_JWKS_URL: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
@@ -56,6 +61,20 @@ class Settings(BaseSettings):
             )
 
         validate_auth_session_hmac_secret_value(configured.get_secret_value())
+        oidc_values = {
+            "OIDC_ISSUER_URL": self.OIDC_ISSUER_URL,
+            "OIDC_CLIENT_ID": self.OIDC_CLIENT_ID,
+            "OIDC_JWKS_URL": self.OIDC_JWKS_URL,
+        }
+        configured_oidc_values = {
+            setting_name: setting_value
+            for setting_name, setting_value in oidc_values.items()
+            if setting_value
+        }
+        if configured_oidc_values and len(configured_oidc_values) != len(oidc_values):
+            raise ValueError(
+                "OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL must be set together"
+            )
         return self
 
 

@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -30,7 +30,7 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail', available: true },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox', available: true },
   { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/mail?folder=starred', available: true },
   { label: '보낸 메일', description: '답변 추적 대상', icon: Send, href: '/mail?folder=sent', available: true },
   { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/mail?folder=drafts', available: true },
@@ -79,20 +79,85 @@ const headerActions = [
 
 
 
-function splitHref(href: string) {
-  const [path, hash = ''] = href.split('#');
-  return { path: path.split('?')[0] || '/', hash: hash ? `#${hash}` : '' };
+const locationChangeEvent = 'naruon:location-change';
+let historyListenerInstalled = false;
+
+function emitLocationChange() {
+  window.dispatchEvent(new Event(locationChangeEvent));
 }
 
-function isActivePath(pathname: string | null, href: string, currentHash = '') {
+function installHistoryListener() {
+  if (typeof window === 'undefined' || historyListenerInstalled) return;
+  const pushState = window.history.pushState;
+  const replaceState = window.history.replaceState;
+
+  window.history.pushState = function patchedPushState(this: History, ...args: Parameters<History['pushState']>) {
+    pushState.apply(this, args);
+    emitLocationChange();
+  } as History['pushState'];
+
+  window.history.replaceState = function patchedReplaceState(this: History, ...args: Parameters<History['replaceState']>) {
+    replaceState.apply(this, args);
+    emitLocationChange();
+  } as History['replaceState'];
+
+  historyListenerInstalled = true;
+}
+
+function subscribeToLocationChanges(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  installHistoryListener();
+  window.addEventListener(locationChangeEvent, callback);
+  window.addEventListener('popstate', callback);
+  return () => {
+    window.removeEventListener(locationChangeEvent, callback);
+    window.removeEventListener('popstate', callback);
+  };
+}
+
+function getCurrentSearch() {
+  return typeof window === 'undefined' ? '' : window.location.search;
+}
+
+function getServerSearch() {
+  return '';
+}
+
+function useCurrentSearchParams() {
+  const search = useSyncExternalStore(subscribeToLocationChanges, getCurrentSearch, getServerSearch);
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+function splitHref(href: string) {
+  const [pathWithQuery, hash = ''] = href.split('#');
+  const [path = '/', query = ''] = pathWithQuery.split('?');
+  return { path: path || '/', query, hash: hash ? `#${hash}` : '' };
+}
+
+type SearchParamsLike = Pick<URLSearchParams, 'get'>;
+
+function isActivePath(
+  pathname: string | null,
+  href: string,
+  currentHash = '',
+  currentSearchParams?: SearchParamsLike | null,
+) {
   if (!pathname) return false;
-  const { path, hash } = splitHref(href);
+  const { path, query, hash } = splitHref(href);
   if (hash) {
     return pathname === path && currentHash === hash;
   }
-  return path === '/'
+  const pathMatch = path === '/'
     ? pathname === '/'
     : pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatch) return false;
+  if (!query) return true;
+  if (!currentSearchParams) return false;
+  const targetSearchParams = new URLSearchParams(query);
+  for (const [key, value] of targetSearchParams.entries()) {
+    if (currentSearchParams.get(key) !== value) return false;
+  }
+  return true;
 }
 
 export function NavLink({
@@ -109,6 +174,7 @@ export function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
+  const searchParams = useCurrentSearchParams();
   const [currentHash, setCurrentHash] = useState('');
 
   useEffect(() => {
@@ -124,7 +190,7 @@ export function NavLink({
     };
   }, [pathname]);
 
-  const active = isActivePath(pathname, href, currentHash);
+  const active = isActivePath(pathname, href, currentHash, searchParams);
 
   if (!available) {
     return (
@@ -177,7 +243,8 @@ function PrimaryNavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const active = isActivePath(pathname, href);
+  const searchParams = useCurrentSearchParams();
+  const active = isActivePath(pathname, href, '', searchParams);
 
   return (
     <Link
@@ -226,6 +293,7 @@ export function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useCurrentSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
@@ -434,55 +502,39 @@ export function DashboardLayout({
             </div>
           </section>
 
-          <nav aria-label="Mobile workspace menu" className="grid gap-2">
+          <nav aria-label="Mobile mail shortcuts" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">메일</p>
-          {mailNavItems.map(({ label, description, icon: Icon, href, available }) => {
-            const active = isActivePath(pathname, href);
-            if (!available) {
+            {mailNavItems.map(({ label, description, href, icon: Icon }) => {
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
-                <button
-                  key={label}
-                  type="button"
-                  disabled
-                  data-coming-soon="true"
-                  className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => closeMobileWorkspaceMenu()}
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
+                  }`}
                 >
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <Icon className="size-4" aria-hidden="true" />
                   <span className="flex flex-col leading-tight">
-                    <span>{label} <span className="text-[10px]">준비 중</span></span>
+                    <span>{label}</span>
                     <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
                   </span>
-                </button>
+                </Link>
               );
-            }
-            return (
-            <Link
-              key={label}
-              href={href}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => {
-                closeMobileWorkspaceMenu();
-                setMobileWorkspaceView('inbox');
-              }}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-            >
-              <Icon className="size-4 text-primary" aria-hidden="true" />
-              <span className="flex flex-col leading-tight">
-                <span>{label}</span>
-                <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
-              </span>
-              </Link>
-           )})}
+            })}
           </nav>
 
-          <nav aria-label="Mobile workspace destinations" className="grid gap-2">
+          <nav aria-label="Mobile workspace shortcuts" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">워크스페이스</p>
-            {mobileWorkspaceMenuItems.map(({ label, description, icon: Icon, href, view }) => {
+            {mobileWorkspaceMenuItems.map(({ label, description, href, icon: Icon, view }) => {
               const active = activeMobileView === view;
               return (
                 <a
-                  key={view}
+                  key={href}
                   href={href}
+                  data-mobile-workspace-shortcut={view}
                   aria-current={active ? 'page' : undefined}
                   onClick={(event) => handleMobileWorkspaceChange(view, event)}
                   className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
@@ -492,7 +544,7 @@ export function DashboardLayout({
                   <Icon className="size-4" aria-hidden="true" />
                   <span className="flex flex-col leading-tight">
                     <span>{label}</span>
-                    <span className={`text-[11px] font-medium ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{description}</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
                   </span>
                 </a>
               );
@@ -502,7 +554,7 @@ export function DashboardLayout({
           <nav aria-label="Mobile primary destinations" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">주요 작업공간</p>
             {primaryNavItems.map(({ label, href, icon: Icon }) => {
-              const active = isActivePath(pathname, href);
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
                 <Link
                   key={href}

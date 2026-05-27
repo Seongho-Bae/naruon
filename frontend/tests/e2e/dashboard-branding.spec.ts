@@ -3,8 +3,6 @@ import { expect, test } from '@playwright/test';
 import { mockDashboardApi } from './helpers';
 
 test('renders the desktop Naruon shell with local brand assets', async ({ page }) => {
-  page.on('console', msg => console.log('PW_LOG:', msg.text()));
-  page.on('pageerror', err => console.log('PW_ERROR:', err.message));
   const requestedUrls: string[] = [];
   page.on('request', (request) => requestedUrls.push(request.url()));
   await page.setViewportSize({ width: 1280, height: 1024 });

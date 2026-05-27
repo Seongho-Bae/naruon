@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from typing import Dict, Any
 
@@ -9,6 +10,14 @@ except ImportError:
     websockets = None
 
 logger = logging.getLogger(__name__)
+
+def _get_account_name(payload: Dict[str, Any]) -> str | None:
+    account = payload.get("account")
+    if not isinstance(account, str):
+        return None
+    account = account.strip()
+    return account or None
+
 
 class SelfHostedConnector:
     def __init__(self, target_ws_url: str, token: str):
@@ -60,12 +69,68 @@ class SelfHostedConnector:
             
     async def handle_message(self, message: str | bytes):
         # Dispatch message to internal SMTP/IMAP proxy handlers
-        logger.debug(f"Received instruction from gateway: {message}")
-        pass
+        logger.debug("Received instruction from gateway.")
+        try:
+            payload = json.loads(message)
+        except json.JSONDecodeError:
+            logger.error("Failed to decode message from gateway.")
+            await self.send_response({
+                "status": "error",
+                "action": None,
+                "error": "invalid json",
+            })
+            return
+
+        if not isinstance(payload, dict):
+            logger.error("Gateway instruction payload must be an object.")
+            await self.send_response({
+                "status": "error",
+                "action": None,
+                "error": "invalid payload",
+            })
+            return
+
+        action = payload.get("action")
+        if action == "fetch_imap":
+            await self._handle_fetch_imap(payload)
+        elif action == "send_smtp":
+            await self._handle_send_smtp(payload)
+        else:
+            logger.info("Unknown action received.")
+            await self.send_response({
+                "status": "error",
+                "action": action if isinstance(action, str) else None,
+                "error": "unknown action",
+            })
+            
+    async def _handle_fetch_imap(self, payload: Dict[str, Any]):
+        if _get_account_name(payload) is None:
+            logger.error("IMAP fetch instruction is missing account.")
+            await self.send_response({
+                "status": "error",
+                "action": "fetch_imap",
+                "error": "missing account",
+            })
+            return
+        logger.info("Executing local IMAP fetch for configured account.")
+        # Placeholder for actual internal IMAP logic
+        await self.send_response({"status": "success", "action": "fetch_imap", "data": "IMAP data placeholder"})
+        
+    async def _handle_send_smtp(self, payload: Dict[str, Any]):
+        if _get_account_name(payload) is None:
+            logger.error("SMTP send instruction is missing account.")
+            await self.send_response({
+                "status": "error",
+                "action": "send_smtp",
+                "error": "missing account",
+            })
+            return
+        logger.info("Executing local SMTP send for configured account.")
+        # Placeholder for actual internal SMTP logic
+        await self.send_response({"status": "success", "action": "send_smtp", "message_id": "mock_id_123"})
 
     async def send_response(self, response: Dict[str, Any]):
         if self.is_connected and self.connection:
-            import json
             await self.connection.send(json.dumps(response))
 
 if __name__ == "__main__":

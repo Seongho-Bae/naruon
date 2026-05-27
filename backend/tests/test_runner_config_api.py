@@ -67,7 +67,7 @@ def admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -87,7 +87,7 @@ def second_org_admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "org-admin-2",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -97,7 +97,7 @@ def second_org_admin_client(mock_db):
 
 
 @pytest.fixture
-def platform_admin_client(mock_db):
+def system_admin_client(mock_db):
     async def override_get_db():
         yield mock_db
 
@@ -107,7 +107,7 @@ def platform_admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "platform-root",
-                "X-User-Role": "platform_admin",
+                "X-User-Role": "system_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -183,8 +183,8 @@ def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):
     assert "registration_token" not in data["connector_manifest"]
 
 
-def test_platform_admin_can_manage_runner_config(platform_admin_client):
-    rotate_response = platform_admin_client.post("/api/runner-config/rotate")
+def test_system_admin_can_manage_runner_config(system_admin_client):
+    rotate_response = system_admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     assert rotate_response.json()["workspace_id"] == "workspace-org-acme"
 
@@ -199,7 +199,7 @@ def test_org_admin_without_org_scope_is_rejected(mock_db):
             app,
             headers={
                 "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
             },
         ) as client:
             response = client.get("/api/runner-config")

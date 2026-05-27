@@ -8,7 +8,8 @@ async def test_caldav_event_parsing_and_sync():
     session_mock = AsyncMock()
     # Mock finding accounts
     account_mock = MagicMock()
-    account_mock.server_url = "https://caldav.example.com"
+    account_mock.id = 1
+    account_mock.server_url = "https://alice:secret@caldav.example.com/calendars"
     account_mock.username = "user"
     account_mock.credentials_encrypted = "pass"
     
@@ -20,6 +21,9 @@ async def test_caldav_event_parsing_and_sync():
         await sync_caldav_accounts(session_mock, "user_1")
         # Should have logged parsing
         assert logger_mock.info.called
+        logged_url = logger_mock.debug.call_args.args[2]
+        assert logged_url == "https://caldav.example.com/calendars"
+        assert "secret" not in logged_url
 
 @pytest.mark.asyncio
 async def test_webdav_file_listing_and_sync():

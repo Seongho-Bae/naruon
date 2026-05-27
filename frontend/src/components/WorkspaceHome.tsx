@@ -6,11 +6,11 @@ import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
-import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Inbox, Network, Settings } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { toSafeReactText } from '@/lib/safe-text';
-import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
+import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
@@ -102,6 +102,17 @@ function formatStartupDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(date);
 }
 
+function formatDashboardTimestamp(value: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(value);
+}
+
 function StartupResultList({ results }: { results: StartupSearchResult[] }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -126,8 +137,18 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   const { emails, tasks, loading } = useDashboardData();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentTimestamp, setCurrentTimestamp] = useState('');
+  const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
+
+  useEffect(() => {
+    const updateTimestamp = () => setCurrentTimestamp(formatDashboardTimestamp(new Date()));
+    updateTimestamp();
+    const intervalId = window.setInterval(updateTimestamp, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
   
   const mapPriorityToKorean = (p: string) => {
     switch(p) {
@@ -147,12 +168,34 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           <div>
             <h1 className="break-keep text-2xl font-bold leading-tight text-foreground">안녕하세요, 김나루님 👋</h1>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
-            <button className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
-              <span className="grid size-4 place-items-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20v-8m0 0V4m0 8h8m-8 0H4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+          <div className="relative flex flex-wrap items-center gap-3">
+            <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">{currentTimestamp || '현재 시간 확인 중'}</span>
+            <button
+              aria-controls={settingsMenuId}
+              aria-expanded={isSettingsOpen}
+              aria-haspopup="menu"
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            >
+              <Settings className="size-4" aria-hidden="true" />
               홈 설정
             </button>
+            {isSettingsOpen && (
+              <div id={settingsMenuId} role="menu" className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-card p-2 shadow-lg">
+                <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
+                <div className="mt-1 flex flex-col gap-1">
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    대시보드
+                  </button>
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    이메일 우선
+                  </button>
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    일정 우선
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -9,12 +9,12 @@ Remove build-time-only frontend API configuration assumptions and introduce a ba
 ## Stepwise Tasks
 
 ### Task 1: Backend Endpoint Implementation
-1. In `backend/api/tenant_config.py` (or a new router `runtime_config.py`), implement `GET /api/runtime-config`.
-2. The endpoint should return non-secret info: `product_name`, `version`, `features` (e.g. `{"llm_enabled": True}`), etc.
-3. Add a basic Pytest to assert it returns 200 OK and valid JSON without secrets.
+1. In `backend/api/tenant_config.py` (or a new router `runtime_config.py`), implement `GET /api/runtime-config` as a signed-session protected private API route.
+2. The endpoint should return non-secret info: `product_name`, `version`, `features` (e.g. `{"llm_enabled": True}`), etc., only after authentication because feature flags and provider state can aid reconnaissance.
+3. Add Pytest coverage that unauthenticated requests return 401 and signed-session requests return valid JSON without secrets.
 
 ### Task 2: Frontend Runtime Config Client
-1. Create `frontend/src/lib/runtime-config.ts` which fetches from `/api/runtime-config`.
+1. Create `frontend/src/lib/runtime-config.ts` which fetches from `/api/runtime-config` through the signed-session API client.
 2. Create `frontend/src/lib/api-client.ts` to manage API URLs dynamically using the fetched config or a safe fallback.
 3. Provide React context or a store for config state.
 

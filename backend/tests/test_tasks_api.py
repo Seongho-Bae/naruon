@@ -49,7 +49,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "organization_admin",
+        "role": "tenant_admin",
         "org": "org-acme",
         "groups": [],
         "workspace": "workspace-org-acme",

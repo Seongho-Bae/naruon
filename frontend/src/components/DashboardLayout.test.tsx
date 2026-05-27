@@ -1,7 +1,12 @@
 /* @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => window.location.pathname,
+  useSearchParams: () => new URLSearchParams(window.location.search),
+}));
 
 import { DashboardLayout } from "./DashboardLayout";
 
@@ -132,6 +137,7 @@ describe("DashboardLayout", () => {
     expect(mobileMenu?.textContent ?? "").toContain("도움");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/"]')?.textContent).toContain("홈");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail"]')?.textContent).toContain("메일");
+    expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=inbox"]')?.textContent).toContain("받은 메일");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=sent"]')?.textContent).toContain("보낸 메일");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/calendar"]')?.textContent).toContain("일정");
     expect(mobileMenu?.querySelector<HTMLAnchorElement>('a[href="/tasks"]')?.textContent).toContain("작업");
@@ -214,6 +220,44 @@ describe("DashboardLayout", () => {
 
     expect(mobileHrefs).toEqual(desktopHrefs);
     expect(mobileHrefs).toEqual(["/", "/mail", "/calendar", "/tasks", "/projects", "/search", "/ai-hub", "/data", "/security", "/settings"]);
+  });
+
+  it("keeps query-based mail shortcuts mutually exclusive in the mobile drawer", () => {
+    window.history.replaceState(null, "", "/mail?folder=sent");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Mail workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    act(() => {
+      container
+        ?.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]')
+        ?.click();
+    });
+
+    const mobileMenu = container.querySelector<HTMLElement>('#mobile-workspace-menu');
+    expect(
+      mobileMenu
+        ?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=sent"]')
+        ?.getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      mobileMenu
+        ?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=inbox"]')
+        ?.getAttribute("aria-current"),
+    ).toBeNull();
+    expect(
+      mobileMenu
+        ?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=starred"]')
+        ?.getAttribute("aria-current"),
+    ).toBeNull();
   });
 
   it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", () => {

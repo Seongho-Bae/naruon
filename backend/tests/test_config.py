@@ -135,3 +135,33 @@ def test_openai_config():
 
     assert hasattr(settings, "OPENAI_EMBEDDING_MODEL")
     assert hasattr(settings, "OPENAI_MODEL")
+
+
+def test_oidc_settings_must_be_configured_together(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
+    monkeypatch.delenv("OIDC_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OIDC_JWKS_URL", raising=False)
+
+    with pytest.raises(
+        ValidationError,
+        match="OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL",
+    ):
+        _settings_without_env_file()
+
+
+def test_oidc_settings_accept_complete_configuration(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
+
+    loaded_settings = _settings_without_env_file()
+
+    assert loaded_settings.OIDC_CLIENT_ID == "naruon-api"
