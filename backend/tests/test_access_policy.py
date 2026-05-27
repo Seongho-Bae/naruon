@@ -193,6 +193,30 @@ def test_organization_admin_alias_satisfies_group_admin_hierarchy():
     assert decision.reason == "allowed"
 
 
+def test_tenant_admin_satisfies_organization_admin_alias_deterministically():
+    decision = evaluate_access(
+        AccessRequest(
+            user_id="alice",
+            role="tenant_admin",
+            organization_id="org-acme",
+            group_ids=(),
+            data_region="eu",
+            consent_scopes=("mail.read",),
+        ),
+        ResourcePolicy(
+            owner_id="alice",
+            organization_id="org-acme",
+            permitted_roles=("organization_admin",),
+            permitted_group_ids=(),
+            data_region="eu",
+            required_consent_scopes=("mail.read",),
+        ),
+    )
+
+    assert decision.allowed is True
+    assert decision.reason == "allowed"
+
+
 def test_abac_owner_denial_overrides_group_admin_rbac_allow_without_delegation():
     decision = evaluate_access(
         AccessRequest(

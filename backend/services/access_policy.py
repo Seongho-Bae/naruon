@@ -61,17 +61,30 @@ ROLE_EQUIVALENTS: dict[str, frozenset[str]] = {
     "member": frozenset({"member"}),
 }
 
+CANONICAL_ROLE: dict[str, str] = {
+    "system_admin": "system_admin",
+    "platform_admin": "system_admin",
+    "tenant_admin": "tenant_admin",
+    "organization_admin": "tenant_admin",
+    "group_admin": "group_admin",
+    "member": "member",
+}
+
 
 def _equivalent_roles(role: str) -> frozenset[str]:
     return ROLE_EQUIVALENTS.get(role, frozenset({role}))
 
 
+def _canonical_role(role: str) -> str:
+    return CANONICAL_ROLE.get(role, role)
+
+
 def _role_allowed(role: str, permitted_roles: tuple[PolicyRoleName, ...]) -> bool:
     if _is_system_admin_role(role):
         return any(_is_system_admin_role(item) for item in permitted_roles)
-    request_role = next(iter(_equivalent_roles(role)))
+    request_role = _canonical_role(role)
     return any(
-        check_tenant_access(request_role, next(iter(_equivalent_roles(item))))
+        check_tenant_access(request_role, _canonical_role(item))
         for item in permitted_roles
     )
 
