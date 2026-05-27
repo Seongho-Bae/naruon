@@ -308,5 +308,10 @@ Open the generated PNGs and visually confirm no clipped menu, hidden bottom acti
 - Full Keycloak/Casdoor OIDC validation and Traefik production edge config.
 - Source-scoped `MailboxAccount` migration for multi-account duplicate threading.
 - Persistent WebDAV project folders and AI-organized file writeback.
+- Persistent duplicate email provenance and importer rewiring. The first
+  implemented slice is `POST /api/emails/unique-thread-intent`, which checks
+  ZIP/forward candidates against canonical owner-scoped threads using normalized
+  Message-ID and strong body fingerprints without provider writes or
+  irreversible DB merges.
 
 These remain explicit roadmap items because pretending they are done would violate the source-of-truth and data-sovereignty contract.

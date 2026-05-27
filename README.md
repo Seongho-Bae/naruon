@@ -103,6 +103,15 @@ with explicit build evidence.
   `Reply-To` headers.
 - Importers persist the canonical service-assigned `thread_id`; they do not
   recompute their own thread IDs.
+- Duplicate ZIP/forward candidates can be checked through signed
+  `/api/emails/unique-thread-intent`. The intent uses normalized Message-ID and
+  strong body fingerprint matches, returns canonical thread metadata, and does
+  not execute provider writes or irreversible DB merges.
+- IMAP imports store the strong body fingerprint when message body content is
+  available, preserving the older lightweight fingerprint only as a fallback.
+- Subject-only `Fwd:` or `Re:` matching is not a valid duplicate/thread merge
+  signal. Forwarded threading must come from Message-ID, References,
+  In-Reply-To, or future persisted duplicate provenance.
 - Replies include `In-Reply-To` and `References` headers in the send payload.
 - Development sends are explicit simulations unless a real SMTP path is wired.
 

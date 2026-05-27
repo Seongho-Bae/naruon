@@ -578,6 +578,80 @@ test('renders data WebDAV writeback intent status without direct provider writes
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
+test('renders unique email canonical thread intent with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-email-dedupe-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.goto('/data');
+  const desktopIntentRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/emails/unique-thread-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: '중복 메일 thread intent 점검' }).click();
+  const desktopRequest = await desktopIntentRequest;
+  const desktopHeaders = desktopRequest.headers();
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopHeaders[headerName]).toBeUndefined();
+  }
+  expect(desktopRequest.postDataJSON().candidates).toHaveLength(2);
+  await expect(page.getByText('email.unique_thread_intent.created')).toBeVisible();
+  await expect(page.getByText('provider_write_executed=false')).toBeVisible();
+  await expect(page.getByText(/fingerprint.*thread-q2-root/)).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-unique-thread-intent-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/data');
+  await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
+  const mobileIntentRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/emails/unique-thread-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: '중복 메일 thread intent 점검' }).click();
+  const mobileHeaders = (await mobileIntentRequest).headers();
+  expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileHeaders[headerName]).toBeUndefined();
+  }
+  await expect(page.getByText('thread-q2-root').first()).toBeVisible();
+  await page.getByText('email.unique_thread_intent.created').scrollIntoViewIfNeeded();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-unique-thread-intent-mobile.png'), fullPage: false });
+  const dataScrollMetrics = await page.evaluate(() => {
+    const scroller = Array.from(document.querySelectorAll('main, main *')).find((element) => {
+      const style = window.getComputedStyle(element);
+      return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
+    });
+    if (!scroller) return null;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(dataScrollMetrics).not.toBeNull();
+  expect(dataScrollMetrics?.maxScroll).toBeGreaterThan(0);
+  expect(dataScrollMetrics?.after).toBeGreaterThan(dataScrollMetrics?.before ?? 0);
+  await page.screenshot({ path: testInfo.outputPath('data-unique-thread-intent-mobile-scroll.png'), fullPage: false });
+});
+
 test('renders API-backed context search sender DAG and reply tracking', async ({ page }, testInfo) => {
   const expectedNaruonToken = 'signed-search-e2e-token';
   const publicIdentityHeaders = [

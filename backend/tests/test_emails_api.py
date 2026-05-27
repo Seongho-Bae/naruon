@@ -1,12 +1,64 @@
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+
 import pytest
 import pytest_asyncio
+from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
+from pydantic import SecretStr
+
+from api.auth import get_auth_context as auth_get_auth_context
+from core.config import settings
 from db.models import Email
 from main import app
 import datetime
 from unittest.mock import patch
+from services.email_service import generate_email_fingerprint
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
+
+
+def _base64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(payload: dict[str, object]) -> str:
+    header_segment = _base64url_encode(
+        json.dumps(
+            {"alg": "HS256", "typ": "JWT"}, separators=(",", ":"), sort_keys=True
+        ).encode("utf-8")
+    )
+    payload_segment = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    )
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        TEST_SESSION_HMAC_SECRET.encode("utf-8"),
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{signing_input}.{_base64url_encode(signature)}"
+
+
+def _valid_session_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ver": 1,
+        "iss": "naruon-control-plane",
+        "aud": "naruon-api",
+        "sub": "testuser",
+        "role": "member",
+        "org": "org-acme",
+        "groups": [],
+        "workspace": "workspace-org-acme",
+        "exp": int(time.time()) + 300,
+    }
+    payload.update(overrides)
+    return payload
 
 
 @pytest_asyncio.fixture
@@ -376,6 +428,194 @@ async def test_get_emails_rejects_unknown_folder(client: AsyncClient):
 
     assert response.status_code == 422
     assert "folder" in response.text
+
+
+@pytest.mark.asyncio
+async def test_unique_email_thread_intent_detects_message_id_and_fingerprint_duplicates(
+    client: AsyncClient, db_session
+):
+    duplicate_date = datetime.datetime(2026, 5, 27, 9, 30, tzinfo=datetime.timezone.utc)
+    fingerprint = generate_email_fingerprint(
+        {
+            "sender": "partner@example.com",
+            "subject": "Q2 출시 계획",
+            "date": duplicate_date.isoformat(),
+            "body": "Forwarded launch plan body",
+        }
+    )
+    db_session.items = [
+        Email(
+            id=41,
+            user_id="testuser",
+            organization_id="org-acme",
+            message_id="<q2-root@example.com>",
+            thread_id="thread-q2-root",
+            fingerprint=fingerprint,
+            sender="partner@example.com",
+            recipients="user@example.com",
+            subject="Q2 출시 계획",
+            date=duplicate_date,
+            body="Forwarded launch plan body",
+        )
+    ]
+
+    response = await client.post(
+        "/api/emails/unique-thread-intent",
+        json={
+            "candidates": [
+                {
+                    "candidate_key": "zip-q2-root",
+                    "message_id": "q2-root@example.com",
+                    "sender": "partner@example.com",
+                    "recipients": "user@example.com",
+                    "subject": "Q2 출시 계획",
+                    "date": duplicate_date.isoformat(),
+                    "body": "Forwarded launch plan body",
+                },
+                {
+                    "candidate_key": "forwarded-copy",
+                    "sender": "partner@example.com",
+                    "recipients": "user@example.com",
+                    "subject": "Q2 출시 계획",
+                    "date": duplicate_date.isoformat(),
+                    "body": "Forwarded launch plan body",
+                },
+            ]
+        },
+        headers={"X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "intent_ready"
+    assert data["candidates_checked"] == 2
+    assert data["duplicates_found"] == 2
+    assert data["provider_write_executed"] is False
+    assert data["audit_event"] == "email.unique_thread_intent.created"
+    by_key = {item["candidate_key"]: item for item in data["thread_updates"]}
+    assert by_key["zip-q2-root"]["match_reason"] == "message_id"
+    assert by_key["zip-q2-root"]["canonical_thread_id"] == "thread-q2-root"
+    assert by_key["forwarded-copy"]["match_reason"] == "fingerprint"
+    assert by_key["forwarded-copy"]["canonical_thread_id"] == "thread-q2-root"
+
+
+@pytest.mark.asyncio
+async def test_unique_email_thread_intent_rejects_empty_candidates(
+    client: AsyncClient,
+):
+    response = await client.post("/api/emails/unique-thread-intent", json={"candidates": []})
+
+    assert response.status_code == 422
+    assert "candidates" in response.text
+
+
+@pytest.mark.asyncio
+async def test_unique_email_thread_intent_applies_auth_dependency(
+    client: AsyncClient,
+):
+    from api.auth import AuthContext
+    from api.emails import get_auth_context as emails_get_auth_context
+
+    calls = []
+
+    async def auth_override():
+        calls.append("hit")
+        return AuthContext(
+            user_id="authorized-user",
+            role="member",
+            organization_id="authorized-org",
+            group_ids=(),
+            workspace_id="workspace-authorized-org",
+        )
+
+    app.dependency_overrides[emails_get_auth_context] = auth_override
+
+    response = await client.post(
+        "/api/emails/unique-thread-intent",
+        json={
+            "candidates": [
+                {
+                    "candidate_key": "new-import",
+                    "message_id": "new@example.com",
+                    "subject": "New import",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls == ["hit"]
+
+
+def test_unique_email_thread_intent_accepts_signed_bearer_session(db_session):
+    duplicate_date = datetime.datetime(2026, 5, 27, 9, 30, tzinfo=datetime.timezone.utc)
+    db_session.items = [
+        Email(
+            id=51,
+            user_id="testuser",
+            organization_id="org-acme",
+            message_id="<signed-root@example.com>",
+            thread_id="signed-thread",
+            sender="partner@example.com",
+            recipients="user@example.com",
+            subject="Signed import",
+            date=duplicate_date,
+            body="Signed duplicate body",
+        )
+    ]
+    token = _signed_session_token(_valid_session_payload())
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    previous_auth_override = app.dependency_overrides.pop(auth_get_auth_context, None)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    try:
+        response = TestClient(app).post(
+            "/api/emails/unique-thread-intent",
+            json={
+                "candidates": [
+                    {
+                        "candidate_key": "signed-import",
+                        "message_id": "signed-root@example.com",
+                        "subject": "Signed import",
+                    }
+                ]
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        if previous_auth_override is not None:
+            app.dependency_overrides[auth_get_auth_context] = previous_auth_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["thread_updates"][0]["canonical_thread_id"] == "signed-thread"
+
+
+@pytest.mark.asyncio
+async def test_unique_email_thread_intent_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.post(
+        "/api/emails/unique-thread-intent",
+        json={
+            "candidates": [
+                {
+                    "candidate_key": "scoped-import",
+                    "message_id": "msg123",
+                    "subject": "Scoped import",
+                }
+            ]
+        },
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
 
 
 @pytest.mark.postgres

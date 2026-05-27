@@ -15,6 +15,7 @@ from services.knowledge_extractor import (
 )
 from services.email_client import validate_imap_destination
 from services.threading_service import assign_thread_id, generate_email_fingerprint
+from services.email_dedupe_service import strong_email_fingerprint
 
 
 async def process_fetched_email(
@@ -46,7 +47,12 @@ async def process_fetched_email(
         else str(recipients_list or "")
     )
 
-    fingerprint = generate_email_fingerprint(subject, date_str, sender, recipients)
+    fingerprint = strong_email_fingerprint(
+        sender=sender,
+        subject=subject,
+        date=persisted_date,
+        body=email_data.get("body", ""),
+    ) or generate_email_fingerprint(subject, date_str, sender, recipients)
 
     # Check if duplicate
     stmt = select(Email).where(
