@@ -82,11 +82,29 @@ def _endpoint_host(endpoint: str | None) -> str | None:
 
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
     if not is_admin_role(auth_context.role):
-        raise HTTPException(status_code=403, detail="Organization admin access required")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "ORG_ADMIN_REQUIRED",
+                "message": "Organization admin access required",
+            },
+        )
     if is_tenant_admin_role(auth_context.role) and not auth_context.organization_id:
-        raise HTTPException(status_code=403, detail="Organization scope is required")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "ORG_SCOPE_REQUIRED",
+                "message": "Organization scope is required",
+            },
+        )
     if not auth_context.organization_id:
-        raise HTTPException(status_code=403, detail="Organization scope is required")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "ORG_SCOPE_REQUIRED",
+                "message": "Organization scope is required",
+            },
+        )
     return auth_context
 
 
@@ -214,9 +232,15 @@ async def get_operational_signals(
 ):
     organization_id = auth_context.organization_id
     if organization_id is None:
-        raise HTTPException(status_code=403, detail="Organization scope is required")
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error_code": "ORG_SCOPE_REQUIRED",
+                "message": "Organization scope is required",
+            },
+        )
 
-    workspace_id = f"workspace-{organization_id}"
+    workspace_id = auth_context.workspace_id
     config = await _get_runner_config(db, organization_id)
     telemetry = _telemetry_runtime()
     connector = _connector_state(organization_id, workspace_id, config)

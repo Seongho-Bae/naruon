@@ -146,13 +146,9 @@ describe("SettingsLayout", () => {
       }),
     );
     const operationalCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/observability/operational-signals");
-    expect(operationalCall?.[1]?.headers).not.toEqual(
-      expect.objectContaining({
-        "X-User-Id": expect.any(String),
-        "X-Organization-Id": expect.any(String),
-        "X-User-Role": expect.any(String),
-      }),
-    );
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
     expect(container.textContent).toContain("Self-hosted connector manifest");
     expect(container.textContent).toContain("Naruon은 이메일 서버가 아닙니다");
     expect(container.textContent).toContain("self-hosted_connector");

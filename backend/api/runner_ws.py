@@ -101,9 +101,14 @@ class ConnectionManager:
             if record.organization_id == organization_id
         ]
         active_count = len(active_records)
-        last_seen_at = self.last_seen_by_org.get(organization_id)
+        last_seen_candidates = [
+            candidate
+            for candidate in [self.last_seen_by_org.get(organization_id)]
+            if candidate
+        ]
         if active_records:
-            last_seen_at = max(record.connected_at for record in active_records)
+            last_seen_candidates.extend(record.connected_at for record in active_records)
+        last_seen_at = max(last_seen_candidates) if last_seen_candidates else None
         return RunnerConnectionSnapshot(
             organization_id=organization_id,
             workspace_id=active_records[0].workspace_id if active_records else workspace_id,
@@ -168,4 +173,6 @@ async def runner_endpoint(websocket: WebSocket, token: str):
             # Echo back or process intents
             await websocket.send_text(f"Naruon ack: {data}")
     except WebSocketDisconnect:
+        pass
+    finally:
         manager.disconnect(connection_key)

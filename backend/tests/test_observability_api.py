@@ -77,6 +77,28 @@ def test_member_cannot_read_operational_signals(member_client):
     response = member_client.get("/api/observability/operational-signals")
 
     assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "ORG_ADMIN_REQUIRED"
+
+
+def test_admin_without_org_scope_gets_deterministic_error(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "tenant_admin",
+            },
+        ) as client:
+            response = client.get("/api/observability/operational-signals")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
 
 
 def test_operational_signals_are_truthful_when_unconfigured(admin_client):
