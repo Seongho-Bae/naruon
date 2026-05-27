@@ -1,7 +1,13 @@
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from pydantic import SecretStr
 from main import app
 from db.session import get_db
+
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 # Mock async DB session
 class MockResult:
@@ -10,6 +16,7 @@ class MockResult:
 
     def scalar_one_or_none(self):
         return self.obj
+
 
 class MockAsyncSession:
     def __init__(self):
@@ -24,40 +31,94 @@ class MockAsyncSession:
     async def commit(self):
         pass
 
+
 @pytest.fixture
 def mock_db():
     return MockAsyncSession()
+
 
 @pytest.fixture
 def client(mock_db):
     async def override_get_db():
         yield mock_db
-    
+
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
         yield c
     app.dependency_overrides.clear()
 
-def test_tenant_config_endpoint(client, mock_db):
+
+def test_tenant_config_endpoint(client, mock_db, monkeypatch):
+    host_resolve_calls = []
+    destination_resolve_calls = []
+    imap_destination_calls = []
+    pop3_destination_calls = []
+
+    def fake_validate_smtp_host(smtp_server, *, resolve_host=True):
+        host_resolve_calls.append(resolve_host)
+        return smtp_server
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        destination_resolve_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    def fake_validate_imap_destination(imap_server, imap_port, *, resolve_host=True):
+        imap_destination_calls.append((imap_server, imap_port, resolve_host))
+        return imap_server, imap_port
+
+    def fake_validate_pop3_destination(pop3_server, pop3_port, *, resolve_host=True):
+        pop3_destination_calls.append((pop3_server, pop3_port, resolve_host))
+        return pop3_server, pop3_port
+
+    monkeypatch.setattr("api.tenant_config.validate_smtp_host", fake_validate_smtp_host)
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_destination",
+        fake_validate_smtp_destination,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_imap_destination",
+        fake_validate_imap_destination,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
+    monkeypatch.setattr("api.tenant_config.validate_pop3_port", lambda port: port)
+
     post_payload = {
         "user_id": "test_user",
         "openai_api_key": "sk-123",
         "smtp_server": "smtp.example.com",
+        "smtp_port": 587,
         "smtp_username": "sender@example.com",
         "smtp_password": "smtp-secret",
         "imap_server": "imap.example.com",
         "imap_port": 993,
         "imap_username": "imap-user",
         "imap_password": "imap-secret",
+        "pop3_server": "pop3.example.com",
+        "pop3_port": 995,
+        "pop3_username": "pop3-user",
+        "pop3_password": "pop3-secret",
         "oauth_client_secret": "secret-456",
     }
-    response = client.post("/api/config", json=post_payload, headers={"X-User-Id": "test_user"})
+    response = client.post(
+        "/api/config", json=post_payload, headers={"X-User-Id": "test_user"}
+    )
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+    assert host_resolve_calls == [True]
+    assert destination_resolve_calls == [True]
+    assert imap_destination_calls == [("imap.example.com", 993, True)]
+    assert pop3_destination_calls == [("pop3.example.com", 995, True)]
 
     assert "test_user" in mock_db.objects
 
-    get_response = client.get("/api/config", params={"user_id": "test_user"}, headers={"X-User-Id": "test_user"})
+    get_response = client.get(
+        "/api/config",
+        params={"user_id": "test_user"},
+        headers={"X-User-Id": "test_user"},
+    )
     assert get_response.status_code == 200
     data = get_response.json()
     assert data["user_id"] == "test_user"
@@ -65,11 +126,16 @@ def test_tenant_config_endpoint(client, mock_db):
     assert data["oauth_client_secret"] == "********"
     assert data["smtp_password"] == "********"
     assert data["imap_password"] == "********"
+    assert data["pop3_password"] == "********"
     assert data["smtp_server"] == "smtp.example.com"
+    assert data["smtp_port"] == 587
     assert data["smtp_username"] == "sender@example.com"
     assert data["imap_server"] == "imap.example.com"
     assert data["imap_port"] == 993
     assert data["imap_username"] == "imap-user"
+    assert data["pop3_server"] == "pop3.example.com"
+    assert data["pop3_port"] == 995
+    assert data["pop3_username"] == "pop3-user"
     assert data["google_client_secret"] is None
 
 
@@ -79,7 +145,7 @@ def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
         json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
         },
     )
@@ -90,13 +156,185 @@ def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
     }
 
 
+def test_tenant_config_rejects_private_smtp_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "127.0.0.1",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_metadata_smtp_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "169.254.169.254",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
+    def fake_getaddrinfo(host, port=None, *args, **kwargs):
+        return [(2, 1, 6, "", ("93.184.216.34", port or 587))]
+
+    monkeypatch.setattr("services.email_client.socket.getaddrinfo", fake_getaddrinfo)
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "SMTP port is not allowed" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_private_pop3_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "127.0.0.1",
+            "pop3_port": 995,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_private_imap_host(client):
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "127.0.0.1",
+            "imap_port": 993,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "imap_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.email_client.settings.ALLOWED_IMAP_HOSTS",
+        "mail.example.com",
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "imap.example.com",
+            "imap_port": 993,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "imap_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
+    monkeypatch.setattr(
+        "services.email_client.settings.ALLOWED_POP3_HOSTS",
+        "mail.example.com",
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "pop3.example.com",
+            "pop3_port": 995,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_server" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
+    def fake_validate_imap_destination(host, port, *, resolve_host=True):
+        from services.email_client import validate_imap_port
+
+        validate_imap_port(port)
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_imap_destination",
+        fake_validate_imap_destination,
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "imap_server": "imap.example.com",
+            "imap_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "imap_port" in response.json()["detail"]
+
+
+def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
+    def fake_validate_pop3_destination(host, port, *, resolve_host=True):
+        from services.email_client import validate_pop3_port
+
+        validate_pop3_port(port)
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
+
+    response = client.post(
+        "/api/config",
+        json={
+            "user_id": "test_user",
+            "pop3_server": "pop3.example.com",
+            "pop3_port": 22,
+        },
+        headers={"X-User-Id": "test_user"},
+    )
+
+    assert response.status_code == 400
+    assert "pop3_port" in response.json()["detail"]
+
+
 def test_tenant_config_get_rejects_cross_user_access(client):
     response = client.get(
         "/api/config",
         params={"user_id": "member-user"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
             "X-Organization-Id": "org-acme",
         },
     )
@@ -105,3 +343,136 @@ def test_tenant_config_get_rejects_cross_user_access(client):
     assert response.json() == {
         "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
     }
+
+def test_global_config_requires_admin(client):
+    response = client.get(
+        "/api/config/global",
+        headers={
+            "X-User-Id": "member-user",
+            "X-User-Role": "member",
+            "X-Organization-Id": "org-acme",
+            "X-Workspace-Id": "ws-1",
+        },
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "Not enough privileges"}
+
+def test_global_config_allows_admin(client):
+    response = client.get(
+        "/api/config/global",
+        headers={
+            "X-User-Id": "admin-user",
+            "X-User-Role": "tenant_admin",
+            "X-Organization-Id": "org-acme",
+            "X-Workspace-Id": "ws-1",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_create_read_pop3_postgres_smoke(monkeypatch):
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
+    from core.config import settings
+    from db.models import Base
+    from sqlalchemy import text
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    def fake_validate_pop3_destination(host, port, *, resolve_host=True):
+        return host, port
+
+    monkeypatch.setattr(
+        "api.tenant_config.validate_pop3_destination",
+        fake_validate_pop3_destination,
+    )
+
+    old_encryption_key = settings.ENCRYPTION_KEY
+    settings.ENCRYPTION_KEY = SecretStr(Fernet.generate_key().decode("ascii"))
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+                await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                await conn.run_sync(Base.metadata.create_all)
+        except (
+            InvalidAuthorizationSpecificationError,
+            InvalidPasswordError,
+            OperationalError,
+            OSError,
+        ) as exc:
+            await engine.dispose()
+            pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+        user_id = "pop3-smoke-user"
+        pop3_password = "pop3-smoke-secret"
+
+        async def cleanup_seed_rows():
+            async with Session() as session:
+                await session.execute(
+                    text("DELETE FROM tenant_configs WHERE user_id = :user_id"),
+                    {"user_id": user_id},
+                )
+                await session.commit()
+
+        async def real_db_override():
+            async with Session() as session:
+                yield session
+
+        await cleanup_seed_rows()
+        previous_db_override = app.dependency_overrides.get(get_db)
+        app.dependency_overrides[get_db] = real_db_override
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                headers={"X-User-Id": user_id},
+                base_url="http://test",
+            ) as real_client:
+                post_response = await real_client.post(
+                    "/api/config",
+                    json={
+                        "user_id": user_id,
+                        "pop3_server": "pop3.example.com",
+                        "pop3_port": 995,
+                        "pop3_username": "pop3-user",
+                        "pop3_password": pop3_password,
+                    },
+                )
+                get_response = await real_client.get(
+                    "/api/config", params={"user_id": user_id}
+                )
+        finally:
+            if previous_db_override is None:
+                app.dependency_overrides.pop(get_db, None)
+            else:
+                app.dependency_overrides[get_db] = previous_db_override
+
+        async with Session() as session:
+            raw_pop3_password = (
+                await session.execute(
+                    text(
+                        "SELECT pop3_password FROM tenant_configs "
+                        "WHERE user_id = :user_id"
+                    ),
+                    {"user_id": user_id},
+                )
+            ).scalar_one()
+
+        await cleanup_seed_rows()
+    finally:
+        await engine.dispose()
+        settings.ENCRYPTION_KEY = old_encryption_key
+
+    assert post_response.status_code == 200
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert data["pop3_server"] == "pop3.example.com"
+    assert data["pop3_port"] == 995
+    assert data["pop3_username"] == "pop3-user"
+    assert data["pop3_password"] == "********"
+    assert raw_pop3_password != pop3_password

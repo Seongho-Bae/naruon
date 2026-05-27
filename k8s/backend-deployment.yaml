@@ -22,4 +22,7 @@ spec:
         - containerPort: 8000
         env:
         - name: DATABASE_URL
-          value: "postgresql+asyncpg://postgres:postgres@postgres-db:5432/ai_email"
+          valueFrom:
+            secretKeyRef:
+              name: backend-secrets
+              key: database-url

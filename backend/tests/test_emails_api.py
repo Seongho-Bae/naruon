@@ -6,11 +6,15 @@ from main import app
 import datetime
 from unittest.mock import patch
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 @pytest_asyncio.fixture
 async def client():
     async with AsyncClient(
-        transport=ASGITransport(app=app), headers={"X-User-Id": "testuser"}, base_url="http://test"
+        transport=ASGITransport(app=app),
+        headers={"X-User-Id": "testuser"},
+        base_url="http://test",
     ) as ac:
         yield ac
 
@@ -21,6 +25,7 @@ class MockTenantConfig:
         self.smtp_port = 587
         self.smtp_username = "testuser"
         self.smtp_password = None
+
 
 _DEFAULT_TENANT_CONFIG = object()
 
@@ -48,6 +53,9 @@ class MockSession:
             def scalar_one_or_none(self):
                 return self.rows[0] if self.rows else None
 
+        if "tenant_configs" in compiled_query_text(query):
+            rows = [] if self.tenant_config is None else [self.tenant_config]
+            return MockResult(rows)
         return MockResult(self.items)
 
     async def scalar(self, query):
@@ -80,10 +88,49 @@ class LimitAwareMockSession(MockSession):
         return MockResult(rows)
 
 
+class QueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+
+class ScalarQueryCapturingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.scalar_queries = []
+
+    async def scalar(self, query):
+        self.scalar_queries.append(query)
+        return await super().scalar(query)
+
+
+def compiled_query_text(query) -> str:
+    return str(query).lower()
+
+
+def compiled_query_params(query) -> dict[str, object]:
+    return dict(query.compile().params)
+
+
+def assert_query_is_owner_scoped(query) -> None:
+    query_text = compiled_query_text(query)
+    query_params = compiled_query_params(query)
+
+    assert "emails.user_id = :user_id_1" in query_text
+    assert "emails.organization_id = :organization_id_1" in query_text
+    assert query_params["user_id_1"] == "testuser"
+    assert query_params["organization_id_1"] == "org-acme"
+
+
 @pytest.fixture
 def sample_email():
     return Email(
         id=1,
+        user_id="testuser",
         message_id="msg123",
         thread_id="thread123",
         sender="test@example.com",
@@ -124,18 +171,22 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     hot_thread = [
         Email(
             id=index + 1,
+            user_id="testuser",
             message_id=f"hot-{index}",
             thread_id="hot-thread",
             sender="hot@example.com",
             recipients="user@example.com",
             subject="Hot thread",
-            date=datetime.datetime(2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc),
+            date=datetime.datetime(
+                2026, 4, 27, 12, index, tzinfo=datetime.timezone.utc
+            ),
             body=f"Hot body {index}",
         )
         for index in range(6)
     ]
     second_thread = Email(
         id=99,
+        user_id="testuser",
         message_id="second-thread-root",
         thread_id="second-thread",
         sender="second@example.com",
@@ -170,7 +221,9 @@ async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit:
 
 
 @pytest.mark.asyncio
-async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, db_session):
+async def test_get_emails_bounds_database_candidate_window(
+    client: AsyncClient, db_session
+):
     from db.session import get_db
 
     session = LimitAwareMockSession(db_session.items)
@@ -184,9 +237,12 @@ async def test_get_emails_bounds_database_candidate_window(client: AsyncClient, 
 
 
 @pytest.mark.asyncio
-async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncClient, db_session):
+async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
+    client: AsyncClient, db_session
+):
     root = Email(
         id=1,
+        user_id="testuser",
         message_id="<root@example.com>",
         thread_id="<root@example.com>",
         sender="root@example.com",
@@ -197,6 +253,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncCl
     )
     reply = Email(
         id=2,
+        user_id="testuser",
         message_id="<reply@example.com>",
         thread_id="root@example.com",
         sender="reply@example.com",
@@ -214,6 +271,186 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(client: AsyncCl
     assert len(data) == 1
     assert data[0]["thread_id"] == "root@example.com"
     assert data[0]["reply_count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_get_emails_marks_self_sent_and_pending_reply_threads(
+    client: AsyncClient, db_session
+):
+    class MailTenantConfig:
+        smtp_username = "Me <testuser@example.com>"
+        imap_username = None
+
+    sent_waiting = Email(
+        id=10,
+        user_id="testuser",
+        message_id="waiting-msg",
+        thread_id="waiting-thread",
+        sender="Test User <testuser@example.com>",
+        recipients="target@example.com",
+        subject="Can you confirm?",
+        date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    self_note = Email(
+        id=11,
+        user_id="testuser",
+        message_id="note-msg",
+        thread_id="note-thread",
+        sender="testuser@example.com",
+        recipients="testuser@example.com",
+        subject="Note to self",
+        date=datetime.datetime(2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Summarize this as knowledge.",
+    )
+    db_session.tenant_config = MailTenantConfig()
+    db_session.items = [self_note, sent_waiting]
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
+    assert by_thread["waiting-thread"]["requires_reply"] is True
+    assert by_thread["waiting-thread"]["is_self_sent"] is False
+    assert by_thread["note-thread"]["is_self_sent"] is True
+    assert by_thread["note-thread"]["requires_reply"] is False
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_get_emails_reply_tracking_real_postgres_smoke():
+    from core.config import settings
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
+    from db.models import Base, TenantConfig
+    from db.session import get_db
+    from sqlalchemy import delete, text
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+    except (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+        OperationalError,
+        OSError,
+    ) as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = "reply-smoke-user"
+    organization_id = "reply-smoke-org"
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    async def cleanup_seed_rows():
+        async with Session() as session:
+            await session.execute(delete(Email).where(Email.user_id == user_id))
+            await session.execute(
+                delete(TenantConfig).where(TenantConfig.user_id == user_id)
+            )
+            await session.commit()
+
+    await cleanup_seed_rows()
+    async with Session() as session:
+        session.add(
+            TenantConfig(
+                user_id=user_id,
+                smtp_username="Smoke User <reply-smoke@example.com>",
+                imap_username=None,
+            )
+        )
+        session.add_all(
+            [
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="waiting-smoke-msg",
+                    thread_id="<waiting-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Can you confirm?",
+                    date=now - datetime.timedelta(days=3),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="note-smoke-msg",
+                    thread_id="note-smoke-thread",
+                    sender="reply-smoke@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Note to self",
+                    date=now - datetime.timedelta(days=2),
+                    body="Organize this as knowledge.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answered-smoke-msg",
+                    thread_id="<answered-smoke-thread>",
+                    sender="reply-smoke@example.com",
+                    recipients="target@example.com",
+                    subject="Answered",
+                    date=now - datetime.timedelta(days=1, hours=1),
+                    body="Please reply when you can.",
+                ),
+                Email(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    message_id="answer-smoke-msg",
+                    thread_id="answered-smoke-thread",
+                    sender="target@example.com",
+                    recipients="reply-smoke@example.com",
+                    subject="Re: Answered",
+                    date=now - datetime.timedelta(days=1),
+                    body="Confirmed.",
+                ),
+            ]
+        )
+        await session.commit()
+
+    async def real_db_override():
+        async with Session() as session:
+            yield session
+
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = real_db_override
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            headers={
+                "X-User-Id": user_id,
+                "X-Organization-Id": organization_id,
+            },
+            base_url="http://test",
+        ) as real_client:
+            inbox_response = await real_client.get("/api/emails?limit=10")
+            pending_response = await real_client.get("/api/emails/pending-replies")
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+        await cleanup_seed_rows()
+        await engine.dispose()
+
+    assert inbox_response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in inbox_response.json()["emails"]}
+    assert by_thread["waiting-smoke-thread"]["requires_reply"] is True
+    assert by_thread["note-smoke-thread"]["is_self_sent"] is True
+    assert by_thread["answered-smoke-thread"]["requires_reply"] is False
+
+    assert pending_response.status_code == 200
+    pending_threads = {
+        item["thread_id"] for item in pending_response.json()["emails"]
+    }
+    assert pending_threads == {"waiting-smoke-thread"}
 
 
 @pytest.mark.asyncio
@@ -235,9 +472,12 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
 
 
 @pytest.mark.asyncio
-async def test_get_email_thread_returns_chronological_order(client: AsyncClient, db_session):
+async def test_get_email_thread_returns_chronological_order(
+    client: AsyncClient, db_session
+):
     newer = Email(
         id=2,
+        user_id="testuser",
         message_id="newer-msg",
         thread_id="thread123",
         sender="newer@example.com",
@@ -248,6 +488,7 @@ async def test_get_email_thread_returns_chronological_order(client: AsyncClient,
     )
     older = Email(
         id=1,
+        user_id="testuser",
         message_id="older-msg",
         thread_id="thread123",
         sender="older@example.com",
@@ -283,15 +524,22 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
     ["/api/emails?limit=10", "/api/emails/1", "/api/emails/thread/thread123"],
 )
 async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path: str):
-    from api.emails import get_current_user as emails_get_current_user
+    from api.auth import AuthContext
+    from api.emails import get_auth_context as emails_get_auth_context
 
     calls = []
 
     async def auth_override():
         calls.append("hit")
-        return "authorized-user"
+        return AuthContext(
+            user_id="authorized-user",
+            role="member",
+            organization_id="authorized-org",
+            group_ids=(),
+            workspace_id="workspace-authorized-org",
+        )
 
-    app.dependency_overrides[emails_get_current_user] = auth_override
+    app.dependency_overrides[emails_get_auth_context] = auth_override
 
     response = await client.get(path)
 
@@ -299,10 +547,74 @@ async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path:
     assert calls == ["hit"]
 
 
+@pytest.mark.asyncio
+async def test_get_emails_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        "/api/emails?limit=10",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_by_id_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        f"/api/emails/{sample_email.id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_query_is_scoped_to_current_user(
+    client: AsyncClient, sample_email: Email
+):
+    from db.session import get_db
+
+    session = QueryCapturingSession([sample_email])
+    app.dependency_overrides[get_db] = lambda: session
+
+    response = await client.get(
+        f"/api/emails/thread/{sample_email.thread_id}",
+        headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+    )
+
+    assert response.status_code == 200
+    assert_query_is_owner_scoped(session.queries[-1])
+
+
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
-def test_send_email_endpoint(mock_send_email):
+def test_send_email_endpoint(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
+
+    validate_calls = []
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        validate_calls.append(resolve_host)
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 
@@ -319,6 +631,7 @@ def test_send_email_endpoint(mock_send_email):
 
     assert response.status_code == 200
     assert response.json() == {"status": "simulated", "simulated": True}
+    assert validate_calls == [True]
     mock_send_email.assert_called_once_with(
         "test@example.com",
         "Re: Test",
@@ -330,6 +643,44 @@ def test_send_email_endpoint(mock_send_email):
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
     )
+
+
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_config(
+    mock_send_email, monkeypatch, sample_email
+):
+    from main import app
+    from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
+    session = ScalarQueryCapturingSession([sample_email])
+
+    async def tenant_db():
+        yield session
+
+    app.dependency_overrides[get_db] = tenant_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send?user_id=victim-user",
+            json={
+                "to": "test@example.com",
+                "subject": "Re: Test",
+                "body": "This is a reply.",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert compiled_query_params(session.scalar_queries[-1])["user_id_1"] == "testuser"
+    mock_send_email.assert_called_once()
 
 
 def test_send_email_endpoint_preserves_configuration_error(sample_email):
@@ -358,10 +709,52 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
     assert response.json() == {"detail": "SMTP is not configured"}
 
 
-@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
-def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
+@patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email):
     from main import app
     from fastapi.testclient import TestClient
+    from db.session import get_db
+
+    class UnsafeTenantConfig(MockTenantConfig):
+        def __init__(self):
+            super().__init__()
+            self.smtp_server = "127.0.0.1"
+            self.smtp_port = 587
+
+    async def unsafe_smtp_db():
+        yield MockSession([], tenant_config=UnsafeTenantConfig())
+
+    app.dependency_overrides[get_db] = unsafe_smtp_db
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        response = client.post(
+            "/api/emails/send",
+            json={
+                "to": "test@example.com",
+                "subject": "Test",
+                "body": "Body",
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "SMTP server is not allowed" in response.json()["detail"]
+    mock_send_email.assert_not_called()
+
+
+@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
+def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeypatch):
+    from main import app
+    from fastapi.testclient import TestClient
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        assert resolve_host is True
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
 
@@ -377,3 +770,62 @@ def test_send_email_endpoint_rejects_failed_send_status(mock_send_email):
     assert response.status_code == 500
     assert response.json() == {"detail": "Failed to send email"}
     mock_send_email.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_pending_replies(client: AsyncClient, db_session):
+    from main import app
+    from db.session import get_db
+
+    # Create MockTenantConfig with smtp_username set to match one email
+    class SentTenantConfig:
+        smtp_username = "testuser@example.com"
+        imap_username = None
+        
+    db_session.tenant_config = SentTenantConfig()
+
+    sent_email = Email(
+        id=3,
+        user_id="testuser",
+        message_id="msg3",
+        thread_id="thread3",
+        sender="testuser@example.com",
+        recipients="target@example.com",
+        subject="Did you get this?",
+        date=datetime.datetime(2026, 4, 28, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    answered_sent_email = Email(
+        id=4,
+        user_id="testuser",
+        message_id="msg4",
+        thread_id="thread4",
+        sender="testuser@example.com",
+        recipients="target@example.com",
+        subject="Answered thread",
+        date=datetime.datetime(2026, 4, 28, 9, 0, tzinfo=datetime.timezone.utc),
+        body="Please reply when you can.",
+    )
+    external_reply = Email(
+        id=5,
+        user_id="testuser",
+        message_id="msg5",
+        thread_id="thread4",
+        sender="target@example.com",
+        recipients="testuser@example.com",
+        subject="Re: Answered thread",
+        date=datetime.datetime(2026, 4, 28, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Confirmed.",
+    )
+    
+    db_session.items = [sent_email, answered_sent_email, external_reply]
+
+    app.dependency_overrides[get_db] = lambda: db_session
+
+    response = await client.get("/api/emails/pending-replies")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["emails"]) == 1
+    assert data["emails"][0]["sender"] == "testuser@example.com"
+    assert data["emails"][0]["thread_id"] == "thread3"
+    assert data["emails"][0]["requires_reply"] is True

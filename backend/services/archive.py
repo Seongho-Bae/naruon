@@ -1,6 +1,7 @@
 import asyncio
 import zipfile
 from pathlib import Path
+from zipfile import ZipInfo
 
 from .exceptions import (
     InvalidArchiveError,
@@ -10,6 +11,36 @@ from .exceptions import (
 
 MAX_EXTRACT_SIZE = 10 * 1024 * 1024 * 1024  # 10 GB
 MAX_FILE_COUNT = 100000
+ZIP_UNIX_FILE_TYPE_MASK = 0o170000
+ZIP_UNIX_SYMLINK_TYPE = 0o120000
+
+
+def _is_zipinfo_symlink(info: ZipInfo) -> bool:
+    return (info.external_attr >> 16) & ZIP_UNIX_FILE_TYPE_MASK == ZIP_UNIX_SYMLINK_TYPE
+
+
+def _resolve_safe_archive_member(output_dir: Path, info: ZipInfo) -> Path:
+    normalized_name = info.filename.replace("\\", "/")
+    if (
+        not normalized_name
+        or normalized_name.startswith("/")
+        or _is_zipinfo_symlink(info)
+    ):
+        raise InvalidArchiveError("Unsafe archive path")
+
+    parts = normalized_name.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise InvalidArchiveError("Unsafe archive path")
+    if parts and parts[0].endswith(":"):
+        raise InvalidArchiveError("Unsafe archive path")
+
+    target_path = output_dir.joinpath(*parts).resolve(strict=False)
+    try:
+        target_path.relative_to(output_dir)
+    except ValueError as exc:
+        raise InvalidArchiveError("Unsafe archive path") from exc
+
+    return target_path
 
 
 def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
@@ -53,21 +84,7 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
                         f"Archive exceeds maximum allowed file count of {MAX_FILE_COUNT}."
                     )
 
-                # Sanitize path to prevent traversal
-                parts = [
-                    p
-                    for p in info.filename.replace("\\", "/").split("/")
-                    if p not in ("", ".", "..")
-                ]
-                if not parts:
-                    continue
-                safe_name = "/".join(parts)
-
-                target_path = (output_dir / safe_name).resolve()
-
-                # Double-check that it is within output_dir
-                if not str(target_path).startswith(str(output_dir)):
-                    continue
+                target_path = _resolve_safe_archive_member(output_dir, info)
 
                 target_path.parent.mkdir(parents=True, exist_ok=True)
 

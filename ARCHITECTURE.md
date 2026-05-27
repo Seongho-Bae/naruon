@@ -4,15 +4,38 @@
 
 ```mermaid
 flowchart LR
-  UI[Next.js frontend] --> API[FastAPI backend]
+  UI[Next.js frontend] --> API[FastAPI backend / Naruon control plane]
   API --> DB[(Postgres + pgvector)]
   API --> LLM[OpenAI APIs when configured]
-  API --> SMTP[SMTP when configured]
+  API --> CONN[Outbound-only self-hosted connector]
+  CONN --> MAIL[Customer IMAP/POP3/SMTP]
+  CONN --> DAV[Customer CalDAV/CardDAV/WebDAV]
+  API --> SMTP[Direct SMTP only when operator-allowed]
 ```
 
 The backend owns persistence, threading, search, AI summaries, and outbound
 send orchestration. The frontend consumes the backend contracts and renders
 inbox, detail, thread history, reply composer, and network graph surfaces.
+Runtime database connectivity is secret-injected: `backend/core/config.py` has
+no fallback `DATABASE_URL`, so missing database configuration fails at startup
+rather than silently using shared development credentials.
+
+## Workspace navigation boundary
+
+The Next.js shell opens the Today execution dashboard for first-run sessions and
+lets users explicitly choose Dashboard, Email, or Calendar as their startup
+surface. The primary and mobile menus expose Mail, Calendar, Tasks, Projects,
+Context Search, AI Hub, Data, Security, and Settings as navigable workspace
+destinations, with the tablet/mobile drawer carrying the same global navigation
+matrix as the desktop shell. The `/mail`, `/search`, `/calendar`, `/tasks`,
+`/projects`, `/ai-hub`, `/data`, `/security`, and `/settings` pages are honest
+scope and control-plane surfaces with actionable detail states: CalDAV
+month/week/detail/coordination and writeback queues, source-linked task boards,
+integrated search results with graph/timeline context, project decision logs,
+document repository/ingestion/embedding/quality queues, security policy/audit
+surfaces, and operational settings. They expose source-of-truth, duplicate
+import/thread provenance, and RBAC/ABAC boundaries without pretending provider
+writeback or enterprise identity integrations are fully implemented.
 
 ## Threading boundary
 
@@ -23,10 +46,63 @@ documented in `docs/threading-contract.md`.
 
 ## Data and tenancy boundary
 
-The current `emails` table does not have an owner/mailbox key. Email and
-search behavior should therefore be treated as single-user local-development
-behavior. Multi-user production safety requires a schema migration that adds
-mailbox ownership and applies that filter to every email/search query.
+The `emails` table has non-null `user_id` and `organization_id` owner keys, and
+the current email list, detail, thread, search, and network graph endpoints scope
+their queries to the authenticated user plus organization. Fresh local databases
+get these columns from SQLAlchemy metadata; existing local databases get them
+through `scripts/bootstrap_db.py`, which fails closed when legacy rows lack owner
+scope unless explicit non-default `NARUON_IMPORT_USER_ID` and
+`NARUON_IMPORT_ORGANIZATION_ID` values are provided for the backfill. Production
+multi-user safety still requires an audited migration and backfill that maps
+historical rows to verified mailbox owners and organizations before real tenant
+data is mixed in one database.
+
+`message_id` is unique only within the `(user_id, organization_id)` owner scope,
+not globally. Fixture import upserts and reply-thread lookup use the same owner
+scope so a reused RFC Message-ID from another organization cannot overwrite an
+email row or attach a reply to another tenant's thread.
+
+`llm_providers` is also owner-scoped. Provider rows carry non-null `user_id` and
+`organization_id`, provider names are unique only within an organization, and the
+registry/list/update/delete plus prompt-preview provider selection paths filter by
+the authenticated organization. Existing local databases get the same fail-closed
+owner backfill through `scripts/bootstrap_db.py`; legacy provider rows require
+explicit non-default `NARUON_IMPORT_USER_ID` and `NARUON_IMPORT_ORGANIZATION_ID`
+before bootstrap will set the new columns non-null.
+
+`ticket_tasks` stores email-derived execution items as ticket-like work records.
+The table and its new columns use at least two-word `snake_case` database names
+such as `task_id`, `task_title`, `status_code`, `priority_code`, `email_id`, and
+`thread_id`. The integer `task_id` stays an internal database surrogate; API
+responses use the opaque `task_uid` as their public id and expose source message
+provenance instead of private foreign keys. Task creation from email always
+checks the source email owner scope, copies the canonical thread provenance, and
+strips NUL bytes from titles before persistence so malformed LLM/email-derived
+strings cannot break PostgreSQL text writes. Because task titles are plain text,
+the backend rejects encoded, malformed, or direct HTML-like execution item markup
+before storage instead of returning stored tags to a future rendering surface.
+Parsed email body/subject, address, and attachment display text strips active
+HTML/script markup at the parser boundary while preserving message/thread
+identifiers and angle-address headers separately.
+
+Customer-owned mail, CalDAV/CardDAV, and WebDAV systems remain the durable
+source-of-truth. Naruon can cache/index metadata and generate writeback intents,
+but provider writes must use server-authoritative source records, ownership
+checks, and conflict-aware provider revisions such as ETag/If-Match. The detailed
+contract is documented in
+`docs/operations/source-of-truth-and-writeback-sovereignty.md`.
+Frontend calendar actions follow the same boundary: `EmailDetail` requests
+`/api/calendar/writeback-intent` per extracted execution item and reports source
+provenance, while legacy `/api/calendar/sync` remains fail-closed unless a
+trusted backend credential dependency supplies an authorized provider token.
+
+Authorization is RBAC plus ABAC with deny precedence. Data-region, consent,
+workspace, group, source capability, and customer-policy denies still override
+broad roles. The narrow exception is an explicitly RBAC-permitted
+`platform_admin`: that role may cross organization and resource ownership
+boundaries in the pure access-policy evaluator for platform operations, but it
+does not bypass data-region or consent denies; see
+`docs/operations/auth-key-management.md`.
 
 ## Local deployment boundary
 
@@ -43,22 +119,48 @@ message payload. Local/dev behavior is explicit: missing SMTP config returns a
 400, and simulated send results are marked with `simulated: true` rather than
 described as real delivery.
 
+Tenant-provided SMTP destinations are not a general outbound socket primitive.
+`backend/api/tenant_config.py`, `backend/api/emails.py`, and the final
+`backend/services/email_client.py` network sink enforce the operator-controlled
+`ALLOWED_SMTP_HOSTS` and `ALLOWED_SMTP_PORTS` allowlists. The service also
+rejects loopback, link-local, private, reserved, and otherwise non-global DNS
+answers before opening a pinned socket to the selected global address, so stale
+database rows or direct service calls fail closed instead of reaching internal
+network targets or re-resolving DNS after validation.
+
+Private-network IMAP/SMTP/CalDAV/CardDAV/WebDAV access belongs behind the
+outbound-only self-hosted connector boundary. GitHub self-hosted runners can
+smoke-test internal mail connectivity, but production relay/proxy access should
+use a connector artifact and never imply inbound MX hosting.
+
+LLM provider `base_url` is also a server-side egress boundary, not an arbitrary
+URL field. Provider registry create/update paths are organization-admin scoped,
+and LLM call sinks validate custom OpenAI-compatible base URLs with HTTPS-only
+syntax, no userinfo/query or fragment, exact host membership in
+`ALLOWED_LLM_BASE_URL_HOSTS`, and DNS answers that are all globally routable.
+Missing allowlist configuration fails closed; the default provider path should
+leave `base_url` unset.
+
 ## CI security boundary
 
 The Strix workflow treats pull request code as untrusted whenever repository
 secrets are available. Privileged PR scans run from `pull_request_target`,
 materialize only trusted base content for workflow scripts and dependencies via
 the GitHub API, fetch the pull request head as Git objects, and copy changed
-PR-head blobs into temporary scan scopes before invoking Strix. Do not checkout
-or execute pull request branch scripts in the privileged Strix job.
+PR-head blobs into temporary scan scopes before invoking Strix. When a changed
+file is also included as backend context for another batch, the scope still uses
+the PR-head blob rather than trusted-base content, so a security fix is not
+re-scanned against stale vulnerable context. Do not checkout or execute pull
+request branch scripts in the privileged Strix job.
 
 The gate fails closed when a changed PR-head blob cannot be validated or copied;
 it must never fall back to scanning trusted-base content for a modified PR path.
 Pull request scans split scoped changed files into small bounded batches before
 the timeout-driven rebalance path, so large PRs do not spend the whole required
 check budget on one oversized Strix invocation. Strix remains a required
-Medium-or-higher gate, while third-party LLM/provider warnings are tracked
-separately unless they make the scan incomplete.
+Medium-or-higher gate. The workflow uses GitHub Models through `models: read`,
+the OpenAI-compatible GitHub Models endpoint, and an OpenAI GPT-5-or-newer
+model; non-GPT-5 provider fallbacks are not valid PR evidence for this gate.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
 
@@ -72,12 +174,60 @@ SMTP/IMAP providers as documented in
 the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
-Authentication still uses trusted request headers in local/dev, but the backend
-now normalizes them into an auth context with `platform_admin`,
-`organization_admin`, `group_admin`, and `member` roles plus optional
-organization/group scope. This preserves the current `X-User-Id` development
-flow while preparing the backend for future Keycloak/Casdoor claims and
-organization-scoped resources that should not assume one workspace per user; see
-`docs/operations/auth-key-management.md`. The current Kubernetes ingress assumes
-NGINX, while Traefik is only an evaluated option in
+Authentication does not treat public `X-User-*`, `X-Organization-*`,
+`X-Group-*`, or `X-Dev-Auth-Token` headers as identity material. The runtime
+FastAPI dependency in `backend/api/auth.py` accepts only `Authorization: Bearer`
+compact session tokens whose protected header pins `alg=HS256` and whose
+`header.payload` signing input is signed by the configured
+`AUTH_SESSION_HMAC_SECRET`; missing, weak, malformed, legacy two-segment,
+wrong-algorithm, tampered, expired, or public fixture-secret tokens fail closed
+with 401. The signed session envelope must carry explicit identity, role,
+organization/group, and workspace claims, so user ids such as `admin` do not
+imply elevated privileges.
+Endpoint tests use FastAPI dependency overrides for fixture identity only through
+explicit opt-in pytest fixtures, while a full Keycloak/Casdoor/OIDC provider and
+audited mailbox-owner migration remain required before production multi-user
+access is claimed; see `docs/operations/auth-key-management.md`. The current
+Kubernetes ingress assumes NGINX, while Traefik is only an evaluated option in
 `docs/operations/traefik-evaluation.md`.
+
+Private `/api/*` routers are also registered in `backend/main.py` with the
+default `get_auth_context` dependency so newly added private endpoints inherit a
+signed-session requirement before endpoint-specific user, organization, role, or
+resource checks run. `/api/runtime-config`, `/`, and `/metrics` remain public
+because they expose only non-secret runtime/health metadata. LLM provider
+registry reads and writes are organization/platform admin operations; members use
+tenant-scoped configuration or approved AI workflows rather than provider
+inventory APIs. Provider rows remain scoped to the authenticated organization for
+ordinary provider registry operations and prompt-preview model selection. Custom
+provider endpoints additionally require an operator-owned egress allowlist so an
+organization admin cannot point LLM traffic at localhost, private networks, or
+cloud metadata services.
+
+The browser API client reads `naruon_session_token` from local storage and sends
+it as the bearer session on signed routes. It does not synthesize or forward
+public identity headers such as `X-User-Id`, `X-Organization-Id`, `X-Group-Id`,
+`X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`; any local development
+identity-header flow is limited to explicit unsigned/test harness paths and is
+not accepted by authenticated runtime dependencies. UI flows that create
+source-linked tasks or other server-side writes must keep that signed-session
+path covered in fast tests and E2E mocks so authenticated backend behavior is
+not masked by stale fixtures.
+Caller-supplied `Authorization` headers are dropped before the stored signed
+session is applied, so browser code cannot shadow the bearer token with a
+case-variant header.
+
+Secret-field encryption has no code fallback key. `backend/db/models.py` requires
+an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,
+OpenAI, SMTP, IMAP, Google, and runner registration token fields, even in debug
+mode. Invalid passphrase-style keys fail closed instead of being transformed into
+derived keys. Decryption failures return `None` rather than ciphertext, so routes
+that touch encrypted values must surface operator-facing missing-key or
+unavailable-secret behavior without exposing encrypted blobs.
+
+Calendar writeback intent selection is server-authoritative. The
+`/api/calendar/writeback-intent` request may specify an action and optional
+target source id, but it must not provide source ownership or capability records;
+`backend/api/calendar.py` obtains writeback sources through a FastAPI dependency
+that is empty by default until a connector/source registry supplies trusted
+records scoped to the authenticated user.

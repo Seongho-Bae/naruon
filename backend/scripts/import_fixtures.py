@@ -20,6 +20,8 @@ from sqlalchemy import select
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+IMPORT_USER_ID = os.environ.get("NARUON_IMPORT_USER_ID", "default")
+IMPORT_ORGANIZATION_ID = os.environ.get("NARUON_IMPORT_ORGANIZATION_ID", "default")
 
 
 async def process_zip_file(zip_path: str | Path, session: AsyncSession):
@@ -41,8 +43,16 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
             embedding = None
             if chunks:
                 try:
-                    tenant_config = await session.scalar(select(TenantConfig).where(TenantConfig.user_id == "default"))
-                    api_key = (tenant_config.openai_api_key if tenant_config and tenant_config.openai_api_key else os.getenv("OPENAI_API_KEY")) or ""
+                    tenant_config = await session.scalar(
+                        select(TenantConfig).where(
+                            TenantConfig.user_id == IMPORT_USER_ID
+                        )
+                    )
+                    api_key = (
+                        tenant_config.openai_api_key
+                        if tenant_config and tenant_config.openai_api_key
+                        else os.getenv("OPENAI_API_KEY")
+                    ) or ""
                     embeddings = await generate_embeddings([chunks[0]], api_key)
                     if embeddings:
                         embedding = embeddings[0]
@@ -52,9 +62,16 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     )
 
             # Upsert into database
-            thread_id = await assign_thread_id(session, email_data)
-            
+            thread_id = await assign_thread_id(
+                session,
+                email_data,
+                user_id=IMPORT_USER_ID,
+                organization_id=IMPORT_ORGANIZATION_ID,
+            )
+
             stmt = insert(Email).values(
+                user_id=IMPORT_USER_ID,
+                organization_id=IMPORT_ORGANIZATION_ID,
                 message_id=email_data["message_id"],
                 sender=email_data["sender"],
                 reply_to=email_data.get("reply_to"),
@@ -68,7 +85,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 embedding=embedding,
             )
             stmt = stmt.on_conflict_do_update(
-                index_elements=["message_id"],
+                index_elements=["user_id", "organization_id", "message_id"],
                 set_=dict(
                     sender=stmt.excluded.sender,
                     reply_to=stmt.excluded.reply_to,
@@ -77,6 +94,8 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     in_reply_to=stmt.excluded.in_reply_to,
                     references=stmt.excluded.references,
                     thread_id=stmt.excluded.thread_id,
+                    user_id=stmt.excluded.user_id,
+                    organization_id=stmt.excluded.organization_id,
                     date=stmt.excluded.date,
                     body=stmt.excluded.body,
                     embedding=stmt.excluded.embedding,

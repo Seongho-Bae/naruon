@@ -12,6 +12,8 @@ from db.session import AsyncSessionLocal
 
 
 THREAD_ID = "<live-e2e-root@example.test>"
+LIVE_E2E_USER_ID = "testuser"
+LIVE_E2E_ORGANIZATION_ID = "org-acme"
 MESSAGE_IDS = [
     "<live-e2e-root@example.test>",
     "<live-e2e-reply@example.test>",
@@ -24,6 +26,8 @@ async def seed_live_data() -> None:
         session.add_all(
             [
                 Email(
+                    user_id=LIVE_E2E_USER_ID,
+                    organization_id=LIVE_E2E_ORGANIZATION_ID,
                     message_id=MESSAGE_IDS[0],
                     thread_id=THREAD_ID,
                     sender="ops@example.test",
@@ -34,6 +38,8 @@ async def seed_live_data() -> None:
                     embedding=[0.0] * 1536,
                 ),
                 Email(
+                    user_id=LIVE_E2E_USER_ID,
+                    organization_id=LIVE_E2E_ORGANIZATION_ID,
                     message_id=MESSAGE_IDS[1],
                     thread_id=THREAD_ID,
                     sender="swe@example.test",

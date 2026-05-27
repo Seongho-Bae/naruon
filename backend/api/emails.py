@@ -5,10 +5,16 @@ from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
-from services.email_client import send_email
+from services.email_client import send_email, validate_smtp_destination
+from services.reply_tracking_service import (
+    check_missing_replies,
+    configured_email_addresses,
+    message_is_self_sent,
+    thread_requires_reply,
+)
 from services.threading_service import normalize_message_id
 import logging
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +34,15 @@ def thread_lookup_values(thread_id: str) -> list[str]:
     return list({thread_id, normalized, f"<{normalized}>"})
 
 
+def email_owner_filters(auth_context: AuthContext):
+    organization_filter = (
+        Email.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else Email.organization_id.is_(None)
+    )
+    return (Email.user_id == auth_context.user_id, organization_filter)
+
+
 class EmailListItem(BaseModel):
     id: int
     thread_id: str | None = None
@@ -37,6 +52,11 @@ class EmailListItem(BaseModel):
     date: datetime.datetime
     snippet: str
     reply_count: int | None = None
+    has_draft: bool = False
+    is_self_sent: bool = False
+    requires_reply: bool = False
+    schedule_conflict: bool = False
+
 
 class EmailDetailResponse(BaseModel):
     id: int
@@ -50,25 +70,36 @@ class EmailDetailResponse(BaseModel):
     body: str
     in_reply_to: str | None = None
     references: str | None = None
+    requires_reply: bool = False
+    schedule_conflict: bool = False
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
 async def get_emails(
     limit: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
+    tenant_config = await db.scalar(
+        select(TenantConfig).where(TenantConfig.user_id == auth_context.user_id)
+    )
+    user_addresses = configured_email_addresses(tenant_config)
     candidate_window = min(max(limit * 10, 200), 2000)
     result = await db.execute(
-        select(Email).order_by(Email.date.desc()).limit(candidate_window)
+        select(Email)
+        .where(*email_owner_filters(auth_context))
+        .order_by(Email.date.desc())
+        .limit(candidate_window)
     )
     emails = result.scalars().all()
     emails = sorted(emails, key=lambda item: item.date)
 
     grouped = {}
     reply_counts = {}
+    thread_messages = {}
     for email in emails:
         group_key = canonical_thread_key(email)
+        thread_messages.setdefault(group_key, []).append(email)
         if group_key not in grouped:
             grouped[group_key] = email
             reply_counts[group_key] = 1
@@ -93,6 +124,39 @@ async def get_emails(
                 snippet=snippet,
                 thread_id=group_key,
                 reply_count=reply_counts[group_key],
+                is_self_sent=message_is_self_sent(email, user_addresses),
+                requires_reply=thread_requires_reply(
+                    thread_messages[group_key], user_addresses
+                ),
+            )
+        )
+    return {"emails": items}
+
+
+@router.get("/pending-replies", response_model=dict[str, list[EmailListItem]])
+async def get_pending_replies(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    pending_emails = await check_missing_replies(
+        db, auth_context.user_id, auth_context.organization_id
+    )
+    items = []
+    for email in pending_emails[:limit]:
+        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
+        items.append(
+            EmailListItem(
+                id=email.id,
+                subject=email.subject,
+                sender=email.sender,
+                reply_to=email.reply_to,
+                date=email.date,
+                snippet=snippet,
+                thread_id=canonical_thread_key(email),
+                reply_count=None,
+                is_self_sent=False,
+                requires_reply=True,
             )
         )
     return {"emails": items}
@@ -102,9 +166,11 @@ async def get_emails(
 async def get_email(
     email_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    result = await db.execute(select(Email).where(Email.id == email_id))
+    result = await db.execute(
+        select(Email).where(Email.id == email_id, *email_owner_filters(auth_context))
+    )
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
@@ -123,16 +189,23 @@ async def get_email(
     )
 
 
-@router.get("/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]])
+@router.get(
+    "/thread/{thread_id:path}", response_model=dict[str, list[EmailDetailResponse]]
+)
 async def get_email_thread(
     thread_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
-        .where(or_(Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)))
+        .where(
+            *email_owner_filters(auth_context),
+            or_(
+                Email.thread_id.in_(lookup_values), Email.message_id.in_(lookup_values)
+            ),
+        )
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
@@ -164,22 +237,29 @@ class SendEmailRequest(BaseModel):
     to: EmailStr
     subject: str
     body: str
-    in_reply_to: str | None = None # O3: email threading support
+    in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
 
 
 @router.post("/send")
 async def send_email_endpoint(
-    request: SendEmailRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)
+    request: SendEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: str = Depends(get_current_user),
 ):
-    if user_id and user_id != current_user:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = current_user
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
-        
-        if not tenant_config or not tenant_config.smtp_server or not tenant_config.smtp_port or not tenant_config.smtp_username:
+        tenant_config = await db.scalar(
+            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        )
+
+        if (
+            not tenant_config
+            or not tenant_config.smtp_server
+            or not tenant_config.smtp_port
+            or not tenant_config.smtp_username
+        ):
             raise HTTPException(status_code=400, detail="SMTP is not configured")
 
         try:
@@ -187,17 +267,23 @@ async def send_email_endpoint(
             smtp_port = tenant_config.smtp_port
             smtp_username = tenant_config.smtp_username
             smtp_password = tenant_config.smtp_password
+            validate_smtp_destination(smtp_server, smtp_port)
         except Exception as exc:
             if "ENCRYPTION_KEY is required" in str(exc):
                 raise HTTPException(
                     status_code=503,
-                    detail="Server encryption key is not configured. Contact your workspace administrator.",
+                    detail=(
+                        "Server encryption key is not configured. "
+                        "Contact your workspace administrator."
+                    ),
                 ) from exc
+            if isinstance(exc, ValueError):
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             raise
-        
+
         send_result = await send_email(
-            request.to, 
-            request.subject, 
+            request.to,
+            request.subject,
             request.body,
             smtp_server=smtp_server,
             smtp_port=smtp_port,

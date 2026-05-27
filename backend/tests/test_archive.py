@@ -2,7 +2,6 @@ import os
 import zipfile
 import pytest
 import asyncio
-from pathlib import Path
 
 from services.archive import extract_backup, extract_backup_async
 from services.exceptions import (
@@ -68,15 +67,50 @@ def test_extract_backup_malformed_path(tmp_path):
         # Create a file with a relative path trying to escape directory
         z.writestr("../malformed.eml", b"Subject: Malformed Email")
 
-    out_dir = tmp_path / "output"
-    extracted_files = extract_backup(zip_path, out_dir)
+    with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
+        extract_backup(zip_path, tmp_path / "output")
 
-    assert len(extracted_files) == 1
-    assert extracted_files[0].name == "malformed.eml"
-    assert ".." not in str(extracted_files[0])
-    for f in extracted_files:
-        assert f.exists()
-        assert f.is_file()
+    assert not (tmp_path / "malformed.eml").exists()
+
+
+def test_extract_backup_rejects_absolute_path(tmp_path):
+    zip_path = tmp_path / "absolute.zip"
+    escaped_path = tmp_path / "absolute-escape.eml"
+    with zipfile.ZipFile(zip_path, "w") as z:
+        z.writestr(str(escaped_path), b"Subject: Absolute Email")
+
+    with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
+        extract_backup(zip_path, tmp_path / "output")
+
+    assert not escaped_path.exists()
+
+
+def test_extract_backup_rejects_symlink_zip_entry(tmp_path):
+    zip_path = tmp_path / "symlink.zip"
+    with zipfile.ZipFile(zip_path, "w") as z:
+        link_info = zipfile.ZipInfo("folder/link_to_tmp")
+        link_info.create_system = 3
+        link_info.external_attr = 0o120000 << 16
+        z.writestr(link_info, "../..")
+
+    with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
+        extract_backup(zip_path, tmp_path / "output")
+
+
+def test_extract_backup_rejects_preexisting_symlink_escape(tmp_path):
+    zip_path = tmp_path / "preexisting-symlink.zip"
+    out_dir = tmp_path / "output"
+    outside_dir = tmp_path / "outside"
+    out_dir.mkdir()
+    outside_dir.mkdir()
+    os.symlink(outside_dir, out_dir / "link")
+    with zipfile.ZipFile(zip_path, "w") as z:
+        z.writestr("link/escaped.eml", b"Subject: Escaped Email")
+
+    with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
+        extract_backup(zip_path, out_dir)
+
+    assert not (outside_dir / "escaped.eml").exists()
 
 
 def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):

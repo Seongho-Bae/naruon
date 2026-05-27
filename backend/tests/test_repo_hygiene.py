@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -21,6 +20,29 @@ def test_compose_externalizes_postgres_credentials():
     assert "${POSTGRES_DB" in compose
     assert "${POSTGRES_USER" in compose
     assert "${POSTGRES_PASSWORD" in compose
+
+
+def test_postgres_ha_compose_requires_external_postgres_password():
+    compose = (REPO_ROOT / "docker-compose.postgres-ha.yml").read_text()
+
+    assert "POSTGRES_PASSWORD:-postgres" not in compose
+    assert "${POSTGRES_PASSWORD:?" in compose
+
+
+def test_kubernetes_backend_database_url_comes_from_secret():
+    manifest = (REPO_ROOT / "k8s" / "backend-deployment.yaml").read_text()
+
+    assert "postgres:postgres@" not in manifest
+    assert "secretKeyRef" in manifest
+    assert "DATABASE_URL" in manifest
+
+
+def test_kubernetes_postgres_password_comes_from_secret():
+    manifest = (REPO_ROOT / "k8s" / "db-statefulset.yaml").read_text()
+
+    assert "name: POSTGRES_PASSWORD\n          value: postgres" not in manifest
+    assert "secretKeyRef" in manifest
+    assert "POSTGRES_PASSWORD" in manifest
 
 
 def test_env_example_documents_required_postgres_password():

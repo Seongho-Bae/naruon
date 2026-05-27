@@ -50,7 +50,86 @@ Content-Type: text/html; charset="utf-8"
 
     try:
         parsed = parse_eml(temp_path)
-        assert "<p>This is HTML content</p>" in parsed["body"]
+        assert parsed["body"] == "This is HTML content"
+    finally:
+        os.unlink(temp_path)
+
+
+def test_parse_eml_strips_active_html_from_display_fields():
+    eml_content = b"""Message-ID: <xss@test.com>
+From: Attacker <attacker@example.com>
+To: recipient@test.com
+Subject: <img src=x onerror=alert('subject')>Launch
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+Content-Type: text/html; charset="utf-8"
+
+<html><body>Hello<script>alert('body')</script><img src=x onerror=alert('body')></body></html>"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["subject"] == "Launch"
+        assert parsed["body"] == "Hello"
+        assert "<" not in parsed["body"]
+        assert "script" not in parsed["body"].lower()
+        assert parsed["message_id"] == "<xss@test.com>"
+        assert parsed["sender"] == "Attacker <attacker@example.com>"
+    finally:
+        os.unlink(temp_path)
+
+
+def test_parse_eml_strips_active_html_from_address_display_fields():
+    eml_content = b"""Message-ID: <headers@test.com>
+From: "<img src=x onerror=alert(1)>" <attacker@example.com>
+To: "<script>alert(1)</script>" <recipient@test.com>
+Reply-To: "&lt;svg onload=alert(1)&gt;" <reply@test.com>
+Subject: Header display safety
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+
+Plain body"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["sender"] == "attacker@example.com"
+        assert parsed["recipients"] == "recipient@test.com"
+        assert parsed["reply_to"] == "reply@test.com"
+    finally:
+        os.unlink(temp_path)
+
+
+def test_parse_eml_strips_active_html_from_attachment_display_fields():
+    eml_content = b"""Message-ID: <attachment-xss@test.com>
+From: sender@test.com
+To: recipient@test.com
+Subject: Attachment display safety
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+Content-Type: multipart/mixed; boundary="mixed-boundary"
+
+--mixed-boundary
+Content-Type: text/plain; charset="utf-8"
+
+See attached.
+--mixed-boundary
+Content-Type: text/plain; charset="utf-8"
+Content-Disposition: attachment; filename="<img src=x onerror=alert(1)>.txt"
+
+<script>alert(1)</script>report
+--mixed-boundary--"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["attachments"] == [{"filename": ".txt", "content": "report"}]
     finally:
         os.unlink(temp_path)
 
@@ -93,6 +172,7 @@ Test."""
 def test_parse_eml_io_error():
     with pytest.raises(EmailParseError):
         parse_eml("/path/to/nonexistent/file.eml")
+
 
 def test_parse_eml_thread_id():
     # 1. Has References

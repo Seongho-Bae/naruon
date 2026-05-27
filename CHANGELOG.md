@@ -1,3 +1,70 @@
+## [Unreleased]
+
+### 수정
+- Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
+  global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
+  provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.
+- Seongho Bae (@seonghobae): task 제목 HTML 검출을 entity/comment/doctype/processing
+  instruction 우회까지 막도록 확장하고, email parser가 subject/body/attachment
+  display text에서 active HTML/script markup을 제거하도록 보강했습니다.
+- Seongho Bae (@seonghobae): email-derived task 제목을 plain text 경계로 고정해
+  `/api/tasks/from-email`이 HTML-like 실행 항목을 저장하지 않도록 거부하고,
+  공개 문서/테스트 fixture용 `AUTH_SESSION_HMAC_SECRET` 재사용을 설정과 runtime
+  검증 양쪽에서 차단했습니다.
+- Seongho Bae (@seonghobae): private backend API router들을 `get_auth_context`
+  signed-session dependency로 기본 등록하고, LLM provider registry 조회도
+  organization/platform admin 전용으로 제한해 인증 누락과 member-level provider
+  inventory 노출을 방지했습니다.
+- Seongho Bae (@seonghobae): frontend API client에서 `localStorage.naruon_dev_user`
+  기반 `X-User-Id` 개발용 header 주입을 제거하고, caller-provided public identity
+  headers를 strip하며, legacy 개발용 계정 스위처를 제거해 signed
+  `Authorization: Bearer` session 경로만 backend write/read에 쓰이도록
+  정리했습니다.
+- Seongho Bae (@seonghobae): runtime 인증 dependency에서 개발용 `X-User-*`,
+  `X-Organization-*`, `X-Group-*`, `X-Dev-Auth-Token` 헤더 인증 경로를
+  제거해, 배포 환경 변수 오설정만으로 공개 요청이 identity/role/scope를
+  위조하지 못하도록 fail-closed 처리했습니다.
+- Seongho Bae (@seonghobae): backend runtime 인증에 32바이트 이상
+  `AUTH_SESSION_HMAC_SECRET`으로 서명된 `Authorization: Bearer` compact
+  session envelope 검증을 추가하고 `alg=HS256` protected header를 고정해,
+  위조/만료/변조/wrong-algorithm token과 암시적 `admin` 권한 승격을 거부하도록
+  했습니다.
+- Seongho Bae (@seonghobae): Strix PR 스코프 배치가 변경된 backend context
+  파일을 다른 배치에서 포함할 때 trusted-base 사본이 아니라 PR-head blob을
+  스캔하도록 수정해, 보안 수정이 stale context로 다시 실패하지 않게 했습니다.
+- Seongho Bae (@seonghobae): backend 테스트의 개발용 인증 dependency override를
+  전역 autouse fixture에서 명시적 opt-in fixture로 좁혀, 실제 인증 경로 회귀가
+  테스트 우회에 가려지지 않도록 했습니다.
+- Seongho Bae (@seonghobae): 일반 PR Strix 스캔에서 scannable backend 파일과
+  무관한 비정규화 경로가 함께 들어와도 context 구성 자체가 실패하지 않도록
+  pull_request와 pull_request_target의 fail-closed 범위를 분리했습니다.
+- Seongho Bae (@seonghobae): `backend/db/models.py`의 하드코딩된 Fernet fallback
+  key를 제거하고, `DEBUG=true` 환경에서도 암호화 필드는 명시적인
+  `ENCRYPTION_KEY` 없이는 암·복호화하지 않도록 수정했습니다.
+- Seongho Bae (@seonghobae): 개발용 헤더 인증 경로를 production runtime에서
+  제거하고, `X-User-Id: admin`만으로 `organization_admin`이 되던 fallback을
+  제거했습니다.
+- Seongho Bae (@seonghobae): backend endpoint 테스트의 fixture identity를
+  production `build_auth_context()`가 아니라 명시적 pytest dependency override가
+  직접 만든 `AuthContext`로 분리했습니다.
+- Seongho Bae (@seonghobae): calendar writeback intent가 클라이언트 제공
+  source owner/capability metadata를 신뢰하지 않고 server-authoritative source
+  provider에서 선택하도록 바꿔 forged `owner_id` 기반 IDOR를 차단했습니다.
+- Seongho Bae (@seonghobae): calendar sync가 클라이언트 제공
+  `user_token`을 받지 않고 서버 권한 credential dependency에서만 Google
+  token을 받아 쓰도록 fail-closed 처리했습니다.
+- Seongho Bae (@seonghobae): `emails.user_id` / `emails.organization_id` owner
+  key와 bootstrap backfill을 추가하고 email list/detail/thread/search/network
+  graph 쿼리를 authenticated user와 organization으로 scope해 다른 사용자나 조직의
+  메일/검색/네트워크 그래프가 노출되지 않도록 했습니다.
+- Seongho Bae (@seonghobae): email `message_id` 중복/업서트/스레드 lookup을
+  owner+organization 범위로 제한해, 다른 조직의 동일 Message-ID가 기존 행을
+  덮어쓰거나 cross-tenant thread에 연결되지 않도록 했습니다.
+- Seongho Bae (@seonghobae): backend `DATABASE_URL`의 하드코딩된
+  `postgres:postgres` fallback을 제거하고, tenant SMTP outbound는 운영자가
+  명시한 `ALLOWED_SMTP_HOSTS`/`ALLOWED_SMTP_PORTS` allowlist와 private IP 차단을
+  통과한 pinned socket으로만 연결하도록 fail-closed 처리했습니다.
+
 ## [0.14.1] - 2026-05-13
 
 ### 수정

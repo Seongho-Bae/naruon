@@ -1,11 +1,153 @@
 from scripts.bootstrap_db import schema_backfill_sql
 
 
-def test_schema_backfill_adds_threading_columns_for_existing_tables():
+def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
+    monkeypatch.delenv("NARUON_IMPORT_USER_ID", raising=False)
+    monkeypatch.delenv("NARUON_IMPORT_ORGANIZATION_ID", raising=False)
+
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
-    assert any("alter table emails add column if not exists reply_to" in statement for statement in statements)
-    assert any("alter table emails add column if not exists thread_id" in statement for statement in statements)
-    assert any("alter table emails add column if not exists in_reply_to" in statement for statement in statements)
-    assert any("alter table emails add column if not exists \"references\"" in statement for statement in statements)
-    assert any("create index if not exists ix_emails_thread_id" in statement for statement in statements)
+    assert any(
+        "alter table emails add column if not exists reply_to" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table emails add column if not exists user_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table emails add column if not exists organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table emails add column if not exists thread_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table emails add column if not exists in_reply_to" in statement
+        for statement in statements
+    )
+    assert any(
+        'alter table emails add column if not exists "references"' in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_emails_user_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_emails_organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "drop index if exists ix_emails_message_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_emails_message_id" in statement
+        and "unique" not in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_emails_owner_message_id" in statement
+        for statement in statements
+    )
+    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any(
+        "update emails set organization_id" in statement for statement in statements
+    )
+    assert any(
+        "existing emails require explicit non-default" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_emails_thread_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table llm_providers add column if not exists user_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table llm_providers add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_llm_providers_organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "existing llm providers require explicit non-default" in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_llm_providers_org_name" in statement
+        for statement in statements
+    )
+    assert any(
+        "drop index if exists ix_llm_providers_name" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_username"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_password"
+        in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):
+    monkeypatch.setenv("NARUON_IMPORT_USER_ID", "import-user")
+    monkeypatch.setenv("NARUON_IMPORT_ORGANIZATION_ID", "import-org")
+
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
+    assert any(
+        "update emails" in statement
+        and "set user_id" in statement
+        and "organization_id = :organization_id" in statement
+        and "where user_id is null and organization_id is null" in statement
+        for statement in statements
+    )
+    assert sum("update emails" in statement for statement in statements) == 1
+    assert any(
+        "update llm_providers" in statement
+        and "set user_id" in statement
+        and "organization_id = :organization_id" in statement
+        and "where user_id is null and organization_id is null" in statement
+        for statement in statements
+    )
+    assert sum("update llm_providers" in statement for statement in statements) == 1
+
+
+def test_schema_backfill_stops_partially_owned_legacy_rows(monkeypatch):
+    monkeypatch.setenv("NARUON_IMPORT_USER_ID", "import-user")
+    monkeypatch.setenv("NARUON_IMPORT_ORGANIZATION_ID", "import-org")
+
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
+    assert any(
+        "where user_id is null and organization_id is null" in statement
+        for statement in statements
+    )
+    assert any(
+        "existing emails require explicit non-default" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_rejects_default_owner_ids(monkeypatch):
+    monkeypatch.setenv("NARUON_IMPORT_USER_ID", "default")
+    monkeypatch.setenv("NARUON_IMPORT_ORGANIZATION_ID", "default")
+
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
+    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any(
+        "update emails set organization_id" in statement for statement in statements
+    )

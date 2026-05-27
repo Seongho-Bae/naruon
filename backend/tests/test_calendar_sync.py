@@ -1,0 +1,27 @@
+import datetime
+from services.calendar_sync import generate_ics_from_task
+
+def test_generate_ics_from_task():
+    task_uid = "abc-123"
+    title = "Review Q2 Marketing Report"
+    status = "in_progress"
+    created_at = datetime.datetime(2026, 5, 23, 10, 0, tzinfo=datetime.timezone.utc)
+    updated_at = datetime.datetime(2026, 5, 23, 11, 0, tzinfo=datetime.timezone.utc)
+    due_date = datetime.datetime(2026, 5, 25, 15, 0, tzinfo=datetime.timezone.utc)
+
+    ics_content = generate_ics_from_task(
+        task_uid=task_uid,
+        title=title,
+        status=status,
+        created_at=created_at,
+        updated_at=updated_at,
+        due_date=due_date
+    )
+
+    assert "BEGIN:VCALENDAR" in ics_content
+    assert "BEGIN:VTODO" in ics_content
+    assert "UID:abc-123" in ics_content
+    assert "SUMMARY:Review Q2 Marketing Report" in ics_content
+    assert "STATUS:IN-PROCESS" in ics_content
+    assert "DUE:20260525T150000Z" in ics_content
+    assert "END:VTODO" in ics_content

@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
@@ -25,7 +24,9 @@ def read_repo_text(relative_path: str) -> str:
 def test_root_version_exists_and_is_initial_semver_release() -> None:
     version = read_repo_text("VERSION").strip()
 
-    assert re.fullmatch(r"\d+\.\d+\.\d+", version), f"VERSION is not valid SemVer: {version!r}"
+    assert re.fullmatch(
+        r"\d+\.\d+\.\d+", version
+    ), f"VERSION is not valid SemVer: {version!r}"
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
@@ -40,7 +41,9 @@ def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None
 
 
 def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
-    assert WORKFLOW_DIR.exists(), "required governance artifact is missing: .github/workflows"
+    assert (
+        WORKFLOW_DIR.exists()
+    ), "required governance artifact is missing: .github/workflows"
     governed_workflows = sorted(WORKFLOW_DIR.glob("*.yml")) + sorted(
         WORKFLOW_DIR.glob("*.yaml")
     )
@@ -76,7 +79,9 @@ def test_bandit_security_scan_does_not_continue_on_error() -> None:
     assert "continue-on-error: true" not in workflow
 
 
-def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> None:
+def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> (
+    None
+):
     workflow = read_repo_text(".github/workflows/app-ci.yml")
 
     assert "pull_request:" in workflow
@@ -99,17 +104,40 @@ def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushe
     assert "release/**" not in push_block
 
 
-def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_tags() -> None:
+def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_tags() -> (
+    None
+):
     workflow = read_repo_text(".github/workflows/docker-publish.yml")
 
     assert "pull_request:" in workflow
     assert "push:" in workflow
     assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true" in workflow
-    assert workflow.count("docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0") == 2
-    assert workflow.count("docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0") == 2
-    assert "docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0" in workflow
-    assert "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0" in workflow
-    assert workflow.count("docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0") == 2
+    assert (
+        workflow.count(
+            "docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0"
+        )
+        == 2
+    )
+    assert (
+        workflow.count(
+            "docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0"
+        )
+        == 2
+    )
+    assert (
+        "docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0"
+        in workflow
+    )
+    assert (
+        "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0"
+        in workflow
+    )
+    assert (
+        workflow.count(
+            "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0"
+        )
+        == 2
+    )
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
     assert "tags:" in push_block
     assert "branches:" not in push_block
@@ -149,27 +177,45 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "unexpected_count" in scanner
 
 
-def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> None:
+def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
+    None
+):
     workflow = read_repo_text(".github/workflows/pr-governance.yml")
+    gate_script = read_repo_text("scripts/ci/pr_governance_gate.sh")
+    combined = f"{workflow}\n{gate_script}"
 
     assert "pull_request_target:" in workflow
     assert "workflow_run:" in workflow
+    assert "check_run:" in workflow
     assert "workflow_dispatch:" in workflow
+    assert "Strix Security Scan" in workflow
+    assert "- strix" not in workflow
     assert "permissions:\n  contents: read" in workflow
-    assert "headRefOid" in workflow
-    assert "mergeStateStatus" in workflow
-    assert "gh pr checks" in workflow and "--required" in workflow
-    assert "check-runs" in workflow
-    assert "CodeRabbit" in workflow or "coderabbit" in workflow
-    assert "BEHIND" in workflow
-    assert "app.slug" in workflow
-    assert "coderabbitai" in workflow
-    assert "/issues/${PR_NUMBER}/comments" in workflow
-    assert "reviewThreads" in workflow
-    assert "--match-head-commit" in workflow
-    assert "actions/checkout" not in workflow
-    assert "@coderabbitai ignore" not in workflow
-    assert "git clone" not in workflow
-    assert "--admin" not in workflow
-    assert "contents: write" not in workflow
-    assert "dismiss" not in workflow.lower()
+    assert "trusted-governance" in workflow
+    assert ".base.sha" in workflow
+    assert "github.sha" not in workflow
+    assert "tarball/${trusted_ref}" in workflow
+    assert 'bash "$GOVERNANCE_GATE"' in workflow
+    assert "CHECK_RUN_PR_NUMBER" in workflow
+    assert "headRefOid" in gate_script
+    assert "mergeStateStatus" in gate_script
+    assert "gh pr checks" in gate_script and "--required" in gate_script
+    assert "check-runs" in gate_script
+    assert "Review skipped" in gate_script
+    assert "CodeRabbit" in gate_script or "coderabbit" in gate_script
+    assert "BEHIND" in gate_script
+    assert "app.slug" in gate_script
+    assert "coderabbitai" in gate_script
+    assert "/issues/${PR_NUMBER}/comments" in gate_script
+    assert "COMMENT_MARKER" in gate_script
+    assert "Waiting for" in gate_script
+    assert "reviewThreads" in gate_script
+    assert "CHANGES_REQUESTED" in gate_script
+    assert "gh pr merge" not in gate_script
+    assert "--match-head-commit" not in gate_script
+    assert "actions/checkout" not in combined
+    assert "@coderabbitai ignore" not in combined
+    assert "git clone" not in combined
+    assert "--admin" not in combined
+    assert "contents: write" not in combined
+    assert "dismiss" not in combined.lower()

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { MessagesSquare } from "lucide-react";
+import { InsightCard } from "@/components/InsightCard";
 import {
   buildThreadUrl,
   buildReplyPayload,
@@ -17,14 +18,33 @@ import {
   type ThreadEmailData,
 } from "@/lib/email-threading";
 
-type EmailData = ThreadEmailData;
-
+type EmailData = ThreadEmailData & {
+  requires_reply?: boolean;
+  schedule_conflict?: boolean;
+};
 interface LlmData {
   summary: string;
   todos: string[];
 }
 
-export function EmailDetail({ emailId }: { emailId: number | null }) {
+interface CreateTasksFromEmailResponse {
+  created: number;
+}
+
+interface CalendarWritebackIntentResponse {
+  target_source_id: string;
+  protocol: string;
+  provenance: {
+    source_provider?: string;
+  };
+}
+
+type EmailDetailActionCommand = {
+  id: number;
+  action: string;
+};
+
+export function EmailDetail({ emailId, actionCommand = null }: { emailId: number | null; actionCommand?: EmailDetailActionCommand | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
   const [threadEmails, setThreadEmails] = useState<EmailData[]>([]);
   const [llmData, setLlmData] = useState<LlmData | null>(null);
@@ -43,8 +63,20 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
   const [instruction, setInstruction] = useState('정중하게 답장해줘');
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
+  const [taskStatus, setTaskStatus] = useState<string | null>(null);
   const threadRequestIdRef = useRef(0);
+  const handledActionCommandIdRef = useRef<number | null>(null);
+  const currentEmailIdRef = useRef<number | null>(emailId);
+
+  useEffect(() => {
+    currentEmailIdRef.current = emailId;
+  }, [emailId]);
+
+  useEffect(() => {
+    handledActionCommandIdRef.current = null;
+  }, [emailId]);
 
   const fetchThread = useCallback(async (currentEmail: EmailData) => {
     const requestId = threadRequestIdRef.current + 1;
@@ -93,6 +125,12 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
       setDraft('');
       setDraftError(null);
       setSendStatus(null);
+      setIsDrafting(false);
+      setIsSending(false);
+      setIsSyncing(false);
+      setIsCreatingTask(false);
+      setSyncStatus(null);
+      setTaskStatus(null);
 
       try {
         const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
@@ -123,21 +161,25 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     return () => { isMounted = false; };
   }, [emailId, fetchThread]);
 
-  const handleDraftReply = async () => {
+  const handleDraftReply = useCallback(async () => {
     if (!email) return;
+    const actionEmailId = email.id;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
     setIsDrafting(true);
     setDraftError(null);
     setSendStatus(null);
     try {
       const data = await apiClient.post<{ draft: string }>('/api/llm/draft', { email_body: email.body, instruction });
+      if (!isCurrentEmail()) return;
       setDraft(data.draft || '');
     } catch (err) {
+      if (!isCurrentEmail()) return;
       console.error("Error drafting reply:", err);
       setDraftError("답장 초안을 생성하지 못했습니다.");
     } finally {
-      setIsDrafting(false);
+      if (isCurrentEmail()) setIsDrafting(false);
     }
-  };
+  }, [email, instruction]);
 
   const handleSendReply = async () => {
     if (!email || !draft) return;
@@ -161,19 +203,86 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     }
   };
 
-  const handleSyncCalendar = async () => {
-    if (!llmData || !llmData.todos.length) return;
+  const handleSyncCalendar = useCallback(async () => {
+    const actionEmailId = emailId;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    if (!llmData || !llmData.todos.length) {
+      setSyncStatus({ type: 'error', message: '캘린더에 반영할 실행 항목이 없습니다.' });
+      return;
+    }
     setIsSyncing(true);
     setSyncStatus(null);
     try {
-      const data = await apiClient.post<{ synced: number }>('/api/calendar/sync', { todos: llmData.todos, user_token: { token: 'mock' } });
-      setSyncStatus({ type: 'success', message: `${data.synced}개 일정이 캘린더에 반영되었습니다.` });
+      const intents = await Promise.all(
+        llmData.todos.map((summary) =>
+          apiClient.post<CalendarWritebackIntentResponse>('/api/calendar/writeback-intent', {
+            action: 'create',
+            summary,
+          }),
+        ),
+      );
+      if (!isCurrentEmail()) return;
+      const targetSource = intents[0]?.provenance.source_provider || intents[0]?.target_source_id || '원본 캘린더';
+      setSyncStatus({ type: 'success', message: `${intents.length}개 일정 writeback intent를 ${targetSource} 원본에 요청했습니다.` });
     } catch {
-      setSyncStatus({ type: 'error', message: '캘린더 반영에 실패했습니다.' });
+      if (!isCurrentEmail()) return;
+      setSyncStatus({ type: 'error', message: '캘린더 writeback intent 요청에 실패했습니다.' });
     } finally {
-      setIsSyncing(false);
+      if (isCurrentEmail()) setIsSyncing(false);
     }
-  };
+  }, [emailId, llmData]);
+
+  const handleCreateTask = useCallback(async () => {
+    const actionEmail = email;
+    const actionEmailId = actionEmail?.id ?? null;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    if (!actionEmail) return;
+    if (!llmData || !llmData.todos.length) {
+      setTaskStatus('정리할 실행 항목이 없습니다.');
+      return;
+    }
+    setIsCreatingTask(true);
+    setTaskStatus(null);
+    try {
+      const data = await apiClient.post<CreateTasksFromEmailResponse>('/api/tasks/from-email', {
+        source_email_id: actionEmail.message_id,
+        thread_id: actionEmail.thread_id || actionEmail.message_id,
+        items: llmData.todos,
+      });
+      if (!isCurrentEmail()) return;
+      setTaskStatus(`${data.created}개 실행 항목을 티켓형 할 일로 추적합니다.`);
+    } catch {
+      if (!isCurrentEmail()) return;
+      setTaskStatus('티켓형 할 일 생성에 실패했습니다.');
+    } finally {
+      if (isCurrentEmail()) setIsCreatingTask(false);
+    }
+  }, [email, llmData]);
+
+  useEffect(() => {
+    if (!actionCommand) {
+      handledActionCommandIdRef.current = null;
+      return;
+    }
+    if (!email || email.id !== emailId) return;
+    if (handledActionCommandIdRef.current === actionCommand.id) return;
+
+    if (actionCommand.action === 'reply-draft') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(() => void handleDraftReply());
+      return;
+    }
+    if (!llmData && !llmError) return;
+    if (actionCommand.action === 'calendar-sync') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(() => void handleSyncCalendar());
+      return;
+    }
+    if (actionCommand.action === 'create-task') {
+      handledActionCommandIdRef.current = actionCommand.id;
+      queueMicrotask(() => void handleCreateTask());
+    }
+  }, [actionCommand, email, emailId, handleCreateTask, handleDraftReply, handleSyncCalendar, llmData, llmError]);
 
   if (!emailId) {
     return (
@@ -213,38 +322,77 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
               답장 주소: {email.reply_to || email.sender}
             </div>
           </div>
-          <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
-            {formatEmailDate(email.date)}
+          <div className="flex flex-col items-end gap-2">
+            <div className="hidden whitespace-nowrap rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground shadow-sm 2xl:block">
+              {formatEmailDate(email.date)}
+            </div>
+            {email.requires_reply && (
+              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5 text-[10px]">응답 대기 중</Badge>
+            )}
+            {email.schedule_conflict && (
+              <Badge variant="outline" className="border-emerald-500/30 text-emerald-700 bg-emerald-500/5 text-[10px]">일정 충돌 조율</Badge>
+            )}
           </div>
         </div>
       </div>
       <Separator />
       <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-6 bg-background/50 p-6">
+        <div className="flex flex-col gap-6 bg-background/50 p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
           
-          <div className="space-y-2 rounded-2xl border border-primary/20 bg-card p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-xl bg-primary/10 text-primary" aria-hidden="true">✦</span>
-              <h3 className="text-sm font-black text-primary">맥락 종합</h3>
-              <Badge variant="secondary" className="border border-primary/10 bg-primary/10 text-[10px] text-primary">AI 생성</Badge>
-            </div>
-            <div className="rounded-xl bg-primary/5 p-4 text-sm leading-6">
-              {llmData ? (
-                <p className="text-sm">{llmData.summary}</p>
-              ) : llmError ? (
-                <p className="text-sm text-red-500">{llmError}</p>
-              ) : (
-                <p className="text-sm text-muted-foreground italic">요약을 생성하는 중입니다...</p>
-              )}
-            </div>
-          </div>
+          <InsightCard
+            title="맥락 종합"
+            icon={<span aria-hidden="true">✦</span>}
+            loading={!llmData && !llmError}
+            error={llmError}
+            provenance="AI 생성"
+          >
+            {llmData ? <p className="text-sm">{llmData.summary}</p> : null}
+          </InsightCard>
 
-          <div className="space-y-2 rounded-2xl border border-emerald-500/20 bg-card p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <span className="grid size-8 place-items-center rounded-xl bg-emerald-500/10 text-emerald-600" aria-hidden="true">✓</span>
-              <h3 className="text-sm font-black text-emerald-700">실행 항목</h3>
-              <Badge variant="secondary" className="border border-emerald-500/10 bg-emerald-500/10 text-[10px] text-emerald-700">{llmData?.todos.length || 0}개 실행 항목</Badge>
-            </div>
+          <InsightCard
+            title="실행 항목"
+            icon={<span aria-hidden="true">✓</span>}
+            loading={!llmData && !llmError}
+            error={llmError ? '실행 항목을 추출하지 못했습니다.' : null}
+            empty={Boolean(llmData && llmData.todos.length === 0)}
+            emptyMessage="실행 항목이 없습니다."
+            provenance={`${llmData?.todos.length || 0}개 실행 항목`}
+            footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
+              <>
+                {llmData.todos.length > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={handleSyncCalendar}
+                    disabled={isSyncing}
+                    className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
+                  >
+                    {isSyncing ? "동기화 중" : "캘린더 반영"}
+                  </Button>
+                )}
+                {llmData.todos.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCreateTask}
+                    disabled={isCreatingTask}
+                    className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
+                  >
+                    {isCreatingTask ? "추적 중" : "할 일 만들기"}
+                  </Button>
+                )}
+                {syncStatus && (
+                  <span className={`self-center text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                    {syncStatus.message}
+                  </span>
+                )}
+                {taskStatus && (
+                  <span role="status" aria-live="polite" className="self-center text-xs text-emerald-700">
+                    {taskStatus}
+                  </span>
+                )}
+              </>
+            ) : null}
+          >
             {llmData ? (
               llmData.todos.length > 0 ? (
                 <ul className="list-none space-y-2 text-sm">
@@ -255,33 +403,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                     </li>
                   ))}
                 </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">실행 항목이 없습니다.</p>
-              )
-            ) : llmError ? (
-              <p className="text-sm text-red-500">실행 항목을 추출하지 못했습니다.</p>
-            ) : (
-              <p className="text-sm text-muted-foreground italic">실행 항목을 추출하는 중입니다...</p>
-            )}
-            
-            {llmData && llmData.todos.length > 0 && (
-              <div className="mt-4 flex items-center justify-between">
-                <Button 
-                  size="sm" 
-                  onClick={handleSyncCalendar} 
-                  disabled={isSyncing}
-                  className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
-                >
-                  {isSyncing ? "동기화 중" : "캘린더 반영"}
-                </Button>
-                {syncStatus && (
-                  <span className={`text-xs ${syncStatus.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                    {syncStatus.message}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
+              ) : null
+            ) : null}
+          </InsightCard>
 
           <Separator />
           
@@ -317,10 +441,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
           <Separator />
 
-          <div className="space-y-4 rounded-2xl border border-purple-500/20 bg-card p-4 shadow-sm">
+          <InsightCard title="답장 실행" provenance="사용자 확인 필요">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
-                <h3 className="text-sm font-black text-purple-700">답장 실행</h3>
                 <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>
                 <Input
                   id="reply-instruction"
@@ -383,7 +506,7 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
                 </Button>
               </div>
             </div>
-          </div>
+          </InsightCard>
         </div>
       </ScrollArea>
     </div>

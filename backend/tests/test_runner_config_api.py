@@ -6,6 +6,8 @@ from db.models import WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 
 class MockResult:
     def __init__(self, obj):
@@ -39,14 +41,6 @@ def mock_db():
     return MockAsyncSession()
 
 
-@pytest.fixture(autouse=True)
-def enable_dev_headers():
-    previous = settings.TRUST_DEV_HEADERS
-    settings.TRUST_DEV_HEADERS = True
-    yield
-    settings.TRUST_DEV_HEADERS = previous
-
-
 @pytest.fixture
 def member_client(mock_db):
     async def override_get_db():
@@ -54,7 +48,9 @@ def member_client(mock_db):
 
     app.dependency_overrides[get_db] = override_get_db
     try:
-        with TestClient(app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}) as c:
+        with TestClient(
+            app, headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"}
+        ) as c:
             yield c
     finally:
         app.dependency_overrides.pop(get_db, None)
@@ -71,7 +67,7 @@ def admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -91,7 +87,7 @@ def second_org_admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "org-admin-2",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -101,7 +97,7 @@ def second_org_admin_client(mock_db):
 
 
 @pytest.fixture
-def platform_admin_client(mock_db):
+def system_admin_client(mock_db):
     async def override_get_db():
         yield mock_db
 
@@ -111,7 +107,7 @@ def platform_admin_client(mock_db):
             app,
             headers={
                 "X-User-Id": "platform-root",
-                "X-User-Role": "platform_admin",
+                "X-User-Role": "system_admin",
                 "X-Organization-Id": "org-acme",
             },
         ) as c:
@@ -128,7 +124,9 @@ def test_member_cannot_manage_runner_config(member_client):
     assert response.status_code == 403
 
 
-def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org_admin_client, mock_db):
+def test_org_scoped_runner_config_uses_shared_workspace(
+    admin_client, second_org_admin_client, mock_db
+):
     rotate_response = admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
@@ -145,8 +143,48 @@ def test_org_scoped_runner_config_uses_shared_workspace(admin_client, second_org
     assert "registration_token" not in read_data
 
 
-def test_platform_admin_can_manage_runner_config(platform_admin_client):
-    rotate_response = platform_admin_client.post("/api/runner-config/rotate")
+def test_runner_config_exposes_outbound_connector_manifest(admin_client):
+    response = admin_client.get("/api/runner-config")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector_manifest"] == {
+        "role": "self-hosted_connector",
+        "network_mode": "outbound_only",
+        "control_plane_domain": "naruon.net",
+        "local_protocols": ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+        "prohibited_roles": ["smtp_server", "imap_server", "mx_host"],
+        "runner_usage": "ci_smoke_only",
+    }
+
+
+def test_runner_config_uses_configured_control_plane_domain(admin_client):
+    previous_domain = settings.CONTROL_PLANE_DOMAIN
+    settings.CONTROL_PLANE_DOMAIN = "staging.naruon.net"
+    try:
+        response = admin_client.get("/api/runner-config")
+    finally:
+        settings.CONTROL_PLANE_DOMAIN = previous_domain
+
+    assert response.status_code == 200
+    assert (
+        response.json()["connector_manifest"]["control_plane_domain"]
+        == "staging.naruon.net"
+    )
+
+
+def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):
+    response = admin_client.post("/api/runner-config/rotate")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector_manifest"]["network_mode"] == "outbound_only"
+    assert data["connector_manifest"]["control_plane_domain"] == "naruon.net"
+    assert "registration_token" not in data["connector_manifest"]
+
+
+def test_system_admin_can_manage_runner_config(system_admin_client):
+    rotate_response = system_admin_client.post("/api/runner-config/rotate")
     assert rotate_response.status_code == 200
     assert rotate_response.json()["workspace_id"] == "workspace-org-acme"
 
@@ -161,7 +199,7 @@ def test_org_admin_without_org_scope_is_rejected(mock_db):
             app,
             headers={
                 "X-User-Id": "admin",
-                "X-User-Role": "organization_admin",
+                "X-User-Role": "tenant_admin",
             },
         ) as client:
             response = client.get("/api/runner-config")

@@ -4,6 +4,8 @@ from main import app
 from db.session import get_db
 from unittest.mock import patch
 
+pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+
 client = TestClient(app, headers={"X-User-Id": "testuser"})
 
 
@@ -21,6 +23,16 @@ class MockSession:
 
     async def execute(self, query):
         return MockResult(self.rows)
+
+
+class QueryCapturingSession(MockSession):
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
 
 
 def get_override(rows):
@@ -127,8 +139,25 @@ def test_network_endpoint_query_params():
             )
         },
     ):
-        response = client.get("/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"})
+        response = client.get(
+            "/api/network/graph?limit=10&user_id=123", headers={"X-User-Id": "123"}
+        )
         assert response.status_code == 200
         data = response.json()
         assert len(data["nodes"]) == 2
         assert len(data["edges"]) == 1
+
+
+def test_network_graph_query_is_scoped_to_current_user():
+    session = QueryCapturingSession([("alice@example.com", "bob@example.com")])
+
+    async def override_get_db():
+        yield session
+
+    with patch.dict(app.dependency_overrides, {get_db: override_get_db}):
+        response = client.get("/api/network/graph")
+
+    assert response.status_code == 200
+    query_text = str(session.queries[-1]).lower()
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
