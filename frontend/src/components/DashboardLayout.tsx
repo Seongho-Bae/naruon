@@ -2,8 +2,8 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -79,6 +79,55 @@ const headerActions = [
 
 
 
+const locationChangeEvent = 'naruon:location-change';
+let historyListenerInstalled = false;
+
+function emitLocationChange() {
+  window.dispatchEvent(new Event(locationChangeEvent));
+}
+
+function installHistoryListener() {
+  if (typeof window === 'undefined' || historyListenerInstalled) return;
+  const pushState = window.history.pushState;
+  const replaceState = window.history.replaceState;
+
+  window.history.pushState = function patchedPushState(this: History, ...args: Parameters<History['pushState']>) {
+    pushState.apply(this, args);
+    emitLocationChange();
+  } as History['pushState'];
+
+  window.history.replaceState = function patchedReplaceState(this: History, ...args: Parameters<History['replaceState']>) {
+    replaceState.apply(this, args);
+    emitLocationChange();
+  } as History['replaceState'];
+
+  historyListenerInstalled = true;
+}
+
+function subscribeToLocationChanges(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  installHistoryListener();
+  window.addEventListener(locationChangeEvent, callback);
+  window.addEventListener('popstate', callback);
+  return () => {
+    window.removeEventListener(locationChangeEvent, callback);
+    window.removeEventListener('popstate', callback);
+  };
+}
+
+function getCurrentSearch() {
+  return typeof window === 'undefined' ? '' : window.location.search;
+}
+
+function getServerSearch() {
+  return '';
+}
+
+function useCurrentSearchParams() {
+  const search = useSyncExternalStore(subscribeToLocationChanges, getCurrentSearch, getServerSearch);
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
 function splitHref(href: string) {
   const [pathWithQuery, hash = ''] = href.split('#');
   const [path = '/', query = ''] = pathWithQuery.split('?');
@@ -125,7 +174,7 @@ export function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams = useCurrentSearchParams();
   const [currentHash, setCurrentHash] = useState('');
 
   useEffect(() => {
@@ -194,7 +243,7 @@ function PrimaryNavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams = useCurrentSearchParams();
   const active = isActivePath(pathname, href, '', searchParams);
 
   return (
@@ -244,7 +293,7 @@ export function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const searchParams = useCurrentSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
