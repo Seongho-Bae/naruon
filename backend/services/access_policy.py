@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from core.rbac import check_tenant_access
+
 PolicyRoleName = Literal[
     "system_admin",
     "tenant_admin",
@@ -65,9 +67,13 @@ def _equivalent_roles(role: str) -> frozenset[str]:
 
 
 def _role_allowed(role: str, permitted_roles: tuple[PolicyRoleName, ...]) -> bool:
-    request_roles = _equivalent_roles(role)
-    permitted = set().union(*(_equivalent_roles(item) for item in permitted_roles))
-    return bool(request_roles & permitted)
+    if _is_system_admin_role(role):
+        return any(_is_system_admin_role(item) for item in permitted_roles)
+    request_role = next(iter(_equivalent_roles(role)))
+    return any(
+        check_tenant_access(request_role, next(iter(_equivalent_roles(item))))
+        for item in permitted_roles
+    )
 
 
 def _is_system_admin_role(role: str) -> bool:

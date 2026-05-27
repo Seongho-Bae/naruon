@@ -3,6 +3,7 @@ import binascii
 import hashlib
 import hmac
 import json
+import logging
 import math
 import time
 from dataclasses import dataclass
@@ -14,9 +15,17 @@ from fastapi import Depends, Header, HTTPException
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 
+logger = logging.getLogger(__name__)
+OIDC_JWKS_TIMEOUT_SECONDS = 5
+
 jwks_client = None
 if settings.OIDC_JWKS_URL:
-    jwks_client = PyJWKClient(settings.OIDC_JWKS_URL)
+    jwks_client = PyJWKClient(
+        settings.OIDC_JWKS_URL,
+        cache_keys=True,
+        timeout=OIDC_JWKS_TIMEOUT_SECONDS,
+    )
+_cached_oidc_signing_keys: tuple[Any, ...] = ()
 
 RoleName = Literal[
     "system_admin",
@@ -97,6 +106,36 @@ def _authentication_error() -> HTTPException:
     return HTTPException(status_code=401, detail="Authentication required")
 
 
+def preload_oidc_jwks() -> None:
+    """Populate OIDC signing keys outside the request authentication path."""
+    global _cached_oidc_signing_keys
+    if jwks_client is None:
+        _cached_oidc_signing_keys = ()
+        return
+    try:
+        jwk_set = jwks_client.get_jwk_set(refresh=True)
+        _cached_oidc_signing_keys = tuple(jwk_set.keys)
+    except Exception:
+        _cached_oidc_signing_keys = ()
+        logger.exception("OIDC JWKS preload failed; requests will fail closed.")
+
+
+def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
+    if not _cached_oidc_signing_keys:
+        raise _authentication_error()
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception:
+        raise _authentication_error() from None
+    key_id = header.get("kid")
+    if not isinstance(key_id, str) or not key_id.strip():
+        raise _authentication_error()
+    for signing_key in _cached_oidc_signing_keys:
+        if getattr(signing_key, "key_id", None) == key_id:
+            return signing_key
+    raise _authentication_error()
+
+
 def _session_secret_bytes() -> bytes:
     configured = settings.AUTH_SESSION_HMAC_SECRET
     if configured is None:
@@ -156,12 +195,12 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
         if jwks_client is None:
             raise _authentication_error()
         try:
-            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            signing_key = _cached_oidc_signing_key_from_jwt(token)
             payload = jwt.decode(
                 token,
                 signing_key.key,
                 algorithms=["RS256"],
-                audience=settings.OIDC_CLIENT_ID or SESSION_AUDIENCE,
+                audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL
             )
             return payload

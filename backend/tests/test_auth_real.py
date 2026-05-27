@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+import api.auth as auth_module
 from api.auth import (
     AuthContext,
     ensure_organization_access,
@@ -118,12 +119,14 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
+    previous_oidc_signing_keys = auth_module._cached_oidc_signing_keys
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
+    auth_module._cached_oidc_signing_keys = previous_oidc_signing_keys
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -679,13 +682,12 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     
-    class MockJWKSClient:
-        def get_signing_key_from_jwt(self, token):
-            class MockKey:
-                key = "public_key"
-            return MockKey()
-    
-    monkeypatch.setattr("api.auth.jwks_client", MockJWKSClient())
+    class MockKey:
+        key_id = "test-key"
+        key = "public_key"
+
+    monkeypatch.setattr("api.auth.jwks_client", object())
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
     
     def mock_jwt_decode(*args, **kwargs):
         return {
@@ -701,7 +703,10 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 
     try:
-        token = "header.payload.signature"
+        token = _signed_session_token(
+            _valid_session_payload(),
+            header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
+        )
         context = await get_auth_context(authorization=f"Bearer {token}")
     finally:
         settings.OIDC_ISSUER_URL = previous_issuer_url
@@ -715,6 +720,8 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monkeypatch):
+    import jwt
+
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
@@ -722,12 +729,52 @@ async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monke
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
-    class RejectingJWKSClient:
-        def get_signing_key_from_jwt(self, token):
-            raise RuntimeError("oidc rejected")
+    class MockKey:
+        key_id = "test-key"
+        key = "public_key"
 
-    monkeypatch.setattr("api.auth.jwks_client", RejectingJWKSClient())
-    token = _signed_session_token(_valid_session_payload())
+    monkeypatch.setattr("api.auth.jwks_client", object())
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
+
+    def reject_jwt_decode(*args, **kwargs):
+        raise RuntimeError("oidc rejected")
+
+    monkeypatch.setattr(jwt, "decode", reject_jwt_decode)
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
+    )
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_oidc_request_path_requires_preloaded_jwks(monkeypatch):
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", ())
+
+    class NetworkFetchingJWKSClient:
+        def get_signing_key_from_jwt(self, token):
+            raise AssertionError("request path must not fetch JWKS")
+
+    monkeypatch.setattr("api.auth.jwks_client", NetworkFetchingJWKSClient())
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
+    )
 
     try:
         with pytest.raises(HTTPException) as exc:

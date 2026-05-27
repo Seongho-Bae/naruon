@@ -102,6 +102,17 @@ function formatStartupDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(date);
 }
 
+function formatDashboardTimestamp(value: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(value);
+}
+
 function StartupResultList({ results }: { results: StartupSearchResult[] }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -127,9 +138,17 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   const { emails, tasks, loading } = useDashboardData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentTimestamp, setCurrentTimestamp] = useState('');
   const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
+
+  useEffect(() => {
+    const updateTimestamp = () => setCurrentTimestamp(formatDashboardTimestamp(new Date()));
+    updateTimestamp();
+    const intervalId = window.setInterval(updateTimestamp, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
   
   const mapPriorityToKorean = (p: string) => {
     switch(p) {
@@ -150,7 +169,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <h1 className="break-keep text-2xl font-bold leading-tight text-foreground">안녕하세요, 김나루님 👋</h1>
           </div>
           <div className="relative flex flex-wrap items-center gap-3">
-            <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
+            <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">{currentTimestamp || '현재 시간 확인 중'}</span>
             <button
               aria-controls={settingsMenuId}
               aria-expanded={isSettingsOpen}

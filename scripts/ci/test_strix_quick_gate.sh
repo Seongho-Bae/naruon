@@ -99,6 +99,31 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "github.event_name == 'pull_request'" "strix workflow should not retain pull_request-only expressions"
 }
 
+assert_strix_gpt54_model_guard_semantics() {
+	local model="$1"
+	case "$model" in
+	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+		openai/openai/gpt-5.[4-9]* | openai/openai/gpt-5.[1-9][0-9]* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+assert_strix_gpt54_model_guard_cases() {
+	if assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
+		record_failure "strix GPT-5.4 guard must reject plain openai/gpt-5"
+	fi
+	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5.4"; then
+		record_failure "strix GPT-5.4 guard must accept openai/gpt-5.4"
+	fi
+	if ! assert_strix_gpt54_model_guard_semantics "openai/openai/gpt-5.4"; then
+		record_failure "strix GPT-5.4 guard must accept GitHub Models openai/openai/gpt-5.4"
+	fi
+}
+
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
@@ -4010,6 +4035,8 @@ EOF
 }
 
 assert_strix_workflow_pr_trigger_hardened
+
+assert_strix_gpt54_model_guard_cases
 
 assert_strix_gate_target_scope_separated
 

@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.auth import get_auth_context
+from api.auth import get_auth_context, preload_oidc_jwks
 from api.search import router as search_router
 from api.llm import router as llm_router
 from api.calendar import router as calendar_router
@@ -32,6 +32,7 @@ PRIVATE_API_DEPENDENCIES = [Depends(get_auth_context)]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    preload_oidc_jwks()
     if not DISABLE_WORKERS:
         await imap_worker.start()
     yield

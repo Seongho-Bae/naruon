@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import React, { useEffect, useState } from 'react';
 import {
   Bell,
@@ -30,7 +30,7 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail', available: true },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox', available: true },
   { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/mail?folder=starred', available: true },
   { label: '보낸 메일', description: '답변 추적 대상', icon: Send, href: '/mail?folder=sent', available: true },
   { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/mail?folder=drafts', available: true },
@@ -80,19 +80,35 @@ const headerActions = [
 
 
 function splitHref(href: string) {
-  const [path, hash = ''] = href.split('#');
-  return { path: path.split('?')[0] || '/', hash: hash ? `#${hash}` : '' };
+  const [pathWithQuery, hash = ''] = href.split('#');
+  const [path = '/', query = ''] = pathWithQuery.split('?');
+  return { path: path || '/', query, hash: hash ? `#${hash}` : '' };
 }
 
-function isActivePath(pathname: string | null, href: string, currentHash = '') {
+type SearchParamsLike = Pick<URLSearchParams, 'get'>;
+
+function isActivePath(
+  pathname: string | null,
+  href: string,
+  currentHash = '',
+  currentSearchParams?: SearchParamsLike | null,
+) {
   if (!pathname) return false;
-  const { path, hash } = splitHref(href);
+  const { path, query, hash } = splitHref(href);
   if (hash) {
     return pathname === path && currentHash === hash;
   }
-  return path === '/'
+  const pathMatch = path === '/'
     ? pathname === '/'
     : pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatch) return false;
+  if (!query) return true;
+  if (!currentSearchParams) return false;
+  const targetSearchParams = new URLSearchParams(query);
+  for (const [key, value] of targetSearchParams.entries()) {
+    if (currentSearchParams.get(key) !== value) return false;
+  }
+  return true;
 }
 
 export function NavLink({
@@ -109,6 +125,7 @@ export function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [currentHash, setCurrentHash] = useState('');
 
   useEffect(() => {
@@ -124,7 +141,7 @@ export function NavLink({
     };
   }, [pathname]);
 
-  const active = isActivePath(pathname, href, currentHash);
+  const active = isActivePath(pathname, href, currentHash, searchParams);
 
   if (!available) {
     return (
@@ -177,7 +194,8 @@ function PrimaryNavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const active = isActivePath(pathname, href);
+  const searchParams = useSearchParams();
+  const active = isActivePath(pathname, href, '', searchParams);
 
   return (
     <Link
@@ -226,6 +244,7 @@ export function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
@@ -437,7 +456,7 @@ export function DashboardLayout({
           <nav aria-label="Mobile mail shortcuts" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">메일</p>
             {mailNavItems.map(({ label, description, href, icon: Icon }) => {
-              const active = isActivePath(pathname, href);
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
                 <Link
                   key={href}
@@ -486,7 +505,7 @@ export function DashboardLayout({
           <nav aria-label="Mobile primary destinations" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">주요 작업공간</p>
             {primaryNavItems.map(({ label, href, icon: Icon }) => {
-              const active = isActivePath(pathname, href);
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
                 <Link
                   key={href}
