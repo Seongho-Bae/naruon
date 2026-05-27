@@ -426,6 +426,13 @@ class WebdavAccount(Base):
     __tablename__ = "webdav_accounts"
 
     id: Mapped[int] = mapped_column("account_id", primary_key=True)
+    source_uid: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        index=True,
+        default=lambda: f"webdav_src_{uuid.uuid4().hex}",
+        nullable=False,
+    )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     server_url: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)

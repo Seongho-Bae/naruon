@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
@@ -17,7 +17,7 @@ WEB_DAV_ERROR_STATUS_CODES = {
 }
 
 class WebdavAccountResponse(BaseModel):
-    account_id: int
+    source_id: str
     server_url: str
     username: str
 
@@ -27,11 +27,13 @@ class ProjectFolderResponse(BaseModel):
     webdav_path: str
 
 class WritebackIntentRequest(BaseModel):
-    target_account_id: int | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    target_source_id: str | None = None
 
 class WritebackIntentResponse(BaseModel):
     intent: str
-    source_id: int | None
+    source_id: str | None
     server_url: str | None
     requires_if_match: bool
     provenance: str
@@ -39,8 +41,10 @@ class WritebackIntentResponse(BaseModel):
     message: str | None = None
 
 class KnowledgeMaterializationIntentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     source_task_id: str
-    target_account_id: int | None = None
+    target_source_id: str | None = None
 
 class KnowledgeMaterializationIntentResponse(BaseModel):
     intent: str
@@ -49,7 +53,7 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     source_type: str
     source_email_id: str | None
     source_thread_id: str | None
-    source_id: int | None
+    source_id: str | None
     server_url: str | None
     target_path: str
     requires_if_match: bool
@@ -63,7 +67,11 @@ async def get_webdav_accounts(
     db: AsyncSession = Depends(get_db),
 ):
     user_id = auth_context.user_id
-    return await webdav_service.get_connected_accounts_from_db(db, user_id)
+    return await webdav_service.get_connected_accounts_from_db(
+        db,
+        user_id,
+        auth_context.organization_id,
+    )
 
 @router.get("/folders", response_model=List[ProjectFolderResponse])
 async def get_project_folders(
@@ -83,7 +91,8 @@ async def get_webdav_writeback_intent(
     result = await webdav_service.determine_webdav_writeback_intent_from_db(
         db,
         user_id,
-        target_account_id=req.target_account_id,
+        auth_context.organization_id,
+        target_source_id=req.target_source_id,
     )
     if result.get("status") == "error":
         raise HTTPException(status_code=422, detail=result.get("message"))
@@ -103,7 +112,7 @@ async def get_knowledge_materialization_intent(
         auth_context.user_id,
         auth_context.organization_id,
         req.source_task_id,
-        target_account_id=req.target_account_id,
+        target_source_id=req.target_source_id,
     )
     if result.get("status") == "error":
         status_code = WEB_DAV_ERROR_STATUS_CODES.get(

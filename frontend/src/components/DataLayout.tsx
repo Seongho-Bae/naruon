@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api-client';
 
 type WebdavWritebackIntentResponse = {
   intent: string;
-  source_id: number | null;
+  source_id: string | null;
   server_url: string | null;
   requires_if_match: boolean;
   provenance: string;
@@ -65,7 +65,7 @@ export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
   
   interface WebdavAccount {
-    account_id: number;
+    source_id: string;
     server_url: string;
     username: string;
   }
@@ -97,10 +97,10 @@ export function DataLayout() {
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
-      const targetAccountId = webdavAccounts[0]?.account_id;
+      const targetSourceId = webdavAccounts[0]?.source_id;
       const result = await apiClient.post<WebdavWritebackIntentResponse>(
         '/api/webdav/writeback-intent',
-        typeof targetAccountId === 'number' ? { target_account_id: targetAccountId } : {},
+        targetSourceId ? { target_source_id: targetSourceId } : {},
       );
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -185,7 +185,7 @@ export function DataLayout() {
                     </div>
                   </div>
                   {webdavAccounts.map(acc => (
-                    <div key={acc.account_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
+                    <div key={acc.source_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
                       <Server className="size-4" />
                       <span className="font-medium">{acc.server_url}</span> ({acc.username})
                     </div>

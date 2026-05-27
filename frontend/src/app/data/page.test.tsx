@@ -36,7 +36,7 @@ function mockWebdavFetch() {
     if (path === "/api/webdav/accounts") {
       return jsonResponse([
         {
-          account_id: 1,
+          source_id: "webdav_src_primary",
           server_url: "https://webdav.naruon.net",
           username: "demo_user",
         },
@@ -55,7 +55,7 @@ function mockWebdavFetch() {
       void init;
       return jsonResponse({
         intent: "writeback",
-        source_id: 1,
+        source_id: "webdav_src_primary",
         server_url: "https://webdav.naruon.net",
         requires_if_match: true,
         provenance: "server-authoritative",
@@ -169,7 +169,9 @@ describe("DataPage", () => {
     ]) {
       expect(requestHeaders[publicHeader]).toBeUndefined();
     }
-    expect(JSON.parse(String(init?.body))).toEqual({ target_account_id: 1 });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      target_source_id: "webdav_src_primary",
+    });
     expect(container.textContent).toContain("server-authoritative");
     expect(container.textContent).toContain("https://webdav.naruon.net");
   });

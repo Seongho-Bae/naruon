@@ -62,12 +62,14 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
 
 @pytest.fixture(autouse=True)
 def stub_webdav_service(monkeypatch):
-    async def fake_accounts(db, user_id):
+    async def fake_accounts(db, user_id, organization_id=None):
+        del organization_id
         return [
             {
-                "account_id": 1,
+                "source_id": "webdav_src_demo_primary",
                 "server_url": "https://webdav.naruon.net",
                 "username": "demo_user",
+                "writeback_enabled": True,
             }
         ] if user_id == "alice" else []
 
@@ -77,10 +79,10 @@ def stub_webdav_service(monkeypatch):
             {"folder_id": 2, "project_name": "Marketing Assets", "webdav_path": "/Projects/Marketing_Assets"}
         ] if user_id == "alice" else []
 
-    async def fake_intent(db, user_id, target_account_id=None):
+    async def fake_intent(db, user_id, organization_id=None, target_source_id=None):
         return webdav_service.determine_webdav_writeback_intent_from_accounts(
             await fake_accounts(db, user_id),
-            target_account_id=target_account_id,
+            target_source_id=target_source_id,
         )
 
     async def fake_knowledge_intent(
@@ -88,7 +90,7 @@ def stub_webdav_service(monkeypatch):
         user_id,
         organization_id,
         source_task_id,
-        target_account_id=None,
+        target_source_id=None,
     ):
         if source_task_id == "task-email":
             return {
@@ -102,7 +104,12 @@ def stub_webdav_service(monkeypatch):
                 "error_code": "not_found",
                 "message": "Self-sent knowledge task was not found.",
             }
-        result = await fake_intent(db, user_id, target_account_id=target_account_id)
+        result = await fake_intent(
+            db,
+            user_id,
+            organization_id=organization_id,
+            target_source_id=target_source_id,
+        )
         if result.get("status") == "error":
             return result
         return {
@@ -165,7 +172,7 @@ def test_get_webdav_writeback_intent(auth_client):
     body = response.json()
     assert body["intent"] == "writeback"
     assert body["requires_if_match"] is True
-    assert body["source_id"] == 1
+    assert body["source_id"] == "webdav_src_demo_primary"
     assert body["server_url"] == "https://webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
 
@@ -173,12 +180,12 @@ def test_get_webdav_writeback_intent(auth_client):
 def test_get_webdav_writeback_intent_with_target_account(auth_client):
     response = auth_client.post(
         "/api/webdav/writeback-intent",
-        json={"target_account_id": 1},
+        json={"target_source_id": "webdav_src_demo_primary"},
     )
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["intent"] == "writeback"
-    assert body["source_id"] == 1
+    assert body["source_id"] == "webdav_src_demo_primary"
     assert body["server_url"] == "https://webdav.naruon.net"
     assert body["requires_if_match"] is True
     assert body["provenance"] == "server-authoritative"
@@ -187,17 +194,28 @@ def test_get_webdav_writeback_intent_with_target_account(auth_client):
 def test_get_webdav_writeback_intent_with_invalid_target_account(auth_client):
     response = auth_client.post(
         "/api/webdav/writeback-intent",
-        json={"target_account_id": 999},
+        json={"target_source_id": "webdav_src_missing"},
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Requested WebDAV account was not found."
+
+
+def test_webdav_writeback_rejects_legacy_target_account_id(auth_client):
+    response = auth_client.post(
+        "/api/webdav/writeback-intent",
+        json={"target_account_id": 1},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["type"] == "extra_forbidden"
+    assert response.json()["detail"][0]["loc"] == ["body", "target_account_id"]
 
 
 def test_get_self_sent_knowledge_webdav_intent(auth_client):
     response = auth_client.post(
         "/api/webdav/knowledge-materialization-intent",
         json={
-            "target_account_id": 1,
+            "target_source_id": "webdav_src_demo_primary",
             "source_task_id": "task-self-knowledge",
         },
     )
@@ -269,7 +287,7 @@ def test_get_self_sent_knowledge_webdav_intent_accepts_signed_bearer_session():
             response = client.post(
                 "/api/webdav/knowledge-materialization-intent",
                 json={
-                    "target_account_id": 1,
+                    "target_source_id": "webdav_src_demo_primary",
                     "source_task_id": "task-self-knowledge",
                 },
                 headers={"Authorization": f"Bearer {token}"},
@@ -383,8 +401,8 @@ def test_get_webdav_writeback_intent_no_accounts():
 
 @pytest.mark.asyncio
 async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
-    account_id = 10_000 + (uuid.uuid4().int % 1_000_000)
-    user_id = f"webdav-smoke-{account_id}"
+    source_uid = f"webdav_src_{uuid.uuid4().hex[:24]}"
+    user_id = f"webdav-smoke-{uuid.uuid4().hex[:12]}"
     monkeypatch.setattr(
         webdav_service,
         "get_connected_accounts_from_db",
@@ -411,6 +429,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     """
                     CREATE TABLE IF NOT EXISTS webdav_accounts (
                         account_id INTEGER PRIMARY KEY,
+                        source_uid VARCHAR UNIQUE NOT NULL,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
@@ -424,16 +443,17 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                 text(
                     """
                     DELETE FROM webdav_accounts
-                    WHERE account_id = :account_id
+                    WHERE source_uid = :source_uid
                     """
                 ),
-                {"account_id": account_id},
+                {"source_uid": source_uid},
             )
             await conn.execute(
                 text(
                     """
                     INSERT INTO webdav_accounts (
                         account_id,
+                        source_uid,
                         user_id,
                         server_url,
                         username,
@@ -441,6 +461,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     )
                     VALUES (
                         :account_id,
+                        :source_uid,
                         :user_id,
                         :server_url,
                         :username,
@@ -449,7 +470,8 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     """
                 ),
                 {
-                    "account_id": account_id,
+                    "account_id": 10_000 + (uuid.uuid4().int % 1_000_000),
+                    "source_uid": source_uid,
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,
@@ -487,20 +509,23 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
         ) as client:
             response = await client.post(
                 "/api/webdav/writeback-intent",
-                json={"target_account_id": account_id},
+                json={"target_source_id": source_uid},
             )
     finally:
         app.dependency_overrides.pop(get_db, None)
         async with engine.begin() as conn:
             await conn.execute(
-                text("DELETE FROM webdav_accounts WHERE account_id = :account_id"),
-                {"account_id": account_id},
+                text(
+                    "DELETE FROM webdav_accounts "
+                    "WHERE source_uid = :source_uid"
+                ),
+                {"source_uid": source_uid},
             )
         await engine.dispose()
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["source_id"] == account_id
+    assert body["source_id"] == source_uid
     assert body["server_url"] == "https://real-webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
 
@@ -515,7 +540,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     task_uid = f"task{uuid.uuid4().hex[:28]}"
     message_id = f"<self-knowledge-{smoke_id}@example.com>"
     thread_id = f"thread-knowledge-{smoke_id}"
-    account_id = smoke_id + 1
+    source_uid = f"webdav_src_{uuid.uuid4().hex[:24]}"
     monkeypatch.setattr(
         webdav_service,
         "get_connected_accounts_from_db",
@@ -605,6 +630,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     """
                     CREATE TABLE webdav_accounts (
                         account_id INTEGER PRIMARY KEY,
+                        source_uid VARCHAR UNIQUE NOT NULL,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
@@ -685,6 +711,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     """
                     INSERT INTO webdav_accounts (
                         account_id,
+                        source_uid,
                         user_id,
                         server_url,
                         username,
@@ -692,6 +719,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     )
                     VALUES (
                         :account_id,
+                        :source_uid,
                         :user_id,
                         :server_url,
                         :username,
@@ -700,7 +728,8 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     """
                 ),
                 {
-                    "account_id": account_id,
+                    "account_id": smoke_id + 1,
+                    "source_uid": source_uid,
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,
@@ -737,7 +766,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
             response = await client.post(
                 "/api/webdav/knowledge-materialization-intent",
                 json={
-                    "target_account_id": account_id,
+                    "target_source_id": source_uid,
                     "source_task_id": task_uid,
                 },
             )
@@ -759,6 +788,6 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     assert body["source_type"] == "self_sent_knowledge"
     assert body["source_email_id"] == message_id
     assert body["source_thread_id"] == thread_id
-    assert body["source_id"] == account_id
+    assert body["source_id"] == source_uid
     assert body["target_path"] == f"/Naruon/Notes/{task_uid}.md"
     assert body["provider_write_executed"] is False

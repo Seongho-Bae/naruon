@@ -550,8 +550,10 @@ test('renders data WebDAV writeback intent status without direct provider writes
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
   });
   await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
-  const desktopHeaders = (await desktopWritebackRequest).headers();
+  const desktopWritebackCall = await desktopWritebackRequest;
+  const desktopHeaders = desktopWritebackCall.headers();
   expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(desktopWritebackCall.postDataJSON()).toEqual({ target_source_id: 'webdav_src_primary' });
   for (const headerName of publicIdentityHeaders) {
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
@@ -572,8 +574,10 @@ test('renders data WebDAV writeback intent status without direct provider writes
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
   });
   await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
-  const mobileHeaders = (await mobileWritebackRequest).headers();
+  const mobileWritebackCall = await mobileWritebackRequest;
+  const mobileHeaders = mobileWritebackCall.headers();
   expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(mobileWritebackCall.postDataJSON()).toEqual({ target_source_id: 'webdav_src_primary' });
   for (const headerName of publicIdentityHeaders) {
     expect(mobileHeaders[headerName]).toBeUndefined();
   }

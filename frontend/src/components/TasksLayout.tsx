@@ -39,7 +39,7 @@ type KnowledgeMaterializationIntent = {
   source_type: 'self_sent_knowledge';
   source_email_id: string | null;
   source_thread_id: string | null;
-  source_id: number | null;
+  source_id: string | null;
   server_url: string | null;
   target_path: string;
   requires_if_match: boolean;

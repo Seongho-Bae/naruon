@@ -258,6 +258,9 @@ provenance. Calendar source selection now reads opaque
 CalDAV account ids. The browser no longer claims `/api/calendar/sync` success
 from the mail-detail action path; direct provider writes stay deferred until
 connector execution can enforce ETag/If-Match and owner capability checks.
+WebDAV writeback and self-sent knowledge materialization use
+`webdav_accounts.source_uid` as the browser-visible source id and reject legacy
+`target_account_id` payloads.
 
 ## Operations and release docs
 

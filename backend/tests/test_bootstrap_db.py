@@ -1,5 +1,5 @@
 from scripts.bootstrap_db import schema_backfill_sql
-from db.models import CalendarWritebackSource, SenderRelationship
+from db.models import CalendarWritebackSource, SenderRelationship, WebdavAccount
 
 
 def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
@@ -118,6 +118,27 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "alter table webdav_accounts add column if not exists source_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "update webdav_accounts set source_uid" in statement
+        and "webdav_src_" in statement
+        and "md5" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts alter column source_uid set not null"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_webdav_accounts_source_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "create index if not exists ix_llm_providers_organization_id" in statement
         for statement in statements
     )
@@ -232,3 +253,11 @@ def test_calendar_writeback_source_model_uses_two_word_names():
         "created_at",
     }
     assert all("_" in column_name for column_name in column_names)
+
+
+def test_webdav_account_model_exposes_opaque_source_uid():
+    column_names = {column.name for column in WebdavAccount.__table__.columns}
+
+    assert "source_uid" in column_names
+    assert WebdavAccount.__table__.c.source_uid.nullable is False
+    assert WebdavAccount.__table__.c.source_uid.unique is True

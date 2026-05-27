@@ -12,6 +12,8 @@ AI-organized files or attachments are written back to their own storage.
 - Customer WebDAV accounts remain the writeback target.
 - The browser calls `POST /api/webdav/writeback-intent` through the signed
   `apiClient` session path.
+- The browser chooses optional targets with opaque `target_source_id`; legacy
+  sequential `target_account_id` payloads fail closed.
 - The UI shows intent, source id, server URL, If-Match requirement, and
   provenance only. It does not claim provider write execution.
 - Public identity headers must not be emitted by browser write requests.
@@ -20,7 +22,8 @@ AI-organized files or attachments are written back to their own storage.
 
 - `/data` now exposes a WebDAV writeback intent approval panel.
 - The intent panel uses the first connected customer WebDAV account as the
-  target source and fails closed when no source or signed session is available.
+  target source through `webdav_accounts.source_uid` and fails closed when no
+  source or signed session is available.
 - Data repository cards now use responsive grid tracks so mobile verification
   does not depend on desktop-only three-column layouts.
 - Unit and Playwright tests assert signed `Authorization: Bearer` handling and
@@ -43,4 +46,3 @@ Screenshots to inspect:
 - `data-webdav-writeback-intent-desktop.png`
 - `data-webdav-writeback-intent-mobile.png`
 - `data-webdav-writeback-intent-mobile-scroll.png`
-

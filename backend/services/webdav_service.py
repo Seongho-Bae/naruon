@@ -29,9 +29,10 @@ class WebDavService:
         self._mock_accounts = {
             "demo_user": [
                 {
-                    "account_id": 1,
+                    "source_id": "webdav_src_demo_primary",
                     "server_url": "https://webdav.naruon.net",
-                    "username": "demo_user"
+                    "username": "demo_user",
+                    "writeback_enabled": True,
                 }
             ]
         }
@@ -67,16 +68,23 @@ class WebDavService:
         self,
         session: AsyncSession,
         user_id: str,
+        organization_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        stmt = select(WebdavAccount).where(WebdavAccount.user_id == user_id)
+        del organization_id
+        stmt = select(
+            WebdavAccount.source_uid,
+            WebdavAccount.server_url,
+            WebdavAccount.username,
+        ).where(WebdavAccount.user_id == user_id)
         result = await session.execute(stmt)
         return [
             {
-                "account_id": account.id,
-                "server_url": account.server_url,
-                "username": account.username,
+                "source_id": source_uid,
+                "server_url": server_url,
+                "username": username,
+                "writeback_enabled": True,
             }
-            for account in result.scalars().all()
+            for source_uid, server_url, username in result.all()
         ]
 
     async def get_project_folders_from_db(
@@ -103,26 +111,31 @@ class WebDavService:
         # Mock implementation: in reality, this would download from storage and upload via webdavclient3
         return True
 
-    def determine_webdav_writeback_intent(self, user_id: str, target_account_id: int | None = None) -> Dict[str, Any]:
+    def determine_webdav_writeback_intent(
+        self, user_id: str, target_source_id: str | None = None
+    ) -> Dict[str, Any]:
         """
         Server-authoritative WebDAV writeback source selection.
         """
         accounts = self.get_connected_accounts(user_id)
         return self.determine_webdav_writeback_intent_from_accounts(
             accounts,
-            target_account_id=target_account_id,
+            target_source_id=target_source_id,
         )
 
     async def determine_webdav_writeback_intent_from_db(
         self,
         session: AsyncSession,
         user_id: str,
-        target_account_id: int | None = None,
+        organization_id: str | None = None,
+        target_source_id: str | None = None,
     ) -> Dict[str, Any]:
-        accounts = await self.get_connected_accounts_from_db(session, user_id)
+        accounts = await self.get_connected_accounts_from_db(
+            session, user_id, organization_id
+        )
         return self.determine_webdav_writeback_intent_from_accounts(
             accounts,
-            target_account_id=target_account_id,
+            target_source_id=target_source_id,
         )
 
     async def determine_knowledge_materialization_intent_from_db(
@@ -131,7 +144,7 @@ class WebDavService:
         user_id: str,
         organization_id: str | None,
         source_task_id: str,
-        target_account_id: int | None = None,
+        target_source_id: str | None = None,
     ) -> Dict[str, Any]:
         task_result = await session.execute(
             select(TicketTask, Email.message_id)
@@ -172,7 +185,8 @@ class WebDavService:
         result = await self.determine_webdav_writeback_intent_from_db(
             session,
             user_id,
-            target_account_id=target_account_id,
+            organization_id,
+            target_source_id=target_source_id,
         )
         if result.get("status") == "error":
             return result
@@ -196,20 +210,23 @@ class WebDavService:
     def determine_webdav_writeback_intent_from_accounts(
         self,
         accounts: List[Dict[str, Any]],
-        target_account_id: int | None = None,
+        target_source_id: str | None = None,
     ) -> Dict[str, Any]:
-        if not accounts:
+        writable_accounts = [
+            account for account in accounts if account.get("writeback_enabled", True)
+        ]
+        if not writable_accounts:
             return {
                 "status": "error",
                 "error_code": "no_webdav_account",
                 "message": "No connected WebDAV accounts found.",
             }
             
-        selected_account = accounts[0]
-        if target_account_id is not None:
+        selected_account = writable_accounts[0]
+        if target_source_id is not None:
             selected_account = None
-            for acc in accounts:
-                if acc["account_id"] == target_account_id:
+            for acc in writable_accounts:
+                if acc["source_id"] == target_source_id:
                     selected_account = acc
                     break
             if selected_account is None:
@@ -221,7 +238,7 @@ class WebDavService:
                     
         return {
             "intent": "writeback",
-            "source_id": selected_account["account_id"],
+            "source_id": selected_account["source_id"],
             "server_url": selected_account["server_url"],
             "requires_if_match": True,
             "provenance": "server-authoritative"
