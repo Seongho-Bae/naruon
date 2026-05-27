@@ -13,6 +13,7 @@ const email = {
   snippet: 'Q2 출시 계획과 우선순위 조정 요청입니다.',
   unread: true,
   reply_count: 2,
+  score: 0.91,
 };
 
 const sibling = {
@@ -266,8 +267,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
 
     if (path === '/api/network/graph') {
       await fulfillJson(route, {
-        nodes: [{ id: 'person-1', label: '김지현', title: 'PM' }],
-        edges: [{ from: 'person-1', to: 'person-1', title: '관련 메일' }],
+        nodes: [
+          { id: 'sender-1', label: '김지현 PM', title: 'PM' },
+          { id: 'owner-1', label: '사용자', title: 'Naruon owner' },
+        ],
+        edges: [{ source: 'sender-1', target: 'owner-1', weight: 2, title: '관련 메일' }],
       });
       return;
     }

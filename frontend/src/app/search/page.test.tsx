@@ -6,17 +6,50 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("lucide-react", () => ({
   Search: () => <svg aria-hidden="true" />,
   Mail: () => <svg aria-hidden="true" />,
-  CalendarDays: () => <svg aria-hidden="true" />,
-  FileText: () => <svg aria-hidden="true" />,
   UserRound: () => <svg aria-hidden="true" />,
   Network: () => <svg aria-hidden="true" />,
-  Filter: () => <svg aria-hidden="true" />,
   Clock: () => <svg aria-hidden="true" />,
-  ChevronRight: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
+  AlertCircle: () => <svg aria-hidden="true" />,
+  CornerDownRight: () => <svg aria-hidden="true" />,
+}));
+
+vi.mock("vis-network", () => ({
+  Network: vi.fn(function MockNetwork() {
+    return { destroy: vi.fn(), fit: vi.fn() };
+  }),
 }));
 
 import SearchPage from "./page";
+
+function jsonResponse(body: unknown, ok = true, status = 200) {
+  return {
+    ok,
+    status,
+    statusText: ok ? "OK" : "Error",
+    json: async () => body,
+  };
+}
+
+async function flushAsyncWork() {
+  for (let index = 0; index < 6; index += 1) {
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+}
+
+function lowerCaseHeaders(headers: HeadersInit | undefined) {
+  if (!headers) return {};
+  if (headers instanceof Headers) {
+    return Object.fromEntries(Array.from(headers.entries()).map(([key, value]) => [key.toLowerCase(), value]));
+  }
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(headers.map(([key, value]) => [key.toLowerCase(), value]));
+  }
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+}
 
 describe("SearchPage", () => {
   let root: Root | null = null;
@@ -27,18 +60,89 @@ describe("SearchPage", () => {
     root = null;
     container?.remove();
     container = null;
+    window.localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
-  it("renders integrated search results detail graph and timeline states", () => {
+  it("renders API-backed search results with reply tracking and signed session headers", async () => {
+    const fetchMock = vi.fn((...args: [RequestInfo | URL, RequestInit?]) => {
+      const [input] = args;
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve(
+          jsonResponse({
+            results: [
+              {
+                id: 7,
+                subject: "Q2 출시 계획 및 우선순위 조정",
+                sender: "김지현 PM",
+                date: "2026-05-11T09:30:00Z",
+                snippet: "Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬했습니다.",
+                thread_id: "thread-q2",
+                reply_count: 3,
+                score: 0.87,
+              },
+            ],
+          }),
+        );
+      }
+      if (url.endsWith("/api/network/graph")) {
+        return Promise.resolve(
+          jsonResponse({
+            nodes: [{ id: "sender-1", label: "김지현 PM", title: "PM" }],
+            edges: [{ source: "sender-1", target: "sender-1", weight: 1, title: "관련 메일" }],
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse({}, false, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem("naruon_session_token", "signed-search-session");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(<SearchPage />);
     });
+    await flushAsyncWork();
 
-    expect(container.textContent).toContain("Q2 런칭 캠페인 기획안.pdf");
-    expect(container.textContent).toContain("통합 검색");
+    expect(container.textContent).toContain("Q2 출시 계획 및 우선순위 조정");
+    expect(container.textContent).toContain("thread-q2");
+    expect(container.textContent).toContain("답장 3건");
+    expect(container.textContent).toContain("관계 그래프와 타임라인");
+
+    const searchCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/search"));
+    expect(searchCall).toBeDefined();
+    expect(searchCall?.[1]?.method).toBe("POST");
+    expect(searchCall?.[1]?.body).toBe(JSON.stringify({ query: "런칭 캠페인", limit: 8 }));
+    const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
+    expect(headers.authorization).toBe("Bearer signed-search-session");
+    for (const headerName of ["x-user-id", "x-organization-id", "x-group-id", "x-group-ids", "x-user-role", "x-dev-auth-token"]) {
+      expect(headers[headerName]).toBeUndefined();
+    }
+  });
+
+  it("renders a fail-closed error state when the search API rejects the query", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/search")) return Promise.resolve(jsonResponse({ detail: "OpenAI API key not configured" }, false, 400));
+        if (url.endsWith("/api/network/graph")) return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
+        return Promise.resolve(jsonResponse({}, false, 404));
+      }),
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SearchPage />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("검색 결과를 불러오지 못했습니다.");
   });
 });
