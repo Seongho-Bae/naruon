@@ -338,6 +338,25 @@ async def test_signed_bearer_session_rejects_rs256_algorithm():
 
 
 @pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_unknown_critical_header():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={
+            "alg": "HS256",
+            "typ": "JWT",
+            "crit": ["x-custom-policy"],
+            "x-custom-policy": "require-mfa",
+        },
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_signed_bearer_session_rejects_wrong_secret():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload(), WRONG_SESSION_HMAC_SECRET)

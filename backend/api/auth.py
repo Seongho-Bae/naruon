@@ -216,6 +216,8 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     header = _json_object_from_base64url_segment(header_segment)
     if header.get("alg") != SESSION_SIGNING_ALGORITHM:
         raise _authentication_error()
+    if "crit" in header:
+        raise _authentication_error()
 
     secret = _session_secret_bytes()
     signing_input = f"{header_segment}.{payload_segment}"
