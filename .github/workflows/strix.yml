@@ -93,7 +93,9 @@ jobs:
               exit 1
               ;;
           esac
-          if [ -z "$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')" ]; then
+          sanitized_openai_key="$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')"
+          trimmed_openai_key="$(printf '%s' "$sanitized_openai_key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [ -z "$trimmed_openai_key" ]; then
             echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
             exit 1
           fi
@@ -217,7 +219,8 @@ jobs:
           LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
           sanitized="$(printf '%s' "$LLM_API_KEY_SECRET" | tr -d '\r\n')"
-          if [ -z "$sanitized" ]; then
+          trimmed="$(printf '%s' "$sanitized" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          if [ -z "$trimmed" ]; then
             echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
             exit 1
           fi

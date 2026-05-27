@@ -86,6 +86,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow uses only explicit direct GPT-5 credentials"
 	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow masks only the direct OpenAI credential"
 	assert_file_contains "$workflow_file" "STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans" "strix workflow fails closed when direct credentials are absent"
+	assert_file_contains "$workflow_file" 'trimmed_openai_key="$(printf '"'"'%s'"'"' "$sanitized_openai_key" | sed '"'"'s/^[[:space:]]*//;s/[[:space:]]*$//'"'"')"' "strix workflow trims whitespace-only OpenAI keys before gate validation"
+	assert_file_contains "$workflow_file" 'trimmed="$(printf '"'"'%s'"'"' "$sanitized" | sed '"'"'s/^[[:space:]]*//;s/[[:space:]]*$//'"'"')"' "strix workflow trims whitespace-only OpenAI keys before input file creation"
 	assert_file_contains "$workflow_file" "STRIX_LLM_DEFAULT_PROVIDER: openai" "strix workflow uses the OpenAI-compatible provider for OpenAI Platform"
 	assert_file_not_contains "$workflow_file" "provider_mode=github_models" "strix workflow must not fall back to GitHub Models"
 	assert_file_not_contains "$workflow_file" "steps.gate.outputs.provider_mode == 'github_models'" "strix workflow must not prepare GitHub Models API base"
