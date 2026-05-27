@@ -70,21 +70,26 @@ class WebDavService:
         user_id: str,
         organization_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        del organization_id
         stmt = select(
             WebdavAccount.source_uid,
             WebdavAccount.server_url,
             WebdavAccount.username,
-        ).where(WebdavAccount.user_id == user_id)
+            WebdavAccount.writeback_enabled,
+        ).where(
+            WebdavAccount.user_id == user_id,
+            WebdavAccount.organization_id == organization_id
+            if organization_id is not None
+            else WebdavAccount.organization_id.is_(None),
+        )
         result = await session.execute(stmt)
         return [
             {
                 "source_id": source_uid,
                 "server_url": server_url,
                 "username": username,
-                "writeback_enabled": True,
+                "writeback_enabled": bool(writeback_enabled),
             }
-            for source_uid, server_url, username in result.all()
+            for source_uid, server_url, username, writeback_enabled in result.all()
         ]
 
     async def get_project_folders_from_db(

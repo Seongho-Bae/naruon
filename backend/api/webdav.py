@@ -20,6 +20,7 @@ class WebdavAccountResponse(BaseModel):
     source_id: str
     server_url: str
     username: str
+    writeback_enabled: bool
 
 class ProjectFolderResponse(BaseModel):
     folder_id: int

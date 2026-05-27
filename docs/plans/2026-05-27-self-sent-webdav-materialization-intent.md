@@ -17,7 +17,8 @@ from an unscoped backend path.
   return `404`.
 - The backend chooses the customer WebDAV source through the existing
   server-authoritative account lookup using opaque `webdav_accounts.source_uid`
-  values and returns intent metadata only:
+  values, the signed session `organization_id`, and persisted
+  `writeback_enabled` eligibility. It returns intent metadata only:
   `target_path`, `server_url`, `requires_if_match`, `provenance`,
   `provider_write_executed=false`, and the audit event name.
 - Clients may pass `target_source_id`; legacy sequential `target_account_id`

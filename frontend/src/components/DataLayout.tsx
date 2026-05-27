@@ -68,6 +68,7 @@ export function DataLayout() {
     source_id: string;
     server_url: string;
     username: string;
+    writeback_enabled: boolean;
   }
   
   interface ProjectFolder {
@@ -97,7 +98,7 @@ export function DataLayout() {
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
-      const targetSourceId = webdavAccounts[0]?.source_id;
+      const targetSourceId = webdavAccounts.find(acc => acc.writeback_enabled)?.source_id;
       const result = await apiClient.post<WebdavWritebackIntentResponse>(
         '/api/webdav/writeback-intent',
         targetSourceId ? { target_source_id: targetSourceId } : {},
@@ -229,7 +230,7 @@ export function DataLayout() {
                   )}
                   {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV writeback intent 요청 중입니다.</p>}
                   {writebackStatus === 'no_source' && (
-                    <p className="font-bold text-amber-700">연결된 고객 WebDAV 원본 계정이 없어 writeback intent를 만들 수 없습니다.</p>
+                    <p className="font-bold text-amber-700">writeback 가능한 고객 WebDAV 원본 계정이 없어 intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'auth' && (
                     <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>

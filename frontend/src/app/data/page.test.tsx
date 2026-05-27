@@ -39,6 +39,7 @@ function mockWebdavFetch() {
           source_id: "webdav_src_primary",
           server_url: "https://webdav.naruon.net",
           username: "demo_user",
+          writeback_enabled: true,
         },
       ]);
     }

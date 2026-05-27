@@ -157,6 +157,7 @@ def test_get_webdav_accounts(auth_client):
     assert len(body) > 0
     assert body[0]["server_url"] == "https://webdav.naruon.net"
     assert body[0]["username"] == "demo_user"
+    assert body[0]["writeback_enabled"] is True
 
 def test_get_project_folders(auth_client):
     response = auth_client.get("/api/webdav/folders")
@@ -399,6 +400,24 @@ def test_get_webdav_writeback_intent_no_accounts():
         assert response.json()["detail"] == "No connected WebDAV accounts found."
 
 
+def test_webdav_writeback_intent_skips_disabled_accounts():
+    svc = WebDavService()
+    result = svc.determine_webdav_writeback_intent_from_accounts(
+        [
+            {
+                "source_id": "webdav_src_disabled",
+                "server_url": "https://webdav.naruon.net",
+                "username": "demo_user",
+                "writeback_enabled": False,
+            }
+        ],
+        target_source_id="webdav_src_disabled",
+    )
+
+    assert result["status"] == "error"
+    assert result["error_code"] == "no_webdav_account"
+
+
 @pytest.mark.asyncio
 async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     source_uid = f"webdav_src_{uuid.uuid4().hex[:24]}"
@@ -430,13 +449,34 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     CREATE TABLE IF NOT EXISTS webdav_accounts (
                         account_id INTEGER PRIMARY KEY,
                         source_uid VARCHAR UNIQUE NOT NULL,
+                        organization_id VARCHAR,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
                         credentials_encrypted VARCHAR NOT NULL,
+                        writeback_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
                     """
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE webdav_accounts "
+                    "ADD COLUMN IF NOT EXISTS source_uid VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE webdav_accounts "
+                    "ADD COLUMN IF NOT EXISTS organization_id VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE webdav_accounts "
+                    "ADD COLUMN IF NOT EXISTS writeback_enabled "
+                    "BOOLEAN NOT NULL DEFAULT FALSE"
                 )
             )
             await conn.execute(
@@ -454,28 +494,34 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     INSERT INTO webdav_accounts (
                         account_id,
                         source_uid,
+                        organization_id,
                         user_id,
                         server_url,
                         username,
-                        credentials_encrypted
+                        credentials_encrypted,
+                        writeback_enabled
                     )
                     VALUES (
                         :account_id,
                         :source_uid,
+                        :organization_id,
                         :user_id,
                         :server_url,
                         :username,
-                        :credentials_encrypted
+                        :credentials_encrypted,
+                        :writeback_enabled
                     )
                     """
                 ),
                 {
                     "account_id": 10_000 + (uuid.uuid4().int % 1_000_000),
                     "source_uid": source_uid,
+                    "organization_id": "org-acme",
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,
                     "credentials_encrypted": "test-only-placeholder",
+                    "writeback_enabled": True,
                 },
             )
     except (
@@ -631,10 +677,12 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     CREATE TABLE webdav_accounts (
                         account_id INTEGER PRIMARY KEY,
                         source_uid VARCHAR UNIQUE NOT NULL,
+                        organization_id VARCHAR,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
                         credentials_encrypted VARCHAR NOT NULL,
+                        writeback_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
                     """
@@ -712,28 +760,34 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     INSERT INTO webdav_accounts (
                         account_id,
                         source_uid,
+                        organization_id,
                         user_id,
                         server_url,
                         username,
-                        credentials_encrypted
+                        credentials_encrypted,
+                        writeback_enabled
                     )
                     VALUES (
                         :account_id,
                         :source_uid,
+                        :organization_id,
                         :user_id,
                         :server_url,
                         :username,
-                        :credentials_encrypted
+                        :credentials_encrypted,
+                        :writeback_enabled
                     )
                     """
                 ),
                 {
                     "account_id": smoke_id + 1,
                     "source_uid": source_uid,
+                    "organization_id": "org-acme",
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,
                     "credentials_encrypted": "test-only-placeholder",
+                    "writeback_enabled": True,
                 },
             )
     except Exception:

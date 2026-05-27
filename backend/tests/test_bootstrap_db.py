@@ -123,6 +123,16 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "alter table webdav_accounts add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts add column if not exists writeback_enabled"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "update webdav_accounts set source_uid" in statement
         and "webdav_src_" in statement
         and "md5" in statement
@@ -135,6 +145,11 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     )
     assert any(
         "create unique index if not exists uq_webdav_accounts_source_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_webdav_accounts_organization_id"
         in statement
         for statement in statements
     )
@@ -259,5 +274,8 @@ def test_webdav_account_model_exposes_opaque_source_uid():
     column_names = {column.name for column in WebdavAccount.__table__.columns}
 
     assert "source_uid" in column_names
+    assert "organization_id" in column_names
+    assert "writeback_enabled" in column_names
     assert WebdavAccount.__table__.c.source_uid.nullable is False
     assert WebdavAccount.__table__.c.source_uid.unique is True
+    assert WebdavAccount.__table__.c.writeback_enabled.nullable is False

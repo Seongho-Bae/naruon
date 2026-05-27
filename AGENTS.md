@@ -105,7 +105,8 @@
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
   dependency and source-owner contract are explicitly in scope.
 - Calendar and WebDAV writeback source selection must resolve through opaque
-  `source_uid` values, not sequential CalDAV or WebDAV account ids.
+  `source_uid` values, signed-session organization scope, and persisted
+  writeback eligibility, not sequential CalDAV or WebDAV account ids.
   Browser-visible source ids must not reveal account primary keys, and provider
   mutations remain future work until connector execution can enforce capability,
   consent, and ETag/If-Match checks.

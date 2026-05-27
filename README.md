@@ -259,8 +259,9 @@ CalDAV account ids. The browser no longer claims `/api/calendar/sync` success
 from the mail-detail action path; direct provider writes stay deferred until
 connector execution can enforce ETag/If-Match and owner capability checks.
 WebDAV writeback and self-sent knowledge materialization use
-`webdav_accounts.source_uid` as the browser-visible source id and reject legacy
-`target_account_id` payloads.
+`webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
+the signed session organization, honor persisted `writeback_enabled`
+eligibility, and reject legacy `target_account_id` payloads.
 
 ## Operations and release docs
 
