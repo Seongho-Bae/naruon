@@ -5,10 +5,12 @@ from db.session import get_db
 from db.models import Email, TenantConfig
 from pydantic import BaseModel, EmailStr
 import datetime
+from typing import Literal
 from services.email_client import send_email, validate_smtp_destination
 from services.reply_tracking_service import (
     check_missing_replies,
     configured_email_addresses,
+    message_is_from_user,
     message_is_self_sent,
     thread_requires_reply,
 )
@@ -41,6 +43,20 @@ def email_owner_filters(auth_context: AuthContext):
         else Email.organization_id.is_(None)
     )
     return (Email.user_id == auth_context.user_id, organization_filter)
+
+
+MailFolder = Literal["inbox", "sent"]
+
+
+def thread_matches_folder(
+    thread_messages: list[Email], user_addresses: set[str], folder: MailFolder
+) -> bool:
+    if folder == "sent":
+        return any(
+            message_is_from_user(email_message, user_addresses)
+            for email_message in thread_messages
+        )
+    return True
 
 
 class EmailListItem(BaseModel):
@@ -77,6 +93,7 @@ class EmailDetailResponse(BaseModel):
 @router.get("", response_model=dict[str, list[EmailListItem]])
 async def get_emails(
     limit: int = Query(default=50, ge=1, le=200),
+    folder: MailFolder = Query(default="inbox"),
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
@@ -108,7 +125,12 @@ async def get_emails(
             if email.date > grouped[group_key].date:
                 grouped[group_key] = email
 
-    sorted_groups = sorted(grouped.values(), key=lambda x: x.date, reverse=True)[:limit]
+    visible_groups = [
+        email
+        for group_key, email in grouped.items()
+        if thread_matches_folder(thread_messages[group_key], user_addresses, folder)
+    ]
+    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
 
     items = []
     for email in sorted_groups:

@@ -199,6 +199,66 @@ for (const destination of [
   });
 }
 
+test('renders sent mail reply tracking route with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-sent-mail-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const sentRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/emails' && url.searchParams.get('folder') === 'sent' && request.method() === 'GET';
+  });
+
+  await page.goto('/mail?folder=sent');
+  const requestHeaders = (await sentRequest).headers();
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(requestHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByRole('heading', { name: '보낸 메일' }).first()).toBeVisible();
+  await expect(page.getByText('답변 대기').first()).toBeVisible();
+  await expect(page.getByText('응답 대기 중').first()).toBeVisible();
+  await expect(page.getByText('지식 정리').first()).toBeVisible();
+  await expect(page.getByText('벤더 계약 답변 요청').first()).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('sent-mail-reply-tracking-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/mail?folder=sent');
+  await expect(page.getByRole('heading', { name: '보낸 메일' }).first()).toBeVisible();
+  await expect(page.getByText('응답 대기 중').first()).toBeVisible();
+  await expect(page.getByText('나에게 보낸 지식 메모').first()).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('sent-mail-reply-tracking-mobile.png'), fullPage: false });
+  const sentScrollMetrics = await page.locator('#mobile-inbox [data-slot="scroll-area-viewport"]').evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(sentScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(sentScrollMetrics.after).toBeGreaterThan(sentScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('sent-mail-reply-tracking-mobile-scroll.png'), fullPage: false });
+});
+
 test('renders the settings self-hosted connector manifest with mobile scrolling', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockDashboardApi(page);

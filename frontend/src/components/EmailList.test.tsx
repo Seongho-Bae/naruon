@@ -112,6 +112,53 @@ describe("EmailList", () => {
     expect(container.textContent).toContain("(제목 없음)");
   });
 
+  it("renders sent mail reply tracking mode from the sent folder API", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          emails: [
+            {
+              id: 12,
+              sender: "Seongho <user@naruon.ai>",
+              subject: "계약 검토 확인 요청",
+              date: "2026-05-11T09:30:00Z",
+              snippet: "Please reply when the contract review is complete.",
+              unread: false,
+              reply_count: 1,
+              requires_reply: true,
+            },
+            {
+              id: 13,
+              sender: "user@naruon.ai",
+              subject: "나에게 보낸 회의 메모",
+              date: "2026-05-11T10:30:00Z",
+              snippet: "다음 회의 전까지 지식으로 정리할 메모입니다.",
+              unread: false,
+              reply_count: 1,
+              is_self_sent: true,
+            },
+          ],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailList onSelectEmail={vi.fn()} selectedEmailId={null} folder="sent" />);
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/emails?folder=sent", expect.any(Object));
+    expect(container.textContent).toContain("보낸 메일");
+    expect(container.textContent).toContain("답변 추적");
+    expect(container.textContent).toContain("응답 대기 중");
+    expect(container.textContent).toContain("지식 정리");
+  });
+
   it("keeps untrusted email fields on the React text-node path", async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(

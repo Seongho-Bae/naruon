@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
+import type { MailFolder } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
@@ -426,7 +427,13 @@ function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupVi
   );
 }
 
-export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: WorkspaceStartupView } = {}) {
+export function WorkspaceHome({
+  forcedStartupView,
+  mailFolder = 'inbox',
+}: {
+  forcedStartupView?: WorkspaceStartupView;
+  mailFolder?: MailFolder;
+} = {}) {
   const [selectedEmail, setSelectedEmail] = useState<number | null>(null);
   const [workspaceActionNotice, setWorkspaceActionNotice] = useState<string | null>(null);
   const [desktopDetailActionCommand, setDesktopDetailActionCommand] = useState<WorkspaceActionCommand | null>(null);
@@ -588,7 +595,7 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
         {viewportReady && !isMobileViewport && !isTabletViewport ? (
         <ResizablePanelGroup orientation="horizontal" className="h-full items-stretch rounded-3xl border border-border/80 bg-card/70 shadow-[0_24px_80px_rgba(15,23,42,0.08)] backdrop-blur-xl">
           <ResizablePanel defaultSize={27} minSize={22}>
-            <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
+            <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} folder={mailFolder} />
           </ResizablePanel>
           <ResizableHandle withHandle />
           <ResizablePanel defaultSize={48} minSize={34}>
@@ -624,7 +631,7 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
         {viewportReady && isTabletViewport ? (
           <>
         <div className="min-w-0 basis-[38%] overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-          <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
+          <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} folder={mailFolder} />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-hidden">
           <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -659,7 +666,7 @@ export function WorkspaceHome({ forcedStartupView }: { forcedStartupView?: Works
             role="region"
             className={`mobile-workspace-panel mobile-workspace-panel-inbox h-full ${effectiveMobileView === 'inbox' ? 'block' : 'hidden'}`}
           >
-            <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} />
+            <EmailList onSelectEmail={handleSelectEmail} selectedEmailId={selectedEmail} folder={mailFolder} />
           </section>
           <section
             id="mobile-detail"
