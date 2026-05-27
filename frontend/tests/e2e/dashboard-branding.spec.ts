@@ -384,6 +384,86 @@ test('renders data WebDAV writeback intent status without direct provider writes
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
+test('renders API-backed context search sender DAG and reply tracking', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-search-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const searchRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/search' && request.method() === 'POST';
+  });
+  const graphRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/network/graph' && request.method() === 'GET';
+  });
+
+  await page.goto('/search');
+  const searchHeaders = (await searchRequest).headers();
+  const graphHeaders = (await graphRequest).headers();
+  expect(searchHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(graphHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(searchHeaders[headerName]).toBeUndefined();
+    expect(graphHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByRole('heading', { name: '맥락 검색' })).toBeAttached();
+  await expect(page.getByRole('heading', { name: 'Q2 출시 계획 및 우선순위 조정' }).first()).toBeVisible();
+  await expect(page.getByText('thread-q2').first()).toBeVisible();
+  await expect(page.getByText('답장 2건').first()).toBeVisible();
+  await expect(page.getByText('관계 그래프와 타임라인')).toBeVisible();
+  await expect(page.getByText('김지현 PM').first()).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('search-dag-reply-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/search');
+  await expect(page.getByRole('heading', { name: 'Q2 출시 계획 및 우선순위 조정' }).first()).toBeVisible();
+  await expect(page.getByText('thread-q2').first()).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('search-dag-reply-mobile.png'), fullPage: false });
+  const resultScrollMetrics = await page.locator('aside').evaluate((scroller) => {
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(resultScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(resultScrollMetrics.after).toBeGreaterThan(resultScrollMetrics.before);
+
+  const detailScrollMetrics = await page.locator('main main').evaluate((scroller) => {
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(detailScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(detailScrollMetrics.after).toBeGreaterThan(detailScrollMetrics.before);
+  await page.getByText('관계 이해').scrollIntoViewIfNeeded();
+  await expect(page.getByText('관계 이해')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('search-dag-reply-mobile-scroll.png'), fullPage: false });
+});
+
 test('captures responsive startup evidence for desktop tablet mobile and the mobile drawer', async ({ page }, testInfo) => {
   await mockDashboardApi(page);
   for (const viewport of [

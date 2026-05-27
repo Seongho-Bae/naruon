@@ -1,154 +1,306 @@
 "use client";
 
-import { useState } from 'react';
-import { Search, Filter, Mail, CalendarDays, FileText, UserRound, Network, Clock, CheckCircle2 } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, CheckCircle2, Clock, CornerDownRight, Mail, Network, Search } from 'lucide-react';
 import dynamic from 'next/dynamic';
+
+import { apiClient } from '@/lib/api-client';
 
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
-const MOCK_RESULTS = [
-  { id: 'R-01', title: 'Q2 런칭 캠페인 기획안.pdf', type: '문서', source: 'WebDAV / marketing', date: '오늘 오전 10:30', icon: FileText },
-  { id: 'R-02', title: 'Re: 런칭 일정 변경 안내', type: '메일', source: '보낸 메일 / thread-892', date: '어제 오후 2:15', icon: Mail },
-  { id: 'R-03', title: '출시 최종 리뷰 미팅', type: '일정', source: '회사 CalDAV', date: '5/23 (목) 14:00', icon: CalendarDays },
-  { id: 'R-04', title: '박지현 PM', type: '사람', source: '조직도', date: '최근 연락 2시간 전', icon: UserRound },
+const DEFAULT_QUERY = '런칭 캠페인';
+
+type SearchResultItem = {
+  id: number;
+  subject: string | null;
+  sender: string;
+  date: string;
+  snippet: string;
+  thread_id: string | null;
+  reply_count?: number;
+  score?: number;
+};
+
+type SearchResponse = {
+  results: SearchResultItem[];
+};
+
+type ResultFilter = 'all' | 'thread' | 'single';
+
+const resultFilters: { key: ResultFilter; label: string }[] = [
+  { key: 'all', label: '전체' },
+  { key: 'thread', label: '스레드' },
+  { key: 'single', label: '단건' },
 ];
 
+function formatResultDate(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(parsed);
+}
+
+function resultTitle(result: SearchResultItem) {
+  return result.subject?.trim() || '(제목 없음)';
+}
+
 export function SearchLayout() {
-  const [activeResult, setActiveResult] = useState(MOCK_RESULTS[0]);
+  const [query, setQuery] = useState(DEFAULT_QUERY);
+  const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
+  const [activeFilter, setActiveFilter] = useState<ResultFilter>('all');
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [activeResultId, setActiveResultId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const trimmedQuery = submittedQuery.trim();
+    const controller = new AbortController();
+
+    if (!trimmedQuery) return () => controller.abort();
+
+    apiClient
+      .post<SearchResponse>('/api/search', { query: trimmedQuery, limit: 8 }, { signal: controller.signal })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setResults(response.results);
+        setActiveResultId(response.results[0]?.id ?? null);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setResults([]);
+        setActiveResultId(null);
+        setError('검색 결과를 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [submittedQuery]);
+
+  const filteredResults = useMemo(() => {
+    if (activeFilter === 'thread') return results.filter((result) => (result.reply_count ?? 1) > 1);
+    if (activeFilter === 'single') return results.filter((result) => (result.reply_count ?? 1) <= 1);
+    return results;
+  }, [activeFilter, results]);
+
+  const activeResult = filteredResults.find((result) => result.id === activeResultId) ?? filteredResults[0] ?? null;
+
+  const submitSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedQuery = query.trim();
+    setActiveFilter('all');
+    setError(null);
+    setResults([]);
+    setActiveResultId(null);
+    setLoading(Boolean(trimmedQuery));
+    setSubmittedQuery(trimmedQuery);
+  };
+
+  const resultList = (
+    <div className="divide-y divide-border">
+      {loading ? (
+        <div role="status" aria-live="polite" className="p-5 text-sm font-semibold text-muted-foreground">
+          검색 결과를 불러오는 중입니다.
+        </div>
+      ) : error ? (
+        <div role="alert" className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+          <AlertCircle className="mr-2 inline size-4" aria-hidden="true" />
+          {error}
+        </div>
+      ) : filteredResults.length === 0 ? (
+        <div className="p-5 text-sm font-semibold text-muted-foreground">검색 결과가 없습니다.</div>
+      ) : (
+        filteredResults.map((result) => {
+          const isActive = activeResult?.id === result.id;
+
+          return (
+            <button
+              key={result.id}
+              type="button"
+              onClick={() => setActiveResultId(result.id)}
+              aria-current={isActive ? 'true' : undefined}
+              className={`w-full border-l-4 p-4 text-left transition-colors ${
+                isActive ? 'border-primary bg-secondary/50' : 'border-transparent hover:bg-secondary/20'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-1 rounded-lg border border-border bg-background p-2">
+                  <Mail className="size-4 text-primary" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-sm font-bold">{resultTitle(result)}</h3>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">{result.sender}</p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{result.snippet}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+                      {result.thread_id ? '메일 스레드' : '메일'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      <Clock className="mr-0.5 inline size-3" aria-hidden="true" />
+                      {formatResultDate(result.date)}
+                    </span>
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                      답장 {result.reply_count ?? 1}건
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </button>
+          );
+        })
+      )}
+    </div>
+  );
 
   return (
-    <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
-      {/* Top Search Bar */}
-      <header className="flex h-20 shrink-0 items-center justify-center border-b border-border bg-card px-8">
+    <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
+      <header className="shrink-0 border-b border-border bg-card px-4 py-4 md:px-8">
         <h1 className="sr-only">맥락 검색</h1>
-        <div className="relative w-full max-w-3xl">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-primary" />
-          <input 
-            type="text" 
-            placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..." 
-            defaultValue="런칭 캠페인"
-            className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 transition-all" 
-          />
-          <button className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors">
-            <Filter className="size-5" />
+        <form onSubmit={submitSearch} className="mx-auto flex w-full max-w-4xl gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-primary" aria-hidden="true" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..."
+              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-4 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+            />
+          </div>
+          <button type="submit" className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+            검색
           </button>
-        </div>
+        </form>
       </header>
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Left Panel - Search Results */}
-        <aside className="w-[400px] shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
-          <div className="p-5 border-b border-border flex items-center justify-between">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto border-b border-border bg-card md:max-h-none md:w-[400px] md:border-b-0 md:border-r">
+          <div className="flex items-center justify-between border-b border-border p-5">
             <h2 className="font-bold">통합 검색 결과</h2>
-            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">24건</span>
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+              {results.length}건
+            </span>
           </div>
-          
-          <div className="flex gap-2 p-4 border-b border-border overflow-x-auto no-scrollbar">
-            {['전체', '메일', '문서', '일정', '사람'].map((filter, i) => (
-              <button key={filter} className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${i === 0 ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}`}>
-                {filter}
+          <div className="flex gap-2 overflow-x-auto border-b border-border p-4">
+            {resultFilters.map((filter) => (
+              <button
+                key={filter.key}
+                type="button"
+                onClick={() => setActiveFilter(filter.key)}
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                  activeFilter === filter.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                }`}
+              >
+                {filter.label}
               </button>
             ))}
           </div>
+          {resultList}
+        </aside>
 
-          <div className="divide-y divide-border">
-            {MOCK_RESULTS.map((res) => {
-              const Icon = res.icon;
-              return (
-                <div 
-                  key={res.id} 
-                  onClick={() => setActiveResult(res)}
-                  className={`cursor-pointer p-4 transition-colors ${activeResult.id === res.id ? 'bg-secondary/50 border-l-4 border-primary' : 'hover:bg-secondary/20 border-l-4 border-transparent'}`}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 rounded-md bg-background border border-border p-2">
-                      <Icon className="size-4 text-primary" />
+        <main className="flex-1 overflow-y-auto bg-background p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-8">
+          <div className="mx-auto max-w-5xl space-y-6">
+            {!activeResult ? (
+              <div className="rounded-lg border border-border bg-card p-6 text-sm font-semibold text-muted-foreground shadow-sm">
+                결과를 선택하면 메일 스레드, 답장 추적, 발신자 관계를 함께 보여줍니다.
+              </div>
+            ) : (
+              <>
+                <section aria-label="검색 결과 상세" className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
+                  <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="rounded-lg bg-primary/10 p-4">
+                        <Mail className="size-7 text-primary" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="mb-2 inline-block rounded bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
+                          메일 스레드
+                        </span>
+                        <h2 className="text-xl font-bold md:text-2xl">{resultTitle(activeResult)}</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">{activeResult.sender}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-sm truncate">{res.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1 truncate">{res.source}</p>
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-[10px] font-bold text-muted-foreground bg-border/50 px-1.5 py-0.5 rounded">{res.type}</span>
-                        <span className="text-[10px] text-muted-foreground"><Clock className="inline size-3 mr-0.5" />{res.date}</span>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-muted-foreground">
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <p className="text-foreground">{activeResult.thread_id ?? 'thread 없음'}</p>
+                        <p className="mt-1">THREAD_ID</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <p className="text-foreground">{activeResult.reply_count ?? 1}건</p>
+                        <p className="mt-1">답장 추적</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-background px-3 py-2">
+                        <p className="text-foreground">{(activeResult.score ?? 0).toFixed(2)}</p>
+                        <p className="mt-1">점수</p>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-        {/* Right Panel - Context & Graph */}
-        <main className="flex-1 overflow-y-auto bg-background p-8">
-          <div className="max-w-4xl mx-auto space-y-8">
-            
-            {/* Detail Card */}
-            <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="rounded-xl bg-primary/10 p-4">
-                    <activeResult.icon className="size-8 text-primary" />
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm leading-7 text-foreground">
+                    {activeResult.snippet}
                   </div>
-                  <div>
-                    <span className="rounded px-2 py-0.5 text-xs font-bold bg-primary/10 text-primary mb-2 inline-block">{activeResult.type}</span>
-                    <h1 className="text-2xl font-bold">{activeResult.title}</h1>
-                    <p className="text-sm text-muted-foreground mt-1">{activeResult.source}</p>
-                  </div>
-                </div>
-                <button className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-                  열기
-                </button>
-              </div>
-              <div className="rounded-xl bg-secondary/30 p-4 text-sm text-foreground leading-relaxed border border-border">
-                이 문서(메일/일정)는 Q2 마케팅 캠페인의 최종 런칭 계획을 포함하고 있습니다. 파일의 무결성이 검증되었으며 WebDAV를 통해 동기화되었습니다.
-              </div>
-            </div>
+                </section>
 
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold">관계 그래프와 타임라인</h2>
-              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">4개 근거 연결</span>
-            </div>
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-lg font-bold">관계 그래프와 타임라인</h2>
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                    API 근거 연결
+                  </span>
+                </div>
 
-            <div className="grid grid-cols-2 gap-6">
-              {/* Relationship Graph */}
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex flex-col">
-                <div className="flex items-center gap-2 mb-4">
-                  <Network className="size-5 text-primary" />
-                  <h2 className="font-bold text-lg">관계 그래프 (Relationship)</h2>
-                </div>
-                <div className="flex-1 relative min-h-[300px] bg-background rounded-xl border border-border flex items-center justify-center overflow-hidden shadow-inner">
-                  <NetworkGraph />
-                </div>
-              </div>
+                <div className="grid gap-6 xl:grid-cols-2">
+                  <section className="flex min-h-[420px] flex-col rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      <Network className="size-5 text-primary" aria-hidden="true" />
+                      <h3 className="text-lg font-bold">관계 그래프 (Relationship)</h3>
+                    </div>
+                    <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
+                      <NetworkGraph />
+                    </div>
+                  </section>
 
-              {/* Timeline Flow */}
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <div className="flex items-center gap-2 mb-6">
-                  <Clock className="size-5 text-primary" />
-                  <h2 className="font-bold text-lg">타임라인 (Timeline)</h2>
+                  <section className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
+                    <div className="mb-6 flex items-center gap-2">
+                      <Clock className="size-5 text-primary" aria-hidden="true" />
+                      <h3 className="text-lg font-bold">타임라인 (Timeline)</h3>
+                    </div>
+                    <div className="relative ml-3 space-y-6 border-l-2 border-border">
+                      <div className="relative pl-6">
+                        <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-primary" />
+                        <p className="mb-1 text-xs font-bold text-primary">현재</p>
+                        <h4 className="inline-block rounded bg-secondary px-2 py-1 text-sm font-bold">검색 결과 선택됨</h4>
+                      </div>
+                      <div className="relative pl-6">
+                        <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border" />
+                        <p className="mb-1 text-xs font-bold text-muted-foreground">{formatResultDate(activeResult.date)}</p>
+                        <h4 className="text-sm font-bold text-muted-foreground">{resultTitle(activeResult)}</h4>
+                        <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <CheckCircle2 className="size-3" aria-hidden="true" />
+                          thread reply_count={activeResult.reply_count ?? 1}
+                        </p>
+                      </div>
+                      {activeResult.thread_id ? (
+                        <div className="relative pl-6">
+                          <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border" />
+                          <p className="mb-1 text-xs font-bold text-muted-foreground">스레드 기준</p>
+                          <h4 className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+                            <CornerDownRight className="size-4" aria-hidden="true" />
+                            {activeResult.thread_id}
+                          </h4>
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
                 </div>
-                <div className="relative border-l-2 border-border ml-3 space-y-6">
-                  <div className="relative pl-6">
-                    <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-primary"></div>
-                    <p className="text-xs text-primary font-bold mb-1">현재</p>
-                    <h3 className="text-sm font-bold bg-secondary inline-block px-2 py-1 rounded">결과 항목 선택됨</h3>
-                  </div>
-                  <div className="relative pl-6">
-                    <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border"></div>
-                    <p className="text-xs text-muted-foreground font-bold mb-1">어제 오전 11:20</p>
-                    <h3 className="text-sm font-bold text-muted-foreground">박지현 PM이 런칭 일정을 승인함</h3>
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1"><CheckCircle2 className="size-3" /> 의사결정 로그</p>
-                  </div>
-                  <div className="relative pl-6">
-                    <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border"></div>
-                    <p className="text-xs text-muted-foreground font-bold mb-1">3일 전</p>
-                    <h3 className="text-sm font-bold text-muted-foreground">초안 문서 생성 (WebDAV 반입)</h3>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+              </>
+            )}
           </div>
         </main>
       </div>

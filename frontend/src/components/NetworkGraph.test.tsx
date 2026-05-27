@@ -100,7 +100,7 @@ describe("NetworkGraph", () => {
       Promise.resolve(
         jsonResponse({
           nodes: [{ id: "person-1", label: "김지현", title: "PM" }],
-          edges: [{ from: "person-1", to: "person-1", title: "관련 메일" }],
+          edges: [{ source: "person-1", target: "person-1", title: "관련 메일" }],
         }),
       ),
     );
@@ -120,6 +120,37 @@ describe("NetworkGraph", () => {
     expect(container.textContent).toContain("1개 관계");
     expect(container.textContent).toContain("김지현");
     expect(container.textContent).not.toContain("nodes and");
+  });
+
+  it("normalizes backend source target edges before rendering the graph", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [
+            { id: "sender-1", label: "김지현", title: "PM" },
+            { id: "recipient-1", label: "사용자", title: "Owner" },
+          ],
+          edges: [{ source: "sender-1", target: "recipient-1", weight: 2, title: "메일 2건" }],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+    await flushAsyncWork();
+
+    expect(Network).toHaveBeenCalledTimes(1);
+    const networkData = vi.mocked(Network).mock.calls[0]?.[1];
+    const edges = Array.isArray(networkData?.edges) ? networkData.edges : [];
+    expect(edges[0]).toMatchObject({ from: "sender-1", to: "recipient-1", weight: 2 });
+    expect(edges[0]).not.toHaveProperty("source");
+    expect(edges[0]).not.toHaveProperty("target");
   });
 
   it("refits the graph when the viewport changes", async () => {

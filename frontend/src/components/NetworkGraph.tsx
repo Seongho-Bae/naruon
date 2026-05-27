@@ -15,7 +15,20 @@ interface Edge {
   [key: string]: unknown;
 }
 
+interface ApiEdge {
+  from?: number | string;
+  to?: number | string;
+  source?: number | string;
+  target?: number | string;
+  [key: string]: unknown;
+}
+
 interface NetworkData {
+  nodes: Node[];
+  edges: ApiEdge[];
+}
+
+interface NormalizedNetworkData {
   nodes: Node[];
   edges: Edge[];
 }
@@ -36,10 +49,33 @@ function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   return sanitized;
 }
 
-function sanitizeNetworkData(data: NetworkData): NetworkData {
+function isGraphId(value: unknown): value is number | string {
+  return typeof value === 'number' || typeof value === 'string';
+}
+
+function normalizeEdge(edge: ApiEdge): Edge | null {
+  const from = edge.from ?? edge.source;
+  const to = edge.to ?? edge.target;
+
+  if (!isGraphId(from) || !isGraphId(to)) return null;
+
+  const rest = { ...edge };
+  delete rest.source;
+  delete rest.target;
+  return {
+    ...rest,
+    from,
+    to,
+  };
+}
+
+function sanitizeNetworkData(data: NetworkData): NormalizedNetworkData {
   return {
     nodes: data.nodes.map(sanitizeGraphItem),
-    edges: data.edges.map(sanitizeGraphItem),
+    edges: data.edges.flatMap((edge) => {
+      const normalized = normalizeEdge(edge);
+      return normalized ? [sanitizeGraphItem(normalized)] : [];
+    }),
   };
 }
 
