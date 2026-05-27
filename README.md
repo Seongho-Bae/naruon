@@ -47,6 +47,11 @@ mail/calendar/file systems.
   signed WebDAV/Notes materialization intent for that task and shows the planned
   customer-owned target with `provider_write_executed=false`; actual provider
   mutation remains connector execution work.
+- **Pending reply dashboard**: the Today dashboard reads signed
+  `/api/emails/pending-replies?limit=3` data and shows sent-mail reply waits in
+  Home KPIs and judgment points. Pending replies are calculated from
+  customer-owned mailbox metadata; Naruon does not host the mailbox or fabricate
+  provider writes.
 
 ## Five-minute local path
 

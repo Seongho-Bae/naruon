@@ -276,6 +276,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
       return;
     }
 
+    if (path === '/api/emails/pending-replies' && request.method() === 'GET') {
+      await fulfillJson(route, { emails: [sentEmail, sentFollowUp] });
+      return;
+    }
+
     if (path === '/api/prompts' && request.method() === 'GET') {
       await fulfillJson(route, aiHubPrompts);
       return;
