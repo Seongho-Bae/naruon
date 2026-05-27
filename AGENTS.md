@@ -122,6 +122,11 @@
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a
   global relationship graph as if it were current-thread evidence.
+- Unique email and forwarded-import dedupe must use strong scoped signals:
+  normalized Message-ID, References/In-Reply-To, persisted duplicate provenance,
+  or exact body/attachment fingerprints. Do not merge threads from subject-only
+  `Fwd:` or `Re:` similarity, and keep duplicate cleanup intent-only until
+  provenance persistence and source-backed import rewiring are implemented.
 
 ## Development environment and tooling defaults
 

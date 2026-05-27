@@ -105,6 +105,26 @@ async def test_existing_legacy_bracketed_thread_id_is_normalized():
 
 
 @pytest.mark.asyncio
+async def test_forwarded_subject_alone_does_not_merge_unrelated_thread():
+    session = _SequentialSession(["unrelated-thread"])
+
+    thread_id = await assign_thread_id(
+        session,
+        {
+            "message_id": "<forwarded-copy@example.com>",
+            "in_reply_to": None,
+            "references": None,
+            "subject": "Fwd: Q2 출시 계획",
+        },
+        user_id="testuser",
+        organization_id="org-acme",
+    )
+
+    assert thread_id == "forwarded-copy@example.com"
+    assert session.execute_count == 0
+
+
+@pytest.mark.asyncio
 async def test_existing_thread_lookup_is_scoped_to_owner_and_organization():
     session = _QueryCapturingSession(["thread-123"])
 

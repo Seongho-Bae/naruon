@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
 from db.session import get_db
 from db.models import Email, TenantConfig
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 import datetime
 from typing import Literal
 from services.email_client import send_email, validate_smtp_destination
@@ -15,6 +15,12 @@ from services.reply_tracking_service import (
     thread_requires_reply,
 )
 from services.threading_service import normalize_message_id
+from services.email_dedupe_service import (
+    EmailDedupeCandidate,
+    candidate_message_lookup_values,
+    candidate_strong_fingerprint,
+    email_strong_fingerprint,
+)
 import logging
 from api.auth import AuthContext, get_auth_context, get_current_user
 
@@ -59,6 +65,27 @@ def thread_matches_folder(
     return True
 
 
+def _to_dedupe_candidate(
+    candidate: "UniqueThreadCandidateRequest",
+) -> EmailDedupeCandidate:
+    return EmailDedupeCandidate(
+        candidate_key=candidate.candidate_key,
+        message_id=candidate.message_id,
+        sender=candidate.sender,
+        recipients=candidate.recipients,
+        subject=candidate.subject,
+        date=candidate.date,
+        body=candidate.body,
+    )
+
+
+def _email_message_lookup_values(email_row: Email) -> set[str]:
+    normalized = normalize_message_id(email_row.message_id)
+    if not normalized:
+        return set()
+    return {normalized, f"<{normalized}>"}
+
+
 class EmailListItem(BaseModel):
     id: int
     thread_id: str | None = None
@@ -88,6 +115,40 @@ class EmailDetailResponse(BaseModel):
     references: str | None = None
     requires_reply: bool = False
     schedule_conflict: bool = False
+
+
+class UniqueThreadCandidateRequest(BaseModel):
+    candidate_key: str = Field(min_length=1, max_length=128)
+    message_id: str | None = Field(default=None, max_length=512)
+    sender: str | None = Field(default=None, max_length=512)
+    recipients: str | None = Field(default=None, max_length=2048)
+    subject: str | None = Field(default=None, max_length=1024)
+    date: datetime.datetime | None = None
+    body: str | None = Field(default=None, max_length=20000)
+
+
+class UniqueThreadIntentRequest(BaseModel):
+    candidates: list[UniqueThreadCandidateRequest] = Field(
+        min_length=1, max_length=20
+    )
+
+
+class UniqueThreadUpdate(BaseModel):
+    candidate_key: str
+    canonical_thread_id: str
+    dedupe_key: str
+    match_reason: Literal["message_id", "fingerprint"]
+    existing_message_id: str
+
+
+class UniqueThreadIntentResponse(BaseModel):
+    status: Literal["intent_ready"]
+    candidates_checked: int
+    duplicates_found: int
+    thread_updates: list[UniqueThreadUpdate]
+    provenance: Literal["server-authoritative"]
+    provider_write_executed: bool
+    audit_event: Literal["email.unique_thread_intent.created"]
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -182,6 +243,93 @@ async def get_pending_replies(
             )
         )
     return {"emails": items}
+
+
+@router.post("/unique-thread-intent", response_model=UniqueThreadIntentResponse)
+async def create_unique_thread_intent(
+    request: UniqueThreadIntentRequest,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
+    message_lookup_values: set[str] = set()
+    fingerprint_values: set[str] = set()
+    for candidate in candidates:
+        message_lookup_values.update(candidate_message_lookup_values(candidate))
+        candidate_fingerprint = candidate_strong_fingerprint(candidate)
+        if candidate_fingerprint:
+            fingerprint_values.add(candidate_fingerprint)
+
+    predicates = []
+    if message_lookup_values:
+        predicates.append(Email.message_id.in_(message_lookup_values))
+    if fingerprint_values:
+        predicates.append(Email.fingerprint.in_(fingerprint_values))
+
+    existing_emails: list[Email] = []
+    if predicates:
+        result = await db.execute(
+            select(Email).where(
+                *email_owner_filters(auth_context),
+                or_(*predicates),
+            )
+        )
+        existing_emails = list(result.scalars().all())
+
+    by_message_id: dict[str, Email] = {}
+    by_fingerprint: dict[str, Email] = {}
+    for email_row in existing_emails:
+        for lookup_value in _email_message_lookup_values(email_row):
+            by_message_id.setdefault(lookup_value, email_row)
+        row_fingerprint = email_strong_fingerprint(email_row)
+        if row_fingerprint:
+            by_fingerprint.setdefault(row_fingerprint, email_row)
+        if email_row.fingerprint:
+            by_fingerprint.setdefault(email_row.fingerprint, email_row)
+
+    updates: list[UniqueThreadUpdate] = []
+    for candidate in candidates:
+        matched_email: Email | None = None
+        match_reason: Literal["message_id", "fingerprint"] | None = None
+        dedupe_key: str | None = None
+
+        for lookup_value in candidate_message_lookup_values(candidate):
+            if lookup_value in by_message_id:
+                matched_email = by_message_id[lookup_value]
+                match_reason = "message_id"
+                dedupe_key = normalize_message_id(lookup_value) or lookup_value
+                break
+
+        if matched_email is None:
+            candidate_fingerprint = candidate_strong_fingerprint(candidate)
+            if candidate_fingerprint and candidate_fingerprint in by_fingerprint:
+                matched_email = by_fingerprint[candidate_fingerprint]
+                match_reason = "fingerprint"
+                dedupe_key = f"sha256:{candidate_fingerprint[:16]}"
+
+        if matched_email is not None and match_reason and dedupe_key:
+            updates.append(
+                UniqueThreadUpdate(
+                    candidate_key=candidate.candidate_key,
+                    canonical_thread_id=canonical_thread_key(matched_email),
+                    dedupe_key=dedupe_key,
+                    match_reason=match_reason,
+                    existing_message_id=(
+                        normalize_message_id(matched_email.message_id)
+                        or matched_email.message_id
+                    ),
+                )
+            )
+
+    return UniqueThreadIntentResponse(
+        status="intent_ready",
+        candidates_checked=len(candidates),
+        duplicates_found=len(updates),
+        thread_updates=updates,
+        provenance="server-authoritative",
+        provider_write_executed=False,
+        audit_event="email.unique_thread_intent.created",
+    )
 
 
 @router.get("/{email_id}", response_model=EmailDetailResponse)

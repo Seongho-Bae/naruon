@@ -16,6 +16,44 @@ type WebdavWritebackIntentResponse = {
 
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'auth' | 'error';
 
+type UniqueThreadIntentResponse = {
+  status: string;
+  candidates_checked: number;
+  duplicates_found: number;
+  provider_write_executed: boolean;
+  provenance: string;
+  audit_event: string;
+  thread_updates: Array<{
+    candidate_key: string;
+    canonical_thread_id: string;
+    dedupe_key: string;
+    match_reason: 'message_id' | 'fingerprint';
+    existing_message_id: string;
+  }>;
+};
+
+type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
+
+const duplicateImportCandidates = [
+  {
+    candidate_key: 'zip-q2-root',
+    message_id: 'q2-root@example.com',
+    sender: 'partner@example.com',
+    recipients: 'user@naruon.net',
+    subject: 'Q2 출시 계획',
+    date: '2026-05-27T09:30:00Z',
+    body: 'Forwarded launch plan body',
+  },
+  {
+    candidate_key: 'forwarded-copy',
+    sender: 'partner@example.com',
+    recipients: 'user@naruon.net',
+    subject: 'Q2 출시 계획',
+    date: '2026-05-27T09:30:00Z',
+    body: 'Forwarded launch plan body',
+  },
+];
+
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
   if (typeof shapedError?.status === 'number') return shapedError.status;
@@ -42,6 +80,8 @@ export function DataLayout() {
   const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
   const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
+  const [uniqueThreadStatus, setUniqueThreadStatus] = useState<UniqueThreadStatus>('idle');
+  const [uniqueThreadResult, setUniqueThreadResult] = useState<UniqueThreadIntentResponse | null>(null);
 
   useEffect(() => {
     apiClient.get<WebdavAccount[]>('/api/webdav/accounts')
@@ -76,7 +116,24 @@ export function DataLayout() {
     }
   }, [webdavAccounts]);
 
+  const requestUniqueThreadIntent = useCallback(async () => {
+    setUniqueThreadStatus('loading');
+    setUniqueThreadResult(null);
+    try {
+      const result = await apiClient.post<UniqueThreadIntentResponse>(
+        '/api/emails/unique-thread-intent',
+        { candidates: duplicateImportCandidates },
+      );
+      setUniqueThreadResult(result);
+      setUniqueThreadStatus('success');
+    } catch (error: unknown) {
+      const status = getApiErrorStatus(error);
+      setUniqueThreadStatus(status === 401 || status === 403 ? 'auth' : 'error');
+    }
+  }, []);
+
   const isWritebackLoading = writebackStatus === 'loading';
+  const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -203,6 +260,72 @@ export function DataLayout() {
                         <dd className="mt-1 break-all font-mono text-sm text-foreground">{writebackResult.server_url ?? 'none'}</dd>
                       </div>
                     </dl>
+                  )}
+                </div>
+              </section>
+
+              <section aria-label="unique email canonical thread intent" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black uppercase text-primary">Canonical email thread</p>
+                    <h2 className="mt-1 text-lg font-black">중복 메일 thread 정리 intent</h2>
+                    <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                      ZIP 반입과 계정 간 포워딩으로 같은 메일이 다시 들어오면 Message-ID와 강한 body fingerprint로 기존 canonical thread에 연결할 intent를 만듭니다.
+                      subject만 비슷한 메일은 자동 병합하지 않습니다.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void requestUniqueThreadIntent()}
+                    disabled={isUniqueThreadLoading}
+                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                  >
+                    중복 메일 thread intent 점검
+                  </button>
+                </div>
+
+                <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
+                  {uniqueThreadStatus === 'idle' && (
+                    <p className="text-muted-foreground">provider write나 DB 병합을 실행하지 않고 canonical thread 후보만 검증합니다.</p>
+                  )}
+                  {uniqueThreadStatus === 'loading' && <p className="font-bold text-primary">중복 메일 thread intent 요청 중입니다.</p>}
+                  {uniqueThreadStatus === 'auth' && (
+                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 중복 메일 intent를 만들 수 없습니다.</p>
+                  )}
+                  {uniqueThreadStatus === 'error' && (
+                    <p className="font-bold text-red-700">중복 메일 thread intent 점검에 실패했습니다.</p>
+                  )}
+                  {uniqueThreadStatus === 'success' && uniqueThreadResult && (
+                    <div className="space-y-3">
+                      <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <dt className="font-black text-muted-foreground">CHECKED</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.candidates_checked}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-black text-muted-foreground">DUPLICATES</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.duplicates_found}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-black text-muted-foreground">PROVIDER_WRITE</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">provider_write_executed={String(uniqueThreadResult.provider_write_executed)}</dd>
+                        </div>
+                        <div>
+                          <dt className="font-black text-muted-foreground">AUDIT</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.audit_event}</dd>
+                        </div>
+                      </dl>
+                      <div className="grid gap-2">
+                        {uniqueThreadResult.thread_updates.map((update) => (
+                          <div key={update.candidate_key} className="rounded-xl border border-border bg-card p-3 text-xs">
+                            <p className="font-black text-foreground">{update.candidate_key}</p>
+                            <p className="mt-1 break-all text-muted-foreground">
+                              {update.match_reason} → {update.canonical_thread_id} ({update.dedupe_key})
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
               </section>

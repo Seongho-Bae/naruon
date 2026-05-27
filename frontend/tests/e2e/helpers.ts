@@ -302,6 +302,34 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/emails/unique-thread-intent' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        status: 'intent_ready',
+        candidates_checked: 2,
+        duplicates_found: 2,
+        provider_write_executed: false,
+        provenance: 'server-authoritative',
+        audit_event: 'email.unique_thread_intent.created',
+        thread_updates: [
+          {
+            candidate_key: 'zip-q2-root',
+            canonical_thread_id: 'thread-q2-root',
+            dedupe_key: 'q2-root@example.com',
+            match_reason: 'message_id',
+            existing_message_id: 'q2-root@example.com',
+          },
+          {
+            candidate_key: 'forwarded-copy',
+            canonical_thread_id: 'thread-q2-root',
+            dedupe_key: 'sha256:duplicate',
+            match_reason: 'fingerprint',
+            existing_message_id: 'q2-root@example.com',
+          },
+        ],
+      });
+      return;
+    }
+
     if (path === '/api/webdav/knowledge-materialization-intent' && request.method() === 'POST') {
       await fulfillJson(route, {
         intent: 'knowledge_materialization',
