@@ -1,10 +1,62 @@
 "use client";
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
+
+import { apiClient } from '@/lib/api-client';
+
+type CalendarWritebackIntentResponse = {
+  workspace_id: string;
+  target_source_id: string;
+  protocol: string;
+  writeback_mode: 'customer_owned';
+  requires_if_match: boolean;
+  if_match: string | null;
+  provenance: Record<string, string>;
+  audit_event: string;
+};
+
+type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
+
+function getApiErrorStatus(error: unknown) {
+  const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
+  if (typeof shapedError?.status === 'number') return shapedError.status;
+  if (typeof shapedError?.response?.status === 'number') return shapedError.response.status;
+  return null;
+}
 
 export function CalendarLayout() {
   const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');
+  const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
+  const [writebackResult, setWritebackResult] = useState<CalendarWritebackIntentResponse | null>(null);
+
+  const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
+    setWritebackStatus('loading');
+    setWritebackResult(null);
+    try {
+      const result = await apiClient.post<CalendarWritebackIntentResponse>('/api/calendar/writeback-intent', {
+        action,
+        summary: action === 'create'
+          ? 'Naruon 일정 후보 writeback intent 점검'
+          : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
+      });
+      setWritebackResult(result);
+      setWritebackStatus('success');
+    } catch (error: unknown) {
+      const status = getApiErrorStatus(error);
+      if (status === 422) {
+        setWritebackStatus('no_source');
+      } else if (status === 409) {
+        setWritebackStatus('conflict');
+      } else if (status === 401 || status === 403) {
+        setWritebackStatus('auth');
+      } else {
+        setWritebackStatus('error');
+      }
+    }
+  }, []);
+
+  const isWritebackLoading = writebackStatus === 'loading';
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -41,36 +93,110 @@ export function CalendarLayout() {
 
       {/* Main Calendar Area */}
       <main className="flex min-w-0 flex-1 flex-col bg-background">
-        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6 bg-card">
-          <div className="flex items-center gap-4">
+        <header className="flex h-auto min-h-16 shrink-0 flex-col items-start gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
             <button className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
             <div className="flex items-center gap-1">
               <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronLeft className="size-5" /></button>
               <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronRight className="size-5" /></button>
             </div>
             <h1 className="text-xl font-bold">일정 관리</h1>
-            <h2 className="text-sm font-bold text-muted-foreground ml-2">2026년 5월</h2>
+            <h2 className="text-sm font-bold text-muted-foreground lg:ml-2">2026년 5월</h2>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex overflow-hidden rounded-md border border-border">
+          <div className="flex w-full min-w-0 items-center gap-3">
+            <div className="flex min-w-0 overflow-x-auto rounded-md border border-border">
               {['월간 캘린더', '주간 캘린더', '일정 상세', '회의 조율', '일정 후보'].map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
-                  className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
                 </button>
               ))}
             </div>
-            <button className="grid size-9 place-items-center rounded-md border border-border bg-background hover:bg-secondary">
+            <button className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary">
               <Settings className="size-5" />
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 lg:pb-6">
           <p className="sr-only">원본 계정 writeback 흐름</p>
+          <section aria-label="CalDAV writeback intent 점검" className="rounded-2xl border border-border bg-card p-4 shadow-sm md:p-5">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-black uppercase text-primary">Customer-owned calendar intent</p>
+                <h2 className="mt-1 text-lg font-black text-foreground">CalDAV/CardDAV/WebDAV writeback intent</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  Naruon은 캘린더 서버가 아니라 고객 원본 계정에 반영할 의도를 기록합니다.
+                  실제 provider write는 source capability, provenance, ETag/If-Match, 감사 이벤트를 통과해야 합니다.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void requestWritebackIntent('create')}
+                  disabled={isWritebackLoading}
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                >
+                  새 일정 intent 점검
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void requestWritebackIntent('update')}
+                  disabled={isWritebackLoading}
+                  className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
+                >
+                  ETag 업데이트 점검
+                </button>
+              </div>
+            </div>
+
+            <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
+              {writebackStatus === 'idle' && (
+                <p className="text-muted-foreground">아직 provider write는 실행하지 않았습니다. intent 점검으로 원본 source와 충돌 조건만 확인합니다.</p>
+              )}
+              {writebackStatus === 'loading' && <p className="font-bold text-primary">writeback intent 요청 중입니다.</p>}
+              {writebackStatus === 'no_source' && (
+                <p className="font-bold text-amber-700">원본 CalDAV/CardDAV/WebDAV 계정이 없어 writeback intent를 만들 수 없습니다.</p>
+              )}
+              {writebackStatus === 'conflict' && (
+                <p className="font-bold text-red-700">ETag/If-Match 충돌이 감지되어 원본 일정을 덮어쓰지 않았습니다.</p>
+              )}
+              {writebackStatus === 'auth' && (
+                <p className="font-bold text-red-700">signed session이 필요합니다. 공개 헤더로는 writeback intent를 만들 수 없습니다.</p>
+              )}
+              {writebackStatus === 'error' && (
+                <p className="font-bold text-red-700">writeback intent 점검에 실패했습니다.</p>
+              )}
+              {writebackStatus === 'success' && writebackResult && (
+                <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
+                  <div>
+                    <dt className="font-black text-muted-foreground">WRITEBACK_MODE</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.writeback_mode}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">PROTOCOL</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.protocol}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">TARGET_SOURCE</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.target_source_id}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">IF_MATCH</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.if_match ?? 'not_required'}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">AUDIT_EVENT</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.audit_event}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          </section>
+
           {viewMode === '월간 캘린더' && (
             <div className="h-full rounded-2xl border border-border bg-card shadow-sm flex flex-col overflow-hidden">
               <div className="grid grid-cols-7 border-b border-border bg-secondary/50 text-center text-sm font-semibold py-3">
@@ -79,14 +205,57 @@ export function CalendarLayout() {
               <div className="grid grid-cols-7 grid-rows-5 flex-1 divide-x divide-y divide-border">
                 {/* Simulated Grid Cells */}
                 {Array.from({ length: 35 }).map((_, i) => (
-                  <div key={i} className="p-2 min-h-[100px]">
+                  <div key={i} className="min-h-[84px] p-2 sm:min-h-[100px]">
                     <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
-                    {i === 15 && <div className="mt-1 rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">10:00 제품 리뷰</div>}
-                    {i === 22 && <div className="mt-1 rounded bg-orange-100 px-2 py-1 text-xs font-semibold text-orange-700">09:30 출시 회의</div>}
+                    {i === 15 && (
+                      <div className="mt-1 rounded bg-green-100 px-1.5 py-1 text-[10px] font-semibold leading-tight text-green-700 sm:px-2 sm:text-xs">
+                        10:00<span className="hidden sm:inline"> 제품 리뷰</span>
+                      </div>
+                    )}
+                    {i === 22 && (
+                      <div className="mt-1 rounded bg-orange-100 px-1.5 py-1 text-[10px] font-semibold leading-tight text-orange-700 sm:px-2 sm:text-xs">
+                        09:30<span className="hidden sm:inline"> 출시 회의</span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
+          )}
+          {viewMode === '주간 캘린더' && (
+            <section aria-label="주간 캘린더" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="text-lg font-bold">주간 캘린더</h3>
+              <div className="mt-4 grid gap-3 md:grid-cols-5">
+                {[
+                  ['월', '제품 리뷰', 'caldav-primary'],
+                  ['화', '파트너 미팅 후보', 'caldav-sales'],
+                  ['수', '리소스 배정 검토', 'caldav-team'],
+                  ['목', '출시 회의', 'caldav-primary'],
+                  ['금', '마케팅 캠페인 오프', 'caldav-marketing'],
+                ].map(([day, title, source]) => (
+                  <article key={day} className="rounded-xl border border-border bg-background p-4">
+                    <p className="text-xs font-black text-primary">{day}</p>
+                    <h4 className="mt-2 text-sm font-bold">{title}</h4>
+                    <p className="mt-2 font-mono text-xs text-muted-foreground">{source}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
+          {viewMode === '일정 상세' && (
+            <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="text-lg font-bold">출시 회의 상세</h3>
+              <dl className="mt-4 grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
+                  <dd className="mt-2 text-sm font-bold">Customer CalDAV · caldav-primary</dd>
+                </div>
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <dt className="text-xs font-black text-muted-foreground">충돌 제어</dt>
+                  <dd className="mt-2 text-sm font-bold">ETag / If-Match 필요 시 server-authoritative 검증</dd>
+                </div>
+              </dl>
+            </section>
           )}
           {viewMode === '회의 조율' && (
             <div className="flex h-full flex-col gap-4">
@@ -118,10 +287,23 @@ export function CalendarLayout() {
               </div>
             </div>
           )}
-          {viewMode !== '월간 캘린더' && viewMode !== '회의 조율' && (
-            <div className="flex h-full items-center justify-center text-muted-foreground">
-              {viewMode} 뷰는 아직 구현 중입니다.
-            </div>
+          {viewMode === '일정 후보' && (
+            <section aria-label="일정 후보" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <h3 className="text-lg font-bold">일정 후보</h3>
+              <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                {[
+                  ['파트너 미팅 일정 확정', 'Customer CalDAV', 'create intent'],
+                  ['출시 회의 시간 변경', 'Team CalDAV', 'update intent + If-Match'],
+                  ['개인 메일에서 발견된 회사 일정', 'Company CalDAV', 'source reassignment'],
+                ].map(([title, source, mode]) => (
+                  <article key={title} className="rounded-xl border border-border bg-background p-4">
+                    <h4 className="text-sm font-bold">{title}</h4>
+                    <p className="mt-2 text-xs text-muted-foreground">{source}</p>
+                    <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{mode}</p>
+                  </article>
+                ))}
+              </div>
+            </section>
           )}
         </div>
       </main>

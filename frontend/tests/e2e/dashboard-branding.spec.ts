@@ -172,7 +172,7 @@ for (const viewport of responsiveViewports) {
 
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
-  { path: '/calendar', heading: '일정 관리', marker: { text: '원본 계정 writeback 흐름' } },
+  { path: '/calendar', heading: '일정 관리', marker: { text: 'CalDAV/CardDAV/WebDAV writeback intent' } },
   { path: '/tasks', heading: '할 일 추적', marker: { name: '리소스 배정 검토 회의' } },
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
@@ -233,6 +233,80 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   expect(scrollMetrics?.maxScroll).toBeGreaterThan(0);
   expect(scrollMetrics?.after).toBeGreaterThan(scrollMetrics?.before ?? 0);
   await page.screenshot({ path: testInfo.outputPath('settings-runner-mobile-scroll.png'), fullPage: false });
+});
+
+test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-calendar-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.goto('/calendar');
+  const desktopWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
+  const desktopRequestHeaders = (await desktopWritebackRequest).headers();
+  expect(desktopRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopRequestHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByText('customer_owned')).toBeVisible();
+  await expect(page.getByText('caldav', { exact: true })).toBeVisible();
+  await expect(page.getByText('caldav-primary')).toBeVisible();
+  await expect(page.getByText('calendar.writeback_intent.created')).toBeVisible();
+  await expect(page.getByText('동기화 완료')).toHaveCount(0);
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/calendar');
+  await expect(page.getByRole('heading', { name: '일정 관리' })).toBeVisible();
+  const mobileWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
+  });
+  await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
+  const mobileRequestHeaders = (await mobileWritebackRequest).headers();
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileRequestHeaders[headerName]).toBeUndefined();
+  }
+  await expect(page.getByText('customer_owned')).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile.png'), fullPage: false });
+  const calendarScrollMetrics = await page.evaluate(() => {
+    const scroller = Array.from(document.querySelectorAll('main div')).find((element) => {
+      const style = window.getComputedStyle(element);
+      return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
+    });
+    if (!scroller) return null;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(calendarScrollMetrics).not.toBeNull();
+  expect(calendarScrollMetrics?.maxScroll).toBeGreaterThan(0);
+  expect(calendarScrollMetrics?.after).toBeGreaterThan(calendarScrollMetrics?.before ?? 0);
+  await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
 test('captures responsive startup evidence for desktop tablet mobile and the mobile drawer', async ({ page }, testInfo) => {
