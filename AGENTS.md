@@ -13,7 +13,7 @@
 - Strix Security Scan must use an explicitly named `STRIX_OPENAI_API_KEY`
   OpenAI Platform credential with an OpenAI GPT-5.4-or-newer model. Do not route
   Strix through GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini,
-  GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
+  Google/Vertex, GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
 
 ## PR automation and review defaults
 

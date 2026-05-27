@@ -101,104 +101,15 @@ jobs:
           fi
           echo 'provider_mode=openai_direct' >> "$GITHUB_OUTPUT"
 
-      - name: Gate GCP credentials
-        id: gcp_gate
-        if: steps.gate.outputs.enabled == 'true'
-        env:
-          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-        run: |
-          if [ -n "$GCP_SA_KEY" ]; then
-            echo 'has_gcp=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'has_gcp=false' >> "$GITHUB_OUTPUT"
-            echo 'GCP credentials not configured; Vertex AI auth will not be available.'
-          fi
-
-      - name: Gate model auth prerequisites
-        id: auth_gate
-        if: steps.gate.outputs.enabled == 'true'
-        env:
-          STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
-          DEFAULT_PROVIDER: openai
-        run: |
-          . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
-          strix_llm="$(trim_whitespace "$STRIX_OPENAI_MODEL")"
-          requires_vertex_auth='false'
-          model_auth_rc=0
-          model_requires_vertex_auth "$strix_llm" || model_auth_rc=$?
-          case "$model_auth_rc" in
-          0)
-            requires_vertex_auth='true'
-            ;;
-          1)
-            ;;
-          *)
-            echo '::error::Unable to classify Strix model authentication requirements; failing closed.'
-            exit "$model_auth_rc"
-            ;;
-          esac
-
-          if [ "$requires_vertex_auth" = 'true' ] && [ "${{ steps.gcp_gate.outputs.has_gcp }}" != 'true' ]; then
-            if [ "$GITHUB_EVENT_NAME" = 'push' ] || [ "$GITHUB_EVENT_NAME" = 'schedule' ] || [ "$GITHUB_EVENT_NAME" = 'pull_request_target' ]; then
-              echo '::error::Vertex-authenticated Strix model requires GCP_SA_KEY on privileged event; failing closed.'
-              exit 1
-            fi
-            echo 'can_run=false' >> "$GITHUB_OUTPUT"
-            echo 'Skipping Strix on pull_request_target because the configured model requires GCP_SA_KEY.'
-          else
-            echo 'can_run=true' >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Authenticate to Google Cloud
-        id: gcp_auth
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' && steps.gcp_gate.outputs.has_gcp == 'true'
-        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Relocate generated GCP credentials outside scan target
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' && steps.gcp_gate.outputs.has_gcp == 'true'
-        run: |
-          auth_creds_path="${{ steps.gcp_auth.outputs.credentials_file_path }}"
-          relocated="$(AUTH_CREDS_PATH="$auth_creds_path" python3 - <<'PY'
-          from pathlib import Path
-          import os
-          import re
-          import shutil
-
-          auth_creds_path = Path(os.environ["AUTH_CREDS_PATH"]).resolve(strict=True)
-          runner_temp = Path(os.environ["RUNNER_TEMP"]).resolve(strict=True)
-          github_workspace = Path(os.environ["GITHUB_WORKSPACE"]).resolve(strict=True)
-          pattern = r"gha-creds-[A-Za-z0-9]+\.json"
-          if not re.fullmatch(pattern, auth_creds_path.name):
-              raise SystemExit(f"Unexpected auth credential filename: {auth_creds_path.name}")
-
-          allowed_roots = (runner_temp, github_workspace)
-          if not any(root == auth_creds_path.parent or root in auth_creds_path.parents for root in allowed_roots):
-              raise SystemExit(
-                  f"Expected auth-generated credentials inside RUNNER_TEMP or GITHUB_WORKSPACE, got {auth_creds_path}"
-              )
-
-          relocated = runner_temp / "gha-creds-relocated.json"
-          shutil.move(str(auth_creds_path), relocated)
-          print(relocated)
-          PY
-          )"
-          {
-            echo "GOOGLE_GHA_CREDS_PATH=$relocated"
-            echo "GOOGLE_APPLICATION_CREDENTIALS=$relocated"
-            echo "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE=$relocated"
-          } >> "$GITHUB_ENV"
-
       - name: Install Strix
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           cd "$TRUSTED_WORKSPACE"
           python3 -m pip install --upgrade pip
           python3 -m pip install --no-cache-dir -r requirements-strix-ci.txt
 
       - name: Mask LLM API key
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        if: steps.gate.outputs.enabled == 'true'
         env:
           LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
@@ -214,7 +125,7 @@ jobs:
           fi
 
       - name: Prepare LLM API key input file
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        if: steps.gate.outputs.enabled == 'true'
         env:
           LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
@@ -230,7 +141,7 @@ jobs:
           echo "LLM_API_KEY_FILE=$llm_api_key_file" >> "$GITHUB_ENV"
 
       - name: Prepare Strix model input file
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        if: steps.gate.outputs.enabled == 'true'
         env:
           STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
         run: |
@@ -249,7 +160,7 @@ jobs:
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
 
       - name: Run Strix (quick)
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
+        if: steps.gate.outputs.enabled == 'true'
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
           STRIX_LLM_DEFAULT_PROVIDER: openai
@@ -276,7 +187,7 @@ jobs:
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' }}
+        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/strix_runs"
@@ -299,7 +210,7 @@ jobs:
           fi
 
       - name: Upload Strix reports artifact
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' }}
+        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: strix-reports
