@@ -6,7 +6,7 @@ import { apiClient } from '@/lib/api-client';
 
 type WebdavWritebackIntentResponse = {
   intent: string;
-  source_id: number | null;
+  source_id: string | null;
   server_url: string | null;
   requires_if_match: boolean;
   provenance: string;
@@ -65,9 +65,10 @@ export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
   
   interface WebdavAccount {
-    account_id: number;
+    source_id: string;
     server_url: string;
     username: string;
+    writeback_enabled: boolean;
   }
   
   interface ProjectFolder {
@@ -97,10 +98,10 @@ export function DataLayout() {
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
-      const targetAccountId = webdavAccounts[0]?.account_id;
+      const targetSourceId = webdavAccounts.find(acc => acc.writeback_enabled)?.source_id;
       const result = await apiClient.post<WebdavWritebackIntentResponse>(
         '/api/webdav/writeback-intent',
-        typeof targetAccountId === 'number' ? { target_account_id: targetAccountId } : {},
+        targetSourceId ? { target_source_id: targetSourceId } : {},
       );
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -185,7 +186,7 @@ export function DataLayout() {
                     </div>
                   </div>
                   {webdavAccounts.map(acc => (
-                    <div key={acc.account_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
+                    <div key={acc.source_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
                       <Server className="size-4" />
                       <span className="font-medium">{acc.server_url}</span> ({acc.username})
                     </div>
@@ -229,7 +230,7 @@ export function DataLayout() {
                   )}
                   {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV writeback intent 요청 중입니다.</p>}
                   {writebackStatus === 'no_source' && (
-                    <p className="font-bold text-amber-700">연결된 고객 WebDAV 원본 계정이 없어 writeback intent를 만들 수 없습니다.</p>
+                    <p className="font-bold text-amber-700">writeback 가능한 고객 WebDAV 원본 계정이 없어 intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'auth' && (
                     <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>

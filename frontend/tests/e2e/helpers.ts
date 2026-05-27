@@ -322,9 +322,10 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
     if (path === '/api/webdav/accounts' && request.method() === 'GET') {
       await fulfillJson(route, [
         {
-          account_id: 1,
+          source_id: 'webdav_src_primary',
           server_url: 'https://webdav.naruon.net',
           username: 'demo_user',
+          writeback_enabled: true,
         },
       ]);
       return;
@@ -349,7 +350,7 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
     if (path === '/api/webdav/writeback-intent' && request.method() === 'POST') {
       await fulfillJson(route, {
         intent: 'writeback',
-        source_id: 1,
+        source_id: 'webdav_src_primary',
         server_url: 'https://webdav.naruon.net',
         requires_if_match: true,
         provenance: 'server-authoritative',
@@ -393,7 +394,7 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
         source_type: 'self_sent_knowledge',
         source_email_id: '<self-note@example.com>',
         source_thread_id: 'thread-self-note',
-        source_id: 1,
+        source_id: 'webdav_src_primary',
         server_url: 'https://webdav.naruon.net',
         target_path: '/Naruon/Notes/task-self-knowledge.md',
         requires_if_match: true,

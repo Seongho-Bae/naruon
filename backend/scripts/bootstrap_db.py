@@ -45,6 +45,15 @@ def schema_backfill_sql():
             "created_at timestamptz DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS source_uid varchar"),
+        text(
+            "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS organization_id varchar"
+        ),
+        text(
+            "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS writeback_enabled boolean NOT NULL DEFAULT false"
+        ),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
@@ -80,6 +89,22 @@ def schema_backfill_sql():
             "CREATE INDEX IF NOT EXISTS ix_calendar_writeback_sources_scope "
             "ON calendar_writeback_sources "
             "(user_id, organization_id, source_protocol)"
+        ),
+        text(
+            "UPDATE webdav_accounts "
+            "SET source_uid = 'webdav_src_' || md5("
+            "account_id::text || ':' || user_id || ':' || server_url"
+            ") "
+            "WHERE source_uid IS NULL OR source_uid = ''"
+        ),
+        text("ALTER TABLE webdav_accounts ALTER COLUMN source_uid SET NOT NULL"),
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_webdav_accounts_source_uid "
+            "ON webdav_accounts (source_uid)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_organization_id "
+            "ON webdav_accounts (organization_id)"
         ),
         text("ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(

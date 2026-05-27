@@ -104,11 +104,13 @@
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
   dependency and source-owner contract are explicitly in scope.
-- Calendar writeback source selection must resolve through opaque
-  `calendar_writeback_sources.source_uid` registry rows, not sequential CalDAV
-  or WebDAV account ids. Browser-visible source ids must not reveal account
-  primary keys, and provider mutations remain future work until connector
-  execution can enforce capability, consent, and ETag/If-Match checks.
+- Calendar and WebDAV writeback source selection must resolve through opaque
+  `source_uid` values, signed-session organization scope, and persisted
+  writeback eligibility, not sequential CalDAV or WebDAV account ids.
+  Missing writeback eligibility must fail closed. Browser-visible source ids
+  must not reveal account primary keys, and provider mutations remain future
+  work until connector execution can enforce capability, consent, and
+  ETag/If-Match checks.
 - Self-sent knowledge extraction must first prove true self-to-self addressing,
   stay idempotent per source email, preserve email/thread provenance, and store
   only plain-text task titles. Do not create unlinked knowledge tasks from raw
