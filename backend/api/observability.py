@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
 
@@ -11,7 +12,7 @@ from api.auth import AuthContext, get_auth_context, is_admin_role, is_tenant_adm
 from api.runner_config import _connector_manifest
 from api.runner_ws import manager as runner_connection_manager
 from core.config import settings
-from db.models import WorkspaceRunnerConfig
+from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import get_db
 
 router = APIRouter(prefix="/api/observability", tags=["observability"])
@@ -33,6 +34,14 @@ class TelemetryRuntime(BaseModel):
     otel_endpoint_host: str | None
 
 
+class ConnectorSignalEventResponse(BaseModel):
+    event_uid: str
+    signal_key: str
+    state_code: str
+    detail_text: str | None
+    observed_at: str
+
+
 class ConnectorOperationalState(BaseModel):
     workspace_id: str
     registration_state: Literal["registration_configured", "not_registered"]
@@ -45,6 +54,7 @@ class ConnectorOperationalState(BaseModel):
     last_heartbeat_at: str | None
     last_disconnect_at: str | None
     queue_depth_state: Literal["not_reported"]
+    recent_events: list[ConnectorSignalEventResponse]
 
 
 class OperationalSignal(BaseModel):
@@ -78,6 +88,23 @@ def _endpoint_host(endpoint: str | None) -> str | None:
     if not parsed.netloc:
         return None
     return parsed.netloc.rsplit("@", 1)[-1]
+
+
+def _datetime_to_utc_iso(value: datetime) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _latest_event_time(
+    recent_events: list[ConnectorSignalEventResponse],
+    signal_key: str,
+    state_codes: set[str],
+) -> str | None:
+    for event in recent_events:
+        if event.signal_key == signal_key and event.state_code in state_codes:
+            return event.observed_at
+    return None
 
 
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
@@ -119,6 +146,30 @@ async def _get_runner_config(
     return result.scalar_one_or_none()
 
 
+async def _get_connector_signal_events(
+    db: AsyncSession, organization_id: str, workspace_id: str
+) -> list[ConnectorSignalEventResponse]:
+    result = await db.execute(
+        select(ConnectorSignalEvent)
+        .where(
+            ConnectorSignalEvent.organization_id == organization_id,
+            ConnectorSignalEvent.workspace_id == workspace_id,
+        )
+        .order_by(ConnectorSignalEvent.observed_at.desc())
+        .limit(8)
+    )
+    return [
+        ConnectorSignalEventResponse(
+            event_uid=event.event_uid,
+            signal_key=event.signal_key,
+            state_code=event.state_code,
+            detail_text=event.detail_text,
+            observed_at=_datetime_to_utc_iso(event.observed_at),
+        )
+        for event in result.scalars().all()
+    ]
+
+
 def _telemetry_runtime() -> TelemetryRuntime:
     otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     otel_endpoint_configured = bool(otel_endpoint and otel_endpoint.strip())
@@ -131,7 +182,10 @@ def _telemetry_runtime() -> TelemetryRuntime:
 
 
 def _connector_state(
-    organization_id: str, workspace_id: str, config: WorkspaceRunnerConfig | None
+    organization_id: str,
+    workspace_id: str,
+    config: WorkspaceRunnerConfig | None,
+    recent_events: list[ConnectorSignalEventResponse],
 ) -> ConnectorOperationalState:
     manifest = _connector_manifest()
     connection_snapshot = runner_connection_manager.snapshot(
@@ -157,9 +211,14 @@ def _connector_state(
         network_mode=str(manifest["network_mode"]),
         runner_usage=str(manifest["runner_usage"]),
         local_protocols=list(manifest["local_protocols"]),
-        last_heartbeat_at=connection_snapshot.last_seen_at,
-        last_disconnect_at=connection_snapshot.last_disconnect_at,
+        last_heartbeat_at=connection_snapshot.last_seen_at
+        or _latest_event_time(
+            recent_events, "connector_heartbeat", {"connected", "heartbeat"}
+        ),
+        last_disconnect_at=connection_snapshot.last_disconnect_at
+        or _latest_event_time(recent_events, "connector_heartbeat", {"disconnected"}),
         queue_depth_state="not_reported",
+        recent_events=recent_events,
     )
 
 
@@ -192,7 +251,7 @@ def _operational_signals(
             display_name="Connector heartbeat",
             state="enabled" if connector.connection_state == "connected" else connector.registration_state,
             evidence_source="runner WebSocket manager and workspace_runner_configs.registration_token",
-            detail="Live heartbeat uses active outbound runner sockets; persistent heartbeat history is still planned.",
+            detail="Live heartbeat uses active outbound runner sockets and durable connector_signal_events history.",
         ),
         OperationalSignal(
             signal_key="sync_lag",
@@ -242,8 +301,12 @@ async def get_operational_signals(
 
     workspace_id = auth_context.workspace_id
     config = await _get_runner_config(db, organization_id)
+    connector_workspace_id = config.workspace_id if config is not None else workspace_id
+    recent_events = await _get_connector_signal_events(
+        db, organization_id, connector_workspace_id
+    )
     telemetry = _telemetry_runtime()
-    connector = _connector_state(organization_id, workspace_id, config)
+    connector = _connector_state(organization_id, workspace_id, config, recent_events)
     return OperationalSignalsResponse(
         workspace_id=connector.workspace_id,
         audit_event="observability.operational_signals.viewed",

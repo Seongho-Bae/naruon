@@ -227,3 +227,15 @@ def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge
     assert "contents: write" not in combined
     assert "continue-on-error: true" not in combined
     assert "dismiss" not in combined.lower()
+
+
+def test_coderabbit_approval_is_decoupled_from_github_checks() -> None:
+    config = read_repo_text(".coderabbit.yaml")
+    policy = read_repo_text("docs/development/merge-gate-policy.md")
+    agents = read_repo_text("AGENTS.md")
+
+    assert "request_changes_workflow: true" in config
+    assert "github-checks:" in config
+    assert "enabled: false" in config
+    assert "GitHub Checks integration stays disabled" in policy
+    assert "GitHub Checks integration disabled" in agents

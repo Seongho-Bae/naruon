@@ -408,10 +408,14 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   await expect(page.getByText('Connector health & APM signals')).toBeVisible();
   await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
   await expect(page.getByText('otel-collector:4317')).toBeVisible();
+  await expect(page.getByText('Recent connector signals')).toBeVisible();
+  await expect(page.getByText('outbound runner heartbeat received')).toBeVisible();
   await expect(page.getByText('instrumentation_pending')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile.png'), fullPage: false });
+  await page.getByText('Recent connector signals').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile-history.png'), fullPage: false });
 
   const scrollMetrics = await page.evaluate(() => {
     const scroller = Array.from(document.querySelectorAll('body, body *')).find((element) => {
@@ -447,9 +451,11 @@ test('renders settings connector APM signals across desktop and tablet', async (
     await expect(page.getByText('Connector health & APM signals')).toBeVisible();
     await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
     await expect(page.getByText('otel-collector:4317')).toBeVisible();
+    await expect(page.getByText('Recent connector signals')).toBeVisible();
     await expect(page.getByText('Connector heartbeat')).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
+    await page.getByText('outbound runner heartbeat received').scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`settings-connector-apm-${viewport.name}.png`), fullPage: false });
   }
 });

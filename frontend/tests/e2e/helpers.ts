@@ -173,6 +173,22 @@ const operationalSignals = {
     last_heartbeat_at: '2026-05-27T12:00:00Z',
     last_disconnect_at: null,
     queue_depth_state: 'not_reported',
+    recent_events: [
+      {
+        event_uid: 'connector_evt_heartbeat',
+        signal_key: 'connector_heartbeat',
+        state_code: 'heartbeat',
+        detail_text: 'outbound runner heartbeat received',
+        observed_at: '2026-05-27T12:00:00Z',
+      },
+      {
+        event_uid: 'connector_evt_connected',
+        signal_key: 'connector_heartbeat',
+        state_code: 'connected',
+        detail_text: 'outbound runner socket connected',
+        observed_at: '2026-05-27T11:59:00Z',
+      },
+    ],
   },
   signals: [
     {

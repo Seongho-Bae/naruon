@@ -31,6 +31,14 @@ interface OperationalSignal {
   provider_write_executed: boolean;
 }
 
+interface ConnectorSignalEvent {
+  event_uid: string;
+  signal_key: string;
+  state_code: string;
+  detail_text: string | null;
+  observed_at: string;
+}
+
 interface OperationalSignalsResponse {
   workspace_id: string;
   audit_event: string;
@@ -52,6 +60,7 @@ interface OperationalSignalsResponse {
     last_heartbeat_at: string | null;
     last_disconnect_at: string | null;
     queue_depth_state: 'not_reported';
+    recent_events: ConnectorSignalEvent[];
   };
   signals: OperationalSignal[];
 }
@@ -120,6 +129,7 @@ export function SettingsLayout() {
   const startupView = useWorkspaceStartupView();
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
+  const connectorEvents = operationalSignals?.connector.recent_events ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -436,6 +446,29 @@ export function SettingsLayout() {
                           <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.telemetry.otel_endpoint_host ?? 'none'}</dd>
                         </div>
                       </dl>
+
+                      <div aria-labelledby="recent-connector-signals-heading" className="border-t border-border pt-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 id="recent-connector-signals-heading" className="font-bold text-sm">Recent connector signals</h4>
+                          <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{connectorEvents.length} events</span>
+                        </div>
+                        {connectorEvents.length > 0 ? (
+                          <ol className="mt-3 divide-y divide-border">
+                            {connectorEvents.map((event) => (
+                              <li key={event.event_uid} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                                <div className="min-w-0">
+                                  <p className="font-mono text-xs font-bold text-foreground">{event.state_code}</p>
+                                  <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{event.detail_text ?? event.signal_key}</p>
+                                  <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{event.event_uid}</p>
+                                </div>
+                                <time className="break-all font-mono text-xs text-muted-foreground sm:text-right">{event.observed_at}</time>
+                              </li>
+                            ))}
+                          </ol>
+                        ) : (
+                          <p className="mt-3 text-sm leading-6 text-muted-foreground">Durable connector history has not recorded a runner event yet.</p>
+                        )}
+                      </div>
 
                       <div className="grid gap-3 md:grid-cols-2">
                         {operationalSignals.signals.map((signal) => (

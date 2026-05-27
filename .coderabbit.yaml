@@ -1,5 +1,8 @@
 reviews:
   request_changes_workflow: true
+  tools:
+    github-checks:
+      enabled: false
   pre_merge_checks:
     docstrings:
       mode: off

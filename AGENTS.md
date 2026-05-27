@@ -28,6 +28,12 @@
 - Missing current-head CodeRabbit evidence is a wait state until bounded polling
   or authoritative skip/review evidence resolves it; do not post a hard blocker
   only because the current head has not been reviewed yet.
+- Keep CodeRabbit `request_changes_workflow` enabled for robot approval, but
+  keep CodeRabbit GitHub Checks integration disabled. GitHub Actions are already
+  evaluated by required checks and PR Governance; letting CodeRabbit also gate
+  on Actions can strand a stale GitHub `CHANGES_REQUESTED` review when an
+  external scanner such as direct-OpenAI Strix is quota-blocked after comments
+  are fixed.
 - `STARTUP_FAILURE` in required PR governance/check metadata is a hard blocker
   and should use the same idempotent metadata-gate comment path.
 - Trusted-base governance materialization must tolerate transient GitHub API
@@ -144,6 +150,10 @@
   runner socket state when available, but label sync lag, provider throttling,
   queue depth, and writeback conflict dashboards as pending until source-backed
   connector events exist.
+- Self-hosted connector APM history must be persisted as scoped control-plane
+  signal events before the UI claims durable heartbeat evidence. Do not expose
+  runner registration tokens, path tokens, or raw provider credentials in event
+  ids, details, logs, Settings mocks, or E2E fixtures.
 
 ## Development environment and tooling defaults
 

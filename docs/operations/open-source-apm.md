@@ -7,8 +7,11 @@
 - `backend/api/observability.py` exposes signed-session
   `/api/observability/operational-signals` for organization admins. It reports
   Prometheus/OTel configuration, self-hosted connector registration, active
-  outbound runner connection state, and the remaining instrumentation gaps
-  without executing provider writes.
+  outbound runner connection state, recent durable `connector_signal_events`,
+  and the remaining instrumentation gaps without executing provider writes.
+- `backend/api/runner_ws.py` records self-hosted connector connect, heartbeat,
+  and disconnect events as control-plane APM evidence. These events do not turn
+  Naruon into an SMTP/IMAP mailbox server and do not execute provider writes.
 - `backend/requirements.txt` includes `prometheus-fastapi-instrumentator` and
   OpenTelemetry dependencies used by the FastAPI app.
 - `docker-compose.observability.yml`, `docker-compose.apm.yml`, and
@@ -48,8 +51,7 @@
 
 ## Remaining gaps
 
-- Persist connector heartbeat history and queue depth beyond the in-process
-  runner WebSocket manager.
+- Add queue depth beyond the in-process runner WebSocket manager.
 - Add sync lag, writeback conflict, and AI action audit dashboards fed by
   source-backed connector/provider events.
 - Add log and trace redaction tests for email bodies, provider tokens, DSNs, and

@@ -45,6 +45,17 @@ def schema_backfill_sql():
             "created_at timestamptz DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS connector_signal_events ("
+            "event_uid varchar PRIMARY KEY, "
+            "organization_id varchar NOT NULL, "
+            "workspace_id varchar NOT NULL, "
+            "signal_key varchar NOT NULL, "
+            "state_code varchar NOT NULL, "
+            "detail_text text, "
+            "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ),
         text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS source_uid varchar"),
         text(
             "ALTER TABLE webdav_accounts "
@@ -89,6 +100,11 @@ def schema_backfill_sql():
             "CREATE INDEX IF NOT EXISTS ix_calendar_writeback_sources_scope "
             "ON calendar_writeback_sources "
             "(user_id, organization_id, source_protocol)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_connector_signal_events_scope_time "
+            "ON connector_signal_events "
+            "(organization_id, workspace_id, observed_at)"
         ),
         text(
             "UPDATE webdav_accounts "
