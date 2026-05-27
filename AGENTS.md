@@ -52,6 +52,9 @@
   public identity headers such as `X-User-Id`, `X-Organization-Id`,
   `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
   tests/mocks must exercise the signed-session path.
+- JWT/session verification must reject unsupported critical headers (`crit`)
+  before trusting payload claims; do not rely only on library defaults for this
+  boundary.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/` may omit it. Keep runtime feature/configuration

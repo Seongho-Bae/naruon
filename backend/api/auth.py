@@ -127,6 +127,7 @@ def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
         header = jwt.get_unverified_header(token)
     except Exception:
         raise _authentication_error() from None
+    _reject_unsupported_critical_headers(header)
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
         raise _authentication_error()
@@ -134,6 +135,11 @@ def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
         if getattr(signing_key, "key_id", None) == key_id:
             return signing_key
     raise _authentication_error()
+
+
+def _reject_unsupported_critical_headers(header: dict[str, Any]) -> None:
+    if "crit" in header:
+        raise _authentication_error()
 
 
 def _session_secret_bytes() -> bytes:
@@ -216,6 +222,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     header = _json_object_from_base64url_segment(header_segment)
     if header.get("alg") != SESSION_SIGNING_ALGORITHM:
         raise _authentication_error()
+    _reject_unsupported_critical_headers(header)
 
     secret = _session_secret_bytes()
     signing_input = f"{header_segment}.{payload_segment}"
