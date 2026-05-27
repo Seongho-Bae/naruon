@@ -4,7 +4,8 @@ from typing import Dict, Any, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models import ProjectFolder, WebdavAccount
+from db.models import Email, ProjectFolder, TicketTask, WebdavAccount
+from services.knowledge_extractor import SELF_SENT_KNOWLEDGE_SOURCE
 
 logger = logging.getLogger(__name__)
 
@@ -124,13 +125,85 @@ class WebDavService:
             target_account_id=target_account_id,
         )
 
+    async def determine_knowledge_materialization_intent_from_db(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        organization_id: str | None,
+        source_task_id: str,
+        target_account_id: int | None = None,
+    ) -> Dict[str, Any]:
+        task_result = await session.execute(
+            select(TicketTask, Email.message_id)
+            .outerjoin(
+                Email,
+                (TicketTask.related_email_id == Email.id)
+                & (Email.user_id == user_id)
+                & (Email.organization_id == organization_id),
+            )
+            .where(
+                TicketTask.task_uid == source_task_id,
+                TicketTask.user_id == user_id,
+                TicketTask.organization_id == organization_id,
+            )
+        )
+        row = task_result.one_or_none()
+        if row is None:
+            return {
+                "status": "error",
+                "error_code": "not_found",
+                "message": "Self-sent knowledge task was not found.",
+            }
+
+        task, source_email_id = row
+        if task.source_type != SELF_SENT_KNOWLEDGE_SOURCE:
+            return {
+                "status": "error",
+                "error_code": "validation_error",
+                "message": "Task is not self-sent knowledge.",
+            }
+        if source_email_id is None:
+            return {
+                "status": "error",
+                "error_code": "missing_provenance",
+                "message": "Self-sent knowledge task missing source email provenance.",
+            }
+
+        result = await self.determine_webdav_writeback_intent_from_db(
+            session,
+            user_id,
+            target_account_id=target_account_id,
+        )
+        if result.get("status") == "error":
+            return result
+
+        return {
+            "intent": "knowledge_materialization",
+            "status": "intent_ready",
+            "task_id": task.task_uid,
+            "source_type": SELF_SENT_KNOWLEDGE_SOURCE,
+            "source_email_id": source_email_id,
+            "source_thread_id": task.related_thread_id,
+            "source_id": result["source_id"],
+            "server_url": result["server_url"],
+            "target_path": f"/Naruon/Notes/{task.task_uid}.md",
+            "requires_if_match": result["requires_if_match"],
+            "provenance": result["provenance"],
+            "provider_write_executed": False,
+            "audit_event": "webdav.self_sent_knowledge_intent.created",
+        }
+
     def determine_webdav_writeback_intent_from_accounts(
         self,
         accounts: List[Dict[str, Any]],
         target_account_id: int | None = None,
     ) -> Dict[str, Any]:
         if not accounts:
-            return {"status": "error", "message": "No connected WebDAV accounts found."}
+            return {
+                "status": "error",
+                "error_code": "no_webdav_account",
+                "message": "No connected WebDAV accounts found.",
+            }
             
         selected_account = accounts[0]
         if target_account_id is not None:
@@ -142,6 +215,7 @@ class WebDavService:
             if selected_account is None:
                 return {
                     "status": "error",
+                    "error_code": "webdav_account_not_found",
                     "message": "Requested WebDAV account was not found.",
                 }
                     

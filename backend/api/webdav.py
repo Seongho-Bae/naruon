@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
@@ -8,6 +8,13 @@ from db.session import get_db
 from services.webdav_service import webdav_service
 
 router = APIRouter(prefix="/api/webdav", tags=["webdav"])
+WEB_DAV_ERROR_STATUS_CODES = {
+    "not_found": 404,
+    "validation_error": 422,
+    "missing_provenance": 422,
+    "no_webdav_account": 422,
+    "webdav_account_not_found": 422,
+}
 
 class WebdavAccountResponse(BaseModel):
     account_id: int
@@ -30,6 +37,25 @@ class WritebackIntentResponse(BaseModel):
     provenance: str
     status: str | None = None
     message: str | None = None
+
+class KnowledgeMaterializationIntentRequest(BaseModel):
+    source_task_id: str
+    target_account_id: int | None = None
+
+class KnowledgeMaterializationIntentResponse(BaseModel):
+    intent: str
+    status: str
+    task_id: str
+    source_type: str
+    source_email_id: str | None
+    source_thread_id: str | None
+    source_id: int | None
+    server_url: str | None
+    target_path: str
+    requires_if_match: bool
+    provenance: str
+    provider_write_executed: bool
+    audit_event: str
 
 @router.get("/accounts", response_model=List[WebdavAccountResponse])
 async def get_webdav_accounts(
@@ -62,3 +88,27 @@ async def get_webdav_writeback_intent(
     if result.get("status") == "error":
         raise HTTPException(status_code=422, detail=result.get("message"))
     return WritebackIntentResponse(**result)
+
+@router.post(
+    "/knowledge-materialization-intent",
+    response_model=KnowledgeMaterializationIntentResponse,
+)
+async def get_knowledge_materialization_intent(
+    req: KnowledgeMaterializationIntentRequest,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await webdav_service.determine_knowledge_materialization_intent_from_db(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
+        req.source_task_id,
+        target_account_id=req.target_account_id,
+    )
+    if result.get("status") == "error":
+        status_code = WEB_DAV_ERROR_STATUS_CODES.get(
+            str(result.get("error_code") or ""),
+            422,
+        )
+        raise HTTPException(status_code=status_code, detail=result.get("message"))
+    return KnowledgeMaterializationIntentResponse(**result)

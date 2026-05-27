@@ -42,8 +42,10 @@ mail/calendar/file systems.
   still an episode task.
 - **Self-sent knowledge capture**: IMAP-imported emails sent from a user to the
   same address now create one idempotent, source-linked `self_sent_knowledge`
-  ticket task with a plain-text memo title. WebDAV/Notes materialization remains
-  future work and must write back to customer-owned sources.
+  ticket task with a plain-text memo title. The Tasks workspace can request a
+  signed WebDAV/Notes materialization intent for that task and shows the planned
+  customer-owned target with `provider_write_executed=false`; actual provider
+  mutation remains connector execution work.
 
 ## Five-minute local path
 

@@ -41,11 +41,12 @@ claims.
 
 Implemented slices currently cover signed task/mail provenance, dedupe/threading
 contracts, source-linked ticket tasks, self-sent knowledge capture into
-idempotent ticket tasks, deterministic sender ontology action hints, and
-writeback intent documentation. Real CalDAV/WebDAV mutation, WebDAV/Notes
-materialization of synthesized knowledge, POP3 runtime sync, durable
-reply-tracking notifications, and source-id filtered sender graph views remain
-episode work and must preserve this registry boundary.
+idempotent ticket tasks, deterministic sender ontology action hints, generic
+WebDAV writeback intent, and self-sent knowledge WebDAV/Notes materialization
+intent. Real CalDAV/WebDAV mutation, ETag-aware WebDAV/Notes provider execution
+for synthesized knowledge, POP3 runtime sync, durable reply-tracking
+notifications, and source-id filtered sender graph views remain episode work and
+must preserve this registry boundary.
 
 ## Policy and audit requirements
 

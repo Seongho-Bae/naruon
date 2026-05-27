@@ -44,10 +44,15 @@
   only after proving a true self-to-self message from a tenant-owned address; it
   preserves email/thread provenance, stores plain-text titles, and skips raw
   payloads without a source email row.
+- Self-sent knowledge WebDAV/Notes materialization now has a signed
+  `/api/webdav/knowledge-materialization-intent` path from Tasks. It validates
+  the opaque task id against owner/org scope, rejects non-self-sent tasks, returns
+  customer WebDAV target intent metadata, and keeps
+  `provider_write_executed=false`.
 - The remaining connector/writeback items stay as explicit future episodes:
   real CalDAV/WebDAV mutation, full POP3 message import/runtime sync, durable
-  reply-tracking notifications, WebDAV/Notes materialization of self-sent
-  knowledge, and source-id filtered sender DAG views.
+  reply-tracking notifications, ETag-aware WebDAV/Notes provider execution for
+  self-sent knowledge, and source-id filtered sender DAG views.
 
 ## Task 1: Governance wait-state correction
 

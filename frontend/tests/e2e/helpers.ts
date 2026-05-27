@@ -302,6 +302,25 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
       return;
     }
 
+    if (path === '/api/webdav/knowledge-materialization-intent' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        intent: 'knowledge_materialization',
+        status: 'intent_ready',
+        task_id: 'task-self-knowledge',
+        source_type: 'self_sent_knowledge',
+        source_email_id: '<self-note@example.com>',
+        source_thread_id: 'thread-self-note',
+        source_id: 1,
+        server_url: 'https://webdav.naruon.net',
+        target_path: '/Naruon/Notes/task-self-knowledge.md',
+        requires_if_match: true,
+        provenance: 'server-authoritative',
+        provider_write_executed: false,
+        audit_event: 'webdav.self_sent_knowledge_intent.created',
+      });
+      return;
+    }
+
     if (path === '/api/tasks' && request.method() === 'GET') {
       await fulfillJson(route, [
         {
@@ -347,6 +366,17 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
           related_thread_id: 'thread-q2',
           created_at: '2026-05-19T00:00:00Z',
           updated_at: '2026-05-24T00:00:00Z',
+        },
+        {
+          id: 'task-self-knowledge',
+          title: '나에게 보낸 지식 메모 정리',
+          status: 'open',
+          priority: 'normal',
+          source_type: 'self_sent_knowledge',
+          source_email_id: '<self-note@example.com>',
+          related_thread_id: 'thread-self-note',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-25T00:00:00Z',
         },
       ]);
       return;
