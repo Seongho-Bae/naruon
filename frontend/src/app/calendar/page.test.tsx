@@ -39,6 +39,19 @@ async function flushAsyncWork() {
   });
 }
 
+const calendarSourceList = [
+  {
+    source_id: "caldav-primary",
+    provider: "Customer CalDAV",
+    protocol: "caldav",
+    owner_id: "user-1",
+    organization_id: "org-acme",
+    capabilities: ["read", "write", "etag"],
+    writeback_enabled: true,
+    etag: "etag-caldav-1",
+  },
+];
+
 describe("CalendarPage", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -53,6 +66,7 @@ describe("CalendarPage", () => {
   });
 
   it("renders monthly weekly detail coordination candidate and CalDAV writeback workspaces", () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(calendarSourceList)));
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -69,6 +83,14 @@ describe("CalendarPage", () => {
   it("creates a signed customer-owned calendar writeback intent", async () => {
     localStorage.setItem("naruon_session_token", "signed-calendar-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/calendar/writeback-sources") {
+        expect(init?.method).toBeUndefined();
+        expect(init?.headers).toEqual(expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer signed-calendar-session",
+        }));
+        return jsonResponse(calendarSourceList);
+      }
       expect(String(input)).toBe("/api/calendar/writeback-intent");
       expect(init?.method).toBe("POST");
       expect(init?.headers).toEqual(expect.objectContaining({
@@ -90,6 +112,7 @@ describe("CalendarPage", () => {
       expect(JSON.parse(String(init?.body))).toEqual({
         action: "create",
         summary: "Naruon 일정 후보 writeback intent 점검",
+        target_source_id: "caldav-primary",
       });
       return jsonResponse({
         workspace_id: "workspace-org-acme",
@@ -114,6 +137,8 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
+    expect(container.textContent).toContain("Customer CalDAV");
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     expect(button).toBeTruthy();
@@ -148,6 +173,7 @@ describe("CalendarPage", () => {
 
   it("distinguishes no-source and ETag conflict writeback errors", async () => {
     const responses = [
+      jsonResponse(calendarSourceList),
       jsonResponse({ detail: "No customer-owned writeback source is available" }, false, 422),
       jsonResponse({ detail: "ETag is required for writeback updates" }, false, 409),
     ];
@@ -159,6 +185,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
 
     const createButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     await act(async () => {

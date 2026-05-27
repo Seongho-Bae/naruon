@@ -293,7 +293,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success)
+	vertex-primary-notfound-fallback-success|github-models-fallback-model-prefix-rejected)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -6312,6 +6312,33 @@ assert_model_requires_vertex_auth "nonvertex-provider" "gemini/gemini-2.5-pro" "
 assert_vertex_path "space-in-project" "projects/my proj/locations/us/models/foo" 1
 assert_vertex_path "tab-in-model-id" $'models/gemini\t2.5' 1
 assert_vertex_path "space-in-model-id" "models/my model" 1
+
+run_gate_case "github-models-model-prefix-rejected" \
+	"openai/openai/gpt-5.4" \
+	"" \
+	"2" \
+	"STRIX_LLM must not use GitHub Models model prefixes" \
+	"0"
+
+run_gate_case "github-models-api-base-rejected" \
+	"openai/gpt-5.4" \
+	"" \
+	"2" \
+	"LLM_API_BASE must not route Strix through GitHub Models" \
+	"0" \
+	"" \
+	"" \
+	"openai" \
+	"https://models.github.ai/inference"
+
+run_gate_case "github-models-fallback-model-prefix-rejected" \
+	"vertex_ai/missing-primary" \
+	"openai/openai/gpt-5.4" \
+	"2" \
+	"Strix fallback models must not use GitHub Models model prefixes" \
+	"1" \
+	"vertex_ai/missing-primary" \
+	"<unset>"
 
 # Endpoint only exists in excluded directories (.git/, node_modules/).
 # The grep --exclude-dir patterns must prevent matching, so the finding

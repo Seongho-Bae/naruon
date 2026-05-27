@@ -471,20 +471,27 @@ test('renders calendar writeback intent status without direct provider writes', 
   }, expectedNaruonToken);
 
   await page.goto('/calendar');
+  await expect(page.getByText('Customer CalDAV').first()).toBeVisible();
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
   });
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
-  const desktopRequestHeaders = (await desktopWritebackRequest).headers();
+  const desktopWritebackCall = await desktopWritebackRequest;
+  const desktopRequestHeaders = desktopWritebackCall.headers();
   expect(desktopRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(desktopWritebackCall.postDataJSON()).toEqual({
+    action: 'create',
+    summary: 'Naruon 일정 후보 writeback intent 점검',
+    target_source_id: 'caldav-primary',
+  });
   for (const headerName of publicIdentityHeaders) {
     expect(desktopRequestHeaders[headerName]).toBeUndefined();
   }
 
   await expect(page.getByText('customer_owned')).toBeVisible();
   await expect(page.getByText('caldav', { exact: true })).toBeVisible();
-  await expect(page.getByText('caldav-primary')).toBeVisible();
+  await expect(page.getByRole('status').getByText('caldav-primary')).toBeVisible();
   await expect(page.getByText('calendar.writeback_intent.created')).toBeVisible();
   await expect(page.getByText('동기화 완료')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -494,13 +501,20 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/calendar');
   await expect(page.getByRole('heading', { name: '일정 관리' })).toBeVisible();
+  await expect(page.getByText('caldav-primary').first()).toBeVisible();
   const mobileWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
   });
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
-  const mobileRequestHeaders = (await mobileWritebackRequest).headers();
+  const mobileWritebackCall = await mobileWritebackRequest;
+  const mobileRequestHeaders = mobileWritebackCall.headers();
   expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(mobileWritebackCall.postDataJSON()).toEqual({
+    action: 'create',
+    summary: 'Naruon 일정 후보 writeback intent 점검',
+    target_source_id: 'caldav-primary',
+  });
   for (const headerName of publicIdentityHeaders) {
     expect(mobileRequestHeaders[headerName]).toBeUndefined();
   }

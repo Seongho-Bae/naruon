@@ -188,10 +188,12 @@ curl -s -X POST http://localhost:8000/api/tasks/from-email \
 
 # Request a customer-owned calendar writeback intent. This selects a trusted
 # server-side source and returns no provider secret or direct write proof.
+curl -s http://localhost:8000/api/calendar/writeback-sources \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER"
 curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
-  -d '{"action":"create","summary":"담당자 확인 회의"}'
+  -d '{"action":"create","summary":"담당자 확인 회의","target_source_id":"caldav-primary"}'
 ```
 
 ## Error-message contract
@@ -255,9 +257,11 @@ Calendar actions in `EmailDetail` now request `/api/calendar/writeback-intent`
 for each extracted execution item and display the selected trusted source
 provenance. Calendar source selection now reads opaque
 `calendar_writeback_sources.source_uid` rows instead of exposing sequential
-CalDAV account ids. The browser no longer claims `/api/calendar/sync` success
-from the mail-detail action path; direct provider writes stay deferred until
-connector execution can enforce ETag/If-Match and owner capability checks.
+CalDAV account ids, and the Calendar workspace loads those rows through signed
+`/api/calendar/writeback-sources` before posting an opaque `target_source_id`.
+The browser no longer claims `/api/calendar/sync` success from the mail-detail
+action path; direct provider writes stay deferred until connector execution can
+enforce ETag/If-Match and owner capability checks.
 WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
