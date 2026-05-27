@@ -48,10 +48,10 @@ def test_telemetry_does_not_instrument_without_explicit_endpoint(monkeypatch):
     from fastapi import FastAPI
     from core import telemetry
 
-    monkeypatch.setattr(telemetry, "_telemetry_configured", False)
+    app = FastAPI()
     monkeypatch.delenv("ENABLE_OTEL", raising=False)
     monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
 
-    telemetry.setup_telemetry(FastAPI())
+    telemetry.setup_telemetry(app)
 
-    assert telemetry._telemetry_configured is False
+    assert getattr(app.state, "naruon_telemetry_configured", False) is False

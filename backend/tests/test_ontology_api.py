@@ -49,6 +49,7 @@ class MockSession:
 
 class ExistingRelationshipSession(MockSession):
     def __init__(self):
+        super().__init__()
         self.items = [MockRow("vendor@example.com", "vendor", 0.5, "buyer@example.com")]
 
     async def execute(self, stmt):

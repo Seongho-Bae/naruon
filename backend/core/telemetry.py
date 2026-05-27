@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 
 logger = logging.getLogger(__name__)
-_telemetry_configured = False
+_TELEMETRY_STATE_KEY = "naruon_telemetry_configured"
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -14,9 +14,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 def setup_telemetry(app: FastAPI):
-    global _telemetry_configured
-
-    if _telemetry_configured:
+    if getattr(app.state, _TELEMETRY_STATE_KEY, False):
         logger.debug("OpenTelemetry instrumentation is already configured.")
         return
 
@@ -54,7 +52,7 @@ def setup_telemetry(app: FastAPI):
         provider.add_span_processor(span_processor)
 
         FastAPIInstrumentor.instrument_app(app)
-        _telemetry_configured = True
+        setattr(app.state, _TELEMETRY_STATE_KEY, True)
         logger.info("OpenTelemetry instrumentation completed successfully.")
     except Exception:
         logger.exception("OpenTelemetry setup failed; continuing without tracing.")

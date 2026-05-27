@@ -4,6 +4,7 @@ import hmac
 import inspect
 import json
 import os
+import sys
 import time
 
 import pytest
@@ -11,7 +12,6 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
-import api.auth as auth_module
 from api.auth import (
     AuthContext,
     ensure_organization_access,
@@ -119,14 +119,14 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
-    previous_oidc_signing_keys = auth_module._cached_oidc_signing_keys
+    previous_oidc_signing_keys = sys.modules["api.auth"]._cached_oidc_signing_keys
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
-    auth_module._cached_oidc_signing_keys = previous_oidc_signing_keys
+    sys.modules["api.auth"]._cached_oidc_signing_keys = previous_oidc_signing_keys
 
 
 def _set_runtime_environment(value: str) -> None:
