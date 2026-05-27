@@ -39,6 +39,15 @@ const taskStatusLabels: Record<TicketTask['status'], string> = {
   done: '완료',
 };
 
+const taskStatusChangeLabels: Record<TicketTask['status'], string> = {
+  open: '접수로',
+  in_progress: '진행으로',
+  blocked: '차단으로',
+  done: '완료로',
+};
+
+const ticketStatusOptions: TicketTask['status'][] = ['open', 'in_progress', 'blocked', 'done'];
+
 const taskPriorityLabels: Record<TicketTask['priority'], string> = {
   low: '낮음',
   normal: '보통',
@@ -62,6 +71,7 @@ export function TasksLayout() {
   const [draggedTask, setDraggedTask] = useState<{id: string, sourceCol: string} | null>(null);
   const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
   const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
+  const [ticketActionStatus, setTicketActionStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +128,19 @@ export function TasksLayout() {
     setDraggedTask(null);
   };
 
+  const handleTicketStatusChange = async (taskId: string, status: TicketTask['status']) => {
+    setTicketActionStatus(null);
+    try {
+      const updatedTask = await apiClient.patch<TicketTask>(`/api/tasks/${encodeURIComponent(taskId)}`, { status });
+      setTicketTasks((currentTasks) =>
+        currentTasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)),
+      );
+      setTicketActionStatus(`${updatedTask.title} 상태를 ${taskStatusChangeLabels[updatedTask.status]} 변경했습니다.`);
+    } catch {
+      setTicketActionStatus('티켓 상태 변경에 실패했습니다.');
+    }
+  };
+
   const currentColumns = [
     { id: 'open', title: '접수', count: tasks.open.length, color: 'bg-blue-100 text-blue-700' },
     { id: 'in_progress', title: '진행', count: tasks.in_progress.length, color: 'bg-orange-100 text-orange-700' },
@@ -138,26 +161,26 @@ export function TasksLayout() {
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground flex-col">
       {/* Top Header */}
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6 bg-card">
-        <div className="flex items-center gap-6">
+      <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-card px-4 py-3 lg:h-16 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-0">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:gap-6">
           <h1 className="text-xl font-bold">할 일 추적</h1>
           <p className="sr-only">리소스 배정 검토 회의</p>
-          <div className="flex overflow-hidden rounded-md border border-border">
+          <div className="flex max-w-full overflow-x-auto rounded-md border border-border">
             {['내 작업', '위임한 작업', '칸반', '작업 상세'].map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode as '내 작업' | '위임한 작업' | '칸반' | '작업 상세')}
-                className={`px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
               >
                 {mode}
               </button>
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2 lg:gap-3">
+          <div className="relative min-w-[180px] flex-1 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <input type="text" placeholder="작업 검색..." className="h-9 w-64 rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary" />
+            <input type="text" placeholder="작업 검색..." className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64" />
           </div>
           <button className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
             <Filter className="size-4" /> 필터
@@ -170,7 +193,7 @@ export function TasksLayout() {
 
       {/* Kanban Board Area */}
       <main className="flex-1 overflow-x-auto overflow-y-auto p-6 bg-secondary/20">
-        <section aria-label="API 연결 작업" className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <section aria-label="source-linked ticket status board" className="mb-6 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-base font-bold">실제 티켓 큐</h2>
@@ -197,7 +220,7 @@ export function TasksLayout() {
           </div>
 
           {ticketStatus === 'ready' ? (
-            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div aria-label="source-linked ticket list" className="mt-4 grid gap-3 lg:grid-cols-2">
               {ticketTasks.slice(0, 4).map((task) => (
                 <article key={task.id} className="rounded-lg border border-border bg-background/75 p-3 text-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -220,9 +243,33 @@ export function TasksLayout() {
                       <dd suppressHydrationWarning>{new Date(task.updated_at).toLocaleString('ko-KR')}</dd>
                     </div>
                   </dl>
+                  <div className="mt-3 flex flex-wrap gap-2" aria-label={`${task.title} 상태 변경`}>
+                    {ticketStatusOptions.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        aria-label={`${task.title} 상태를 ${taskStatusChangeLabels[status]} 변경`}
+                        aria-pressed={task.status === status}
+                        onClick={() => void handleTicketStatusChange(task.id, status)}
+                        className={`rounded-md border px-2.5 py-1 text-xs font-bold transition-colors ${
+                          task.status === status
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-card text-foreground hover:border-primary/60 hover:bg-secondary'
+                        }`}
+                      >
+                        {taskStatusLabels[status]}
+                      </button>
+                    ))}
+                  </div>
                 </article>
               ))}
             </div>
+          ) : null}
+
+          {ticketActionStatus ? (
+            <p role="status" aria-live="polite" className="mt-3 rounded-lg border border-border bg-background/70 p-3 text-sm font-semibold text-foreground">
+              {ticketActionStatus}
+            </p>
           ) : null}
 
           {ticketStatus === 'empty' ? (

@@ -103,6 +103,64 @@ describe("TasksPage", () => {
     expect(container.textContent).toContain("thread_public_789");
   });
 
+  it("updates ticket status through the signed task API", async () => {
+    localStorage.setItem("naruon_session_token", "signed.task.status");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/tasks/task_public_123" && init?.method === "PATCH") {
+        expect(init.headers).toEqual(expect.objectContaining({
+          Authorization: "Bearer signed.task.status",
+          "Content-Type": "application/json",
+        }));
+        expect(JSON.parse(String(init.body))).toEqual({ status: "done" });
+        return jsonResponse({
+          id: "task_public_123",
+          title: "보낸 메일 회신 추적",
+          status: "done",
+          priority: "high",
+          source_type: "email",
+          source_email_id: "mail_public_456",
+          related_thread_id: "thread_public_789",
+          updated_at: "2026-05-26T10:00:00.000Z",
+        });
+      }
+      return jsonResponse([
+        {
+          id: "task_public_123",
+          title: "보낸 메일 회신 추적",
+          status: "in_progress",
+          priority: "high",
+          source_type: "email",
+          source_email_id: "mail_public_456",
+          related_thread_id: "thread_public_789",
+          updated_at: "2026-05-26T09:00:00.000Z",
+        },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    const doneButton = container.querySelector<HTMLButtonElement>('button[aria-label="보낸 메일 회신 추적 상태를 완료로 변경"]');
+    expect(doneButton).not.toBeNull();
+    await act(async () => {
+      doneButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/tasks/task_public_123", expect.objectContaining({
+      method: "PATCH",
+    }));
+    expect(container.textContent).toContain("보낸 메일 회신 추적 상태를 완료로 변경했습니다.");
+    expect(doneButton?.getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("distinguishes signed-session authorization failures from generic task API errors", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ detail: "forbidden" }, false, 403)));
     container = document.createElement("div");

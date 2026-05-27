@@ -314,6 +314,39 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
           created_at: '2026-05-19T00:00:00Z',
           updated_at: '2026-05-21T00:00:00Z',
         },
+        {
+          id: 'task-reply-followup',
+          title: '보낸 메일 회신 SLA 확인',
+          status: 'in_progress',
+          priority: 'high',
+          source_type: 'email',
+          source_email_id: '<sent-q2@example.com>',
+          related_thread_id: 'thread-sent-q2',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-22T00:00:00Z',
+        },
+        {
+          id: 'task-calendar-writeback',
+          title: '회의 후보 CalDAV 반영 검토',
+          status: 'open',
+          priority: 'normal',
+          source_type: 'calendar',
+          source_email_id: '<q2@example.com>',
+          related_thread_id: 'thread-q2',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-23T00:00:00Z',
+        },
+        {
+          id: 'task-webdav-evidence',
+          title: '첨부파일 WebDAV 폴더 정리',
+          status: 'done',
+          priority: 'low',
+          source_type: 'webdav',
+          source_email_id: '<q2@example.com>',
+          related_thread_id: 'thread-q2',
+          created_at: '2026-05-19T00:00:00Z',
+          updated_at: '2026-05-24T00:00:00Z',
+        },
       ]);
       return;
     }
@@ -345,6 +378,21 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
             updated_at: '2026-05-19T00:00:00Z',
           },
         ],
+      });
+      return;
+    }
+
+    if (path === '/api/tasks/task-q2-owner' && request.method() === 'PATCH') {
+      await fulfillJson(route, {
+        id: 'task-q2-owner',
+        title: '리소스 배정 검토 회의',
+        status: 'done',
+        priority: 'urgent',
+        source_type: 'email',
+        source_email_id: '<q2@example.com>',
+        related_thread_id: 'thread-q2',
+        created_at: '2026-05-19T00:00:00Z',
+        updated_at: '2026-05-27T08:00:00Z',
       });
       return;
     }
