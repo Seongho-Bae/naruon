@@ -236,11 +236,32 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
 });
 
 test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-calendar-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
 
   await page.goto('/calendar');
+  const desktopWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
+  });
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
+  const desktopRequestHeaders = (await desktopWritebackRequest).headers();
+  expect(desktopRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopRequestHeaders[headerName]).toBeUndefined();
+  }
 
   await expect(page.getByText('customer_owned')).toBeVisible();
   await expect(page.getByText('caldav', { exact: true })).toBeVisible();
@@ -254,7 +275,16 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/calendar');
   await expect(page.getByRole('heading', { name: '일정 관리' })).toBeVisible();
+  const mobileWritebackRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
+  });
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
+  const mobileRequestHeaders = (await mobileWritebackRequest).headers();
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileRequestHeaders[headerName]).toBeUndefined();
+  }
   await expect(page.getByText('customer_owned')).toBeVisible();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);

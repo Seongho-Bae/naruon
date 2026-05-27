@@ -75,6 +75,17 @@ describe("CalendarPage", () => {
         "Content-Type": "application/json",
         Authorization: "Bearer signed-calendar-session",
       }));
+      const requestHeaders = init?.headers as Record<string, string>;
+      for (const publicHeader of [
+        "X-User-Id",
+        "X-Organization-Id",
+        "X-Group-Id",
+        "X-Group-Ids",
+        "X-User-Role",
+        "X-Dev-Auth-Token",
+      ]) {
+        expect(requestHeaders).not.toHaveProperty(publicHeader);
+      }
       expect(JSON.parse(String(init?.body))).toEqual({
         action: "create",
         summary: "Naruon 일정 후보 writeback intent 점검",
