@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("lucide-react", () => ({
+  Activity: () => <svg aria-hidden="true" />,
   AlertCircle: () => <svg aria-hidden="true" />,
   Bell: () => <svg aria-hidden="true" />,
   Mail: () => <svg aria-hidden="true" />,
@@ -50,6 +51,49 @@ describe("SettingsLayout", () => {
             },
           });
         }
+        if (String(input) === "/api/observability/operational-signals") {
+          return jsonResponse({
+            workspace_id: "workspace-org-acme",
+            audit_event: "observability.operational_signals.viewed",
+            telemetry: {
+              prometheus_metrics_enabled: true,
+              otel_traces_enabled: true,
+              otel_endpoint_configured: true,
+              otel_endpoint_host: "otel-collector:4317",
+            },
+            connector: {
+              workspace_id: "workspace-org-acme",
+              registration_state: "registration_configured",
+              connection_state: "connected",
+              active_connection_count: 1,
+              control_plane_domain: "naruon.net",
+              network_mode: "outbound_only",
+              runner_usage: "ci_smoke_only",
+              local_protocols: ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+              last_heartbeat_at: "2026-05-27T12:00:00Z",
+              last_disconnect_at: null,
+              queue_depth_state: "not_reported",
+            },
+            signals: [
+              {
+                signal_key: "connector_heartbeat",
+                display_name: "Connector heartbeat",
+                state: "enabled",
+                evidence_source: "runner WebSocket manager",
+                detail: "Live heartbeat uses active outbound runner sockets.",
+                provider_write_executed: false,
+              },
+              {
+                signal_key: "sync_lag",
+                display_name: "Sync lag",
+                state: "instrumentation_pending",
+                evidence_source: "provider adapters",
+                detail: "Provider sync lag will be emitted by source-backed connector jobs.",
+                provider_write_executed: false,
+              },
+            ],
+          });
+        }
         return jsonResponse({});
       }),
     );
@@ -72,6 +116,7 @@ describe("SettingsLayout", () => {
     await act(async () => {
       root?.render(<SettingsLayout />);
       await Promise.resolve();
+      await Promise.resolve();
     });
 
     const mobileSettingsNav = container.querySelector('nav[aria-label="설정 섹션"]');
@@ -92,6 +137,22 @@ describe("SettingsLayout", () => {
         }),
       }),
     );
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/observability/operational-signals",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer signed-runner-session-token",
+        }),
+      }),
+    );
+    const operationalCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/observability/operational-signals");
+    expect(operationalCall?.[1]?.headers).not.toEqual(
+      expect.objectContaining({
+        "X-User-Id": expect.any(String),
+        "X-Organization-Id": expect.any(String),
+        "X-User-Role": expect.any(String),
+      }),
+    );
     expect(container.textContent).toContain("Self-hosted connector manifest");
     expect(container.textContent).toContain("Naruon은 이메일 서버가 아닙니다");
     expect(container.textContent).toContain("self-hosted_connector");
@@ -103,6 +164,12 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("smtp_server");
     expect(container.textContent).toContain("imap_server");
     expect(container.textContent).toContain("mx_host");
+    expect(container.textContent).toContain("Connector health & APM signals");
+    expect(container.textContent).toContain("observability.operational_signals.viewed");
+    expect(container.textContent).toContain("connected");
+    expect(container.textContent).toContain("otel-collector:4317");
+    expect(container.textContent).toContain("Connector heartbeat");
+    expect(container.textContent).toContain("instrumentation_pending");
   });
 
   it("renders settings tabs as detail surfaces instead of placeholder dead space", async () => {
@@ -112,6 +179,7 @@ describe("SettingsLayout", () => {
 
     await act(async () => {
       root?.render(<SettingsLayout />);
+      await Promise.resolve();
       await Promise.resolve();
     });
 

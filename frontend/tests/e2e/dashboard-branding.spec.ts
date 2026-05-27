@@ -405,9 +405,13 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   await expect(page.getByText('naruon.net', { exact: true })).toBeVisible();
   await expect(page.getByText('ci_smoke_only')).toBeVisible();
   await expect(page.getByText('smtp_server')).toBeVisible();
+  await expect(page.getByText('Connector health & APM signals')).toBeVisible();
+  await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
+  await expect(page.getByText('otel-collector:4317')).toBeVisible();
+  await expect(page.getByText('instrumentation_pending')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
-  await page.screenshot({ path: testInfo.outputPath('settings-runner-mobile-manifest.png'), fullPage: false });
+  await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile.png'), fullPage: false });
 
   const scrollMetrics = await page.evaluate(() => {
     const scroller = Array.from(document.querySelectorAll('body, body *')).find((element) => {
@@ -426,7 +430,28 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   expect(scrollMetrics).not.toBeNull();
   expect(scrollMetrics?.maxScroll).toBeGreaterThan(0);
   expect(scrollMetrics?.after).toBeGreaterThan(scrollMetrics?.before ?? 0);
-  await page.screenshot({ path: testInfo.outputPath('settings-runner-mobile-scroll.png'), fullPage: false });
+  await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile-scroll.png'), fullPage: false });
+});
+
+test('renders settings connector APM signals across desktop and tablet', async ({ page }, testInfo) => {
+  await mockDashboardApi(page);
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 1024 },
+    { name: 'tablet', width: 1024, height: 768 },
+  ] as const) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/settings');
+    await page.getByRole('button', { name: '개발자' }).first().click();
+
+    await expect(page.getByText('Connector health & APM signals')).toBeVisible();
+    await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
+    await expect(page.getByText('otel-collector:4317')).toBeVisible();
+    await expect(page.getByText('Connector heartbeat')).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`settings-connector-apm-${viewport.name}.png`), fullPage: false });
+  }
 });
 
 test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {

@@ -4,6 +4,11 @@
 
 - `backend/main.py` wires optional OpenTelemetry FastAPI instrumentation and
   exposes Prometheus `/metrics` only when `ENABLE_PROMETHEUS_METRICS=true`.
+- `backend/api/observability.py` exposes signed-session
+  `/api/observability/operational-signals` for organization admins. It reports
+  Prometheus/OTel configuration, self-hosted connector registration, active
+  outbound runner connection state, and the remaining instrumentation gaps
+  without executing provider writes.
 - `backend/requirements.txt` includes `prometheus-fastapi-instrumentator` and
   OpenTelemetry dependencies used by the FastAPI app.
 - `docker-compose.observability.yml`, `docker-compose.apm.yml`, and
@@ -43,7 +48,9 @@
 
 ## Remaining gaps
 
-- Add connector heartbeat, sync lag, writeback conflict, and AI action audit
-  dashboards.
+- Persist connector heartbeat history and queue depth beyond the in-process
+  runner WebSocket manager.
+- Add sync lag, writeback conflict, and AI action audit dashboards fed by
+  source-backed connector/provider events.
 - Add log and trace redaction tests for email bodies, provider tokens, DSNs, and
   calendar/file descriptions.

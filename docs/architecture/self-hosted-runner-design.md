@@ -15,6 +15,11 @@ To connect to these private network mail servers without exposing them to the pu
 - Maintains WebSocket connections with registered runners.
 - Holds the configuration for each tenant (e.g., Target Internal IP, Port).
 - Manages AI capabilities, deduplication, threading, and user sessions.
+- Exposes organization-admin operational state through
+  `/api/observability/operational-signals`, including connector registration,
+  active outbound connection count, last in-process heartbeat, and APM
+  configuration. Persistent heartbeat history and queue depth remain connector
+  execution work.
 
 ### 2. The Self-Hosted Runner (Customer Network)
 - Distributed as a lightweight Docker container.
@@ -31,3 +36,5 @@ To connect to these private network mail servers without exposing them to the pu
 1. Create a `RunnerAgent` CLI application.
 2. Expose WebSocket or HTTP polling endpoints on the Naruon backend.
 3. Update `WorkspaceRunnerConfig` in `backend/db/models.py` to manage runner lifecycle.
+4. Persist connector heartbeat and queue depth events so the APM dashboard can
+   move from in-process status to durable operational history.

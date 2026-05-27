@@ -15,6 +15,7 @@ from api.llm_providers import router as llm_providers_router
 from api.prompts import router as prompts_router
 from api.tasks import router as tasks_router
 from api.ontology import router as ontology_router
+from api.observability import router as observability_router
 from api.runner_ws import router as runner_ws_router
 from api.dav import router as dav_router
 from api.accounts import router as accounts_router
@@ -80,6 +81,7 @@ app.include_router(llm_providers_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(prompts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(tasks_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(observability_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(runner_ws_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(dav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)

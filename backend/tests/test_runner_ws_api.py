@@ -97,7 +97,9 @@ def _auth_context() -> AuthContext:
 @pytest.fixture(autouse=True)
 def restore_session_secret():
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    runner_ws.manager.reset()
     yield
+    runner_ws.manager.reset()
     settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
 
@@ -164,3 +166,14 @@ def test_runner_ws_accepts_signed_session_and_registered_token(monkeypatch):
         ) as websocket:
             websocket.send_text("ping")
             assert websocket.receive_text() == "Naruon ack: ping"
+            snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+            assert snapshot.connection_state == "connected"
+            assert snapshot.active_connection_count == 1
+            assert snapshot.last_seen_at is not None
+            assert snapshot.last_disconnect_at is None
+            assert "nrn_registered-token" not in str(runner_ws.manager.connection_records)
+
+    snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+    assert snapshot.connection_state == "not_connected"
+    assert snapshot.active_connection_count == 0
+    assert snapshot.last_disconnect_at is not None

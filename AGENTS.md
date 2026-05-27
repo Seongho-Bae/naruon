@@ -127,6 +127,11 @@
   or exact body/attachment fingerprints. Do not merge threads from subject-only
   `Fwd:` or `Re:` similarity, and keep duplicate cleanup intent-only until
   provenance persistence and source-backed import rewiring are implemented.
+- Operational dashboards must distinguish live server-observed state from
+  planned instrumentation. Show connector registration and active outbound
+  runner socket state when available, but label sync lag, provider throttling,
+  queue depth, and writeback conflict dashboards as pending until source-backed
+  connector events exist.
 
 ## Development environment and tooling defaults
 
