@@ -18,7 +18,6 @@ concurrency:
 permissions:
   actions: read
   contents: read
-  models: read
 
 jobs:
   strix:
@@ -81,25 +80,24 @@ jobs:
       - name: Gate Strix secrets
         id: gate
         env:
-          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
+          STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
           STRIX_OPENAI_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
-          strix_model="$(printf '%s' "$STRIX_GITHUB_MODELS_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          strix_model="$(printf '%s' "$STRIX_OPENAI_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           case "$strix_model" in
-            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
-            openai/openai/gpt-5.[4-9]* | openai/openai/gpt-5.[1-9][0-9]* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]*)
+            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo '::error::STRIX_LLM must select an OpenAI GPT-5.4 or newer model, for example openai/gpt-5.4.'
+              echo '::error::STRIX_LLM must select an OpenAI Platform GPT-5.4 or newer model, for example openai/gpt-5.4.'
               exit 1
               ;;
           esac
-          if [ -n "$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')" ]; then
-            echo 'provider_mode=openai_direct' >> "$GITHUB_OUTPUT"
-          else
-            echo 'provider_mode=github_models' >> "$GITHUB_OUTPUT"
+          if [ -z "$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')" ]; then
+            echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
+            exit 1
           fi
+          echo 'provider_mode=openai_direct' >> "$GITHUB_OUTPUT"
 
       - name: Gate GCP credentials
         id: gcp_gate
@@ -118,11 +116,11 @@ jobs:
         id: auth_gate
         if: steps.gate.outputs.enabled == 'true'
         env:
-          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
+          STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
           DEFAULT_PROVIDER: openai
         run: |
           . "$TRUSTED_WORKSPACE/scripts/ci/strix_model_utils.sh"
-          strix_llm="$(trim_whitespace "$STRIX_GITHUB_MODELS_MODEL")"
+          strix_llm="$(trim_whitespace "$STRIX_OPENAI_MODEL")"
           requires_vertex_auth='false'
           model_auth_rc=0
           model_requires_vertex_auth "$strix_llm" || model_auth_rc=$?
@@ -200,7 +198,7 @@ jobs:
       - name: Mask LLM API key
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY || github.token }}
+          LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
           # Sanitize CR/LF before masking to prevent broken ::add-mask::
           # commands and potential workflow command injection.
@@ -216,59 +214,36 @@ jobs:
       - name: Prepare LLM API key input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY || github.token }}
+          LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}
         run: |
-          if [ -n "$LLM_API_KEY_SECRET" ]; then
-            umask 077
-            llm_api_key_file="$RUNNER_TEMP/llm_api_key.txt"
-            printf '%s' "$LLM_API_KEY_SECRET" > "$llm_api_key_file"
-            echo "LLM_API_KEY_FILE=$llm_api_key_file" >> "$GITHUB_ENV"
+          sanitized="$(printf '%s' "$LLM_API_KEY_SECRET" | tr -d '\r\n')"
+          if [ -z "$sanitized" ]; then
+            echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
+            exit 1
           fi
+          umask 077
+          llm_api_key_file="$RUNNER_TEMP/llm_api_key.txt"
+          printf '%s' "$sanitized" > "$llm_api_key_file"
+          echo "LLM_API_KEY_FILE=$llm_api_key_file" >> "$GITHUB_ENV"
 
       - name: Prepare Strix model input file
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
         env:
-          STRIX_GITHUB_MODELS_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
+          STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || 'openai/gpt-5.4' }}
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
-          strix_model="$(printf '%s' "$STRIX_GITHUB_MODELS_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          if [ "${{ steps.gate.outputs.provider_mode }}" = 'openai_direct' ]; then
-            case "$strix_model" in
-              openai/openai/*)
-                printf '%s' "${strix_model#openai/}" > "$strix_llm_file"
-                ;;
-              openai/*)
-                printf '%s' "$strix_model" > "$strix_llm_file"
-                ;;
-              *)
-                echo '::error::STRIX_LLM must select an OpenAI GPT-5.4 or newer model, for example openai/gpt-5.4.'
-                exit 1
-                ;;
-            esac
-          else
-            case "$strix_model" in
-              openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
-                printf 'openai/%s' "$strix_model" > "$strix_llm_file"
-                ;;
-              openai/openai/gpt-5.[4-9]* | openai/openai/gpt-5.[1-9][0-9]* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]*)
-                printf '%s' "$strix_model" > "$strix_llm_file"
-                ;;
-              *)
-                echo '::error::STRIX_LLM must select a GitHub Models OpenAI GPT-5.4 or newer model, for example openai/gpt-5.4.'
-                exit 1
-                ;;
-            esac
-          fi
+          strix_model="$(printf '%s' "$STRIX_OPENAI_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          case "$strix_model" in
+            openai/*)
+              printf '%s' "$strix_model" > "$strix_llm_file"
+              ;;
+            *)
+              echo '::error::STRIX_LLM must select an OpenAI Platform GPT-5.4 or newer model, for example openai/gpt-5.4.'
+              exit 1
+              ;;
+          esac
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
-
-      - name: Prepare LLM API base input file
-        if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true' && steps.gate.outputs.provider_mode == 'github_models'
-        run: |
-          umask 077
-          llm_api_base_file="$RUNNER_TEMP/llm_api_base.txt"
-          printf '%s' "https://models.github.ai/inference" > "$llm_api_base_file"
-          echo "LLM_API_BASE_FILE=$llm_api_base_file" >> "$GITHUB_ENV"
 
       - name: Run Strix (quick)
         if: steps.gate.outputs.enabled == 'true' && steps.auth_gate.outputs.can_run == 'true'
@@ -276,7 +251,6 @@ jobs:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
           STRIX_LLM_DEFAULT_PROVIDER: openai
           LLM_API_KEY_FILE: ${{ env.LLM_API_KEY_FILE }}
-          LLM_API_BASE_FILE: ${{ env.LLM_API_BASE_FILE }}
           STRIX_TARGET_PATH: ./
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: low
