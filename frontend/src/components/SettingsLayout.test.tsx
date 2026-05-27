@@ -34,7 +34,7 @@ describe("SettingsLayout", () => {
     localStorage.setItem("naruon_session_token", "signed-runner-session-token");
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         if (String(input) === "/api/runner-config") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
@@ -108,6 +108,47 @@ describe("SettingsLayout", () => {
                 provider_write_executed: false,
               },
             ],
+          });
+        }
+        if (String(input) === "/api/accounts/config" && init?.method === "PUT") {
+          const body = JSON.parse(String(init.body));
+          return jsonResponse({
+            user_id: "default",
+            smtp_server: body.smtp_server,
+            smtp_port: body.smtp_port,
+            smtp_username: body.smtp_username,
+            has_smtp_password: false,
+            imap_server: body.imap_server,
+            imap_port: body.imap_port,
+            imap_username: body.imap_username,
+            has_imap_password: true,
+            pop3_server: body.pop3_server,
+            pop3_port: body.pop3_port,
+            pop3_username: body.pop3_username,
+            has_pop3_password: false,
+            oauth_client_id: body.oauth_client_id,
+            oauth_redirect_uri: body.oauth_redirect_uri,
+            has_oauth_client_secret: true,
+          });
+        }
+        if (String(input) === "/api/accounts/config") {
+          return jsonResponse({
+            user_id: "default",
+            smtp_server: "smtp.example.com",
+            smtp_port: 587,
+            smtp_username: "sender@example.com",
+            has_smtp_password: true,
+            imap_server: "imap.example.com",
+            imap_port: 993,
+            imap_username: "inbox@example.com",
+            has_imap_password: true,
+            pop3_server: "pop3.example.com",
+            pop3_port: 995,
+            pop3_username: "archive@example.com",
+            has_pop3_password: false,
+            oauth_client_id: "oauth-client-id",
+            oauth_redirect_uri: "https://naruon.net/oauth/mail/callback",
+            has_oauth_client_secret: true,
           });
         }
         return jsonResponse({});
@@ -189,6 +230,81 @@ describe("SettingsLayout", () => {
     expect(container.textContent).not.toContain("nrn_registered-token");
     expect(container.textContent).toContain("Connector heartbeat");
     expect(container.textContent).toContain("instrumentation_pending");
+  });
+
+  it("loads and saves source-backed mail account settings without public identity headers or secret replay", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SettingsLayout />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const accountButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "연결 계정");
+    expect(accountButton).toBeTruthy();
+    await act(async () => {
+      accountButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/accounts/config",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer signed-runner-session-token",
+        }),
+      }),
+    );
+    const configGetCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/accounts/config" && init?.method !== "PUT");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
+    expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+
+    expect(container.textContent).toContain("고객 지정 Provider");
+    expect(container.textContent).toContain("smtp.example.com:587");
+    expect(container.textContent).toContain("imap.example.com:993");
+    expect(container.textContent).toContain("pop3.example.com:995");
+    expect(container.textContent).toContain("OAuth 로그인");
+    expect(container.textContent).toContain("저장된 secret 유지");
+    expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");
+
+    const saveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "계정 설정 저장");
+    expect(saveButton).toBeTruthy();
+    await act(async () => {
+      saveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const putCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/accounts/config" && init?.method === "PUT");
+    expect(putCall).toBeTruthy();
+    const putBody = JSON.parse(String(putCall?.[1]?.body));
+    expect(putBody).toMatchObject({
+      smtp_server: "smtp.example.com",
+      smtp_port: 587,
+      smtp_username: "sender@example.com",
+      imap_server: "imap.example.com",
+      imap_port: 993,
+      imap_username: "inbox@example.com",
+      pop3_server: "pop3.example.com",
+      pop3_port: 995,
+      pop3_username: "archive@example.com",
+      oauth_client_id: "oauth-client-id",
+      oauth_redirect_uri: "https://naruon.net/oauth/mail/callback",
+    });
+    expect(putBody).not.toHaveProperty("smtp_password");
+    expect(putBody).not.toHaveProperty("imap_password");
+    expect(putBody).not.toHaveProperty("pop3_password");
+    expect(putBody).not.toHaveProperty("oauth_client_secret");
+    expect(container.textContent).toContain("계정 설정을 저장했습니다");
   });
 
   it("renders settings tabs as detail surfaces instead of placeholder dead space", async () => {

@@ -423,6 +423,7 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
       return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
     });
     if (!scroller) return null;
+    scroller.scrollTop = 0;
     const before = scroller.scrollTop;
     scroller.scrollTop = scroller.scrollHeight;
     return {
@@ -458,6 +459,105 @@ test('renders settings connector APM signals across desktop and tablet', async (
     await page.getByText('outbound runner heartbeat received').scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`settings-connector-apm-${viewport.name}.png`), fullPage: false });
   }
+});
+
+test('renders source-backed mail account settings across desktop tablet and mobile', async ({ page }, testInfo) => {
+  const accountRequests: {
+    method: string;
+    headers: Record<string, string>;
+    postData: string | null;
+  }[] = [];
+
+  await page.addInitScript(() => {
+    localStorage.setItem('naruon_session_token', 'signed-settings-e2e-token');
+  });
+  await mockDashboardApi(page, (path, request) => {
+    if (path === '/api/accounts/config') {
+      accountRequests.push({
+        method: request.method(),
+        headers: request.headers(),
+        postData: request.postData(),
+      });
+    }
+  });
+
+  for (const viewport of [
+    { name: 'desktop', width: 1280, height: 1024 },
+    { name: 'tablet', width: 1024, height: 768 },
+    { name: 'mobile', width: 390, height: 844 },
+  ] as const) {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    await page.goto('/settings');
+    await page.getByRole('button', { name: '연결 계정' }).first().click();
+
+    await expect(page.getByText('고객 지정 Provider')).toBeVisible();
+    await expect(page.getByText('Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다')).toBeVisible();
+    await expect(page.getByText('smtp.example.com:587')).toBeVisible();
+    await expect(page.getByText('imap.example.com:993')).toBeVisible();
+    await expect(page.getByText('pop3.example.com:995')).toBeVisible();
+    await expect(page.getByText('OAuth 로그인')).toBeVisible();
+    await expect(page.getByText('저장된 secret 유지').first()).toBeVisible();
+
+    if (viewport.name === 'desktop') {
+      await page.getByRole('button', { name: '계정 설정 저장' }).click();
+      await expect(page.getByText('계정 설정을 저장했습니다')).toBeVisible();
+    }
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`settings-mail-account-${viewport.name}.png`), fullPage: false });
+  }
+
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto('/settings');
+  await page.getByRole('button', { name: '연결 계정' }).first().click();
+  await page.getByLabel('OAuth redirect URI').scrollIntoViewIfNeeded();
+  const mobileScrollMetrics = await page.evaluate(() => {
+    const scroller = Array.from(document.querySelectorAll('main, main *')).find((element) => {
+      const style = window.getComputedStyle(element);
+      return style.overflowY !== 'hidden' && element.scrollHeight > element.clientHeight + 10;
+    });
+    if (!scroller) return null;
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(mobileScrollMetrics).not.toBeNull();
+  expect(mobileScrollMetrics?.maxScroll).toBeGreaterThan(0);
+  expect(mobileScrollMetrics?.after).toBeGreaterThan(mobileScrollMetrics?.before ?? 0);
+  await page.screenshot({ path: testInfo.outputPath('settings-mail-account-mobile-scroll.png'), fullPage: false });
+
+  const getRequest = accountRequests.find((request) => request.method === 'GET');
+  expect(getRequest?.headers.authorization).toBe('Bearer signed-settings-e2e-token');
+  for (const header of ['x-user-id', 'x-organization-id', 'x-group-id', 'x-group-ids', 'x-user-role', 'x-dev-auth-token']) {
+    expect(getRequest?.headers[header]).toBeUndefined();
+  }
+
+  const putRequest = accountRequests.find((request) => request.method === 'PUT');
+  expect(putRequest?.headers.authorization).toBe('Bearer signed-settings-e2e-token');
+  const putBody = JSON.parse(putRequest?.postData || '{}') as Record<string, unknown>;
+  expect(putBody).toMatchObject({
+    smtp_server: 'smtp.example.com',
+    smtp_port: 587,
+    smtp_username: 'sender@example.com',
+    imap_server: 'imap.example.com',
+    imap_port: 993,
+    imap_username: 'inbox@example.com',
+    pop3_server: 'pop3.example.com',
+    pop3_port: 995,
+    pop3_username: 'archive@example.com',
+    oauth_client_id: 'oauth-client-id',
+    oauth_redirect_uri: 'https://naruon.net/oauth/mail/callback',
+  });
+  expect(putBody).not.toHaveProperty('smtp_password');
+  expect(putBody).not.toHaveProperty('imap_password');
+  expect(putBody).not.toHaveProperty('pop3_password');
+  expect(putBody).not.toHaveProperty('oauth_client_secret');
 });
 
 test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {

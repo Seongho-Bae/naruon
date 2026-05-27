@@ -90,6 +90,10 @@
   no-op. Do not place sensitive credential values, secret-derived values, or
   password-shaped field names in logs or raised exception text; use static
   non-secret labels such as "credential secret" instead.
+- Settings account screens must be source-backed by signed-session APIs rather
+  than static provider examples. Display only masked secret presence flags, keep
+  blank secret fields out of save payloads so stored values are preserved, and
+  do not reintroduce public identity headers in frontend account mocks.
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.

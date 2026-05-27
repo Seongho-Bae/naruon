@@ -38,8 +38,9 @@ mail/calendar/file systems.
 
 - **Sender ontology**: The backend classifies sender relationships and returns a
   deterministic next-action hint, such as reply/task tracking for colleagues or
-  summary-first handling for newsletters. Source-id filtered graph persistence is
-  still an episode task.
+  summary-first handling for newsletters. Relationship graph reads can be
+  filtered by source message/thread ids so the Search workspace can show the
+  sender DAG beside the originating mail context.
 - **Self-sent knowledge capture**: IMAP-imported emails sent from a user to the
   same address now create one idempotent, source-linked `self_sent_knowledge`
   ticket task with a plain-text memo title. The Tasks workspace can request a
@@ -245,6 +246,11 @@ exist. Browser writes to signed backend routes use the stored
 API client strips public identity headers such as `X-User-Id` and
 `X-Organization-Id`, including group and dev-token variants, rather than
 forwarding development identity fallbacks.
+Settings connected-account workflow reads and saves `/api/accounts/config`
+through the same signed-session path. It displays SMTP, IMAP, POP3, and OAuth
+provider state from masked response fields, preserves stored credential secrets
+when the user leaves replacement fields blank, and keeps Naruon framed as a web
+client/relay proxy rather than an email host.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread

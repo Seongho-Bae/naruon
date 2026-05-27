@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
@@ -65,6 +65,143 @@ interface OperationalSignalsResponse {
   signals: OperationalSignal[];
 }
 
+interface AccountConfig {
+  user_id: string;
+  smtp_server: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  has_smtp_password: boolean;
+  imap_server: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  has_imap_password: boolean;
+  pop3_server: string | null;
+  pop3_port: number | null;
+  pop3_username: string | null;
+  has_pop3_password: boolean;
+  oauth_client_id: string | null;
+  oauth_redirect_uri: string | null;
+  has_oauth_client_secret: boolean;
+}
+
+interface AccountConfigUpdate {
+  smtp_server: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password?: string;
+  imap_server: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password?: string;
+  pop3_server: string | null;
+  pop3_port: number | null;
+  pop3_username: string | null;
+  pop3_password?: string;
+  oauth_client_id: string | null;
+  oauth_client_secret?: string;
+  oauth_redirect_uri: string | null;
+}
+
+interface AccountFormState {
+  smtpServer: string;
+  smtpPort: string;
+  smtpUsername: string;
+  smtpPassword: string;
+  imapServer: string;
+  imapPort: string;
+  imapUsername: string;
+  imapPassword: string;
+  pop3Server: string;
+  pop3Port: string;
+  pop3Username: string;
+  pop3Password: string;
+  oauthClientId: string;
+  oauthClientSecret: string;
+  oauthRedirectUri: string;
+}
+
+const emptyAccountForm: AccountFormState = {
+  smtpServer: '',
+  smtpPort: '',
+  smtpUsername: '',
+  smtpPassword: '',
+  imapServer: '',
+  imapPort: '',
+  imapUsername: '',
+  imapPassword: '',
+  pop3Server: '',
+  pop3Port: '',
+  pop3Username: '',
+  pop3Password: '',
+  oauthClientId: '',
+  oauthClientSecret: '',
+  oauthRedirectUri: '',
+};
+
+function toAccountForm(config: AccountConfig): AccountFormState {
+  return {
+    smtpServer: config.smtp_server ?? '',
+    smtpPort: config.smtp_port?.toString() ?? '',
+    smtpUsername: config.smtp_username ?? '',
+    smtpPassword: '',
+    imapServer: config.imap_server ?? '',
+    imapPort: config.imap_port?.toString() ?? '',
+    imapUsername: config.imap_username ?? '',
+    imapPassword: '',
+    pop3Server: config.pop3_server ?? '',
+    pop3Port: config.pop3_port?.toString() ?? '',
+    pop3Username: config.pop3_username ?? '',
+    pop3Password: '',
+    oauthClientId: config.oauth_client_id ?? '',
+    oauthClientSecret: '',
+    oauthRedirectUri: config.oauth_redirect_uri ?? '',
+  };
+}
+
+function optionalText(value: string) {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function optionalPort(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function buildAccountUpdate(form: AccountFormState): AccountConfigUpdate {
+  const update: AccountConfigUpdate = {
+    smtp_server: optionalText(form.smtpServer),
+    smtp_port: optionalPort(form.smtpPort),
+    smtp_username: optionalText(form.smtpUsername),
+    imap_server: optionalText(form.imapServer),
+    imap_port: optionalPort(form.imapPort),
+    imap_username: optionalText(form.imapUsername),
+    pop3_server: optionalText(form.pop3Server),
+    pop3_port: optionalPort(form.pop3Port),
+    pop3_username: optionalText(form.pop3Username),
+    oauth_client_id: optionalText(form.oauthClientId),
+    oauth_redirect_uri: optionalText(form.oauthRedirectUri),
+  };
+
+  const smtpPassword = optionalText(form.smtpPassword);
+  if (smtpPassword) update.smtp_password = smtpPassword;
+  const imapPassword = optionalText(form.imapPassword);
+  if (imapPassword) update.imap_password = imapPassword;
+  const pop3Password = optionalText(form.pop3Password);
+  if (pop3Password) update.pop3_password = pop3Password;
+  const oauthClientSecret = optionalText(form.oauthClientSecret);
+  if (oauthClientSecret) update.oauth_client_secret = oauthClientSecret;
+
+  return update;
+}
+
+function formatEndpoint(host: string | null | undefined, port: number | null | undefined) {
+  if (!host) return '미설정';
+  return port ? `${host}:${port}` : host;
+}
+
 const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
   { id: '워크스페이스', icon: Monitor },
   { id: '멤버', icon: User },
@@ -126,10 +263,70 @@ export function SettingsLayout() {
   const [operationalSignals, setOperationalSignals] = useState<OperationalSignalsResponse | null>(null);
   const [operationalError, setOperationalError] = useState<string | null>(null);
   const [operationalLoading, setOperationalLoading] = useState(true);
+  const [accountConfig, setAccountConfig] = useState<AccountConfig | null>(null);
+  const [accountForm, setAccountForm] = useState<AccountFormState>(emptyAccountForm);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [accountStatus, setAccountStatus] = useState<string | null>(null);
+  const [accountLoading, setAccountLoading] = useState(true);
+  const [accountSaving, setAccountSaving] = useState(false);
   const startupView = useWorkspaceStartupView();
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
   const connectorEvents = operationalSignals?.connector.recent_events ?? [];
+  const accountProtocols = [
+    {
+      label: 'SMTP 송신',
+      endpoint: formatEndpoint(accountConfig?.smtp_server, accountConfig?.smtp_port),
+      identity: accountConfig?.smtp_username ?? '발신 계정 미설정',
+      secretReady: accountConfig?.has_smtp_password ?? false,
+      detail: '메일 발송과 보낸 메일 답변 추적에 사용합니다.',
+    },
+    {
+      label: 'IMAP 수신',
+      endpoint: formatEndpoint(accountConfig?.imap_server, accountConfig?.imap_port),
+      identity: accountConfig?.imap_username ?? '수신 계정 미설정',
+      secretReady: accountConfig?.has_imap_password ?? false,
+      detail: '받은편지함, 스레드, self-sent 지식 후보를 읽습니다.',
+    },
+    {
+      label: 'POP3 반입',
+      endpoint: formatEndpoint(accountConfig?.pop3_server, accountConfig?.pop3_port),
+      identity: accountConfig?.pop3_username ?? '반입 계정 미설정',
+      secretReady: accountConfig?.has_pop3_password ?? false,
+      detail: '레거시 메일함과 ZIP 반입 중복 정리에 사용합니다.',
+    },
+    {
+      label: 'OAuth 로그인',
+      endpoint: accountConfig?.oauth_client_id ?? '미설정',
+      identity: accountConfig?.oauth_redirect_uri ?? 'redirect URI 미설정',
+      secretReady: accountConfig?.has_oauth_client_secret ?? false,
+      detail: '지원 provider에서는 비밀번호 대신 OAuth consent를 사용합니다.',
+    },
+  ];
+
+  const updateAccountField = (field: keyof AccountFormState, value: string) => {
+    setAccountForm((current) => ({ ...current, [field]: value }));
+    setAccountStatus(null);
+  };
+
+  const handleAccountSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAccountSaving(true);
+    setAccountError(null);
+    setAccountStatus(null);
+
+    try {
+      const savedConfig = await apiClient.put<AccountConfig>('/api/accounts/config', buildAccountUpdate(accountForm));
+      setAccountConfig(savedConfig);
+      setAccountForm(toAccountForm(savedConfig));
+      setAccountStatus('계정 설정을 저장했습니다. 저장된 secret은 응답에 노출되지 않습니다.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '계정 설정을 저장할 수 없습니다.';
+      setAccountError(message);
+    } finally {
+      setAccountSaving(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -162,6 +359,22 @@ export function SettingsLayout() {
       })
       .finally(() => {
         if (!cancelled) setOperationalLoading(false);
+      });
+
+    void apiClient
+      .get<AccountConfig>('/api/accounts/config')
+      .then((config) => {
+        if (cancelled) return;
+        setAccountConfig(config);
+        setAccountForm(toAccountForm(config));
+        setAccountError(null);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setAccountError(error.message || '계정 설정을 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!cancelled) setAccountLoading(false);
       });
 
     return () => {
@@ -261,60 +474,142 @@ export function SettingsLayout() {
 
             {activeTab === '연결 계정' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <h2 className="font-bold text-xl">이메일 및 캘린더 커넥터</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Naruon Relay Proxy를 통해 외부 계정의 데이터를 수집하고 연동합니다.</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      회원이 지정한 SMTP/IMAP/POP3/OAuth provider를 사용합니다. Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다.
+                    </p>
                   </div>
-                  <button className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90">
-                    <Plus className="size-4" /> 커넥터 추가
-                  </button>
+                  <span className="rounded-full border border-border bg-card px-3 py-1 font-mono text-xs font-bold text-foreground">
+                    고객 지정 Provider
+                  </span>
                 </div>
 
-                <div className="space-y-4">
-                  {/* Connected Accounts */}
-                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="size-10 rounded-full bg-blue-100 grid place-items-center"><Mail className="size-5 text-blue-600" /></div>
-                      <div>
-                        <h3 className="font-bold text-base">Google Workspace (업무용)</h3>
-                        <p className="text-sm text-muted-foreground">seongho@naruon.com • IMAP, SMTP, CalDAV 연동됨</p>
+                {accountLoading ? (
+                  <p className="rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">계정 설정을 불러오는 중입니다.</p>
+                ) : null}
+                {accountError ? (
+                  <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{accountError}</p>
+                ) : null}
+                {accountStatus ? (
+                  <p className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{accountStatus}</p>
+                ) : null}
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  {accountProtocols.map((protocol) => (
+                    <article key={protocol.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <div className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary">
+                          <Mail className="size-5 text-primary" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-bold text-base">{protocol.label}</h3>
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${protocol.secretReady ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
+                              {protocol.secretReady ? '저장된 secret 유지' : 'secret 미설정'}
+                            </span>
+                          </div>
+                          <p className="mt-1 break-all font-mono text-sm text-foreground">{protocol.endpoint}</p>
+                          <p className="mt-1 break-all text-sm text-muted-foreground">{protocol.identity}</p>
+                          <p className="mt-3 text-sm leading-6 text-muted-foreground">{protocol.detail}</p>
+                        </div>
                       </div>
+                    </article>
+                  ))}
+                </div>
+
+                <form onSubmit={handleAccountSave} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold text-lg">Source-backed 계정 설정</h3>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        빈 secret 입력은 기존 저장값을 유지합니다. 실제 연결과 provider write는 서버 검증과 self-hosted connector 정책을 통과한 뒤 별도 실행됩니다.
+                      </p>
                     </div>
-                    <button className="text-sm font-semibold border border-border px-4 py-2 rounded-lg hover:bg-secondary">설정 변경</button>
+                    <button
+                      type="submit"
+                      disabled={accountSaving}
+                      className="rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {accountSaving ? '저장 중' : '계정 설정 저장'}
+                    </button>
                   </div>
 
-                  <div className="rounded-2xl border border-border bg-card p-5 shadow-sm flex items-center justify-between opacity-70">
-                    <div className="flex items-center gap-4">
-                      <div className="size-10 rounded-full bg-slate-100 grid place-items-center"><Mail className="size-5 text-slate-600" /></div>
-                      <div>
-                        <h3 className="font-bold text-base">개인 메일 (iCloud)</h3>
-                        <p className="text-sm text-muted-foreground">seongho.bae@icloud.com • IMAP 수집만 됨 (일정 연동 제외)</p>
+                  <div className="mt-6 grid gap-5">
+                    <section aria-label="SMTP 송신 설정" className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="smtp-server" className="text-sm font-bold text-muted-foreground">SMTP 서버</label>
+                        <input id="smtp-server" name="smtp_server" value={accountForm.smtpServer} onChange={(event) => updateAccountField('smtpServer', event.target.value)} placeholder="smtp.example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
-                    </div>
-                    <button className="text-sm font-semibold border border-border px-4 py-2 rounded-lg hover:bg-secondary">설정 변경</button>
-                  </div>
-                </div>
+                      <div className="space-y-2">
+                        <label htmlFor="smtp-port" className="text-sm font-bold text-muted-foreground">SMTP 포트</label>
+                        <input id="smtp-port" name="smtp_port" type="number" inputMode="numeric" value={accountForm.smtpPort} onChange={(event) => updateAccountField('smtpPort', event.target.value)} placeholder="587" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="smtp-username" className="text-sm font-bold text-muted-foreground">SMTP 사용자</label>
+                        <input id="smtp-username" name="smtp_username" value={accountForm.smtpUsername} onChange={(event) => updateAccountField('smtpUsername', event.target.value)} placeholder="sender@example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="smtp-password" className="text-sm font-bold text-muted-foreground">SMTP secret</label>
+                        <input id="smtp-password" name="smtp_password" type="password" value={accountForm.smtpPassword} onChange={(event) => updateAccountField('smtpPassword', event.target.value)} placeholder={accountConfig?.has_smtp_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                    </section>
 
-                {/* Form Example */}
-                <div className="mt-8 rounded-2xl border border-border bg-card p-6 shadow-sm">
-                  <h3 className="font-bold text-lg mb-4">IMAP 수동 설정 (사내 메일)</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-muted-foreground">IMAP 서버 주소</label>
-                      <input type="text" placeholder="imap.example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-bold text-muted-foreground">포트 (SSL)</label>
-                      <input type="text" defaultValue="993" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
-                    <div className="col-span-2 space-y-2">
-                      <label className="text-sm font-bold text-muted-foreground">사용자 계정</label>
-                      <input type="email" placeholder="user@company.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" />
-                    </div>
+                    <section aria-label="IMAP 수신 설정" className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="imap-server" className="text-sm font-bold text-muted-foreground">IMAP 서버</label>
+                        <input id="imap-server" name="imap_server" value={accountForm.imapServer} onChange={(event) => updateAccountField('imapServer', event.target.value)} placeholder="imap.example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="imap-port" className="text-sm font-bold text-muted-foreground">IMAP 포트</label>
+                        <input id="imap-port" name="imap_port" type="number" inputMode="numeric" value={accountForm.imapPort} onChange={(event) => updateAccountField('imapPort', event.target.value)} placeholder="993" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="imap-username" className="text-sm font-bold text-muted-foreground">IMAP 사용자</label>
+                        <input id="imap-username" name="imap_username" value={accountForm.imapUsername} onChange={(event) => updateAccountField('imapUsername', event.target.value)} placeholder="inbox@example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="imap-password" className="text-sm font-bold text-muted-foreground">IMAP secret</label>
+                        <input id="imap-password" name="imap_password" type="password" value={accountForm.imapPassword} onChange={(event) => updateAccountField('imapPassword', event.target.value)} placeholder={accountConfig?.has_imap_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                    </section>
+
+                    <section aria-label="POP3 반입 설정" className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="pop3-server" className="text-sm font-bold text-muted-foreground">POP3 서버</label>
+                        <input id="pop3-server" name="pop3_server" value={accountForm.pop3Server} onChange={(event) => updateAccountField('pop3Server', event.target.value)} placeholder="pop3.example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="pop3-port" className="text-sm font-bold text-muted-foreground">POP3 포트</label>
+                        <input id="pop3-port" name="pop3_port" type="number" inputMode="numeric" value={accountForm.pop3Port} onChange={(event) => updateAccountField('pop3Port', event.target.value)} placeholder="995" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="pop3-username" className="text-sm font-bold text-muted-foreground">POP3 사용자</label>
+                        <input id="pop3-username" name="pop3_username" value={accountForm.pop3Username} onChange={(event) => updateAccountField('pop3Username', event.target.value)} placeholder="archive@example.com" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="pop3-password" className="text-sm font-bold text-muted-foreground">POP3 secret</label>
+                        <input id="pop3-password" name="pop3_password" type="password" value={accountForm.pop3Password} onChange={(event) => updateAccountField('pop3Password', event.target.value)} placeholder={accountConfig?.has_pop3_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                    </section>
+
+                    <section aria-label="OAuth 앱 설정" className="grid gap-3 border-t border-border pt-5 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <label htmlFor="oauth-client-id" className="text-sm font-bold text-muted-foreground">OAuth client ID</label>
+                        <input id="oauth-client-id" name="oauth_client_id" value={accountForm.oauthClientId} onChange={(event) => updateAccountField('oauthClientId', event.target.value)} placeholder="client-id" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="oauth-client-secret" className="text-sm font-bold text-muted-foreground">OAuth client secret</label>
+                        <input id="oauth-client-secret" name="oauth_client_secret" type="password" value={accountForm.oauthClientSecret} onChange={(event) => updateAccountField('oauthClientSecret', event.target.value)} placeholder={accountConfig?.has_oauth_client_secret ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <label htmlFor="oauth-redirect-uri" className="text-sm font-bold text-muted-foreground">OAuth redirect URI</label>
+                        <input id="oauth-redirect-uri" name="oauth_redirect_uri" value={accountForm.oauthRedirectUri} onChange={(event) => updateAccountField('oauthRedirectUri', event.target.value)} placeholder="https://naruon.net/oauth/mail/callback" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                    </section>
                   </div>
-                  <button className="mt-6 rounded-lg bg-foreground text-background px-6 py-2 text-sm font-bold hover:bg-foreground/90">연결 테스트</button>
-                </div>
+                </form>
               </div>
             )}
 
