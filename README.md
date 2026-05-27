@@ -28,11 +28,23 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
+- Strix PR/security evidence requires an OpenAI GPT-5+ model. The workflow
+  prefers GitHub Models with `models: read`, verifies real inference
+  availability, and uses only an explicit `STRIX_OPENAI_API_KEY` direct GPT-5
+  credential instead of downgrading to GPT-4-era models when GitHub Models has
+  not enabled GPT-5 for the repo token. Pending CodeRabbit or check evidence is
+  a wait state, not a hard blocker.
   
-## Agentic Ontology & Auto-Organization (Planned)
+## Agentic Ontology & Auto-Organization
 
-- **DAG Ontology**: The system evaluates a Directed Acyclic Graph (DAG) for sender relationships to determine "what this sender means to the user", allowing the AI Agent to decide subsequent tasks based on dynamic relationship contexts.
-- **Self-Sent Knowledge Indexing**: Emails sent to oneself are automatically parsed and structured into the connected WebDAV/Notes repository, creating a seamless personal knowledge base.
+- **Sender ontology**: The backend classifies sender relationships and returns a
+  deterministic next-action hint, such as reply/task tracking for colleagues or
+  summary-first handling for newsletters. Source-id filtered graph persistence is
+  still an episode task.
+- **Self-sent knowledge capture**: IMAP-imported emails sent from a user to the
+  same address now create one idempotent, source-linked `self_sent_knowledge`
+  ticket task with a plain-text memo title. WebDAV/Notes materialization remains
+  future work and must write back to customer-owned sources.
 
 ## Five-minute local path
 
@@ -76,6 +88,12 @@ npm run lint
 npm run build
 npm run dev
 ```
+
+`next.config.ts` caps static generation concurrency by default
+(`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
+`NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER=50`) so constrained CI/build
+machines do not fan out excessive Node/PostCSS workers. Raise those values only
+with explicit build evidence.
 
 ## Threading proof points
 

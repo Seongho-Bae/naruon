@@ -204,6 +204,9 @@ class Email(Base):
     thread_id: Mapped[str | None] = mapped_column(
         String, index=True, nullable=True
     )  # O3: email threading support
+    fingerprint: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -288,6 +291,8 @@ class TenantConfig(Base):
     imap_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     pop3_server: Mapped[str | None] = mapped_column(String, nullable=True)
     pop3_port: Mapped[int | None] = mapped_column(nullable=True)
+    pop3_username: Mapped[str | None] = mapped_column(String, nullable=True)
+    pop3_password: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
 
     # OAuth and Third Party Settings
     oauth_client_id: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -308,6 +313,7 @@ class TenantConfig(Base):
             f"smtp_server='{self.smtp_server}', imap_server='{self.imap_server}', "
             f"has_smtp_password={self.smtp_password is not None}, "
             f"has_imap_password={self.imap_password is not None}, "
+            f"has_pop3_password={self.pop3_password is not None}, "
             f"has_oauth_secret={self.oauth_client_secret is not None}, "
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"
@@ -328,6 +334,7 @@ class SenderRelationship(Base):
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    parent_sender_email: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     relationship_type: Mapped[str] = mapped_column(String, nullable=False)
     confidence_score: Mapped[float] = mapped_column(default=1.0)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -338,4 +345,64 @@ class SenderRelationship(Base):
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class CaldavAccount(Base):
+    __tablename__ = "caldav_accounts"
+
+    id: Mapped[int] = mapped_column("account_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    server_url: Mapped[str] = mapped_column(String, nullable=False)
+    username: Mapped[str] = mapped_column(String, nullable=False)
+    credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class ReplyTracker(Base):
+    __tablename__ = "reply_trackers"
+
+    id: Mapped[int] = mapped_column("tracker_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    message_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    status_code: Mapped[str] = mapped_column(String, default="waiting", index=True)
+    follow_up_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class WebdavAccount(Base):
+    __tablename__ = "webdav_accounts"
+
+    id: Mapped[int] = mapped_column("account_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    server_url: Mapped[str] = mapped_column(String, nullable=False)
+    username: Mapped[str] = mapped_column(String, nullable=False)
+    credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+
+class ProjectFolder(Base):
+    __tablename__ = "project_folders"
+
+    id: Mapped[int] = mapped_column("folder_id", primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    project_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    webdav_path: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )

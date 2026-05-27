@@ -16,8 +16,15 @@ Set `DATABASE_URL` explicitly through `.env`, Docker Compose, CI secrets, or the
 runtime environment. The backend has no code default for the database URL and
 fails closed when it is missing.
 
-Outbound SMTP also fails closed unless the normalized tenant SMTP host is listed
-in `ALLOWED_SMTP_HOSTS` and the port is listed in `ALLOWED_SMTP_PORTS`.
+Outbound SMTP/IMAP/POP3 connector destinations fail closed unless the normalized
+tenant host is listed in the matching `ALLOWED_*_HOSTS` setting and the port is
+listed in the matching `ALLOWED_*_PORTS` setting. The defaults allow SMTP
+submission ports `465,587`, IMAP TLS port `993`, and POP3 TLS port `995`, but
+operators must explicitly allow each provider hostname.
+
+Prometheus `/metrics` is disabled by default. Set
+`ENABLE_PROMETHEUS_METRICS=true` only behind a trusted scrape path or reverse
+proxy access policy.
 
 For local fixture imports, `OPENAI_API_KEY` is optional. When absent,
 `import_fixtures.py` uses zero-vector embeddings so the local threading proof
@@ -51,11 +58,19 @@ mailbox owners.
 
 ## Warning classification
 
-Current backend test warnings are known dependency/toolchain warnings:
+Backend evidence should be collected with warnings promoted to errors whenever
+the slice is under active change:
+
+```bash
+PYTHONWARNINGS=error python3 -m pytest -q
+```
+
+Historical third-party dependency warnings should be isolated or filtered with
+an explicit rationale before merge evidence is accepted:
 
 - `starlette.formparsers` imports `multipart`, which emits a pending deprecation
   warning.
 - Compiled SWIG metadata emits `__module__` deprecation warnings during import.
 
-Threading code should not add new warnings. Treat any new warning from
-application modules as a regression.
+Threading code should not add new warnings. Treat any new application warning
+or log output containing `Timeout`, `Fatal`, `Warn`, or `Denied` as a regression.

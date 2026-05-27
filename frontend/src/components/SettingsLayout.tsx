@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor } from 'lucide-react';
+import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useState } from 'react';
 
@@ -144,7 +144,40 @@ export function SettingsLayout() {
               </div>
             )}
 
-            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && (
+            {activeTab === '개발자' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-xl">개발자 및 시스템 (Observability)</h2>
+                    <p className="text-sm text-muted-foreground mt-1">Naruon 인프라 모니터링, 추적 및 보안 로그에 접근합니다.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                  <a href="http://localhost:3000" target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-primary/50 transition-colors">
+                    <Monitor className="size-8 text-orange-500 mb-2" />
+                    <h3 className="font-bold text-lg">Grafana 대시보드</h3>
+                    <p className="text-sm text-muted-foreground">OpenTelemetry 기반의 APM, 트래픽 메트릭 및 시스템 자원 모니터링을 확인합니다.</p>
+                  </a>
+                  <a href="http://localhost:8080" target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-primary/50 transition-colors">
+                    <Shield className="size-8 text-blue-500 mb-2" />
+                    <h3 className="font-bold text-lg">Keycloak 관리 콘솔</h3>
+                    <p className="text-sm text-muted-foreground">OIDC 프로바이더, SSO 인증, 역할 기반 접근 제어(RBAC)를 구성합니다.</p>
+                  </a>
+                  <a href="http://localhost:3100" target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-primary/50 transition-colors">
+                    <AlertCircle className="size-8 text-slate-500 mb-2" />
+                    <h3 className="font-bold text-lg">Loki 로그 서버</h3>
+                    <p className="text-sm text-muted-foreground">분산 아키텍처 환경의 컨테이너 로그 및 어플리케이션 에러 로그를 검색합니다.</p>
+                  </a>
+                  <a href="http://localhost:3200" target="_blank" rel="noreferrer" className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-6 shadow-sm hover:border-primary/50 transition-colors">
+                    <RefreshCw className="size-8 text-teal-500 mb-2" />
+                    <h3 className="font-bold text-lg">Tempo 분산 추적</h3>
+                    <p className="text-sm text-muted-foreground">FastAPI의 엔드포인트 지연율 및 MSA 구성요소 간의 호출 트레이스를 시각화합니다.</p>
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {activeTab !== '연결 계정' && activeTab !== '워크스페이스' && activeTab !== '개발자' && (
               <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
                 <Settings className="size-10 text-muted-foreground mb-4 opacity-50" />
                 <h2 className="text-xl font-bold mb-2">{activeTab} 메뉴</h2>

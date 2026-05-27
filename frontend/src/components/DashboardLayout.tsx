@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -30,11 +30,11 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail', available: true },
-  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/starred', available: false },
-  { label: '보낸 메일', description: '발송 완료', icon: Send, href: '/sent', available: false },
-  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/drafts', available: false },
-  { label: '전체 메일', description: '모든 메일함', icon: Home, href: '/all', available: false },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox', available: true },
+  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/mail?folder=starred', available: true },
+  { label: '보낸 메일', description: '답변 추적 대상', icon: Send, href: '/mail?folder=sent', available: true },
+  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/mail?folder=drafts', available: true },
+  { label: '전체 메일', description: '중복 정리 대상', icon: Home, href: '/mail?folder=all', available: true },
 ];
 
 const mobileWorkspaceItems = [
@@ -79,20 +79,85 @@ const headerActions = [
 
 
 
-function splitHref(href: string) {
-  const [path, hash = ''] = href.split('#');
-  return { path: path || '/', hash: hash ? `#${hash}` : '' };
+const locationChangeEvent = 'naruon:location-change';
+let historyListenerInstalled = false;
+
+function emitLocationChange() {
+  window.dispatchEvent(new Event(locationChangeEvent));
 }
 
-function isActivePath(pathname: string | null, href: string, currentHash = '') {
+function installHistoryListener() {
+  if (typeof window === 'undefined' || historyListenerInstalled) return;
+  const pushState = window.history.pushState;
+  const replaceState = window.history.replaceState;
+
+  window.history.pushState = function patchedPushState(this: History, ...args: Parameters<History['pushState']>) {
+    pushState.apply(this, args);
+    emitLocationChange();
+  } as History['pushState'];
+
+  window.history.replaceState = function patchedReplaceState(this: History, ...args: Parameters<History['replaceState']>) {
+    replaceState.apply(this, args);
+    emitLocationChange();
+  } as History['replaceState'];
+
+  historyListenerInstalled = true;
+}
+
+function subscribeToLocationChanges(callback: () => void) {
+  if (typeof window === 'undefined') return () => {};
+  installHistoryListener();
+  window.addEventListener(locationChangeEvent, callback);
+  window.addEventListener('popstate', callback);
+  return () => {
+    window.removeEventListener(locationChangeEvent, callback);
+    window.removeEventListener('popstate', callback);
+  };
+}
+
+function getCurrentSearch() {
+  return typeof window === 'undefined' ? '' : window.location.search;
+}
+
+function getServerSearch() {
+  return '';
+}
+
+function useCurrentSearchParams() {
+  const search = useSyncExternalStore(subscribeToLocationChanges, getCurrentSearch, getServerSearch);
+  return useMemo(() => new URLSearchParams(search), [search]);
+}
+
+function splitHref(href: string) {
+  const [pathWithQuery, hash = ''] = href.split('#');
+  const [path = '/', query = ''] = pathWithQuery.split('?');
+  return { path: path || '/', query, hash: hash ? `#${hash}` : '' };
+}
+
+type SearchParamsLike = Pick<URLSearchParams, 'get'>;
+
+function isActivePath(
+  pathname: string | null,
+  href: string,
+  currentHash = '',
+  currentSearchParams?: SearchParamsLike | null,
+) {
   if (!pathname) return false;
-  const { path, hash } = splitHref(href);
+  const { path, query, hash } = splitHref(href);
   if (hash) {
     return pathname === path && currentHash === hash;
   }
-  return path === '/'
+  const pathMatch = path === '/'
     ? pathname === '/'
     : pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatch) return false;
+  if (!query) return true;
+  if (!currentSearchParams) return false;
+  const targetSearchParams = new URLSearchParams(query);
+  for (const [key, value] of targetSearchParams.entries()) {
+    if (currentSearchParams.get(key) !== value) return false;
+  }
+  return true;
 }
 
 export function NavLink({
@@ -109,6 +174,7 @@ export function NavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
+  const searchParams = useCurrentSearchParams();
   const [currentHash, setCurrentHash] = useState('');
 
   useEffect(() => {
@@ -124,7 +190,7 @@ export function NavLink({
     };
   }, [pathname]);
 
-  const active = isActivePath(pathname, href, currentHash);
+  const active = isActivePath(pathname, href, currentHash, searchParams);
 
   if (!available) {
     return (
@@ -177,7 +243,8 @@ function PrimaryNavLink({
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
-  const active = isActivePath(pathname, href);
+  const searchParams = useCurrentSearchParams();
+  const active = isActivePath(pathname, href, '', searchParams);
 
   return (
     <Link
@@ -226,6 +293,7 @@ export function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useCurrentSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
@@ -249,23 +317,20 @@ export function DashboardLayout({
     window.dispatchEvent(new CustomEvent('naruon:header-action', { detail: { action } }));
   }
 
-  function handleStartupViewChange(
-    view: WorkspaceStartupView,
-    options: { syncMobileHash?: boolean } = {},
-  ) {
+  function handleStartupViewChange(view: WorkspaceStartupView) {
     setWorkspaceStartupView(view);
     closeMobileWorkspaceMenu();
+    if (window.location.hash.startsWith('#mobile-')) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
     if (view === 'dashboard') {
-      if (window.location.hash.startsWith('#mobile-')) {
-        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-      }
       setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'email') {
-      setMobileWorkspaceView('inbox', { updateHash: options.syncMobileHash ?? false });
+      setMobileWorkspaceView('inbox', { updateHash: false });
     }
     if (view === 'calendar') {
-      setMobileWorkspaceView('calendar', { updateHash: options.syncMobileHash ?? false });
+      setMobileWorkspaceView('calendar', { updateHash: false });
     }
   }
 
@@ -294,16 +359,16 @@ export function DashboardLayout({
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <Image src="/brand/naruon-symbol.svg" alt="Naruon" width={32} height={32} style={{ width: '32px', height: '32px' }} />
             <span className="text-lg font-black tracking-tight">Naruon</span>
           </div>
-          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto lg:flex 2xl:max-w-none">
+          <nav aria-label="Primary workspace navigation" className="hidden max-w-[44vw] items-center gap-1 overflow-x-auto xl:flex 2xl:max-w-none">
             {primaryNavItems.map((item) => (
               <PrimaryNavLink key={item.href} {...item} />
             ))}
           </nav>
-          <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] md:flex">
+          <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
             <span className="sr-only">맥락 검색</span>
             <input
@@ -355,14 +420,14 @@ export function DashboardLayout({
             <button type="button" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
               <HelpCircle className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 sm:inline-flex">
+            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:inline-flex">
               <UserCircle className="size-4 text-primary" aria-hidden="true" />
               Seongho
             </button>
-            <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary sm:inline-flex">
+            <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary xl:inline-flex">
               답장 추적
             </span>
-            <span className="hidden rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 sm:inline-flex">
+            <span className="hidden rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700 xl:inline-flex">
               충돌 조율
             </span>
           </div>
@@ -425,7 +490,7 @@ export function DashboardLayout({
                     title={description}
                     popoverTarget="mobile-workspace-menu"
                     popoverTargetAction="hide"
-                    onClick={() => handleStartupViewChange(view, { syncMobileHash: true })}
+                    onClick={() => handleStartupViewChange(view)}
                     className={`min-h-11 rounded-2xl border px-2 text-xs font-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                       active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/70 text-foreground'
                     }`}
@@ -437,55 +502,39 @@ export function DashboardLayout({
             </div>
           </section>
 
-          <nav aria-label="Mobile workspace menu" className="grid gap-2">
+          <nav aria-label="Mobile mail shortcuts" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">메일</p>
-          {mailNavItems.map(({ label, description, icon: Icon, href, available }) => {
-            const active = isActivePath(pathname, href);
-            if (!available) {
+            {mailNavItems.map(({ label, description, href, icon: Icon }) => {
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
-                <button
-                  key={label}
-                  type="button"
-                  disabled
-                  data-coming-soon="true"
-                  className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => closeMobileWorkspaceMenu()}
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
+                  }`}
                 >
-                  <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                  <Icon className="size-4" aria-hidden="true" />
                   <span className="flex flex-col leading-tight">
-                    <span>{label} <span className="text-[10px]">준비 중</span></span>
+                    <span>{label}</span>
                     <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
                   </span>
-                </button>
+                </Link>
               );
-            }
-            return (
-            <Link
-              key={label}
-              href={href}
-              aria-current={active ? 'page' : undefined}
-              onClick={() => {
-                closeMobileWorkspaceMenu();
-                setMobileWorkspaceView('inbox');
-              }}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-            >
-              <Icon className="size-4 text-primary" aria-hidden="true" />
-              <span className="flex flex-col leading-tight">
-                <span>{label}</span>
-                <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
-              </span>
-              </Link>
-           )})}
+            })}
           </nav>
 
-          <nav aria-label="Mobile workspace destinations" className="grid gap-2">
+          <nav aria-label="Mobile workspace shortcuts" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">워크스페이스</p>
-            {mobileWorkspaceMenuItems.map(({ label, description, icon: Icon, href, view }) => {
+            {mobileWorkspaceMenuItems.map(({ label, description, href, icon: Icon, view }) => {
               const active = activeMobileView === view;
               return (
                 <a
-                  key={view}
+                  key={href}
                   href={href}
+                  data-mobile-workspace-shortcut={view}
                   aria-current={active ? 'page' : undefined}
                   onClick={(event) => handleMobileWorkspaceChange(view, event)}
                   className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
@@ -495,7 +544,7 @@ export function DashboardLayout({
                   <Icon className="size-4" aria-hidden="true" />
                   <span className="flex flex-col leading-tight">
                     <span>{label}</span>
-                    <span className={`text-[11px] font-medium ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{description}</span>
+                    <span className="text-[11px] font-medium text-muted-foreground">{description}</span>
                   </span>
                 </a>
               );
@@ -505,7 +554,7 @@ export function DashboardLayout({
           <nav aria-label="Mobile primary destinations" className="grid gap-2">
             <p className="px-1 text-[11px] font-black text-muted-foreground">주요 작업공간</p>
             {primaryNavItems.map(({ label, href, icon: Icon }) => {
-              const active = isActivePath(pathname, href);
+              const active = isActivePath(pathname, href, '', searchParams);
               return (
                 <Link
                   key={href}
@@ -536,24 +585,22 @@ export function DashboardLayout({
                 <span className="text-[11px] font-medium text-muted-foreground">시작 화면과 계정 설정</span>
               </span>
             </Link>
-            <button
-              type="button"
-              disabled
-              data-coming-soon="true"
-              className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+            <Link
+              href="/settings#help"
+              onClick={() => closeMobileWorkspaceMenu()}
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             >
-              <HelpCircle className="size-4" aria-hidden="true" />
-              <span>도움말 <span className="text-[10px]">준비 중</span></span>
-            </button>
-            <button
-              type="button"
-              disabled
-              data-coming-soon="true"
-              className="flex min-h-11 cursor-not-allowed items-center gap-3 rounded-2xl border border-border/70 bg-background/50 px-3 py-2 text-left text-sm font-semibold text-muted-foreground"
+              <HelpCircle className="size-4 text-primary" aria-hidden="true" />
+              <span>도움말</span>
+            </Link>
+            <Link
+              href="/settings#profile"
+              onClick={() => closeMobileWorkspaceMenu()}
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
             >
-              <UserCircle className="size-4" aria-hidden="true" />
-              <span>프로필 <span className="text-[10px]">준비 중</span></span>
-            </button>
+              <UserCircle className="size-4 text-primary" aria-hidden="true" />
+              <span>프로필</span>
+            </Link>
           </nav>
         </div>
       </div>

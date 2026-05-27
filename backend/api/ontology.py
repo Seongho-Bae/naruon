@@ -7,16 +7,21 @@ from typing import List
 from db.session import get_db
 from db.models import SenderRelationship
 from api.auth import get_auth_context, AuthContext
+from services.ontology_service import ontology_service
 
 router = APIRouter(prefix="/api/ontology", tags=["ontology"])
 
 class RelationshipResponse(BaseModel):
     sender_email: str
+    parent_sender_email: str | None = None
     relationship_type: str
     confidence_score: float
+    next_action: str
+    action_reason: str
 
 class RelationshipCreate(BaseModel):
     sender_email: str
+    parent_sender_email: str | None = None
     relationship_type: str
     confidence_score: float = 1.0
 
@@ -32,8 +37,10 @@ async def get_relationships(
     return [
         RelationshipResponse(
             sender_email=r.sender_email,
+            parent_sender_email=r.parent_sender_email,
             relationship_type=r.relationship_type,
-            confidence_score=r.confidence_score
+            confidence_score=r.confidence_score,
+            **ontology_service.next_action_for_relationship(r.relationship_type),
         )
         for r in rels
     ]
@@ -56,10 +63,13 @@ async def create_relationship(
     if rel:
         rel.relationship_type = req.relationship_type
         rel.confidence_score = req.confidence_score
+        if "parent_sender_email" in req.model_fields_set:
+            rel.parent_sender_email = req.parent_sender_email
     else:
         rel = SenderRelationship(
             user_id=user_id,
             sender_email=req.sender_email,
+            parent_sender_email=req.parent_sender_email,
             relationship_type=req.relationship_type,
             confidence_score=req.confidence_score
         )
@@ -70,6 +80,8 @@ async def create_relationship(
     
     return RelationshipResponse(
         sender_email=rel.sender_email,
+        parent_sender_email=rel.parent_sender_email,
         relationship_type=rel.relationship_type,
-        confidence_score=rel.confidence_score
+        confidence_score=rel.confidence_score,
+        **ontology_service.next_action_for_relationship(rel.relationship_type),
     )

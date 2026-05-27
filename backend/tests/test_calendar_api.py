@@ -392,7 +392,7 @@ def test_calendar_writeback_allows_org_admin_to_target_same_org_source(
         app,
         headers={
             "X-User-Id": "org-admin",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
         },
     )
@@ -410,7 +410,7 @@ def test_calendar_writeback_allows_org_admin_to_target_same_org_source(
     assert response.json()["target_source_id"] == "shared-calendar"
 
 
-def test_calendar_writeback_allows_platform_admin_to_target_any_org_source(
+def test_calendar_writeback_allows_system_admin_to_target_any_org_source(
     writeback_source_override,
 ):
     writeback_source_override(
@@ -427,12 +427,12 @@ def test_calendar_writeback_allows_platform_admin_to_target_any_org_source(
             )
         ]
     )
-    platform_admin_client = TestClient(
+    system_admin_client = TestClient(
         app,
-        headers={"X-User-Id": "platform-ops", "X-User-Role": "platform_admin"},
+        headers={"X-User-Id": "platform-ops", "X-User-Role": "system_admin"},
     )
 
-    response = platform_admin_client.post(
+    response = system_admin_client.post(
         "/api/calendar/writeback-intent",
         json={
             "action": "create",

@@ -105,6 +105,11 @@ export function SearchLayout() {
               </div>
             </div>
 
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">관계 그래프와 타임라인</h2>
+              <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">4개 근거 연결</span>
+            </div>
+
             <div className="grid grid-cols-2 gap-6">
               {/* Relationship Graph */}
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex flex-col">

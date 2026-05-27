@@ -3,7 +3,12 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
-from api.auth import AuthContext, get_auth_context
+from api.auth import (
+    AuthContext,
+    get_auth_context,
+    is_system_admin_role,
+    is_tenant_admin_role,
+)
 from services.calendar_service import create_calendar_event, validate_calendar_todo_text
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
@@ -113,11 +118,11 @@ def _find_writeback_source_by_id(
 def _can_target_writeback_source(
     target_source: WritebackSource, auth_context: AuthContext
 ) -> bool:
-    if auth_context.role == "platform_admin":
+    if is_system_admin_role(auth_context.role):
         return True
     if target_source.organization_id != auth_context.organization_id:
         return False
-    if auth_context.role == "organization_admin":
+    if is_tenant_admin_role(auth_context.role):
         return True
     return target_source.owner_id == auth_context.user_id
 
