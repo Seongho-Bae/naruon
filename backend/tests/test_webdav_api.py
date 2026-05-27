@@ -418,6 +418,23 @@ def test_webdav_writeback_intent_skips_disabled_accounts():
     assert result["error_code"] == "no_webdav_account"
 
 
+def test_webdav_writeback_intent_fails_closed_without_eligibility():
+    svc = WebDavService()
+    result = svc.determine_webdav_writeback_intent_from_accounts(
+        [
+            {
+                "source_id": "webdav_src_missing_eligibility",
+                "server_url": "https://webdav.naruon.net",
+                "username": "demo_user",
+            }
+        ],
+        target_source_id="webdav_src_missing_eligibility",
+    )
+
+    assert result["status"] == "error"
+    assert result["error_code"] == "no_webdav_account"
+
+
 @pytest.mark.asyncio
 async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     source_uid = f"webdav_src_{uuid.uuid4().hex[:24]}"

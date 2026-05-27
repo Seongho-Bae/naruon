@@ -218,7 +218,7 @@ class WebDavService:
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
         writable_accounts = [
-            account for account in accounts if account.get("writeback_enabled", True)
+            account for account in accounts if account.get("writeback_enabled", False)
         ]
         if not writable_accounts:
             return {

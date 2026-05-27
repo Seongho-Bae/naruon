@@ -107,9 +107,10 @@
 - Calendar and WebDAV writeback source selection must resolve through opaque
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.
-  Browser-visible source ids must not reveal account primary keys, and provider
-  mutations remain future work until connector execution can enforce capability,
-  consent, and ETag/If-Match checks.
+  Missing writeback eligibility must fail closed. Browser-visible source ids
+  must not reveal account primary keys, and provider mutations remain future
+  work until connector execution can enforce capability, consent, and
+  ETag/If-Match checks.
 - Self-sent knowledge extraction must first prove true self-to-self addressing,
   stay idempotent per source email, preserve email/thread provenance, and store
   only plain-text task titles. Do not create unlinked knowledge tasks from raw
