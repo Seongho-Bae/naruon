@@ -48,6 +48,11 @@ type KnowledgeMaterializationIntent = {
   audit_event: string;
 };
 
+type KnowledgeIntentEntry = {
+  state: 'idle' | 'loading' | 'ready' | 'error';
+  result: KnowledgeMaterializationIntent | null;
+};
+
 const taskStatusLabels: Record<TicketTask['status'], string> = {
   open: '접수',
   in_progress: '진행',
@@ -88,11 +93,7 @@ export function TasksLayout() {
   const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
   const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
   const [ticketActionStatus, setTicketActionStatus] = useState<string | null>(null);
-  const [knowledgeIntentStatus, setKnowledgeIntentStatus] = useState<{
-    state: 'idle' | 'loading' | 'ready' | 'error';
-    taskId: string | null;
-    result: KnowledgeMaterializationIntent | null;
-  }>({ state: 'idle', taskId: null, result: null });
+  const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -163,15 +164,24 @@ export function TasksLayout() {
   };
 
   const handleKnowledgeIntentCreate = async (taskId: string) => {
-    setKnowledgeIntentStatus({ state: 'loading', taskId, result: null });
+    setKnowledgeIntentByTask((current) => ({
+      ...current,
+      [taskId]: { state: 'loading', result: null },
+    }));
     try {
       const result = await apiClient.post<KnowledgeMaterializationIntent>(
         '/api/webdav/knowledge-materialization-intent',
         { source_task_id: taskId },
       );
-      setKnowledgeIntentStatus({ state: 'ready', taskId, result });
+      setKnowledgeIntentByTask((current) => ({
+        ...current,
+        [taskId]: { state: 'ready', result },
+      }));
     } catch {
-      setKnowledgeIntentStatus({ state: 'error', taskId, result: null });
+      setKnowledgeIntentByTask((current) => ({
+        ...current,
+        [taskId]: { state: 'error', result: null },
+      }));
     }
   };
 
@@ -320,8 +330,11 @@ export function TasksLayout() {
               </div>
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 {selfSentKnowledgeTasks.map((task) => {
-                  const isActiveTask = knowledgeIntentStatus.taskId === task.id;
-                  const currentIntent = isActiveTask ? knowledgeIntentStatus.result : null;
+                  const currentKnowledgeIntent = knowledgeIntentByTask[task.id] ?? {
+                    state: 'idle',
+                    result: null,
+                  };
+                  const currentIntent = currentKnowledgeIntent.result;
                   return (
                     <article key={task.id} className="rounded-lg border border-border bg-background/75 p-3 text-sm">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -332,15 +345,15 @@ export function TasksLayout() {
                         <button
                           type="button"
                           aria-label={`${task.title} WebDAV 지식 노트 intent 생성`}
-                          disabled={knowledgeIntentStatus.state === 'loading' && isActiveTask}
+                          disabled={currentKnowledgeIntent.state === 'loading'}
                           onClick={() => void handleKnowledgeIntentCreate(task.id)}
                           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
                         >
                           <Plus className="size-3.5" />
-                          {knowledgeIntentStatus.state === 'loading' && isActiveTask ? '준비 중' : 'intent 생성'}
+                          {currentKnowledgeIntent.state === 'loading' ? '준비 중' : 'intent 생성'}
                         </button>
                       </div>
-                      {knowledgeIntentStatus.state === 'error' && isActiveTask ? (
+                      {currentKnowledgeIntent.state === 'error' ? (
                         <p role="status" className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-xs font-semibold text-red-900">
                           WebDAV/Notes intent를 만들지 못했습니다.
                         </p>

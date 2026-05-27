@@ -151,6 +151,7 @@ class WebDavService:
         if row is None:
             return {
                 "status": "error",
+                "error_code": "not_found",
                 "message": "Self-sent knowledge task was not found.",
             }
 
@@ -158,7 +159,14 @@ class WebDavService:
         if task.source_type != SELF_SENT_KNOWLEDGE_SOURCE:
             return {
                 "status": "error",
+                "error_code": "validation_error",
                 "message": "Task is not self-sent knowledge.",
+            }
+        if source_email_id is None:
+            return {
+                "status": "error",
+                "error_code": "missing_provenance",
+                "message": "Self-sent knowledge task missing source email provenance.",
             }
 
         result = await self.determine_webdav_writeback_intent_from_db(
@@ -191,7 +199,11 @@ class WebDavService:
         target_account_id: int | None = None,
     ) -> Dict[str, Any]:
         if not accounts:
-            return {"status": "error", "message": "No connected WebDAV accounts found."}
+            return {
+                "status": "error",
+                "error_code": "no_webdav_account",
+                "message": "No connected WebDAV accounts found.",
+            }
             
         selected_account = accounts[0]
         if target_account_id is not None:
@@ -203,6 +215,7 @@ class WebDavService:
             if selected_account is None:
                 return {
                     "status": "error",
+                    "error_code": "webdav_account_not_found",
                     "message": "Requested WebDAV account was not found.",
                 }
                     

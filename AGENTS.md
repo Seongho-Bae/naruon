@@ -112,6 +112,12 @@
   opaque task uid, re-check owner and organization scope server-side, reject
   non-`self_sent_knowledge` tasks, and return intent metadata only until the
   connector/provider write path has source-backed ETag conflict handling.
+- Private API services should return deterministic `error_code` values for
+  expected failures; route layers must not derive HTTP status from human-readable
+  message substrings.
+- UI async state for repeated task/action rows must be keyed by the row's opaque
+  public id so one row's loading, error, or result state cannot overwrite another
+  row.
 - Sender ontology and relationship DAG APIs must stay scoped to the signed
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a

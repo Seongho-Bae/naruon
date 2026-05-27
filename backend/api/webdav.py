@@ -8,6 +8,13 @@ from db.session import get_db
 from services.webdav_service import webdav_service
 
 router = APIRouter(prefix="/api/webdav", tags=["webdav"])
+WEB_DAV_ERROR_STATUS_CODES = {
+    "not_found": 404,
+    "validation_error": 422,
+    "missing_provenance": 422,
+    "no_webdav_account": 422,
+    "webdav_account_not_found": 422,
+}
 
 class WebdavAccountResponse(BaseModel):
     account_id: int
@@ -99,8 +106,9 @@ async def get_knowledge_materialization_intent(
         target_account_id=req.target_account_id,
     )
     if result.get("status") == "error":
-        status_code = (
-            404 if "not found" in str(result.get("message", "")).lower() else 422
+        status_code = WEB_DAV_ERROR_STATUS_CODES.get(
+            str(result.get("error_code") or ""),
+            422,
         )
         raise HTTPException(status_code=status_code, detail=result.get("message"))
     return KnowledgeMaterializationIntentResponse(**result)
