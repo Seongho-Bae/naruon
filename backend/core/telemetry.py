@@ -1,12 +1,6 @@
 import logging
 import os
 from fastapi import FastAPI
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 
 logger = logging.getLogger(__name__)
 _telemetry_configured = False
@@ -37,6 +31,15 @@ def setup_telemetry(app: FastAPI):
     otlp_insecure = _env_flag("OTEL_EXPORTER_OTLP_INSECURE")
 
     try:
+        from opentelemetry import trace
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
         logger.info("Setting up OpenTelemetry export.")
         resource = Resource(attributes={SERVICE_NAME: "naruon-backend"})
 

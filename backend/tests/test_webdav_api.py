@@ -1,5 +1,4 @@
-import asyncio
-
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
@@ -111,7 +110,8 @@ def test_get_webdav_writeback_intent_no_accounts():
         assert response.json()["detail"] == "No connected WebDAV accounts found."
 
 
-def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
+@pytest.mark.asyncio
+async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     monkeypatch.setattr(
         webdav_service,
         "get_connected_accounts_from_db",
@@ -129,94 +129,90 @@ def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
         ),
     )
 
-    async def prepare_database():
-        engine = create_async_engine(settings.DATABASE_URL)
-        try:
-            async with engine.begin() as conn:
-                await conn.execute(text("SELECT 1"))
-                await conn.execute(
-                    text(
-                        """
-                        CREATE TABLE IF NOT EXISTS webdav_accounts (
-                            account_id INTEGER PRIMARY KEY,
-                            user_id VARCHAR NOT NULL,
-                            server_url VARCHAR NOT NULL,
-                            username VARCHAR NOT NULL,
-                            credentials_encrypted VARCHAR NOT NULL,
-                            created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-                        )
-                        """
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS webdav_accounts (
+                        account_id INTEGER PRIMARY KEY,
+                        user_id VARCHAR NOT NULL,
+                        server_url VARCHAR NOT NULL,
+                        username VARCHAR NOT NULL,
+                        credentials_encrypted VARCHAR NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
+                    """
                 )
-                await conn.execute(
-                    text(
-                        """
-                        DELETE FROM webdav_accounts
-                        WHERE account_id = :account_id OR user_id = :user_id
-                        """
-                    ),
-                    {"account_id": 8871, "user_id": "alice"},
-                )
-                await conn.execute(
-                    text(
-                        """
-                        INSERT INTO webdav_accounts (
-                            account_id,
-                            user_id,
-                            server_url,
-                            username,
-                            credentials_encrypted
-                        )
-                        VALUES (
-                            :account_id,
-                            :user_id,
-                            :server_url,
-                            :username,
-                            :credentials_encrypted
-                        )
-                        """
-                    ),
-                    {
-                        "account_id": 8871,
-                        "user_id": "alice",
-                        "server_url": "https://real-webdav.naruon.net",
-                        "username": "alice",
-                        "credentials_encrypted": "test-only-placeholder",
-                    },
-                )
-        except Exception as exc:
-            await engine.dispose()
-            pytest.skip(f"PostgreSQL smoke path unavailable: {exc}")
+            )
+            await conn.execute(
+                text(
+                    """
+                    DELETE FROM webdav_accounts
+                    WHERE account_id = :account_id OR user_id = :user_id
+                    """
+                ),
+                {"account_id": 8871, "user_id": "alice"},
+            )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO webdav_accounts (
+                        account_id,
+                        user_id,
+                        server_url,
+                        username,
+                        credentials_encrypted
+                    )
+                    VALUES (
+                        :account_id,
+                        :user_id,
+                        :server_url,
+                        :username,
+                        :credentials_encrypted
+                    )
+                    """
+                ),
+                {
+                    "account_id": 8871,
+                    "user_id": "alice",
+                    "server_url": "https://real-webdav.naruon.net",
+                    "username": "alice",
+                    "credentials_encrypted": "test-only-placeholder",
+                },
+            )
+    except Exception as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke path unavailable: {exc}")
 
-        return engine, async_sessionmaker(engine, expire_on_commit=False)
-
-    engine, session_factory = asyncio.run(prepare_database())
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
 
     async def override_real_db():
         async with session_factory() as session:
             yield session
 
-    async def cleanup_database():
+    app.dependency_overrides[get_db] = override_real_db
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"X-User-Id": "alice", "X-Organization-Id": "org-acme"},
+        ) as client:
+            response = await client.post(
+                "/api/webdav/writeback-intent",
+                json={"target_account_id": 8871},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
         async with engine.begin() as conn:
             await conn.execute(
                 text("DELETE FROM webdav_accounts WHERE account_id = :account_id"),
                 {"account_id": 8871},
             )
         await engine.dispose()
-
-    app.dependency_overrides[get_db] = override_real_db
-    try:
-        with TestClient(
-            app,
-            headers={"X-User-Id": "alice", "X-Organization-Id": "org-acme"},
-        ) as client:
-            response = client.post(
-                "/api/webdav/writeback-intent",
-                json={"target_account_id": 8871},
-            )
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-        asyncio.run(cleanup_database())
 
     assert response.status_code == 200, response.text
     body = response.json()
