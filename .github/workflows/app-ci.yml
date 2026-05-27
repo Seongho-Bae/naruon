@@ -40,7 +40,14 @@ jobs:
           python -m pip install -r backend/requirements.txt
 
       - name: Run backend tests
-        run: cd backend && python -m pytest -q
+        run: |
+          set -o pipefail
+          cd backend
+          python -m pytest -q 2>&1 | tee pytest_output.log
+          if grep -qiE 'timeout|fatal|warn|denied' pytest_output.log; then
+            echo "::error::Tests produced Timeout, Fatal, Warn, or Denied outputs"
+            exit 1
+          fi
 
   frontend:
     name: frontend
@@ -77,6 +84,8 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NODE_OPTIONS: "--max-old-space-size=4096"
+          POSTCSS_WORKERS: "1"
+          DISABLE_POSTCSS_WORKERS: "true"
         run: |
           rm -f ~/package-lock.json
           cd frontend && npm run build
