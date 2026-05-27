@@ -152,6 +152,56 @@ const runnerConfig = {
   },
 };
 
+const operationalSignals = {
+  workspace_id: 'workspace-org-acme',
+  audit_event: 'observability.operational_signals.viewed',
+  telemetry: {
+    prometheus_metrics_enabled: true,
+    otel_traces_enabled: true,
+    otel_endpoint_configured: true,
+    otel_endpoint_host: 'otel-collector:4317',
+  },
+  connector: {
+    workspace_id: 'workspace-org-acme',
+    registration_state: 'registration_configured',
+    connection_state: 'connected',
+    active_connection_count: 1,
+    control_plane_domain: 'naruon.net',
+    network_mode: 'outbound_only',
+    runner_usage: 'ci_smoke_only',
+    local_protocols: ['imap', 'pop3', 'smtp', 'caldav', 'carddav', 'webdav'],
+    last_heartbeat_at: '2026-05-27T12:00:00Z',
+    last_disconnect_at: null,
+    queue_depth_state: 'not_reported',
+  },
+  signals: [
+    {
+      signal_key: 'connector_heartbeat',
+      display_name: 'Connector heartbeat',
+      state: 'enabled',
+      evidence_source: 'runner WebSocket manager',
+      detail: 'Live heartbeat uses active outbound runner sockets.',
+      provider_write_executed: false,
+    },
+    {
+      signal_key: 'sync_lag',
+      display_name: 'Sync lag',
+      state: 'instrumentation_pending',
+      evidence_source: 'provider adapters',
+      detail: 'Provider sync lag will be emitted by source-backed connector jobs.',
+      provider_write_executed: false,
+    },
+    {
+      signal_key: 'writeback_conflicts',
+      display_name: 'Writeback conflicts',
+      state: 'intent_only',
+      evidence_source: 'calendar and WebDAV writeback-intent APIs',
+      detail: 'Conflict handling is surfaced at intent boundaries.',
+      provider_write_executed: false,
+    },
+  ],
+};
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -198,6 +248,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
 
     if (path === '/api/runner-config' && request.method() === 'GET') {
       await fulfillJson(route, runnerConfig);
+      return;
+    }
+
+    if (path === '/api/observability/operational-signals' && request.method() === 'GET') {
+      await fulfillJson(route, operationalSignals);
       return;
     }
 

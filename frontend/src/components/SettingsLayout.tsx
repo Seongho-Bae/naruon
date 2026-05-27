@@ -1,6 +1,6 @@
 "use client";
 
-import { Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Plus, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
@@ -20,6 +20,40 @@ interface RunnerConfig {
     prohibited_roles: string[];
     runner_usage: string;
   };
+}
+
+interface OperationalSignal {
+  signal_key: string;
+  display_name: string;
+  state: string;
+  evidence_source: string;
+  detail: string;
+  provider_write_executed: boolean;
+}
+
+interface OperationalSignalsResponse {
+  workspace_id: string;
+  audit_event: string;
+  telemetry: {
+    prometheus_metrics_enabled: boolean;
+    otel_traces_enabled: boolean;
+    otel_endpoint_configured: boolean;
+    otel_endpoint_host: string | null;
+  };
+  connector: {
+    workspace_id: string;
+    registration_state: 'registration_configured' | 'not_registered';
+    connection_state: 'connected' | 'not_connected';
+    active_connection_count: number;
+    control_plane_domain: string;
+    network_mode: string;
+    runner_usage: string;
+    local_protocols: string[];
+    last_heartbeat_at: string | null;
+    last_disconnect_at: string | null;
+    queue_depth_state: 'not_reported';
+  };
+  signals: OperationalSignal[];
 }
 
 const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
@@ -80,6 +114,9 @@ export function SettingsLayout() {
   const [runnerConfig, setRunnerConfig] = useState<RunnerConfig | null>(null);
   const [runnerError, setRunnerError] = useState<string | null>(null);
   const [runnerLoading, setRunnerLoading] = useState(true);
+  const [operationalSignals, setOperationalSignals] = useState<OperationalSignalsResponse | null>(null);
+  const [operationalError, setOperationalError] = useState<string | null>(null);
+  const [operationalLoading, setOperationalLoading] = useState(true);
   const startupView = useWorkspaceStartupView();
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
@@ -100,6 +137,21 @@ export function SettingsLayout() {
       })
       .finally(() => {
         if (!cancelled) setRunnerLoading(false);
+      });
+
+    void apiClient
+      .get<OperationalSignalsResponse>('/api/observability/operational-signals')
+      .then((signals) => {
+        if (cancelled) return;
+        setOperationalSignals(signals);
+        setOperationalError(null);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setOperationalError(error.message || '운영 신호를 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!cancelled) setOperationalLoading(false);
       });
 
     return () => {
@@ -320,6 +372,82 @@ export function SettingsLayout() {
                             ))}
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section aria-label="Open-source APM operational signals" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="flex items-center gap-2 font-bold text-lg">
+                        <Activity className="size-5 text-teal-600" />
+                        Connector health & APM signals
+                      </h3>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        서버가 확인한 self-hosted connector 연결, OpenTelemetry, Prometheus 상태만 표시합니다. Provider write 실행은 여기서 수행하지 않습니다.
+                      </p>
+                    </div>
+                    {operationalSignals ? (
+                      <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
+                        {operationalSignals.audit_event}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {operationalLoading ? (
+                    <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">운영 신호를 불러오는 중입니다.</p>
+                  ) : null}
+                  {operationalError ? (
+                    <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{operationalError}</p>
+                  ) : null}
+                  {operationalSignals ? (
+                    <div className="mt-5 space-y-5">
+                      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">connection_state</dt>
+                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.connector.connection_state}</dd>
+                        </div>
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">active_connections</dt>
+                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.connector.active_connection_count}</dd>
+                        </div>
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">prometheus</dt>
+                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.telemetry.prometheus_metrics_enabled ? 'enabled' : 'not_configured'}</dd>
+                        </div>
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">otel_traces</dt>
+                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_traces_enabled ? 'enabled' : 'not_configured'}</dd>
+                        </div>
+                      </dl>
+
+                      <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">last_heartbeat_at</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_heartbeat_at ?? 'none'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">last_disconnect_at</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_disconnect_at ?? 'none'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">otel_endpoint_host</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.telemetry.otel_endpoint_host ?? 'none'}</dd>
+                        </div>
+                      </dl>
+
+                      <div className="grid gap-3 md:grid-cols-2">
+                        {operationalSignals.signals.map((signal) => (
+                          <article key={signal.signal_key} className="rounded-xl border border-border bg-background p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h4 className="font-bold text-sm">{signal.display_name}</h4>
+                              <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{signal.state}</span>
+                            </div>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">{signal.detail}</p>
+                            <p className="mt-3 break-all font-mono text-xs text-muted-foreground">{signal.evidence_source}</p>
+                          </article>
+                        ))}
                       </div>
                     </div>
                   ) : null}

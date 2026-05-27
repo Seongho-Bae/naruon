@@ -262,7 +262,11 @@ source registry work can enforce ETag/If-Match and owner capability checks.
 - `docs/operations/release-deployment-architecture.md`: release, CI, GHCR, and
   live E2E evidence path.
 - `docs/operations/open-source-apm.md`: OpenTelemetry, Prometheus, Grafana, Loki,
-  Tempo/Jaeger adoption plan.
+  Tempo/Jaeger adoption plan. Settings calls signed
+  `/api/observability/operational-signals` to show server-observed connector
+  registration, active runner connection state, Prometheus, and OpenTelemetry
+  configuration while durable heartbeat history and provider execution remain
+  future connector work.
 - `docs/operations/email-relay-proxy-boundary.md`: Naruon is a web client
   relay/proxy, not an email server.
 - `docs/operations/source-of-truth-and-writeback-sovereignty.md`: customer-owned

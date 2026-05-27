@@ -42,6 +42,23 @@ class _MockRunnerSession:
         return _MockResult(self.token)
 
 
+class _FailingSendWebSocket:
+    headers: dict[str, str]
+
+    def __init__(self):
+        authorization = _valid_session_headers()["Authorization"]
+        self.headers = {"authorization": authorization}
+
+    async def accept(self):
+        return None
+
+    async def receive_text(self):
+        return "ping"
+
+    async def send_text(self, text: str):
+        raise RuntimeError("simulated runner send failure")
+
+
 def _base64url_encode(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
@@ -97,7 +114,9 @@ def _auth_context() -> AuthContext:
 @pytest.fixture(autouse=True)
 def restore_session_secret():
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    runner_ws.manager.reset()
     yield
+    runner_ws.manager.reset()
     settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
 
@@ -164,3 +183,47 @@ def test_runner_ws_accepts_signed_session_and_registered_token(monkeypatch):
         ) as websocket:
             websocket.send_text("ping")
             assert websocket.receive_text() == "Naruon ack: ping"
+            snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+            assert snapshot.connection_state == "connected"
+            assert snapshot.active_connection_count == 1
+            assert snapshot.last_seen_at is not None
+            assert snapshot.last_disconnect_at is None
+            assert "nrn_registered-token" not in str(runner_ws.manager.connection_records)
+
+    snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+    assert snapshot.connection_state == "not_connected"
+    assert snapshot.active_connection_count == 0
+    assert snapshot.last_disconnect_at is not None
+
+
+def test_runner_snapshot_keeps_latest_touch_after_connected_at():
+    runner_ws.manager.connection_records["org-acme:token-fingerprint"] = (
+        runner_ws.RunnerConnectionRecord(
+            organization_id="org-acme",
+            workspace_id="workspace-org-acme",
+            connected_at="2026-05-27T12:00:00Z",
+        )
+    )
+    runner_ws.manager.last_seen_by_org["org-acme"] = "2026-05-27T12:01:00Z"
+
+    snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+
+    assert snapshot.last_seen_at == "2026-05-27T12:01:00Z"
+
+
+@pytest.mark.asyncio
+async def test_runner_endpoint_disconnects_on_send_errors(monkeypatch):
+    async def registered_key(token: str, auth_context: AuthContext) -> str:
+        assert token == "nrn_registered-token"
+        assert auth_context.organization_id == "org-acme"
+        return "org-acme:registered"
+
+    monkeypatch.setattr(runner_ws, "_runner_connection_key", registered_key)
+
+    with pytest.raises(RuntimeError, match="simulated runner send failure"):
+        await runner_ws.runner_endpoint(_FailingSendWebSocket(), "nrn_registered-token")
+
+    snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
+    assert snapshot.connection_state == "not_connected"
+    assert snapshot.active_connection_count == 0
+    assert snapshot.last_disconnect_at is not None
