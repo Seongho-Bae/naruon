@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,23 +24,34 @@ interface EmailItem {
   schedule_conflict?: boolean;
 }
 
-let inboxRequest: Promise<EmailItem[]> | null = null;
+export type MailFolder = 'inbox' | 'sent';
 
-async function fetchInboxEmails() {
-  inboxRequest ??= apiClient.get<{ emails: EmailItem[] }>('/api/emails')
+const folderRequests = new Map<MailFolder, Promise<EmailItem[]>>();
+
+function folderEndpoint(folder: MailFolder) {
+  return folder === 'sent' ? '/api/emails?folder=sent' : '/api/emails';
+}
+
+async function fetchFolderEmails(folder: MailFolder) {
+  if (folderRequests.has(folder)) return folderRequests.get(folder)!;
+
+  const request = apiClient.get<{ emails: EmailItem[] }>(folderEndpoint(folder))
     .then((data) => data.emails || [])
     .finally(() => {
-      inboxRequest = null;
+      folderRequests.delete(folder);
     });
-  return inboxRequest;
+  folderRequests.set(folder, request);
+  return request;
 }
 
 export function EmailList({
   onSelectEmail,
   selectedEmailId,
+  folder = 'inbox',
 }: {
   onSelectEmail: (id: number) => void;
   selectedEmailId?: number | null;
+  folder?: MailFolder;
 }) {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,12 +59,12 @@ export function EmailList({
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
 
-  const fetchEmails = async (query = "") => {
+  const fetchEmails = useCallback(async (query = "") => {
     setLoading(true);
     setError(null);
     try {
       if (query.trim() === "") {
-        setEmails(await fetchInboxEmails());
+        setEmails(await fetchFolderEmails(folder));
       } else {
         setIsSearching(true);
         const data = await apiClient.post<{ results: EmailItem[] }>('/api/search', { query });
@@ -65,15 +76,37 @@ export function EmailList({
       setLoading(false);
       setIsSearching(false);
     }
-  };
+  }, [folder]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- Initial inbox fetch synchronizes client state with the backend.
     fetchEmails();
-  }, []);
+  }, [fetchEmails]);
+
+  const folderCopy = folder === 'sent'
+    ? {
+        title: '보낸 메일',
+        description: '답변 대기, 회신 완료, 나에게 보낸 지식 정리 후보를 추적합니다.',
+        primaryBadge: '답변 추적',
+        secondaryBadge: '지식 정리',
+        focusLabel: '보낸 메일 추적',
+        focusText: '응답 대기 스레드와 self-sent 지식 후보를 표시합니다',
+        emptyTitle: '보낸 메일이 없습니다',
+        emptyBody: 'SMTP/IMAP 동기화 후 보낸 스레드와 답변 대기 상태가 표시됩니다.',
+      }
+    : {
+        title: '받은편지함',
+        description: '중요 메일을 맥락과 실행 흐름으로 정리합니다.',
+        primaryBadge: '맥락 종합',
+        secondaryBadge: '실행 항목',
+        focusLabel: '오늘의 판단 포인트',
+        focusText: '메일 데이터 기반으로 판단 포인트를 표시합니다',
+        emptyTitle: '검색 결과가 없습니다',
+        emptyBody: '검색어를 바꾸거나 메일 동기화 상태를 확인하세요.',
+      };
 
   return (
-    <div className="h-full flex w-full flex-col border-r border-border/80 bg-card/95">
+    <div className="flex h-full min-h-0 w-full flex-col border-r border-border/80 bg-card/95">
       <div className="border-b border-border/80 bg-gradient-to-br from-card via-card to-primary/5 p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -81,22 +114,22 @@ export function EmailList({
               <Sparkles className="size-3.5" aria-hidden="true" />
               Naruon Mail
             </div>
-            <h2 className="mt-1 text-2xl font-black tracking-tight text-foreground">받은편지함</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">중요 메일을 맥락과 실행 흐름으로 정리합니다.</p>
+            <h2 className="mt-1 text-2xl font-black tracking-tight text-foreground">{folderCopy.title}</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{folderCopy.description}</p>
             <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-bold">
               <span className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-1 text-primary">
                 <Network className="size-3" aria-hidden="true" />
-                맥락 종합
+                {folderCopy.primaryBadge}
               </span>
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-emerald-700">
                 <CheckCircle2 className="size-3" aria-hidden="true" />
-                실행 항목
+                {folderCopy.secondaryBadge}
               </span>
             </div>
             <div className="mt-3 rounded-2xl border border-primary/15 bg-background/80 px-3 py-2 text-xs leading-5 shadow-inner shadow-slate-950/[0.02]">
-              <span className="font-bold text-primary">오늘의 판단 포인트</span>
+              <span className="font-bold text-primary">{folderCopy.focusLabel}</span>
               <span className="mx-2 text-muted-foreground">·</span>
-              <span className="font-semibold text-foreground">메일 데이터 기반으로 판단 포인트를 표시합니다</span>
+              <span className="font-semibold text-foreground">{folderCopy.focusText}</span>
             </div>
           </div>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.28)]">
@@ -127,7 +160,7 @@ export function EmailList({
           </Button>
         </form>
       </div>
-      <ScrollArea className="flex-1 w-full">
+      <ScrollArea className="min-h-0 flex-1 w-full">
         <div className="flex flex-col gap-2 p-3 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-3">
           {loading ? (
             <div role="status" aria-live="polite" className="rounded-2xl border border-border bg-background/70 p-4 text-sm text-muted-foreground">메일을 불러오는 중입니다...</div>
@@ -135,8 +168,8 @@ export function EmailList({
             <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
           ) : emails.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border bg-background/70 p-5 text-sm text-muted-foreground">
-              <p className="font-bold text-foreground">검색 결과가 없습니다</p>
-              <p className="mt-1 text-xs leading-5">검색어를 바꾸거나 메일 동기화 상태를 확인하세요.</p>
+              <p className="font-bold text-foreground">{folderCopy.emptyTitle}</p>
+              <p className="mt-1 text-xs leading-5">{folderCopy.emptyBody}</p>
             </div>
           ) : (
             emails.map((email: EmailItem) => {

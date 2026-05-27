@@ -23,6 +23,86 @@ const sibling = {
   body: '파트너 미팅 전까지 일정 확인이 필요합니다.',
 };
 
+const sentEmail = {
+  ...email,
+  id: 31,
+  message_id: '<sent-q2@example.com>',
+  thread_id: 'thread-sent-q2',
+  sender: 'Seongho <user@naruon.ai>',
+  recipients: 'partner@example.com',
+  subject: '벤더 계약 답변 요청',
+  date: '2026-05-11T12:30:00Z',
+  snippet: 'Please reply when the vendor contract review is ready.',
+  unread: false,
+  reply_count: 1,
+  requires_reply: true,
+  is_self_sent: false,
+};
+
+const selfSentNote = {
+  ...email,
+  id: 32,
+  message_id: '<self-note@example.com>',
+  thread_id: 'thread-self-note',
+  sender: 'user@naruon.ai',
+  recipients: 'user@naruon.ai',
+  subject: '나에게 보낸 지식 메모',
+  date: '2026-05-11T13:10:00Z',
+  snippet: '다음 분기 전략 회의 전에 지식으로 정리할 메모입니다.',
+  unread: false,
+  reply_count: 1,
+  requires_reply: false,
+  is_self_sent: true,
+};
+
+const sentFollowUp = {
+  ...email,
+  id: 33,
+  message_id: '<sent-follow-up@example.com>',
+  thread_id: 'thread-sent-follow-up',
+  sender: 'Seongho <user@naruon.ai>',
+  recipients: 'finance@example.com',
+  subject: '예산 승인 후속 확인',
+  date: '2026-05-11T14:20:00Z',
+  snippet: 'Can you confirm whether the budget approval is ready?',
+  unread: false,
+  reply_count: 1,
+  requires_reply: true,
+  is_self_sent: false,
+};
+
+const sentResolved = {
+  ...email,
+  id: 34,
+  message_id: '<sent-resolved@example.com>',
+  thread_id: 'thread-sent-resolved',
+  sender: 'Seongho <user@naruon.ai>',
+  recipients: 'ops@example.com',
+  subject: '운영 점검 회신 완료',
+  date: '2026-05-11T15:00:00Z',
+  snippet: '운영 점검 후속 메일이며 이미 회신이 연결된 스레드입니다.',
+  unread: false,
+  reply_count: 2,
+  requires_reply: false,
+  is_self_sent: false,
+};
+
+const sentKnowledge = {
+  ...email,
+  id: 35,
+  message_id: '<sent-knowledge@example.com>',
+  thread_id: 'thread-sent-knowledge',
+  sender: 'user@naruon.ai',
+  recipients: 'user@naruon.ai',
+  subject: '고객 미팅 지식 정리',
+  date: '2026-05-11T16:00:00Z',
+  snippet: '고객 미팅에서 나온 판단 포인트를 지식으로 정리합니다.',
+  unread: false,
+  reply_count: 1,
+  requires_reply: false,
+  is_self_sent: true,
+};
+
 const mobileAttachmentResult = {
   ...email,
   id: 17,
@@ -102,6 +182,10 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string)
     }
 
     if (path === '/api/emails' && request.method() === 'GET') {
+      if (url.searchParams.get('folder') === 'sent') {
+        await fulfillJson(route, { emails: [sentEmail, selfSentNote, sentFollowUp, sentResolved, sentKnowledge] });
+        return;
+      }
       await fulfillJson(route, { emails: [email] });
       return;
     }

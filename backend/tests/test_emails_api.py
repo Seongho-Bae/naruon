@@ -316,6 +316,68 @@ async def test_get_emails_marks_self_sent_and_pending_reply_threads(
     assert by_thread["note-thread"]["requires_reply"] is False
 
 
+@pytest.mark.asyncio
+async def test_get_emails_sent_folder_returns_user_sent_threads_only(
+    client: AsyncClient, db_session
+):
+    class MailTenantConfig:
+        smtp_username = "Me <testuser@example.com>"
+        imap_username = None
+
+    external_inbox = Email(
+        id=20,
+        user_id="testuser",
+        message_id="external-msg",
+        thread_id="external-thread",
+        sender="partner@example.com",
+        recipients="testuser@example.com",
+        subject="Incoming only",
+        date=datetime.datetime(2026, 4, 27, 9, 0, tzinfo=datetime.timezone.utc),
+        body="FYI only.",
+    )
+    sent_waiting = Email(
+        id=21,
+        user_id="testuser",
+        message_id="sent-waiting-msg",
+        thread_id="sent-waiting-thread",
+        sender="Test User <testuser@example.com>",
+        recipients="partner@example.com",
+        subject="Can you confirm?",
+        date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Can you confirm this plan?",
+    )
+    self_note = Email(
+        id=22,
+        user_id="testuser",
+        message_id="sent-note-msg",
+        thread_id="sent-note-thread",
+        sender="testuser@example.com",
+        recipients="testuser@example.com",
+        subject="Note to self",
+        date=datetime.datetime(2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc),
+        body="Turn this into knowledge.",
+    )
+    db_session.tenant_config = MailTenantConfig()
+    db_session.items = [self_note, sent_waiting, external_inbox]
+
+    response = await client.get("/api/emails?folder=sent&limit=10")
+
+    assert response.status_code == 200
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
+    assert set(by_thread) == {"sent-waiting-thread", "sent-note-thread"}
+    assert by_thread["sent-waiting-thread"]["requires_reply"] is True
+    assert by_thread["sent-note-thread"]["is_self_sent"] is True
+    assert by_thread["sent-note-thread"]["requires_reply"] is False
+
+
+@pytest.mark.asyncio
+async def test_get_emails_rejects_unknown_folder(client: AsyncClient):
+    response = await client.get("/api/emails?folder=archive")
+
+    assert response.status_code == 422
+    assert "folder" in response.text
+
+
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_get_emails_reply_tracking_real_postgres_smoke():
