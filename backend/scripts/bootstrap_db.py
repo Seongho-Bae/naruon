@@ -30,6 +30,21 @@ def schema_backfill_sql():
         text(
             "ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS calendar_writeback_sources ("
+            "source_uid varchar PRIMARY KEY, "
+            "user_id varchar NOT NULL, "
+            "organization_id varchar, "
+            "workspace_id varchar NOT NULL, "
+            "account_ref varchar, "
+            "provider_name varchar NOT NULL, "
+            "source_protocol varchar NOT NULL, "
+            "source_host varchar NOT NULL, "
+            "writeback_enabled boolean NOT NULL DEFAULT false, "
+            "etag_value varchar, "
+            "created_at timestamptz DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
@@ -60,6 +75,11 @@ def schema_backfill_sql():
         text(
             "CREATE INDEX IF NOT EXISTS ix_llm_providers_organization_id "
             "ON llm_providers (organization_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_calendar_writeback_sources_scope "
+            "ON calendar_writeback_sources "
+            "(user_id, organization_id, source_protocol)"
         ),
         text("ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(

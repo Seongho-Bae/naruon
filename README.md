@@ -253,9 +253,11 @@ public task ids instead of exposing database integer surrogates. The new
 
 Calendar actions in `EmailDetail` now request `/api/calendar/writeback-intent`
 for each extracted execution item and display the selected trusted source
-provenance. The browser no longer claims `/api/calendar/sync` success from the
-mail-detail action path; direct provider writes stay deferred until connector and
-source registry work can enforce ETag/If-Match and owner capability checks.
+provenance. Calendar source selection now reads opaque
+`calendar_writeback_sources.source_uid` rows instead of exposing sequential
+CalDAV account ids. The browser no longer claims `/api/calendar/sync` success
+from the mail-detail action path; direct provider writes stay deferred until
+connector execution can enforce ETag/If-Match and owner capability checks.
 
 ## Operations and release docs
 

@@ -376,6 +376,33 @@ class CaldavAccount(Base):
     )
 
 
+class CalendarWritebackSource(Base):
+    __tablename__ = "calendar_writeback_sources"
+
+    source_uid: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    account_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    provider_name: Mapped[str] = mapped_column(String, nullable=False)
+    source_protocol: Mapped[str] = mapped_column(String, nullable=False)
+    source_host: Mapped[str] = mapped_column(String, nullable=False)
+    writeback_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    etag_value: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+    __table_args__ = (
+        Index(
+            "ix_calendar_writeback_sources_scope",
+            "user_id",
+            "organization_id",
+            "source_protocol",
+        ),
+    )
+
+
 class ReplyTracker(Base):
     __tablename__ = "reply_trackers"
 

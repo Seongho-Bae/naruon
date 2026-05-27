@@ -35,6 +35,6 @@
 **Files:**
 - Create: `backend/api/dav_sync.py`
 
-- [ ] **Step 1: Add `/api/calendar/writeback-intent` with provenance**
-- [ ] **Step 2: Support ETag / If-Match collision checks**
+- [x] **Step 1: Add `/api/calendar/writeback-intent` with provenance**
+- [x] **Step 2: Support ETag / If-Match collision checks**
 - [ ] **Step 3: Write DAG/Ontology placeholder processing**

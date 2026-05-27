@@ -40,6 +40,10 @@ connector, and PR governance is metadata-only.
   requirement and uses only an explicitly named `STRIX_OPENAI_API_KEY` OpenAI
   Platform credential. It fails closed instead of routing scanner traffic
   through GitHub Models, `github.token`, Gemini, GPT-4o, or GPT-4.1.
+- [x] CalDAV source registry: `/api/calendar/writeback-intent` now resolves
+  DB-backed `calendar_writeback_sources` rows with opaque `source_uid` values
+  instead of exposing sequential CalDAV account ids or accepting browser-supplied
+  source metadata.
 
 ## Verification evidence
 
@@ -92,7 +96,8 @@ connector, and PR governance is metadata-only.
 - Replace the HMAC bridge with a verified OIDC provider integration while keeping
   signed, server-verifiable session claims.
 - Implement provider writes for CalDAV/CardDAV/WebDAV with ETag/If-Match conflict
-  handling and source-level audit trails.
+  handling and source-level audit trails after connector execution can enforce
+  source capability and consent.
 - Add OpenTelemetry instrumentation and dashboards for connector heartbeat, sync
   lag, provider throttling, writeback conflicts, and AI action audit events.
 

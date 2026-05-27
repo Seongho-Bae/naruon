@@ -3,12 +3,16 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import (
     AuthContext,
     get_auth_context,
     is_system_admin_role,
     is_tenant_admin_role,
 )
+from db.models import CalendarWritebackSource
+from db.session import get_db
 from services.calendar_service import create_calendar_event, validate_calendar_todo_text
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
@@ -26,7 +30,7 @@ class WritebackSource(BaseModel):
     provider: str
     protocol: Literal["caldav", "carddav", "webdav", "local"]
     owner_id: str
-    organization_id: str
+    organization_id: str | None
     capabilities: list[str]
     writeback_enabled: bool
     etag: str | None = None
@@ -54,6 +58,54 @@ class WritebackIntentResponse(BaseModel):
 CUSTOMER_OWNED_PROTOCOLS = {"caldav", "carddav", "webdav"}
 
 
+def _registry_capabilities(source: CalendarWritebackSource) -> list[str]:
+    capabilities = ["read"]
+    if source.writeback_enabled:
+        capabilities.extend(["write", "etag"])
+    return capabilities
+
+
+def _writeback_source_from_registry(
+    registry_source: CalendarWritebackSource,
+) -> WritebackSource:
+    return WritebackSource(
+        source_id=registry_source.source_uid,
+        provider=registry_source.provider_name,
+        protocol=registry_source.source_protocol,
+        owner_id=registry_source.user_id,
+        organization_id=registry_source.organization_id,
+        capabilities=_registry_capabilities(registry_source),
+        writeback_enabled=bool(registry_source.writeback_enabled),
+        etag=registry_source.etag_value,
+    )
+
+
+def _registry_scope_statement(auth_context: AuthContext):
+    statement = (
+        select(CalendarWritebackSource)
+        .where(CalendarWritebackSource.source_protocol == "caldav")
+        .order_by(
+            CalendarWritebackSource.created_at.asc(),
+            CalendarWritebackSource.source_uid.asc(),
+        )
+    )
+    if is_system_admin_role(auth_context.role):
+        return statement
+    if is_tenant_admin_role(auth_context.role) and auth_context.organization_id:
+        return statement.where(
+            CalendarWritebackSource.organization_id == auth_context.organization_id
+        )
+    organization_filter = (
+        CalendarWritebackSource.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else CalendarWritebackSource.organization_id.is_(None)
+    )
+    return statement.where(
+        CalendarWritebackSource.user_id == auth_context.user_id,
+        organization_filter,
+    )
+
+
 def _has_writeback_capability(source: WritebackSource) -> bool:
     return (
         source.writeback_enabled
@@ -64,16 +116,19 @@ def _has_writeback_capability(source: WritebackSource) -> bool:
 
 async def get_writeback_sources(
     auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
 ) -> tuple[WritebackSource, ...]:
     """
     Return server-authoritative writeback sources for the authenticated user.
 
-    The current slice has no persisted connector/source registry yet, so the
-    production default is intentionally empty. Tests may override this dependency
-    with fixture-owned sources, and the future connector registry should replace
-    this placeholder with a database-backed lookup scoped by `auth_context`.
+    This currently resolves persisted CalDAV source-registry rows only. Provider
+    mutations are still out of scope: the endpoint returns intent metadata and
+    ETag/If-Match requirements so later connector execution can fail closed.
     """
-    return ()
+    result = await db.execute(_registry_scope_statement(auth_context))
+    return tuple(
+        _writeback_source_from_registry(source) for source in result.scalars().all()
+    )
 
 
 async def get_calendar_user_token(
