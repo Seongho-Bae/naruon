@@ -58,6 +58,74 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(page.locator('link[rel="preload"][href="/brand/naruon-logo.svg"]')).toHaveCount(0);
 });
 
+test('renders Today dashboard pending reply lane with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-dashboard-pending-replies-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const desktopPendingRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/emails/pending-replies' && request.method() === 'GET';
+  });
+
+  await page.goto('/');
+  const desktopHeaders = (await desktopPendingRequest).headers();
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopHeaders[headerName]).toBeUndefined();
+  }
+
+  const desktopDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  await expect(desktopDashboard).toBeVisible();
+  await expect(page.getByRole('article', { name: '답변 대기' }).first()).toBeVisible();
+  await expect(desktopDashboard.getByText('답변 대기 메일')).toBeVisible();
+  await expect(desktopDashboard.getByText('벤더 계약 답변 요청')).toBeVisible();
+  await expect(desktopDashboard.getByText('예산 승인 후속 확인')).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('today-pending-replies-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePendingRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/emails/pending-replies' && request.method() === 'GET';
+  });
+  await page.goto('/');
+  expect((await mobilePendingRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  const mobileDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  await expect(mobileDashboard).toBeVisible();
+  await mobileDashboard.getByText('답변 대기 메일').scrollIntoViewIfNeeded();
+  await expect(mobileDashboard.getByText('답변 대기 메일')).toBeVisible();
+  await expect(mobileDashboard.getByText('벤더 계약 답변 요청')).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('today-pending-replies-mobile-pending-list.png'), fullPage: false });
+  const dashboardScrollMetrics = await mobileDashboard.evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(dashboardScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(dashboardScrollMetrics.after).toBeGreaterThan(dashboardScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('today-pending-replies-mobile-scroll.png'), fullPage: false });
+});
+
 test('keeps the short mobile AI quick action menu inside the viewport with scrollable actions', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await mockDashboardApi(page);

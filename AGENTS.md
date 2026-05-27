@@ -83,6 +83,11 @@
   storing user-supplied tags for later UI rendering. Parsed email display fields
   must not persist active HTML/script markup; preserve message/thread identifiers
   separately from UI-safe subject/body, address, and attachment display text.
+- Home/Today dashboard reply-wait surfaces must read signed
+  `/api/emails/pending-replies` data instead of inferring pending replies from
+  generic inbox fixtures or static copy. Tests and E2E mocks must verify the
+  stored `naruon_session_token` bearer path and must not add public identity
+  headers.
 - Mail connection updates and workers must validate server-side SMTP, POP3,
   IMAP, and relay destinations before persistence or network connection. POP3
   credentials are required for POP3 sync;

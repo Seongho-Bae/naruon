@@ -7,7 +7,7 @@ import type { MailFolder } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
-import { CalendarDays, CheckCircle2, Inbox, Network, Settings } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Inbox, Network, Send, Settings } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { toSafeReactText } from '@/lib/safe-text';
@@ -74,6 +74,7 @@ interface EmailItem {
 
 function useDashboardData() {
   const [emails, setEmails] = useState<EmailItem[]>([]);
+  const [pendingReplies, setPendingReplies] = useState<EmailItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -81,10 +82,12 @@ function useDashboardData() {
     let cancelled = false;
     Promise.all([
       apiClient.get<{ emails: EmailItem[] }>('/api/emails').catch(() => ({ emails: [] })),
+      apiClient.get<{ emails: EmailItem[] }>('/api/emails/pending-replies?limit=3').catch(() => ({ emails: [] })),
       apiClient.get<TaskItem[]>('/api/tasks').catch(() => [])
-    ]).then(([emailRes, tasksRes]) => {
+    ]).then(([emailRes, pendingReplyRes, tasksRes]) => {
       if (cancelled) return;
       setEmails(emailRes.emails || []);
+      setPendingReplies(pendingReplyRes.emails || []);
       setTasks(tasksRes || []);
       setLoading(false);
     });
@@ -94,7 +97,7 @@ function useDashboardData() {
     };
   }, []);
 
-  return { emails, tasks, loading };
+  return { emails, pendingReplies, tasks, loading };
 }
 
 function formatStartupDate(value: string) {
@@ -137,11 +140,12 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 }
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
-  const { emails, tasks, loading } = useDashboardData();
+  const { emails, pendingReplies, tasks, loading } = useDashboardData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
+  const pendingReplyCount = pendingReplies.length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
 
   useEffect(() => {
@@ -201,9 +205,10 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
         </div>
 
         {/* KPI Cards */}
-        <div aria-label="홈 지표" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
+        <div aria-label="홈 지표" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
           {[
             { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
+            { title: '답변 대기', value: loading ? '-' : pendingReplyCount.toString(), diff: pendingReplyCount > 0 ? `${pendingReplyCount}건` : '-', diffText: '보낸 메일', icon: Send, color: 'text-rose-500' },
             { title: '오늘 일정', value: '5', diff: '+1', diffText: '어제 대비', icon: CalendarDays, color: 'text-blue-500' },
             { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: '변동 없음', icon: CheckCircle2, color: 'text-green-500' },
             { title: '진행 중 프로젝트', value: '7', diff: '-', diffText: '변동 없음', icon: Network, color: 'text-purple-500' },
@@ -227,11 +232,11 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           <h2 className="text-lg font-bold">오늘의 핵심 요약</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 divide-y divide-border md:grid-cols-3 md:gap-6 md:divide-x md:divide-y-0">
             <div className="flex gap-4">
-              <div className="grid size-10 shrink-0 place-items-center rounded-full bg-purple-100 text-purple-600"><Inbox className="size-5" /></div>
+              <div className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-100 text-rose-600"><Send className="size-5" /></div>
               <div>
-                <p className="break-keep font-bold">중요 메일 {loading ? '-' : unreadCount}건</p>
-                <p className="text-xs text-muted-foreground mt-1">오늘 확인이 필요한 메일이 있어요.</p>
-                <button onClick={() => onOpenView('email')} className="mt-2 text-xs font-semibold text-primary hover:underline">메일 바로가기</button>
+                <p className="break-keep font-bold">답변 대기 {loading ? '-' : pendingReplyCount}건</p>
+                <p className="text-xs text-muted-foreground mt-1">보낸 메일 중 회신 확인이 필요한 항목입니다.</p>
+                <a href="/mail?folder=sent" className="mt-2 inline-flex text-xs font-semibold text-primary hover:underline">보낸 메일 보기</a>
               </div>
             </div>
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
@@ -260,28 +265,29 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <h2 className="text-base font-bold">오늘의 판단 포인트</h2>
             </div>
             <div className="space-y-3">
-              <div className="flex flex-col gap-2 rounded-lg bg-secondary/50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <span className="w-fit shrink-0 rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">우선 검토 필요</span>
-                  <div>
-                    <p className="text-sm font-bold">출시 회의 (Naruon 2.0)</p>
-                    <p className="text-[11px] text-muted-foreground">주요 의사결정이 필요한 회의입니다.</p>
+              <div className="text-xs font-bold text-muted-foreground">답변 대기 메일</div>
+              {loading ? (
+                <div className="text-sm text-muted-foreground p-2">답변 대기 메일을 불러오는 중...</div>
+              ) : pendingReplies.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2">답변 대기 중인 보낸 메일이 없습니다.</div>
+              ) : pendingReplies.map((reply) => {
+                const safeSubject = toSafeReactText(reply.subject?.trim() || null, '(제목 없음)');
+                const safeSnippet = toSafeReactText(reply.snippet);
+                return (
+                  <div key={reply.id} className="flex flex-col gap-2 rounded-lg bg-secondary/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                      <span className="w-fit shrink-0 rounded bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700">답변 대기</span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold">{safeSubject}</p>
+                        <p className="line-clamp-2 text-[11px] text-muted-foreground">{safeSnippet}</p>
+                      </div>
+                    </div>
+                    <span suppressHydrationWarning className="shrink-0 text-xs text-muted-foreground">{formatStartupDate(reply.date || '')}</span>
                   </div>
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">오늘 10:30</span>
-              </div>
-              <div className="flex flex-col gap-2 rounded-lg bg-secondary/50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                  <span className="w-fit shrink-0 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">데이터 검토</span>
-                  <div>
-                    <p className="text-sm font-bold">5월 리포트 분석</p>
-                    <p className="text-[11px] text-muted-foreground">핵심 지표 변동사항을 확인하세요.</p>
-                  </div>
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground">오늘 11:00</span>
-              </div>
+                );
+              })}
             </div>
-            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">오늘 전체 보기</button>
+            <a href="/mail?folder=sent" className="mt-4 block w-full text-center text-sm font-semibold text-primary hover:underline">보낸 메일 전체 보기</a>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">

@@ -1,0 +1,146 @@
+/* @vitest-environment jsdom */
+import React, { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/components/EmailList", () => ({
+  EmailList: () => <section aria-label="mock email list">mock email list</section>,
+}));
+
+vi.mock("@/components/EmailDetail", () => ({
+  EmailDetail: () => <section aria-label="mock email detail">mock email detail</section>,
+}));
+
+vi.mock("@/components/ui/resizable", () => ({
+  ResizablePanelGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ResizablePanel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  ResizableHandle: () => <div />,
+}));
+
+vi.mock("@/components/mobile-workspace-panels", () => ({
+  MobileCalendarPanel: () => <section>mock calendar</section>,
+  MobileSearchPanel: () => <section>mock search</section>,
+}));
+
+vi.mock("next/dynamic", () => ({
+  default: () => function MockDynamic() {
+    return <div>mock graph</div>;
+  },
+}));
+
+vi.mock("lucide-react", () => ({
+  CalendarDays: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
+  Inbox: () => <svg aria-hidden="true" />,
+  Network: () => <svg aria-hidden="true" />,
+  Send: () => <svg aria-hidden="true" />,
+  Settings: () => <svg aria-hidden="true" />,
+}));
+
+import { WorkspaceHome } from "./WorkspaceHome";
+
+async function flushAsyncWork() {
+  await act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+async function waitForCondition(condition: () => boolean) {
+  for (let index = 0; index < 20; index += 1) {
+    if (condition()) return;
+    await flushAsyncWork();
+  }
+  throw new Error("waitForCondition timed out after 20 attempts");
+}
+
+describe("WorkspaceHome Today dashboard", () => {
+  let root: Root | null = null;
+  let container: HTMLDivElement | null = null;
+
+  afterEach(() => {
+    const mountedRoot = root;
+    if (mountedRoot) {
+      act(() => mountedRoot.unmount());
+    }
+    root = null;
+    container?.remove();
+    container = null;
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("loads pending sent-mail replies through signed session headers", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_session_token", "signed-dashboard-token");
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      fetchCalls.push({ url, init });
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 301,
+                subject: "벤더 계약 답변 요청",
+                sender: "Seongho <user@naruon.ai>",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "계약 검토 회신 SLA가 지나 작업 보드와 연결해야 합니다.",
+                requires_reply: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([]),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("벤더 계약 답변 요청") ?? false);
+
+    expect(container.textContent).toContain("답변 대기 메일");
+    expect(container.textContent).toContain("계약 검토 회신 SLA");
+    const pendingCall = fetchCalls.find((call) => call.url.endsWith("/api/emails/pending-replies?limit=3"));
+    expect(pendingCall).toBeDefined();
+    const headers = pendingCall?.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer signed-dashboard-token");
+    expect(headers["X-User-Id"]).toBeUndefined();
+    expect(headers["X-Organization-Id"]).toBeUndefined();
+    expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
+  });
+});
