@@ -1,9 +1,20 @@
+import uuid
+from unittest.mock import patch, AsyncMock
+
+import asyncpg
+import httpx
 import pytest
 from fastapi.testclient import TestClient
-from main import app
-from unittest.mock import patch, AsyncMock
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
 from api import calendar as calendar_api
 from api.calendar import WritebackSource
+from core.config import settings
+from db.models import CalendarWritebackSource
+from db.session import get_db
+from main import app
 from services.exceptions import CalendarServiceError
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -38,6 +49,57 @@ def calendar_user_token_override():
 
     yield apply
     app.dependency_overrides.pop(calendar_api.get_calendar_user_token, None)
+
+
+class FakeScalarResult:
+    def __init__(self, sources: list[CalendarWritebackSource]):
+        self._sources = sources
+
+    def all(self) -> list[CalendarWritebackSource]:
+        return self._sources
+
+
+class FakeExecuteResult:
+    def __init__(self, sources: list[CalendarWritebackSource]):
+        self._sources = sources
+
+    def scalars(self) -> FakeScalarResult:
+        return FakeScalarResult(self._sources)
+
+
+class FakeCalendarRegistrySession:
+    def __init__(self, sources: list[CalendarWritebackSource]):
+        self.sources = sources
+        self.statement_text = ""
+
+    async def execute(self, statement):
+        self.statement_text = str(statement)
+        return FakeExecuteResult(self.sources)
+
+
+def _calendar_writeback_source(
+    *,
+    source_uid: str = "caldav_src_fastmail_primary",
+    user_id: str = "testuser",
+    organization_id: str | None = "org-acme",
+    workspace_id: str = "workspace-org-acme",
+    provider_name: str = "Fastmail",
+    source_protocol: str = "caldav",
+    writeback_enabled: bool = True,
+    etag_value: str | None = "etag-caldav-1",
+) -> CalendarWritebackSource:
+    return CalendarWritebackSource(
+        source_uid=source_uid,
+        user_id=user_id,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        account_ref="caldav-account-ref",
+        provider_name=provider_name,
+        source_protocol=source_protocol,
+        source_host="caldav.fastmail.example",
+        writeback_enabled=writeback_enabled,
+        etag_value=etag_value,
+    )
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
@@ -551,3 +613,200 @@ def test_calendar_writeback_rejects_same_owner_cross_org_source(
     assert response.json() == {
         "detail": "No customer-owned writeback source is available"
     }
+
+
+def test_calendar_writeback_sources_use_db_backed_caldav_registry():
+    fake_session = FakeCalendarRegistrySession(
+        [
+            _calendar_writeback_source(
+                source_uid="caldav_src_fastmail_primary",
+                provider_name="Fastmail",
+                etag_value="etag-db-42",
+            )
+        ]
+    )
+
+    async def override_db():
+        yield fake_session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        response = workspace_client.post(
+            "/api/calendar/writeback-intent",
+            json={"action": "update", "summary": "Launch review"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["target_source_id"] == "caldav_src_fastmail_primary"
+    assert body["protocol"] == "caldav"
+    assert body["if_match"] == "etag-db-42"
+    assert body["provenance"]["source_provider"] == "Fastmail"
+    assert "calendar_writeback_sources.organization_id" in fake_session.statement_text
+    assert "calendar_writeback_sources.user_id" in fake_session.statement_text
+    assert "calendar_writeback_sources.source_protocol" in fake_session.statement_text
+
+
+def test_calendar_writeback_db_registry_rejects_cross_org_rows():
+    fake_session = FakeCalendarRegistrySession(
+        [
+            _calendar_writeback_source(
+                source_uid="caldav_src_rival_primary",
+                organization_id="org-rival",
+                provider_name="Rival CalDAV",
+            )
+        ]
+    )
+
+    async def override_db():
+        yield fake_session
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        response = workspace_client.post(
+            "/api/calendar/writeback-intent",
+            json={"action": "create", "summary": "Launch review"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "No customer-owned writeback source is available"
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_calendar_writeback_intent_real_postgres_smoke():
+    source_uid = f"caldav_src_{uuid.uuid4().hex[:24]}"
+    user_id = f"caldav-smoke-{uuid.uuid4().hex[:12]}"
+    organization_id = "org-caldav-smoke"
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS calendar_writeback_sources (
+                        source_uid VARCHAR PRIMARY KEY,
+                        user_id VARCHAR NOT NULL,
+                        organization_id VARCHAR,
+                        workspace_id VARCHAR NOT NULL,
+                        account_ref VARCHAR,
+                        provider_name VARCHAR NOT NULL,
+                        source_protocol VARCHAR NOT NULL,
+                        source_host VARCHAR NOT NULL,
+                        writeback_enabled BOOLEAN NOT NULL DEFAULT false,
+                        etag_value VARCHAR,
+                        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
+                    DELETE FROM calendar_writeback_sources
+                    WHERE source_uid = :source_uid
+                    """
+                ),
+                {"source_uid": source_uid},
+            )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO calendar_writeback_sources (
+                        source_uid,
+                        user_id,
+                        organization_id,
+                        workspace_id,
+                        account_ref,
+                        provider_name,
+                        source_protocol,
+                        source_host,
+                        writeback_enabled,
+                        etag_value
+                    )
+                    VALUES (
+                        :source_uid,
+                        :user_id,
+                        :organization_id,
+                        :workspace_id,
+                        :account_ref,
+                        :provider_name,
+                        :source_protocol,
+                        :source_host,
+                        :writeback_enabled,
+                        :etag_value
+                    )
+                    """
+                ),
+                {
+                    "source_uid": source_uid,
+                    "user_id": user_id,
+                    "organization_id": organization_id,
+                    "workspace_id": f"workspace-{organization_id}",
+                    "account_ref": "caldav-smoke-account",
+                    "provider_name": "Smoke CalDAV",
+                    "source_protocol": "caldav",
+                    "source_host": "caldav-smoke.example",
+                    "writeback_enabled": True,
+                    "etag_value": "etag-smoke",
+                },
+            )
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ):
+        await engine.dispose()
+        pytest.skip("PostgreSQL smoke path unavailable")
+    except Exception:
+        await engine.dispose()
+        raise
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override_real_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_real_db
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"X-User-Id": user_id, "X-Organization-Id": organization_id},
+        ) as client:
+            response = await client.post(
+                "/api/calendar/writeback-intent",
+                json={"action": "update", "summary": "Smoke update"},
+            )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "DELETE FROM calendar_writeback_sources "
+                    "WHERE source_uid = :source_uid"
+                ),
+                {"source_uid": source_uid},
+            )
+        await engine.dispose()
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["target_source_id"] == source_uid
+    assert body["protocol"] == "caldav"
+    assert body["if_match"] == "etag-smoke"
+    assert body["provenance"]["source_provider"] == "Smoke CalDAV"

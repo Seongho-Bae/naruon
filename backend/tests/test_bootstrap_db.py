@@ -1,5 +1,5 @@
 from scripts.bootstrap_db import schema_backfill_sql
-from db.models import SenderRelationship
+from db.models import CalendarWritebackSource, SenderRelationship
 
 
 def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
@@ -99,6 +99,25 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "create table if not exists calendar_writeback_sources" in statement
+        for statement in statements
+    )
+    assert any("source_uid varchar primary key" in statement for statement in statements)
+    assert any("workspace_id varchar not null" in statement for statement in statements)
+    assert any("provider_name varchar not null" in statement for statement in statements)
+    assert any("source_protocol varchar not null" in statement for statement in statements)
+    assert any("source_host varchar not null" in statement for statement in statements)
+    assert any(
+        "writeback_enabled boolean not null default false" in statement
+        for statement in statements
+    )
+    assert any("etag_value varchar" in statement for statement in statements)
+    assert any(
+        "create index if not exists ix_calendar_writeback_sources_scope"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "create index if not exists ix_llm_providers_organization_id" in statement
         for statement in statements
     )
@@ -193,3 +212,23 @@ def test_sender_relationship_model_declares_source_unique_index():
     assert "sender_email" in expression_text
     assert "source_message_id" in expression_text
     assert "source_thread_id" in expression_text
+
+
+def test_calendar_writeback_source_model_uses_two_word_names():
+    assert CalendarWritebackSource.__tablename__ == "calendar_writeback_sources"
+    column_names = {column.name for column in CalendarWritebackSource.__table__.columns}
+
+    assert column_names == {
+        "source_uid",
+        "user_id",
+        "organization_id",
+        "workspace_id",
+        "account_ref",
+        "provider_name",
+        "source_protocol",
+        "source_host",
+        "writeback_enabled",
+        "etag_value",
+        "created_at",
+    }
+    assert all("_" in column_name for column_name in column_names)
