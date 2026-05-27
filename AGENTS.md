@@ -144,6 +144,10 @@
   runner socket state when available, but label sync lag, provider throttling,
   queue depth, and writeback conflict dashboards as pending until source-backed
   connector events exist.
+- Self-hosted connector APM history must be persisted as scoped control-plane
+  signal events before the UI claims durable heartbeat evidence. Do not expose
+  runner registration tokens, path tokens, or raw provider credentials in event
+  ids, details, logs, Settings mocks, or E2E fixtures.
 
 ## Development environment and tooling defaults
 

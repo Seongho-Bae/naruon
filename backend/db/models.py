@@ -125,6 +125,34 @@ class WorkspaceRunnerConfig(Base):
     )
 
 
+class ConnectorSignalEvent(Base):
+    __tablename__ = "connector_signal_events"
+
+    event_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"connector_evt_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    signal_key: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    state_code: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    detail_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    __table_args__ = (
+        Index(
+            "ix_connector_signal_events_scope_time",
+            "organization_id",
+            "workspace_id",
+            "observed_at",
+        ),
+    )
+
+
 class Organization(Base):
     __tablename__ = "organizations"
 

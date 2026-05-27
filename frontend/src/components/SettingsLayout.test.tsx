@@ -73,6 +73,22 @@ describe("SettingsLayout", () => {
               last_heartbeat_at: "2026-05-27T12:00:00Z",
               last_disconnect_at: null,
               queue_depth_state: "not_reported",
+              recent_events: [
+                {
+                  event_uid: "connector_evt_heartbeat",
+                  signal_key: "connector_heartbeat",
+                  state_code: "heartbeat",
+                  detail_text: "outbound runner heartbeat received",
+                  observed_at: "2026-05-27T12:00:00Z",
+                },
+                {
+                  event_uid: "connector_evt_connected",
+                  signal_key: "connector_heartbeat",
+                  state_code: "connected",
+                  detail_text: "outbound runner socket connected",
+                  observed_at: "2026-05-27T11:59:00Z",
+                },
+              ],
             },
             signals: [
               {
@@ -148,7 +164,10 @@ describe("SettingsLayout", () => {
     const operationalCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/observability/operational-signals");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
+    expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     expect(container.textContent).toContain("Self-hosted connector manifest");
     expect(container.textContent).toContain("Naruon은 이메일 서버가 아닙니다");
     expect(container.textContent).toContain("self-hosted_connector");
@@ -164,6 +183,10 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("observability.operational_signals.viewed");
     expect(container.textContent).toContain("connected");
     expect(container.textContent).toContain("otel-collector:4317");
+    expect(container.textContent).toContain("Recent connector signals");
+    expect(container.textContent).toContain("connector_evt_heartbeat");
+    expect(container.textContent).toContain("outbound runner heartbeat received");
+    expect(container.textContent).not.toContain("nrn_registered-token");
     expect(container.textContent).toContain("Connector heartbeat");
     expect(container.textContent).toContain("instrumentation_pending");
   });

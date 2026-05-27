@@ -59,6 +59,11 @@ class _FailingSendWebSocket:
         raise RuntimeError("simulated runner send failure")
 
 
+class _AcceptOnlyWebSocket:
+    async def accept(self):
+        return None
+
+
 def _base64url_encode(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
@@ -112,9 +117,18 @@ def _auth_context() -> AuthContext:
 
 
 @pytest.fixture(autouse=True)
-def restore_session_secret():
+def restore_session_secret(monkeypatch):
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     runner_ws.manager.reset()
+
+    async def noop_record_connector_signal_event(**kwargs):
+        return None
+
+    monkeypatch.setattr(
+        runner_ws,
+        "record_connector_signal_event",
+        noop_record_connector_signal_event,
+    )
     yield
     runner_ws.manager.reset()
     settings.AUTH_SESSION_HMAC_SECRET = previous_secret
@@ -209,6 +223,42 @@ def test_runner_snapshot_keeps_latest_touch_after_connected_at():
     snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
 
     assert snapshot.last_seen_at == "2026-05-27T12:01:00Z"
+
+
+@pytest.mark.asyncio
+async def test_runner_manager_records_durable_signal_events(monkeypatch):
+    recorded_events: list[dict[str, str]] = []
+
+    async def capture_connector_signal_event(**event):
+        recorded_events.append(event)
+
+    monkeypatch.setattr(
+        runner_ws,
+        "record_connector_signal_event",
+        capture_connector_signal_event,
+    )
+
+    await runner_ws.manager.connect(
+        _AcceptOnlyWebSocket(),
+        "org-acme:registered",
+        _auth_context(),
+    )
+    await runner_ws.manager.touch("org-acme:registered")
+    await runner_ws.manager.disconnect("org-acme:registered")
+
+    assert [event["state_code"] for event in recorded_events] == [
+        "connected",
+        "heartbeat",
+        "disconnected",
+    ]
+    assert {event["signal_key"] for event in recorded_events} == {
+        "connector_heartbeat"
+    }
+    assert all(event["organization_id"] == "org-acme" for event in recorded_events)
+    assert all(
+        event["workspace_id"] == "workspace-org-acme" for event in recorded_events
+    )
+    assert "nrn_registered-token" not in str(recorded_events)
 
 
 @pytest.mark.asyncio

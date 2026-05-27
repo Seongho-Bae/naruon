@@ -1,9 +1,16 @@
+from datetime import datetime, timezone
+
+import asyncpg
 from fastapi.testclient import TestClient
+import httpx
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api import runner_ws
 from core.config import settings
-from db.models import WorkspaceRunnerConfig
+from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
 
@@ -17,13 +24,24 @@ class MockResult:
     def scalar_one_or_none(self):
         return self.obj
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.obj if isinstance(self.obj, list) else []
+
 
 class MockAsyncSession:
     def __init__(self):
         self.runner = None
+        self.events = []
+        self.execute_calls = 0
 
     async def execute(self, query):
-        return MockResult(self.runner)
+        self.execute_calls += 1
+        if self.execute_calls == 1:
+            return MockResult(self.runner)
+        return MockResult(self.events)
 
 
 @pytest.fixture(autouse=True)
@@ -118,6 +136,7 @@ def test_operational_signals_are_truthful_when_unconfigured(admin_client):
     assert data["connector"]["connection_state"] == "not_connected"
     assert data["connector"]["active_connection_count"] == 0
     assert data["connector"]["last_heartbeat_at"] is None
+    assert data["connector"]["recent_events"] == []
     assert data["connector"]["queue_depth_state"] == "not_reported"
     assert data["connector"]["control_plane_domain"] == "naruon.net"
     signals = {signal["signal_key"]: signal for signal in data["signals"]}
@@ -167,3 +186,183 @@ def test_operational_signals_reflect_registered_connector_and_otel(
     assert signals["prometheus_metrics"]["state"] == "enabled"
     assert signals["otel_traces"]["state"] == "enabled"
     assert signals["connector_heartbeat"]["state"] == "enabled"
+
+
+def test_operational_signals_include_durable_connector_history(admin_client, mock_db):
+    mock_db.runner = WorkspaceRunnerConfig(
+        organization_id="org-acme",
+        workspace_id="workspace-org-acme",
+        registration_token="nrn_registered-token",
+    )
+    mock_db.events = [
+        ConnectorSignalEvent(
+            event_uid="connector_evt_disconnect",
+            organization_id="org-acme",
+            workspace_id="workspace-org-acme",
+            signal_key="connector_heartbeat",
+            state_code="disconnected",
+            detail_text="outbound runner socket disconnected",
+            observed_at=datetime(2026, 5, 27, 12, 2, tzinfo=timezone.utc),
+        ),
+        ConnectorSignalEvent(
+            event_uid="connector_evt_heartbeat",
+            organization_id="org-acme",
+            workspace_id="workspace-org-acme",
+            signal_key="connector_heartbeat",
+            state_code="heartbeat",
+            detail_text="outbound runner heartbeat received",
+            observed_at=datetime(2026, 5, 27, 12, 1, tzinfo=timezone.utc),
+        ),
+    ]
+
+    response = admin_client.get("/api/observability/operational-signals")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector"]["connection_state"] == "not_connected"
+    assert data["connector"]["registration_state"] == "registration_configured"
+    assert data["connector"]["last_heartbeat_at"] == "2026-05-27T12:01:00Z"
+    assert data["connector"]["last_disconnect_at"] == "2026-05-27T12:02:00Z"
+    assert data["connector"]["recent_events"] == [
+        {
+            "event_uid": "connector_evt_disconnect",
+            "signal_key": "connector_heartbeat",
+            "state_code": "disconnected",
+            "detail_text": "outbound runner socket disconnected",
+            "observed_at": "2026-05-27T12:02:00Z",
+        },
+        {
+            "event_uid": "connector_evt_heartbeat",
+            "signal_key": "connector_heartbeat",
+            "state_code": "heartbeat",
+            "detail_text": "outbound runner heartbeat received",
+            "observed_at": "2026-05-27T12:01:00Z",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_operational_signals_real_postgres_connector_history_smoke():
+    event_uid = "connector_evt_pg_smoke"
+    organization_id = "org-acme"
+    workspace_id = "workspace-org-acme"
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS workspace_runner_configs (
+                        id SERIAL PRIMARY KEY,
+                        organization_id VARCHAR UNIQUE,
+                        workspace_id VARCHAR UNIQUE,
+                        registration_token VARCHAR,
+                        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS connector_signal_events (
+                        event_uid VARCHAR PRIMARY KEY,
+                        organization_id VARCHAR NOT NULL,
+                        workspace_id VARCHAR NOT NULL,
+                        signal_key VARCHAR NOT NULL,
+                        state_code VARCHAR NOT NULL,
+                        detail_text TEXT,
+                        observed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM connector_signal_events "
+                    "WHERE event_uid = :event_uid"
+                ),
+                {"event_uid": event_uid},
+            )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO connector_signal_events (
+                        event_uid,
+                        organization_id,
+                        workspace_id,
+                        signal_key,
+                        state_code,
+                        detail_text,
+                        observed_at
+                    )
+                    VALUES (
+                        :event_uid,
+                        :organization_id,
+                        :workspace_id,
+                        'connector_heartbeat',
+                        'heartbeat',
+                        'outbound runner heartbeat received',
+                        '2026-05-27T12:03:00Z'
+                    )
+                    """
+                ),
+                {
+                    "event_uid": event_uid,
+                    "organization_id": organization_id,
+                    "workspace_id": workspace_id,
+                },
+            )
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ):
+        await engine.dispose()
+        pytest.skip("PostgreSQL smoke path unavailable")
+    except Exception:
+        await engine.dispose()
+        raise
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override_real_db():
+        async with session_factory() as session:
+            yield session
+
+    app.dependency_overrides[get_db] = override_real_db
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "tenant_admin",
+                "X-Organization-Id": organization_id,
+            },
+        ) as client:
+            response = await client.get("/api/observability/operational-signals")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "DELETE FROM connector_signal_events "
+                    "WHERE event_uid = :event_uid"
+                ),
+                {"event_uid": event_uid},
+            )
+        await engine.dispose()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["connector"]["last_heartbeat_at"] == "2026-05-27T12:03:00Z"
+    assert data["connector"]["recent_events"][0]["event_uid"] == event_uid
+    assert "nrn_registered-token" not in str(data)

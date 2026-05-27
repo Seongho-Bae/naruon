@@ -1,5 +1,18 @@
+import asyncpg
+import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from core.config import settings
+from db.models import Base
 from scripts.bootstrap_db import schema_backfill_sql
-from db.models import CalendarWritebackSource, SenderRelationship, WebdavAccount
+from db.models import (
+    CalendarWritebackSource,
+    ConnectorSignalEvent,
+    SenderRelationship,
+    WebdavAccount,
+)
 
 
 def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
@@ -279,3 +292,81 @@ def test_webdav_account_model_exposes_opaque_source_uid():
     assert WebdavAccount.__table__.c.source_uid.nullable is False
     assert WebdavAccount.__table__.c.source_uid.unique is True
     assert WebdavAccount.__table__.c.writeback_enabled.nullable is False
+
+
+def test_connector_signal_event_model_uses_two_word_names():
+    assert ConnectorSignalEvent.__tablename__ == "connector_signal_events"
+    column_names = {column.name for column in ConnectorSignalEvent.__table__.columns}
+
+    assert column_names == {
+        "event_uid",
+        "organization_id",
+        "workspace_id",
+        "signal_key",
+        "state_code",
+        "detail_text",
+        "observed_at",
+    }
+    assert all("_" in column_name for column_name in column_names)
+
+
+def test_schema_backfill_creates_connector_signal_events():
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
+    assert any(
+        "create table if not exists connector_signal_events" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_connector_signal_events_scope_time" in statement
+        for statement in statements
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.postgres
+async def test_connector_signal_events_real_postgres_bootstrap_smoke():
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+            for statement in schema_backfill_sql():
+                await conn.execute(statement)
+            result = await conn.execute(
+                text(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = 'connector_signal_events'
+                    """
+                )
+            )
+            column_names = {row[0] for row in result.fetchall()}
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ):
+        await engine.dispose()
+        pytest.skip("PostgreSQL smoke path unavailable")
+    except Exception:
+        await engine.dispose()
+        raise
+    finally:
+        await engine.dispose()
+
+    assert {
+        "event_uid",
+        "organization_id",
+        "workspace_id",
+        "signal_key",
+        "state_code",
+        "detail_text",
+        "observed_at",
+    }.issubset(column_names)

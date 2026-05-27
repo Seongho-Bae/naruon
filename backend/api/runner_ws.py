@@ -15,7 +15,7 @@ from fastapi import (
 from sqlalchemy import select
 
 from api.auth import AuthContext, build_auth_context
-from db.models import WorkspaceRunnerConfig
+from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
@@ -74,23 +74,45 @@ class ConnectionManager:
             organization_id,
             auth_context.workspace_id,
         )
+        await _record_connector_signal_event_safely(
+            organization_id=organization_id,
+            workspace_id=auth_context.workspace_id,
+            signal_key="connector_heartbeat",
+            state_code="connected",
+            detail_text="outbound runner socket connected",
+        )
 
-    def disconnect(self, connection_key: str):
+    async def disconnect(self, connection_key: str):
         record = self.connection_records.pop(connection_key, None)
         if connection_key in self.active_connections:
             del self.active_connections[connection_key]
         if record:
-            self.last_disconnect_by_org[record.organization_id] = _utc_now_iso()
+            disconnected_at = _utc_now_iso()
+            self.last_disconnect_by_org[record.organization_id] = disconnected_at
             logger.info(
                 "Runner disconnected for organization %s workspace %s",
                 record.organization_id,
                 record.workspace_id,
             )
+            await _record_connector_signal_event_safely(
+                organization_id=record.organization_id,
+                workspace_id=record.workspace_id,
+                signal_key="connector_heartbeat",
+                state_code="disconnected",
+                detail_text="outbound runner socket disconnected",
+            )
 
-    def touch(self, connection_key: str):
+    async def touch(self, connection_key: str):
         record = self.connection_records.get(connection_key)
         if record:
             self.last_seen_by_org[record.organization_id] = _utc_now_iso()
+            await _record_connector_signal_event_safely(
+                organization_id=record.organization_id,
+                workspace_id=record.workspace_id,
+                signal_key="connector_heartbeat",
+                state_code="heartbeat",
+                detail_text="outbound runner heartbeat received",
+            )
 
     def snapshot(
         self, organization_id: str, workspace_id: str
@@ -149,6 +171,47 @@ async def _registered_runner_token(organization_id: str) -> str | None:
         return result.scalar_one_or_none()
 
 
+async def record_connector_signal_event(
+    *,
+    organization_id: str,
+    workspace_id: str,
+    signal_key: str,
+    state_code: str,
+    detail_text: str,
+) -> None:
+    async with AsyncSessionLocal() as db:
+        db.add(
+            ConnectorSignalEvent(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                signal_key=signal_key,
+                state_code=state_code,
+                detail_text=detail_text,
+            )
+        )
+        await db.commit()
+
+
+async def _record_connector_signal_event_safely(
+    *,
+    organization_id: str,
+    workspace_id: str,
+    signal_key: str,
+    state_code: str,
+    detail_text: str,
+) -> None:
+    try:
+        await record_connector_signal_event(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            signal_key=signal_key,
+            state_code=state_code,
+            detail_text=detail_text,
+        )
+    except Exception:
+        logger.debug("Runner signal event persistence skipped", exc_info=True)
+
+
 async def _runner_connection_key(token: str, auth_context: AuthContext) -> str:
     if not token or not auth_context.organization_id:
         raise _policy_violation()
@@ -169,10 +232,10 @@ async def runner_endpoint(websocket: WebSocket, token: str):
     try:
         while True:
             data = await websocket.receive_text()
-            manager.touch(connection_key)
+            await manager.touch(connection_key)
             # Echo back or process intents
             await websocket.send_text(f"Naruon ack: {data}")
     except WebSocketDisconnect:
         pass
     finally:
-        manager.disconnect(connection_key)
+        await manager.disconnect(connection_key)
