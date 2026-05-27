@@ -89,6 +89,16 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "drop index if exists ix_llm_providers_name" in statement
         for statement in statements
     )
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_username"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_password"
+        in statement
+        for statement in statements
+    )
 
 
 def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):

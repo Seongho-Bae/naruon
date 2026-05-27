@@ -7,7 +7,13 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import AuthContext, ensure_organization_access, get_auth_context
+from api.auth import (
+    AuthContext,
+    ensure_organization_access,
+    get_auth_context,
+    is_admin_role,
+    is_tenant_admin_role,
+)
 from core.config import settings
 from db.models import WorkspaceRunnerConfig
 from db.session import get_db
@@ -43,9 +49,9 @@ def _connector_manifest() -> dict[str, object]:
 
 
 def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
-    if auth_context.role not in {"platform_admin", "organization_admin"}:
+    if not is_admin_role(auth_context.role):
         raise HTTPException(status_code=403, detail="Organization admin access required")
-    if auth_context.role == "organization_admin" and not auth_context.organization_id:
+    if is_tenant_admin_role(auth_context.role) and not auth_context.organization_id:
         raise HTTPException(status_code=403, detail="Organization scope is required")
     return auth_context
 

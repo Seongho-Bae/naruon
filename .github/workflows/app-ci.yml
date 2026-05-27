@@ -65,8 +65,18 @@ jobs:
       - name: Run frontend lint
         run: cd frontend && npm run lint
 
+      - name: Cache Next.js build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: frontend/.next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
+
       - name: Build frontend
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NODE_OPTIONS: "--max-old-space-size=4096"
-        run: cd frontend && npm run build
+        run: |
+          rm -f ~/package-lock.json
+          cd frontend && npm run build

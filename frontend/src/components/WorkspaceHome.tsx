@@ -6,11 +6,11 @@ import { EmailList } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
-import { CalendarDays, CheckCircle2, Inbox, Network } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Inbox, Network, Settings } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { toSafeReactText } from '@/lib/safe-text';
-import { useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
+import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
 const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
@@ -102,6 +102,17 @@ function formatStartupDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', { month: 'short', day: 'numeric' }).format(date);
 }
 
+function formatDashboardTimestamp(value: Date) {
+  return new Intl.DateTimeFormat('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(value);
+}
+
 function StartupResultList({ results }: { results: StartupSearchResult[] }) {
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -126,8 +137,18 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   const { emails, tasks, loading } = useDashboardData();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentTimestamp, setCurrentTimestamp] = useState('');
+  const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
+
+  useEffect(() => {
+    const updateTimestamp = () => setCurrentTimestamp(formatDashboardTimestamp(new Date()));
+    updateTimestamp();
+    const intervalId = window.setInterval(updateTimestamp, 60_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
   
   const mapPriorityToKorean = (p: string) => {
     switch(p) {
@@ -139,25 +160,47 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
     }
   };
   return (
-    <section role="region" aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-6">
+    <section role="region" aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         
         {/* Header Section */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">안녕하세요, 김나루님 👋</h1>
+            <h1 className="break-keep text-2xl font-bold leading-tight text-foreground">안녕하세요, 김나루님 👋</h1>
           </div>
-          <div className="flex items-center gap-4">
-            <span suppressHydrationWarning className="text-sm font-medium text-muted-foreground">2026.05.25 (토) 오전 10:23</span>
-            <button className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground">
-              <span className="grid size-4 place-items-center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 20v-8m0 0V4m0 8h8m-8 0H4" strokeLinecap="round" strokeLinejoin="round"/></svg></span>
+          <div className="relative flex flex-wrap items-center gap-3">
+            <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">{currentTimestamp || '현재 시간 확인 중'}</span>
+            <button
+              aria-controls={settingsMenuId}
+              aria-expanded={isSettingsOpen}
+              aria-haspopup="menu"
+              onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+            >
+              <Settings className="size-4" aria-hidden="true" />
               홈 설정
             </button>
+            {isSettingsOpen && (
+              <div id={settingsMenuId} role="menu" className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-card p-2 shadow-lg">
+                <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
+                <div className="mt-1 flex flex-col gap-1">
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    대시보드
+                  </button>
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    이메일 우선
+                  </button>
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                    일정 우선
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-5 gap-4">
+        <div aria-label="홈 지표" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
           {[
             { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
             { title: '오늘 일정', value: '5', diff: '+1', diffText: '어제 대비', icon: CalendarDays, color: 'text-blue-500' },
@@ -165,43 +208,43 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             { title: '진행 중 프로젝트', value: '7', diff: '-', diffText: '변동 없음', icon: Network, color: 'text-purple-500' },
             { title: '이번 주 목표 진행률', value: '68%', diff: '+6%', diffText: '지난주 대비', icon: CheckCircle2, color: 'text-emerald-500' },
           ].map((stat, i) => (
-            <div key={i} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-              <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
-                <stat.icon className={`size-4 ${stat.color}`} />
-                {stat.title}
+            <article key={i} aria-label={stat.title} className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm">
+              <div className="flex min-w-0 items-start gap-2 text-sm font-semibold text-muted-foreground">
+                <stat.icon className={`mt-0.5 size-4 shrink-0 ${stat.color}`} />
+                <span className="min-w-0 break-keep leading-snug">{stat.title}</span>
               </div>
               <div className="mt-4 text-3xl font-bold">{stat.value}</div>
-              <div className={`mt-2 text-xs font-medium ${stat.diff.startsWith('+') ? 'text-primary' : stat.diff.startsWith('-') && stat.diff !== '-' ? 'text-red-500' : 'text-muted-foreground'}`}>
+              <div className={`mt-2 break-keep text-xs font-medium ${stat.diff.startsWith('+') ? 'text-primary' : stat.diff.startsWith('-') && stat.diff !== '-' ? 'text-red-500' : 'text-muted-foreground'}`}>
                 {stat.diff} <span className="text-muted-foreground font-normal">{stat.diffText}</span>
               </div>
-            </div>
+            </article>
           ))}
         </div>
 
         {/* 오늘의 핵심 요약 */}
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <h2 className="text-lg font-bold">오늘의 핵심 요약</h2>
-          <div className="mt-4 grid grid-cols-3 gap-6 divide-x divide-border">
+          <div className="mt-4 grid grid-cols-1 gap-4 divide-y divide-border md:grid-cols-3 md:gap-6 md:divide-x md:divide-y-0">
             <div className="flex gap-4">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-purple-100 text-purple-600"><Inbox className="size-5" /></div>
               <div>
-                <p className="font-bold">중요 메일 {loading ? '-' : unreadCount}건</p>
+                <p className="break-keep font-bold">중요 메일 {loading ? '-' : unreadCount}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 확인이 필요한 메일이 있어요.</p>
                 <button onClick={() => onOpenView('email')} className="mt-2 text-xs font-semibold text-primary hover:underline">메일 바로가기</button>
               </div>
             </div>
-            <div className="flex gap-4 pl-6">
+            <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-blue-100 text-blue-600"><CalendarDays className="size-5" /></div>
               <div>
-                <p className="font-bold">회의 2건 예정</p>
+                <p className="break-keep font-bold">회의 2건 예정</p>
                 <p className="text-xs text-muted-foreground mt-1">오전 10:30, 오후 14:00</p>
                 <button onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline">일정 확인하기</button>
               </div>
             </div>
-            <div className="flex gap-4 pl-6">
+            <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-green-100 text-green-600"><CheckCircle2 className="size-5" /></div>
               <div>
-                <p className="font-bold">완료 가능 작업 {loading ? '-' : pendingTasks.length}건</p>
+                <p className="break-keep font-bold">완료 가능 작업 {loading ? '-' : pendingTasks.length}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 마감 전 완료해보세요.</p>
                 <button className="mt-2 text-xs font-semibold text-primary hover:underline">작업 바로가기</button>
               </div>
@@ -216,25 +259,25 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <h2 className="text-base font-bold">오늘의 판단 포인트</h2>
             </div>
             <div className="space-y-3">
-              <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">우선 검토 필요</span>
+              <div className="flex flex-col gap-2 rounded-lg bg-secondary/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <span className="w-fit shrink-0 rounded bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700">우선 검토 필요</span>
                   <div>
                     <p className="text-sm font-bold">출시 회의 (Naruon 2.0)</p>
                     <p className="text-[11px] text-muted-foreground">주요 의사결정이 필요한 회의입니다.</p>
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground">오늘 10:30</span>
+                <span className="shrink-0 text-xs text-muted-foreground">오늘 10:30</span>
               </div>
-              <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
-                <div className="flex items-center gap-3">
-                  <span className="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">데이터 검토</span>
+              <div className="flex flex-col gap-2 rounded-lg bg-secondary/50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                  <span className="w-fit shrink-0 rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">데이터 검토</span>
                   <div>
                     <p className="text-sm font-bold">5월 리포트 분석</p>
                     <p className="text-[11px] text-muted-foreground">핵심 지표 변동사항을 확인하세요.</p>
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground">오늘 11:00</span>
+                <span className="shrink-0 text-xs text-muted-foreground">오늘 11:00</span>
               </div>
             </div>
             <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">오늘 전체 보기</button>

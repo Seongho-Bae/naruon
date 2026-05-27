@@ -82,7 +82,7 @@ def auth_client():
         app,
         headers={
             "X-User-Id": "testuser",
-            "X-User-Role": "organization_admin",
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
         },
     ) as c:
@@ -90,12 +90,12 @@ def auth_client():
 
 
 @pytest.fixture
-def orgless_platform_admin_client():
+def orgless_system_admin_client():
     with TestClient(
         app,
         headers={
             "X-User-Id": "platform-admin",
-            "X-User-Role": "platform_admin",
+            "X-User-Role": "system_admin",
         },
     ) as c:
         yield c
@@ -296,7 +296,7 @@ def test_prompt_test_uses_only_current_organization_active_provider(
 
 
 def test_prompt_test_does_not_use_org_provider_without_org_scope(
-    orgless_platform_admin_client, monkeypatch
+    orgless_system_admin_client, monkeypatch
 ):
     import api.prompts as prompts_module
 
@@ -319,7 +319,7 @@ def test_prompt_test_does_not_use_org_provider_without_org_scope(
         )
     )
 
-    response = orgless_platform_admin_client.post(
+    response = orgless_system_admin_client.post(
         "/api/prompts/test",
         json={"content": "Summarize this: {{email}}", "variables": {"email": "hi"}},
     )

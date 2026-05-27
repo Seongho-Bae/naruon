@@ -3,8 +3,6 @@ import { expect, test } from '@playwright/test';
 import { mockDashboardApi } from './helpers';
 
 test('renders the desktop Naruon shell with local brand assets', async ({ page }) => {
-  page.on('console', msg => console.log('PW_LOG:', msg.text()));
-  page.on('pageerror', err => console.log('PW_ERROR:', err.message));
   const requestedUrls: string[] = [];
   page.on('request', (request) => requestedUrls.push(request.url()));
   await page.setViewportSize({ width: 1280, height: 1024 });
@@ -132,6 +130,17 @@ for (const viewport of responsiveViewports) {
     await expect(page.locator('main#main-content')).toBeVisible();
     await expect(page.locator('header[aria-label="Naruon workspace header"]')).toBeVisible();
     await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    if (viewport.width <= 390) {
+      const metricLabel = page
+        .getByRole('article', { name: '받은 메일' })
+        .first()
+        .getByText('받은 메일', { exact: true });
+      await expect(metricLabel).toBeVisible();
+      const metricLabelBox = await metricLabel.boundingBox();
+      expect(metricLabelBox).not.toBeNull();
+      if (!metricLabelBox) throw new Error('Metric label bounding box was unavailable.');
+      expect(metricLabelBox.height).toBeLessThan(48);
+    }
     await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
@@ -145,6 +154,7 @@ for (const viewport of responsiveViewports) {
       await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
       const menu = page.getByRole('dialog', { name: '모바일 워크스페이스 메뉴' });
       await expect(menu.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
+      await expect(menu.getByRole('link', { name: /보낸 메일/ })).toHaveAttribute('href', '/mail?folder=sent');
       await expect(menu.getByRole('link', { name: '맥락 검색', exact: true })).toHaveAttribute('href', '/search');
       await menu.getByRole('button', { name: '모바일 워크스페이스 메뉴 닫기' }).click();
       await expect(page.getByRole('region', { name: '태블릿 메일 작업공간' })).toBeVisible();
@@ -163,11 +173,11 @@ for (const viewport of responsiveViewports) {
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
   { path: '/calendar', heading: '일정 관리', marker: { text: '원본 계정 writeback 흐름' } },
-  { path: '/tasks', heading: '할 일 추적', marker: { text: '리소스 배정 검토 회의' } },
+  { path: '/tasks', heading: '할 일 추적', marker: { name: '리소스 배정 검토 회의' } },
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
   { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },
-  { path: '/projects', heading: '프로젝트 워크스페이스', marker: { text: '의사결정 로그' } },
+  { path: '/projects', heading: '프로젝트 워크스페이스', marker: { name: '의사결정 로그' } },
   { path: '/ai-hub', heading: 'AI 허브', marker: { name: '실행 항목' } },
   { path: '/settings', heading: '설정 (Settings)', marker: { text: 'Self-hosted Runner' } },
 ] as const) {
@@ -224,6 +234,7 @@ test('validates mobile hamburger composition and startup preference controls', a
   await expect(menu.getByRole('button', { name: '일정' })).toBeVisible();
   await expect(menu.getByRole('link', { name: '홈', exact: true })).toHaveAttribute('href', '/');
   await expect(menu.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
+  await expect(menu.getByRole('link', { name: /보낸 메일/ })).toHaveAttribute('href', '/mail?folder=sent');
   await expect(menu.getByRole('link', { name: '일정', exact: true })).toHaveAttribute('href', '/calendar');
   await expect(menu.getByRole('link', { name: '맥락 검색', exact: true })).toHaveAttribute('href', '/search');
   await expect(menu.getByRole('link', { name: 'AI 허브', exact: true })).toHaveAttribute('href', '/ai-hub');
@@ -235,6 +246,8 @@ test('validates mobile hamburger composition and startup preference controls', a
   await expect(menu.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
   await expect(menu.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
   await expect(menu.getByRole('link', { name: '설정', exact: true })).toHaveAttribute('href', '/settings');
+  await expect(menu.getByRole('link', { name: '도움말', exact: true })).toHaveAttribute('href', '/settings#help');
+  await expect(menu.getByRole('link', { name: '프로필', exact: true })).toHaveAttribute('href', '/settings#profile');
   const desktopDestinationHrefs = await page
     .locator('nav[aria-label="Primary workspace navigation"] a')
     .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
@@ -243,7 +256,7 @@ test('validates mobile hamburger composition and startup preference controls', a
     .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
   expect(mobileDestinationHrefs).toEqual(desktopDestinationHrefs);
   await expect(menu.getByRole('link', { name: /일정 연결/ })).toHaveAttribute('href', '#mobile-calendar');
-  await expect(menu.getByText(/중요 메일.*준비 중/)).toBeVisible();
+  await expect(menu.getByText(/중요 메일.*준비 중/)).toHaveCount(0);
   await menu.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
@@ -288,16 +301,18 @@ for (const section of [
   { hash: 'decisions', linkName: /판단 포인트/, region: '판단 포인트' },
   { hash: 'actions', linkName: /실행 항목/, region: '실행 항목' },
 ] as const) {
-  test(`deep-links desktop AI hub sidebar to ${section.region}`, async ({ page }) => {
+  test(`deep-links the AI hub execution checkpoint to ${section.region}`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1024 });
     await mockDashboardApi(page);
 
-    await page.goto('/');
-    await page.getByRole('navigation', { name: 'Naruon workspace sections' }).getByRole('link', { name: section.linkName }).click();
+    await page.goto('/ai-hub');
+    await page
+      .getByRole('navigation', { name: 'AI hub execution checkpoints' })
+      .getByRole('link', { name: section.linkName })
+      .click();
 
     await expect(page).toHaveURL(new RegExp(`/ai-hub#${section.hash}$`));
     await expect(page.getByRole('region', { name: section.region })).toBeVisible();
-    await expect(page.getByRole('navigation', { name: 'Naruon workspace sections' }).getByRole('link', { name: section.linkName })).toHaveAttribute('aria-current', 'location');
     const targetTop = await page.getByRole('region', { name: section.region }).evaluate((element) => Math.round(element.getBoundingClientRect().top));
     expect(targetTop).toBeGreaterThanOrEqual(0);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

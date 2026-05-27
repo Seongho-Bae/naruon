@@ -19,7 +19,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ./docs/operations/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml
     ports:
       - "9090:9090"
     networks:
@@ -29,6 +29,8 @@ services:
     image: grafana/grafana:latest
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./observability/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
     ports:
       - "3000:3000"
     networks:
@@ -42,11 +44,34 @@ services:
     networks:
       - naruon-network
 
+  tempo:
+    image: grafana/tempo:latest
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml
+    ports:
+      - "3200:3200"
+      - "4317" # otlp grpc
+    networks:
+      - naruon-network
+
   otel-collector:
     image: otel/opentelemetry-collector:0.88.0
     ports:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
+    networks:
+      - naruon-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.0
+    command: start-dev
+    environment:
+      KC_DB: dev-file
+      KEYCLOAK_ADMIN: "${KEYCLOAK_ADMIN:?KEYCLOAK_ADMIN is not set}"
+      KEYCLOAK_ADMIN_PASSWORD: "${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is not set}"
+    ports:
+      - "8081:8080"
     networks:
       - naruon-network
 

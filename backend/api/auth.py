@@ -3,22 +3,49 @@ import binascii
 import hashlib
 import hmac
 import json
+import logging
 import math
 import time
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
 
+import jwt
+from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 
-RoleName = Literal["platform_admin", "organization_admin", "group_admin", "member"]
+logger = logging.getLogger(__name__)
+OIDC_JWKS_TIMEOUT_SECONDS = 5
+
+jwks_client = None
+if settings.OIDC_JWKS_URL:
+    jwks_client = PyJWKClient(
+        settings.OIDC_JWKS_URL,
+        cache_keys=True,
+        timeout=OIDC_JWKS_TIMEOUT_SECONDS,
+    )
+_cached_oidc_signing_keys: tuple[Any, ...] = ()
+
+RoleName = Literal[
+    "system_admin",
+    "tenant_admin",
+    "platform_admin",
+    "organization_admin",
+    "group_admin",
+    "member",
+]
 ALLOWED_ROLES: set[str] = {
+    "system_admin",
+    "tenant_admin",
     "platform_admin",
     "organization_admin",
     "group_admin",
     "member",
 }
+SYSTEM_ADMIN_ROLES = frozenset({"system_admin", "platform_admin"})
+TENANT_ADMIN_ROLES = frozenset({"tenant_admin", "organization_admin"})
+ADMIN_ROLES = SYSTEM_ADMIN_ROLES | TENANT_ADMIN_ROLES
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
@@ -35,12 +62,24 @@ class AuthContext:
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
-    if auth_context.role == "platform_admin":
+    if is_system_admin_role(auth_context.role):
         return
     if auth_context.organization_id != organization_id:
         raise HTTPException(
             status_code=403, detail="Resource belongs to a different organization"
         )
+
+
+def is_system_admin_role(role: str) -> bool:
+    return role in SYSTEM_ADMIN_ROLES
+
+
+def is_tenant_admin_role(role: str) -> bool:
+    return role in TENANT_ADMIN_ROLES
+
+
+def is_admin_role(role: str) -> bool:
+    return role in ADMIN_ROLES
 
 
 async def get_auth_context(
@@ -65,6 +104,36 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
 
 def _authentication_error() -> HTTPException:
     return HTTPException(status_code=401, detail="Authentication required")
+
+
+def preload_oidc_jwks() -> None:
+    """Populate OIDC signing keys outside the request authentication path."""
+    global _cached_oidc_signing_keys
+    if jwks_client is None:
+        _cached_oidc_signing_keys = ()
+        return
+    try:
+        jwk_set = jwks_client.get_jwk_set(refresh=True)
+        _cached_oidc_signing_keys = tuple(jwk_set.keys)
+    except Exception:
+        _cached_oidc_signing_keys = ()
+        logger.exception("OIDC JWKS preload failed; requests will fail closed.")
+
+
+def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
+    if not _cached_oidc_signing_keys:
+        raise _authentication_error()
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception:
+        raise _authentication_error() from None
+    key_id = header.get("kid")
+    if not isinstance(key_id, str) or not key_id.strip():
+        raise _authentication_error()
+    for signing_key in _cached_oidc_signing_keys:
+        if getattr(signing_key, "key_id", None) == key_id:
+            return signing_key
+    raise _authentication_error()
 
 
 def _session_secret_bytes() -> bytes:
@@ -120,6 +189,25 @@ def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
 
 def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
+    
+    # OIDC RS256 verification is authoritative when configured.
+    if settings.OIDC_ISSUER_URL:
+        if jwks_client is None:
+            raise _authentication_error()
+        try:
+            signing_key = _cached_oidc_signing_key_from_jwt(token)
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=settings.OIDC_CLIENT_ID,
+                issuer=settings.OIDC_ISSUER_URL
+            )
+            return payload
+        except Exception:
+            raise _authentication_error() from None
+
+    # Legacy HMAC HS256 Fallback
     token_segments = token.split(".")
     if len(token_segments) != 3:
         raise _authentication_error()
@@ -172,12 +260,14 @@ def _tuple_string_claim(payload: dict[str, Any], name: str) -> tuple[str, ...]:
 
 
 def _validate_session_metadata(payload: dict[str, Any]) -> None:
-    if payload.get("ver") != 1:
-        raise _authentication_error()
-    if payload.get("iss") != SESSION_ISSUER:
-        raise _authentication_error()
-    if payload.get("aud") != SESSION_AUDIENCE:
-        raise _authentication_error()
+    # If OIDC is configured, the issuer/audience might be verified by jwt.decode
+    if not settings.OIDC_ISSUER_URL:
+        if payload.get("ver") != 1:
+            raise _authentication_error()
+        if payload.get("iss") != SESSION_ISSUER:
+            raise _authentication_error()
+        if payload.get("aud") != SESSION_AUDIENCE:
+            raise _authentication_error()
     expires_at = payload.get("exp")
     if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
         raise _authentication_error()
@@ -194,7 +284,7 @@ def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
         raise _authentication_error()
     role = cast(RoleName, role_value)
     organization_id = _optional_string_claim(payload, "org")
-    if role != "platform_admin" and organization_id is None:
+    if not is_system_admin_role(role) and organization_id is None:
         raise _authentication_error()
     return AuthContext(
         user_id=_required_string_claim(payload, "sub"),
