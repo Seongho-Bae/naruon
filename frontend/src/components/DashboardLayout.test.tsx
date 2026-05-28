@@ -56,9 +56,6 @@ describe("DashboardLayout", () => {
       'a[href="#main-content"]',
     );
     const logo = container.querySelector<HTMLImageElement>('img[alt="Naruon"]');
-    const comingSoonControls = Array.from(
-      container.querySelectorAll<HTMLButtonElement>('button[data-coming-soon="true"]'),
-    ).map((button) => button.textContent);
 
     expect(banner).not.toBeNull();
     expect(primaryNav?.textContent).toContain("홈");
@@ -80,9 +77,7 @@ describe("DashboardLayout", () => {
     expect(mobileQuickActionButton).not.toBeNull();
     expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(comingSoonControls.some((text) => text?.includes("중요 메일") && text.includes("준비 중"))).toBe(false);
-    expect(comingSoonControls.some((text) => text?.includes("맥락 종합") && text.includes("준비 중"))).toBe(false);
-    expect(comingSoonControls.some((text) => text?.includes("런칭 프로젝트") && text.includes("준비 중"))).toBe(false);
+    expect(container.textContent).not.toContain("준비 중");
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");

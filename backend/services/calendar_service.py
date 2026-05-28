@@ -9,6 +9,20 @@ from .exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 MAX_CALENDAR_TODO_LENGTH = 500
 UNSAFE_CALENDAR_TODO_SEQUENCES = ("<", ">", "`", "$(", "${")
+GOOGLE_OAUTH_ENDPOINT_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_OAUTH_ALLOWED_KEYS = {
+    "account",
+    "client_id",
+    "client_secret",
+    "expiry",
+    "quota_project_id",
+    "rapt_token",
+    "refresh_token",
+    "scopes",
+    "token",
+    "token_uri",
+    "universe_domain",
+}
 
 
 def validate_calendar_todo_text(todo_text: str) -> str:
@@ -23,11 +37,28 @@ def validate_calendar_todo_text(todo_text: str) -> str:
     return normalized
 
 
+def validate_google_user_token(user_token: dict) -> dict:
+    """Allow only server-issued Google OAuth credential fields."""
+    if not isinstance(user_token, dict):
+        raise CalendarServiceError("Invalid calendar credentials")
+
+    unexpected_keys = set(user_token) - GOOGLE_OAUTH_ALLOWED_KEYS
+    if unexpected_keys:
+        raise CalendarServiceError("Invalid calendar credentials")
+
+    token_uri = user_token.get("token_uri")
+    if token_uri is not None and token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
+        raise CalendarServiceError("Invalid calendar credentials")
+
+    return dict(user_token)
+
+
 async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
     """Creates a calendar event for a given TODO text."""
     try:
         safe_todo_text = validate_calendar_todo_text(todo_text)
-        creds = Credentials(**user_token)
+        validated_user_token = validate_google_user_token(user_token)
+        creds = Credentials(**validated_user_token)
         service = build("calendar", "v3", credentials=creds)
 
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -41,5 +72,7 @@ async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
         return created_event
     except UnsafeCalendarTodoError:
         raise
+    except CalendarServiceError:
+        raise
     except Exception as e:
-        raise CalendarServiceError(f"Failed to create event: {str(e)}") from e
+        raise CalendarServiceError("Failed to create event") from e
