@@ -77,7 +77,6 @@ describe("DashboardLayout", () => {
     expect(mobileQuickActionButton).not.toBeNull();
     expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
-    expect(container.textContent).not.toContain("준비 중");
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");

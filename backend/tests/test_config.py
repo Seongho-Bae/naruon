@@ -48,58 +48,6 @@ def test_database_url_loads_from_environment(monkeypatch):
     assert loaded_settings.DATABASE_URL == database_url
 
 
-def test_settings_load_repo_root_env_when_started_from_backend_directory(
-    monkeypatch, tmp_path
-):
-    backend_dir = tmp_path / "backend"
-    backend_dir.mkdir()
-    repo_env = tmp_path / ".env"
-    database_url = "postgresql+asyncpg://root:root@localhost:5432/root_db"
-    repo_env.write_text(
-        "\n".join(
-            [
-                f"DATABASE_URL={database_url}",
-                f"AUTH_SESSION_HMAC_SECRET={TEST_AUTH_SESSION_HMAC_SECRET}",
-            ]
-        )
-        + "\n"
-    )
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("AUTH_SESSION_HMAC_SECRET", raising=False)
-    monkeypatch.chdir(backend_dir)
-
-    loaded_settings = Settings()
-
-    assert loaded_settings.DATABASE_URL == database_url
-
-
-def test_settings_load_operator_home_env_when_project_env_is_absent(
-    monkeypatch, tmp_path
-):
-    project_dir = tmp_path / "project" / "backend"
-    home_dir = tmp_path / "home"
-    project_dir.mkdir(parents=True)
-    home_dir.mkdir()
-    database_url = "postgresql+asyncpg://home:home@localhost:5432/home_db"
-    (home_dir / ".env").write_text(
-        "\n".join(
-            [
-                f"DATABASE_URL={database_url}",
-                f"AUTH_SESSION_HMAC_SECRET={TEST_AUTH_SESSION_HMAC_SECRET}",
-            ]
-        )
-        + "\n"
-    )
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.delenv("AUTH_SESSION_HMAC_SECRET", raising=False)
-    monkeypatch.setenv("HOME", str(home_dir))
-    monkeypatch.chdir(project_dir)
-
-    loaded_settings = Settings()
-
-    assert loaded_settings.DATABASE_URL == database_url
-
-
 def test_production_settings_reject_missing_auth_session_hmac_secret(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"

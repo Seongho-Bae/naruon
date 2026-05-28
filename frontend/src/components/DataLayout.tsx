@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect } from 'react';
-import { Database, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server } from 'lucide-react';
+import { Database, HardDrive, RefreshCw, FolderOpen, AlertCircle, FileText, CheckCircle2, Server } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type WebdavWritebackIntentResponse = {
@@ -36,64 +36,6 @@ type UniqueThreadIntentResponse = {
 
 type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 
-type DataSurfaceStatus = 'loading' | 'ready' | 'error';
-
-type SurfaceStatusCode = 'ready' | 'running' | 'needs_attention' | 'pending' | 'no_source';
-type QualityStatusCode = 'pass' | 'needs_attention' | 'pending';
-
-type DataQualitySurfaceResponse = {
-  workspace_id: string;
-  organization_id: string | null;
-  audit_event: string;
-  provider_write_executed: boolean;
-  repositories: Array<{
-    source_id: string;
-    repository_type: 'webdav_account' | 'project_folder' | 'email_repository' | 'attachment_repository';
-    display_name: string;
-    object_count: number;
-    writeback_enabled: boolean | null;
-    evidence_source: string;
-    provider_write_executed: boolean;
-  }>;
-  pipeline_stages: Array<{
-    stage_key: string;
-    display_name: string;
-    status_code: SurfaceStatusCode;
-    progress_percent: number;
-    evidence_source: string;
-    detail_text: string;
-    provider_write_executed: boolean;
-  }>;
-  embedding_collections: Array<{
-    collection_key: string;
-    display_name: string;
-    object_count: number;
-    embedded_count: number;
-    embedding_model: string;
-    vector_dimensions: number;
-    status_code: SurfaceStatusCode;
-    evidence_source: string;
-    provider_write_executed: boolean;
-  }>;
-  quality_checks: Array<{
-    check_key: string;
-    display_name: string;
-    status_code: QualityStatusCode;
-    issue_count: number;
-    total_count: number;
-    evidence_source: string;
-    detail_text: string;
-    provider_write_executed: boolean;
-  }>;
-  connector_events: Array<{
-    event_uid: string;
-    signal_key: string;
-    state_code: string;
-    detail_text: string | null;
-    observed_at: string;
-  }>;
-};
-
 const duplicateImportCandidates = [
   {
     candidate_key: 'zip-q2-root',
@@ -127,45 +69,6 @@ function getSafeErrorSummary(error: unknown) {
   return { status, error_name: errorName.slice(0, 40) };
 }
 
-function formatCount(value: number) {
-  return new Intl.NumberFormat('ko-KR').format(value);
-}
-
-function getSurfaceStatusLabel(status: SurfaceStatusCode | QualityStatusCode) {
-  switch (status) {
-    case 'ready':
-    case 'pass':
-      return '정상';
-    case 'running':
-      return '진행 중';
-    case 'needs_attention':
-      return '점검 필요';
-    case 'pending':
-      return '대기';
-    case 'no_source':
-      return '원본 없음';
-    default:
-      return '대기';
-  }
-}
-
-function getSurfaceStatusClass(status: SurfaceStatusCode | QualityStatusCode) {
-  switch (status) {
-    case 'ready':
-    case 'pass':
-      return 'bg-emerald-100 text-emerald-700';
-    case 'running':
-      return 'bg-blue-100 text-blue-700';
-    case 'needs_attention':
-      return 'bg-amber-100 text-amber-800';
-    case 'no_source':
-      return 'bg-slate-100 text-slate-700';
-    case 'pending':
-    default:
-      return 'bg-secondary text-muted-foreground';
-  }
-}
-
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
   
@@ -191,24 +94,8 @@ export function DataLayout() {
   const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
   const [uniqueThreadStatus, setUniqueThreadStatus] = useState<UniqueThreadStatus>('idle');
   const [uniqueThreadResult, setUniqueThreadResult] = useState<UniqueThreadIntentResponse | null>(null);
-  const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
-  const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
 
   useEffect(() => {
-    apiClient.get<DataQualitySurfaceResponse>('/api/data/quality-surface')
-      .then((data) => {
-        if (!Array.isArray(data.repositories) || !Array.isArray(data.pipeline_stages)) {
-          throw new Error('Invalid data quality surface response');
-        }
-        setDataQualitySurface(data);
-        setDataSurfaceStatus('ready');
-      })
-      .catch((error: unknown) => {
-        console.error('Data quality surface fetch error', getSafeErrorSummary(error));
-        setDataQualitySurface(null);
-        setDataSurfaceStatus('error');
-      });
-
     apiClient.get<WebdavAccount[]>('/api/webdav/accounts')
       .then((data) => {
         if (!Array.isArray(data)) throw new Error('Invalid WebDAV accounts response');
@@ -286,11 +173,6 @@ export function DataLayout() {
   const selectedWebdavAccount = webdavAccounts.find((account) => (
     account.source_id === selectedWebdavSourceId && account.writeback_enabled
   )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
-  const repositories = dataQualitySurface?.repositories ?? [];
-  const emailRepository = repositories.find((repository) => repository.repository_type === 'email_repository');
-  const attachmentRepository = repositories.find((repository) => repository.repository_type === 'attachment_repository');
-  const embeddingStage = dataQualitySurface?.pipeline_stages.find((stage) => stage.stage_key === 'embedding_inventory');
-  const connectorEvents = dataQualitySurface?.connector_events ?? [];
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -322,18 +204,12 @@ export function DataLayout() {
                   <div className="flex items-center gap-3 mb-4">
                     <div className="rounded-xl bg-blue-100 p-3"><HardDrive className="size-5 text-blue-700" /></div>
                     <div>
-                      <h2 className="font-bold text-sm text-muted-foreground">메일/첨부 저장소</h2>
-                      <p className="text-xl font-bold">
-                        {dataSurfaceStatus === 'loading' ? '확인 중' : `${formatCount(emailRepository?.object_count ?? 0)} / ${formatCount(attachmentRepository?.object_count ?? 0)}`}
-                      </p>
-                      <p className="mt-1 text-xs font-semibold text-muted-foreground">emails / attachments</p>
+                      <h2 className="font-bold text-sm text-muted-foreground">로컬 캐시 (Vector DB)</h2>
+                      <p className="text-xl font-bold">12.4 GB <span className="text-sm font-normal text-muted-foreground">/ 50 GB</span></p>
                     </div>
                   </div>
                   <div className="h-2 w-full rounded-full bg-border overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 transition-all"
-                      style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
-                    ></div>
+                    <div className="h-full bg-blue-500 w-[25%]"></div>
                   </div>
                 </div>
                 
@@ -377,17 +253,11 @@ export function DataLayout() {
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex items-center justify-between">
                   <div>
                     <h2 className="font-bold text-sm text-muted-foreground mb-1">인덱싱 상태</h2>
-                    <p className="text-lg font-bold text-emerald-600 flex items-center gap-2">
-                      <CheckCircle2 className="size-5" />
-                      {embeddingStage ? getSurfaceStatusLabel(embeddingStage.status_code) : dataSurfaceStatus === 'error' ? '확인 실패' : '확인 중'}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {dataQualitySurface?.audit_event ?? 'data.quality_surface.viewed'}
-                    </p>
+                    <p className="text-lg font-bold text-emerald-600 flex items-center gap-2"><CheckCircle2 className="size-5" /> 최적화됨</p>
                   </div>
-                  <span className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold shadow-sm">
-                    provider_write_executed={String(dataQualitySurface?.provider_write_executed ?? false)}
-                  </span>
+                  <button className="rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold shadow-sm hover:bg-secondary">
+                    수동 최적화
+                  </button>
                 </div>
               </div>
 
@@ -550,30 +420,25 @@ export function DataLayout() {
 
               <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-border bg-secondary/30">
-                  <h2 className="font-bold text-lg">최근 수집/커넥터 근거</h2>
+                  <h2 className="font-bold text-lg">최근 수집 로그 (Ingestion Logs)</h2>
                 </div>
                 <div className="divide-y divide-border">
-                  {dataSurfaceStatus === 'loading' && (
-                    <div className="p-4 text-sm font-semibold text-muted-foreground">signed data quality surface를 확인하는 중입니다.</div>
-                  )}
-                  {dataSurfaceStatus === 'error' && (
-                    <div className="p-4 text-sm font-bold text-red-700">데이터 품질 표면을 확인하지 못했습니다.</div>
-                  )}
-                  {dataSurfaceStatus === 'ready' && connectorEvents.length === 0 && (
-                    <div className="p-4 text-sm text-muted-foreground">이 워크스페이스에 기록된 connector evidence가 아직 없습니다.</div>
-                  )}
-                  {connectorEvents.map((event) => (
-                    <div key={event.event_uid} className="p-4 flex flex-col gap-3 hover:bg-secondary/10 transition-colors sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex min-w-0 items-center gap-4">
-                        <div className="p-2 rounded-lg bg-blue-100 text-blue-700"><RefreshCw className="size-4" /></div>
+                  {[
+                    { source: '회사 IMAP', item: 'Q2 런칭 기획.pdf', status: '인덱싱 완료', time: '10분 전', icon: FileText, color: 'text-green-600 bg-green-100' },
+                    { source: 'CalDAV', item: '주간 회의 일정', status: '동기화 완료', time: '1시간 전', icon: RefreshCw, color: 'text-blue-600 bg-blue-100' },
+                    { source: '개인 IMAP', item: '대용량 첨부파일.zip', status: '용량 초과 (Skip)', time: '3시간 전', icon: AlertCircle, color: 'text-red-600 bg-red-100' },
+                  ].map((log, i) => (
+                    <div key={i} className="p-4 flex items-center justify-between hover:bg-secondary/10 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`p-2 rounded-lg ${log.color}`}><log.icon className="size-4" /></div>
                         <div>
-                          <p className="break-all font-bold text-sm">{event.event_uid}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{event.detail_text ?? event.signal_key}</p>
+                          <p className="font-bold text-sm">{log.item}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">출처: {log.source}</p>
                         </div>
                       </div>
-                      <div className="text-left sm:text-right">
-                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-blue-100 text-blue-700">{event.state_code}</span>
-                        <p className="text-xs text-muted-foreground mt-1">{event.observed_at}</p>
+                      <div className="text-right">
+                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${log.status.includes('완료') ? 'text-green-700 bg-green-100' : 'text-red-700 bg-red-100'}`}>{log.status}</span>
+                        <p className="text-xs text-muted-foreground mt-1">{log.time}</p>
                       </div>
                     </div>
                   ))}
@@ -587,32 +452,33 @@ export function DataLayout() {
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="font-bold text-lg mb-6">현재 파이프라인 진행률</h2>
                 <div className="space-y-6">
-                  {dataSurfaceStatus === 'loading' && (
-                    <p className="text-sm font-semibold text-muted-foreground">파이프라인 근거를 확인하는 중입니다.</p>
-                  )}
-                  {dataSurfaceStatus === 'error' && (
-                    <p className="text-sm font-bold text-red-700">파이프라인 근거를 불러오지 못했습니다.</p>
-                  )}
-                  {dataQualitySurface?.pipeline_stages.map((stage, index) => (
-                    <div key={stage.stage_key}>
-                      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <span className="text-sm font-bold">{index + 1}. {stage.display_name}</span>
-                          <p className="mt-1 text-xs text-muted-foreground">{stage.detail_text}</p>
-                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{stage.evidence_source}</p>
-                        </div>
-                        <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(stage.status_code)}`}>
-                          {getSurfaceStatusLabel(stage.status_code)} · {stage.progress_percent}%
-                        </span>
-                      </div>
-                      <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all"
-                          style={{ width: `${stage.progress_percent}%` }}
-                        ></div>
-                      </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold">1. 데이터 추출 (WebDAV / IMAP)</span>
+                      <span className="text-sm text-muted-foreground font-semibold">100% 완료</span>
                     </div>
-                  ))}
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-green-500 w-full"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold">2. 청크 분할 (Chunking)</span>
+                      <span className="text-sm text-primary font-semibold">진행 중 (85%)</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-primary w-[85%]"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-sm font-bold text-muted-foreground">3. 벡터 임베딩 (Embedding)</span>
+                      <span className="text-sm text-muted-foreground font-semibold">대기 중</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full bg-slate-300 w-0"></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -620,73 +486,46 @@ export function DataLayout() {
 
           {activeTab === '임베딩' && (
             <div className="space-y-6">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <p className="text-xs font-bold text-muted-foreground mb-1">활성 모델</p>
-                  <p className="break-all text-lg font-bold text-primary">
-                    {dataQualitySurface?.embedding_collections[0]?.embedding_model ?? '확인 중'}
-                  </p>
+                  <p className="text-lg font-bold text-primary">text-embedding-3-large</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <p className="text-xs font-bold text-muted-foreground mb-1">벡터 차원 (Dimensions)</p>
-                  <p className="text-lg font-bold">
-                    {dataQualitySurface?.embedding_collections[0]?.vector_dimensions ? formatCount(dataQualitySurface.embedding_collections[0].vector_dimensions) : '-'}
-                  </p>
+                  <p className="text-lg font-bold">3,072</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                  <p className="text-xs font-bold text-muted-foreground mb-1">벡터 보유 객체</p>
-                  <p className="text-lg font-bold">
-                    {formatCount(dataQualitySurface?.embedding_collections.reduce((sum, collection) => sum + collection.embedded_count, 0) ?? 0)}
-                  </p>
+                  <p className="text-xs font-bold text-muted-foreground mb-1">총 인덱싱 건수</p>
+                  <p className="text-lg font-bold">28,401</p>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                  <p className="text-xs font-bold text-muted-foreground mb-1">대상 객체</p>
-                  <p className="text-lg font-bold">
-                    {formatCount(dataQualitySurface?.embedding_collections.reduce((sum, collection) => sum + collection.object_count, 0) ?? 0)}
-                  </p>
+                  <p className="text-xs font-bold text-muted-foreground mb-1">QPS (초당 쿼리)</p>
+                  <p className="text-lg font-bold">4.2</p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                 <h2 className="font-bold text-lg mb-4">임베딩 컬렉션 상태</h2>
-                <div className="grid gap-3">
-                  {dataSurfaceStatus === 'loading' && (
-                    <p className="text-sm font-semibold text-muted-foreground">임베딩 컬렉션을 확인하는 중입니다.</p>
-                  )}
-                  {dataSurfaceStatus === 'error' && (
-                    <p className="text-sm font-bold text-red-700">임베딩 컬렉션을 불러오지 못했습니다.</p>
-                  )}
-                  {dataQualitySurface?.embedding_collections.map((collection) => (
-                    <article key={collection.collection_key} className="rounded-xl border border-border bg-background p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <h3 className="break-all text-sm font-black">{collection.display_name}</h3>
-                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{collection.evidence_source}</p>
-                        </div>
-                        <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(collection.status_code)}`}>
-                          {getSurfaceStatusLabel(collection.status_code)}
-                        </span>
-                      </div>
-                      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-4">
-                        <div>
-                          <dt className="font-black text-muted-foreground">OBJECTS</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(collection.object_count)}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-black text-muted-foreground">VECTORS</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(collection.embedded_count)}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-black text-muted-foreground">MODEL</dt>
-                          <dd className="mt-1 break-all text-sm font-bold">{collection.embedding_model}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-black text-muted-foreground">DIMENSIONS</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(collection.vector_dimensions)}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  ))}
+                <div className="divide-y divide-border border border-border rounded-lg overflow-hidden">
+                  <div className="grid grid-cols-4 bg-secondary/50 p-3 text-xs font-bold text-muted-foreground">
+                    <div>컬렉션 명</div>
+                    <div>청크 수</div>
+                    <div>마지막 업데이트</div>
+                    <div>상태</div>
+                  </div>
+                  <div className="grid grid-cols-4 p-3 text-sm items-center">
+                    <div className="font-bold">emails_naruon</div>
+                    <div>12,400</div>
+                    <div className="text-muted-foreground">10분 전</div>
+                    <div><span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold">정상</span></div>
+                  </div>
+                  <div className="grid grid-cols-4 p-3 text-sm items-center">
+                    <div className="font-bold">docs_webdav</div>
+                    <div>16,001</div>
+                    <div className="text-muted-foreground">1시간 전</div>
+                    <div><span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">업데이트 중</span></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -695,61 +534,28 @@ export function DataLayout() {
           {activeTab === '품질 점검' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                {(dataQualitySurface?.quality_checks.slice(0, 3) ?? []).map((check) => (
-                  <div key={check.check_key} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                    <p className="text-xs font-bold text-muted-foreground mb-1">{check.display_name}</p>
-                    <p className={`text-xl font-bold ${check.issue_count > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {formatCount(check.issue_count)} / {formatCount(check.total_count)}
-                    </p>
-                    <span className={`mt-3 inline-flex rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
-                      {getSurfaceStatusLabel(check.status_code)}
-                    </span>
-                  </div>
-                ))}
-                {dataSurfaceStatus === 'loading' && (
-                  <div className="rounded-2xl border border-border bg-card p-5 text-sm font-semibold text-muted-foreground shadow-sm md:col-span-3">
-                    품질 점검 근거를 확인하는 중입니다.
-                  </div>
-                )}
-                {dataSurfaceStatus === 'error' && (
-                  <div className="rounded-2xl border border-border bg-card p-5 text-sm font-bold text-red-700 shadow-sm md:col-span-3">
-                    품질 점검 근거를 불러오지 못했습니다.
-                  </div>
-                )}
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">인덱싱 실패</p>
+                  <p className="text-xl font-bold text-red-500">23건</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">재시도</button>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">고아(Orphaned) 청크</p>
+                  <p className="text-xl font-bold text-orange-500">105건</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">정리하기</button>
+                </div>
+                <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <p className="text-xs font-bold text-muted-foreground mb-1">임베딩 일치율 평균</p>
+                  <p className="text-xl font-bold text-green-600">92.4%</p>
+                  <button className="mt-3 text-xs font-semibold text-primary hover:underline">상세 리포트</button>
+                </div>
               </div>
               <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
                 <div className="p-5 border-b border-border bg-secondary/30">
                   <h2 className="font-bold text-lg">품질 문제 항목</h2>
                 </div>
-                <div className="grid gap-3 p-5">
-                  {dataQualitySurface?.quality_checks.map((check) => (
-                    <article key={check.check_key} className="rounded-xl border border-border bg-background p-4">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-black">{check.display_name}</h3>
-                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{check.detail_text}</p>
-                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{check.evidence_source}</p>
-                        </div>
-                        <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
-                          {getSurfaceStatusLabel(check.status_code)}
-                        </span>
-                      </div>
-                      <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
-                        <div>
-                          <dt className="font-black text-muted-foreground">ISSUES</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(check.issue_count)}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-black text-muted-foreground">TOTAL</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(check.total_count)}</dd>
-                        </div>
-                        <div>
-                          <dt className="font-black text-muted-foreground">PROVIDER_WRITE</dt>
-                          <dd className="mt-1 text-sm font-bold">provider_write_executed={String(check.provider_write_executed)}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  ))}
+                <div className="p-5 text-sm text-muted-foreground text-center">
+                  발견된 심각한 데이터 품질 문제가 없습니다.
                 </div>
               </div>
             </div>

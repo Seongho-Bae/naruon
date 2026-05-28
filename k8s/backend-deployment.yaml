@@ -26,8 +26,3 @@ spec:
             secretKeyRef:
               name: backend-secrets
               key: database-url
-        - name: AUTH_SESSION_HMAC_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: backend-secrets
-              key: auth-session-hmac-secret

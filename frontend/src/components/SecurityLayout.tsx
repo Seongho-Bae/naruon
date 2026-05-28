@@ -1,515 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  AlertOctagon,
-  CheckCircle2,
-  Database,
-  Lock,
-  RefreshCw,
-  ScrollText,
-  Share2,
-  ShieldCheck,
-  XCircle,
-} from 'lucide-react';
-
-import { apiClient } from '@/lib/api-client';
-
-type SecurityTab = '보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책';
-
-type PolicyDecisionSummary = {
-  decision_uid: string;
-  resource_label: string;
-  resource_type: string;
-  allowed: boolean;
-  reason: string;
-  evidence_source: string;
-};
-
-type GovernanceSource = {
-  source_id: string;
-  source_type: 'caldav_source' | 'carddav_source' | 'webdav_repository';
-  source_label: string;
-  source_host: string;
-  owner_id: string;
-  organization_id: string | null;
-  workspace_id: string;
-  capabilities: string[];
-  writeback_enabled: boolean;
-  provider_write_executed: boolean;
-  policy_decision: PolicyDecisionSummary;
-  last_observed_at: string | null;
-};
-
-type ConnectorEvidence = {
-  event_uid: string;
-  signal_key: string;
-  state_code: string;
-  detail_text: string | null;
-  observed_at: string;
-};
-
-type ExternalShareReview = {
-  review_uid: string;
-  source_id: string;
-  source_type: GovernanceSource['source_type'];
-  review_label: string;
-  exposure_level: 'internal' | 'external_writeback';
-  decision_reason: string;
-  provider_write_executed: boolean;
-};
-
-type PolicyOrderStep = {
-  step_key: string;
-  display_name: string;
-  evidence_source: string;
-};
-
-type SecurityAccessSurface = {
-  workspace_id: string;
-  organization_id: string | null;
-  audit_event: 'security.access_surface.viewed';
-  viewer: {
-    user_id: string;
-    role: string;
-    organization_id: string | null;
-    group_ids: string[];
-    workspace_id: string;
-  };
-  sources: GovernanceSource[];
-  connector_events: ConnectorEvidence[];
-  policy_decisions: PolicyDecisionSummary[];
-  external_share_reviews: ExternalShareReview[];
-  policy_order: PolicyOrderStep[];
-};
-
-const tabs: SecurityTab[] = ['보안 대시보드', '접근 권한', '감사 로그', '외부 공유', '정책'];
-
-const reasonLabels: Record<string, string> = {
-  allowed: '허용',
-  organization_denied: '조직 차단',
-  data_region_denied: '리전 차단',
-  consent_denied: '동의 차단',
-  ownership_denied: '소유권 차단',
-  rbac_denied: 'RBAC 차단',
-};
-
-function reasonLabel(reason: string) {
-  return reasonLabels[reason] ?? reason;
-}
-
-function DecisionPill({ decision }: { decision: PolicyDecisionSummary }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold ${
-        decision.allowed
-          ? 'bg-emerald-100 text-emerald-700'
-          : 'bg-red-100 text-red-700'
-      }`}
-    >
-      {decision.allowed ? <CheckCircle2 className="size-3" /> : <XCircle className="size-3" />}
-      {reasonLabel(decision.reason)}
-    </span>
-  );
-}
-
-function LoadingPanel() {
-  return (
-    <div className="rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">
-      보안 거버넌스 데이터를 불러오는 중입니다.
-    </div>
-  );
-}
-
-function ErrorPanel({ message }: { message: string }) {
-  return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-5 text-sm text-red-700">
-      signed-session 보안 표면을 불러오지 못했습니다. {message}
-    </div>
-  );
-}
-
-function EmptyState({ label }: { label: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-      현재 signed-session 스코프에서 확인된 {label}가 없습니다.
-    </div>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  detail,
-  icon,
-}: {
-  title: string;
-  value: string;
-  detail: string;
-  icon: ReactNode;
-}) {
-  return (
-    <article className="rounded-lg border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-muted-foreground">{title}</p>
-          <p className="mt-2 text-xl font-bold">{value}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
-        </div>
-        <div className="rounded-lg bg-secondary p-2 text-primary">{icon}</div>
-      </div>
-    </article>
-  );
-}
-
-function DashboardTab({ data }: { data: SecurityAccessSurface }) {
-  const allowedCount = data.policy_decisions.filter((decision) => decision.allowed).length;
-  const deniedCount = data.policy_decisions.length - allowedCount;
-  const writebackReady = data.sources.filter((source) => source.writeback_enabled).length;
-  const providerWrites = data.sources.filter((source) => source.provider_write_executed).length;
-
-  return (
-    <section aria-label="보안 거버넌스 대시보드" className="space-y-5">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <SummaryCard
-          title="접근 판정"
-          value={`${allowedCount}/${data.policy_decisions.length}`}
-          detail={`deny ${deniedCount}건, ABAC가 RBAC보다 먼저 적용됩니다.`}
-          icon={<ShieldCheck className="size-5" />}
-        />
-        <SummaryCard
-          title="연결 원본"
-          value={`${data.sources.length}개`}
-          detail={`writeback 가능 ${writebackReady}개, source-owned only`}
-          icon={<Database className="size-5" />}
-        />
-        <SummaryCard
-          title="Connector evidence"
-          value={`${data.connector_events.length}건`}
-          detail={data.workspace_id}
-          icon={<ScrollText className="size-5" />}
-        />
-        <SummaryCard
-          title="Provider write"
-          value={`${providerWrites}건`}
-          detail="이 화면은 읽기 전용 evidence만 표시합니다."
-          icon={<Lock className="size-5" />}
-        />
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-bold">현재 관리자 경계</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {data.viewer.role} / {data.organization_id ?? 'personal-scope'} / {data.workspace_id}
-            </p>
-          </div>
-          <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">
-            {data.audit_event}
-          </span>
-        </div>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.policy_decisions.slice(0, 4).map((decision) => (
-            <div key={decision.decision_uid} className="rounded-lg border border-border bg-background p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm font-bold">{decision.resource_label}</p>
-                <DecisionPill decision={decision} />
-              </div>
-              <p className="mt-2 truncate font-mono text-xs text-muted-foreground">{decision.evidence_source}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AccessTab({ data }: { data: SecurityAccessSurface }) {
-  return (
-    <section aria-label="접근 권한 소스 거버넌스" className="space-y-5">
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-base font-bold">Source-linked RBAC / ABAC</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              WebDAV, CalDAV, CardDAV source registry를 signed-session 스코프로 판정합니다.
-            </p>
-          </div>
-          <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">
-            provider_write_executed=false
-          </span>
-        </div>
-        {data.sources.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState label="연결 원본" />
-          </div>
-        ) : (
-          <>
-            <div className="mt-4 grid grid-cols-1 gap-3 md:hidden">
-              {data.sources.map((source) => (
-                <article key={source.source_id} className="rounded-lg border border-border bg-background p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="text-sm font-bold">{source.source_label}</h3>
-                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{source.source_id}</p>
-                    </div>
-                    <DecisionPill decision={source.policy_decision} />
-                  </div>
-                  <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="font-bold text-muted-foreground">Host</dt>
-                      <dd className="break-all text-right font-mono">{source.source_host}</dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="font-bold text-muted-foreground">Owner</dt>
-                      <dd className="text-right">{source.owner_id} / {source.organization_id ?? 'personal'}</dd>
-                    </div>
-                    <div>
-                      <dt className="font-bold text-muted-foreground">Capability</dt>
-                      <dd className="mt-2 flex flex-wrap gap-1">
-                        {source.capabilities.map((capability) => (
-                          <span key={capability} className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">
-                            {capability}
-                          </span>
-                        ))}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-            <div className="mt-4 hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
-                  <tr>
-                    <th className="p-3 font-bold">원본</th>
-                    <th className="p-3 font-bold">Host</th>
-                    <th className="p-3 font-bold">Owner scope</th>
-                    <th className="p-3 font-bold">Capability</th>
-                    <th className="p-3 font-bold">판정</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.sources.map((source) => (
-                    <tr key={source.source_id} className="bg-background">
-                      <td className="p-3">
-                        <p className="font-bold">{source.source_label}</p>
-                        <p className="mt-1 font-mono text-xs text-muted-foreground">{source.source_id}</p>
-                      </td>
-                      <td className="p-3 font-mono text-xs">{source.source_host}</td>
-                      <td className="p-3">
-                        <p>{source.owner_id}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{source.organization_id ?? 'personal'}</p>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-wrap gap-1">
-                          {source.capabilities.map((capability) => (
-                            <span key={capability} className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">
-                              {capability}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-3"><DecisionPill decision={source.policy_decision} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function AuditTab({ data }: { data: SecurityAccessSurface }) {
-  return (
-    <section aria-label="보안 감사 로그" className="space-y-5">
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">Connector evidence와 감사 이벤트</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          AuditLog 직접 노출 대신 scoped connector evidence와 API audit event만 표시합니다.
-        </p>
-        <div className="mt-4 rounded-lg border border-border bg-background p-3">
-          <p className="text-xs font-bold text-muted-foreground">API audit event</p>
-          <p className="mt-1 font-mono text-sm">{data.audit_event}</p>
-        </div>
-        {data.connector_events.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState label="connector evidence" />
-          </div>
-        ) : (
-          <div className="mt-4 space-y-3">
-            {data.connector_events.map((event) => (
-              <div key={event.event_uid} className="rounded-lg border border-border bg-background p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-mono text-sm font-bold">{event.event_uid}</p>
-                  <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">{event.state_code}</span>
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">{event.detail_text ?? event.signal_key}</p>
-                <p className="mt-2 font-mono text-xs text-muted-foreground">{event.observed_at}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function SharingTab({ data }: { data: SecurityAccessSurface }) {
-  return (
-    <section aria-label="외부 공유와 writeback 검토" className="space-y-5">
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">외부 공유 / writeback boundary</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          고객 소유 provider로 나가는 writeback 가능성만 검토하며 실제 provider write는 실행하지 않습니다.
-        </p>
-        {data.external_share_reviews.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState label="외부 공유 검토 항목" />
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {data.external_share_reviews.map((review) => (
-              <article key={review.review_uid} className="rounded-lg border border-border bg-background p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-bold">{review.review_label}</h3>
-                    <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{review.source_id}</p>
-                  </div>
-                  <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">
-                    {review.exposure_level}
-                  </span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-md bg-red-50 px-2 py-1 font-bold text-red-700">
-                    {reasonLabel(review.decision_reason)}
-                  </span>
-                  <span className="rounded-md bg-secondary px-2 py-1 font-bold">
-                    provider_write_executed={String(review.provider_write_executed)}
-                  </span>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function PolicyTab({ data }: { data: SecurityAccessSurface }) {
-  return (
-    <section aria-label="정책 엔진 판정 순서" className="space-y-5">
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">Deny-first policy order</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          NIST ABAC 모델과 OWASP deny-by-default 원칙에 맞춰 속성 차단을 역할 허용보다 먼저 평가합니다.
-        </p>
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.policy_order.map((step, index) => (
-            <div key={step.step_key} className="rounded-lg border border-border bg-background p-3">
-              <div className="flex items-center gap-3">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-                  {index + 1}
-                </span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold">{step.display_name}</p>
-                  <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{step.evidence_source}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">판정 샘플</h2>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-border bg-secondary/50 text-xs text-muted-foreground">
-              <tr>
-                <th className="p-3 font-bold">Resource</th>
-                <th className="p-3 font-bold">Type</th>
-                <th className="p-3 font-bold">Decision</th>
-                <th className="p-3 font-bold">Evidence</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {data.policy_decisions.map((decision) => (
-                <tr key={decision.decision_uid} className="bg-background">
-                  <td className="p-3 font-bold">{decision.resource_label}</td>
-                  <td className="p-3 font-mono text-xs">{decision.resource_type}</td>
-                  <td className="p-3"><DecisionPill decision={decision} /></td>
-                  <td className="p-3 font-mono text-xs text-muted-foreground">{decision.evidence_source}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  );
-}
+import { useState } from 'react';
+import { ShieldCheck, Lock, AlertOctagon, CheckCircle2, XCircle } from 'lucide-react';
 
 export function SecurityLayout() {
-  const [activeTab, setActiveTab] = useState<SecurityTab>('접근 권한');
-  const [data, setData] = useState<SecurityAccessSurface | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let mounted = true;
-    apiClient
-      .get<SecurityAccessSurface>('/api/security/access-surface')
-      .then((surface) => {
-        if (!mounted) return;
-        setData(surface);
-      })
-      .catch((err: unknown) => {
-        if (!mounted) return;
-        setError(err instanceof Error ? err.message : 'unknown error');
-      })
-      .finally(() => {
-        if (!mounted) return;
-        setLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const content = useMemo(() => {
-    if (loading) return <LoadingPanel />;
-    if (error) return <ErrorPanel message={error} />;
-    if (!data) return <EmptyState label="보안 거버넌스 데이터" />;
-    if (activeTab === '보안 대시보드') return <DashboardTab data={data} />;
-    if (activeTab === '접근 권한') return <AccessTab data={data} />;
-    if (activeTab === '감사 로그') return <AuditTab data={data} />;
-    if (activeTab === '외부 공유') return <SharingTab data={data} />;
-    return <PolicyTab data={data} />;
-  }, [activeTab, data, error, loading]);
+  const [activeTab, setActiveTab] = useState<'보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책'>('접근 권한');
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-x-hidden bg-background text-foreground">
-      <header className="flex h-20 shrink-0 items-center overflow-hidden border-b border-border bg-card px-4 md:px-8">
-        <h1 className="flex shrink-0 items-center gap-3 text-xl font-bold md:text-2xl">
-          <ShieldCheck className="size-6 text-primary" />
-          <span className="hidden sm:inline">보안과 관리자</span>
+    <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
+      <header className="flex h-20 shrink-0 items-center border-b border-border bg-card px-4 md:px-8 overflow-hidden">
+        <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
+          <ShieldCheck className="size-6 text-primary" /> <span className="hidden sm:inline">보안과 관리자</span>
         </h1>
         <p className="sr-only">관리자 경계</p>
-        <div className="ml-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 md:ml-8">
-          {tabs.map((tab) => (
+        <div className="ml-4 md:ml-8 flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {['보안 대시보드', '접근 권한', '감사 로그', '외부 공유', '정책'].map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold transition-colors md:px-4 ${
-                activeTab === tab
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-secondary'
-              }`}
+              onClick={() => setActiveTab(tab as '보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책')}
+              className={`whitespace-nowrap px-3 md:px-4 py-2 text-sm font-bold rounded-lg transition-colors shrink-0 ${activeTab === tab ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
             >
               {tab}
             </button>
@@ -517,50 +26,183 @@ export function SecurityLayout() {
         </div>
       </header>
 
-      <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-4 md:p-8">
-        <div className="mx-auto max-w-6xl space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold text-muted-foreground">Security governance</p>
-              <h2 className="mt-1 text-lg font-bold">접근 권한, 감사 evidence, writeback boundary</h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setLoading(true);
-                setError(null);
-                apiClient
-                  .get<SecurityAccessSurface>('/api/security/access-surface')
-                  .then(setData)
-                  .catch((err: unknown) => setError(err instanceof Error ? err.message : 'unknown error'))
-                  .finally(() => setLoading(false));
-              }}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-secondary"
-            >
-              <RefreshCw className="size-4" /> 새로고침
-            </button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            <div className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-center gap-2 text-sm font-bold">
-                <AlertOctagon className="size-4 text-red-600" /> Deny precedence
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden p-4 md:p-8">
+        <div className="max-w-5xl mx-auto space-y-8">
+
+          {activeTab === '접근 권한' && (
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="font-bold text-lg">권한 정책 (Policies)</h2>
+                    <p className="text-sm text-muted-foreground mt-1">사용자 역할(RBAC) 및 속성 기반(ABAC) 접근 제어 규칙입니다. <strong className="text-red-500">Deny 정책이 우선합니다.</strong></p>
+                  </div>
+                  <button className="bg-primary text-primary-foreground text-sm font-bold px-4 py-2 rounded-lg">새 정책 추가</button>
+                </div>
+
+                <div className="border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-secondary/50 text-muted-foreground border-b border-border">
+                      <tr>
+                        <th className="p-4 font-bold">효과 (Effect)</th>
+                        <th className="p-4 font-bold">대상 (Resource)</th>
+                        <th className="p-4 font-bold">조건 (Condition / ABAC)</th>
+                        <th className="p-4 font-bold">역할 (Role)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border bg-background">
+                      <tr className="hover:bg-secondary/20">
+                        <td className="p-4"><span className="bg-red-100 text-red-700 px-2 py-1 rounded font-bold text-xs">DENY</span></td>
+                        <td className="p-4 font-mono text-xs">/api/accounts/*</td>
+                        <td className="p-4">Outside Corporate IP</td>
+                        <td className="p-4">All</td>
+                      </tr>
+                      <tr className="hover:bg-secondary/20">
+                        <td className="p-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded font-bold text-xs">ALLOW</span></td>
+                        <td className="p-4 font-mono text-xs">/api/tasks/*</td>
+                        <td className="p-4">Tenant == User.Tenant</td>
+                        <td className="p-4">Member, Admin</td>
+                      </tr>
+                      <tr className="hover:bg-secondary/20">
+                        <td className="p-4"><span className="bg-green-100 text-green-700 px-2 py-1 rounded font-bold text-xs">ALLOW</span></td>
+                        <td className="p-4 font-mono text-xs">/api/settings/*</td>
+                        <td className="p-4">-</td>
+                        <td className="p-4">Admin</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">조직, 리전, 동의, 소유권 차단이 RBAC 허용보다 먼저 적용됩니다.</p>
-            </div>
-            <div className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-center gap-2 text-sm font-bold">
-                <Share2 className="size-4 text-primary" /> Source sovereignty
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="rounded-xl bg-orange-100 p-3"><AlertOctagon className="size-5 text-orange-700" /></div>
+                    <h2 className="font-bold text-lg">최근 차단 로그</h2>
+                  </div>
+                  <div className="space-y-3">
+                    {[
+                      { user: 'guest@example.com', path: '/api/accounts', reason: 'Role mismatch' },
+                      { user: 'park@naruon.com', path: '/api/tasks/T-102', reason: 'Tenant mismatch (ABAC)' },
+                    ].map((log, i) => (
+                      <div key={i} className="text-sm p-3 border border-border rounded-lg bg-background flex justify-between items-center">
+                        <div>
+                          <p className="font-bold">{log.user}</p>
+                          <p className="text-xs text-muted-foreground font-mono mt-1">{log.path}</p>
+                        </div>
+                        <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded font-bold">{log.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="rounded-xl bg-purple-100 p-3"><Lock className="size-5 text-purple-700" /></div>
+                    <h2 className="font-bold text-lg">인증 연동 (OIDC)</h2>
+                  </div>
+                  <div className="space-y-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Provider</span>
+                      <span className="font-bold">Keycloak (Default)</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">상태</span>
+                      <span className="flex items-center gap-1 text-emerald-600 font-bold"><CheckCircle2 className="size-4" /> 연동됨</span>
+                    </div>
+                    <button className="w-full mt-2 py-2 border border-border rounded-lg font-bold hover:bg-secondary">
+                      Casdoor로 마이그레이션
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">WebDAV/CalDAV 원본은 고객 시스템이며 Naruon은 용량 제공자가 아닙니다.</p>
             </div>
-            <div className="rounded-lg border border-border bg-card p-3">
-              <div className="flex items-center gap-2 text-sm font-bold">
-                <Lock className="size-4 text-primary" /> Signed session only
+          )}
+
+          {activeTab === '보안 대시보드' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                  <h2 className="font-bold text-lg mb-6 flex items-center gap-2">
+                    <AlertOctagon className="size-5 text-red-500" /> 위협 현황 (Threat Status)
+                  </h2>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center p-3 rounded-lg border border-border bg-background">
+                      <div className="flex items-center gap-3">
+                        <div className="size-2 rounded-full bg-red-500"></div>
+                        <div>
+                          <p className="text-sm font-bold">비정상 로그인 시도 감지</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">외부 IP (14.xx.xx.xx)에서 관리자 계정 시도</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-red-600 bg-red-100 px-2 py-1 rounded">High</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 rounded-lg border border-border bg-background">
+                      <div className="flex items-center gap-3">
+                        <div className="size-2 rounded-full bg-orange-500"></div>
+                        <div>
+                          <p className="text-sm font-bold">비인가 API 접근 차단</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">/api/settings 경로 접근 실패</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-orange-600 bg-orange-100 px-2 py-1 rounded">Medium</span>
+                    </div>
+                    <div className="flex justify-between items-center p-3 rounded-lg border border-border bg-background">
+                      <div className="flex items-center gap-3">
+                        <div className="size-2 rounded-full bg-green-500"></div>
+                        <div>
+                          <p className="text-sm font-bold">전체 시스템 상태</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">현재 감지된 심각한 위협 없음</p>
+                        </div>
+                      </div>
+                      <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded">Safe</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                  <h2 className="font-bold text-lg mb-4">규정 준수 (Compliance)</h2>
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold">데이터 암호화 (At Rest)</p>
+                        <p className="text-xs text-muted-foreground">PostgreSQL TDE 활성화됨</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold">통신 암호화 (In Transit)</p>
+                        <p className="text-xs text-muted-foreground">TLS 1.3 강제 적용됨</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <XCircle className="size-5 text-red-500 shrink-0" />
+                      <div>
+                        <p className="text-sm font-bold">정기 접근 권한 리뷰</p>
+                        <p className="text-xs text-muted-foreground">90일 초과됨 (리뷰 필요)</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button className="w-full mt-6 py-2 border border-border rounded-lg text-sm font-bold hover:bg-secondary">
+                    체크리스트 상세 보기
+                  </button>
+                </div>
               </div>
-              <p className="mt-1 text-xs text-muted-foreground">브라우저는 bearer session으로만 보안 API를 호출합니다.</p>
             </div>
-          </div>
-          {content}
+          )}
+
+          {(activeTab !== '접근 권한' && activeTab !== '보안 대시보드') && (
+            <div className="flex flex-col items-center justify-center py-24 text-center rounded-2xl border border-dashed border-border bg-card">
+              <ShieldCheck className="size-10 text-muted-foreground mb-4 opacity-50" />
+              <h2 className="text-xl font-bold mb-2">{activeTab} 패널</h2>
+              <p className="text-muted-foreground max-w-sm">
+                조직 내 보안 현황, 감사 로그, 외부 공유 제한 등을 통제할 수 있는 기능이 곧 제공됩니다.
+              </p>
+            </div>
+          )}
+
         </div>
       </main>
     </div>
