@@ -30,11 +30,11 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 
 const mailNavItems = [
-  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox', available: true },
-  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/mail?folder=starred', available: true },
-  { label: '보낸 메일', description: '답변 추적 대상', icon: Send, href: '/mail?folder=sent', available: true },
-  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/mail?folder=drafts', available: true },
-  { label: '전체 메일', description: '중복 정리 대상', icon: Home, href: '/mail?folder=all', available: true },
+  { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox' },
+  { label: '중요 메일', description: '중요 표시된 메일', icon: Star, href: '/mail?folder=starred' },
+  { label: '보낸 메일', description: '답변 추적 대상', icon: Send, href: '/mail?folder=sent' },
+  { label: '임시 보관함', description: '작성 중인 메일', icon: FileText, href: '/mail?folder=drafts' },
+  { label: '전체 메일', description: '중복 정리 대상', icon: Home, href: '/mail?folder=all' },
 ];
 
 const mobileWorkspaceItems = [
@@ -165,12 +165,10 @@ export function NavLink({
   description,
   icon: Icon,
   href = '#main-content',
-  available = true,
 }: {
   label: string;
   description?: string;
   href?: string;
-  available?: boolean;
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 }) {
   const pathname = usePathname();
@@ -191,26 +189,6 @@ export function NavLink({
   }, [pathname]);
 
   const active = isActivePath(pathname, href, currentHash, searchParams);
-
-  if (!available) {
-    return (
-      <button
-        type="button"
-        disabled
-        data-coming-soon="true"
-        className="group flex min-h-9 w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-sidebar-foreground/55"
-      >
-        <Icon className="size-4" aria-hidden={true} />
-        <span className="flex min-w-0 flex-1 flex-col leading-tight">
-          <span className="flex items-center gap-2 font-semibold">
-            {label}
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold text-muted-foreground">준비 중</span>
-          </span>
-          <span className="text-[11px] text-muted-foreground/80">{description || '곧 연결됩니다'}</span>
-        </span>
-      </button>
-    );
-  }
 
   return (
     <Link
