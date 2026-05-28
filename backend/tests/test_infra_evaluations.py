@@ -7,3 +7,23 @@ def test_postgres_ha_compose_exists():
 
 def test_gateway_compose_exists():
     assert (_REPO_ROOT / "docker-compose.gateway.yml").exists()
+
+
+def test_gateway_backend_requires_runtime_secrets():
+    compose = (_REPO_ROOT / "docker-compose.gateway.yml").read_text()
+
+    assert "DATABASE_URL: ${DATABASE_URL:?" in compose
+    assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?" in compose
+    assert "postgresql+asyncpg://" not in compose
+
+
+def test_gateway_compose_does_not_expose_management_planes():
+    compose = (_REPO_ROOT / "docker-compose.gateway.yml").read_text()
+
+    assert "--api.insecure=true" not in compose
+    assert '"8080:8080"' not in compose
+    assert '"8081:8080"' not in compose
+    assert "KEYCLOAK_ADMIN=admin" not in compose
+    assert "KEYCLOAK_ADMIN_PASSWORD=admin" not in compose
+    assert "KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:?" in compose
+    assert "KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?" in compose
