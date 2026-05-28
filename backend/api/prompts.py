@@ -10,9 +10,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, get_current_user
-from db.models import LLMProvider, PromptTemplate, TenantConfig
+from db.models import LLMProvider, PromptTemplate
 from db.session import get_db
 from services.llm_provider_urls import validate_llm_provider_base_url_async
+from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
 
@@ -185,10 +186,11 @@ async def test_prompt(
         api_key = active_provider.api_key
         base_url = active_provider.base_url
     else:
-        tenant_result = await db.execute(
-            select(TenantConfig).where(TenantConfig.user_id == user_id)
+        tenant_config = await get_scoped_tenant_config(
+            db,
+            user_id,
+            auth_context.organization_id,
         )
-        tenant_config = tenant_result.scalars().first()
         if tenant_config and tenant_config.openai_api_key:
             api_key = tenant_config.openai_api_key
 

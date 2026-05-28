@@ -1,12 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
-from api.auth import get_current_user, get_current_user_role, is_admin_role
+from api.auth import (
+    AuthContext,
+    get_auth_context,
+    get_current_user_role,
+    is_admin_role,
+)
+from services.tenant_config_scope import (
+    get_scoped_tenant_config,
+    new_scoped_tenant_config,
+)
 from services.email_client import (
     validate_imap_destination,
     validate_imap_port,
@@ -150,15 +158,16 @@ def validate_mail_config_update(
 async def create_or_update_config(
     config: TenantConfigCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    if config.user_id != current_user:
+    if config.user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail=MAILBOX_MANAGE_FORBIDDEN)
 
-    result = await db.execute(
-        select(TenantConfig).where(TenantConfig.user_id == config.user_id)
+    db_config = await get_scoped_tenant_config(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
     )
-    db_config = result.scalar_one_or_none()
 
     config_data = config.model_dump(exclude_unset=True)
     validate_mail_config_update(config_data, db_config)
@@ -172,7 +181,12 @@ async def create_or_update_config(
         for key in SECRET_FIELDS:
             if key in config_data and config_data[key] == "********":
                 config_data[key] = None
-        db_config = TenantConfig(**config_data)
+        db_config = new_scoped_tenant_config(
+            user_id=auth_context.user_id,
+            organization_id=auth_context.organization_id,
+        )
+        for key, value in config_data.items():
+            setattr(db_config, key, value)
         db.add(db_config)
 
     try:
@@ -191,15 +205,16 @@ async def create_or_update_config(
 async def get_config(
     user_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    if user_id != current_user:
+    if user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail=MAILBOX_VIEW_FORBIDDEN)
 
-    result = await db.execute(
-        select(TenantConfig).where(TenantConfig.user_id == user_id)
+    db_config = await get_scoped_tenant_config(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
     )
-    db_config = result.scalar_one_or_none()
 
     if not db_config:
         return TenantConfigResponse(user_id=user_id)

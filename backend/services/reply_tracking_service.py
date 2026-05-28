@@ -2,6 +2,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import Email, TenantConfig
+from services.tenant_config_scope import get_scoped_tenant_config
 from services.email_service import detect_reply_tracking
 from services.threading_service import normalize_message_id
 import datetime
@@ -97,10 +98,11 @@ async def check_missing_replies(
     Returns a list of such emails.
     """
     # Find user's own email address
-    tenant_config = await session.execute(
-        select(TenantConfig).where(TenantConfig.user_id == user_id)
+    config = await get_scoped_tenant_config(
+        session,
+        user_id,
+        organization_id,
     )
-    config = tenant_config.scalar_one_or_none()
     user_addresses = configured_email_addresses(config)
 
     if not user_addresses:

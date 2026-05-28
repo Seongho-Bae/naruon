@@ -153,7 +153,12 @@ class QueryCapturingSession(MockSession):
 class ScalarQueryCapturingSession(MockSession):
     def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
         super().__init__(items, tenant_config=tenant_config)
+        self.queries = []
         self.scalar_queries = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
 
     async def scalar(self, query):
         self.scalar_queries.append(query)
@@ -981,7 +986,10 @@ def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_c
         app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert compiled_query_params(session.scalar_queries[-1])["user_id_1"] == "testuser"
+    tenant_query = next(
+        query for query in session.queries if "tenant_configs" in compiled_query_text(query)
+    )
+    assert compiled_query_params(tenant_query)["user_id_1"] == "testuser"
     mock_send_email.assert_called_once()
 
 

@@ -6,8 +6,9 @@ from db.session import get_db
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
 class MockTenantConfig:
-    def __init__(self, user_id):
+    def __init__(self, user_id, organization_id=None):
         self.user_id = user_id
+        self.organization_id = organization_id
         self.smtp_server = None
         self.smtp_port = None
         self.smtp_username = None
@@ -32,16 +33,23 @@ class MockResult:
 
 class MockSession:
     def __init__(self):
-        self.config = None
-        
+        self.configs = {}
+        self.commits = 0
+
+    def _query_key(self, stmt):
+        params = dict(stmt.compile().params)
+        user_id = params.get("user_id_1")
+        organization_id = params.get("organization_id_1")
+        return user_id, organization_id
+
     async def execute(self, stmt):
-        return MockResult(self.config)
+        return MockResult(self.configs.get(self._query_key(stmt)))
 
     def add(self, obj):
-        self.config = obj
+        self.configs[(obj.user_id, obj.organization_id)] = obj
 
     async def commit(self):
-        pass
+        self.commits += 1
 
     async def refresh(self, obj):
         pass
@@ -70,11 +78,12 @@ def test_get_and_update_tenant_config(client: TestClient, monkeypatch):
         lambda host, port, *, resolve_host=True: (host, port),
     )
 
-    # Get config (should create empty one)
+    # Get config returns an empty response without creating a row.
     response = client.get("/api/accounts/config")
     assert response.status_code == 200
     data = response.json()
     assert data["smtp_server"] is None
+    assert data["user_id"] == "testuser"
 
     # Update config
     update_data = {
@@ -96,6 +105,52 @@ def test_get_and_update_tenant_config(client: TestClient, monkeypatch):
     assert data["pop3_port"] == 995
     assert data["pop3_username"] == "pop3-user"
     assert data["has_pop3_password"] is True
+
+
+def test_accounts_config_uses_signed_session_organization_scope(monkeypatch):
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_host",
+        lambda host, *, resolve_host=True: host,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_destination",
+        lambda host, port, *, resolve_host=True: (host, port),
+    )
+    session = MockSession()
+
+    async def scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = scoped_db
+    try:
+        with TestClient(app, headers={"X-User-Id": "shared-user"}) as c:
+            first = c.put(
+                "/api/accounts/config",
+                json={"smtp_server": "smtp.example.com", "smtp_port": 587},
+                headers={"X-Organization-Id": "org-acme"},
+            )
+            second = c.put(
+                "/api/accounts/config",
+                json={"smtp_server": "smtp.other.com", "smtp_port": 587},
+                headers={"X-Organization-Id": "org-rival"},
+            )
+            acme_read = c.get(
+                "/api/accounts/config",
+                headers={"X-Organization-Id": "org-acme"},
+            )
+            rival_read = c.get(
+                "/api/accounts/config",
+                headers={"X-Organization-Id": "org-rival"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert acme_read.json()["smtp_server"] == "smtp.example.com"
+    assert rival_read.json()["smtp_server"] == "smtp.other.com"
+    assert ("shared-user", "org-acme") in session.configs
+    assert ("shared-user", "org-rival") in session.configs
 
 
 def test_accounts_config_rejects_private_imap_host(client: TestClient):

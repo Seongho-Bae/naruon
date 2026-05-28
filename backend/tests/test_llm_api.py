@@ -12,9 +12,20 @@ class MockTenantConfig:
         self.openai_api_key = openai_api_key
 
 
+class MockTenantConfigResult:
+    def __init__(self, tenant_config):
+        self.tenant_config = tenant_config
+
+    def scalar_one_or_none(self):
+        return self.tenant_config
+
+
 class MockSession:
     def __init__(self, tenant_config=None):
         self.tenant_config = tenant_config or MockTenantConfig()
+
+    async def execute(self, stmt):
+        return MockTenantConfigResult(self.tenant_config)
 
     async def scalar(self, stmt):
         return self.tenant_config

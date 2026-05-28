@@ -17,6 +17,7 @@ from services.threading_service import assign_thread_id
 from db.session import AsyncSessionLocal
 from db.models import Email, TenantConfig
 from sqlalchemy import select
+from services.tenant_config_scope import tenant_config_owner_filters
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,7 +46,10 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 try:
                     tenant_config = await session.scalar(
                         select(TenantConfig).where(
-                            TenantConfig.user_id == IMPORT_USER_ID
+                            *tenant_config_owner_filters(
+                                IMPORT_USER_ID,
+                                IMPORT_ORGANIZATION_ID,
+                            )
                         )
                     )
                     api_key = (

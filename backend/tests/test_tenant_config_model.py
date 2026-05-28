@@ -32,9 +32,41 @@ def db_session():
 
 
 def test_tenant_config_model_exists():
-    config = TenantConfig(user_id="test_user", openai_api_key="test_key")
+    config = TenantConfig(
+        user_id="test_user",
+        organization_id="org_acme",
+        openai_api_key="test_key",
+    )
     assert config.user_id == "test_user"
+    assert config.organization_id == "org_acme"
     assert config.openai_api_key == "test_key"
+
+
+def test_tenant_config_allows_same_user_in_different_organizations(db_session):
+    db_session.add(
+        TenantConfig(
+            user_id="shared_user",
+            organization_id="org_acme",
+            smtp_server="smtp.example.com",
+        )
+    )
+    db_session.add(
+        TenantConfig(
+            user_id="shared_user",
+            organization_id="org_rival",
+            smtp_server="smtp.other.com",
+        )
+    )
+    db_session.commit()
+
+    rows = (
+        db_session.query(TenantConfig)
+        .filter_by(user_id="shared_user")
+        .order_by(TenantConfig.organization_id)
+        .all()
+    )
+
+    assert [row.organization_id for row in rows] == ["org_acme", "org_rival"]
 
 
 def test_get_fernet_requires_encryption_key_even_when_debug_enabled():

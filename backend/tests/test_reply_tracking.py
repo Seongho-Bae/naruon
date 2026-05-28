@@ -161,6 +161,14 @@ async def test_missing_reply_tracking_scopes_email_query_to_user_and_org():
 
     await check_missing_replies(session, "user_1", "org_1")
 
+    config_query = session.queries[0]
+    config_query_text = compiled_query_text(config_query)
+    config_query_params = compiled_query_params(config_query)
+    assert "tenant_configs.user_id = :user_id_1" in config_query_text
+    assert "tenant_configs.organization_id = :organization_id_1" in config_query_text
+    assert config_query_params["user_id_1"] == "user_1"
+    assert config_query_params["organization_id_1"] == "org_1"
+
     email_query = session.queries[-1]
     query_text = compiled_query_text(email_query)
     query_params = compiled_query_params(email_query)

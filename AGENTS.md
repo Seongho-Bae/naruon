@@ -88,6 +88,11 @@
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
   stored `naruon_session_token` bearer path and must not add public identity
   headers.
+- TenantConfig/provider account settings must be scoped by signed-session
+  `user_id` and `organization_id`; do not query provider credentials or API keys
+  by `user_id` only. Frontend Settings onboarding must use bearer-session API
+  calls for account config, CalDAV/WebDAV source readiness, and runner token
+  rotation, and mocks must not reintroduce public identity headers.
 - Reply-wait task escalation must reuse the server-authoritative pending reply
   path, create or update source-linked `reply_sla` ticket tasks by opaque task
   id, and sanitize generated task titles from email subjects before persistence.

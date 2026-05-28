@@ -51,6 +51,20 @@ describe("SettingsLayout", () => {
             },
           });
         }
+        if (String(input) === "/api/runner-config/rotate" && init?.method === "POST") {
+          return jsonResponse({
+            workspace_id: "workspace-org-acme",
+            registration_token: "nrn_one_time_connector_token",
+            connector_manifest: {
+              role: "self-hosted_connector",
+              network_mode: "outbound_only",
+              control_plane_domain: "naruon.net",
+              local_protocols: ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
+              prohibited_roles: ["smtp_server", "imap_server", "mx_host"],
+              runner_usage: "ci_smoke_only",
+            },
+          });
+        }
         if (String(input) === "/api/observability/operational-signals") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
@@ -109,6 +123,30 @@ describe("SettingsLayout", () => {
               },
             ],
           });
+        }
+        if (String(input) === "/api/calendar/writeback-sources") {
+          return jsonResponse([
+            {
+              source_id: "caldav_src_fastmail_primary",
+              provider: "Fastmail",
+              protocol: "caldav",
+              owner_id: "default",
+              organization_id: "org-acme",
+              capabilities: ["read", "write", "etag"],
+              writeback_enabled: true,
+              etag: "etag-caldav-primary",
+            },
+          ]);
+        }
+        if (String(input) === "/api/webdav/accounts") {
+          return jsonResponse([
+            {
+              source_id: "webdav_src_primary",
+              server_url: "https://files.example.com/dav",
+              username: "files@example.com",
+              writeback_enabled: true,
+            },
+          ]);
         }
         if (String(input) === "/api/accounts/config" && init?.method === "PUT") {
           const body = JSON.parse(String(init.body));
@@ -230,6 +268,24 @@ describe("SettingsLayout", () => {
     expect(container.textContent).not.toContain("nrn_registered-token");
     expect(container.textContent).toContain("Connector heartbeat");
     expect(container.textContent).toContain("instrumentation_pending");
+
+    const rotateButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("등록 토큰 회전"));
+    expect(rotateButton).toBeTruthy();
+    await act(async () => {
+      rotateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const rotateCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/runner-config/rotate" && init?.method === "POST");
+    expect(rotateCall?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer signed-runner-session-token",
+    });
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+    expect(container.textContent).toContain("One-time connector registration token");
+    expect(container.textContent).toContain("nrn_one_time_connector_token");
   });
 
   it("loads and saves source-backed mail account settings without public identity headers or secret replay", async () => {
@@ -267,12 +323,33 @@ describe("SettingsLayout", () => {
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+    const calendarSourcesCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/calendar/writeback-sources");
+    const webdavAccountsCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
+    expect(calendarSourcesCall?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer signed-runner-session-token",
+    });
+    expect(webdavAccountsCall?.[1]?.headers).toMatchObject({
+      Authorization: "Bearer signed-runner-session-token",
+    });
+    for (const sourceCall of [calendarSourcesCall, webdavAccountsCall]) {
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
+      expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+    }
 
     expect(container.textContent).toContain("고객 지정 Provider");
     expect(container.textContent).toContain("smtp.example.com:587");
     expect(container.textContent).toContain("imap.example.com:993");
     expect(container.textContent).toContain("pop3.example.com:995");
     expect(container.textContent).toContain("OAuth 로그인");
+    expect(container.textContent).toContain("앱 설정 완료, 사용자 consent 대기");
+    expect(container.textContent).toContain("Source readiness");
+    expect(container.textContent).toContain("caldav_src_fastmail_primary");
+    expect(container.textContent).toContain("webdav_src_primary");
+    expect(container.textContent).toContain("writeback intent enabled");
     expect(container.textContent).toContain("저장된 secret 유지");
     expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");
 

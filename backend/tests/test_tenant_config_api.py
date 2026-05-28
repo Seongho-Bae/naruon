@@ -22,11 +22,15 @@ class MockAsyncSession:
     def __init__(self):
         self.objects = {}
 
+    def _query_key(self, query):
+        params = dict(query.compile().params)
+        return params.get("user_id_1"), params.get("organization_id_1")
+
     async def execute(self, query):
-        return MockResult(self.objects.get("test_user"))
+        return MockResult(self.objects.get(self._query_key(query)))
 
     def add(self, obj):
-        self.objects[obj.user_id] = obj
+        self.objects[(obj.user_id, obj.organization_id)] = obj
 
     async def commit(self):
         pass
@@ -112,7 +116,7 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     assert imap_destination_calls == [("imap.example.com", 993, True)]
     assert pop3_destination_calls == [("pop3.example.com", 995, True)]
 
-    assert "test_user" in mock_db.objects
+    assert ("test_user", None) in mock_db.objects
 
     get_response = client.get(
         "/api/config",
@@ -137,6 +141,56 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     assert data["pop3_port"] == 995
     assert data["pop3_username"] == "pop3-user"
     assert data["google_client_secret"] is None
+
+
+def test_legacy_tenant_config_endpoint_keeps_organization_scope(
+    client, mock_db, monkeypatch
+):
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_host",
+        lambda host, *, resolve_host=True: host,
+    )
+    monkeypatch.setattr(
+        "api.tenant_config.validate_smtp_destination",
+        lambda host, port, *, resolve_host=True: (host, port),
+    )
+
+    acme_response = client.post(
+        "/api/config",
+        json={
+            "user_id": "shared_user",
+            "smtp_server": "smtp.example.com",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-acme"},
+    )
+    rival_response = client.post(
+        "/api/config",
+        json={
+            "user_id": "shared_user",
+            "smtp_server": "smtp.other.com",
+            "smtp_port": 587,
+        },
+        headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-rival"},
+    )
+
+    acme_get = client.get(
+        "/api/config",
+        params={"user_id": "shared_user"},
+        headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-acme"},
+    )
+    rival_get = client.get(
+        "/api/config",
+        params={"user_id": "shared_user"},
+        headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-rival"},
+    )
+
+    assert acme_response.status_code == 200
+    assert rival_response.status_code == 200
+    assert acme_get.json()["smtp_server"] == "smtp.example.com"
+    assert rival_get.json()["smtp_server"] == "smtp.other.com"
+    assert ("shared_user", "org-acme") in mock_db.objects
+    assert ("shared_user", "org-rival") in mock_db.objects
 
 
 def test_tenant_config_stays_user_owned_even_for_admin_headers(client):

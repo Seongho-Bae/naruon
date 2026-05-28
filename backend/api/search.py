@@ -5,9 +5,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, union_all
 from db.session import get_db
-from db.models import Email, Attachment, TenantConfig
+from db.models import Email, Attachment
 from services.embedding import generate_embeddings
 from api.auth import AuthContext, get_auth_context
+from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -81,8 +82,10 @@ async def hybrid_search(
         return SearchResponse(results=[])
 
     try:
-        tenant_config = await db.scalar(
-            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        tenant_config = await get_scoped_tenant_config(
+            db,
+            target_user_id,
+            auth_context.organization_id,
         )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")

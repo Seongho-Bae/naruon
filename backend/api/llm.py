@@ -1,17 +1,16 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from fastapi import Depends
 from db.session import get_db
-from db.models import TenantConfig, LLMProvider
-from api.auth import get_current_user
+from api.auth import AuthContext, get_auth_context
 from services.llm_service import (
     extract_todos_and_summary,
     draft_reply,
     ExtractionResult,
 )
 from core.exceptions import LLMServiceError
+from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api/llm")
 
@@ -26,16 +25,25 @@ class DraftRequest(BaseModel):
 
 
 @router.post("/summarize", response_model=ExtractionResult)
-async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
-    if user_id and user_id != current_user:
+async def summarize_endpoint(
+    request: SummarizeRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = user_id or auth_context.user_id
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await get_scoped_tenant_config(
+            db,
+            target_user_id,
+            auth_context.organization_id,
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
         openai_api_key = tenant_config.openai_api_key
         return await extract_todos_and_summary(request.email_body, openai_api_key)
     except LLMServiceError:
@@ -53,16 +61,25 @@ async def summarize_endpoint(request: SummarizeRequest, user_id: str | None = No
 
 
 @router.post("/draft")
-async def draft_endpoint(request: DraftRequest, user_id: str | None = None, db: AsyncSession = Depends(get_db), current_user: str = Depends(get_current_user)):
-    if user_id and user_id != current_user:
+async def draft_endpoint(
+    request: DraftRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
-    target_user_id = user_id or current_user
+    target_user_id = user_id or auth_context.user_id
 
     try:
-        tenant_config = await db.scalar(select(TenantConfig).where(TenantConfig.user_id == target_user_id))
+        tenant_config = await get_scoped_tenant_config(
+            db,
+            target_user_id,
+            auth_context.organization_id,
+        )
         if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
-            
+
         openai_api_key = tenant_config.openai_api_key
         reply = await draft_reply(request.email_body, request.instruction, openai_api_key)
         return {"draft": reply}

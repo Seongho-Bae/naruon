@@ -257,10 +257,15 @@ API client strips public identity headers such as `X-User-Id` and
 `X-Organization-Id`, including group and dev-token variants, rather than
 forwarding development identity fallbacks.
 Settings connected-account workflow reads and saves `/api/accounts/config`
-through the same signed-session path. It displays SMTP, IMAP, POP3, and OAuth
-provider state from masked response fields, preserves stored credential secrets
-when the user leaves replacement fields blank, and keeps Naruon framed as a web
-client/relay proxy rather than an email host.
+through the same signed-session path and scopes provider settings by the signed
+`user_id + organization_id` owner. It displays SMTP, IMAP, POP3, OAuth,
+CalDAV/CardDAV, and WebDAV readiness from masked account fields and source
+registry APIs, preserves stored credential secrets when the user leaves
+replacement fields blank, and keeps Naruon framed as a web client/relay proxy
+rather than an email host. Settings also exposes organization-admin
+self-hosted connector token rotation through `/api/runner-config/rotate`; the
+one-time token is shown only after rotation and is not included in the connector
+manifest.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread
