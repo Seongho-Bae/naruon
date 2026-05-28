@@ -168,9 +168,10 @@ jobs:
           STRIX_TARGET_PATH: ./
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: low
-          STRIX_LLM_MAX_RETRIES: 1
+          STRIX_LLM_MAX_RETRIES: 3
           LLM_TIMEOUT: 90
           STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
+          STRIX_FALLBACK_MODELS: openai/gpt-4o,openai/gpt-4o-mini
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
           STRIX_PROCESS_TIMEOUT_SECONDS: ${{ github.event_name == 'pull_request_target' && '1200' || '2400' }}
