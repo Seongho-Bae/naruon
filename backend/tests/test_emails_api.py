@@ -1139,3 +1139,36 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     assert data["emails"][0]["sender"] == "testuser@example.com"
     assert data["emails"][0]["thread_id"] == "thread3"
     assert data["emails"][0]["requires_reply"] is True
+
+def test_email_owner_filters():
+    from api.emails import email_owner_filters
+    from api.auth import AuthContext
+    from db.models import Email
+
+    # Test with organization_id
+    ctx1 = AuthContext(
+        user_id="user-123",
+        role="member",
+        organization_id="org-456",
+        group_ids=(),
+        workspace_id="ws-789",
+    )
+    filters1 = email_owner_filters(ctx1)
+
+    assert len(filters1) == 2
+    assert str(filters1[0].compile(compile_kwargs={"literal_binds": True})) == "emails.user_id = 'user-123'"
+    assert str(filters1[1].compile(compile_kwargs={"literal_binds": True})) == "emails.organization_id = 'org-456'"
+
+    # Test with None organization_id
+    ctx2 = AuthContext(
+        user_id="user-123",
+        role="member",
+        organization_id=None,
+        group_ids=(),
+        workspace_id="ws-789",
+    )
+    filters2 = email_owner_filters(ctx2)
+
+    assert len(filters2) == 2
+    assert str(filters2[0].compile(compile_kwargs={"literal_binds": True})) == "emails.user_id = 'user-123'"
+    assert str(filters2[1].compile(compile_kwargs={"literal_binds": True})) == "emails.organization_id IS NULL"
