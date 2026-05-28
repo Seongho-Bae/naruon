@@ -271,13 +271,19 @@ async def test_send_email_rejects_private_smtp_host_before_network(monkeypatch):
     monkeypatch.setattr("services.email_client.aiosmtplib.send", fail_if_called)
 
     with pytest.raises(ValueError, match="SMTP server is not allowed"):
-        await email_client.send_email(
+        message_params = email_client.EmailMessageParams(
             to_address="test@example.com",
             subject="Test",
             body="Body",
+        )
+        smtp_config = email_client.SmtpConfig(
             smtp_server="127.0.0.1",
             smtp_port=587,
             smtp_username="testuser",
+        )
+        await email_client.send_email(
+            message_params=message_params,
+            smtp_config=smtp_config,
         )
 
 
@@ -331,13 +337,19 @@ async def test_send_email_uses_validated_address_without_second_dns(monkeypatch)
         fake_validate_smtp_destination,
     )
 
-    result = await email_client.send_email(
+    message_params = email_client.EmailMessageParams(
         to_address="test@example.com",
         subject="Test",
         body="Body",
+    )
+    smtp_config = email_client.SmtpConfig(
         smtp_server="smtp.example.com",
         smtp_port=587,
         smtp_username="testuser",
+    )
+    result = await email_client.send_email(
+        message_params=message_params,
+        smtp_config=smtp_config,
     )
 
     assert result == {"status": "sent", "simulated": False}
@@ -432,13 +444,19 @@ async def test_send_email_pins_first_validated_sockaddr_across_dns_rebinding(
 
     monkeypatch.setattr(email_client, "_send_pinned_smtp_message", fake_pinned_send)
 
-    result = await email_client.send_email(
+    message_params = email_client.EmailMessageParams(
         to_address="test@example.com",
         subject="Test",
         body="Body",
+    )
+    smtp_config = email_client.SmtpConfig(
         smtp_server="smtp.example.com",
         smtp_port=587,
         smtp_username="testuser",
+    )
+    result = await email_client.send_email(
+        message_params=message_params,
+        smtp_config=smtp_config,
     )
 
     assert result == {"status": "sent", "simulated": False}
@@ -514,10 +532,13 @@ async def test_starttls_existing_transport_delegates_to_public_starttls_api():
 async def test_pinned_smtp_send_passes_original_hostname_and_socket(monkeypatch):
     smtp_socket = _make_socket()
     fake_client = FakeSmtpClient()
-    message = email_client.build_email_message(
+    message_params = email_client.EmailMessageParams(
         to_address="test@example.com",
         subject="Test",
         body="Body",
+    )
+    message = email_client.build_email_message(
+        message_params=message_params,
         from_address="sender@example.com",
     )
 
@@ -613,12 +634,18 @@ async def test_send_email_raises_error_when_smtp_fails(monkeypatch):
     )
 
     with pytest.raises(Exception, match="Failed to send email"):
-        await email_client.send_email(
+        message_params = email_client.EmailMessageParams(
             to_address="test@example.com",
             subject="Test Failure",
             body="Should fail because SMTP server is invalid",
+        )
+        smtp_config = email_client.SmtpConfig(
             smtp_server="smtp.example.com",
             smtp_port=587,
             smtp_username="testuser",
+        )
+        await email_client.send_email(
+            message_params=message_params,
+            smtp_config=smtp_config,
         )
     assert smtp_socket.fileno() == -1

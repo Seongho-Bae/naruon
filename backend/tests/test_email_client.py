@@ -3,6 +3,7 @@ import logging
 
 import pytest
 from services.email_client import (
+    EmailMessageParams,
     _sanitize_log_value,
     build_email_message,
     generate_oauth2_string,
@@ -18,13 +19,16 @@ def test_generate_oauth2_string():
 
 
 def test_build_email_message_sets_reply_headers():
-    message = build_email_message(
+    params = EmailMessageParams(
         to_address="test@example.com",
         subject="Re: Test",
         body="Reply body",
-        from_address="sender@example.com",
         in_reply_to="<parent@example.com>",
         references="<root@example.com> <parent@example.com>",
+    )
+    message = build_email_message(
+        message_params=params,
+        from_address="sender@example.com",
     )
 
     assert message["In-Reply-To"] == "<parent@example.com>"
@@ -51,25 +55,31 @@ def test_build_email_message_rejects_newlines_in_header_fields(
         "to_address": "victim@example.com",
         "subject": "Status",
         "body": "Body text\nwith allowed body newlines",
-        "from_address": "sender@example.com",
         "in_reply_to": "<parent@example.com>",
         "references": "<root@example.com> <parent@example.com>",
     }
-    kwargs[field_name] = field_value
 
+    from_address = "sender@example.com"
+    if field_name == "from_address":
+        from_address = field_value
+    else:
+        kwargs[field_name] = field_value
+
+    params = EmailMessageParams(**kwargs)
     with pytest.raises(ValueError, match="Email header fields must not contain newlines"):
-        build_email_message(**kwargs)
+        build_email_message(message_params=params, from_address=from_address)
 
 
 @pytest.mark.asyncio
 async def test_send_email_logs_sanitized_recipient(caplog):
     caplog.set_level(logging.INFO, logger="services.email_client")
 
-    result = await send_email(
+    params = EmailMessageParams(
         to_address="victim@example.com",
         subject="Test",
         body="Body",
     )
+    result = await send_email(message_params=params)
 
     assert result == {"status": "simulated", "simulated": True}
     messages = [record.getMessage() for record in caplog.records]
