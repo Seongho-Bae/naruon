@@ -248,13 +248,8 @@ async def get_pending_replies(
     return {"emails": items}
 
 
-@router.post("/unique-thread-intent", response_model=UniqueThreadIntentResponse)
-async def create_unique_thread_intent(
-    request: UniqueThreadIntentRequest,
-    db: AsyncSession = Depends(get_db),
-    auth_context: AuthContext = Depends(get_auth_context),
-):
-    candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
+
+def _extract_candidate_lookups(candidates: list[EmailDedupeCandidate]) -> tuple[set[str], set[str]]:
     message_lookup_values: set[str] = set()
     fingerprint_values: set[str] = set()
     for candidate in candidates:
@@ -262,23 +257,36 @@ async def create_unique_thread_intent(
         candidate_fingerprint = candidate_strong_fingerprint(candidate)
         if candidate_fingerprint:
             fingerprint_values.add(candidate_fingerprint)
+    return message_lookup_values, fingerprint_values
 
+
+async def _fetch_existing_emails_for_candidates(
+    db: AsyncSession,
+    auth_context: AuthContext,
+    message_lookup_values: set[str],
+    fingerprint_values: set[str],
+) -> list[Email]:
     predicates = []
     if message_lookup_values:
         predicates.append(Email.message_id.in_(message_lookup_values))
     if fingerprint_values:
         predicates.append(Email.fingerprint.in_(fingerprint_values))
 
-    existing_emails: list[Email] = []
-    if predicates:
-        result = await db.execute(
-            select(Email).where(
-                *email_owner_filters(auth_context),
-                or_(*predicates),
-            )
-        )
-        existing_emails = list(result.scalars().all())
+    if not predicates:
+        return []
 
+    result = await db.execute(
+        select(Email).where(
+            *email_owner_filters(auth_context),
+            or_(*predicates),
+        )
+    )
+    return list(result.scalars().all())
+
+
+def _build_email_lookup_dicts(
+    existing_emails: list[Email],
+) -> tuple[dict[str, Email], dict[str, Email]]:
     by_message_id: dict[str, Email] = {}
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
@@ -289,7 +297,14 @@ async def create_unique_thread_intent(
             by_fingerprint.setdefault(row_fingerprint, email_row)
         if email_row.fingerprint:
             by_fingerprint.setdefault(email_row.fingerprint, email_row)
+    return by_message_id, by_fingerprint
 
+
+def _find_matches_for_candidates(
+    candidates: list[EmailDedupeCandidate],
+    by_message_id: dict[str, Email],
+    by_fingerprint: dict[str, Email],
+) -> list[UniqueThreadUpdate]:
     updates: list[UniqueThreadUpdate] = []
     for candidate in candidates:
         matched_email: Email | None = None
@@ -323,6 +338,22 @@ async def create_unique_thread_intent(
                     ),
                 )
             )
+    return updates
+
+
+@router.post("/unique-thread-intent", response_model=UniqueThreadIntentResponse)
+async def create_unique_thread_intent(
+    request: UniqueThreadIntentRequest,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
+    message_lookup_values, fingerprint_values = _extract_candidate_lookups(candidates)
+    existing_emails = await _fetch_existing_emails_for_candidates(
+        db, auth_context, message_lookup_values, fingerprint_values
+    )
+    by_message_id, by_fingerprint = _build_email_lookup_dicts(existing_emails)
+    updates = _find_matches_for_candidates(candidates, by_message_id, by_fingerprint)
 
     return UniqueThreadIntentResponse(
         status="intent_ready",

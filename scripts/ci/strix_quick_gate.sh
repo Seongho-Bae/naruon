@@ -2146,6 +2146,10 @@ is_rate_limit_error() {
 		return 0
 	fi
 
+	if grep -Fq 'You exceeded your current quota' "$STRIX_LOG"; then
+		return 0
+	fi
+
 	if grep -Eq '"status"[[:space:]]*:[[:space:]]*"RESOURCE_EXHAUSTED"' "$STRIX_LOG"; then
 		return 0
 	fi
