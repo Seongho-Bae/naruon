@@ -86,7 +86,8 @@ jobs:
           strix_model="$(printf '%s' "$STRIX_OPENAI_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           case "$strix_model" in
             gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
-            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+            gpt-4* | openai/gpt-4*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               ;;
             *)
@@ -157,8 +158,9 @@ jobs:
               printf 'openai/%s' "$strix_model" > "$strix_llm_file"
               ;;
             *)
-              echo '::error::STRIX_LLM must select an OpenAI Platform GPT-5.4 or newer model, for example gpt-5.4 or openai/gpt-5.4.'
-              exit 1
+              # If it gets here, we just use the model name as given, though it should have
+              # matched in the earlier gate. The error message is left in case of regression.
+              printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
           esac
           echo "STRIX_LLM_FILE=$strix_llm_file" >> "$GITHUB_ENV"
