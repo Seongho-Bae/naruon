@@ -420,7 +420,7 @@ export function TasksLayout() {
                           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
                         >
                           <Plus className="size-3.5" />
-                          {currentKnowledgeIntent.state === 'loading' ? '준비 중' : 'intent 생성'}
+                          {currentKnowledgeIntent.state === 'loading' ? '생성 중' : 'intent 생성'}
                         </button>
                       </div>
                       {currentKnowledgeIntent.state === 'error' ? (
