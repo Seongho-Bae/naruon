@@ -68,29 +68,36 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/test_strix_quick_gate.sh" "strix workflow avoids direct repo self-test execution on privileged trigger"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
 	assert_file_contains "$workflow_file" "Fetch pull request head for trusted scan" "strix workflow fetches PR head without checkout"
+	assert_file_contains "$workflow_file" "pr_number:" "strix workflow accepts manual PR-scope evidence inputs"
+	assert_file_contains "$workflow_file" "github.event.inputs.pr_number" "strix workflow can run PR-scoped workflow_dispatch evidence"
+	assert_file_contains "$workflow_file" "PR number and head SHA are required for trusted PR-scope Strix evidence" "strix workflow fails closed when manual PR-scope metadata is incomplete"
+	assert_file_contains "$workflow_file" 'fetch --no-tags --depth=1 origin "$PR_BASE_SHA"' "strix workflow fetches manual PR-scope base commit for diffing"
 	assert_file_contains "$workflow_file" "refs/remotes/pull" "strix workflow verifies fetched PR head ref"
 	assert_file_contains "$workflow_file" "for pr_head_fetch_attempt in 1 2 3 4 5 6" "strix workflow retries stale PR head ref propagation"
 	assert_file_contains "$workflow_file" "PR head ref did not resolve to expected commit" "strix workflow fails closed when PR head ref remains stale"
 	assert_file_contains "$workflow_file" "sleep 10" "strix workflow waits between stale PR head ref retries"
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "strix workflow gates PR context on pull_request_target"
-	assert_file_not_contains "$workflow_file" "GCP_SA_KEY" "strix workflow must not route direct OpenAI scans through GCP credentials"
+	assert_file_contains "$workflow_file" "GCP_SA_KEY" "strix workflow uses organization Vertex AI credentials when STRIX_LLM selects vertex_ai"
 	assert_file_not_contains "$workflow_file" "google-github-actions/auth" "strix workflow must not authenticate to Google Cloud for direct OpenAI scans"
-	assert_file_not_contains "$workflow_file" "model_requires_vertex_auth" "strix workflow must not keep Vertex auth prerequisites in the direct OpenAI path"
-	assert_file_not_contains "$workflow_file" "Vertex-authenticated Strix model" "strix workflow must not keep Vertex-authenticated Strix branches"
-	assert_file_not_contains "$workflow_file" "GOOGLE_APPLICATION_CREDENTIALS" "strix workflow must not export Google credentials for direct OpenAI scans"
+	assert_file_contains "$workflow_file" "provider_mode=vertex_ai" "strix workflow supports Vertex AI provider mode"
+	assert_file_contains "$workflow_file" "GOOGLE_APPLICATION_CREDENTIALS" "strix workflow exports Vertex AI credentials only for Vertex provider mode"
+	assert_file_contains "$workflow_file" "VERTEXAI_PROJECT" "strix workflow exports LiteLLM Vertex project env"
+	assert_file_contains "$workflow_file" "VERTEXAI_LOCATION" "strix workflow exports LiteLLM Vertex location env"
 	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
 	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
 	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
-	assert_file_contains "$workflow_file" 'STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || '"'"'openai/gpt-5.4'"'"' }}' "strix workflow defaults STRIX_LLM to GPT-5.4"
-	assert_file_contains "$workflow_file" "STRIX_LLM must select an OpenAI Platform GPT-5.4 or newer model" "strix workflow rejects older GPT inputs"
-	assert_file_contains "$workflow_file" "gpt-5.4 or openai/gpt-5.4" "strix workflow documents both direct OpenAI model formats"
+	assert_file_contains "$workflow_file" 'STRIX_MODEL: ${{ secrets.STRIX_LLM || '"'"'vertex_ai/gemini-2.5-flash'"'"' }}' "strix workflow defaults STRIX_LLM to the operational organization Vertex AI model"
+	assert_file_contains "$workflow_file" "STRIX_LLM must select direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
+	assert_file_contains "$workflow_file" "vertex_ai/gemini-2.5-flash" "strix workflow accepts the validated organization Vertex AI operational model"
+	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
-	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow uses only explicit direct GPT-5 credentials"
-	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow masks only the direct OpenAI credential"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow uses provider-scoped LLM key material"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow masks provider-scoped LLM key material"
+	assert_file_not_contains "$workflow_file" "secrets.LLM_API_KEY" "strix workflow must not expose generic LLM_API_KEY for Vertex scans"
 	assert_file_contains "$workflow_file" "STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans" "strix workflow fails closed when direct credentials are absent"
 	assert_file_contains "$workflow_file" 'trimmed_openai_key="$(printf '"'"'%s'"'"' "$sanitized_openai_key" | sed '"'"'s/^[[:space:]]*//;s/[[:space:]]*$//'"'"')"' "strix workflow trims whitespace-only OpenAI keys before gate validation"
 	assert_file_contains "$workflow_file" 'trimmed="$(printf '"'"'%s'"'"' "$sanitized" | sed '"'"'s/^[[:space:]]*//;s/[[:space:]]*$//'"'"')"' "strix workflow trims whitespace-only OpenAI keys before input file creation"
-	assert_file_contains "$workflow_file" "STRIX_LLM_DEFAULT_PROVIDER: openai" "strix workflow uses the OpenAI-compatible provider for OpenAI Platform"
+	assert_file_contains "$workflow_file" 'STRIX_LLM_DEFAULT_PROVIDER: ${{ steps.gate.outputs.provider_mode == '"'"'vertex_ai'"'"' && '"'"'vertex_ai'"'"' || '"'"'openai'"'"' }}' "strix workflow selects the correct default provider"
 	assert_file_not_contains "$workflow_file" "provider_mode=github_models" "strix workflow must not fall back to GitHub Models"
 	assert_file_not_contains "$workflow_file" "steps.gate.outputs.provider_mode == 'github_models'" "strix workflow must not prepare GitHub Models API base"
 	assert_file_not_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow must not route Strix through GitHub Models inference"
@@ -99,7 +106,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_not_contains "$workflow_file" "openai/openai/gpt-5" "strix workflow must not accept GitHub Models OpenAI model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to GPT-4o when GPT-5 is required"
-	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to Gemini when OpenAI Platform is required"
+	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to GitHub Models or Gemini API when Vertex AI is required"
 	assert_file_not_contains "$workflow_file" "if-no-files-found: warn" "strix workflow must not downgrade missing security artifacts to warnings"
 	if grep -Eq '^[[:space:]]+pull_request:[[:space:]]*$' "$workflow_file"; then
 		record_failure "strix workflow must not expose secrets on pull_request events"
@@ -111,7 +118,8 @@ assert_strix_gpt54_model_guard_semantics() {
 	local model="$1"
 	case "$model" in
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
-	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+	vertex_ai/gemini-2.5-flash)
 		return 0
 		;;
 	*)
@@ -136,11 +144,18 @@ assert_strix_gpt54_model_guard_cases() {
 	if assert_strix_gpt54_model_guard_semantics "openai/openai/gpt-5.4"; then
 		record_failure "strix GPT-5.4 guard must reject GitHub Models openai/openai/gpt-5.4"
 	fi
+	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-flash"; then
+		record_failure "strix guard must accept the validated organization Vertex AI operational model"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-pro"; then
+		record_failure "strix guard must reject arbitrary Vertex models"
+	fi
 }
 
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
+	assert_file_contains "$GATE_SCRIPT" 'git diff --name-only "$base_sha" "$head_sha"' "strix gate falls back to explicit manual PR-scope diff when merge-base is unavailable"
 }
 
 assert_changed_file_membership_uses_cached_normalized_paths() {
@@ -153,6 +168,18 @@ assert_absent_endpoint_search_uses_canonical_target_path() {
 	assert_file_contains "$GATE_SCRIPT" 'resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"' "absent-endpoint search resolves canonical target root"
 	assert_file_contains "$GATE_SCRIPT" 'candidate="${resolved_target_root%/}/$dir_entry"' "absent-endpoint search uses canonical target root"
 	assert_file_not_contains "$GATE_SCRIPT" 'candidate="${TARGET_PATH%/}/$dir_entry"' "absent-endpoint search avoids relative target path roots"
+}
+
+assert_strix_llm_file_read_is_literal_data() {
+	assert_file_contains "$GATE_SCRIPT" 'STRIX_LLM_CONTENT="$(cat -- "$STRIX_LLM_FILE")"' "strix gate reads model file content as data before trimming"
+	assert_file_contains "$GATE_SCRIPT" 'STRIX_LLM="$(trim_whitespace "$STRIX_LLM_CONTENT")"' "strix gate trims model file content without nested command substitution"
+	assert_file_not_contains "$GATE_SCRIPT" 'STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"' "strix gate avoids nested command substitution for model file content"
+}
+
+assert_strix_child_target_uses_constant_argument() {
+	assert_file_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", ".", "--scan-mode", scan_mode]' "strix gate passes a constant target argument to the child process"
+	assert_file_contains "$GATE_SCRIPT" 'cwd=str(target_cwd)' "strix gate runs the child process from the canonical target directory"
+	assert_file_not_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", target_path, "--scan-mode", scan_mode]' "strix gate must not forward raw target paths as child arguments"
 }
 
 assert_internal_pr_scope_targets() {
@@ -283,6 +310,9 @@ while [ "$#" -gt 0 ]; do
 	fi
 	shift
 done
+if [ "$target_path" = "." ]; then
+	target_path="$PWD"
+fi
 printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
@@ -632,25 +662,19 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	gemini-timeout-retry-same-model-success)
+	gemini-timeout-direct-fallback-success)
 		case "${STRIX_LLM:-}" in
 		gemini/retry-timeout-primary)
-			attempt="0"
-			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
-				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
-			fi
-			attempt="$((attempt + 1))"
-			echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
-			if [ "$attempt" -eq 1 ]; then
-				echo "LLM CONNECTION FAILED"
-				echo "Error: litellm.Timeout: Connection timed out after None seconds."
-				exit 1
-			fi
-			echo "scan ok after same-model timeout retry"
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.Timeout: Connection timed out after None seconds."
+			exit 1
+			;;
+		gemini/fallback-one)
+			echo "scan ok after timeout fallback"
 			exit 0
 			;;
 		*)
-			echo "Error: gemini timeout retry path unexpected (${STRIX_LLM:-})" >&2
+			echo "Error: gemini timeout fallback path unexpected (${STRIX_LLM:-})" >&2
 			exit 38
 			;;
 		esac
@@ -3649,6 +3673,153 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_strix_llm_file_command_substitution_literal_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local output_log="$tmp_dir/output.log"
+	local call_count_file="$tmp_dir/strix_calls"
+	local marker_file="$tmp_dir/strix_marker"
+	local fake_strix="$tmp_dir/strix"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "1" >> "${STRIX_CALL_COUNT_FILE:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf 'openai/gpt-5.4 $(touch %s)' "$marker_file" >"$strix_llm_file"
+	printf '%s' 'dummy-key' >"$llm_api_key_file"
+
+	set +e
+	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+		STRIX_TARGET_PATH="-" \
+		STRIX_DISABLE_PR_SCOPING="0" \
+		STRIX_LLM_FILE="$strix_llm_file" \
+		LLM_API_KEY_FILE="$llm_api_key_file" \
+		STRIX_CALL_COUNT_FILE="$call_count_file" \
+		bash "$GATE_SCRIPT" >"$output_log" 2>&1
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=strix-llm-file-command-substitution-literal exit code"
+	assert_file_contains "$output_log" "ERROR: STRIX_TARGET_PATH contains unsupported path syntax" "case=strix-llm-file-command-substitution-literal output"
+	if [ -e "$marker_file" ]; then
+		record_failure "case=strix-llm-file-command-substitution-literal must not execute model file content"
+	fi
+
+	local actual_calls="0"
+	if [ -f "$call_count_file" ]; then
+		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
+	fi
+	assert_equals "0" "$actual_calls" "case=strix-llm-file-command-substitution-literal strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
+run_vertex_without_llm_api_key_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local output_log="$tmp_dir/output.log"
+	local call_count_file="$tmp_dir/strix_calls"
+	local fake_strix="$tmp_dir/strix"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
+if [ "${LLM_API_KEY+x}" = "x" ]; then
+	echo "unexpected LLM_API_KEY for Vertex" >&2
+	exit 1
+fi
+if [ "${LLM_API_KEY_FILE+x}" = "x" ]; then
+	echo "unexpected LLM_API_KEY_FILE for Vertex" >&2
+	exit 1
+fi
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' "vertex_ai/ready-primary" >"$strix_llm_file"
+
+	set +e
+	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+		STRIX_DISABLE_PR_SCOPING="0" \
+		STRIX_LLM_FILE="$strix_llm_file" \
+		FAKE_STRIX_CALL_COUNT_FILE="$call_count_file" \
+		bash "$GATE_SCRIPT" >"$output_log" 2>&1
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=vertex-without-llm-api-key exit code"
+	assert_file_contains "$output_log" "Strix run succeeded for model 'vertex_ai/ready-primary'" "case=vertex-without-llm-api-key output"
+
+	local actual_calls="0"
+	if [ -f "$call_count_file" ]; then
+		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
+	fi
+	assert_equals "1" "$actual_calls" "case=vertex-without-llm-api-key strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
+run_vertex_with_llm_api_key_file_does_not_forward_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local output_log="$tmp_dir/output.log"
+	local call_count_file="$tmp_dir/strix_calls"
+	local fake_strix="$tmp_dir/strix"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
+if [ "${LLM_API_KEY+x}" = "x" ]; then
+	echo "unexpected LLM_API_KEY for Vertex" >&2
+	exit 1
+fi
+if [ "${LLM_API_KEY_FILE+x}" = "x" ]; then
+	echo "unexpected LLM_API_KEY_FILE for Vertex" >&2
+	exit 1
+fi
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' "vertex_ai/ready-primary" >"$strix_llm_file"
+	printf '%s' "openai-key-should-not-reach-vertex" >"$llm_api_key_file"
+
+	set +e
+	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+		STRIX_DISABLE_PR_SCOPING="0" \
+		STRIX_LLM_FILE="$strix_llm_file" \
+		LLM_API_KEY_FILE="$llm_api_key_file" \
+		FAKE_STRIX_CALL_COUNT_FILE="$call_count_file" \
+		bash "$GATE_SCRIPT" >"$output_log" 2>&1
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=vertex-with-llm-api-key-file-not-forwarded exit code"
+	assert_file_contains "$output_log" "Strix run succeeded for model 'vertex_ai/ready-primary'" "case=vertex-with-llm-api-key-file-not-forwarded output"
+
+	local actual_calls="0"
+	if [ -f "$call_count_file" ]; then
+		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
+	fi
+	assert_equals "1" "$actual_calls" "case=vertex-with-llm-api-key-file-not-forwarded strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_invalid_min_fail_severity_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -4150,6 +4321,10 @@ assert_changed_file_membership_uses_cached_normalized_paths
 
 assert_absent_endpoint_search_uses_canonical_target_path
 
+assert_strix_llm_file_read_is_literal_data
+
+assert_strix_child_target_uses_constant_argument
+
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
 	"src/app.py" \
@@ -4518,13 +4693,13 @@ run_gate_case "gemini-high-demand-retry-same-model-success" \
 	"" \
 	"1"
 
-run_gate_case "gemini-timeout-retry-same-model-success" \
+run_gate_case "gemini-timeout-direct-fallback-success" \
 	"gemini/retry-timeout-primary" \
-	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
-	"scan ok after same-model timeout retry" \
+	"scan ok after timeout fallback" \
 	"2" \
-	"gemini/retry-timeout-primary|gemini/retry-timeout-primary" \
+	"gemini/retry-timeout-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
@@ -4536,9 +4711,9 @@ run_gate_case "gemini-timeout-fallback-success" \
 	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
 	"scan ok after gemini fallback" \
-	"3" \
-	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
-	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"2" \
+	"gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
 	"" \
@@ -4549,9 +4724,9 @@ run_gate_case "gemini-generic-fallback-success" \
 	"" \
 	"0" \
 	"scan ok after gemini fallback" \
-	"3" \
-	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
-	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"2" \
+	"gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
 	"" \
@@ -4598,7 +4773,7 @@ run_gate_case "pr-batch-zero-finding-does-not-leak" \
 	"gemini/batch-zero-leak-primary" \
 	"" \
 	"1" \
-	"Configured model and fallback models were unavailable." \
+	"ERROR: No fallback models configured" \
 	"2" \
 	"gemini/batch-zero-leak-primary|gemini/batch-zero-leak-primary" \
 	"https://example.invalid|https://example.invalid" \
@@ -6175,9 +6350,12 @@ run_gate_case "pr-low-markdown-plus-console-critical-manifest-after-fallback-aut
 	'{"workflow_runs":[{"id":405,"name":"Dependency review","path":".github/workflows/dependency-review.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]},{"id":406,"name":"OSV-Scanner","path":".github/workflows/osvscanner.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]}]}'
 
 run_missing_config_case "missing-strix-llm" "" "dummy" "ERROR: STRIX_LLM_FILE must reference a regular file containing the model."
-run_missing_config_case "missing-llm-api-key" "vertex_ai/ready-primary" "" "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key."
+run_missing_config_case "missing-llm-api-key" "openai/gpt-5.4" "" "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key."
 run_missing_config_case "whitespace-only-strix-llm" "   " "dummy" "ERROR: STRIX_LLM_FILE must contain a non-empty model value."
-run_missing_config_case "whitespace-only-llm-api-key" "vertex_ai/ready-primary" $'\t  ' "ERROR: LLM_API_KEY_FILE must contain a non-empty API key."
+run_missing_config_case "whitespace-only-llm-api-key" "openai/gpt-5.4" $'\t  ' "ERROR: LLM_API_KEY_FILE must contain a non-empty API key."
+run_strix_llm_file_command_substitution_literal_case
+run_vertex_without_llm_api_key_case
+run_vertex_with_llm_api_key_file_does_not_forward_case
 
 # ── Segment boundary enforcement for is_vertex_resource_path / extract_vertex_model_id ──
 # Shell glob '*' matches '/' so the old case-pattern implementation accepted
