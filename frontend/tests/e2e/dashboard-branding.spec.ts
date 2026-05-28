@@ -659,6 +659,9 @@ test('renders source-backed mail account settings across desktop tablet and mobi
     await expect(page.getByText('imap.example.com:993')).toBeVisible();
     await expect(page.getByText('pop3.example.com:995')).toBeVisible();
     await expect(page.getByText('OAuth 로그인')).toBeVisible();
+    await expect(page.getByText('Source readiness')).toBeVisible();
+    await expect(page.getByText('caldav-primary', { exact: true })).toBeVisible();
+    await expect(page.getByText('webdav_src_primary')).toBeVisible();
     await expect(page.getByText('저장된 secret 유지').first()).toBeVisible();
 
     if (viewport.name === 'desktop') {

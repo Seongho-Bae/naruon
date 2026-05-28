@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
 from db.session import get_db
-from db.models import Email, TenantConfig
+from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
 from typing import Literal
@@ -22,7 +22,8 @@ from services.email_dedupe_service import (
     email_strong_fingerprint,
 )
 import logging
-from api.auth import AuthContext, get_auth_context, get_current_user
+from api.auth import AuthContext, get_auth_context
+from services.tenant_config_scope import get_scoped_tenant_config
 
 logger = logging.getLogger(__name__)
 
@@ -158,8 +159,10 @@ async def get_emails(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
-    tenant_config = await db.scalar(
-        select(TenantConfig).where(TenantConfig.user_id == auth_context.user_id)
+    tenant_config = await get_scoped_tenant_config(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
     )
     user_addresses = configured_email_addresses(tenant_config)
     candidate_window = min(max(limit * 10, 200), 2000)
@@ -415,13 +418,13 @@ class SendEmailRequest(BaseModel):
 async def send_email_endpoint(
     request: SendEmailRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    target_user_id = current_user
-
     try:
-        tenant_config = await db.scalar(
-            select(TenantConfig).where(TenantConfig.user_id == target_user_id)
+        tenant_config = await get_scoped_tenant_config(
+            db,
+            auth_context.user_id,
+            auth_context.organization_id,
         )
 
         if (

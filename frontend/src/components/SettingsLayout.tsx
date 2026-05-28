@@ -22,6 +22,12 @@ interface RunnerConfig {
   };
 }
 
+interface RunnerRotateResponse {
+  workspace_id: string;
+  registration_token: string;
+  connector_manifest: RunnerConfig['connector_manifest'];
+}
+
 interface OperationalSignal {
   signal_key: string;
   display_name: string;
@@ -100,6 +106,24 @@ interface AccountConfigUpdate {
   oauth_client_id: string | null;
   oauth_client_secret?: string;
   oauth_redirect_uri: string | null;
+}
+
+interface CalendarWritebackSource {
+  source_id: string;
+  provider: string;
+  protocol: string;
+  owner_id: string;
+  organization_id: string | null;
+  capabilities: string[];
+  writeback_enabled: boolean;
+  etag: string | null;
+}
+
+interface WebdavAccount {
+  source_id: string;
+  server_url: string;
+  username: string;
+  writeback_enabled: boolean;
 }
 
 interface AccountFormState {
@@ -261,6 +285,9 @@ export function SettingsLayout() {
   const [runnerConfig, setRunnerConfig] = useState<RunnerConfig | null>(null);
   const [runnerError, setRunnerError] = useState<string | null>(null);
   const [runnerLoading, setRunnerLoading] = useState(true);
+  const [runnerRotating, setRunnerRotating] = useState(false);
+  const [runnerRotateError, setRunnerRotateError] = useState<string | null>(null);
+  const [oneTimeRunnerToken, setOneTimeRunnerToken] = useState<string | null>(null);
   const [operationalSignals, setOperationalSignals] = useState<OperationalSignalsResponse | null>(null);
   const [operationalError, setOperationalError] = useState<string | null>(null);
   const [operationalLoading, setOperationalLoading] = useState(true);
@@ -270,11 +297,21 @@ export function SettingsLayout() {
   const [accountStatus, setAccountStatus] = useState<string | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
   const [accountSaving, setAccountSaving] = useState(false);
+  const [calendarSources, setCalendarSources] = useState<CalendarWritebackSource[]>([]);
+  const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
+  const [sourceReadinessLoading, setSourceReadinessLoading] = useState(true);
+  const [sourceReadinessError, setSourceReadinessError] = useState<string | null>(null);
   const startupView = useWorkspaceStartupView();
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
   const connectorEvents = operationalSignals?.connector.recent_events ?? [];
   const accountReady = !accountLoading && !accountError && accountConfig !== null;
+  const oauthAppConfigured = Boolean(
+    accountConfig?.oauth_client_id
+      && accountConfig?.oauth_redirect_uri
+      && accountConfig?.has_oauth_client_secret,
+  );
+  const oauthConsentState = oauthAppConfigured ? '앱 설정 완료, 사용자 consent 대기' : '앱 설정 미완료';
   const accountProtocols = [
     {
       label: 'SMTP 송신',
@@ -302,7 +339,7 @@ export function SettingsLayout() {
       endpoint: accountConfig?.oauth_client_id ?? '미설정',
       identity: accountConfig?.oauth_redirect_uri ?? 'redirect URI 미설정',
       secretReady: accountConfig?.has_oauth_client_secret ?? false,
-      detail: '지원 provider에서는 비밀번호 대신 OAuth consent를 사용합니다.',
+      detail: `지원 provider에서는 비밀번호 대신 OAuth consent를 사용합니다. ${oauthConsentState}`,
     },
   ];
 
@@ -328,6 +365,30 @@ export function SettingsLayout() {
       setAccountError(message);
     } finally {
       setAccountSaving(false);
+    }
+  };
+
+  const handleRunnerTokenRotate = async () => {
+    setRunnerRotating(true);
+    setRunnerRotateError(null);
+    setOneTimeRunnerToken(null);
+
+    try {
+      const rotated = await apiClient.post<RunnerRotateResponse>('/api/runner-config/rotate', {});
+      setOneTimeRunnerToken(rotated.registration_token);
+      setRunnerConfig({
+        workspace_id: rotated.workspace_id,
+        configured: true,
+        fingerprint: null,
+        updated_at: null,
+        connector_manifest: rotated.connector_manifest,
+      });
+      setRunnerError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '등록 토큰을 회전할 수 없습니다.';
+      setRunnerRotateError(message);
+    } finally {
+      setRunnerRotating(false);
     }
   };
 
@@ -378,6 +439,24 @@ export function SettingsLayout() {
       })
       .finally(() => {
         if (!cancelled) setAccountLoading(false);
+      });
+
+    void Promise.all([
+      apiClient.get<CalendarWritebackSource[]>('/api/calendar/writeback-sources'),
+      apiClient.get<WebdavAccount[]>('/api/webdav/accounts'),
+    ])
+      .then(([calendarSourceRows, webdavAccountRows]) => {
+        if (cancelled) return;
+        setCalendarSources(calendarSourceRows);
+        setWebdavAccounts(webdavAccountRows);
+        setSourceReadinessError(null);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setSourceReadinessError(error.message || 'Source readiness를 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!cancelled) setSourceReadinessLoading(false);
       });
 
     return () => {
@@ -499,9 +578,9 @@ export function SettingsLayout() {
                   <p className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{accountStatus}</p>
                 ) : null}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  {accountProtocols.map((protocol) => (
-                    <article key={protocol.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {accountProtocols.map((protocol) => (
+                      <article key={protocol.label} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                       <div className="flex items-start gap-3">
                         <div className="grid size-10 shrink-0 place-items-center rounded-full bg-secondary">
                           <Mail className="size-5 text-primary" />
@@ -518,11 +597,87 @@ export function SettingsLayout() {
                           <p className="mt-3 text-sm leading-6 text-muted-foreground">{protocol.detail}</p>
                         </div>
                       </div>
-                    </article>
-                  ))}
-                </div>
+                      </article>
+                    ))}
+                  </div>
 
-                <form onSubmit={handleAccountSave} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <section aria-label="Provider source readiness" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-bold text-lg">Source readiness</h3>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                          CalDAV/CardDAV/WebDAV source registry와 writeback intent 상태를 확인합니다. 이 화면은 provider write를 실행하지 않습니다.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
+                        OAuth: {oauthConsentState}
+                      </span>
+                    </div>
+
+                    {sourceReadinessLoading ? (
+                      <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">source readiness를 불러오는 중입니다.</p>
+                    ) : null}
+                    {sourceReadinessError ? (
+                      <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{sourceReadinessError}</p>
+                    ) : null}
+
+                    {!sourceReadinessLoading && !sourceReadinessError ? (
+                      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-bold">CalDAV/CardDAV sources</h4>
+                            <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{calendarSources.length} sources</span>
+                          </div>
+                          {calendarSources.length > 0 ? (
+                            <ul className="divide-y divide-border rounded-xl border border-border bg-background">
+                              {calendarSources.map((source) => (
+                                <li key={source.source_id} className="p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="font-mono text-xs font-bold text-foreground">{source.source_id}</p>
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${source.writeback_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
+                                      {source.writeback_enabled ? 'writeback intent enabled' : 'read-only intent'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 break-all text-sm text-foreground">{source.provider} / {source.protocol}</p>
+                                  <p className="mt-1 break-all text-xs text-muted-foreground">{source.capabilities.join(', ')}</p>
+                                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">etag {source.etag ?? 'none'}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 CalDAV/CardDAV source가 없습니다.</p>
+                          )}
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <h4 className="text-sm font-bold">WebDAV repositories</h4>
+                            <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{webdavAccounts.length} sources</span>
+                          </div>
+                          {webdavAccounts.length > 0 ? (
+                            <ul className="divide-y divide-border rounded-xl border border-border bg-background">
+                              {webdavAccounts.map((account) => (
+                                <li key={account.source_id} className="p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <p className="font-mono text-xs font-bold text-foreground">{account.source_id}</p>
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${account.writeback_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
+                                      {account.writeback_enabled ? 'writeback intent enabled' : 'read-only intent'}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 break-all text-sm text-foreground">{account.server_url}</p>
+                                  <p className="mt-1 break-all text-xs text-muted-foreground">{account.username}</p>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 WebDAV repository가 없습니다.</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <form onSubmit={handleAccountSave} className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h3 className="font-bold text-lg">Source-backed 계정 설정</h3>
@@ -646,6 +801,41 @@ export function SettingsLayout() {
                   ) : null}
                   {runnerError ? (
                     <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{runnerError}</p>
+                  ) : null}
+                  <div className="mt-5 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <dl className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">workspace_id</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{runnerConfig?.workspace_id ?? 'none'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">registration</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{runnerConfig?.configured ? 'configured' : 'not_configured'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">fingerprint</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{runnerConfig?.fingerprint ?? 'none'}</dd>
+                      </div>
+                    </dl>
+                    <button
+                      type="button"
+                      onClick={handleRunnerTokenRotate}
+                      disabled={runnerRotating}
+                      aria-disabled={runnerRotating}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RefreshCw className={`size-4 ${runnerRotating ? 'animate-spin' : ''}`} />
+                      {runnerRotating ? '회전 중' : '등록 토큰 회전'}
+                    </button>
+                  </div>
+                  {runnerRotateError ? (
+                    <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{runnerRotateError}</p>
+                  ) : null}
+                  {oneTimeRunnerToken ? (
+                    <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
+                      <p className="text-sm font-bold text-emerald-900">One-time connector registration token</p>
+                      <p className="mt-2 break-all font-mono text-xs text-emerald-950">{oneTimeRunnerToken}</p>
+                    </div>
                   ) : null}
                   {connectorManifest ? (
                     <div className="mt-5 space-y-4">

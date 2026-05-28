@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 
 from db.session import get_db
-from db.models import TenantConfig
 from api.auth import AuthContext, get_auth_context
 from api.tenant_config import validate_mail_config_update
+from services.tenant_config_scope import (
+    get_scoped_tenant_config,
+    new_scoped_tenant_config,
+)
 
 router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
@@ -46,21 +48,8 @@ class TenantConfigResponse(BaseModel):
     oauth_redirect_uri: str | None
     has_oauth_client_secret: bool
 
-@router.get("/config", response_model=TenantConfigResponse)
-async def get_tenant_config(
-    db: AsyncSession = Depends(get_db),
-    auth_ctx: AuthContext = Depends(get_auth_context)
-):
-    stmt = select(TenantConfig).where(TenantConfig.user_id == auth_ctx.user_id)
-    result = await db.execute(stmt)
-    config = result.scalar_one_or_none()
-    
-    if not config:
-        config = TenantConfig(user_id=auth_ctx.user_id)
-        db.add(config)
-        await db.commit()
-        await db.refresh(config)
-        
+
+def _tenant_config_response(config) -> TenantConfigResponse:
     return TenantConfigResponse(
         user_id=config.user_id,
         smtp_server=config.smtp_server,
@@ -80,18 +69,42 @@ async def get_tenant_config(
         has_oauth_client_secret=bool(config.oauth_client_secret),
     )
 
+
+def _empty_tenant_config_response(user_id: str) -> TenantConfigResponse:
+    config = new_scoped_tenant_config(user_id=user_id, organization_id=None)
+    return _tenant_config_response(config)
+
+@router.get("/config", response_model=TenantConfigResponse)
+async def get_tenant_config(
+    db: AsyncSession = Depends(get_db),
+    auth_ctx: AuthContext = Depends(get_auth_context)
+):
+    config = await get_scoped_tenant_config(
+        db,
+        auth_ctx.user_id,
+        auth_ctx.organization_id,
+    )
+    if not config:
+        return _empty_tenant_config_response(auth_ctx.user_id)
+
+    return _tenant_config_response(config)
+
 @router.put("/config", response_model=TenantConfigResponse)
 async def update_tenant_config(
     update_data: TenantConfigUpdate,
     db: AsyncSession = Depends(get_db),
     auth_ctx: AuthContext = Depends(get_auth_context)
 ):
-    stmt = select(TenantConfig).where(TenantConfig.user_id == auth_ctx.user_id)
-    result = await db.execute(stmt)
-    config = result.scalar_one_or_none()
-    
+    config = await get_scoped_tenant_config(
+        db,
+        auth_ctx.user_id,
+        auth_ctx.organization_id,
+    )
     if not config:
-        config = TenantConfig(user_id=auth_ctx.user_id)
+        config = new_scoped_tenant_config(
+            user_id=auth_ctx.user_id,
+            organization_id=auth_ctx.organization_id,
+        )
         db.add(config)
         
     update_dict = update_data.model_dump(exclude_unset=True)
@@ -101,22 +114,5 @@ async def update_tenant_config(
         
     await db.commit()
     await db.refresh(config)
-    
-    return TenantConfigResponse(
-        user_id=config.user_id,
-        smtp_server=config.smtp_server,
-        smtp_port=config.smtp_port,
-        smtp_username=config.smtp_username,
-        has_smtp_password=bool(config.smtp_password),
-        imap_server=config.imap_server,
-        imap_port=config.imap_port,
-        imap_username=config.imap_username,
-        has_imap_password=bool(config.imap_password),
-        pop3_server=config.pop3_server,
-        pop3_port=config.pop3_port,
-        pop3_username=config.pop3_username,
-        has_pop3_password=bool(config.pop3_password),
-        oauth_client_id=config.oauth_client_id,
-        oauth_redirect_uri=config.oauth_redirect_uri,
-        has_oauth_client_secret=bool(config.oauth_client_secret),
-    )
+
+    return _tenant_config_response(config)

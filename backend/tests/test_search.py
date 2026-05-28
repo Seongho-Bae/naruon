@@ -26,6 +26,14 @@ class MockResult:
         return [MockRow(1, "Test Subject", "test@test.com", "Test Body", 1.0)]
 
 
+class MockTenantConfigResult:
+    def __init__(self, config):
+        self.config = config
+
+    def scalar_one_or_none(self):
+        return self.config
+
+
 class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
@@ -33,6 +41,8 @@ class MockTenantConfig:
 
 class MockSession:
     async def execute(self, stmt):
+        if "tenant_configs" in str(stmt).lower():
+            return MockTenantConfigResult(MockTenantConfig())
         return MockResult()
 
     async def scalar(self, stmt):

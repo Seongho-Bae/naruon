@@ -12,6 +12,7 @@ from db.models import (
     ConnectorSignalEvent,
     ProjectFolder,
     SenderRelationship,
+    TenantConfig,
     TicketTask,
     WebdavAccount,
 )
@@ -230,6 +231,31 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         in statement
         for statement in statements
     )
+    assert any(
+        "alter table tenant_configs add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table tenant_configs drop constraint if exists tenant_configs_user_id_key"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "drop index if exists ix_tenant_configs_user_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_tenant_configs_owner_scope" in statement
+        and "user_id, organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_tenant_configs_owner_scope"
+        in statement
+        and "coalesce(organization_id, '')" in statement
+        for statement in statements
+    )
 
 
 def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):
@@ -254,6 +280,13 @@ def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):
         for statement in statements
     )
     assert sum("update llm_providers" in statement for statement in statements) == 1
+    assert any(
+        "update tenant_configs" in statement
+        and "set organization_id = :organization_id" in statement
+        and "where user_id = :user_id and organization_id is null" in statement
+        for statement in statements
+    )
+    assert sum("update tenant_configs" in statement for statement in statements) == 1
 
 
 def test_schema_backfill_stops_partially_owned_legacy_rows(monkeypatch):
@@ -299,6 +332,20 @@ def test_sender_relationship_model_declares_source_unique_index():
     assert "sender_email" in expression_text
     assert "source_message_id" in expression_text
     assert "source_thread_id" in expression_text
+
+
+def test_tenant_config_model_declares_owner_scope_unique_index():
+    indexes = {index.name: index for index in TenantConfig.__table__.indexes}
+
+    source_index = indexes["uq_tenant_configs_owner_scope"]
+
+    assert source_index.unique is True
+    expression_text = " ".join(
+        str(expression).lower() for expression in source_index.expressions
+    )
+    assert "user_id" in expression_text
+    assert "coalesce" in expression_text
+    assert "organization_id" in expression_text
 
 
 def test_ticket_task_reply_sla_unique_index_is_bootstrapped():

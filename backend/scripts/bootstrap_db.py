@@ -70,6 +70,10 @@ def schema_backfill_sql():
             "ALTER TABLE project_folders "
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
+        text(
+            "ALTER TABLE tenant_configs "
+            "ADD COLUMN IF NOT EXISTS organization_id varchar"
+        ),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
@@ -147,6 +151,10 @@ def schema_backfill_sql():
         ),
         text("ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(
+            "ALTER TABLE tenant_configs "
+            "DROP CONSTRAINT IF EXISTS tenant_configs_user_id_key"
+        ),
+        text(
             "ALTER TABLE sender_relationships "
             "DROP CONSTRAINT IF EXISTS uq_sender_relationships_user_email"
         ),
@@ -154,8 +162,21 @@ def schema_backfill_sql():
             "ALTER TABLE llm_providers DROP CONSTRAINT IF EXISTS llm_providers_name_key"
         ),
         text("DROP INDEX IF EXISTS ix_llm_providers_name"),
+        text("DROP INDEX IF EXISTS ix_tenant_configs_user_id"),
         text("DROP INDEX IF EXISTS ix_emails_message_id"),
         text("CREATE INDEX IF NOT EXISTS ix_emails_message_id ON emails (message_id)"),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_tenant_configs_user_id "
+            "ON tenant_configs (user_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_tenant_configs_owner_scope "
+            "ON tenant_configs (user_id, organization_id)"
+        ),
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_tenant_configs_owner_scope "
+            "ON tenant_configs (user_id, coalesce(organization_id, ''))"
+        ),
     ]
     if backfill_user_id is not None and backfill_organization_id is not None:
         statements.extend(
@@ -180,6 +201,14 @@ def schema_backfill_sql():
                 ),
                 text(
                     "UPDATE project_folders "
+                    "SET organization_id = :organization_id "
+                    "WHERE user_id = :user_id AND organization_id IS NULL"
+                ).bindparams(
+                    user_id=backfill_user_id,
+                    organization_id=backfill_organization_id,
+                ),
+                text(
+                    "UPDATE tenant_configs "
                     "SET organization_id = :organization_id "
                     "WHERE user_id = :user_id AND organization_id IS NULL"
                 ).bindparams(

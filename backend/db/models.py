@@ -328,7 +328,12 @@ class TenantConfig(Base):
     __tablename__ = "tenant_configs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[str] = mapped_column(String, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String,
+        index=True,
+        nullable=True,
+    )
 
     # Email settings
     smtp_server: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -360,6 +365,7 @@ class TenantConfig(Base):
     def __repr__(self) -> str:
         return (
             f"<TenantConfig(id={self.id}, user_id='{self.user_id}', "
+            f"organization_id='{self.organization_id}', "
             f"smtp_server='{self.smtp_server}', imap_server='{self.imap_server}', "
             f"has_smtp_password={self.smtp_password is not None}, "
             f"has_imap_password={self.imap_password is not None}, "
@@ -368,6 +374,14 @@ class TenantConfig(Base):
             f"has_openai_key={self.openai_api_key is not None}, "
             f"has_google_secret={self.google_client_secret is not None})>"
         )
+
+
+Index(
+    "uq_tenant_configs_owner_scope",
+    TenantConfig.user_id,
+    func.coalesce(TenantConfig.organization_id, ""),
+    unique=True,
+)
 
 
 class SenderRelationship(Base):

@@ -47,6 +47,9 @@ class MockSession:
             def scalars(self):
                 return MockScalars(self._rows)
 
+            def scalar_one_or_none(self):
+                return self._rows[0] if self._rows else None
+
         return MockResult(items)
 
     def add(self, obj):
