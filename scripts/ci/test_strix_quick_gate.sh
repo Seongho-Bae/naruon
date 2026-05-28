@@ -68,6 +68,9 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/test_strix_quick_gate.sh" "strix workflow avoids direct repo self-test execution on privileged trigger"
 	assert_file_not_contains "$workflow_file" "run: bash ./scripts/ci/strix_quick_gate.sh" "strix workflow avoids direct repo gate execution on privileged trigger"
 	assert_file_contains "$workflow_file" "Fetch pull request head for trusted scan" "strix workflow fetches PR head without checkout"
+	assert_file_contains "$workflow_file" "pr_number:" "strix workflow accepts manual PR-scope evidence inputs"
+	assert_file_contains "$workflow_file" "github.event.inputs.pr_number" "strix workflow can run PR-scoped workflow_dispatch evidence"
+	assert_file_contains "$workflow_file" "PR number and head SHA are required for trusted PR-scope Strix evidence" "strix workflow fails closed when manual PR-scope metadata is incomplete"
 	assert_file_contains "$workflow_file" "refs/remotes/pull" "strix workflow verifies fetched PR head ref"
 	assert_file_contains "$workflow_file" "for pr_head_fetch_attempt in 1 2 3 4 5 6" "strix workflow retries stale PR head ref propagation"
 	assert_file_contains "$workflow_file" "PR head ref did not resolve to expected commit" "strix workflow fails closed when PR head ref remains stale"
@@ -82,9 +85,10 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
 	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
 	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
-	assert_file_contains "$workflow_file" 'STRIX_MODEL: ${{ secrets.STRIX_LLM || '"'"'vertex_ai/gemini-3.1-pro-preview-customtools'"'"' }}' "strix workflow defaults STRIX_LLM to the organization Vertex AI model"
-	assert_file_contains "$workflow_file" "STRIX_LLM must select direct OpenAI GPT-5.4 or newer, or the organization Vertex AI model" "strix workflow rejects unsupported model inputs"
+	assert_file_contains "$workflow_file" 'STRIX_MODEL: ${{ secrets.STRIX_LLM || '"'"'vertex_ai/gemini-2.5-flash'"'"' }}' "strix workflow defaults STRIX_LLM to the operational organization Vertex AI model"
+	assert_file_contains "$workflow_file" "STRIX_LLM must select direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
 	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools" "strix workflow documents the organization Vertex AI custom-tools model"
+	assert_file_contains "$workflow_file" "vertex_ai/gemini-2.5-flash" "strix workflow accepts the validated organization Vertex AI operational model"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
 	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow uses provider-scoped LLM key material"
@@ -115,7 +119,7 @@ assert_strix_gpt54_model_guard_semantics() {
 	case "$model" in
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
 	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
-	vertex_ai/gemini-3.1-pro-preview-customtools)
+	vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
 		return 0
 		;;
 	*)
@@ -142,6 +146,9 @@ assert_strix_gpt54_model_guard_cases() {
 	fi
 	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-3.1-pro-preview-customtools"; then
 		record_failure "strix guard must accept the organization Vertex AI custom-tools model"
+	fi
+	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-flash"; then
+		record_failure "strix guard must accept the validated organization Vertex AI operational model"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-pro"; then
 		record_failure "strix guard must reject arbitrary Vertex models"

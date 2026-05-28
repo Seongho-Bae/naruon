@@ -12,14 +12,16 @@
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan must not route through GitHub Models, `github.token`,
   generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
-  route is the exact Vertex AI model
-  `vertex_ai/gemini-3.1-pro-preview-customtools` selected through `STRIX_LLM`
-  with `GCP_SA_KEY`; expose Google/Vertex credentials only for that provider
-  mode. Direct OpenAI GPT-5.4-or-newer scans remain supported only when selected
+  route is `STRIX_LLM` with `GCP_SA_KEY`; `vertex_ai/gemini-2.5-flash` is the
+  validated operational model after run `26581416713` proved
+  `vertex_ai/gemini-3.1-pro-preview-customtools` returns Vertex 404/no-access in
+  this project. Expose Google/Vertex credentials only for Vertex provider mode.
+  Direct OpenAI GPT-5.4-or-newer scans remain supported only when selected
   explicitly with `STRIX_OPENAI_API_KEY`. Do not silently fall back between
   providers, and record provider evidence in the PR. Keep architecture docs and
   reusable Strix gate tests aligned with this rule so stale GitHub Models,
-  OpenAI-only, or generic-key examples cannot re-enter copied workflow guidance.
+  OpenAI-only, unavailable-model, or generic-key examples cannot re-enter copied
+  workflow guidance.
 
 ## PR automation and review defaults
 

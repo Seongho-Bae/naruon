@@ -292,8 +292,15 @@ normalize_changed_files_cache() {
 	done
 }
 
+pull_request_metadata_env_present() {
+	[ -n "$(trim_whitespace "${PR_NUMBER:-}")" ] &&
+		[ -n "$(trim_whitespace "${PR_BASE_SHA:-}")" ] &&
+		[ -n "$(trim_whitespace "${PR_HEAD_SHA:-}")" ]
+}
+
 pull_request_head_blob_required() {
-	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]
+	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ] ||
+		{ [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && pull_request_metadata_env_present; }
 }
 
 is_valid_git_commit_sha() {
@@ -601,6 +608,9 @@ is_pull_request_event() {
 	case "${GITHUB_EVENT_NAME:-}" in
 	pull_request | pull_request_target)
 		github_event_payload_has_pull_request
+		;;
+	workflow_dispatch)
+		pull_request_metadata_env_present
 		;;
 	*)
 		return 1

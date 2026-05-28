@@ -38,9 +38,9 @@ connector, and PR governance is metadata-only.
   comment instead of posting duplicates.
 - [x] Strix provider hardening: the workflow fails closed instead of routing
   scanner traffic through GitHub Models, `github.token`, generic `LLM_API_KEY`,
-  GPT-4o, or GPT-4.1. The current approved default is the exact org-secret
-  Vertex AI model, while direct OpenAI GPT-5.4+ remains explicit-only through
-  `STRIX_OPENAI_API_KEY`.
+  GPT-4o, or GPT-4.1. The current approved default is the validated
+  org-secret Vertex AI model, while direct OpenAI GPT-5.4+ remains
+  explicit-only through `STRIX_OPENAI_API_KEY`.
 - [x] CalDAV source registry: `/api/calendar/writeback-intent` now resolves
   DB-backed `calendar_writeback_sources` rows with opaque `source_uid` values
   instead of exposing sequential CalDAV account ids or accepting browser-supplied

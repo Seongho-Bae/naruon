@@ -59,8 +59,8 @@ Browser evidence to inspect:
 ## Governance
 
 - Strix follows the current provider governance contract: the approved default
-  is the exact org-secret Vertex AI model
-  `vertex_ai/gemini-3.1-pro-preview-customtools`, while direct OpenAI GPT-5.4+
-  remains explicit-only through `STRIX_OPENAI_API_KEY`.
+  is the validated org-secret Vertex AI model `vertex_ai/gemini-2.5-flash`,
+  while direct OpenAI GPT-5.4+ remains explicit-only through
+  `STRIX_OPENAI_API_KEY`.
 - GitHub Models, `github.token`, generic `LLM_API_KEY`, arbitrary
   Gemini/Vertex fallback, GPT-4o, and GPT-4.1 are not valid Strix routes.
