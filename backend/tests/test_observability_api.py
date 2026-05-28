@@ -92,6 +92,18 @@ def admin_client(mock_db):
         app.dependency_overrides.pop(get_db, None)
 
 
+
+def test_datetime_to_utc_iso_with_naive_datetime():
+    from api.observability import _datetime_to_utc_iso
+    from datetime import datetime
+    dt = datetime(2023, 1, 1, 12, 0, 0)
+    iso_str = _datetime_to_utc_iso(dt)
+    assert iso_str == "2023-01-01T12:00:00Z"
+
+def test_endpoint_host_without_netloc():
+    from api.observability import _endpoint_host
+    assert _endpoint_host("invalid-url") is None
+
 def test_member_cannot_read_operational_signals(member_client):
     response = member_client.get("/api/observability/operational-signals")
 
@@ -115,6 +127,64 @@ def test_admin_without_org_scope_gets_deterministic_error(mock_db):
             response = client.get("/api/observability/operational-signals")
     finally:
         app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
+
+
+
+def test_system_admin_without_org_scope_gets_deterministic_error(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "system_admin",
+            },
+        ) as client:
+            response = client.get("/api/observability/operational-signals")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
+
+
+def test_operational_signals_requires_org_id_in_auth_context_explicit(mock_db):
+    async def override_get_db():
+        yield mock_db
+
+    from api.auth import AuthContext
+    from api.observability import _check_org_admin
+
+    async def override_check_org_admin():
+        # returns an AuthContext with no organization_id
+        return AuthContext(
+            user_id="admin",
+            role="system_admin",
+            organization_id=None,
+            workspace_id="workspace-admin",
+            group_ids=()
+        )
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[_check_org_admin] = override_check_org_admin
+    try:
+        with TestClient(
+            app,
+            headers={
+                "X-User-Id": "admin",
+                "X-User-Role": "system_admin",
+            },
+        ) as client:
+            response = client.get("/api/observability/operational-signals")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(_check_org_admin, None)
 
     assert response.status_code == 403
     assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
