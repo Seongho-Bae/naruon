@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from db.models import Email, SenderRelationship
-from services.ontology_service import OntologyService
+from services.ontology_service import OntologyService, SaveRelationshipRequest
 
 @pytest.mark.asyncio
 async def test_sender_relationship_insertion():
@@ -16,13 +16,15 @@ async def test_sender_relationship_insertion():
     
     relationship = await ontology_service.save_relationship(
         session_mock,
-        user_email="user@test.com",
-        sender_email="colleague@test.com",
-        email_content="Hey let's talk about the project",
-        user_id="user_1",
-        organization_id="org_1",
-        source_message_id="<project@test.com>",
-        source_thread_id="thread-project",
+        request=SaveRelationshipRequest(
+            user_email="user@test.com",
+            sender_email="colleague@test.com",
+            email_content="Hey let's talk about the project",
+            user_id="user_1",
+            organization_id="org_1",
+            source_message_id="<project@test.com>",
+            source_thread_id="thread-project",
+        )
     )
     
     session_mock.add.assert_called_once()

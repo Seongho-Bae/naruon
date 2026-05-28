@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Dict
 from sqlalchemy import select
 from db.models import Email, SenderRelationship
@@ -7,6 +8,18 @@ from services.email_service import process_self_to_self
 from services.knowledge_extractor import extract_knowledge_from_self_sent
 
 logger = logging.getLogger(__name__)
+
+
+
+@dataclass
+class SaveRelationshipRequest:
+    user_email: str
+    sender_email: str
+    email_content: str
+    user_id: str
+    organization_id: str | None
+    source_message_id: str | None = None
+    source_thread_id: str | None = None
 
 
 class OntologyService:
@@ -71,24 +84,18 @@ class OntologyService:
     async def save_relationship(
         self,
         session,
-        user_email: str,
-        sender_email: str,
-        email_content: str,
-        user_id: str,
-        organization_id: str | None,
-        source_message_id: str | None = None,
-        source_thread_id: str | None = None,
+        request: SaveRelationshipRequest,
     ):
         analysis = self.analyze_sender_relationship(
-            user_email, sender_email, email_content
+            request.user_email, request.sender_email, request.email_content
         )
 
         stmt = select(SenderRelationship).where(
-            SenderRelationship.user_id == user_id,
-            SenderRelationship.organization_id == organization_id,
-            SenderRelationship.sender_email == sender_email,
-            SenderRelationship.source_message_id == source_message_id,
-            SenderRelationship.source_thread_id == source_thread_id,
+            SenderRelationship.user_id == request.user_id,
+            SenderRelationship.organization_id == request.organization_id,
+            SenderRelationship.sender_email == request.sender_email,
+            SenderRelationship.source_message_id == request.source_message_id,
+            SenderRelationship.source_thread_id == request.source_thread_id,
         )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -96,15 +103,15 @@ class OntologyService:
         if existing:
             existing.relationship_type = analysis["type"]
             existing.confidence_score = analysis["confidence"]
-            existing.source_message_id = source_message_id
-            existing.source_thread_id = source_thread_id
+            existing.source_message_id = request.source_message_id
+            existing.source_thread_id = request.source_thread_id
         else:
             new_rel = SenderRelationship(
-                user_id=user_id,
-                organization_id=organization_id,
-                sender_email=sender_email,
-                source_message_id=source_message_id,
-                source_thread_id=source_thread_id,
+                user_id=request.user_id,
+                organization_id=request.organization_id,
+                sender_email=request.sender_email,
+                source_message_id=request.source_message_id,
+                source_thread_id=request.source_thread_id,
                 relationship_type=analysis["type"],
                 confidence_score=analysis["confidence"],
             )
