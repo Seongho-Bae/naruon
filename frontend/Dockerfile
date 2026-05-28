@@ -6,10 +6,10 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 
 COPY frontend/package*.json ./
 ARG TARGETARCH
-RUN npm ci \
+RUN npm ci --fetch-timeout=600000 --fetch-retries=5 \
     && if [ "$TARGETARCH" = "arm64" ] \
       && [ ! -f node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node ]; then \
-      npm install --no-save --package-lock=false lightningcss-linux-arm64-gnu@1.32.0; \
+      npm install --fetch-timeout=600000 --fetch-retries=5 --no-save --package-lock=false lightningcss-linux-arm64-gnu@1.32.0; \
     fi
 
 COPY frontend ./

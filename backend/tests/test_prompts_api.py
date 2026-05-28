@@ -1,5 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+from api.prompts import PromptTestRequest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
@@ -394,3 +396,34 @@ async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_ba
     assert create_kwargs["messages"] == [{"role": "user", "content": "Summarize this"}]
     await constructor_kwargs["http_client"].aclose()
     mock_client.close.assert_awaited_once()
+
+
+def test_prompt_test_request_valid_variables():
+    request = PromptTestRequest(
+        content="Hello {{name}}",
+        variables={"name": "Alice", "valid_var_123": "value"}
+    )
+    assert request.variables == {"name": "Alice", "valid_var_123": "value"}
+
+def test_prompt_test_request_too_many_variables():
+    variables = {f"var_{i}": "value" for i in range(21)}
+    with pytest.raises(ValidationError) as exc_info:
+        PromptTestRequest(content="Hello", variables=variables)
+    assert "Too many prompt variables" in str(exc_info.value)
+
+@pytest.mark.parametrize("invalid_name", [
+    "1invalid",  # Starts with a number
+    "in-valid",  # Contains a hyphen
+    "in valid",  # Contains a space
+    "a" * 65     # Too long (max 64)
+])
+def test_prompt_test_request_invalid_variable_names(invalid_name):
+    with pytest.raises(ValidationError) as exc_info:
+        PromptTestRequest(content="Hello", variables={invalid_name: "value"})
+    assert "Invalid prompt variable name" in str(exc_info.value)
+
+def test_prompt_test_request_variable_value_too_long():
+    long_value = "x" * 2001
+    with pytest.raises(ValidationError) as exc_info:
+        PromptTestRequest(content="Hello", variables={"name": long_value})
+    assert "Prompt variable value is too long" in str(exc_info.value)
