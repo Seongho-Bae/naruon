@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
 from main import app
-from api.auth import get_auth_context
+from api.auth import get_auth_context, get_current_user
 from db.models import TicketTask
 from db.session import get_db
 from services.webdav_service import WebDavService, webdav_service
@@ -150,14 +150,78 @@ def auth_client():
     ) as client:
         yield client
 
+
+def _request_with_signed_session(method: str, path: str, json_body: dict | None = None):
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    original_overrides = dict(app.dependency_overrides)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        with TestClient(app) as client:
+            return client.request(
+                method,
+                path,
+                json=json_body,
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
+def _request_without_signed_session(
+    method: str,
+    path: str,
+    json_body: dict | None = None,
+):
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        with TestClient(app) as client:
+            return client.request(
+                method,
+                path,
+                json=json_body,
+                headers={
+                    "X-User-Id": "alice",
+                    "X-Organization-Id": "org-acme",
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+
 def test_get_webdav_accounts(auth_client):
     response = auth_client.get("/api/webdav/accounts")
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body) > 0
+    assert body[0]["source_id"] == "webdav_src_demo_primary"
     assert body[0]["server_url"] == "https://webdav.naruon.net"
     assert body[0]["username"] == "demo_user"
     assert body[0]["writeback_enabled"] is True
+    assert "account_id" not in body[0]
+
+
+def test_get_webdav_accounts_accepts_signed_bearer_session():
+    response = _request_with_signed_session("GET", "/api/webdav/accounts")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body[0]["source_id"] == "webdav_src_demo_primary"
+    assert "account_id" not in body[0]
+
+
+def test_webdav_routes_reject_public_identity_headers_without_signed_session():
+    response = _request_without_signed_session("GET", "/api/webdav/accounts")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Authentication required"
 
 def test_get_project_folders(auth_client):
     response = auth_client.get("/api/webdav/folders")
@@ -176,6 +240,20 @@ def test_get_webdav_writeback_intent(auth_client):
     assert body["source_id"] == "webdav_src_demo_primary"
     assert body["server_url"] == "https://webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
+    assert "account_id" not in body
+
+
+def test_get_webdav_writeback_intent_accepts_signed_bearer_session():
+    response = _request_with_signed_session(
+        "POST",
+        "/api/webdav/writeback-intent",
+        {"target_source_id": "webdav_src_demo_primary"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source_id"] == "webdav_src_demo_primary"
+    assert "account_id" not in body
 
 
 def test_get_webdav_writeback_intent_with_target_account(auth_client):
@@ -234,6 +312,7 @@ def test_get_self_sent_knowledge_webdav_intent(auth_client):
     assert "related_email_id" not in body
     assert "user_id" not in body
     assert "organization_id" not in body
+    assert "account_id" not in body
 
 
 def test_self_sent_knowledge_webdav_intent_requires_source_task(auth_client):
@@ -279,27 +358,18 @@ def test_self_sent_knowledge_webdav_intent_requires_connected_webdav_account():
 
 
 def test_get_self_sent_knowledge_webdav_intent_accepts_signed_bearer_session():
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    previous_override = app.dependency_overrides.pop(get_auth_context, None)
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(_valid_session_payload())
-    try:
-        with TestClient(app) as client:
-            response = client.post(
-                "/api/webdav/knowledge-materialization-intent",
-                json={
-                    "target_source_id": "webdav_src_demo_primary",
-                    "source_task_id": "task-self-knowledge",
-                },
-                headers={"Authorization": f"Bearer {token}"},
-            )
-    finally:
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-        if previous_override is not None:
-            app.dependency_overrides[get_auth_context] = previous_override
+    response = _request_with_signed_session(
+        "POST",
+        "/api/webdav/knowledge-materialization-intent",
+        {
+            "target_source_id": "webdav_src_demo_primary",
+            "source_task_id": "task-self-knowledge",
+        },
+    )
 
     assert response.status_code == 200, response.text
     assert response.json()["task_id"] == "task-self-knowledge"
+    assert "account_id" not in response.json()
 
 
 @pytest.mark.asyncio
@@ -562,19 +632,28 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
         async with session_factory() as session:
             yield session
 
+    previous_override = app.dependency_overrides.pop(get_auth_context, None)
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = override_real_db
+    token = _signed_session_token(
+        _valid_session_payload(sub=user_id, org="org-acme", workspace="workspace-org-acme")
+    )
     try:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
             transport=transport,
             base_url="http://testserver",
-            headers={"X-User-Id": user_id, "X-Organization-Id": "org-acme"},
+            headers={"Authorization": f"Bearer {token}"},
         ) as client:
             response = await client.post(
                 "/api/webdav/writeback-intent",
                 json={"target_source_id": source_uid},
             )
     finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        if previous_override is not None:
+            app.dependency_overrides[get_auth_context] = previous_override
         app.dependency_overrides.pop(get_db, None)
         async with engine.begin() as conn:
             await conn.execute(
@@ -591,6 +670,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     assert body["source_id"] == source_uid
     assert body["server_url"] == "https://real-webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
+    assert "account_id" not in body
 
 
 @pytest.mark.asyncio

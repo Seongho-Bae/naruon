@@ -49,8 +49,10 @@ ticket tasks, DB-backed CalDAV intent source selection through opaque
 `calendar_writeback_sources.source_uid` rows exposed to the Calendar workspace
 through a signed source-registry read, and WebDAV intent selection through
 opaque, organization-scoped `webdav_accounts.source_uid` rows with persisted
-writeback eligibility. Real CalDAV/WebDAV mutation, ETag-aware WebDAV/Notes
-provider execution for synthesized knowledge, POP3 runtime sync, durable
+writeback eligibility; sequential `webdav_accounts.account_id` values remain
+internal and are not browser-visible source identifiers. Real CalDAV/WebDAV
+mutation, ETag-aware WebDAV/Notes provider execution for synthesized knowledge,
+POP3 runtime sync, durable
 reply-tracking notifications, configurable SLA policy storage, and source-id
 filtered sender graph views remain episode work and must preserve this registry
 boundary.

@@ -109,7 +109,8 @@ def schema_backfill_sql():
         text(
             "UPDATE webdav_accounts "
             "SET source_uid = 'webdav_src_' || md5("
-            "account_id::text || ':' || user_id || ':' || server_url"
+            "random()::text || ':' || clock_timestamp()::text || ':' || "
+            "user_id || ':' || server_url"
             ") "
             "WHERE source_uid IS NULL OR source_uid = ''"
         ),
