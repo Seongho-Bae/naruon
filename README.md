@@ -339,14 +339,16 @@ enforce ETag/If-Match and owner capability checks.
 WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
-eligibility, reject legacy `target_account_id` payloads, and keep sequential
+eligibility, surface `webdav_accounts.etag_value` as source-safe If-Match
+evidence, reject legacy `target_account_id` payloads, and keep sequential
 `account_id` values internal-only. The Data workspace exposes the WebDAV source
 as an explicit selected target and treats `409` If-Match/ETag responses as
 conflicts instead of generic failures, so UI copy never implies a provider write
-overwrote customer-owned files. Project folder listings are scoped by the signed
-session organization and expose opaque `project_folders.folder_uid` values
-instead of sequential `folder_id` values, and the `/dav` PUT skeleton fails
-closed until provider-backed source, capability, and ETag/If-Match checks exist.
+overwrote customer-owned files. Provider URLs, usernames, and credentials stay
+server-side. Project folder listings are scoped by the signed session
+organization and expose opaque `project_folders.folder_uid` values instead of
+sequential `folder_id` values, and the `/dav` PUT skeleton fails closed until
+provider-backed source, capability, and ETag/If-Match checks exist.
 Data repository, ingestion, embedding, and quality status is loaded from signed
 `/api/data/quality-surface`. The UI must not reintroduce static ingestion logs,
 fake vector counts, unsupported embedding model names, or fake quality totals;

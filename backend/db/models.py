@@ -535,6 +535,7 @@ class WebdavAccount(Base):
     username: Mapped[str] = mapped_column(String, nullable=False)
     credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
     writeback_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    etag_value: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),

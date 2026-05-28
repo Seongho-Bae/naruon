@@ -69,6 +69,7 @@ def stub_webdav_service(monkeypatch):
                 "source_id": "webdav_src_demo_primary",
                 "display_label": "WebDAV source webdav_src_demo_primary",
                 "writeback_enabled": True,
+                "etag": "etag-webdav-demo-primary",
             }
         ] if user_id == "alice" else []
 
@@ -131,6 +132,7 @@ def stub_webdav_service(monkeypatch):
             "target_label": result["target_label"],
             "target_path": f"/Naruon/Notes/{source_task_id}.md",
             "requires_if_match": result["requires_if_match"],
+            "if_match": result.get("if_match"),
             "provenance": result["provenance"],
             "provider_write_executed": False,
             "audit_event": "webdav.self_sent_knowledge_intent.created",
@@ -211,6 +213,7 @@ def test_get_webdav_accounts(auth_client):
     assert body[0]["source_id"] == "webdav_src_demo_primary"
     assert body[0]["display_label"] == "WebDAV source webdav_src_demo_primary"
     assert body[0]["writeback_enabled"] is True
+    assert body[0]["etag"] == "etag-webdav-demo-primary"
     assert "account_id" not in body[0]
     assert "server_url" not in body[0]
     assert "username" not in body[0]
@@ -250,6 +253,7 @@ def test_get_webdav_writeback_intent(auth_client):
     assert body["source_id"] == "webdav_src_demo_primary"
     assert body["target_label"] == "WebDAV source webdav_src_demo_primary"
     assert body["provenance"] == "server-authoritative"
+    assert body["if_match"] == "etag-webdav-demo-primary"
     assert "account_id" not in body
     assert "server_url" not in body
 
@@ -264,6 +268,7 @@ def test_get_webdav_writeback_intent_accepts_signed_bearer_session():
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source_id"] == "webdav_src_demo_primary"
+    assert body["if_match"] == "etag-webdav-demo-primary"
     assert "account_id" not in body
 
 
@@ -278,6 +283,7 @@ def test_get_webdav_writeback_intent_with_target_account(auth_client):
     assert body["source_id"] == "webdav_src_demo_primary"
     assert body["target_label"] == "WebDAV source webdav_src_demo_primary"
     assert body["requires_if_match"] is True
+    assert body["if_match"] == "etag-webdav-demo-primary"
     assert body["provenance"] == "server-authoritative"
 
 
@@ -553,6 +559,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         username VARCHAR NOT NULL,
                         credentials_encrypted VARCHAR NOT NULL,
                         writeback_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        etag_value VARCHAR,
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
                     """
@@ -579,6 +586,12 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
             )
             await conn.execute(
                 text(
+                    "ALTER TABLE webdav_accounts "
+                    "ADD COLUMN IF NOT EXISTS etag_value VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
                     """
                     DELETE FROM webdav_accounts
                     WHERE source_uid = :source_uid
@@ -597,7 +610,8 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         server_url,
                         username,
                         credentials_encrypted,
-                        writeback_enabled
+                        writeback_enabled,
+                        etag_value
                     )
                     VALUES (
                         :account_id,
@@ -607,7 +621,8 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         :server_url,
                         :username,
                         :credentials_encrypted,
-                        :writeback_enabled
+                        :writeback_enabled,
+                        :etag_value
                     )
                     """
                 ),
@@ -620,6 +635,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     "username": user_id,
                     "credentials_encrypted": "test-only-placeholder",
                     "writeback_enabled": True,
+                    "etag_value": "etag-webdav-smoke",
                 },
             )
     except (
@@ -681,6 +697,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     assert body["source_id"] == source_uid
     assert body["target_label"] == f"WebDAV source {source_uid}"
     assert body["provenance"] == "server-authoritative"
+    assert body["if_match"] == "etag-webdav-smoke"
     assert "account_id" not in body
     assert "server_url" not in body
 
@@ -981,6 +998,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         username VARCHAR NOT NULL,
                         credentials_encrypted VARCHAR NOT NULL,
                         writeback_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+                        etag_value VARCHAR,
                         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
                     )
                     """
@@ -1063,7 +1081,8 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         server_url,
                         username,
                         credentials_encrypted,
-                        writeback_enabled
+                        writeback_enabled,
+                        etag_value
                     )
                     VALUES (
                         :account_id,
@@ -1073,7 +1092,8 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         :server_url,
                         :username,
                         :credentials_encrypted,
-                        :writeback_enabled
+                        :writeback_enabled,
+                        :etag_value
                     )
                     """
                 ),
@@ -1086,6 +1106,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     "username": user_id,
                     "credentials_encrypted": "test-only-placeholder",
                     "writeback_enabled": True,
+                    "etag_value": "etag-webdav-knowledge-smoke",
                 },
             )
     except Exception:
@@ -1143,5 +1164,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     assert body["source_id"] == source_uid
     assert body["target_label"] == f"WebDAV source {source_uid}"
     assert body["target_path"] == f"/Naruon/Notes/{task_uid}.md"
+    assert body["requires_if_match"] is True
+    assert body["if_match"] == "etag-webdav-knowledge-smoke"
     assert body["provider_write_executed"] is False
     assert "server_url" not in body

@@ -20,6 +20,7 @@ class WebdavAccountResponse(BaseModel):
     source_id: str
     display_label: str
     writeback_enabled: bool
+    etag: str | None = None
 
 class ProjectFolderResponse(BaseModel):
     folder_uid: str
@@ -36,6 +37,7 @@ class WritebackIntentResponse(BaseModel):
     source_id: str | None
     target_label: str | None
     requires_if_match: bool
+    if_match: str | None = None
     provenance: str
     status: str | None = None
     message: str | None = None
@@ -57,6 +59,7 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     target_label: str | None
     target_path: str
     requires_if_match: bool
+    if_match: str | None = None
     provenance: str
     provider_write_executed: bool
     audit_event: str

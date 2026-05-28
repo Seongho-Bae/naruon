@@ -1016,7 +1016,17 @@ test('renders data WebDAV writeback intent status without direct provider writes
     window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
+  const desktopAccountsRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/accounts' && request.method() === 'GET';
+  });
   await page.goto('/data');
+  const desktopAccountsCall = await desktopAccountsRequest;
+  const desktopAccountsHeaders = desktopAccountsCall.headers();
+  expect(desktopAccountsHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopAccountsHeaders[headerName]).toBeUndefined();
+  }
   await expect(page.getByText('etag=etag-webdav-primary')).toBeVisible();
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
@@ -1035,7 +1045,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
   await expect(page.getByText('server-authoritative')).toBeVisible();
   await expect(page.getByText('WebDAV source webdav_src_primary').first()).toBeVisible();
   await expect(page.getByText('https://webdav.naruon.net')).toHaveCount(0);
-  await expect(page.getByText('required', { exact: true })).toBeVisible();
+  await expect(page.getByText('etag-webdav-primary').first()).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-desktop.png'), fullPage: false });

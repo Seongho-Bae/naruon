@@ -201,6 +201,7 @@ function mockWebdavFetch() {
         source_id: "webdav_src_primary",
         target_label: "WebDAV source webdav_src_primary",
         requires_if_match: true,
+        if_match: "etag-webdav-primary",
         provenance: "server-authoritative",
       });
     }
@@ -365,6 +366,31 @@ describe("DataPage", () => {
       root?.render(<DataPage />);
     });
 
+    const accountsCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
+    expect(accountsCall).toBeDefined();
+    const [, accountsInit] = accountsCall ?? [];
+    const accountsHeaderEntries =
+      accountsInit?.headers instanceof Headers
+        ? Array.from(accountsInit.headers.entries())
+        : Object.entries((accountsInit?.headers as Record<string, string>) ?? {});
+    const accountsHeaders = Object.fromEntries(
+      accountsHeaderEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
+    );
+    expect(accountsHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-webdav-session",
+      "content-type": "application/json",
+    }));
+    for (const publicHeader of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(accountsHeaders[publicHeader]).toBeUndefined();
+    }
+
     const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
       candidate.textContent?.includes("WebDAV intent 승인 점검"),
     );
@@ -404,6 +430,7 @@ describe("DataPage", () => {
     });
     expect(container.textContent).toContain("server-authoritative");
     expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).toContain("etag-webdav-primary");
     expect(container.textContent).not.toContain("https://webdav.naruon.net");
     expect(container.textContent).not.toContain("demo_user");
   });
