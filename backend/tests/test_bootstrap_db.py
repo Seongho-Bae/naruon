@@ -150,8 +150,11 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "update webdav_accounts set source_uid" in statement
         and "webdav_src_" in statement
         and "md5" in statement
+        and "random()::text" in statement
+        and "clock_timestamp()::text" in statement
         for statement in statements
     )
+    assert not any("account_id::text" in statement for statement in statements)
     assert any(
         "alter table webdav_accounts alter column source_uid set not null"
         in statement

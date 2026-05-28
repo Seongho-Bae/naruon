@@ -14,7 +14,8 @@ type WebdavWritebackIntentResponse = {
   message?: string | null;
 };
 
-type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'auth' | 'error';
+type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'fetch_error' | 'auth' | 'error';
+type WebdavAccountStatus = 'loading' | 'ready' | 'error';
 
 type UniqueThreadIntentResponse = {
   status: string;
@@ -61,6 +62,12 @@ function getApiErrorStatus(error: unknown) {
   return null;
 }
 
+function getSafeErrorSummary(error: unknown) {
+  const status = getApiErrorStatus(error);
+  const errorName = error instanceof Error ? error.name : typeof error;
+  return { status, error_name: errorName.slice(0, 40) };
+}
+
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
   
@@ -78,6 +85,7 @@ export function DataLayout() {
   }
   
   const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
+  const [webdavAccountStatus, setWebdavAccountStatus] = useState<WebdavAccountStatus>('loading');
   const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
   const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
@@ -86,22 +94,38 @@ export function DataLayout() {
 
   useEffect(() => {
     apiClient.get<WebdavAccount[]>('/api/webdav/accounts')
-      .then(data => Array.isArray(data) && setWebdavAccounts(data))
-      .catch(console.error);
+      .then((data) => {
+        if (!Array.isArray(data)) throw new Error('Invalid WebDAV accounts response');
+        setWebdavAccounts(data);
+        setWebdavAccountStatus('ready');
+      })
+      .catch((error: unknown) => {
+        console.error('WebDAV accounts fetch error', getSafeErrorSummary(error));
+        setWebdavAccounts([]);
+        setWebdavAccountStatus('error');
+      });
 
     apiClient.get<ProjectFolder[]>('/api/webdav/folders')
       .then(data => Array.isArray(data) && setProjectFolders(data))
-      .catch(console.error);
+      .catch((error: unknown) => console.error('WebDAV folders fetch error', getSafeErrorSummary(error)));
   }, []);
 
   const requestWebdavWritebackIntent = useCallback(async () => {
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
+      if (webdavAccountStatus !== 'ready') {
+        setWritebackStatus('fetch_error');
+        return;
+      }
       const targetSourceId = webdavAccounts.find(acc => acc.writeback_enabled)?.source_id;
+      if (!targetSourceId) {
+        setWritebackStatus('no_source');
+        return;
+      }
       const result = await apiClient.post<WebdavWritebackIntentResponse>(
         '/api/webdav/writeback-intent',
-        targetSourceId ? { target_source_id: targetSourceId } : {},
+        { target_source_id: targetSourceId },
       );
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -115,7 +139,7 @@ export function DataLayout() {
         setWritebackStatus('error');
       }
     }
-  }, [webdavAccounts]);
+  }, [webdavAccounts, webdavAccountStatus]);
 
   const requestUniqueThreadIntent = useCallback(async () => {
     setUniqueThreadStatus('loading');
@@ -134,6 +158,8 @@ export function DataLayout() {
   }, []);
 
   const isWritebackLoading = writebackStatus === 'loading';
+  const isWebdavSourceLoading = webdavAccountStatus === 'loading';
+  const canRequestWebdavWriteback = webdavAccountStatus === 'ready';
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
 
   return (
@@ -217,8 +243,9 @@ export function DataLayout() {
                   <button
                     type="button"
                     onClick={() => void requestWebdavWritebackIntent()}
-                    disabled={isWritebackLoading}
-                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                    disabled={isWritebackLoading || !canRequestWebdavWriteback}
+                    aria-busy={isWebdavSourceLoading || isWritebackLoading}
+                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
                     WebDAV intent 승인 점검
                   </button>
@@ -229,8 +256,14 @@ export function DataLayout() {
                     <p className="text-muted-foreground">아직 WebDAV provider write는 실행하지 않았습니다. 원본 source와 충돌 조건만 확인합니다.</p>
                   )}
                   {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV writeback intent 요청 중입니다.</p>}
+                  {writebackStatus === 'idle' && webdavAccountStatus === 'error' && (
+                    <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못했습니다.</p>
+                  )}
                   {writebackStatus === 'no_source' && (
                     <p className="font-bold text-amber-700">writeback 가능한 고객 WebDAV 원본 계정이 없어 intent를 만들 수 없습니다.</p>
+                  )}
+                  {writebackStatus === 'fetch_error' && (
+                    <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못해 intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'auth' && (
                     <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>
