@@ -103,6 +103,7 @@ describe("DataPage", () => {
     container?.remove();
     container = null;
     localStorage.clear();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -175,6 +176,43 @@ describe("DataPage", () => {
     });
     expect(container.textContent).toContain("server-authoritative");
     expect(container.textContent).toContain("https://webdav.naruon.net");
+  });
+
+  it("keeps WebDAV writeback disabled when account loading fails", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-session");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/webdav/accounts") {
+        throw new Error("signed-webdav-session should not be logged");
+      }
+      if (path === "/api/webdav/folders") return jsonResponse([]);
+      if (path === "/api/webdav/writeback-intent") throw new Error("writeback should stay disabled");
+      return jsonResponse({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
+    ) as HTMLButtonElement | undefined;
+    expect(button).toBeDefined();
+    expect(button?.disabled).toBe(true);
+    button?.click();
+
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/webdav/writeback-intent")).toBe(false);
+    expect(container.textContent).toContain("WebDAV 원본 계정 목록을 확인하지 못했습니다.");
+    expect(JSON.stringify(consoleError.mock.calls)).toContain("WebDAV accounts fetch error");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("signed-webdav-session");
   });
 
   it("creates a signed unique email thread intent without public identity headers", async () => {
