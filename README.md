@@ -33,6 +33,10 @@ mail/calendar/file systems.
   fails closed rather than falling back to GitHub Models, Google/Vertex/Gemini,
   `github.token`, or GPT-4-era models. Pending CodeRabbit or check evidence is
   a wait state, not a hard blocker.
+- Security governance is source-backed through signed
+  `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
+  connector evidence, reuses the deny-first RBAC/ABAC policy engine, and returns
+  no sequential account ids, raw credentials, or fake security posture claims.
   
 ## Agentic Ontology & Auto-Organization
 
@@ -205,6 +209,11 @@ curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
   -d '{"action":"create","summary":"담당자 확인 회의","target_source_id":"caldav-primary"}'
+
+# Review source-backed Security governance without exposing provider secrets.
+curl -s http://localhost:8000/api/security/access-surface \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
+  | jq '{workspace_id, audit_event, sources, policy_decisions}'
 ```
 
 ## Error-message contract
