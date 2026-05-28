@@ -1,0 +1,3 @@
+## 2024-05-28 - Add ARIA labels to icon-only buttons
+**Learning:** Found multiple icon-only buttons in `TasksLayout.tsx` and `CalendarLayout.tsx` missing `aria-label`s, indicating a recurring accessibility gap. Korean labels ("이전 달", "다음 달", "설정", "닫기", "더보기") should be used to match the application's context. Temporary artifact scripts should be cleaned up before code review. Running `npm` modifies `package-lock.json` and must be strictly avoided; only `pnpm` is allowed.
+**Action:** When implementing icon-only buttons, always ensure an `aria-label` matching the localized app language is included. Never use `npm` in the frontend directory. Cleanup any temporary files created for searching.
