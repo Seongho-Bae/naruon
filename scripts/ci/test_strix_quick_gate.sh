@@ -159,6 +159,7 @@ assert_strix_gpt54_model_guard_cases() {
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
+	assert_file_contains "$GATE_SCRIPT" 'git diff --name-only "$base_sha" "$head_sha"' "strix gate falls back to explicit manual PR-scope diff when merge-base is unavailable"
 }
 
 assert_changed_file_membership_uses_cached_normalized_paths() {
