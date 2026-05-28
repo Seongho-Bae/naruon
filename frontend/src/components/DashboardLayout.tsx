@@ -190,8 +190,6 @@ export function NavLink({
 
   const active = isActivePath(pathname, href, currentHash, searchParams);
 
-
-
   return (
     <Link
       href={href}
