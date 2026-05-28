@@ -12,9 +12,12 @@ python3 -m pytest -q
 uvicorn main:app --reload
 ```
 
-Set `DATABASE_URL` explicitly through `.env`, Docker Compose, CI secrets, or the
-runtime environment. The backend has no code default for the database URL and
-fails closed when it is missing.
+Set `DATABASE_URL` and `AUTH_SESSION_HMAC_SECRET` explicitly through `.env`,
+Docker Compose, CI secrets, or the runtime environment. Backend settings read
+environment variables first, then `.env`, `../.env`, and `~/.env`; this supports
+running from `backend/`, the repository root, or a local operator env file
+without adding code defaults. The backend still fails closed when either
+required value is missing.
 
 Outbound SMTP/IMAP/POP3 connector destinations fail closed unless the normalized
 tenant host is listed in the matching `ALLOWED_*_HOSTS` setting and the port is

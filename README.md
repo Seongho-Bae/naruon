@@ -37,6 +37,11 @@ mail/calendar/file systems.
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence, reuses the deny-first RBAC/ABAC policy engine, and returns
   no sequential account ids, raw credentials, or fake security posture claims.
+- Data quality is source-backed through signed `/api/data/quality-surface`.
+  The endpoint summarizes scoped repositories, ingestion inventory, embedding
+  coverage, quality checks, and connector evidence from existing rows, returns
+  `provider_write_executed=false`, and does not expose provider credentials,
+  raw usernames, server URLs, or sequential ids.
   
 ## Agentic Ontology & Auto-Organization
 
@@ -66,7 +71,19 @@ mail/calendar/file systems.
 
 ```bash
 cp .env.example .env
-POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build
+python3 - <<'PY'
+from pathlib import Path
+import secrets
+
+env_path = Path(".env")
+env_text = env_path.read_text()
+env_text = env_text.replace(
+    "AUTH_SESSION_HMAC_SECRET=\n",
+    f"AUTH_SESSION_HMAC_SECRET={secrets.token_urlsafe(48)}\n",
+)
+env_path.write_text(env_text)
+PY
+docker compose up -d --build
 docker compose exec backend python import_fixtures.py
 curl -s http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
@@ -81,6 +98,10 @@ explicit entry points to the email workspace and calendar-first workspace.
 The fixture importer uses real OpenAI embeddings only when `OPENAI_API_KEY` is
 set. With the default empty key it writes local zero-vector embeddings so the
 threading proof path works offline.
+
+Backend settings read environment variables first, then `.env`, `../.env`, and
+`~/.env`. `DATABASE_URL` and `AUTH_SESSION_HMAC_SECRET` still have no code
+defaults; Compose and Kubernetes must inject them explicitly.
 
 ## Manual development path
 
@@ -214,6 +235,11 @@ curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
 curl -s http://localhost:8000/api/security/access-surface \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   | jq '{workspace_id, audit_event, sources, policy_decisions}'
+
+# Review source-backed Data repository, ingestion, embedding, and quality state.
+curl -s http://localhost:8000/api/data/quality-surface \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
+  | jq '{workspace_id, audit_event, repositories, quality_checks}'
 ```
 
 ## Error-message contract
@@ -306,6 +332,10 @@ overwrote customer-owned files. Project folder listings are scoped by the signed
 session organization and expose opaque `project_folders.folder_uid` values
 instead of sequential `folder_id` values, and the `/dav` PUT skeleton fails
 closed until provider-backed source, capability, and ETag/If-Match checks exist.
+Data repository, ingestion, embedding, and quality status is loaded from signed
+`/api/data/quality-surface`. The UI must not reintroduce static ingestion logs,
+fake vector counts, unsupported embedding model names, or fake quality totals;
+use source-backed rows or explicit pending states.
 
 ## Operations and release docs
 
