@@ -2105,7 +2105,11 @@ run_strix_with_transient_retry() {
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
-		echo "Retrying model '$model' due to $retry_reason (attempt $((attempt + 1))/$max_attempts)." >&2
+		if [ "$retry_reason" = "rate limit" ]; then
+			echo "Retrying model '$model' due to rate limit (attempt $((attempt + 1))/$max_attempts)." >&2
+		else
+			echo "Retrying model '$model' due to $retry_reason (attempt $((attempt + 1))/$max_attempts)." >&2
+		fi
 		sleep "$STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS"
 		attempt=$((attempt + 1))
 	done
