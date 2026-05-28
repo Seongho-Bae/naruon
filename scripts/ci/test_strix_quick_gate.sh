@@ -83,6 +83,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
 	assert_file_contains "$workflow_file" 'STRIX_OPENAI_MODEL: ${{ secrets.STRIX_LLM || '"'"'openai/gpt-5.4'"'"' }}' "strix workflow defaults STRIX_LLM to GPT-5.4"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select an OpenAI Platform GPT-5.4 or newer model" "strix workflow rejects older GPT inputs"
+	assert_file_contains "$workflow_file" "gpt-5.4 or openai/gpt-5.4" "strix workflow documents both direct OpenAI model formats"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
 	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow uses only explicit direct GPT-5 credentials"
 	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}' "strix workflow masks only the direct OpenAI credential"
@@ -109,6 +110,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gpt54_model_guard_semantics() {
 	local model="$1"
 	case "$model" in
+	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
 	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
 		return 0
 		;;
@@ -121,6 +123,12 @@ assert_strix_gpt54_model_guard_semantics() {
 assert_strix_gpt54_model_guard_cases() {
 	if assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
 		record_failure "strix GPT-5.4 guard must reject plain openai/gpt-5"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "gpt-5"; then
+		record_failure "strix GPT-5.4 guard must reject plain gpt-5"
+	fi
+	if ! assert_strix_gpt54_model_guard_semantics "gpt-5.4"; then
+		record_failure "strix GPT-5.4 guard must accept direct OpenAI gpt-5.4"
 	fi
 	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5.4"; then
 		record_failure "strix GPT-5.4 guard must accept openai/gpt-5.4"

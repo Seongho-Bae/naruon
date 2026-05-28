@@ -14,6 +14,9 @@
   OpenAI Platform credential with an OpenAI GPT-5.4-or-newer model. Do not route
   Strix through GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini,
   Google/Vertex, GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
+  Direct OpenAI model names may be plain (`gpt-5.4`) or provider-qualified
+  (`openai/gpt-5.4`), but must never use the GitHub Models
+  `openai/openai/...` prefix.
   Keep architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models examples cannot re-enter copied workflow guidance.
 
