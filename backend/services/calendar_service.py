@@ -9,7 +9,7 @@ from .exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 MAX_CALENDAR_TODO_LENGTH = 500
 UNSAFE_CALENDAR_TODO_SEQUENCES = ("<", ">", "`", "$(", "${")
-GOOGLE_OAUTH_TOKEN_URI = "https://oauth2.googleapis.com/token"
+GOOGLE_OAUTH_ENDPOINT_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_OAUTH_ALLOWED_KEYS = {
     "account",
     "client_id",
@@ -47,7 +47,7 @@ def validate_google_user_token(user_token: dict) -> dict:
         raise CalendarServiceError("Invalid calendar credentials")
 
     token_uri = user_token.get("token_uri")
-    if token_uri is not None and token_uri != GOOGLE_OAUTH_TOKEN_URI:
+    if token_uri is not None and token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
         raise CalendarServiceError("Invalid calendar credentials")
 
     return dict(user_token)
