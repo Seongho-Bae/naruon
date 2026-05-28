@@ -65,6 +65,11 @@ def schema_backfill_sql():
             "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS writeback_enabled boolean NOT NULL DEFAULT false"
         ),
+        text("ALTER TABLE project_folders ADD COLUMN IF NOT EXISTS folder_uid varchar"),
+        text(
+            "ALTER TABLE project_folders "
+            "ADD COLUMN IF NOT EXISTS organization_id varchar"
+        ),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"),
         text("ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
@@ -123,6 +128,23 @@ def schema_backfill_sql():
             "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_organization_id "
             "ON webdav_accounts (organization_id)"
         ),
+        text(
+            "UPDATE project_folders "
+            "SET folder_uid = 'webdav_folder_' || md5("
+            "random()::text || ':' || clock_timestamp()::text || ':' || "
+            "user_id || ':' || project_name || ':' || webdav_path"
+            ") "
+            "WHERE folder_uid IS NULL OR folder_uid = ''"
+        ),
+        text("ALTER TABLE project_folders ALTER COLUMN folder_uid SET NOT NULL"),
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_project_folders_folder_uid "
+            "ON project_folders (folder_uid)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_project_folders_owner_scope "
+            "ON project_folders (user_id, organization_id)"
+        ),
         text("ALTER TABLE emails DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(
             "ALTER TABLE sender_relationships "
@@ -152,6 +174,14 @@ def schema_backfill_sql():
                     "SET user_id = :user_id, "
                     "organization_id = :organization_id "
                     "WHERE user_id IS NULL AND organization_id IS NULL"
+                ).bindparams(
+                    user_id=backfill_user_id,
+                    organization_id=backfill_organization_id,
+                ),
+                text(
+                    "UPDATE project_folders "
+                    "SET organization_id = :organization_id "
+                    "WHERE user_id = :user_id AND organization_id IS NULL"
                 ).bindparams(
                     user_id=backfill_user_id,
                     organization_id=backfill_organization_id,

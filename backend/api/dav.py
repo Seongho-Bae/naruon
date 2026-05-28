@@ -59,6 +59,14 @@ async def dav_handler(request: Request, path: str):
         body = await request.body()
         safe_path = path.replace("\n", "").replace("\r", "")
         logger.info("DAV PUT received %s bytes at /%s", len(body), safe_path)
-        return Response(status_code=201)  # Created
+        return Response(
+            content=(
+                "Provider-backed DAV writeback is not implemented; use signed "
+                "writeback-intent APIs until source, capability, and "
+                "ETag/If-Match checks are enforced."
+            ),
+            media_type="text/plain",
+            status_code=501,
+        )
 
     return Response(content="Not Implemented", status_code=501)

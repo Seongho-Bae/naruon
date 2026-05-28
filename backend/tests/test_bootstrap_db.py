@@ -10,6 +10,7 @@ from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
+    ProjectFolder,
     SenderRelationship,
     TicketTask,
     WebdavAccount,
@@ -147,6 +148,16 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "alter table project_folders add column if not exists folder_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table project_folders add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "update webdav_accounts set source_uid" in statement
         and "webdav_src_" in statement
         and "md5" in statement
@@ -168,6 +179,29 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     assert any(
         "create index if not exists ix_webdav_accounts_organization_id"
         in statement
+        for statement in statements
+    )
+    assert any(
+        "update project_folders set folder_uid" in statement
+        and "webdav_folder_" in statement
+        and "md5" in statement
+        and "random()::text" in statement
+        and "clock_timestamp()::text" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table project_folders alter column folder_uid set not null"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_project_folders_folder_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_project_folders_owner_scope" in statement
+        and "user_id, organization_id" in statement
         for statement in statements
     )
     assert any(
@@ -326,6 +360,15 @@ def test_webdav_account_model_exposes_opaque_source_uid():
     assert WebdavAccount.__table__.c.source_uid.nullable is False
     assert WebdavAccount.__table__.c.source_uid.unique is True
     assert WebdavAccount.__table__.c.writeback_enabled.nullable is False
+
+
+def test_project_folder_model_exposes_opaque_folder_uid():
+    column_names = {column.name for column in ProjectFolder.__table__.columns}
+
+    assert "folder_uid" in column_names
+    assert "organization_id" in column_names
+    assert ProjectFolder.__table__.c.folder_uid.nullable is False
+    assert ProjectFolder.__table__.c.folder_uid.unique is True
 
 
 def test_connector_signal_event_model_uses_two_word_names():

@@ -140,6 +140,14 @@
   must not reveal or be deterministically derived from account primary keys, and
   provider mutations remain future work until connector execution can enforce
   capability, consent, and ETag/If-Match checks.
+- DAV/WebDAV folder and write paths must not expose sequential folder primary
+  keys or claim provider write success from skeleton endpoints. Browser-visible
+  project folders use opaque `folder_uid` values, and `/dav` mutation methods
+  must fail closed until source, capability, credential, and ETag/If-Match
+  execution exists.
+- WebDAV folder listings must stay tenant-scoped by both `user_id` and signed
+  session `organization_id`; do not reintroduce user-only folder queries because
+  the same principal can exist in multiple B2B tenants.
 - Mobile workspace drawers must lock background body scroll while open and keep
   the drawer itself scrollable; responsive E2E screenshots should cover the open
   hamburger state after scrolling the drawer.

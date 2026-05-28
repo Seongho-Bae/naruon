@@ -41,23 +41,31 @@ class CalDavService:
     def __init__(self):
         pass
         
-    def determine_writeback_target(self, task_context: Dict[str, Any], connected_accounts: list) -> str:
+    def determine_writeback_target(
+        self,
+        task_context: Dict[str, Any],
+        connected_accounts: list,
+    ) -> str | None:
         """
-        Determines the most appropriate CalDav account to write back to,
-        based on the context of the task (e.g., if it originated from a company email).
+        Determine the opaque customer-owned CalDAV source to write back to.
         """
-        # Basic ontology/context mock logic
+        eligible_sources = [
+            account
+            for account in connected_accounts
+            if account.get("writeback_enabled") is True
+            and isinstance(account.get("source_id"), str)
+            and account.get("source_id")
+        ]
         source_email = task_context.get("source_email", "")
         if isinstance(source_email, str) and "@" in source_email:
             source_domain = source_email.strip().lower().rsplit("@", 1)[-1]
-            for account in connected_accounts:
+            for account in eligible_sources:
                 account_domain = str(account.get("domain", "")).lower().strip()
                 if account_domain and source_domain == account_domain:
-                    return account.get("account_id")
+                    return account["source_id"]
                 
-        # Fallback to the primary account
-        if connected_accounts:
-            return connected_accounts[0].get("account_id")
-        return "default_system_caldav"
+        if eligible_sources:
+            return eligible_sources[0]["source_id"]
+        return None
 
 caldav_service = CalDavService()

@@ -65,4 +65,6 @@ def test_dav_put(dev_auth_dependency_overrides):
             content=b"BEGIN:VCALENDAR\r\nEND:VCALENDAR",
             headers=AUTH_HEADERS,
         )
-        assert response.status_code == 201
+        assert response.status_code == 501
+        assert "Provider-backed DAV writeback is not implemented" in response.text
+        assert "etag" not in {header.lower() for header in response.headers}

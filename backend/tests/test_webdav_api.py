@@ -73,11 +73,19 @@ def stub_webdav_service(monkeypatch):
             }
         ] if user_id == "alice" else []
 
-    async def fake_folders(db, user_id):
+    async def fake_folders(db, user_id, organization_id=None):
         return [
-            {"folder_id": 1, "project_name": "Naruon Roadmap 2026", "webdav_path": "/Projects/Naruon_Roadmap_2026"},
-            {"folder_id": 2, "project_name": "Marketing Assets", "webdav_path": "/Projects/Marketing_Assets"}
-        ] if user_id == "alice" else []
+            {
+                "folder_uid": "webdav_folder_demo_roadmap",
+                "project_name": "Naruon Roadmap 2026",
+                "webdav_path": "/Projects/Naruon_Roadmap_2026",
+            },
+            {
+                "folder_uid": "webdav_folder_demo_marketing",
+                "project_name": "Marketing Assets",
+                "webdav_path": "/Projects/Marketing_Assets",
+            },
+        ] if user_id == "alice" and organization_id == "org-acme" else []
 
     async def fake_intent(db, user_id, organization_id=None, target_source_id=None):
         return webdav_service.determine_webdav_writeback_intent_from_accounts(
@@ -228,8 +236,10 @@ def test_get_project_folders(auth_client):
     assert response.status_code == 200, response.text
     body = response.json()
     assert len(body) == 2
+    assert body[0]["folder_uid"] == "webdav_folder_demo_roadmap"
     assert body[0]["project_name"] == "Naruon Roadmap 2026"
     assert body[1]["project_name"] == "Marketing Assets"
+    assert "folder_id" not in body[0]
 
 def test_get_webdav_writeback_intent(auth_client):
     response = auth_client.post("/api/webdav/writeback-intent", json={})
@@ -671,6 +681,195 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     assert body["server_url"] == "https://real-webdav.naruon.net"
     assert body["provenance"] == "server-authoritative"
     assert "account_id" not in body
+
+
+@pytest.mark.asyncio
+async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
+    folder_uid = f"webdav_folder_{uuid.uuid4().hex[:24]}"
+    rival_folder_uid = f"webdav_folder_{uuid.uuid4().hex[:24]}"
+    folder_id = 10_000 + (uuid.uuid4().int % 1_000_000)
+    rival_folder_id = 10_000 + (uuid.uuid4().int % 1_000_000)
+    user_id = f"webdav-folder-{uuid.uuid4().hex[:12]}"
+    monkeypatch.setattr(
+        webdav_service,
+        "get_project_folders_from_db",
+        WebDavService.get_project_folders_from_db.__get__(
+            webdav_service,
+            WebDavService,
+        ),
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS project_folders (
+                        folder_id INTEGER PRIMARY KEY,
+                        folder_uid VARCHAR UNIQUE NOT NULL,
+                        user_id VARCHAR NOT NULL,
+                        organization_id VARCHAR,
+                        project_name VARCHAR NOT NULL,
+                        webdav_path VARCHAR NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_folders "
+                    "ADD COLUMN IF NOT EXISTS folder_uid VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE project_folders "
+                    "ADD COLUMN IF NOT EXISTS organization_id VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM project_folders "
+                    "WHERE folder_uid IN (:folder_uid, :rival_folder_uid) "
+                    "OR folder_id IN (:folder_id, :rival_folder_id)"
+                ),
+                {
+                    "folder_uid": folder_uid,
+                    "rival_folder_uid": rival_folder_uid,
+                    "folder_id": folder_id,
+                    "rival_folder_id": rival_folder_id,
+                },
+            )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO project_folders (
+                        folder_id,
+                        folder_uid,
+                        user_id,
+                        organization_id,
+                        project_name,
+                        webdav_path
+                    )
+                    VALUES (
+                        :folder_id,
+                        :folder_uid,
+                        :user_id,
+                        :organization_id,
+                        :project_name,
+                        :webdav_path
+                    )
+                    """
+                ),
+                {
+                    "folder_id": folder_id,
+                    "folder_uid": folder_uid,
+                    "user_id": user_id,
+                    "organization_id": "org-acme",
+                    "project_name": "Source-backed Folder",
+                    "webdav_path": "/Projects/Source_Backed_Folder",
+                },
+            )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO project_folders (
+                        folder_id,
+                        folder_uid,
+                        user_id,
+                        organization_id,
+                        project_name,
+                        webdav_path
+                    )
+                    VALUES (
+                        :folder_id,
+                        :folder_uid,
+                        :user_id,
+                        :organization_id,
+                        :project_name,
+                        :webdav_path
+                    )
+                    """
+                ),
+                {
+                    "folder_id": rival_folder_id,
+                    "folder_uid": rival_folder_uid,
+                    "user_id": user_id,
+                    "organization_id": "org-rival",
+                    "project_name": "Rival Folder",
+                    "webdav_path": "/Projects/Rival_Folder",
+                },
+            )
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ):
+        await engine.dispose()
+        pytest.skip("PostgreSQL smoke path unavailable")
+    except Exception:
+        await engine.dispose()
+        raise
+
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override_real_db():
+        async with session_factory() as session:
+            yield session
+
+    previous_override = app.dependency_overrides.pop(get_auth_context, None)
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    app.dependency_overrides[get_db] = override_real_db
+    token = _signed_session_token(
+        _valid_session_payload(sub=user_id, org="org-acme", workspace="workspace-org-acme")
+    )
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            response = await client.get("/api/webdav/folders")
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        if previous_override is not None:
+            app.dependency_overrides[get_auth_context] = previous_override
+        app.dependency_overrides.pop(get_db, None)
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "DELETE FROM project_folders "
+                    "WHERE folder_uid IN (:folder_uid, :rival_folder_uid) "
+                    "OR folder_id IN (:folder_id, :rival_folder_id)"
+                ),
+                {
+                    "folder_uid": folder_uid,
+                    "rival_folder_uid": rival_folder_uid,
+                    "folder_id": folder_id,
+                    "rival_folder_id": rival_folder_id,
+                },
+            )
+        await engine.dispose()
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body == [
+        {
+            "folder_uid": folder_uid,
+            "project_name": "Source-backed Folder",
+            "webdav_path": "/Projects/Source_Backed_Folder",
+        }
+    ]
+    assert "folder_id" not in body[0]
 
 
 @pytest.mark.asyncio

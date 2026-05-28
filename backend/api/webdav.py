@@ -23,7 +23,7 @@ class WebdavAccountResponse(BaseModel):
     writeback_enabled: bool
 
 class ProjectFolderResponse(BaseModel):
-    folder_id: int
+    folder_uid: str
     project_name: str
     webdav_path: str
 
@@ -80,7 +80,11 @@ async def get_project_folders(
     db: AsyncSession = Depends(get_db),
 ):
     user_id = auth_context.user_id
-    return await webdav_service.get_project_folders_from_db(db, user_id)
+    return await webdav_service.get_project_folders_from_db(
+        db,
+        user_id,
+        auth_context.organization_id,
+    )
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)
 async def get_webdav_writeback_intent(

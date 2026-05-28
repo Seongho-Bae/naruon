@@ -288,7 +288,10 @@ eligibility, reject legacy `target_account_id` payloads, and keep sequential
 `account_id` values internal-only. The Data workspace exposes the WebDAV source
 as an explicit selected target and treats `409` If-Match/ETag responses as
 conflicts instead of generic failures, so UI copy never implies a provider write
-overwrote customer-owned files.
+overwrote customer-owned files. Project folder listings are scoped by the signed
+session organization and expose opaque `project_folders.folder_uid` values
+instead of sequential `folder_id` values, and the `/dav` PUT skeleton fails
+closed until provider-backed source, capability, and ETag/If-Match checks exist.
 
 ## Operations and release docs
 

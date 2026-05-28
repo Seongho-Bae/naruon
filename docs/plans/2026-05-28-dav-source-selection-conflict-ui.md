@@ -45,11 +45,11 @@ workspace/control plane over customer-owned CalDAV/CardDAV/WebDAV providers.
 - Real connector/provider write execution remains out of scope until the
   connector can enforce consent, capability, credential reference, remote href,
   and ETag/If-Match checks server-side.
-- `CaldavAccount` and `/dav` still need deeper registry consolidation so legacy
-  account ids and skeleton PUT behavior cannot be mistaken for a complete
-  provider write path.
-- WebDAV project folder responses still need opaque folder ids in a backend
-  slice; this UI phase did not change that API contract.
+- `CaldavAccount` still needs deeper credential/account registry consolidation
+  with `calendar_writeback_sources`; this UI phase did not add provider
+  execution.
+- WebDAV project folder opaque ids and `/dav` fail-closed mutation behavior are
+  handled in `2026-05-28-dav-registry-hardening.md`.
 
 ## Verification
 
