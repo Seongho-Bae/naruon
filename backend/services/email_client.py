@@ -440,7 +440,7 @@ def _build_smtp_client(
 ) -> aiosmtplib.SMTP:
     if smtp_port == 465:
         return _PinnedImplicitTlsSMTP(
-            hostname=None,
+            hostname=smtp_server,
             port=None,
             sock=smtp_socket,
             timeout=SMTP_TIMEOUT_SECONDS,
@@ -448,7 +448,7 @@ def _build_smtp_client(
             tls_server_hostname=smtp_server,
         )
     return aiosmtplib.SMTP(
-        hostname=None,
+        hostname=smtp_server,
         port=None,
         sock=smtp_socket,
         timeout=SMTP_TIMEOUT_SECONDS,
