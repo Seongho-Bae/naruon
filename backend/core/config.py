@@ -82,4 +82,4 @@ class Settings(BaseSettings):
         return self
 
 
-settings = Settings(**cast(dict[str, Any], {}))  # type: ignore
+settings = Settings()
