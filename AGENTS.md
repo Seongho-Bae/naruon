@@ -125,6 +125,9 @@
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
+- Icon-only workspace controls must carry localized `aria-label` text matching
+  the visible app language; do not rely on the SVG icon alone for Calendar,
+  Tasks, drawer, modal, or toolbar actions.
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.

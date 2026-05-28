@@ -498,7 +498,7 @@ export function TasksLayout() {
                     <h2 className="font-bold text-sm">{col.title}</h2>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.color}`}>{col.count}</span>
                   </div>
-                  <button className="text-muted-foreground hover:text-foreground"><MoreHorizontal className="size-4" /></button>
+                  <button aria-label="더보기" className="text-muted-foreground hover:text-foreground"><MoreHorizontal className="size-4" /></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
                   {tasks[col.id as keyof typeof MOCK_TASKS].map((task) => (
