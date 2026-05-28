@@ -17,7 +17,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import get_auth_context, get_current_user
 from core.config import settings
-from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
+from db.models import (
+    CalendarWritebackSource,
+    ConnectorSignalEvent,
+    SecurityAuditEvent,
+    WebdavAccount,
+)
 from db.session import get_db
 from main import app
 
@@ -41,11 +46,13 @@ class MockAsyncSession:
         self,
         webdav_accounts: list[WebdavAccount] | None = None,
         calendar_sources: list[CalendarWritebackSource] | None = None,
+        audit_events: list[SecurityAuditEvent] | None = None,
         connector_events: list[ConnectorSignalEvent] | None = None,
     ):
         self.results = [
             webdav_accounts or [],
             calendar_sources or [],
+            audit_events or [],
             connector_events or [],
         ]
         self.execute_calls = 0
@@ -150,6 +157,27 @@ def _connector_event(
     )
 
 
+def _audit_event(
+    event_uid: str,
+    actor_user_id: str = "admin",
+    organization_id: str | None = "org-acme",
+    workspace_id: str = "workspace-org-acme",
+) -> SecurityAuditEvent:
+    return SecurityAuditEvent(
+        event_uid=event_uid,
+        actor_user_id=actor_user_id,
+        actor_role="tenant_admin",
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        event_action="update",
+        resource_type="llm_provider",
+        resource_uid="llm_provider:provider_primary",
+        evidence_source="api.llm_providers",
+        detail_text="Updated provider configuration",
+        observed_at=_now(),
+    )
+
+
 @pytest.fixture
 def mock_db():
     return MockAsyncSession(
@@ -160,6 +188,10 @@ def mock_db():
         calendar_sources=[
             _calendar_source("caldav_src_primary", "owner"),
             _calendar_source("caldav_src_other_org", "owner", "org-rival"),
+        ],
+        audit_events=[
+            _audit_event("audit_evt_provider_update"),
+            _audit_event("audit_evt_other_org", organization_id="org-rival"),
         ],
         connector_events=[
             _connector_event("connector_evt_heartbeat"),
@@ -201,6 +233,10 @@ def test_access_surface_returns_org_scoped_sources_and_policy_decisions(admin_cl
     assert "caldav_src_other_org" not in response.text
     assert data["connector_events"][0]["event_uid"] == "connector_evt_heartbeat"
     assert "connector_evt_other_org" not in response.text
+    audit_event_ids = {event["event_uid"] for event in data["durable_audit_events"]}
+    assert audit_event_ids == {"audit_evt_provider_update"}
+    assert "audit_evt_other_org" not in response.text
+    assert data["durable_audit_events"][0]["workspace_id"] == "workspace-org-acme"
     reasons = {decision["reason"] for decision in data["policy_decisions"]}
     assert "organization_denied" in reasons
     assert "data_region_denied" in reasons
@@ -218,6 +254,9 @@ def test_access_surface_redacts_sequential_ids_and_credentials(admin_client):
         "credential secret",
         "username",
         "files@example.com",
+        "api_key",
+        "sk-",
+        "audit_id",
     ):
         assert forbidden not in serialized
 
@@ -232,6 +271,10 @@ def test_member_surface_only_returns_owned_sources(mock_db):
             calendar_sources=[
                 _calendar_source("caldav_src_owned", "member"),
                 _calendar_source("caldav_src_admin", "admin"),
+            ],
+            audit_events=[
+                _audit_event("audit_evt_member", actor_user_id="member"),
+                _audit_event("audit_evt_admin", actor_user_id="admin"),
             ],
             connector_events=[],
         )
@@ -253,6 +296,10 @@ def test_member_surface_only_returns_owned_sources(mock_db):
     assert response.status_code == 200, response.text
     source_ids = {source["source_id"] for source in response.json()["sources"]}
     assert source_ids == {"webdav_src_owned", "caldav_src_owned"}
+    audit_event_ids = {
+        event["event_uid"] for event in response.json()["durable_audit_events"]
+    }
+    assert audit_event_ids == {"audit_evt_member"}
 
 
 def test_access_surface_rejects_public_identity_headers_without_signed_session(mock_db):
@@ -313,6 +360,7 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     source_uid = f"webdav_src_security_{uuid.uuid4().hex[:18]}"
     caldav_uid = f"caldav_src_security_{uuid.uuid4().hex[:18]}"
     event_uid = f"connector_evt_security_{uuid.uuid4().hex[:18]}"
+    audit_uid = f"audit_evt_security_{uuid.uuid4().hex[:18]}"
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
     try:
         async with engine.begin() as conn:
@@ -421,6 +469,48 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                     "detail_text": "security smoke connector heartbeat",
                 },
             )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO security_audit_events (
+                        event_uid,
+                        actor_user_id,
+                        actor_role,
+                        organization_id,
+                        workspace_id,
+                        event_action,
+                        resource_type,
+                        resource_uid,
+                        evidence_source,
+                        detail_text
+                    )
+                    VALUES (
+                        :event_uid,
+                        :actor_user_id,
+                        :actor_role,
+                        :organization_id,
+                        :workspace_id,
+                        :event_action,
+                        :resource_type,
+                        :resource_uid,
+                        :evidence_source,
+                        :detail_text
+                    )
+                    """
+                ),
+                {
+                    "event_uid": audit_uid,
+                    "actor_user_id": user_id,
+                    "actor_role": "tenant_admin",
+                    "organization_id": "org-acme",
+                    "workspace_id": "workspace-org-acme",
+                    "event_action": "update",
+                    "resource_type": "llm_provider",
+                    "resource_uid": "llm_provider:security_smoke",
+                    "evidence_source": "api.llm_providers",
+                    "detail_text": "Updated provider configuration",
+                },
+            )
     except (
         ConnectionRefusedError,
         OSError,
@@ -482,6 +572,13 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                 ),
                 {"event_uid": event_uid},
             )
+            await conn.execute(
+                text(
+                    "DELETE FROM security_audit_events "
+                    "WHERE event_uid = :event_uid"
+                ),
+                {"event_uid": audit_uid},
+            )
         await engine.dispose()
 
     assert response.status_code == 200, response.text
@@ -490,5 +587,8 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     assert source_uid in source_ids
     assert caldav_uid in source_ids
     assert event_uid in {event["event_uid"] for event in body["connector_events"]}
+    assert audit_uid in {
+        event["event_uid"] for event in body["durable_audit_events"]
+    }
     assert "account_id" not in response.text
     assert "security-smoke@example.com" not in response.text

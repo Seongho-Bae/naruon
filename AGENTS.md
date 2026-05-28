@@ -110,6 +110,10 @@
   no-op. Do not place sensitive credential values, secret-derived values, or
   password-shaped field names in logs or raised exception text; use static
   non-secret labels such as "credential secret" instead.
+- SMTP, IMAP, and POP3 host validation must reject legacy numeric IP literal
+  forms such as decimal integers, hexadecimal integers, and octal dotted forms
+  before DNS or socket connection; `socket.getaddrinfo` may resolve those forms
+  to loopback/private addresses even when `ipaddress.ip_address` rejects them.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and
@@ -117,6 +121,9 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
+- Public audit/event identifiers that may use human-readable prefixes must not
+  be stored in artificially short `varchar(n)` columns; use opaque source UIDs
+  that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
 - When robot review cites an obsolete Strix provider policy, update the docs and
   tests to the current secret contract before accepting a rollback suggestion;

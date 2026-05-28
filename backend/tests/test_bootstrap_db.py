@@ -11,6 +11,7 @@ from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
     ProjectFolder,
+    SecurityAuditEvent,
     SenderRelationship,
     TenantConfig,
     TicketTask,
@@ -118,6 +119,13 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "create table if not exists calendar_writeback_sources" in statement
         for statement in statements
     )
+    assert any(
+        "create table if not exists security_audit_events" in statement
+        for statement in statements
+    )
+    assert any("actor_user_id varchar not null" in statement for statement in statements)
+    assert any("event_action varchar not null" in statement for statement in statements)
+    assert any("resource_uid varchar" in statement for statement in statements)
     assert any("source_uid varchar primary key" in statement for statement in statements)
     assert any("workspace_id varchar not null" in statement for statement in statements)
     assert any("provider_name varchar not null" in statement for statement in statements)
@@ -434,6 +442,29 @@ def test_connector_signal_event_model_uses_two_word_names():
     assert all("_" in column_name for column_name in column_names)
 
 
+def test_security_audit_event_model_uses_two_word_names():
+    assert SecurityAuditEvent.__tablename__ == "security_audit_events"
+    column_names = {column.name for column in SecurityAuditEvent.__table__.columns}
+    index_names = {index.name for index in SecurityAuditEvent.__table__.indexes}
+
+    assert column_names == {
+        "event_uid",
+        "actor_user_id",
+        "actor_role",
+        "organization_id",
+        "workspace_id",
+        "event_action",
+        "resource_type",
+        "resource_uid",
+        "evidence_source",
+        "detail_text",
+        "observed_at",
+    }
+    assert all("_" in column_name for column_name in column_names)
+    assert "ix_security_audit_events_scope_time" in index_names
+    assert "ix_security_audit_events_actor_scope" in index_names
+
+
 def test_schema_backfill_creates_connector_signal_events():
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
@@ -443,6 +474,14 @@ def test_schema_backfill_creates_connector_signal_events():
     )
     assert any(
         "ix_connector_signal_events_scope_time" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_security_audit_events_scope_time" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_security_audit_events_actor_scope" in statement
         for statement in statements
     )
 

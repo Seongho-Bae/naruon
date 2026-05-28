@@ -37,8 +37,9 @@ mail/calendar/file systems.
   wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
-  connector evidence, reuses the deny-first RBAC/ABAC policy engine, and returns
-  no sequential account ids, raw credentials, or fake security posture claims.
+  connector evidence plus durable `security_audit_events`, reuses the deny-first
+  RBAC/ABAC policy engine, and returns no sequential account ids, raw
+  credentials, legacy unscoped audit rows, or fake security posture claims.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
   The endpoint summarizes scoped repositories, ingestion inventory, embedding
   coverage, quality checks, and connector evidence from existing rows, returns
@@ -138,11 +139,13 @@ npm run build
 npm run dev
 ```
 
-`next.config.ts` caps static generation concurrency by default
-(`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
+`next.config.ts` applies a best-effort local guard for build worker fan-out and
+static generation concurrency (`NEXT_BUILD_CPUS=2`,
+`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
 `NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER=50`) so constrained CI/build
-machines do not fan out excessive Node/PostCSS workers. Raise those values only
-with explicit build evidence.
+machines do not fan out excessive Node/PostCSS workers. Treat the Next.js CPU
+knob as experimental and enforce authoritative limits through CI, Docker, or the
+runner. Raise those values only with explicit build evidence.
 
 ## Threading proof points
 

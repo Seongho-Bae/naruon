@@ -282,6 +282,21 @@ const securityAccessSurface = {
       observed_at: '2026-05-28T04:00:00Z',
     },
   ],
+  durable_audit_events: [
+    {
+      event_uid: 'audit_evt_provider_update',
+      actor_user_id: 'admin',
+      actor_role: 'tenant_admin',
+      organization_id: 'org-acme',
+      workspace_id: 'workspace-org-acme',
+      event_action: 'update',
+      resource_type: 'llm_provider',
+      resource_uid: 'llm_provider:provider_primary',
+      evidence_source: 'api.llm_providers',
+      detail_text: 'Updated provider configuration',
+      observed_at: '2026-05-28T04:02:00Z',
+    },
+  ],
   policy_decisions: [
     {
       decision_uid: 'policy:webdav_src_primary',
