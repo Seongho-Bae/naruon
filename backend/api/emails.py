@@ -6,7 +6,7 @@ from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
 from typing import Literal
-from services.email_client import send_email, validate_smtp_destination
+from services.email_client import EmailMessageParams, SmtpConfig, send_email, validate_smtp_destination
 from services.reply_tracking_service import (
     check_missing_replies,
     configured_email_addresses,
@@ -454,16 +454,22 @@ async def send_email_endpoint(
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             raise
 
-        send_result = await send_email(
-            request.to,
-            request.subject,
-            request.body,
+        message_params = EmailMessageParams(
+            to_address=request.to,
+            subject=request.subject,
+            body=request.body,
+            in_reply_to=request.in_reply_to,
+            references=request.references,
+        )
+        smtp_config = SmtpConfig(
             smtp_server=smtp_server,
             smtp_port=smtp_port,
             smtp_username=smtp_username,
             smtp_password=smtp_password,
-            in_reply_to=request.in_reply_to,
-            references=request.references,
+        )
+        send_result = await send_email(
+            message_params=message_params,
+            smtp_config=smtp_config,
         )
         if send_result.get("status") not in {"sent", "simulated"}:
             raise HTTPException(status_code=500, detail="Failed to send email")

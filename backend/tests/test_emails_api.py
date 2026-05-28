@@ -939,16 +939,23 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"status": "simulated", "simulated": True}
     assert validate_calls == [True]
-    mock_send_email.assert_called_once_with(
-        "test@example.com",
-        "Re: Test",
-        "This is a reply.",
+    from services.email_client import EmailMessageParams, SmtpConfig
+    expected_params = EmailMessageParams(
+        to_address="test@example.com",
+        subject="Re: Test",
+        body="This is a reply.",
+        in_reply_to="<parent@example.com>",
+        references="<root@example.com> <parent@example.com>",
+    )
+    expected_config = SmtpConfig(
         smtp_server="smtp.example.com",
         smtp_port=587,
         smtp_username="testuser",
         smtp_password=None,
-        in_reply_to="<parent@example.com>",
-        references="<root@example.com> <parent@example.com>",
+    )
+    mock_send_email.assert_called_once_with(
+        message_params=expected_params,
+        smtp_config=expected_config,
     )
 
 
