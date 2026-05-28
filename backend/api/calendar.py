@@ -92,10 +92,7 @@ def _registry_scope_statement(auth_context: AuthContext):
     )
     if is_system_admin_role(auth_context.role):
         return statement
-    if is_tenant_admin_role(auth_context.role) and auth_context.organization_id:
-        return statement.where(
-            CalendarWritebackSource.organization_id == auth_context.organization_id
-        )
+
     organization_filter = (
         CalendarWritebackSource.organization_id == auth_context.organization_id
         if auth_context.organization_id is not None
@@ -185,8 +182,6 @@ def _can_target_writeback_source(
         return True
     if target_source.organization_id != auth_context.organization_id:
         return False
-    if is_tenant_admin_role(auth_context.role):
-        return True
     return target_source.owner_id == auth_context.user_id
 
 
