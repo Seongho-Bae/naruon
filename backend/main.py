@@ -21,6 +21,7 @@ from api.dav import router as dav_router
 from api.accounts import router as accounts_router
 from api.webdav import router as webdav_router
 from api.security import router as security_router
+from api.data import router as data_router
 from core.config import settings
 from core.telemetry import setup_telemetry
 from services.imap_worker import ImapSyncWorker
@@ -88,6 +89,7 @@ app.include_router(dav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(security_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(data_router, dependencies=PRIVATE_API_DEPENDENCIES)
 
 
 @app.get("/")

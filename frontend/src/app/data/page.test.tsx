@@ -23,6 +23,136 @@ vi.mock("lucide-react", () => ({
 
 import DataPage from "./page";
 
+const dataQualitySurface = {
+  workspace_id: "workspace-org-acme",
+  organization_id: "org-acme",
+  audit_event: "data.quality_surface.viewed",
+  provider_write_executed: false,
+  repositories: [
+    {
+      source_id: "email_repository",
+      repository_type: "email_repository",
+      display_name: "Scoped email archive",
+      object_count: 4,
+      writeback_enabled: null,
+      evidence_source: "emails",
+      provider_write_executed: false,
+    },
+    {
+      source_id: "attachment_repository",
+      repository_type: "attachment_repository",
+      display_name: "Scoped attachment archive",
+      object_count: 3,
+      writeback_enabled: null,
+      evidence_source: "attachments",
+      provider_write_executed: false,
+    },
+    {
+      source_id: "webdav_src_primary",
+      repository_type: "webdav_account",
+      display_name: "Customer WebDAV account",
+      object_count: 0,
+      writeback_enabled: true,
+      evidence_source: "webdav_accounts",
+      provider_write_executed: false,
+    },
+  ],
+  pipeline_stages: [
+    {
+      stage_key: "source_registry",
+      display_name: "Source registry",
+      status_code: "ready",
+      progress_percent: 100,
+      evidence_source: "webdav_accounts, project_folders",
+      detail_text: "2 customer-owned sources are in scope.",
+      provider_write_executed: false,
+    },
+    {
+      stage_key: "ingestion_inventory",
+      display_name: "Ingestion inventory",
+      status_code: "ready",
+      progress_percent: 100,
+      evidence_source: "emails, attachments",
+      detail_text: "4 emails and 3 attachments are visible in the signed workspace scope.",
+      provider_write_executed: false,
+    },
+    {
+      stage_key: "embedding_inventory",
+      display_name: "Embedding inventory",
+      status_code: "running",
+      progress_percent: 57,
+      evidence_source: "emails.embedding, attachments.embedding",
+      detail_text: "4 of 7 objects have vectors.",
+      provider_write_executed: false,
+    },
+  ],
+  embedding_collections: [
+    {
+      collection_key: "emails_embedding",
+      display_name: "Email vectors",
+      object_count: 4,
+      embedded_count: 3,
+      embedding_model: "text-embedding-3-small",
+      vector_dimensions: 1536,
+      status_code: "running",
+      evidence_source: "emails.embedding",
+      provider_write_executed: false,
+    },
+    {
+      collection_key: "attachments_embedding",
+      display_name: "Attachment vectors",
+      object_count: 3,
+      embedded_count: 1,
+      embedding_model: "text-embedding-3-small",
+      vector_dimensions: 1536,
+      status_code: "running",
+      evidence_source: "attachments.embedding",
+      provider_write_executed: false,
+    },
+  ],
+  quality_checks: [
+    {
+      check_key: "thread_id_integrity",
+      display_name: "Thread id integrity",
+      status_code: "needs_attention",
+      issue_count: 1,
+      total_count: 4,
+      evidence_source: "emails.thread_id",
+      detail_text: "Some scoped emails need canonical thread ids.",
+      provider_write_executed: false,
+    },
+    {
+      check_key: "dedupe_fingerprint",
+      display_name: "Dedupe fingerprint",
+      status_code: "needs_attention",
+      issue_count: 2,
+      total_count: 4,
+      evidence_source: "emails.fingerprint",
+      detail_text: "Some scoped emails need duplicate-detection fingerprints.",
+      provider_write_executed: false,
+    },
+    {
+      check_key: "attachment_content",
+      display_name: "Attachment content",
+      status_code: "needs_attention",
+      issue_count: 1,
+      total_count: 3,
+      evidence_source: "attachments.content",
+      detail_text: "Some scoped attachments need extracted content.",
+      provider_write_executed: false,
+    },
+  ],
+  connector_events: [
+    {
+      event_uid: "connector_evt_data_quality",
+      signal_key: "connector_heartbeat",
+      state_code: "heartbeat",
+      detail_text: "outbound connector heartbeat received",
+      observed_at: "2026-05-28T05:45:00Z",
+    },
+  ],
+};
+
 function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   return {
     ok,
@@ -35,6 +165,10 @@ function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
 function mockWebdavFetch() {
   return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
+    if (path === "/api/data/quality-surface") {
+      void init;
+      return jsonResponse(dataQualitySurface);
+    }
     if (path === "/api/webdav/accounts") {
       return jsonResponse([
         {
@@ -131,10 +265,94 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("저장소");
     expect(container.textContent).toContain("데이터와 파일");
     expect(container.textContent).toContain("WebDAV 원본");
-    expect(container.textContent).toContain("로컬 캐시");
+    expect(container.textContent).toContain("메일/첨부 저장소");
+    expect(container.textContent).toContain("data.quality_surface.viewed");
+    expect(container.textContent).toContain("connector_evt_data_quality");
     expect(container.textContent).toContain("WebDAV writeback intent 승인");
     expect(container.textContent).toContain("etag=etag-webdav-primary");
     expect(container.textContent).toContain("webdav_folder_roadmap");
+  });
+
+  it("loads signed data quality surface without public identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed-data-quality-session");
+    const fetchMock = mockWebdavFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const dataCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/data/quality-surface");
+    expect(dataCall).toBeDefined();
+    const [, init] = dataCall ?? [];
+    const headerEntries =
+      init?.headers instanceof Headers
+        ? Array.from(init.headers.entries())
+        : Object.entries((init?.headers as Record<string, string>) ?? {});
+    const requestHeaders = Object.fromEntries(
+      headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
+    );
+    expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-data-quality-session",
+      "content-type": "application/json",
+    }));
+    for (const publicHeader of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(requestHeaders[publicHeader]).toBeUndefined();
+    }
+    expect(container.textContent).not.toContain("28,401");
+    expect(container.textContent).not.toContain("23건");
+  });
+
+  it("renders API-backed pipeline embedding and quality tabs", async () => {
+    vi.stubGlobal("fetch", mockWebdavFetch());
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const pipelineTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("수집 파이프라인"),
+    );
+    await act(async () => {
+      pipelineTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("4 emails and 3 attachments");
+    expect(container.textContent).toContain("emails.embedding, attachments.embedding");
+
+    const embeddingTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("임베딩"),
+    );
+    await act(async () => {
+      embeddingTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("text-embedding-3-small");
+    expect(container.textContent).toContain("1,536");
+    expect(container.textContent).toContain("Email vectors");
+    expect(container.textContent).not.toContain("text-embedding-3-large");
+
+    const qualityTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("품질 점검"),
+    );
+    await act(async () => {
+      qualityTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.textContent).toContain("Thread id integrity");
+    expect(container.textContent).toContain("Some scoped emails need canonical thread ids.");
+    expect(container.textContent).toContain("provider_write_executed=false");
+    expect(container.textContent).not.toContain("발견된 심각한 데이터 품질 문제가 없습니다.");
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {
@@ -213,6 +431,7 @@ describe("DataPage", () => {
         ]);
       }
       if (path === "/api/webdav/folders") return jsonResponse([]);
+      if (path === "/api/data/quality-surface") return jsonResponse(dataQualitySurface);
       expect(path).toBe("/api/webdav/writeback-intent");
       expect(JSON.parse(String(init?.body))).toEqual({
         target_source_id: "webdav_src_team",

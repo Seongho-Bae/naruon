@@ -378,6 +378,100 @@ test('renders Security governance access audit sharing and policy with signed AP
   await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-hamburger.png'), fullPage: false });
 });
 
+test('renders Data quality surface across viewports with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-data-quality-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  const dataRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/data/quality-surface' && request.method() === 'GET';
+  });
+  await page.goto('/data');
+  const dataHeaders = (await dataRequest).headers();
+  expect(dataHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(dataHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
+  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await expect(page.getByText('connector_evt_data_quality')).toBeVisible();
+  await page.getByRole('button', { name: '수집 파이프라인' }).click();
+  await expect(page.getByText('4 emails and 3 attachments')).toBeVisible();
+  await expect(page.getByText('emails.embedding, attachments.embedding')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-pipeline.png'), fullPage: false });
+
+  await page.getByRole('button', { name: '임베딩' }).click();
+  await expect(page.getByText('text-embedding-3-small').first()).toBeVisible();
+  await expect(page.getByText('Email vectors')).toBeVisible();
+  await expect(page.getByText('1,536').first()).toBeVisible();
+  await expect(page.getByText('28,401')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-embedding.png'), fullPage: false });
+
+  await page.getByRole('button', { name: '품질 점검' }).click();
+  await expect(page.getByText('Thread id integrity').first()).toBeVisible();
+  await expect(page.getByText('Some scoped emails need canonical thread ids.')).toBeVisible();
+  await expect(page.getByText('23건')).toHaveCount(0);
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-quality.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto('/data');
+  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await page.getByRole('button', { name: '수집 파이프라인' }).click();
+  await expect(page.getByText('Connector observability')).toBeVisible();
+  const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(tabletOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-quality-tablet-pipeline.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/data');
+  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await page.getByRole('button', { name: '품질 점검' }).click();
+  const mobileQualityCard = page.locator('article', { hasText: 'Dedupe fingerprint' }).first();
+  await mobileQualityCard.scrollIntoViewIfNeeded();
+  await expect(mobileQualityCard).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('data-quality-mobile-quality.png'), fullPage: false });
+  const dataScrollMetrics = await page.locator('#main-content main').evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(dataScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(dataScrollMetrics.after).toBeGreaterThan(dataScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('data-quality-mobile-scroll.png'), fullPage: false });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
+  const menu = page.locator('#mobile-workspace-menu');
+  await expect(menu.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
+  await menu.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(menu.getByRole('link', { name: '설정', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('data-quality-mobile-hamburger.png'), fullPage: false });
+});
+
 test('renders sent mail reply tracking route with signed API headers', async ({ page }, testInfo) => {
   const expectedNaruonToken = 'signed-sent-mail-e2e-token';
   const publicIdentityHeaders = [

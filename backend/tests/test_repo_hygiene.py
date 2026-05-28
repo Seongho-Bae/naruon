@@ -20,6 +20,8 @@ def test_compose_externalizes_postgres_credentials():
     assert "${POSTGRES_DB" in compose
     assert "${POSTGRES_USER" in compose
     assert "${POSTGRES_PASSWORD" in compose
+    assert "AUTH_SESSION_HMAC_SECRET" in compose
+    assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
 
 
 def test_postgres_ha_compose_requires_external_postgres_password():
@@ -35,6 +37,8 @@ def test_kubernetes_backend_database_url_comes_from_secret():
     assert "postgres:postgres@" not in manifest
     assert "secretKeyRef" in manifest
     assert "DATABASE_URL" in manifest
+    assert "AUTH_SESSION_HMAC_SECRET" in manifest
+    assert "auth-session-hmac-secret" in manifest
 
 
 def test_kubernetes_postgres_password_comes_from_secret():
@@ -49,6 +53,7 @@ def test_env_example_documents_required_postgres_password():
     env_example = (REPO_ROOT / ".env.example").read_text()
 
     assert "POSTGRES_PASSWORD=change-me-local-only" in env_example
+    assert "AUTH_SESSION_HMAC_SECRET=" in env_example
     assert "postgres:postgres@" not in env_example
     assert "postgres:change-me-local-only@" in env_example
 

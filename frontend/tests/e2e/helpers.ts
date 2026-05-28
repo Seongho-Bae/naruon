@@ -352,6 +352,173 @@ const securityAccessSurface = {
   ],
 };
 
+const dataQualitySurface = {
+  workspace_id: 'workspace-org-acme',
+  organization_id: 'org-acme',
+  audit_event: 'data.quality_surface.viewed',
+  provider_write_executed: false,
+  repositories: [
+    {
+      source_id: 'email_repository',
+      repository_type: 'email_repository',
+      display_name: 'Scoped email archive',
+      object_count: 4,
+      writeback_enabled: null,
+      evidence_source: 'emails',
+      provider_write_executed: false,
+    },
+    {
+      source_id: 'attachment_repository',
+      repository_type: 'attachment_repository',
+      display_name: 'Scoped attachment archive',
+      object_count: 3,
+      writeback_enabled: null,
+      evidence_source: 'attachments',
+      provider_write_executed: false,
+    },
+    {
+      source_id: 'webdav_src_primary',
+      repository_type: 'webdav_account',
+      display_name: 'Customer WebDAV account',
+      object_count: 0,
+      writeback_enabled: true,
+      evidence_source: 'webdav_accounts',
+      provider_write_executed: false,
+    },
+    {
+      source_id: 'webdav_folder_roadmap',
+      repository_type: 'project_folder',
+      display_name: 'Naruon Roadmap 2026',
+      object_count: 0,
+      writeback_enabled: null,
+      evidence_source: 'project_folders',
+      provider_write_executed: false,
+    },
+  ],
+  pipeline_stages: [
+    {
+      stage_key: 'source_registry',
+      display_name: 'Source registry',
+      status_code: 'ready',
+      progress_percent: 100,
+      evidence_source: 'webdav_accounts, project_folders',
+      detail_text: '2 customer-owned sources are in scope.',
+      provider_write_executed: false,
+    },
+    {
+      stage_key: 'ingestion_inventory',
+      display_name: 'Ingestion inventory',
+      status_code: 'ready',
+      progress_percent: 100,
+      evidence_source: 'emails, attachments',
+      detail_text: '4 emails and 3 attachments are visible in the signed workspace scope.',
+      provider_write_executed: false,
+    },
+    {
+      stage_key: 'canonical_threading',
+      display_name: 'Canonical threading',
+      status_code: 'needs_attention',
+      progress_percent: 75,
+      evidence_source: 'emails.thread_id',
+      detail_text: '1 emails need canonical thread ids.',
+      provider_write_executed: false,
+    },
+    {
+      stage_key: 'embedding_inventory',
+      display_name: 'Embedding inventory',
+      status_code: 'running',
+      progress_percent: 57,
+      evidence_source: 'emails.embedding, attachments.embedding',
+      detail_text: '4 of 7 objects have vectors.',
+      provider_write_executed: false,
+    },
+    {
+      stage_key: 'connector_observability',
+      display_name: 'Connector observability',
+      status_code: 'ready',
+      progress_percent: 100,
+      evidence_source: 'connector_signal_events',
+      detail_text: '1 connector events are in scope.',
+      provider_write_executed: false,
+    },
+  ],
+  embedding_collections: [
+    {
+      collection_key: 'emails_embedding',
+      display_name: 'Email vectors',
+      object_count: 4,
+      embedded_count: 3,
+      embedding_model: 'text-embedding-3-small',
+      vector_dimensions: 1536,
+      status_code: 'running',
+      evidence_source: 'emails.embedding',
+      provider_write_executed: false,
+    },
+    {
+      collection_key: 'attachments_embedding',
+      display_name: 'Attachment vectors',
+      object_count: 3,
+      embedded_count: 1,
+      embedding_model: 'text-embedding-3-small',
+      vector_dimensions: 1536,
+      status_code: 'running',
+      evidence_source: 'attachments.embedding',
+      provider_write_executed: false,
+    },
+  ],
+  quality_checks: [
+    {
+      check_key: 'thread_id_integrity',
+      display_name: 'Thread id integrity',
+      status_code: 'needs_attention',
+      issue_count: 1,
+      total_count: 4,
+      evidence_source: 'emails.thread_id',
+      detail_text: 'Some scoped emails need canonical thread ids.',
+      provider_write_executed: false,
+    },
+    {
+      check_key: 'dedupe_fingerprint',
+      display_name: 'Dedupe fingerprint',
+      status_code: 'needs_attention',
+      issue_count: 2,
+      total_count: 4,
+      evidence_source: 'emails.fingerprint',
+      detail_text: 'Some scoped emails need duplicate-detection fingerprints.',
+      provider_write_executed: false,
+    },
+    {
+      check_key: 'attachment_content',
+      display_name: 'Attachment content',
+      status_code: 'needs_attention',
+      issue_count: 1,
+      total_count: 3,
+      evidence_source: 'attachments.content',
+      detail_text: 'Some scoped attachments need extracted content.',
+      provider_write_executed: false,
+    },
+    {
+      check_key: 'connector_signal',
+      display_name: 'Connector signal coverage',
+      status_code: 'pass',
+      issue_count: 0,
+      total_count: 1,
+      evidence_source: 'connector_signal_events',
+      detail_text: 'Connector evidence is visible for this workspace.',
+      provider_write_executed: false,
+    },
+  ],
+  connector_events: [
+    {
+      event_uid: 'connector_evt_data_quality',
+      signal_key: 'connector_heartbeat',
+      state_code: 'heartbeat',
+      detail_text: 'outbound connector heartbeat received',
+      observed_at: '2026-05-28T05:45:00Z',
+    },
+  ],
+};
+
 const accountConfig = {
   user_id: 'default',
   smtp_server: 'smtp.example.com',
@@ -441,6 +608,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
 
     if (path === '/api/security/access-surface' && request.method() === 'GET') {
       await fulfillJson(route, securityAccessSurface);
+      return;
+    }
+
+    if (path === '/api/data/quality-surface' && request.method() === 'GET') {
+      await fulfillJson(route, dataQualitySurface);
       return;
     }
 
