@@ -221,6 +221,9 @@
   repository root, and backend working directory, and require Compose/Kubernetes
   to inject the mandatory values so missing runtime configuration fails before
   deployment rather than during `uvicorn main:app` import.
+- Backend Docker image and Compose commands must run through
+  `python scripts/start_backend.py` before `uvicorn main:app`; direct uvicorn
+  CMDs can recreate missing-env stack traces instead of the intended preflight.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
 

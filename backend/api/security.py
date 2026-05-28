@@ -1,20 +1,27 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import (
     AuthContext,
     get_auth_context,
     is_admin_role,
+    is_system_admin_role,
 )
-from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
+from db.models import (
+    AuditLog,
+    CalendarWritebackSource,
+    ConnectorSignalEvent,
+    WebdavAccount,
+)
 from db.session import get_db
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
@@ -71,6 +78,19 @@ class ConnectorEvidence(BaseModel):
     observed_at: str
 
 
+class AuditEventEvidence(BaseModel):
+    audit_uid: str
+    event_name: str
+    actor_user_id: str
+    organization_id: str | None
+    workspace_id: str | None
+    resource_type: str
+    resource_ref: str | None
+    event_action: str
+    event_summary: str | None
+    observed_at: str
+
+
 class ExternalShareReview(BaseModel):
     review_uid: str
     source_id: str
@@ -94,6 +114,7 @@ class SecurityAccessSurfaceResponse(BaseModel):
     viewer: ViewerContext
     sources: list[GovernanceSource]
     connector_events: list[ConnectorEvidence]
+    audit_events: list[AuditEventEvidence]
     policy_decisions: list[PolicyDecisionSummary]
     external_share_reviews: list[ExternalShareReview]
     policy_order: list[PolicyOrderStep]
@@ -173,6 +194,34 @@ def _connector_scope_statement(auth_context: AuthContext):
     )
 
 
+def _audit_scope_statement(auth_context: AuthContext):
+    statement = select(AuditLog).order_by(AuditLog.timestamp.desc()).limit(12)
+    if is_system_admin_role(auth_context.role):
+        return statement
+    legacy_own_filter = (
+        AuditLog.user_id == auth_context.user_id,
+        AuditLog.organization_id.is_(None),
+        AuditLog.workspace_id.is_(None),
+    )
+    if _can_read_org_scope(auth_context):
+        return statement.where(
+            or_(
+                AuditLog.organization_id == auth_context.organization_id,
+                and_(*legacy_own_filter),
+            )
+        )
+    organization_filter = (
+        AuditLog.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else AuditLog.organization_id.is_(None)
+    )
+    return statement.where(
+        AuditLog.user_id == auth_context.user_id,
+        organization_filter,
+        or_(AuditLog.workspace_id == auth_context.workspace_id, AuditLog.workspace_id.is_(None)),
+    )
+
+
 def _source_in_scope(
     auth_context: AuthContext,
     owner_id: str,
@@ -186,6 +235,26 @@ def _source_in_scope(
     )
 
 
+def _audit_log_in_scope(auth_context: AuthContext, audit_log: AuditLog) -> bool:
+    log_organization_id = audit_log.organization_id
+    log_workspace_id = audit_log.workspace_id
+    if is_system_admin_role(auth_context.role):
+        return True
+    if _can_read_org_scope(auth_context):
+        if log_organization_id == auth_context.organization_id:
+            return True
+        return (
+            log_organization_id is None
+            and log_workspace_id is None
+            and audit_log.user_id == auth_context.user_id
+        )
+    if audit_log.user_id != auth_context.user_id:
+        return False
+    if log_organization_id != auth_context.organization_id:
+        return log_organization_id is None and log_workspace_id is None
+    return log_workspace_id in {None, auth_context.workspace_id}
+
+
 def _access_request(auth_context: AuthContext) -> AccessRequest:
     return AccessRequest(
         user_id=auth_context.user_id,
@@ -194,6 +263,50 @@ def _access_request(auth_context: AuthContext) -> AccessRequest:
         group_ids=auth_context.group_ids,
         data_region="kr",
         consent_scopes=("mail.read", "calendar.read", "webdav.write"),
+    )
+
+
+def _public_resource_ref(audit_log: AuditLog) -> str | None:
+    if not audit_log.resource_id:
+        return None
+    raw_value = ":".join(
+        [
+            audit_log.resource_type,
+            audit_log.resource_id,
+            audit_log.organization_id or "",
+            audit_log.workspace_id or "",
+        ]
+    )
+    return f"res_{hashlib.sha256(raw_value.encode('utf-8')).hexdigest()[:10]}"
+
+
+def _public_audit_uid(audit_log: AuditLog) -> str:
+    if audit_log.audit_uid:
+        return audit_log.audit_uid
+    raw_value = ":".join(
+        [
+            audit_log.user_id,
+            audit_log.resource_type,
+            audit_log.action,
+            _datetime_to_utc_iso(audit_log.timestamp),
+        ]
+    )
+    return f"audit_{hashlib.sha256(raw_value.encode('utf-8')).hexdigest()[:24]}"
+
+
+def _audit_event_evidence(audit_log: AuditLog) -> AuditEventEvidence:
+    event_name = audit_log.event_name or f"{audit_log.resource_type}.{audit_log.action}"
+    return AuditEventEvidence(
+        audit_uid=_public_audit_uid(audit_log),
+        event_name=event_name,
+        actor_user_id=audit_log.user_id,
+        organization_id=audit_log.organization_id,
+        workspace_id=audit_log.workspace_id,
+        resource_type=audit_log.resource_type,
+        resource_ref=_public_resource_ref(audit_log),
+        event_action=audit_log.action,
+        event_summary=audit_log.details,
+        observed_at=_datetime_to_utc_iso(audit_log.timestamp),
     )
 
 
@@ -431,6 +544,12 @@ async def get_access_surface(
             if event.organization_id == auth_context.organization_id
             and event.workspace_id == auth_context.workspace_id
         ]
+    audit_result = await db.execute(_audit_scope_statement(auth_context))
+    audit_events = [
+        _audit_event_evidence(audit_log)
+        for audit_log in audit_result.scalars().all()
+        if _audit_log_in_scope(auth_context, audit_log)
+    ]
 
     sources = [
         _webdav_source(account, auth_context)
@@ -458,6 +577,7 @@ async def get_access_surface(
         ),
         sources=sources,
         connector_events=[_connector_evidence(event) for event in connector_events],
+        audit_events=audit_events,
         policy_decisions=policy_decisions,
         external_share_reviews=_share_reviews(sources),
         policy_order=_policy_order(),

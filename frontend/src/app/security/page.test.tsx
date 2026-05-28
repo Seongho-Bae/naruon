@@ -73,6 +73,20 @@ const securitySurface = {
       observed_at: "2026-05-28T04:00:00Z",
     },
   ],
+  audit_events: [
+    {
+      audit_uid: "audit_llm_provider_update",
+      event_name: "llm_provider.update",
+      actor_user_id: "admin",
+      organization_id: "org-acme",
+      workspace_id: "workspace-org-acme",
+      resource_type: "llm_provider",
+      resource_ref: "res_9c0f7c85",
+      event_action: "update",
+      event_summary: "Updated provider acme-ai",
+      observed_at: "2026-05-28T05:00:00Z",
+    },
+  ],
   policy_decisions: [
     {
       decision_uid: "policy:webdav_src_primary",
@@ -204,6 +218,10 @@ describe("SecurityPage", () => {
       expect(container.textContent).not.toContain("곧 제공됩니다");
       if (tabName === "감사 로그") {
         expect(container.textContent).toContain("connector_evt_heartbeat");
+        expect(container.textContent).toContain("audit_llm_provider_update");
+        expect(container.textContent).toContain("llm_provider.update");
+        expect(container.textContent).toContain("res_9c0f7c85");
+        expect(container.textContent).not.toContain("resource_id");
       }
       if (tabName === "외부 공유") {
         expect(container.textContent).toContain("WebDAV repository writeback boundary");

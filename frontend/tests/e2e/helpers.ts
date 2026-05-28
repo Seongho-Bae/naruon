@@ -282,6 +282,20 @@ const securityAccessSurface = {
       observed_at: '2026-05-28T04:00:00Z',
     },
   ],
+  audit_events: [
+    {
+      audit_uid: 'audit_llm_provider_update',
+      event_name: 'llm_provider.update',
+      actor_user_id: 'admin',
+      organization_id: 'org-acme',
+      workspace_id: 'workspace-org-acme',
+      resource_type: 'llm_provider',
+      resource_ref: 'res_9c0f7c85',
+      event_action: 'update',
+      event_summary: 'Updated provider acme-ai',
+      observed_at: '2026-05-28T05:00:00Z',
+    },
+  ],
   policy_decisions: [
     {
       decision_uid: 'policy:webdav_src_primary',

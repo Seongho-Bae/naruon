@@ -100,6 +100,28 @@ def test_settings_load_operator_home_env_when_project_env_is_absent(
     assert loaded_settings.DATABASE_URL == database_url
 
 
+def test_settings_load_operator_env_file_from_naruon_env_file(monkeypatch, tmp_path):
+    env_file = tmp_path / "backend.env"
+    database_url = "postgresql+asyncpg://operator:operator@localhost:5432/operator_db"
+    env_file.write_text(
+        "\n".join(
+            [
+                f"DATABASE_URL={database_url}",
+                f"AUTH_SESSION_HMAC_SECRET={TEST_AUTH_SESSION_HMAC_SECRET}",
+            ]
+        )
+        + "\n"
+    )
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("AUTH_SESSION_HMAC_SECRET", raising=False)
+    monkeypatch.delenv("NARUON_BACKEND_ENV_FILE", raising=False)
+    monkeypatch.setenv("NARUON_ENV_FILE", str(env_file))
+
+    loaded_settings = Settings()
+
+    assert loaded_settings.DATABASE_URL == database_url
+
+
 def test_production_settings_reject_missing_auth_session_hmac_secret(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"

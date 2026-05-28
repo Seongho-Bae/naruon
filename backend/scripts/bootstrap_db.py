@@ -26,6 +26,12 @@ def schema_backfill_sql():
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS thread_id varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS user_id varchar"),
         text("ALTER TABLE emails ADD COLUMN IF NOT EXISTS organization_id varchar"),
+        text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS audit_uid varchar"),
+        text(
+            "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS organization_id varchar"
+        ),
+        text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS workspace_id varchar"),
+        text("ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS event_name varchar"),
         text("ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS user_id varchar"),
         text(
             "ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS organization_id varchar"
@@ -104,6 +110,32 @@ def schema_backfill_sql():
         text(
             "CREATE INDEX IF NOT EXISTS ix_llm_providers_organization_id "
             "ON llm_providers (organization_id)"
+        ),
+        text(
+            "UPDATE audit_logs "
+            "SET audit_uid = md5("
+            "random()::text || ':' || clock_timestamp()::text || ':' || "
+            "coalesce(user_id, '') || ':' || coalesce(resource_type, '') || ':' || "
+            "coalesce(action, '')"
+            ") "
+            "WHERE audit_uid IS NULL OR audit_uid = ''"
+        ),
+        text(
+            "UPDATE audit_logs "
+            "SET event_name = resource_type || '.' || action "
+            "WHERE event_name IS NULL OR event_name = ''"
+        ),
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_audit_logs_audit_uid "
+            "ON audit_logs (audit_uid)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_scope_time "
+            "ON audit_logs (organization_id, workspace_id, timestamp)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_user_time "
+            "ON audit_logs (user_id, timestamp)"
         ),
         text(
             "CREATE INDEX IF NOT EXISTS ix_calendar_writeback_sources_scope "
