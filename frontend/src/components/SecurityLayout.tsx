@@ -49,19 +49,6 @@ type ConnectorEvidence = {
   observed_at: string;
 };
 
-type AuditEventEvidence = {
-  audit_uid: string;
-  event_name: string;
-  actor_user_id: string;
-  organization_id: string | null;
-  workspace_id: string | null;
-  resource_type: string;
-  resource_ref: string | null;
-  event_action: string;
-  event_summary: string | null;
-  observed_at: string;
-};
-
 type ExternalShareReview = {
   review_uid: string;
   source_id: string;
@@ -91,7 +78,6 @@ type SecurityAccessSurface = {
   };
   sources: GovernanceSource[];
   connector_events: ConnectorEvidence[];
-  audit_events: AuditEventEvidence[];
   policy_decisions: PolicyDecisionSummary[];
   external_share_reviews: ExternalShareReview[];
   policy_order: PolicyOrderStep[];
@@ -342,47 +328,14 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
   return (
     <section aria-label="보안 감사 로그" className="space-y-5">
       <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">Scoped AuditLog와 connector evidence</h2>
+        <h2 className="text-base font-bold">Connector evidence와 감사 이벤트</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          조직/워크스페이스로 제한된 audit event를 opaque uid와 resource reference로 표시합니다.
+          AuditLog 직접 노출 대신 scoped connector evidence와 API audit event만 표시합니다.
         </p>
         <div className="mt-4 rounded-lg border border-border bg-background p-3">
           <p className="text-xs font-bold text-muted-foreground">API audit event</p>
           <p className="mt-1 font-mono text-sm">{data.audit_event}</p>
         </div>
-        {data.audit_events.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState label="durable audit event" />
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {data.audit_events.map((event) => (
-              <article key={event.audit_uid} className="rounded-lg border border-border bg-background p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-mono text-sm font-bold">{event.audit_uid}</p>
-                  <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">{event.event_action}</span>
-                </div>
-                <p className="mt-2 text-sm font-bold">{event.event_name}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{event.event_summary ?? event.resource_type}</p>
-                <dl className="mt-3 grid grid-cols-1 gap-2 text-xs">
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="font-bold text-muted-foreground">Actor</dt>
-                    <dd className="text-right">{event.actor_user_id}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="font-bold text-muted-foreground">Scope</dt>
-                    <dd className="text-right">{event.organization_id ?? 'personal'} / {event.workspace_id ?? 'legacy'}</dd>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <dt className="font-bold text-muted-foreground">Resource</dt>
-                    <dd className="text-right font-mono">{event.resource_ref ?? event.resource_type}</dd>
-                  </div>
-                </dl>
-                <p className="mt-3 font-mono text-xs text-muted-foreground">{event.observed_at}</p>
-              </article>
-            ))}
-          </div>
-        )}
         {data.connector_events.length === 0 ? (
           <div className="mt-4">
             <EmptyState label="connector evidence" />

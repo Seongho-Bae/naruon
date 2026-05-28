@@ -101,17 +101,12 @@ threading proof path works offline.
 
 Backend settings read environment variables first, then `.env`, `../.env`, and
 `~/.env`. `DATABASE_URL` and `AUTH_SESSION_HMAC_SECRET` still have no code
-defaults; Compose and Kubernetes must inject them explicitly. A container image
-starts through `python scripts/start_backend.py`, which checks those mandatory
-values before `uvicorn main:app` imports application code. For Compose,
+defaults; Compose and Kubernetes must inject them explicitly. For Compose,
 `./scripts/naruon_compose.sh` reads `${NARUON_ENV_FILE}` when set, otherwise
 uses `~/.env` if present, and falls back to the project `.env`. It passes that
 file to Docker Compose only as an interpolation source so the backend service
 receives the whitelisted variables in `docker-compose*.yml`, not every local
-secret present in `~/.env`. Direct image runs must use explicit env injection,
-for example `docker run --env-file ~/.env ... naruon-backend:local`, or mount a
-backend-only env file and set `NARUON_ENV_FILE`/`NARUON_BACKEND_ENV_FILE` to
-that mounted path.
+secret present in `~/.env`.
 
 ## Manual development path
 

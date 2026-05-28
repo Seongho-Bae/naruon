@@ -1,4 +1,3 @@
-import os
 from typing import Any, cast
 
 from pydantic import SecretStr, model_validator
@@ -9,17 +8,6 @@ _LOW_ENTROPY_PLACEHOLDER_TERMS = ("change", "example", "password", "secret")
 _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS = frozenset(
     {"naruon-session-hmac-token-32-byte-minimum"}
 )
-_DEFAULT_SETTINGS_ENV_FILES = ("~/.env", "../.env", ".env")
-
-
-def _settings_env_files() -> tuple[str, ...]:
-    env_files = list(_DEFAULT_SETTINGS_ENV_FILES)
-    explicit_env_file = os.environ.get("NARUON_BACKEND_ENV_FILE") or os.environ.get(
-        "NARUON_ENV_FILE"
-    )
-    if explicit_env_file:
-        env_files.append(explicit_env_file)
-    return tuple(env_files)
 
 
 def validate_auth_session_hmac_secret_value(secret: str) -> None:
@@ -63,15 +51,10 @@ class Settings(BaseSettings):
     OIDC_JWKS_URL: str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=_settings_env_files(),
+        env_file=("~/.env", "../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
-
-    def __init__(self, **values: Any) -> None:
-        if "_env_file" not in values:
-            values["_env_file"] = _settings_env_files()
-        super().__init__(**values)
 
     @model_validator(mode="after")
     def validate_session_secret(self) -> "Settings":

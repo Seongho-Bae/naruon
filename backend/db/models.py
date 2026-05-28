@@ -72,18 +72,10 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    audit_uid: Mapped[str] = mapped_column(
-        String(32), default=lambda: uuid.uuid4().hex, unique=True, index=True
-    )
     timestamp: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.datetime.utcnow
     )
     user_id: Mapped[str] = mapped_column(String, index=True)
-    organization_id: Mapped[str | None] = mapped_column(
-        String, index=True, nullable=True
-    )
-    workspace_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    event_name: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     action: Mapped[str] = mapped_column(String)
     resource_type: Mapped[str] = mapped_column(String)
     resource_id: Mapped[str | None] = mapped_column(String, nullable=True)

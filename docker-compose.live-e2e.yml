@@ -58,7 +58,7 @@ services:
         condition: service_completed_successfully
     expose:
       - "8000"
-    command: ["python", "scripts/start_backend.py"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
   frontend:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a pre-built frontend image}

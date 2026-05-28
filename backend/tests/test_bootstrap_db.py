@@ -8,7 +8,6 @@ from core.config import settings
 from db.models import Base
 from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
-    AuditLog,
     CalendarWritebackSource,
     ConnectorSignalEvent,
     ProjectFolder,
@@ -433,47 +432,6 @@ def test_connector_signal_event_model_uses_two_word_names():
         "observed_at",
     }
     assert all("_" in column_name for column_name in column_names)
-
-
-def test_audit_log_model_exposes_durable_scope_columns():
-    column_names = {column.name for column in AuditLog.__table__.columns}
-
-    assert {
-        "audit_uid",
-        "organization_id",
-        "workspace_id",
-        "event_name",
-    }.issubset(column_names)
-    for new_column_name in (
-        "audit_uid",
-        "organization_id",
-        "workspace_id",
-        "event_name",
-    ):
-        assert "_" in new_column_name
-
-
-def test_schema_backfill_adds_audit_log_scope_columns():
-    statements = [str(statement).lower() for statement in schema_backfill_sql()]
-
-    assert any(
-        "alter table audit_logs add column if not exists audit_uid" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table audit_logs add column if not exists organization_id" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table audit_logs add column if not exists workspace_id" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table audit_logs add column if not exists event_name" in statement
-        for statement in statements
-    )
-    assert any("uq_audit_logs_audit_uid" in statement for statement in statements)
-    assert any("ix_audit_logs_scope_time" in statement for statement in statements)
 
 
 def test_schema_backfill_creates_connector_signal_events():

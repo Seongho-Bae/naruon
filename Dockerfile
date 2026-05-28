@@ -5,8 +5,6 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-ENV BACKEND_BIND_HOST=0.0.0.0
-ENV BACKEND_BIND_PORT=8000
 
 # Install system dependencies if any are needed for pgvector/psycopg2
 RUN apt-get update \
@@ -25,4 +23,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["python", "scripts/start_backend.py"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
