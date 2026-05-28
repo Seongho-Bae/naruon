@@ -173,15 +173,13 @@ function mockWebdavFetch() {
       return jsonResponse([
         {
           source_id: "webdav_src_primary",
-          server_url: "https://webdav.naruon.net",
-          username: "demo_user",
+          display_label: "WebDAV source webdav_src_primary",
           writeback_enabled: true,
           etag: "etag-webdav-primary",
         },
         {
           source_id: "webdav_src_team",
-          server_url: "https://files.acme.example",
-          username: "team_user",
+          display_label: "WebDAV source webdav_src_team",
           writeback_enabled: true,
           etag: "etag-webdav-team",
         },
@@ -201,7 +199,7 @@ function mockWebdavFetch() {
       return jsonResponse({
         intent: "writeback",
         source_id: "webdav_src_primary",
-        server_url: "https://webdav.naruon.net",
+        target_label: "WebDAV source webdav_src_primary",
         requires_if_match: true,
         provenance: "server-authoritative",
       });
@@ -405,7 +403,9 @@ describe("DataPage", () => {
       target_source_id: "webdav_src_primary",
     });
     expect(container.textContent).toContain("server-authoritative");
-    expect(container.textContent).toContain("https://webdav.naruon.net");
+    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("https://webdav.naruon.net");
+    expect(container.textContent).not.toContain("demo_user");
   });
 
   it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
@@ -416,15 +416,13 @@ describe("DataPage", () => {
         return jsonResponse([
           {
             source_id: "webdav_src_primary",
-            server_url: "https://webdav.naruon.net",
-            username: "demo_user",
+            display_label: "WebDAV source webdav_src_primary",
             writeback_enabled: true,
             etag: "etag-webdav-primary",
           },
           {
             source_id: "webdav_src_team",
-            server_url: "https://files.acme.example",
-            username: "team_user",
+            display_label: "WebDAV source webdav_src_team",
             writeback_enabled: true,
             etag: "etag-webdav-team",
           },
