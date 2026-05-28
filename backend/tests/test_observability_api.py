@@ -1,21 +1,66 @@
+import base64
 from datetime import datetime, timezone
+import hashlib
+import hmac
+import json
+import time
 import uuid
 
 import asyncpg
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api import runner_ws
+from api.auth import AuthContext, get_auth_context, get_current_user
 from core.config import settings
 from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+TEST_SESSION_HMAC_SECRET = "observability-hmac-material-32-bytes"  # noqa: S105
+
+
+def _base64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(payload: dict[str, object]) -> str:
+    header_segment = _base64url_encode(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+    )
+    payload_segment = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    )
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        TEST_SESSION_HMAC_SECRET.encode("utf-8"),
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{signing_input}.{_base64url_encode(signature)}"
+
+
+def _valid_session_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ver": 1,
+        "iss": "naruon-control-plane",
+        "aud": "naruon-api",
+        "sub": "admin",
+        "role": "tenant_admin",
+        "org": "org-acme",
+        "groups": ["group-observability"],
+        "workspace": "workspace-org-acme",
+        "exp": int(time.time()) + 300,
+    }
+    payload.update(overrides)
+    return payload
 
 
 class MockResult:
@@ -92,17 +137,19 @@ def admin_client(mock_db):
         app.dependency_overrides.pop(get_db, None)
 
 
-
 def test_datetime_to_utc_iso_with_naive_datetime():
     from api.observability import _datetime_to_utc_iso
-    from datetime import datetime
+
     dt = datetime(2023, 1, 1, 12, 0, 0)
     iso_str = _datetime_to_utc_iso(dt)
     assert iso_str == "2023-01-01T12:00:00Z"
 
+
 def test_endpoint_host_without_netloc():
     from api.observability import _endpoint_host
+
     assert _endpoint_host("invalid-url") is None
+
 
 def test_member_cannot_read_operational_signals(member_client):
     response = member_client.get("/api/observability/operational-signals")
@@ -132,33 +179,28 @@ def test_admin_without_org_scope_gets_deterministic_error(mock_db):
     assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
 
 
+def test_system_admin_without_org_scope_gets_deterministic_error():
+    from api.observability import _check_org_admin
 
-def test_system_admin_without_org_scope_gets_deterministic_error(mock_db):
-    async def override_get_db():
-        yield mock_db
+    with pytest.raises(HTTPException) as exc_info:
+        _check_org_admin(
+            AuthContext(
+                user_id="admin",
+                role="system_admin",
+                organization_id=None,
+                workspace_id="workspace-admin",
+                group_ids=(),
+            )
+        )
 
-    app.dependency_overrides[get_db] = override_get_db
-    try:
-        with TestClient(
-            app,
-            headers={
-                "X-User-Id": "admin",
-                "X-User-Role": "system_admin",
-            },
-        ) as client:
-            response = client.get("/api/observability/operational-signals")
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-
-    assert response.status_code == 403
-    assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail["error_code"] == "ORG_SCOPE_REQUIRED"
 
 
 def test_operational_signals_requires_org_id_in_auth_context_explicit(mock_db):
     async def override_get_db():
         yield mock_db
 
-    from api.auth import AuthContext
     from api.observability import _check_org_admin
 
     async def override_check_org_admin():
@@ -168,23 +210,27 @@ def test_operational_signals_requires_org_id_in_auth_context_explicit(mock_db):
             role="system_admin",
             organization_id=None,
             workspace_id="workspace-admin",
-            group_ids=()
+            group_ids=(),
         )
 
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    original_overrides = dict(app.dependency_overrides)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[_check_org_admin] = override_check_org_admin
     try:
-        with TestClient(
-            app,
-            headers={
-                "X-User-Id": "admin",
-                "X-User-Role": "system_admin",
-            },
-        ) as client:
-            response = client.get("/api/observability/operational-signals")
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/observability/operational-signals",
+                headers={"Authorization": f"Bearer {token}"},
+            )
     finally:
-        app.dependency_overrides.pop(get_db, None)
-        app.dependency_overrides.pop(_check_org_admin, None)
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
 
     assert response.status_code == 403
     assert response.json()["detail"]["error_code"] == "ORG_SCOPE_REQUIRED"
