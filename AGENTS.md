@@ -127,6 +127,10 @@
   orchestrator secret. Do not add code defaults, and do not mount or declare the
   full `~/.env` as a Compose `env_file` because unrelated local secrets may leak
   into the backend container.
+- Backend container entrypoints must pass through `python scripts/start_backend.py`
+  before `uvicorn` imports `main:app`. Do not reintroduce Dockerfile, Compose,
+  live-E2E, or gateway commands that call `uvicorn main:app` directly and expose
+  Pydantic import tracebacks for missing runtime settings.
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
   escape XML response fields before interpolation, and keep path values separate

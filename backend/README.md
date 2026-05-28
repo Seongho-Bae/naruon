@@ -17,7 +17,11 @@ Docker Compose, CI secrets, or the runtime environment. Backend settings read
 environment variables first, then `.env`, `../.env`, and `~/.env`; this supports
 running from `backend/`, the repository root, or a local operator env file
 without adding code defaults. The backend still fails closed when either
-required value is missing.
+required value is missing. The Docker image runs `scripts/start_backend.py`
+before `uvicorn`, so missing runtime settings are reported as a concise startup
+configuration error instead of an import-time traceback. Direct container runs
+must inject only the required backend settings through `--env`, an orchestrator
+secret, or a minimal Naruon-specific env file.
 
 Outbound SMTP/IMAP/POP3 connector destinations fail closed unless the normalized
 tenant host is listed in the matching `ALLOWED_*_HOSTS` setting and the port is

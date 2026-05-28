@@ -167,6 +167,16 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
+    assert '"scripts/start_backend.py"' in dockerfile
+    assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
+
+
+def test_backend_compose_commands_use_startup_preflight() -> None:
+    compose = read_repo_text("docker-compose.yml")
+    live_e2e_compose = read_repo_text("docker-compose.live-e2e.yml")
+
+    assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
+    assert '"scripts/start_backend.py"' in live_e2e_compose
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:

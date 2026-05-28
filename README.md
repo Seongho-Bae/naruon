@@ -106,7 +106,12 @@ defaults; Compose and Kubernetes must inject them explicitly. For Compose,
 uses `~/.env` if present, and falls back to the project `.env`. It passes that
 file to Docker Compose only as an interpolation source so the backend service
 receives the whitelisted variables in `docker-compose*.yml`, not every local
-secret present in `~/.env`.
+secret present in `~/.env`. The backend image starts through
+`python scripts/start_backend.py`, which checks the same required settings before
+`uvicorn` imports the app. A direct `docker run` therefore still needs explicit
+environment injection through `--env`, an orchestrator secret, or a minimal
+Naruon-specific env file containing only the backend settings needed by the
+container.
 
 ## Manual development path
 
