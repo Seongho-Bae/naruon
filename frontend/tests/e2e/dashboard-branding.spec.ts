@@ -323,6 +323,8 @@ test('renders Security governance access audit sharing and policy with signed AP
   await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-access.png'), fullPage: false });
 
   await page.getByRole('button', { name: '감사 로그' }).click();
+  await expect(page.getByText('audit_evt_provider_update')).toBeVisible();
+  await expect(page.getByText('llm_provider:provider_primary')).toBeVisible();
   await expect(page.getByText('connector_evt_heartbeat')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-audit.png'), fullPage: false });
 

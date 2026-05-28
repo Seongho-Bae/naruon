@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   experimental: {
+    cpus: positiveIntegerFromEnv("NEXT_BUILD_CPUS", 2),
     staticGenerationMaxConcurrency: positiveIntegerFromEnv(
       "NEXT_STATIC_GENERATION_MAX_CONCURRENCY",
       2,

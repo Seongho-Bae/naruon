@@ -1,4 +1,5 @@
 import datetime
+import hashlib
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
-from db.models import AuditLog, LLMProvider
+from db.models import AuditLog, LLMProvider, SecurityAuditEvent
 from db.session import get_db
 from services.llm_provider_urls import (
     LLM_BASE_URL_NOT_ALLOWED,
@@ -82,6 +83,32 @@ def _provider_owner_filter(auth_context: AuthContext):
     return LLMProvider.organization_id == _required_provider_organization(auth_context)
 
 
+def _security_audit_event(
+    auth_context: AuthContext,
+    *,
+    event_action: str,
+    resource_uid: str | None,
+    detail_text: str,
+) -> SecurityAuditEvent:
+    return SecurityAuditEvent(
+        actor_user_id=auth_context.user_id,
+        actor_role=auth_context.role,
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
+        event_action=event_action,
+        resource_type="llm_provider",
+        resource_uid=resource_uid,
+        evidence_source="api.llm_providers",
+        detail_text=detail_text,
+    )
+
+
+def _provider_resource_uid(auth_context: AuthContext, provider_name: str) -> str:
+    scope = auth_context.organization_id or auth_context.user_id
+    digest = hashlib.sha256(f"{scope}:{provider_name}".encode("utf-8")).hexdigest()
+    return f"llm_provider:{digest[:16]}"
+
+
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
@@ -129,9 +156,17 @@ async def create_provider(
         user_id=auth_context.user_id,
         action="create",
         resource_type="llm_provider",
-        details=f"Created provider {data.name}",
+        details="Created provider configuration",
     )
     db.add(audit)
+    db.add(
+        _security_audit_event(
+            auth_context,
+            event_action="create",
+            resource_uid=_provider_resource_uid(auth_context, data.name),
+            detail_text="Created provider configuration",
+        )
+    )
     try:
         await db.commit()
         await db.refresh(provider)
@@ -191,9 +226,17 @@ async def update_provider(
             action="update",
             resource_type="llm_provider",
             resource_id=str(provider.id),
-            details=f"Updated provider {provider.name}",
+            details="Updated provider configuration",
         )
         db.add(audit)
+        db.add(
+            _security_audit_event(
+                auth_context,
+                event_action="update",
+                resource_uid=_provider_resource_uid(auth_context, provider.name),
+                detail_text="Updated provider configuration",
+            )
+        )
         await db.commit()
         await db.refresh(provider)
 
@@ -231,7 +274,15 @@ async def delete_provider(
         action="delete",
         resource_type="llm_provider",
         resource_id=str(provider.id),
-        details=f"Deleted provider {provider.name}",
+        details="Deleted provider configuration",
     )
     db.add(audit)
+    db.add(
+        _security_audit_event(
+            auth_context,
+            event_action="delete",
+            resource_uid=_provider_resource_uid(auth_context, provider.name),
+            detail_text="Deleted provider configuration",
+        )
+    )
     await db.commit()

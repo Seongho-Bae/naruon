@@ -56,6 +56,21 @@ def schema_backfill_sql():
             "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS security_audit_events ("
+            "event_uid varchar PRIMARY KEY, "
+            "actor_user_id varchar NOT NULL, "
+            "actor_role varchar NOT NULL, "
+            "organization_id varchar, "
+            "workspace_id varchar NOT NULL, "
+            "event_action varchar NOT NULL, "
+            "resource_type varchar NOT NULL, "
+            "resource_uid varchar, "
+            "evidence_source varchar NOT NULL, "
+            "detail_text text, "
+            "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ),
         text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS source_uid varchar"),
         text(
             "ALTER TABLE webdav_accounts "
@@ -114,6 +129,16 @@ def schema_backfill_sql():
             "CREATE INDEX IF NOT EXISTS ix_connector_signal_events_scope_time "
             "ON connector_signal_events "
             "(organization_id, workspace_id, observed_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_security_audit_events_scope_time "
+            "ON security_audit_events "
+            "(organization_id, workspace_id, observed_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_security_audit_events_actor_scope "
+            "ON security_audit_events "
+            "(actor_user_id, organization_id, workspace_id)"
         ),
         text(
             "UPDATE webdav_accounts "

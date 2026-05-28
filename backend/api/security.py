@@ -14,7 +14,12 @@ from api.auth import (
     get_auth_context,
     is_admin_role,
 )
-from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
+from db.models import (
+    CalendarWritebackSource,
+    ConnectorSignalEvent,
+    SecurityAuditEvent,
+    WebdavAccount,
+)
 from db.session import get_db
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
@@ -71,6 +76,20 @@ class ConnectorEvidence(BaseModel):
     observed_at: str
 
 
+class DurableAuditEvidence(BaseModel):
+    event_uid: str
+    actor_user_id: str
+    actor_role: str
+    organization_id: str | None
+    workspace_id: str
+    event_action: str
+    resource_type: str
+    resource_uid: str | None
+    evidence_source: str
+    detail_text: str | None
+    observed_at: str
+
+
 class ExternalShareReview(BaseModel):
     review_uid: str
     source_id: str
@@ -94,6 +113,7 @@ class SecurityAccessSurfaceResponse(BaseModel):
     viewer: ViewerContext
     sources: list[GovernanceSource]
     connector_events: list[ConnectorEvidence]
+    durable_audit_events: list[DurableAuditEvidence]
     policy_decisions: list[PolicyDecisionSummary]
     external_share_reviews: list[ExternalShareReview]
     policy_order: list[PolicyOrderStep]
@@ -170,6 +190,28 @@ def _connector_scope_statement(auth_context: AuthContext):
         )
         .order_by(ConnectorSignalEvent.observed_at.desc())
         .limit(8)
+    )
+
+
+def _durable_audit_scope_statement(auth_context: AuthContext):
+    statement = (
+        select(SecurityAuditEvent)
+        .where(SecurityAuditEvent.workspace_id == auth_context.workspace_id)
+        .order_by(SecurityAuditEvent.observed_at.desc())
+        .limit(12)
+    )
+    if _can_read_org_scope(auth_context):
+        return statement.where(
+            SecurityAuditEvent.organization_id == auth_context.organization_id
+        )
+    organization_filter = (
+        SecurityAuditEvent.organization_id == auth_context.organization_id
+        if auth_context.organization_id is not None
+        else SecurityAuditEvent.organization_id.is_(None)
+    )
+    return statement.where(
+        SecurityAuditEvent.actor_user_id == auth_context.user_id,
+        organization_filter,
     )
 
 
@@ -320,6 +362,22 @@ def _connector_evidence(event: ConnectorSignalEvent) -> ConnectorEvidence:
     )
 
 
+def _durable_audit_evidence(event: SecurityAuditEvent) -> DurableAuditEvidence:
+    return DurableAuditEvidence(
+        event_uid=event.event_uid,
+        actor_user_id=event.actor_user_id,
+        actor_role=event.actor_role,
+        organization_id=event.organization_id,
+        workspace_id=event.workspace_id,
+        event_action=event.event_action,
+        resource_type=event.resource_type,
+        resource_uid=event.resource_uid,
+        evidence_source=event.evidence_source,
+        detail_text=event.detail_text,
+        observed_at=_datetime_to_utc_iso(event.observed_at),
+    )
+
+
 def _canonical_policy_decisions(
     auth_context: AuthContext,
     source_decisions: list[PolicyDecisionSummary],
@@ -421,6 +479,7 @@ async def get_access_surface(
 ) -> SecurityAccessSurfaceResponse:
     webdav_result = await db.execute(_webdav_scope_statement(auth_context))
     calendar_result = await db.execute(_calendar_scope_statement(auth_context))
+    audit_result = await db.execute(_durable_audit_scope_statement(auth_context))
     connector_statement = _connector_scope_statement(auth_context)
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:
@@ -431,6 +490,23 @@ async def get_access_surface(
             if event.organization_id == auth_context.organization_id
             and event.workspace_id == auth_context.workspace_id
         ]
+
+    durable_audit_events = [
+        event
+        for event in audit_result.scalars().all()
+        if event.workspace_id == auth_context.workspace_id
+        and (
+            (
+                _can_read_org_scope(auth_context)
+                and event.organization_id == auth_context.organization_id
+            )
+            or (
+                not _can_read_org_scope(auth_context)
+                and event.actor_user_id == auth_context.user_id
+                and event.organization_id == auth_context.organization_id
+            )
+        )
+    ]
 
     sources = [
         _webdav_source(account, auth_context)
@@ -458,6 +534,9 @@ async def get_access_surface(
         ),
         sources=sources,
         connector_events=[_connector_evidence(event) for event in connector_events],
+        durable_audit_events=[
+            _durable_audit_evidence(event) for event in durable_audit_events
+        ],
         policy_decisions=policy_decisions,
         external_share_reviews=_share_reviews(sources),
         policy_order=_policy_order(),

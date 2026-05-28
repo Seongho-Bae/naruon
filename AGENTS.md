@@ -117,6 +117,9 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
+- Public audit/event identifiers that may use human-readable prefixes must not
+  be stored in artificially short `varchar(n)` columns; use opaque source UIDs
+  that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
 - When robot review cites an obsolete Strix provider policy, update the docs and
   tests to the current secret contract before accepting a rollback suggestion;

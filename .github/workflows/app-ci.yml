@@ -84,6 +84,7 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
           NODE_OPTIONS: "--max-old-space-size=4096"
+          NEXT_BUILD_CPUS: "2"
           POSTCSS_WORKERS: "1"
           DISABLE_POSTCSS_WORKERS: "true"
         run: |
