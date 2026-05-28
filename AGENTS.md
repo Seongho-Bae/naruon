@@ -118,6 +118,12 @@
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
+- When a backend container reports missing `DATABASE_URL` or
+  `AUTH_SESSION_HMAC_SECRET`, verify the runtime path injects the operator env
+  through `scripts/naruon_compose.sh`, Kubernetes secrets, or an explicit
+  orchestrator secret. Do not add code defaults, and do not mount or declare the
+  full `~/.env` as a Compose `env_file` because unrelated local secrets may leak
+  into the backend container.
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
   escape XML response fields before interpolation, and keep path values separate

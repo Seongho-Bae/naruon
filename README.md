@@ -83,8 +83,8 @@ env_text = env_text.replace(
 )
 env_path.write_text(env_text)
 PY
-docker compose up -d --build
-docker compose exec backend python import_fixtures.py
+./scripts/naruon_compose.sh up -d --build
+./scripts/naruon_compose.sh exec backend python import_fixtures.py
 curl -s http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
@@ -101,7 +101,12 @@ threading proof path works offline.
 
 Backend settings read environment variables first, then `.env`, `../.env`, and
 `~/.env`. `DATABASE_URL` and `AUTH_SESSION_HMAC_SECRET` still have no code
-defaults; Compose and Kubernetes must inject them explicitly.
+defaults; Compose and Kubernetes must inject them explicitly. For Compose,
+`./scripts/naruon_compose.sh` reads `${NARUON_ENV_FILE}` when set, otherwise
+uses `~/.env` if present, and falls back to the project `.env`. It passes that
+file to Docker Compose only as an interpolation source so the backend service
+receives the whitelisted variables in `docker-compose*.yml`, not every local
+secret present in `~/.env`.
 
 ## Manual development path
 
