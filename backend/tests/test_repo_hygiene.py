@@ -38,6 +38,18 @@ def test_compose_externalizes_postgres_credentials():
     assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
 
 
+def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():
+    wrapper = (REPO_ROOT / "scripts" / "naruon_compose.sh").read_text()
+    gateway_compose = (REPO_ROOT / "docker-compose.gateway.yml").read_text()
+    local_compose = (REPO_ROOT / "docker-compose.yml").read_text()
+
+    assert "NARUON_ENV_FILE" in wrapper
+    assert "${HOME}/.env" in wrapper
+    assert 'docker compose --env-file "${env_file}" "$@"' in wrapper
+    assert "env_file:" not in gateway_compose
+    assert "env_file:" not in local_compose
+
+
 def test_postgres_ha_compose_requires_external_postgres_password():
     compose = (REPO_ROOT / "docker-compose.postgres-ha.yml").read_text()
 
