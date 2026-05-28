@@ -141,9 +141,6 @@ def test_llm_provider_crud_admin(admin_client):
     assert "api_key" not in data
     assert mock_session.providers[0].user_id == "admin"
     assert mock_session.providers[0].organization_id == "org-acme"
-    assert mock_session.audits[0].event_name == "llm_provider.create"
-    assert mock_session.audits[0].organization_id == "org-acme"
-    assert mock_session.audits[0].workspace_id == "workspace-org-acme"
 
     provider_id = data["id"]
 

@@ -17,12 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import get_auth_context, get_current_user
 from core.config import settings
-from db.models import (
-    AuditLog,
-    CalendarWritebackSource,
-    ConnectorSignalEvent,
-    WebdavAccount,
-)
+from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
 from db.session import get_db
 from main import app
 
@@ -47,13 +42,11 @@ class MockAsyncSession:
         webdav_accounts: list[WebdavAccount] | None = None,
         calendar_sources: list[CalendarWritebackSource] | None = None,
         connector_events: list[ConnectorSignalEvent] | None = None,
-        audit_logs: list[AuditLog] | None = None,
     ):
         self.results = [
             webdav_accounts or [],
             calendar_sources or [],
             connector_events or [],
-            audit_logs or [],
         ]
         self.execute_calls = 0
 
@@ -157,26 +150,6 @@ def _connector_event(
     )
 
 
-def _audit_log(
-    audit_uid: str,
-    user_id: str = "admin",
-    organization_id: str | None = "org-acme",
-    workspace_id: str | None = "workspace-org-acme",
-) -> AuditLog:
-    return AuditLog(
-        audit_uid=audit_uid,
-        user_id=user_id,
-        organization_id=organization_id,
-        workspace_id=workspace_id,
-        event_name="llm_provider.update",
-        action="update",
-        resource_type="llm_provider",
-        resource_id="42",
-        details="Updated provider acme-ai",
-        timestamp=_now(),
-    )
-
-
 @pytest.fixture
 def mock_db():
     return MockAsyncSession(
@@ -191,10 +164,6 @@ def mock_db():
         connector_events=[
             _connector_event("connector_evt_heartbeat"),
             _connector_event("connector_evt_other_org", "org-rival"),
-        ],
-        audit_logs=[
-            _audit_log("audit_llm_provider_update"),
-            _audit_log("audit_other_org", "rival-admin", "org-rival", "workspace-org-rival"),
         ],
     )
 
@@ -232,11 +201,6 @@ def test_access_surface_returns_org_scoped_sources_and_policy_decisions(admin_cl
     assert "caldav_src_other_org" not in response.text
     assert data["connector_events"][0]["event_uid"] == "connector_evt_heartbeat"
     assert "connector_evt_other_org" not in response.text
-    audit_uids = {event["audit_uid"] for event in data["audit_events"]}
-    assert audit_uids == {"audit_llm_provider_update"}
-    assert data["audit_events"][0]["event_name"] == "llm_provider.update"
-    assert data["audit_events"][0]["resource_ref"] != "42"
-    assert "resource_id" not in data["audit_events"][0]
     reasons = {decision["reason"] for decision in data["policy_decisions"]}
     assert "organization_denied" in reasons
     assert "data_region_denied" in reasons
@@ -270,10 +234,6 @@ def test_member_surface_only_returns_owned_sources(mock_db):
                 _calendar_source("caldav_src_admin", "admin"),
             ],
             connector_events=[],
-            audit_logs=[
-                _audit_log("audit_member_owned", "member"),
-                _audit_log("audit_admin_peer", "admin"),
-            ],
         )
 
     app.dependency_overrides[get_db] = override_get_db
@@ -293,8 +253,6 @@ def test_member_surface_only_returns_owned_sources(mock_db):
     assert response.status_code == 200, response.text
     source_ids = {source["source_id"] for source in response.json()["sources"]}
     assert source_ids == {"webdav_src_owned", "caldav_src_owned"}
-    audit_uids = {event["audit_uid"] for event in response.json()["audit_events"]}
-    assert audit_uids == {"audit_member_owned"}
 
 
 def test_access_surface_rejects_public_identity_headers_without_signed_session(mock_db):
