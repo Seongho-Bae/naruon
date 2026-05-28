@@ -27,6 +27,12 @@ services:
 
   backend:
     image: naruon-backend:local
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for gateway backend}
+      AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for gateway backend}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.localhost`)"

@@ -5,6 +5,10 @@
 - `k8s/ingress.yaml` currently uses NGINX ingress annotations.
 - `docker-compose.gateway.yml` now implements a Traefik API gateway integrated
   with Keycloak for API protection and routing.
+- The gateway backend service is image-based and does not include a database
+  container. Run it with the base compose stack or inject `DATABASE_URL` and
+  `AUTH_SESSION_HMAC_SECRET` explicitly; the backend must fail closed instead of
+  inventing a database URL or session secret.
 
 ## Traefik & Keycloak/Casdoor 평가 (Issue #138)
 
