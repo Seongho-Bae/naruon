@@ -43,7 +43,7 @@ jobs:
           trusted_archive_candidate="$RUNNER_TEMP/trusted-workspace.tar.gz.candidate"
           for attempt in 1 2 3 4; do
             rm -f "$trusted_archive" "$trusted_archive_candidate"
-            if gh api "/repos/${REPOSITORY}/tarball/${TRUSTED_WORKSPACE_SHA}" > "$trusted_archive_candidate" && tar -tzf "$trusted_archive_candidate" >/dev/null 2>&1; then
+            if gh_api_with_retry "/repos/${REPOSITORY}/tarball/${TRUSTED_WORKSPACE_SHA}" > "$trusted_archive_candidate" && tar -tzf "$trusted_archive_candidate" >/dev/null 2>&1; then
               mv "$trusted_archive_candidate" "$trusted_archive"
               break
             fi
@@ -99,7 +99,8 @@ jobs:
           strix_model="$(printf '%s' "$STRIX_OPENAI_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           case "$strix_model" in
             gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
-            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+            gpt-4* | openai/gpt-4*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               ;;
             *)
