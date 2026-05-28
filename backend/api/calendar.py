@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Sequence
 from typing import Literal
 
@@ -223,11 +224,9 @@ async def sync_todos(
         )
     try:
         safe_todos = [validate_calendar_todo_text(todo) for todo in request.todos]
-        results = []
-        for safe_todo in safe_todos:
-            event = await create_calendar_event(safe_todo, user_token)
-            results.append(event)
-        return {"synced": len(results), "events": results}
+        coros = [create_calendar_event(safe_todo, user_token) for safe_todo in safe_todos]
+        results = await asyncio.gather(*coros)
+        return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:
