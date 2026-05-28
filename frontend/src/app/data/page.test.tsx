@@ -23,9 +23,11 @@ vi.mock("lucide-react", () => ({
 
 import DataPage from "./page";
 
-function jsonResponse(body: unknown) {
+function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   return {
-    ok: true,
+    ok,
+    status,
+    statusText: ok ? "OK" : "Error",
     json: async () => body,
   };
 }
@@ -40,6 +42,14 @@ function mockWebdavFetch() {
           server_url: "https://webdav.naruon.net",
           username: "demo_user",
           writeback_enabled: true,
+          etag: "etag-webdav-primary",
+        },
+        {
+          source_id: "webdav_src_team",
+          server_url: "https://files.acme.example",
+          username: "team_user",
+          writeback_enabled: true,
+          etag: "etag-webdav-team",
         },
       ]);
     }
@@ -123,6 +133,7 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("WebDAV 원본");
     expect(container.textContent).toContain("로컬 캐시");
     expect(container.textContent).toContain("WebDAV writeback intent 승인");
+    expect(container.textContent).toContain("etag=etag-webdav-primary");
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {
@@ -176,6 +187,63 @@ describe("DataPage", () => {
     });
     expect(container.textContent).toContain("server-authoritative");
     expect(container.textContent).toContain("https://webdav.naruon.net");
+  });
+
+  it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-conflict-session");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/webdav/accounts") {
+        return jsonResponse([
+          {
+            source_id: "webdav_src_primary",
+            server_url: "https://webdav.naruon.net",
+            username: "demo_user",
+            writeback_enabled: true,
+            etag: "etag-webdav-primary",
+          },
+          {
+            source_id: "webdav_src_team",
+            server_url: "https://files.acme.example",
+            username: "team_user",
+            writeback_enabled: true,
+            etag: "etag-webdav-team",
+          },
+        ]);
+      }
+      if (path === "/api/webdav/folders") return jsonResponse([]);
+      expect(path).toBe("/api/webdav/writeback-intent");
+      expect(JSON.parse(String(init?.body))).toEqual({
+        target_source_id: "webdav_src_team",
+      });
+      return jsonResponse({ detail: "If-Match conflict" }, false, 409);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const teamSourceButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("webdav_src_team"),
+    );
+    expect(teamSourceButton).toBeDefined();
+    await act(async () => {
+      teamSourceButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const writebackButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
+    );
+    await act(async () => {
+      writebackButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("If-Match/ETag 충돌");
+    expect(container.textContent).toContain("webdav_src_team");
   });
 
   it("keeps WebDAV writeback disabled when account loading fails", async () => {

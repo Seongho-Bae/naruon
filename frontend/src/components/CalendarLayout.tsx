@@ -29,6 +29,12 @@ type CalendarWritebackSource = {
 
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
 
+function isCustomerOwnedWritableSource(source: CalendarWritebackSource) {
+  return source.writeback_enabled
+    && source.protocol !== 'local'
+    && source.capabilities.includes('write');
+}
+
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
   if (typeof shapedError?.status === 'number') return shapedError.status;
@@ -42,6 +48,7 @@ export function CalendarLayout() {
   const [writebackResult, setWritebackResult] = useState<CalendarWritebackIntentResponse | null>(null);
   const [writebackSources, setWritebackSources] = useState<CalendarWritebackSource[]>([]);
   const [sourceLoadStatus, setSourceLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -49,12 +56,14 @@ export function CalendarLayout() {
       .then((sources) => {
         if (!isMounted) return;
         setWritebackSources(sources);
+        setSelectedSourceId(sources.find(isCustomerOwnedWritableSource)?.source_id ?? null);
         setSourceLoadStatus('ready');
       })
       .catch(() => {
         if (!isMounted) return;
         setWritebackSources([]);
         setSourceLoadStatus('error');
+        setSelectedSourceId(null);
       });
 
     return () => {
@@ -62,14 +71,11 @@ export function CalendarLayout() {
     };
   }, []);
 
-  const selectedWritebackSource = useMemo(
-    () => writebackSources.find((source) => (
-      source.writeback_enabled
-      && source.protocol !== 'local'
-      && source.capabilities.includes('write')
-    )) ?? null,
-    [writebackSources],
-  );
+  const selectedWritebackSource = useMemo(() => {
+    const selectedSource = writebackSources.find((source) => source.source_id === selectedSourceId);
+    if (selectedSource && isCustomerOwnedWritableSource(selectedSource)) return selectedSource;
+    return writebackSources.find(isCustomerOwnedWritableSource) ?? null;
+  }, [selectedSourceId, writebackSources]);
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
@@ -208,25 +214,45 @@ export function CalendarLayout() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {writebackSources.map((source) => (
-                <article
-                  key={source.source_id}
-                  className="rounded-xl border border-border bg-background/70 p-3"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-mono text-xs font-bold text-primary">{source.source_id}</p>
-                      <p className="mt-1 break-words text-sm font-bold">{source.provider}</p>
+              {writebackSources.map((source) => {
+                const sourceWritable = isCustomerOwnedWritableSource(source);
+                const sourceSelected = selectedWritebackSource?.source_id === source.source_id;
+                return (
+                  <button
+                    key={source.source_id}
+                    type="button"
+                    disabled={!sourceWritable}
+                    aria-pressed={sourceSelected}
+                    onClick={() => setSelectedSourceId(source.source_id)}
+                    className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
+                      sourceSelected
+                        ? 'border-primary bg-primary/10 shadow-sm'
+                        : 'border-border bg-background/70 hover:border-primary/40'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs font-bold text-primary">{source.source_id}</p>
+                        <p className="mt-1 break-words text-sm font-bold">{source.provider}</p>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs font-black ${sourceWritable ? 'bg-green-100 text-green-700' : 'bg-secondary text-muted-foreground'}`}>
+                        {sourceSelected ? 'selected' : sourceWritable ? 'write' : 'read_only'}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-black ${source.writeback_enabled ? 'bg-green-100 text-green-700' : 'bg-secondary text-muted-foreground'}`}>
-                      {source.writeback_enabled ? 'write' : 'read_only'}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                    {source.protocol} · {source.capabilities.join(', ')}
-                  </p>
-                </article>
-              ))}
+                    <p className="mt-2 text-xs font-semibold text-muted-foreground">
+                      {source.protocol} · {source.capabilities.join(', ')}
+                    </p>
+                    <p className="mt-2 break-all font-mono text-[11px] font-semibold text-muted-foreground">
+                      etag={source.etag ?? 'missing'} · writeback={sourceWritable ? 'eligible' : 'blocked'}
+                    </p>
+                  </button>
+                );
+              })}
+              {sourceLoadStatus === 'ready' && writebackSources.length === 0 && (
+                <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-amber-700">
+                  연결된 CalDAV/CardDAV/WebDAV source가 없습니다.
+                </p>
+              )}
               {sourceLoadStatus === 'loading' && (
                 <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-primary">
                   CalDAV source registry 확인 중입니다.

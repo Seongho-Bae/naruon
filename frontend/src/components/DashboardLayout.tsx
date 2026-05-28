@@ -298,6 +298,15 @@ export function DashboardLayout({
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
 
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen || typeof document === 'undefined') return undefined;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [isWorkspaceMenuOpen]);
+
   function closeMobileWorkspaceMenu() {
     const menu = document.getElementById('mobile-workspace-menu') as (HTMLElement & { hidePopover?: () => void }) | null;
     menu?.hidePopover?.();

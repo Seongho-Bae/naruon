@@ -26,8 +26,11 @@ is the calendar server or directly writing provider data from the browser.
 ## Implemented Slice
 
 - `/calendar` now exposes a CalDAV/CardDAV/WebDAV intent check panel.
-- The intent panel lists signed-session CalDAV registry sources and chooses an
-  eligible write-capable customer source before posting intent.
+- The intent panel lists signed-session CalDAV registry sources, initializes an
+  eligible write-capable customer source, and lets the user deliberately select
+  the opaque target source before posting intent.
+- Source cards show provider, protocol, capabilities, persisted ETag state, and
+  writeback eligibility so source selection is visible before any intent POST.
 - The monthly, weekly, detail, coordination, and candidate calendar tabs all
   render concrete surfaces instead of an inert "under implementation" state.
 - Mobile layout keeps the header and monthly grid bounded, and adds bottom safe

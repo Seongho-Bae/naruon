@@ -18,13 +18,29 @@ test.describe('Mobile Workspace Navigation', () => {
 
     const mobileMenu = page.locator('#mobile-workspace-menu');
     await expect(mobileMenu).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
 
     // Verify some expected elements in the menu
     await expect(mobileMenu.getByText('시작 화면', { exact: true })).toBeVisible();
     await expect(mobileMenu.getByText('워크스페이스 메뉴', { exact: true })).toBeVisible();
+    await expect(mobileMenu.getByRole('link', { name: /데이터/ })).toBeVisible();
+    await expect(mobileMenu.getByRole('link', { name: /보안/ })).toBeVisible();
 
-    // Take a screenshot of the opened menu
     await page.screenshot({ path: testInfo.outputPath('mobile-hamburger-open.png'), fullPage: false });
+
+    const drawerScrollMetrics = await mobileMenu.evaluate((drawer) => {
+      const before = drawer.scrollTop;
+      drawer.scrollTop = drawer.scrollHeight;
+      return {
+        before,
+        after: drawer.scrollTop,
+        maxScroll: drawer.scrollHeight - drawer.clientHeight,
+      };
+    });
+    expect(drawerScrollMetrics.maxScroll).toBeGreaterThan(0);
+    expect(drawerScrollMetrics.after).toBeGreaterThan(drawerScrollMetrics.before);
+
+    await page.screenshot({ path: testInfo.outputPath('mobile-hamburger-open-scrolled.png'), fullPage: false });
 
     // Close the menu
     const closeButton = page.locator('button[aria-label="모바일 워크스페이스 메뉴 닫기"]');
@@ -32,5 +48,6 @@ test.describe('Mobile Workspace Navigation', () => {
 
     // Playwright popover might need a moment to hide
     await expect(mobileMenu).not.toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
   });
 });

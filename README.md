@@ -275,6 +275,9 @@ provenance. Calendar source selection now reads opaque
 `calendar_writeback_sources.source_uid` rows instead of exposing sequential
 CalDAV account ids, and the Calendar workspace loads those rows through signed
 `/api/calendar/writeback-sources` before posting an opaque `target_source_id`.
+The workspace now presents those sources as explicit selectable writeback
+targets and shows the selected source ETag/capability state before intent
+creation.
 The browser no longer claims `/api/calendar/sync` success from the mail-detail
 action path; direct provider writes stay deferred until connector execution can
 enforce ETag/If-Match and owner capability checks.
@@ -282,7 +285,10 @@ WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
 eligibility, reject legacy `target_account_id` payloads, and keep sequential
-`account_id` values internal-only.
+`account_id` values internal-only. The Data workspace exposes the WebDAV source
+as an explicit selected target and treats `409` If-Match/ETag responses as
+conflicts instead of generic failures, so UI copy never implies a provider write
+overwrote customer-owned files.
 
 ## Operations and release docs
 

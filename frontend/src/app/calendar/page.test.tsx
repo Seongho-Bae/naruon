@@ -50,6 +50,16 @@ const calendarSourceList = [
     writeback_enabled: true,
     etag: "etag-caldav-1",
   },
+  {
+    source_id: "caldav-team",
+    provider: "Team CalDAV",
+    protocol: "caldav",
+    owner_id: "user-1",
+    organization_id: "org-acme",
+    capabilities: ["read", "write", "etag"],
+    writeback_enabled: true,
+    etag: "etag-team-2",
+  },
 ];
 
 describe("CalendarPage", () => {
@@ -139,6 +149,7 @@ describe("CalendarPage", () => {
     });
     await flushAsyncWork();
     expect(container.textContent).toContain("Customer CalDAV");
+    expect(container.textContent).toContain("etag=etag-caldav-1");
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     expect(button).toBeTruthy();
@@ -151,6 +162,68 @@ describe("CalendarPage", () => {
     expect(container.textContent).toContain("caldav");
     expect(container.textContent).toContain("caldav-primary");
     expect(container.textContent).toContain("calendar.writeback_intent.created");
+  });
+
+  it("lets the user choose a specific customer-owned calendar source before intent creation", async () => {
+    localStorage.setItem("naruon_session_token", "signed-calendar-source-selection");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/calendar/writeback-sources") {
+        expect(init?.headers).toEqual(expect.objectContaining({
+          "Content-Type": "application/json",
+          Authorization: "Bearer signed-calendar-source-selection",
+        }));
+        return jsonResponse(calendarSourceList);
+      }
+      expect(String(input)).toBe("/api/calendar/writeback-intent");
+      expect(init?.headers).toEqual(expect.objectContaining({
+        "Content-Type": "application/json",
+        Authorization: "Bearer signed-calendar-source-selection",
+      }));
+      expect(JSON.parse(String(init?.body))).toEqual({
+        action: "create",
+        summary: "Naruon 일정 후보 writeback intent 점검",
+        target_source_id: "caldav-team",
+      });
+      return jsonResponse({
+        workspace_id: "workspace-org-acme",
+        target_source_id: "caldav-team",
+        protocol: "caldav",
+        writeback_mode: "customer_owned",
+        requires_if_match: false,
+        if_match: null,
+        provenance: {
+          created_by: "user-1",
+          source_provider: "Team CalDAV",
+          source_protocol: "caldav",
+        },
+        audit_event: "calendar.writeback_intent.created",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<CalendarPage />);
+    });
+    await flushAsyncWork();
+
+    const teamSourceButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("Team CalDAV"));
+    expect(teamSourceButton).toBeTruthy();
+    await act(async () => {
+      teamSourceButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const createButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("caldav-team");
+    expect(container.textContent).toContain("Team CalDAV");
   });
 
   it("does not post writeback intent before source registry readiness", async () => {
