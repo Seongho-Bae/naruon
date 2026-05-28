@@ -1139,3 +1139,59 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     assert data["emails"][0]["sender"] == "testuser@example.com"
     assert data["emails"][0]["thread_id"] == "thread3"
     assert data["emails"][0]["requires_reply"] is True
+
+from api.emails import canonical_thread_key
+
+def test_canonical_thread_key_uses_thread_id():
+    email = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="msg1",
+        thread_id="thread1"
+    )
+    assert canonical_thread_key(email) == "thread1"
+
+def test_canonical_thread_key_falls_back_to_message_id():
+    email = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="msg1",
+        thread_id=None
+    )
+    assert canonical_thread_key(email) == "msg1"
+
+def test_canonical_thread_key_normalizes_ids():
+    email1 = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="<msg1>",
+        thread_id="<thread1>"
+    )
+    assert canonical_thread_key(email1) == "thread1"
+
+    email2 = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="<msg2>",
+        thread_id=None
+    )
+    assert canonical_thread_key(email2) == "msg2"
+
+def test_canonical_thread_key_handles_empty_thread_id():
+    email = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="msg1",
+        thread_id="   "
+    )
+    assert canonical_thread_key(email) == "msg1"
+
+def test_canonical_thread_key_fallback_to_raw_message_id():
+    # If normalize_message_id returns None for message_id, it should fall back to raw message_id
+    email = Email(
+        user_id="user1",
+        organization_id="org1",
+        message_id="   <>   ",
+        thread_id=None
+    )
+    assert canonical_thread_key(email) == "   <>   "
