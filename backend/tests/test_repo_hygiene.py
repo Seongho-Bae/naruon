@@ -12,6 +12,20 @@ def test_dockerignore_excludes_nested_environment_files_but_keeps_examples():
     assert "!**/.env.example" in dockerignore
 
 
+def test_backend_dockerfile_suppresses_pip_root_warning():
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
+
+    assert "PIP_ROOT_USER_ACTION=ignore" in dockerfile
+    assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
+
+
+def test_backend_requirements_do_not_pin_yanked_email_validator():
+    requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
+
+    assert "email-validator==2.1.0" not in requirements
+    assert "email-validator==2.3.0" in requirements
+
+
 def test_compose_externalizes_postgres_credentials():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
 
