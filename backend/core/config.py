@@ -50,7 +50,11 @@ class Settings(BaseSettings):
     OIDC_CLIENT_ID: str | None = None
     OIDC_JWKS_URL: str | None = None
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=("~/.env", "../.env", ".env"),
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @model_validator(mode="after")
     def validate_session_secret(self) -> "Settings":

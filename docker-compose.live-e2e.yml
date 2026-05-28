@@ -19,6 +19,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""
@@ -32,6 +33,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""
@@ -45,6 +47,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
       OPENAI_API_KEY: ""

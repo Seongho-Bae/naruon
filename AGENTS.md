@@ -184,6 +184,17 @@
   runner socket state when available, but label sync lag, provider throttling,
   queue depth, and writeback conflict dashboards as pending until source-backed
   connector events exist.
+- Security governance screens must be source-backed by signed
+  `/api/security/access-surface` data. Do not ship static RBAC/ABAC rows, fake
+  blocked-login logs, unsupported TLS/TDE claims, or permanent Security tab
+  placeholders as implemented features. New Security mocks and E2E fixtures must
+  preserve bearer-session calls and omit public identity headers.
+- Data workspace repository, ingestion, embedding, and quality surfaces must be
+  source-backed by signed `/api/data/quality-surface` data or explicitly labeled
+  pending. Do not ship static ingestion logs, fake progress percentages, fake
+  vector counts, unsupported embedding model names, static quality totals, or
+  provider-write success claims; Data mocks and E2E fixtures must preserve the
+  bearer-session call and omit public identity headers.
 - Self-hosted connector APM history must be persisted as scoped control-plane
   signal events before the UI claims durable heartbeat evidence. Do not expose
   runner registration tokens, path tokens, or raw provider credentials in event
@@ -194,6 +205,11 @@
 - StepSecurity `harden-runner` will trigger false-positive `suspicious_file_access` lockouts on Next.js build and dev server executions (e.g., `router_init.js` checksum matches). Configure `disable-file-monitoring: true` in the `harden-runner` step rather than disabling the workflow or using `continue-on-error`.
 - Next.js 15+ Turbopack resolves workspace roots by scanning upward for `package-lock.json`. Do not create or leave a `package-lock.json` in the user's home directory (`~/`), as it will cause Turbopack to spawn infinite background worker node processes attempting to compile the entire home directory.
 - `pydantic-settings` strictly rejects unexpected environment variables by default. When sharing a common `.env` file between frontend and backend services, you must explicitly set `extra="ignore"` in the `SettingsConfigDict` to prevent fatal startup crashes.
+- Backend startup must not add code defaults for `DATABASE_URL` or
+  `AUTH_SESSION_HMAC_SECRET`. Support explicit env files from the operator,
+  repository root, and backend working directory, and require Compose/Kubernetes
+  to inject the mandatory values so missing runtime configuration fails before
+  deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
 
