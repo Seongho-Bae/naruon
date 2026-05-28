@@ -2,25 +2,24 @@ services:
   traefik:
     image: traefik:v3.0
     command:
+      - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
     ports:
       - "80:80"
+      - "8080:8080"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.3
     environment:
-      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN:?Set KEYCLOAK_ADMIN for gateway}
-      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD for gateway}
-      - KC_HOSTNAME=auth.localhost
-      - KC_HTTP_ENABLED=true
-      - KC_PROXY_HEADERS=xforwarded
-    command: start
-    expose:
-      - "8080"
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    command: start-dev
+    ports:
+      - "8081:8080"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.keycloak.rule=Host(`auth.localhost`)"
@@ -28,12 +27,6 @@ services:
 
   backend:
     image: naruon-backend:local
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for gateway backend}
-      AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for gateway backend}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.backend.rule=Host(`api.localhost`)"
