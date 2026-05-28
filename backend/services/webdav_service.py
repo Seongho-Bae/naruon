@@ -9,6 +9,13 @@ from services.knowledge_extractor import SELF_SENT_KNOWLEDGE_SOURCE
 
 logger = logging.getLogger(__name__)
 
+
+def safe_webdav_source_label(source_id: str | None) -> str:
+    if not source_id:
+        return "WebDAV source"
+    return f"WebDAV source {source_id}"
+
+
 async def sync_webdav_folders(session, user_id: str):
     """
     Fetch folder structures for all WebDAV accounts of the user.
@@ -21,7 +28,10 @@ async def sync_webdav_folders(session, user_id: str):
     res = await session.execute(stmt)
     accounts = res.scalars().all()
     for account in accounts:
-        logger.info(f"Fetched folder structures for WebDAV account {account.server_url}")
+        logger.info(
+            "Fetched folder structures for WebDAV source %s",
+            account.source_uid or "unknown",
+        )
     return True
 
 class WebDavService:
@@ -32,6 +42,7 @@ class WebDavService:
                     "source_id": "webdav_src_demo_primary",
                     "server_url": "https://webdav.naruon.net",
                     "username": "demo_user",
+                    "display_label": "WebDAV source webdav_src_demo_primary",
                     "writeback_enabled": True,
                 }
             ]
@@ -72,8 +83,6 @@ class WebDavService:
     ) -> List[Dict[str, Any]]:
         stmt = select(
             WebdavAccount.source_uid,
-            WebdavAccount.server_url,
-            WebdavAccount.username,
             WebdavAccount.writeback_enabled,
         ).where(
             WebdavAccount.user_id == user_id,
@@ -85,11 +94,10 @@ class WebDavService:
         return [
             {
                 "source_id": source_uid,
-                "server_url": server_url,
-                "username": username,
+                "display_label": safe_webdav_source_label(source_uid),
                 "writeback_enabled": bool(writeback_enabled),
             }
-            for source_uid, server_url, username, writeback_enabled in result.all()
+            for source_uid, writeback_enabled in result.all()
         ]
 
     async def get_project_folders_from_db(
@@ -210,7 +218,7 @@ class WebDavService:
             "source_email_id": source_email_id,
             "source_thread_id": task.related_thread_id,
             "source_id": result["source_id"],
-            "server_url": result["server_url"],
+            "target_label": result["target_label"],
             "target_path": f"/Naruon/Notes/{task.task_uid}.md",
             "requires_if_match": result["requires_if_match"],
             "provenance": result["provenance"],
@@ -250,7 +258,8 @@ class WebDavService:
         return {
             "intent": "writeback",
             "source_id": selected_account["source_id"],
-            "server_url": selected_account["server_url"],
+            "target_label": selected_account.get("display_label")
+            or safe_webdav_source_label(selected_account["source_id"]),
             "requires_if_match": True,
             "provenance": "server-authoritative"
         }

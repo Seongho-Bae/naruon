@@ -40,7 +40,7 @@ type KnowledgeMaterializationIntent = {
   source_email_id: string | null;
   source_thread_id: string | null;
   source_id: string | null;
-  server_url: string | null;
+  target_label: string | null;
   target_path: string;
   requires_if_match: boolean;
   provenance: string;
@@ -435,8 +435,8 @@ export function TasksLayout() {
                             <dd className="break-all text-muted-foreground">{currentIntent.target_path}</dd>
                           </div>
                           <div>
-                            <dt className="font-bold text-foreground">server_url</dt>
-                            <dd className="break-all text-muted-foreground">{currentIntent.server_url ?? 'unassigned'}</dd>
+                            <dt className="font-bold text-foreground">target_label</dt>
+                            <dd className="break-all text-muted-foreground">{currentIntent.target_label ?? 'unassigned'}</dd>
                           </div>
                           <div>
                             <dt className="font-bold text-foreground">write policy</dt>

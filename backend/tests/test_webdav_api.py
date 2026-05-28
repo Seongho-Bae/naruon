@@ -67,8 +67,7 @@ def stub_webdav_service(monkeypatch):
         return [
             {
                 "source_id": "webdav_src_demo_primary",
-                "server_url": "https://webdav.naruon.net",
-                "username": "demo_user",
+                "display_label": "WebDAV source webdav_src_demo_primary",
                 "writeback_enabled": True,
             }
         ] if user_id == "alice" else []
@@ -129,7 +128,7 @@ def stub_webdav_service(monkeypatch):
             "source_email_id": "<self-note@example.com>",
             "source_thread_id": "thread-self-note",
             "source_id": result["source_id"],
-            "server_url": result["server_url"],
+            "target_label": result["target_label"],
             "target_path": f"/Naruon/Notes/{source_task_id}.md",
             "requires_if_match": result["requires_if_match"],
             "provenance": result["provenance"],
@@ -210,10 +209,11 @@ def test_get_webdav_accounts(auth_client):
     body = response.json()
     assert len(body) > 0
     assert body[0]["source_id"] == "webdav_src_demo_primary"
-    assert body[0]["server_url"] == "https://webdav.naruon.net"
-    assert body[0]["username"] == "demo_user"
+    assert body[0]["display_label"] == "WebDAV source webdav_src_demo_primary"
     assert body[0]["writeback_enabled"] is True
     assert "account_id" not in body[0]
+    assert "server_url" not in body[0]
+    assert "username" not in body[0]
 
 
 def test_get_webdav_accounts_accepts_signed_bearer_session():
@@ -248,9 +248,10 @@ def test_get_webdav_writeback_intent(auth_client):
     assert body["intent"] == "writeback"
     assert body["requires_if_match"] is True
     assert body["source_id"] == "webdav_src_demo_primary"
-    assert body["server_url"] == "https://webdav.naruon.net"
+    assert body["target_label"] == "WebDAV source webdav_src_demo_primary"
     assert body["provenance"] == "server-authoritative"
     assert "account_id" not in body
+    assert "server_url" not in body
 
 
 def test_get_webdav_writeback_intent_accepts_signed_bearer_session():
@@ -275,7 +276,7 @@ def test_get_webdav_writeback_intent_with_target_account(auth_client):
     body = response.json()
     assert body["intent"] == "writeback"
     assert body["source_id"] == "webdav_src_demo_primary"
-    assert body["server_url"] == "https://webdav.naruon.net"
+    assert body["target_label"] == "WebDAV source webdav_src_demo_primary"
     assert body["requires_if_match"] is True
     assert body["provenance"] == "server-authoritative"
 
@@ -678,9 +679,10 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["source_id"] == source_uid
-    assert body["server_url"] == "https://real-webdav.naruon.net"
+    assert body["target_label"] == f"WebDAV source {source_uid}"
     assert body["provenance"] == "server-authoritative"
     assert "account_id" not in body
+    assert "server_url" not in body
 
 
 @pytest.mark.asyncio
@@ -1139,5 +1141,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     assert body["source_email_id"] == message_id
     assert body["source_thread_id"] == thread_id
     assert body["source_id"] == source_uid
+    assert body["target_label"] == f"WebDAV source {source_uid}"
     assert body["target_path"] == f"/Naruon/Notes/{task_uid}.md"
     assert body["provider_write_executed"] is False
+    assert "server_url" not in body
