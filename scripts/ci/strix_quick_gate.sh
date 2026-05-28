@@ -145,20 +145,45 @@ if [ -z "$STRIX_LLM" ]; then
 	exit 2
 fi
 
+is_vertex_model() {
+	case "$1" in
+	vertex_ai/* | vertex_ai_beta/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_gemini_model() {
+	case "$1" in
+	gemini/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
-if [ -z "$LLM_API_KEY_FILE" ]; then
+if [ -z "$LLM_API_KEY_FILE" ] && ! is_vertex_model "$STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
 	exit 2
 fi
-if [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+if [ -n "$LLM_API_KEY_FILE" ] && { [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; }; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
 	exit 2
 fi
-if ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
+if [ -n "$LLM_API_KEY_FILE" ] && ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
 	exit 2
 fi
-LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
-if [ -z "$LLM_API_KEY" ]; then
+LLM_API_KEY=""
+if [ -n "$LLM_API_KEY_FILE" ]; then
+	LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
+fi
+if [ -z "$LLM_API_KEY" ] && ! is_vertex_model "$STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must contain a non-empty API key." >&2
 	exit 2
 fi
@@ -1729,28 +1754,6 @@ evaluate_pull_request_findings() {
 	return 1
 }
 
-is_vertex_model() {
-	case "$1" in
-	vertex_ai/* | vertex_ai_beta/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_gemini_model() {
-	case "$1" in
-	gemini/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
 fallback_models_raw_for_model() {
 	local model="$1"
 
@@ -1907,18 +1910,21 @@ for key in (
         child_env[key] = value
 child_env["STRIX_LLM"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_MODEL"] = os.environ["STRIX_CHILD_MODEL"]
-child_env["LLM_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
+if os.environ.get("STRIX_CHILD_LLM_API_KEY"):
+    child_env["LLM_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
 child_env["STRIX_REPORTS_DIR"] = os.environ["STRIX_CHILD_REPORTS_DIR"]
 for key, value in os.environ.items():
     if key.startswith("FAKE_STRIX_") and value:
         child_env[key] = value
 for key in (
-    "GOOGLE_GHA_CREDS_PATH",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
-    "VERTEX_LOCATION",
-    "GEMINI_LOCATION",
-    "LLM_TIMEOUT",
+	"GOOGLE_GHA_CREDS_PATH",
+	"GOOGLE_APPLICATION_CREDENTIALS",
+	"CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+	"VERTEXAI_PROJECT",
+	"VERTEXAI_LOCATION",
+	"VERTEX_LOCATION",
+	"GEMINI_LOCATION",
+	"LLM_TIMEOUT",
     "STRIX_MEMORY_COMPRESSOR_TIMEOUT",
     "STRIX_REASONING_EFFORT",
     "STRIX_LLM_MAX_RETRIES",
@@ -2037,17 +2043,12 @@ is_llm_service_unavailable_error() {
 ##   - litellm API connection failures with LLM-provider evidence
 ##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Vertex timeouts remain infrastructure errors for guard logic, but the caller
-## should move directly to fallback model evaluation instead of spending the
-## remaining budget retrying the same slow model. Non-Vertex models have no
-## provider-specific fallback path in this gate, so LLM timeouts are retried on
-## the same model before being treated as non-recoverable.
+## Timeouts remain infrastructure errors for guard logic, but the caller should
+## move directly to fallback model evaluation instead of spending the remaining
+## budget retrying the same slow model.
 is_transient_same_model_retry_error() {
 	local model="${1-}"
 	if is_timeout_error; then
-		if [ -n "$model" ] && ! is_vertex_model "$model"; then
-			return 0
-		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
@@ -2850,6 +2851,7 @@ run_current_target_scan() {
 		else
 			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
+		return 1
 	fi
 
 	if is_vertex_model "$PRIMARY_MODEL"; then
