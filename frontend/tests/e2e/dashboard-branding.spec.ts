@@ -1031,7 +1031,8 @@ test('renders data WebDAV writeback intent status without direct provider writes
 
   await expect(page.getByText('writeback', { exact: true })).toBeVisible();
   await expect(page.getByText('server-authoritative')).toBeVisible();
-  await expect(page.getByText('https://webdav.naruon.net').first()).toBeVisible();
+  await expect(page.getByText('WebDAV source webdav_src_primary').first()).toBeVisible();
+  await expect(page.getByText('https://webdav.naruon.net')).toHaveCount(0);
   await expect(page.getByText('required', { exact: true })).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);

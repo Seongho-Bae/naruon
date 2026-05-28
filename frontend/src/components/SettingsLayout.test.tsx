@@ -142,8 +142,7 @@ describe("SettingsLayout", () => {
           return jsonResponse([
             {
               source_id: "webdav_src_primary",
-              server_url: "https://files.example.com/dav",
-              username: "files@example.com",
+              display_label: "WebDAV source webdav_src_primary",
               writeback_enabled: true,
             },
           ]);
@@ -349,6 +348,9 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("Source readiness");
     expect(container.textContent).toContain("caldav_src_fastmail_primary");
     expect(container.textContent).toContain("webdav_src_primary");
+    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("https://files.example.com/dav");
+    expect(container.textContent).not.toContain("files@example.com");
     expect(container.textContent).toContain("writeback intent enabled");
     expect(container.textContent).toContain("저장된 secret 유지");
     expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");
