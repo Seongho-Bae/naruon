@@ -49,6 +49,12 @@
   local client adapters for IMAP, POP3, SMTP, CalDAV, CardDAV, and WebDAV.
 - The `/api/runner-config` manifest describes this production connector role, but
   GitHub self-hosted runners remain CI smoke infrastructure only.
+- Connector command handlers must not synthesize successful IMAP/SMTP results.
+  If a local customer-network adapter is not configured, the runner returns
+  `adapter_not_configured` with `provider_write_executed=false`. If configured,
+  the runner wraps the local adapter result in a standard action/protocol/account
+  envelope so Naruon can distinguish accepted intent, local execution, and
+  provider write evidence.
 - Customer mail/calendar/file systems remain the source-of-truth; see
   `docs/operations/source-of-truth-and-writeback-sovereignty.md`.
 

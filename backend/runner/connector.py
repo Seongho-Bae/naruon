@@ -1,7 +1,8 @@
 import asyncio
 import json
 import logging
-from typing import Dict, Any
+from collections.abc import Awaitable, Callable
+from typing import Any, Dict
 
 try:
     import websockets
@@ -11,6 +12,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+RunnerActionHandler = Callable[[Dict[str, Any]], Awaitable[Dict[str, Any]]]
+
+
 def _get_account_name(payload: Dict[str, Any]) -> str | None:
     account = payload.get("account")
     if not isinstance(account, str):
@@ -19,10 +23,29 @@ def _get_account_name(payload: Dict[str, Any]) -> str | None:
     return account or None
 
 
+def _get_request_id(payload: Dict[str, Any]) -> str | None:
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str):
+        return None
+    request_id = request_id.strip()
+    if not request_id or len(request_id) > 128:
+        return None
+    return request_id
+
+
 class SelfHostedConnector:
-    def __init__(self, target_ws_url: str, token: str):
+    def __init__(
+        self,
+        target_ws_url: str,
+        token: str,
+        *,
+        imap_fetch_handler: RunnerActionHandler | None = None,
+        smtp_send_handler: RunnerActionHandler | None = None,
+    ):
         self.target_ws_url = target_ws_url
         self.token = token
+        self.imap_fetch_handler = imap_fetch_handler
+        self.smtp_send_handler = smtp_send_handler
         self.connection = None
         self.is_connected = False
         
@@ -112,9 +135,13 @@ class SelfHostedConnector:
                 "error": "missing account",
             })
             return
-        logger.info("Executing local IMAP fetch for configured account.")
-        # Placeholder for actual internal IMAP logic
-        await self.send_response({"status": "success", "action": "fetch_imap", "data": "IMAP data placeholder"})
+        logger.info("Dispatching local IMAP fetch adapter for configured account.")
+        await self._execute_local_adapter(
+            action="fetch_imap",
+            protocol="IMAP",
+            payload=payload,
+            handler=self.imap_fetch_handler,
+        )
         
     async def _handle_send_smtp(self, payload: Dict[str, Any]):
         if _get_account_name(payload) is None:
@@ -125,9 +152,70 @@ class SelfHostedConnector:
                 "error": "missing account",
             })
             return
-        logger.info("Executing local SMTP send for configured account.")
-        # Placeholder for actual internal SMTP logic
-        await self.send_response({"status": "success", "action": "send_smtp", "message_id": "mock_id_123"})
+        logger.info("Dispatching local SMTP send adapter for configured account.")
+        await self._execute_local_adapter(
+            action="send_smtp",
+            protocol="SMTP",
+            payload=payload,
+            handler=self.smtp_send_handler,
+        )
+
+    async def _execute_local_adapter(
+        self,
+        *,
+        action: str,
+        protocol: str,
+        payload: Dict[str, Any],
+        handler: RunnerActionHandler | None,
+    ):
+        account = _get_account_name(payload)
+        response: Dict[str, Any] = {
+            "status": "error",
+            "action": action,
+            "protocol": protocol,
+            "account": account,
+            "request_id": _get_request_id(payload),
+            "provider_write_executed": False,
+        }
+        if account is None:
+            response["error"] = "missing account"
+            await self.send_response(response)
+            return
+        if handler is None:
+            response["error"] = "adapter_not_configured"
+            await self.send_response(response)
+            return
+
+        try:
+            adapter_result = await handler(dict(payload))
+        except Exception:
+            logger.exception("%s local adapter failed.", protocol)
+            response["error"] = "adapter_failed"
+            await self.send_response(response)
+            return
+
+        if not isinstance(adapter_result, dict):
+            response["error"] = "invalid_adapter_response"
+            await self.send_response(response)
+            return
+
+        status_value = adapter_result.get("status", "success")
+        response["status"] = status_value if isinstance(status_value, str) else "success"
+        response["provider_write_executed"] = bool(
+            adapter_result.get("provider_write_executed", False)
+        )
+        reserved_keys = {
+            "action",
+            "account",
+            "protocol",
+            "request_id",
+            "provider_write_executed",
+        }
+        for key, value in adapter_result.items():
+            if key in reserved_keys:
+                continue
+            response[key] = value
+        await self.send_response(response)
 
     async def send_response(self, response: Dict[str, Any]):
         if self.is_connected and self.connection:
