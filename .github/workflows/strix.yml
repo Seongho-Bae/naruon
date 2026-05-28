@@ -117,7 +117,7 @@ jobs:
                 exit 1
               fi
               ;;
-            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-2.5-flash)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=vertex_ai' >> "$GITHUB_OUTPUT"
               sanitized_vertex_credentials="$(printf '%s' "$STRIX_VERTEX_CREDENTIALS" | tr -d '\r')"
@@ -215,7 +215,7 @@ jobs:
             gpt-*)
               printf 'openai/%s' "$strix_model" > "$strix_llm_file"
               ;;
-            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-2.5-flash)
               printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
             *)
