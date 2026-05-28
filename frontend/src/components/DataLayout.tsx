@@ -81,7 +81,7 @@ export function DataLayout() {
   }
   
   interface ProjectFolder {
-    folder_id: number;
+    folder_uid: string;
     project_name: string;
     webdav_path: string;
   }
@@ -404,11 +404,12 @@ export function DataLayout() {
                 </div>
                 <div className="p-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                   {projectFolders.length > 0 ? projectFolders.map(folder => (
-                    <div key={folder.folder_id} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors">
+                    <div key={folder.folder_uid} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors">
                       <div className="flex items-center gap-3 mb-2">
                         <FolderOpen className="size-5 text-primary" />
                         <span className="font-bold truncate">{folder.project_name}</span>
                       </div>
+                      <p className="mb-2 break-all font-mono text-[11px] font-semibold text-primary">{folder.folder_uid}</p>
                       <p className="text-xs text-muted-foreground break-all">{folder.webdav_path}</p>
                     </div>
                   )) : (

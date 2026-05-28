@@ -39,12 +39,12 @@ class WebDavService:
         self._mock_folders = {
             "demo_user": [
                 {
-                    "folder_id": 1,
+                    "folder_uid": "webdav_folder_demo_roadmap",
                     "project_name": "Naruon Roadmap 2026",
                     "webdav_path": "/Projects/Naruon_Roadmap_2026"
                 },
                 {
-                    "folder_id": 2,
+                    "folder_uid": "webdav_folder_demo_marketing",
                     "project_name": "Marketing Assets",
                     "webdav_path": "/Projects/Marketing_Assets"
                 }
@@ -96,12 +96,18 @@ class WebDavService:
         self,
         session: AsyncSession,
         user_id: str,
+        organization_id: str | None,
     ) -> List[Dict[str, Any]]:
-        stmt = select(ProjectFolder).where(ProjectFolder.user_id == user_id)
+        stmt = select(ProjectFolder).where(
+            ProjectFolder.user_id == user_id,
+            ProjectFolder.organization_id == organization_id
+            if organization_id is not None
+            else ProjectFolder.organization_id.is_(None),
+        )
         result = await session.execute(stmt)
         return [
             {
-                "folder_id": folder.id,
+                "folder_uid": folder.folder_uid,
                 "project_name": folder.project_name,
                 "webdav_path": folder.webdav_path,
             }

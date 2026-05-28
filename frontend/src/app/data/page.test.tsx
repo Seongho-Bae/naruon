@@ -56,7 +56,7 @@ function mockWebdavFetch() {
     if (path === "/api/webdav/folders") {
       return jsonResponse([
         {
-          folder_id: 1,
+          folder_uid: "webdav_folder_roadmap",
           project_name: "Naruon Roadmap 2026",
           webdav_path: "/Projects/Naruon_Roadmap_2026",
         },
@@ -134,6 +134,7 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("로컬 캐시");
     expect(container.textContent).toContain("WebDAV writeback intent 승인");
     expect(container.textContent).toContain("etag=etag-webdav-primary");
+    expect(container.textContent).toContain("webdav_folder_roadmap");
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {

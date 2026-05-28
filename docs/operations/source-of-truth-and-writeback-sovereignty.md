@@ -50,9 +50,13 @@ ticket tasks, DB-backed CalDAV intent source selection through opaque
 through a signed source-registry read, and WebDAV intent selection through
 opaque, organization-scoped `webdav_accounts.source_uid` rows with persisted
 writeback eligibility; sequential `webdav_accounts.account_id` values remain
-internal and are not browser-visible source identifiers. Real CalDAV/WebDAV
-mutation, ETag-aware WebDAV/Notes provider execution for synthesized knowledge,
-POP3 runtime sync, durable
+internal and are not browser-visible source identifiers. WebDAV project folders
+now expose opaque `project_folders.folder_uid` values, scope listing by the
+signed-session `user_id` and `organization_id`, and keep sequential folder
+primary keys internal. `/dav` mutation methods fail closed until provider
+execution can enforce source, capability, credential, and ETag/If-Match checks.
+Real CalDAV/WebDAV mutation, ETag-aware WebDAV/Notes provider execution for
+synthesized knowledge, POP3 runtime sync, durable
 reply-tracking notifications, configurable SLA policy storage, and source-id
 filtered sender graph views remain episode work and must preserve this registry
 boundary.

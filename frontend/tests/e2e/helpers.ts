@@ -415,12 +415,12 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
     if (path === '/api/webdav/folders' && request.method() === 'GET') {
       await fulfillJson(route, [
         {
-          folder_id: 1,
+          folder_uid: 'webdav_folder_roadmap',
           project_name: 'Naruon Roadmap 2026',
           webdav_path: '/Projects/Naruon_Roadmap_2026',
         },
         {
-          folder_id: 2,
+          folder_uid: 'webdav_folder_marketing',
           project_name: 'Marketing Assets',
           webdav_path: '/Projects/Marketing_Assets',
         },

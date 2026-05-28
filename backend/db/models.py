@@ -375,7 +375,11 @@ class SenderRelationship(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String,
+        index=True,
+        nullable=True,
+    )
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
     parent_sender_email: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     source_message_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
@@ -491,7 +495,15 @@ class ProjectFolder(Base):
     __tablename__ = "project_folders"
 
     id: Mapped[int] = mapped_column("folder_id", primary_key=True)
+    folder_uid: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        index=True,
+        default=lambda: f"webdav_folder_{uuid.uuid4().hex}",
+        nullable=False,
+    )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     project_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
     webdav_path: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
