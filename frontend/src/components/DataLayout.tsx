@@ -9,12 +9,13 @@ type WebdavWritebackIntentResponse = {
   source_id: string | null;
   server_url: string | null;
   requires_if_match: boolean;
+  if_match?: string | null;
   provenance: string;
   status?: string | null;
   message?: string | null;
 };
 
-type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'fetch_error' | 'auth' | 'error';
+type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'fetch_error' | 'conflict' | 'auth' | 'error';
 type WebdavAccountStatus = 'loading' | 'ready' | 'error';
 
 type UniqueThreadIntentResponse = {
@@ -76,6 +77,7 @@ export function DataLayout() {
     server_url: string;
     username: string;
     writeback_enabled: boolean;
+    etag?: string | null;
   }
   
   interface ProjectFolder {
@@ -86,6 +88,7 @@ export function DataLayout() {
   
   const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
   const [webdavAccountStatus, setWebdavAccountStatus] = useState<WebdavAccountStatus>('loading');
+  const [selectedWebdavSourceId, setSelectedWebdavSourceId] = useState<string | null>(null);
   const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
   const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
@@ -97,12 +100,14 @@ export function DataLayout() {
       .then((data) => {
         if (!Array.isArray(data)) throw new Error('Invalid WebDAV accounts response');
         setWebdavAccounts(data);
+        setSelectedWebdavSourceId(data.find((account) => account.writeback_enabled)?.source_id ?? null);
         setWebdavAccountStatus('ready');
       })
       .catch((error: unknown) => {
         console.error('WebDAV accounts fetch error', getSafeErrorSummary(error));
         setWebdavAccounts([]);
         setWebdavAccountStatus('error');
+        setSelectedWebdavSourceId(null);
       });
 
     apiClient.get<ProjectFolder[]>('/api/webdav/folders')
@@ -118,7 +123,9 @@ export function DataLayout() {
         setWritebackStatus('fetch_error');
         return;
       }
-      const targetSourceId = webdavAccounts.find(acc => acc.writeback_enabled)?.source_id;
+      const targetSourceId = webdavAccounts.find((account) => (
+        account.source_id === selectedWebdavSourceId && account.writeback_enabled
+      ))?.source_id ?? webdavAccounts.find((account) => account.writeback_enabled)?.source_id;
       if (!targetSourceId) {
         setWritebackStatus('no_source');
         return;
@@ -133,13 +140,15 @@ export function DataLayout() {
       const status = getApiErrorStatus(error);
       if (status === 422) {
         setWritebackStatus('no_source');
+      } else if (status === 409) {
+        setWritebackStatus('conflict');
       } else if (status === 401 || status === 403) {
         setWritebackStatus('auth');
       } else {
         setWritebackStatus('error');
       }
     }
-  }, [webdavAccounts, webdavAccountStatus]);
+  }, [selectedWebdavSourceId, webdavAccounts, webdavAccountStatus]);
 
   const requestUniqueThreadIntent = useCallback(async () => {
     setUniqueThreadStatus('loading');
@@ -161,6 +170,9 @@ export function DataLayout() {
   const isWebdavSourceLoading = webdavAccountStatus === 'loading';
   const canRequestWebdavWriteback = webdavAccountStatus === 'ready';
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
+  const selectedWebdavAccount = webdavAccounts.find((account) => (
+    account.source_id === selectedWebdavSourceId && account.writeback_enabled
+  )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -211,12 +223,31 @@ export function DataLayout() {
                       </p>
                     </div>
                   </div>
-                  {webdavAccounts.map(acc => (
-                    <div key={acc.source_id} className="flex items-center gap-2 text-sm text-muted-foreground mt-2 bg-secondary/50 p-2 rounded-lg">
-                      <Server className="size-4" />
-                      <span className="font-medium">{acc.server_url}</span> ({acc.username})
-                    </div>
-                  ))}
+                  <div className="mt-3 grid gap-2">
+                    {webdavAccounts.map((account) => {
+                      const accountSelected = selectedWebdavAccount?.source_id === account.source_id;
+                      return (
+                        <button
+                          key={account.source_id}
+                          type="button"
+                          disabled={!account.writeback_enabled}
+                          aria-pressed={accountSelected}
+                          onClick={() => setSelectedWebdavSourceId(account.source_id)}
+                          className={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
+                            accountSelected ? 'border-primary bg-primary/10' : 'border-transparent bg-secondary/50 hover:border-primary/40'
+                          }`}
+                        >
+                          <Server className="mt-0.5 size-4 shrink-0 text-primary" />
+                          <span className="min-w-0">
+                            <span className="block break-all font-medium text-foreground">{account.server_url}</span>
+                            <span className="block break-all text-xs text-muted-foreground">
+                              {account.source_id} · {account.username} · {account.writeback_enabled ? 'writeback eligible' : 'read only'} · etag={account.etag ?? 'missing'}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm flex items-center justify-between">
@@ -265,6 +296,9 @@ export function DataLayout() {
                   {writebackStatus === 'fetch_error' && (
                     <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못해 intent를 만들 수 없습니다.</p>
                   )}
+                  {writebackStatus === 'conflict' && (
+                    <p className="font-bold text-red-700">If-Match/ETag 충돌이 감지되어 고객 WebDAV 원본 파일을 덮어쓰지 않았습니다.</p>
+                  )}
                   {writebackStatus === 'auth' && (
                     <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>
                   )}
@@ -283,7 +317,7 @@ export function DataLayout() {
                       </div>
                       <div>
                         <dt className="font-black text-muted-foreground">IF_MATCH</dt>
-                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.requires_if_match ? 'required' : 'not_required'}</dd>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.if_match ?? (writebackResult.requires_if_match ? 'required' : 'not_required')}</dd>
                       </div>
                       <div>
                         <dt className="font-black text-muted-foreground">PROVENANCE</dt>

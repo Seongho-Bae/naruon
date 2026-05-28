@@ -741,6 +741,7 @@ test('renders calendar writeback intent status without direct provider writes', 
 
   await page.goto('/calendar');
   await expect(page.getByText('Customer CalDAV').first()).toBeVisible();
+  await expect(page.getByText('etag=etag-caldav-primary')).toBeVisible();
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
@@ -828,6 +829,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
   }, expectedNaruonToken);
 
   await page.goto('/data');
+  await expect(page.getByText('etag=etag-webdav-primary')).toBeVisible();
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';

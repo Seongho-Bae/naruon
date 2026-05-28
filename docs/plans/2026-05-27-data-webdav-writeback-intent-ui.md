@@ -21,10 +21,15 @@ AI-organized files or attachments are written back to their own storage.
 ## Implementation
 
 - `/data` now exposes a WebDAV writeback intent approval panel.
-- The intent panel uses the first connected customer WebDAV account as the
-  target source through `webdav_accounts.source_uid`, only chooses accounts with
-  persisted `writeback_enabled=true`, and fails closed when no eligible source
-  or signed session is available.
+- The intent panel initializes from the first connected customer WebDAV account
+  but exposes it as an explicit selected source through
+  `webdav_accounts.source_uid`, only permits accounts with persisted
+  `writeback_enabled=true`, and fails closed when no eligible source or signed
+  session is available.
+- The source card shows the WebDAV endpoint, opaque source id, username,
+  writeback eligibility, and current ETag state before the intent request.
+- `409` responses now render as If-Match/ETag conflicts instead of generic
+  failures, preserving the customer-owned source-of-truth boundary.
 - Data repository cards now use responsive grid tracks so mobile verification
   does not depend on desktop-only three-column layouts.
 - Unit and Playwright tests assert signed `Authorization: Bearer` handling and

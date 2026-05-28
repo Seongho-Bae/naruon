@@ -406,6 +406,7 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
           server_url: 'https://webdav.naruon.net',
           username: 'demo_user',
           writeback_enabled: true,
+          etag: 'etag-webdav-primary',
         },
       ]);
       return;

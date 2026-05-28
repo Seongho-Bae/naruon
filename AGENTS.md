@@ -128,6 +128,11 @@
 - Calendar writeback UI must fail closed while the signed source registry is
   loading or errored; do not emit intent POSTs without a confirmed opaque
   `target_source_id`, and keep tests covering the loading/error boundary.
+- Calendar and WebDAV workspaces must expose the current opaque writeback source
+  as a deliberate user selection with capability and ETag/If-Match state.
+  Automatic first-source fallback may initialize the control, but intent POSTs
+  must use the selected opaque source and `409` responses must render as
+  conflicts, not generic errors or completed writes.
 - Calendar and WebDAV writeback source selection must resolve through opaque
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.
@@ -135,6 +140,9 @@
   must not reveal or be deterministically derived from account primary keys, and
   provider mutations remain future work until connector execution can enforce
   capability, consent, and ETag/If-Match checks.
+- Mobile workspace drawers must lock background body scroll while open and keep
+  the drawer itself scrollable; responsive E2E screenshots should cover the open
+  hamburger state after scrolling the drawer.
 - Self-sent knowledge extraction must first prove true self-to-self addressing,
   stay idempotent per source email, preserve email/thread provenance, and store
   only plain-text task titles. Do not create unlinked knowledge tasks from raw
