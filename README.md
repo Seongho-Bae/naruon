@@ -139,11 +139,13 @@ npm run build
 npm run dev
 ```
 
-`next.config.ts` caps build worker fan-out and static generation concurrency by
-default (`NEXT_BUILD_CPUS=2`, `NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
+`next.config.ts` applies a best-effort local guard for build worker fan-out and
+static generation concurrency (`NEXT_BUILD_CPUS=2`,
+`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
 `NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER=50`) so constrained CI/build
-machines do not fan out excessive Node/PostCSS workers. Raise those values only
-with explicit build evidence.
+machines do not fan out excessive Node/PostCSS workers. Treat the Next.js CPU
+knob as experimental and enforce authoritative limits through CI, Docker, or the
+runner. Raise those values only with explicit build evidence.
 
 ## Threading proof points
 

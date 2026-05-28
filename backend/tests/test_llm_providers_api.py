@@ -82,6 +82,9 @@ class MockSession:
     async def commit(self):
         return None
 
+    async def flush(self):
+        return None
+
     async def refresh(self, obj):
         return None
 

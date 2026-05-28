@@ -2,7 +2,6 @@ import asyncio
 import base64
 import ipaddress
 import logging
-import re
 import socket
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -35,9 +34,6 @@ SMTP_EGRESS_PORTS = {25, 465, 587}
 IMAP_EGRESS_PORTS = {143, 993}
 POP3_EGRESS_PORTS = {110, 995}
 EMAIL_HEADER_NEWLINE_ERROR = "Email header fields must not contain newlines"
-LEGACY_NUMERIC_IP_LITERAL_PATTERN = re.compile(
-    r"^(?:0x[0-9a-f]+|0[0-7]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|0[0-7]+|[0-9]+))*$"
-)
 
 
 @dataclass(frozen=True)
@@ -196,10 +192,23 @@ def _is_ip_literal(candidate: str) -> bool:
     return True
 
 
+def _is_legacy_numeric_ip_component(component: str) -> bool:
+    if not component:
+        return False
+    if component.startswith("0x"):
+        return len(component) > 2 and all(
+            character in "0123456789abcdef" for character in component[2:]
+        )
+    return component.isdigit()
+
+
 def _looks_like_ip_literal(candidate: str) -> bool:
     normalized_candidate = candidate.lower()
-    return ":" in candidate or bool(
-        LEGACY_NUMERIC_IP_LITERAL_PATTERN.fullmatch(normalized_candidate)
+    if ":" in normalized_candidate:
+        return True
+    return all(
+        _is_legacy_numeric_ip_component(component)
+        for component in normalized_candidate.split(".")
     )
 
 

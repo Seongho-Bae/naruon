@@ -103,9 +103,9 @@ def _security_audit_event(
     )
 
 
-def _provider_resource_uid(auth_context: AuthContext, provider_name: str) -> str:
+def _provider_resource_uid(auth_context: AuthContext, provider_id: int) -> str:
     scope = auth_context.organization_id or auth_context.user_id
-    digest = hashlib.sha256(f"{scope}:{provider_name}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{scope}:{provider_id}".encode("utf-8")).hexdigest()
     return f"llm_provider:{digest[:16]}"
 
 
@@ -152,6 +152,12 @@ async def create_provider(
         is_active=data.is_active,
     )
     db.add(provider)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Provider name already exists")
+
     audit = AuditLog(
         user_id=auth_context.user_id,
         action="create",
@@ -163,7 +169,7 @@ async def create_provider(
         _security_audit_event(
             auth_context,
             event_action="create",
-            resource_uid=_provider_resource_uid(auth_context, data.name),
+            resource_uid=_provider_resource_uid(auth_context, provider.id),
             detail_text="Created provider configuration",
         )
     )
@@ -233,7 +239,7 @@ async def update_provider(
             _security_audit_event(
                 auth_context,
                 event_action="update",
-                resource_uid=_provider_resource_uid(auth_context, provider.name),
+                resource_uid=_provider_resource_uid(auth_context, provider.id),
                 detail_text="Updated provider configuration",
             )
         )
@@ -281,7 +287,7 @@ async def delete_provider(
         _security_audit_event(
             auth_context,
             event_action="delete",
-            resource_uid=_provider_resource_uid(auth_context, provider.name),
+            resource_uid=_provider_resource_uid(auth_context, provider.id),
             detail_text="Deleted provider configuration",
         )
     )
