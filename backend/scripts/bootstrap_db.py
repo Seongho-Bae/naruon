@@ -80,6 +80,10 @@ def schema_backfill_sql():
             "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS writeback_enabled boolean NOT NULL DEFAULT false"
         ),
+        text(
+            "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS etag_value varchar"
+        ),
         text("ALTER TABLE project_folders ADD COLUMN IF NOT EXISTS folder_uid varchar"),
         text(
             "ALTER TABLE project_folders "

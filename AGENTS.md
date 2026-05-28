@@ -177,9 +177,11 @@
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.
   Missing writeback eligibility must fail closed. Browser-visible source ids
-  must not reveal or be deterministically derived from account primary keys, and
-  provider mutations remain future work until connector execution can enforce
-  capability, consent, and ETag/If-Match checks.
+  must not reveal or be deterministically derived from account primary keys.
+  WebDAV account readiness may expose only source-safe labels and ETag/If-Match
+  evidence, never provider URLs, usernames, credentials, or sequential account
+  ids. Provider mutations remain future work until connector execution can
+  enforce capability, consent, and ETag/If-Match checks.
 - DAV/WebDAV folder and write paths must not expose sequential folder primary
   keys or claim provider write success from skeleton endpoints. Browser-visible
   project folders use opaque `folder_uid` values, and `/dav` mutation methods

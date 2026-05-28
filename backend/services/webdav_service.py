@@ -44,6 +44,7 @@ class WebDavService:
                     "username": "demo_user",
                     "display_label": "WebDAV source webdav_src_demo_primary",
                     "writeback_enabled": True,
+                    "etag": "etag-webdav-demo-primary",
                 }
             ]
         }
@@ -84,6 +85,7 @@ class WebDavService:
         stmt = select(
             WebdavAccount.source_uid,
             WebdavAccount.writeback_enabled,
+            WebdavAccount.etag_value,
         ).where(
             WebdavAccount.user_id == user_id,
             WebdavAccount.organization_id == organization_id
@@ -96,8 +98,9 @@ class WebDavService:
                 "source_id": source_uid,
                 "display_label": safe_webdav_source_label(source_uid),
                 "writeback_enabled": bool(writeback_enabled),
+                "etag": etag_value,
             }
-            for source_uid, writeback_enabled in result.all()
+            for source_uid, writeback_enabled, etag_value in result.all()
         ]
 
     async def get_project_folders_from_db(
@@ -221,6 +224,7 @@ class WebDavService:
             "target_label": result["target_label"],
             "target_path": f"/Naruon/Notes/{task.task_uid}.md",
             "requires_if_match": result["requires_if_match"],
+            "if_match": result.get("if_match"),
             "provenance": result["provenance"],
             "provider_write_executed": False,
             "audit_event": "webdav.self_sent_knowledge_intent.created",
@@ -261,6 +265,8 @@ class WebDavService:
             "target_label": selected_account.get("display_label")
             or safe_webdav_source_label(selected_account["source_id"]),
             "requires_if_match": True,
+            "if_match": selected_account.get("etag")
+            or selected_account.get("etag_value"),
             "provenance": "server-authoritative"
         }
 

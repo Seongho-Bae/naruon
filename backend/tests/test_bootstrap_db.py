@@ -157,6 +157,11 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "alter table webdav_accounts add column if not exists etag_value"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "alter table project_folders add column if not exists folder_uid"
         in statement
         for statement in statements
