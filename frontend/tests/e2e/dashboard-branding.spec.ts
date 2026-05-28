@@ -92,6 +92,17 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   await expect(desktopDashboard.getByText('답변 대기 메일')).toBeVisible();
   await expect(desktopDashboard.getByText('벤더 계약 답변 요청')).toBeVisible();
   await expect(desktopDashboard.getByText('예산 승인 후속 확인')).toBeVisible();
+  const desktopEscalationRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
+  });
+  await desktopDashboard.getByRole('button', { name: '홈에서 보낸 메일 답변 SLA 티켓 생성' }).click();
+  const desktopEscalationHeaders = (await desktopEscalationRequest).headers();
+  expect(desktopEscalationHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopEscalationHeaders[headerName]).toBeUndefined();
+  }
+  await expect(desktopDashboard.getByText('1개 SLA 티켓 생성, 2개 답변 대기 확인')).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('today-pending-replies-desktop.png'), fullPage: false });
@@ -108,6 +119,17 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   await mobileDashboard.getByText('답변 대기 메일').scrollIntoViewIfNeeded();
   await expect(mobileDashboard.getByText('답변 대기 메일')).toBeVisible();
   await expect(mobileDashboard.getByText('벤더 계약 답변 요청')).toBeVisible();
+  const mobileEscalationRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
+  });
+  await mobileDashboard.getByRole('button', { name: '홈에서 보낸 메일 답변 SLA 티켓 생성' }).click();
+  const mobileEscalationHeaders = (await mobileEscalationRequest).headers();
+  expect(mobileEscalationHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileEscalationHeaders[headerName]).toBeUndefined();
+  }
+  await expect(mobileDashboard.getByText('1개 SLA 티켓 생성, 2개 답변 대기 확인')).toBeVisible();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('today-pending-replies-mobile-pending-list.png'), fullPage: false });
@@ -386,6 +408,79 @@ test('updates source-linked task ticket status with signed API headers', async (
   expect(taskScrollMetrics.maxScroll).toBeGreaterThan(0);
   expect(taskScrollMetrics.after).toBeGreaterThan(taskScrollMetrics.before);
   await page.screenshot({ path: testInfo.outputPath('task-ticket-status-mobile-scroll.png'), fullPage: false });
+});
+
+test('creates pending reply SLA task escalation with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-reply-sla-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  const desktopEscalationRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
+  });
+
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
+  const desktopRequest = await desktopEscalationRequest;
+  const desktopHeaders = desktopRequest.headers();
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopHeaders[headerName]).toBeUndefined();
+  }
+  expect(desktopRequest.postDataJSON()).toEqual({ overdue_hours: 48 });
+
+  await expect(page.getByText('1개 답변 SLA 티켓을 생성했습니다. 2개 대기 메일을 48시간 기준으로 확인했습니다.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
+  const escalatedDesktopTask = page.getByRole('article').filter({ hasText: '답변 SLA 확인: 벤더 계약 답변 요청' });
+  await expect(escalatedDesktopTask.getByText('차단 · 긴급')).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('reply-sla-escalation-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileEscalationRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
+  });
+  await page.goto('/tasks');
+  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
+  const mobileRequestHeaders = (await mobileEscalationRequest).headers();
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(mobileRequestHeaders[headerName]).toBeUndefined();
+  }
+  await expect(page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
+  await page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' }).scrollIntoViewIfNeeded();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('reply-sla-escalation-mobile.png'), fullPage: false });
+  const taskScrollMetrics = await page.locator('main').nth(1).evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(taskScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(taskScrollMetrics.after).toBeGreaterThan(taskScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('reply-sla-escalation-mobile-scroll.png'), fullPage: false });
 });
 
 test('creates self-sent knowledge WebDAV intent with signed API headers', async ({ page }, testInfo) => {

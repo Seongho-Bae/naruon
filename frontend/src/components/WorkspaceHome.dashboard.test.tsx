@@ -143,4 +143,96 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(headers["X-Organization-Id"]).toBeUndefined();
     expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
   });
+
+  it("creates reply SLA ticket escalation from the Today dashboard with signed headers", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_session_token", "signed-home-reply-sla");
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      fetchCalls.push({ url, init });
+      if (url.endsWith("/api/tasks/reply-sla-escalations")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            evaluated: 2,
+            created: 1,
+            policy: { overdue_hours: 48 },
+            tasks: [],
+          }),
+        });
+      }
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 301,
+                subject: "벤더 계약 답변 요청",
+                sender: "Seongho <user@naruon.ai>",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "계약 검토 회신 SLA가 지나 작업 보드와 연결해야 합니다.",
+                requires_reply: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([]),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("벤더 계약 답변 요청") ?? false);
+
+    const escalationButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="홈에서 보낸 메일 답변 SLA 티켓 생성"]',
+    );
+    expect(escalationButton).not.toBeNull();
+    await act(async () => {
+      escalationButton?.click();
+    });
+    await waitForCondition(() => container?.textContent?.includes("1개 SLA 티켓 생성") ?? false);
+
+    const escalationCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/reply-sla-escalations"));
+    expect(escalationCall).toBeDefined();
+    expect(escalationCall?.init?.method).toBe("POST");
+    expect(JSON.parse(String(escalationCall?.init?.body))).toEqual({ overdue_hours: 48 });
+    const headers = escalationCall?.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer signed-home-reply-sla");
+    for (const headerName of publicIdentityHeaders) {
+      expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+    }
+    expect(container.textContent).toContain("1개 SLA 티켓 생성, 2개 답변 대기 확인");
+  });
 });

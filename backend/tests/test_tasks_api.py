@@ -9,11 +9,13 @@ import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
+from sqlalchemy.exc import IntegrityError
 
 from api.auth import get_auth_context
 from core.config import settings
-from db.models import Email, TicketTask
+from db.models import Email, TenantConfig, TicketTask
 from db.session import get_db
 from main import app
 
@@ -63,6 +65,11 @@ class MockTaskSession:
     def __init__(self) -> None:
         self.emails: dict[int, Email] = {}
         self.tasks: list[TicketTask] = []
+        self.tenant_config: TenantConfig | None = TenantConfig(
+            user_id="alice",
+            smtp_username="alice@example.com",
+            imap_username=None,
+        )
 
     async def get(self, model, primary_key):
         if model is Email:
@@ -99,18 +106,34 @@ class MockTaskSession:
             def one_or_none(self):
                 return self.scalar_one_or_none()
 
+        if descriptions and descriptions[0].get("entity") is TenantConfig:
+            return MockResult([] if self.tenant_config is None else [self.tenant_config])
+
         if descriptions and descriptions[0].get("entity") is Email:
             params = stmt.compile().params
             source_email_id = params.get("message_id_1")
             user_id = params.get("user_id_1")
             organization_id = params.get("organization_id_1")
+            minimum_date = next(
+                (
+                    value
+                    for key, value in params.items()
+                    if key.startswith("date_")
+                    and isinstance(value, datetime.datetime)
+                ),
+                None,
+            )
             return MockResult(
                 [
                     email
                     for email in self.emails.values()
-                    if email.message_id == source_email_id
-                    and email.user_id == user_id
-                    and email.organization_id == organization_id
+                    if (source_email_id is None or email.message_id == source_email_id)
+                    and (user_id is None or email.user_id == user_id)
+                    and (
+                        organization_id is None
+                        or email.organization_id == organization_id
+                    )
+                    and (minimum_date is None or email.date > minimum_date)
                 ]
             )
 
@@ -120,6 +143,9 @@ class MockTaskSession:
             task_uid = params.get("task_uid_1")
             user_id = params.get("user_id_1")
             organization_id = params.get("organization_id_1")
+            source_type = params.get("source_type_1")
+            related_email_id = params.get("email_id_1")
+            returns_joined_email = len(descriptions) > 1
             scoped_email_join = (
                 "emails.user_id" in statement_text
                 and "emails.organization_id" in statement_text
@@ -138,23 +164,38 @@ class MockTaskSession:
                     return None
                 return source_email.message_id
 
-            return MockResult(
-                [
-                    (task, source_message_id(task))
-                    for task in self.tasks
-                    if (task_uid is None or task.task_uid == task_uid)
-                    and (user_id is None or task.user_id == user_id)
-                    and (
-                        organization_id is None
-                        or task.organization_id == organization_id
-                    )
-                ]
-            )
+            matching_tasks = [
+                task
+                for task in self.tasks
+                if (task_uid is None or task.task_uid == task_uid)
+                and (user_id is None or task.user_id == user_id)
+                and (
+                    organization_id is None or task.organization_id == organization_id
+                )
+                and (source_type is None or task.source_type == source_type)
+                and (
+                    related_email_id is None
+                    or task.related_email_id == related_email_id
+                )
+            ]
+            if returns_joined_email:
+                return MockResult(
+                    [(task, source_message_id(task)) for task in matching_tasks]
+                )
+            return MockResult(matching_tasks)
 
         return MockResult(self.tasks)
 
     def add(self, obj):
         if isinstance(obj, TicketTask):
+            if obj.source_type == "reply_sla" and any(
+                task.user_id == obj.user_id
+                and task.organization_id == obj.organization_id
+                and task.source_type == obj.source_type
+                and task.related_email_id == obj.related_email_id
+                for task in self.tasks
+            ):
+                raise IntegrityError("duplicate reply_sla task", {}, None)
             obj.id = len(self.tasks) + 1
             if not getattr(obj, "task_uid", None):
                 obj.task_uid = uuid.uuid4().hex
@@ -164,6 +205,9 @@ class MockTaskSession:
             self.tasks.append(obj)
 
     async def commit(self):
+        pass
+
+    async def rollback(self):
         pass
 
     async def refresh(self, obj):
@@ -180,6 +224,11 @@ def override_get_db():
     app.dependency_overrides.pop(get_db, None)
     mock_session.emails = {}
     mock_session.tasks = []
+    mock_session.tenant_config = TenantConfig(
+        user_id="alice",
+        smtp_username="alice@example.com",
+        imap_username=None,
+    )
 
 
 @pytest.fixture
@@ -219,6 +268,285 @@ def test_create_ticket_tasks_accepts_signed_bearer_session():
     assert body["tasks"][0]["source_email_id"] == "<message-14@example.com>"
     assert "user_id" not in body["tasks"][0]
     assert "organization_id" not in body["tasks"][0]
+
+
+def test_reply_sla_escalation_accepts_signed_bearer_session():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    mock_session.emails[21] = make_email(
+        email_id=21,
+        message_id="<sent-sla-signed@example.com>",
+        thread_id="<thread-sla-signed>",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="Vendor reply",
+        body="Please reply by Friday.",
+        date=now - datetime.timedelta(days=3),
+    )
+    app.dependency_overrides.pop(get_auth_context, None)
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    try:
+        with TestClient(
+            app,
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            response = client.post(
+                "/api/tasks/reply-sla-escalations",
+                json={"overdue_hours": 48},
+            )
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 1
+    assert body["tasks"][0]["source_type"] == "reply_sla"
+    assert body["tasks"][0]["source_email_id"] == "<sent-sla-signed@example.com>"
+    assert "user_id" not in body["tasks"][0]
+    assert "organization_id" not in body["tasks"][0]
+
+
+def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    mock_session.emails[21] = make_email(
+        email_id=21,
+        message_id="<sent-sla@example.com>",
+        thread_id="<thread-sla>",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="<script>alert('x')</script>",
+        body="Please reply by Friday.",
+        date=now - datetime.timedelta(days=3),
+    )
+    mock_session.emails[22] = make_email(
+        email_id=22,
+        message_id="<sent-recent@example.com>",
+        thread_id="thread-recent",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="Recent follow-up",
+        body="Please reply when you can.",
+        date=now - datetime.timedelta(hours=2),
+    )
+    mock_session.emails[23] = make_email(
+        email_id=23,
+        message_id="<sent-answered@example.com>",
+        thread_id="<thread-answered>",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="Answered follow-up",
+        body="Please reply when you can.",
+        date=now - datetime.timedelta(days=3),
+    )
+    mock_session.emails[24] = make_email(
+        email_id=24,
+        message_id="<reply-answered@example.com>",
+        thread_id="thread-answered",
+        sender="vendor@example.com",
+        recipients="alice@example.com",
+        subject="Re: Answered follow-up",
+        body="Confirmed.",
+        date=now - datetime.timedelta(days=2),
+    )
+    mock_session.emails[25] = make_email(
+        email_id=25,
+        message_id="<self-note@example.com>",
+        thread_id="thread-self",
+        sender="alice@example.com",
+        recipients="alice@example.com",
+        subject="Self note",
+        body="Please reply is not external work.",
+        date=now - datetime.timedelta(days=3),
+    )
+
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 48},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["evaluated"] == 2
+    assert body["created"] == 1
+    assert body["policy"] == {"overdue_hours": 48}
+    assert len(body["tasks"]) == 1
+    task = body["tasks"][0]
+    assert task["title"] == "답변 SLA 확인: 제목 정리 필요"
+    assert task["status"] == "blocked"
+    assert task["priority"] == "urgent"
+    assert task["source_type"] == "reply_sla"
+    assert task["source_email_id"] == "<sent-sla@example.com>"
+    assert task["related_thread_id"] == "thread-sla"
+    assert "related_email_id" not in task
+    assert "user_id" not in task
+    assert "organization_id" not in task
+    assert len(mock_session.tasks) == 1
+    assert mock_session.tasks[0].related_email_id == 21
+    assert "<script>" not in mock_session.tasks[0].title
+
+
+def test_reply_sla_escalation_is_idempotent_for_existing_task(auth_client):
+    now = datetime.datetime.now(datetime.timezone.utc)
+    previous_update = now - datetime.timedelta(days=1)
+    mock_session.emails[31] = make_email(
+        email_id=31,
+        message_id="<existing-sla@example.com>",
+        thread_id="<thread-existing-sla>",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="Existing SLA follow-up",
+        body="Please reply by tomorrow.",
+        date=now - datetime.timedelta(days=4),
+    )
+    mock_session.tasks.append(
+        TicketTask(
+            id=1,
+            task_uid="opaque-existing-sla",
+            user_id="alice",
+            organization_id="org-acme",
+            title="예전 SLA 작업",
+            status="open",
+            priority="normal",
+            source_type="reply_sla",
+            related_email_id=31,
+            related_thread_id="old-thread",
+            created_at=previous_update,
+            updated_at=previous_update,
+        )
+    )
+
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 48},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 0
+    assert len(body["tasks"]) == 1
+    assert body["tasks"][0]["id"] == "opaque-existing-sla"
+    assert body["tasks"][0]["status"] == "blocked"
+    assert body["tasks"][0]["priority"] == "urgent"
+    assert body["tasks"][0]["related_thread_id"] == "thread-existing-sla"
+    assert len(mock_session.tasks) == 1
+    assert mock_session.tasks[0].title == "답변 SLA 확인: Existing SLA follow-up"
+    assert mock_session.tasks[0].updated_at > previous_update
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_reply_sla_escalation_real_postgres_smoke():
+    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
+    from asyncpg.exceptions import InvalidPasswordError
+    from db.models import Base
+    from sqlalchemy import delete, select, text
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+    except (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+        OperationalError,
+        OSError,
+    ) as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke database unavailable: {exc}")
+
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+    user_id = "reply-sla-smoke-user"
+    organization_id = "reply-sla-smoke-org"
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    async def cleanup_seed_rows():
+        async with Session() as session:
+            await session.execute(
+                delete(TicketTask).where(TicketTask.user_id == user_id)
+            )
+            await session.execute(delete(Email).where(Email.user_id == user_id))
+            await session.execute(
+                delete(TenantConfig).where(TenantConfig.user_id == user_id)
+            )
+            await session.commit()
+
+    await cleanup_seed_rows()
+    async with Session() as session:
+        session.add(
+            TenantConfig(
+                user_id=user_id,
+                smtp_username="reply-sla-smoke@example.com",
+                imap_username=None,
+            )
+        )
+        session.add(
+            Email(
+                user_id=user_id,
+                organization_id=organization_id,
+                message_id="<reply-sla-smoke@example.com>",
+                thread_id="<reply-sla-smoke-thread>",
+                sender="reply-sla-smoke@example.com",
+                recipients="vendor@example.com",
+                subject="<img src=x onerror=alert(1)>",
+                date=now - datetime.timedelta(days=3),
+                body="Please reply by tomorrow.",
+            )
+        )
+        await session.commit()
+
+    async def real_db_override():
+        async with Session() as session:
+            yield session
+
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = real_db_override
+    persisted_task: TicketTask | None = None
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            headers={
+                "X-User-Id": user_id,
+                "X-Organization-Id": organization_id,
+            },
+            base_url="http://test",
+        ) as real_client:
+            response = await real_client.post(
+                "/api/tasks/reply-sla-escalations",
+                json={"overdue_hours": 48},
+            )
+        async with Session() as session:
+            task_result = await session.execute(
+                select(TicketTask).where(
+                    TicketTask.user_id == user_id,
+                    TicketTask.organization_id == organization_id,
+                    TicketTask.source_type == "reply_sla",
+                )
+            )
+            persisted_task = task_result.scalar_one()
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+        await cleanup_seed_rows()
+        await engine.dispose()
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 1
+    assert body["tasks"][0]["source_email_id"] == "<reply-sla-smoke@example.com>"
+    assert body["tasks"][0]["related_thread_id"] == "reply-sla-smoke-thread"
+    assert body["tasks"][0]["title"] == "답변 SLA 확인: 제목 정리 필요"
+    assert persisted_task is not None
+    assert persisted_task.status == "blocked"
+    assert persisted_task.priority == "urgent"
+    assert persisted_task.related_thread_id == "reply-sla-smoke-thread"
 
 
 def test_list_ticket_tasks_does_not_leak_cross_tenant_source_email(auth_client):
@@ -335,18 +663,24 @@ def make_email(
     user_id: str = "alice",
     organization_id: str | None = "org-acme",
     thread_id: str | None = "thread-123",
+    message_id: str | None = None,
+    sender: str = "pm@example.com",
+    recipients: str = "alice@example.com",
+    subject: str | None = "Task source email",
+    body: str = "Please create tracked work items.",
+    date: datetime.datetime | None = None,
 ) -> Email:
     return Email(
         id=email_id,
         user_id=user_id,
         organization_id=organization_id,
-        message_id=f"<message-{email_id}@example.com>",
+        message_id=message_id or f"<message-{email_id}@example.com>",
         thread_id=thread_id,
-        sender="pm@example.com",
-        recipients="alice@example.com",
-        subject="Task source email",
-        date=datetime.datetime(2026, 5, 19, tzinfo=datetime.timezone.utc),
-        body="Please create tracked work items.",
+        sender=sender,
+        recipients=recipients,
+        subject=subject,
+        date=date or datetime.datetime(2026, 5, 19, tzinfo=datetime.timezone.utc),
+        body=body,
     )
 
 
@@ -368,6 +702,22 @@ def test_ticket_task_database_columns_use_two_word_snake_case():
         "updated_at",
     }
     assert all("_" in column_name for column_name in column_names)
+
+
+def test_ticket_task_model_declares_reply_sla_unique_index():
+    indexes = {index.name: index for index in TicketTask.__table__.indexes}
+
+    reply_sla_index = indexes["uq_ticket_tasks_reply_sla_email"]
+
+    assert reply_sla_index.unique is True
+    expression_text = " ".join(
+        str(expression).lower() for expression in reply_sla_index.expressions
+    )
+    assert "user_id" in expression_text
+    assert "coalesce" in expression_text
+    assert "organization_id" in expression_text
+    assert "source_type" in expression_text
+    assert "email_id" in expression_text
 
 
 def test_create_ticket_tasks_from_email_links_source_email_and_thread(auth_client):

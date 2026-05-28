@@ -11,6 +11,7 @@ from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
     SenderRelationship,
+    TicketTask,
     WebdavAccount,
 )
 
@@ -263,6 +264,36 @@ def test_sender_relationship_model_declares_source_unique_index():
     assert "source_thread_id" in expression_text
 
 
+def test_ticket_task_reply_sla_unique_index_is_bootstrapped():
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+    indexes = {index.name: index for index in TicketTask.__table__.indexes}
+    dedupe_statement_index = next(
+        index
+        for index, statement in enumerate(statements)
+        if "with ranked_tasks as" in statement
+        and "delete from ticket_tasks" in statement
+        and "source_type = 'reply_sla'" in statement
+        and "task_id desc" in statement
+        and "row_rank > 1" in statement
+    )
+    unique_index_statement_index = next(
+        index
+        for index, statement in enumerate(statements)
+        if "create unique index if not exists uq_ticket_tasks_reply_sla_email"
+        in statement
+    )
+
+    assert "uq_ticket_tasks_reply_sla_email" in indexes
+    assert indexes["uq_ticket_tasks_reply_sla_email"].unique is True
+    assert dedupe_statement_index < unique_index_statement_index
+    assert any(
+        "create unique index if not exists uq_ticket_tasks_reply_sla_email"
+        in statement
+        and "where source_type = 'reply_sla'" in statement
+        for statement in statements
+    )
+
+
 def test_calendar_writeback_source_model_uses_two_word_names():
     assert CalendarWritebackSource.__tablename__ == "calendar_writeback_sources"
     column_names = {column.name for column in CalendarWritebackSource.__table__.columns}
@@ -327,11 +358,80 @@ def test_schema_backfill_creates_connector_signal_events():
 @pytest.mark.postgres
 async def test_connector_signal_events_real_postgres_bootstrap_smoke():
     engine = create_async_engine(settings.DATABASE_URL)
+    duplicate_count = 0
+    kept_title = ""
+    smoke_user_id = "reply-sla-bootstrap-smoke-user"
+    smoke_organization_id = "reply-sla-bootstrap-smoke-org"
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(
+                text("DROP INDEX IF EXISTS uq_ticket_tasks_reply_sla_email")
+            )
+            await conn.execute(
+                text("DELETE FROM ticket_tasks WHERE user_id = :user_id"),
+                {"user_id": smoke_user_id},
+            )
+            await conn.execute(
+                text("DELETE FROM emails WHERE user_id = :user_id"),
+                {"user_id": smoke_user_id},
+            )
+            email_result = await conn.execute(
+                text(
+                    """
+                    INSERT INTO emails (
+                        user_id, organization_id, message_id, sender, recipients,
+                        subject, "date", body
+                    )
+                    VALUES (
+                        :user_id, :organization_id, :message_id, :sender,
+                        :recipients, :subject, now(), :body
+                    )
+                    RETURNING id
+                    """
+                ),
+                {
+                    "user_id": smoke_user_id,
+                    "organization_id": smoke_organization_id,
+                    "message_id": "<reply-sla-bootstrap-smoke@example.com>",
+                    "sender": "smoke@example.com",
+                    "recipients": "owner@example.com",
+                    "subject": "Bootstrap duplicate reply SLA",
+                    "body": "bootstrap duplicate smoke",
+                },
+            )
+            email_id = email_result.scalar_one()
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO ticket_tasks (
+                        task_uid, user_id, organization_id, task_title,
+                        status_code, priority_code, source_type, email_id,
+                        thread_id, created_at, updated_at
+                    )
+                    VALUES
+                    (
+                        'reply_sla_bootstrap_old', :user_id, :organization_id,
+                        'old duplicate', 'blocked', 'urgent', 'reply_sla',
+                        :email_id, 'thread-bootstrap-smoke',
+                        now() - interval '2 hours', now() - interval '2 hours'
+                    ),
+                    (
+                        'reply_sla_bootstrap_new', :user_id, :organization_id,
+                        'new duplicate', 'blocked', 'urgent', 'reply_sla',
+                        :email_id, 'thread-bootstrap-smoke',
+                        now() - interval '1 hour', now() - interval '1 hour'
+                    )
+                    """
+                ),
+                {
+                    "user_id": smoke_user_id,
+                    "organization_id": smoke_organization_id,
+                    "email_id": email_id,
+                },
+            )
             for statement in schema_backfill_sql():
                 await conn.execute(statement)
             result = await conn.execute(
@@ -344,6 +444,36 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                 )
             )
             column_names = {row[0] for row in result.fetchall()}
+            duplicate_result = await conn.execute(
+                text(
+                    """
+                    SELECT
+                        count(*) OVER () AS task_count,
+                        task_title
+                    FROM ticket_tasks
+                    WHERE user_id = :user_id
+                        AND organization_id = :organization_id
+                        AND source_type = 'reply_sla'
+                        AND email_id = :email_id
+                    ORDER BY updated_at DESC, task_id DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "user_id": smoke_user_id,
+                    "organization_id": smoke_organization_id,
+                    "email_id": email_id,
+                },
+            )
+            duplicate_count, kept_title = duplicate_result.one()
+            await conn.execute(
+                text("DELETE FROM ticket_tasks WHERE user_id = :user_id"),
+                {"user_id": smoke_user_id},
+            )
+            await conn.execute(
+                text("DELETE FROM emails WHERE user_id = :user_id"),
+                {"user_id": smoke_user_id},
+            )
     except (
         ConnectionRefusedError,
         OSError,
@@ -370,3 +500,5 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
         "detail_text",
         "observed_at",
     }.issubset(column_names)
+    assert duplicate_count == 1
+    assert kept_title == "new duplicate"

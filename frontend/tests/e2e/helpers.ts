@@ -577,6 +577,28 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
       return;
     }
 
+    if (path === '/api/tasks/reply-sla-escalations' && request.method() === 'POST') {
+      await fulfillJson(route, {
+        evaluated: 2,
+        created: 1,
+        policy: { overdue_hours: 48 },
+        tasks: [
+          {
+            id: 'task-reply-followup',
+            title: '답변 SLA 확인: 벤더 계약 답변 요청',
+            status: 'blocked',
+            priority: 'urgent',
+            source_type: 'reply_sla',
+            source_email_id: '<sent-q2@example.com>',
+            related_thread_id: 'thread-sent-q2',
+            created_at: '2026-05-19T00:00:00Z',
+            updated_at: '2026-05-27T08:30:00Z',
+          },
+        ],
+      });
+      return;
+    }
+
     if (path === '/api/tasks/task-q2-owner' && request.method() === 'PATCH') {
       await fulfillJson(route, {
         id: 'task-q2-owner',

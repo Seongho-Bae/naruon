@@ -53,6 +53,15 @@ type KnowledgeIntentEntry = {
   result: KnowledgeMaterializationIntent | null;
 };
 
+type ReplySlaEscalationResponse = {
+  evaluated: number;
+  created: number;
+  policy: {
+    overdue_hours: number;
+  };
+  tasks: TicketTask[];
+};
+
 const taskStatusLabels: Record<TicketTask['status'], string> = {
   open: '접수',
   in_progress: '진행',
@@ -77,6 +86,7 @@ const taskPriorityLabels: Record<TicketTask['priority'], string> = {
 };
 
 type TicketStatus = 'loading' | 'ready' | 'empty' | 'auth' | 'error';
+type ReplySlaStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
@@ -93,6 +103,7 @@ export function TasksLayout() {
   const [ticketTasks, setTicketTasks] = useState<TicketTask[]>([]);
   const [ticketStatus, setTicketStatus] = useState<TicketStatus>('loading');
   const [ticketActionStatus, setTicketActionStatus] = useState<string | null>(null);
+  const [replySlaStatus, setReplySlaStatus] = useState<ReplySlaStatus>('idle');
   const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
 
   useEffect(() => {
@@ -185,6 +196,34 @@ export function TasksLayout() {
     }
   };
 
+  const handleReplySlaEscalation = async () => {
+    setReplySlaStatus('loading');
+    setTicketActionStatus(null);
+    try {
+      const result = await apiClient.post<ReplySlaEscalationResponse>(
+        '/api/tasks/reply-sla-escalations',
+        { overdue_hours: 48 },
+      );
+      setTicketTasks((currentTasks) => {
+        const mergedTasks = new Map(currentTasks.map((task) => [task.id, task]));
+        result.tasks.forEach((task) => mergedTasks.set(task.id, task));
+        return Array.from(mergedTasks.values());
+      });
+      if (result.tasks.length > 0) {
+        setTicketStatus('ready');
+      } else {
+        setTicketStatus((currentStatus) => (
+          currentStatus === 'loading' || currentStatus === 'error' ? 'empty' : currentStatus
+        ));
+      }
+      setReplySlaStatus('ready');
+      setTicketActionStatus(`${result.created}개 답변 SLA 티켓을 생성했습니다. ${result.evaluated}개 대기 메일을 ${result.policy.overdue_hours}시간 기준으로 확인했습니다.`);
+    } catch {
+      setReplySlaStatus('error');
+      setTicketActionStatus('답변 SLA 티켓 생성에 실패했습니다.');
+    }
+  };
+
   const currentColumns = [
     { id: 'open', title: '접수', count: tasks.open.length, color: 'bg-blue-100 text-blue-700' },
     { id: 'in_progress', title: '진행', count: tasks.in_progress.length, color: 'bg-orange-100 text-orange-700' },
@@ -267,6 +306,37 @@ export function TasksLayout() {
               </div>
             ))}
           </div>
+
+          <section aria-label="pending reply SLA escalation" className="mt-4 border-t border-border pt-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">보낸 메일 SLA 승격</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  48시간 넘게 답변이 없는 보낸 메일을 원본 메일과 스레드가 연결된 티켓으로 올립니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="보낸 메일 답변 SLA 티켓 생성"
+                disabled={replySlaStatus === 'loading'}
+                onClick={() => void handleReplySlaEscalation()}
+                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+              >
+                <Plus className="size-3.5" />
+                {replySlaStatus === 'loading' ? '확인 중' : 'SLA 티켓 생성'}
+              </button>
+            </div>
+            {replySlaStatus === 'ready' ? (
+              <p role="status" className="mt-3 text-xs font-semibold text-muted-foreground">
+                답변 SLA 티켓 승격 결과가 보드에 반영되었습니다.
+              </p>
+            ) : null}
+            {replySlaStatus === 'error' ? (
+              <p role="status" className="mt-3 text-xs font-semibold text-red-700">
+                답변 SLA 티켓 승격 API를 완료하지 못했습니다.
+              </p>
+            ) : null}
+          </section>
 
           {ticketStatus === 'ready' ? (
             <div aria-label="source-linked ticket list" className="mt-4 grid gap-3 lg:grid-cols-2">
