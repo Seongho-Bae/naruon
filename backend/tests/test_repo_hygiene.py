@@ -19,6 +19,14 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
+def test_backend_dockerfile_runs_startup_preflight_before_uvicorn_import():
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
+
+    assert 'CMD ["python", "scripts/start_backend.py"]' in dockerfile
+    assert 'CMD ["uvicorn"' not in dockerfile
+    assert "ENV BACKEND_BIND_HOST=0.0.0.0" in dockerfile
+
+
 def test_backend_requirements_do_not_pin_yanked_email_validator():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 
@@ -48,6 +56,14 @@ def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():
     assert 'docker compose --env-file "${env_file}" "$@"' in wrapper
     assert "env_file:" not in gateway_compose
     assert "env_file:" not in local_compose
+
+
+def test_compose_backend_uses_startup_preflight_before_uvicorn_import():
+    local_compose = (REPO_ROOT / "docker-compose.yml").read_text()
+    live_compose = (REPO_ROOT / "docker-compose.live-e2e.yml").read_text()
+
+    assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in local_compose
+    assert 'command: ["python", "scripts/start_backend.py"]' in live_compose
 
 
 def test_postgres_ha_compose_requires_external_postgres_password():
