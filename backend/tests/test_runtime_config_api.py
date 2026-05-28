@@ -71,3 +71,16 @@ def test_runtime_config_returns_non_secret_data(client):
     # Ensure no secrets leak
     assert "openai_api_key" not in data
     assert "encryption_key" not in data
+
+@pytest.mark.asyncio
+async def test_get_runtime_config_direct():
+    from api.runtime_config import get_runtime_config, RuntimeConfigResponse
+    response = await get_runtime_config()
+    assert isinstance(response, RuntimeConfigResponse)
+    assert response.product_name == "Naruon"
+    assert response.version == "0.5.1"
+    assert response.features == {
+        "llm_enabled": True,
+        "smtp_enabled": True,
+        "imap_enabled": True
+    }
