@@ -3697,6 +3697,53 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_vertex_with_llm_api_key_file_does_not_forward_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local output_log="$tmp_dir/output.log"
+	local call_count_file="$tmp_dir/strix_calls"
+	local fake_strix="$tmp_dir/strix"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
+if [ -n "${LLM_API_KEY:-}" ]; then
+	echo "unexpected LLM_API_KEY for Vertex" >&2
+	exit 1
+fi
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' "vertex_ai/ready-primary" >"$strix_llm_file"
+	printf '%s' "openai-key-should-not-reach-vertex" >"$llm_api_key_file"
+
+	set +e
+	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+		STRIX_DISABLE_PR_SCOPING="0" \
+		STRIX_LLM_FILE="$strix_llm_file" \
+		LLM_API_KEY_FILE="$llm_api_key_file" \
+		FAKE_STRIX_CALL_COUNT_FILE="$call_count_file" \
+		bash "$GATE_SCRIPT" >"$output_log" 2>&1
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=vertex-with-llm-api-key-file-not-forwarded exit code"
+	assert_file_contains "$output_log" "Strix run succeeded for model 'vertex_ai/ready-primary'" "case=vertex-with-llm-api-key-file-not-forwarded output"
+
+	local actual_calls="0"
+	if [ -f "$call_count_file" ]; then
+		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
+	fi
+	assert_equals "1" "$actual_calls" "case=vertex-with-llm-api-key-file-not-forwarded strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_invalid_min_fail_severity_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -6227,6 +6274,7 @@ run_missing_config_case "missing-llm-api-key" "openai/gpt-5.4" "" "ERROR: LLM_AP
 run_missing_config_case "whitespace-only-strix-llm" "   " "dummy" "ERROR: STRIX_LLM_FILE must contain a non-empty model value."
 run_missing_config_case "whitespace-only-llm-api-key" "openai/gpt-5.4" $'\t  ' "ERROR: LLM_API_KEY_FILE must contain a non-empty API key."
 run_vertex_without_llm_api_key_case
+run_vertex_with_llm_api_key_file_does_not_forward_case
 
 # ── Segment boundary enforcement for is_vertex_resource_path / extract_vertex_model_id ──
 # Shell glob '*' matches '/' so the old case-pattern implementation accepted

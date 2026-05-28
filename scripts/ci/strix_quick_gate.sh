@@ -167,8 +167,10 @@ is_gemini_model() {
 	esac
 }
 
+NORMALIZED_STRIX_LLM="$(normalize_model "$STRIX_LLM")"
+
 LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
-if [ -z "$LLM_API_KEY_FILE" ] && ! is_vertex_model "$STRIX_LLM"; then
+if [ -z "$LLM_API_KEY_FILE" ] && ! is_vertex_model "$NORMALIZED_STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
 	exit 2
 fi
@@ -183,7 +185,7 @@ LLM_API_KEY=""
 if [ -n "$LLM_API_KEY_FILE" ]; then
 	LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
 fi
-if [ -z "$LLM_API_KEY" ] && ! is_vertex_model "$STRIX_LLM"; then
+if [ -z "$LLM_API_KEY" ] && ! is_vertex_model "$NORMALIZED_STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must contain a non-empty API key." >&2
 	exit 2
 fi
@@ -1867,10 +1869,14 @@ run_strix_once() {
 	fi
 	local start_epoch
 	start_epoch="$(date +%s)"
+	local child_llm_api_key=""
+	if ! is_vertex_model "$(normalize_model "$model")"; then
+		child_llm_api_key="$LLM_API_KEY"
+	fi
 	set -o pipefail
 	set +e
 	STRIX_CHILD_MODEL="$model" \
-		STRIX_CHILD_LLM_API_KEY="$LLM_API_KEY" \
+		STRIX_CHILD_LLM_API_KEY="$child_llm_api_key" \
 		STRIX_CHILD_LLM_API_BASE="$llm_api_base_value" \
 		STRIX_CHILD_REPORTS_DIR="$ACTIVE_REPORTS_DIR" \
 		python3 - "$timeout_seconds" "$resolved_target_path" "$SCAN_MODE" "$STRIX_LOG" <<'PY'
