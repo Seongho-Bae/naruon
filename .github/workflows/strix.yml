@@ -40,7 +40,20 @@ jobs:
           trusted_workspace="$RUNNER_TEMP/trusted-workspace"
           trusted_archive="$RUNNER_TEMP/trusted-workspace.tar.gz"
           mkdir -p "$trusted_workspace"
-          gh api "/repos/${REPOSITORY}/tarball/${TRUSTED_WORKSPACE_SHA}" > "$trusted_archive"
+          trusted_archive_candidate="$RUNNER_TEMP/trusted-workspace.tar.gz.candidate"
+          for attempt in 1 2 3 4; do
+            rm -f "$trusted_archive" "$trusted_archive_candidate"
+            if gh api "/repos/${REPOSITORY}/tarball/${TRUSTED_WORKSPACE_SHA}" > "$trusted_archive_candidate" && tar -tzf "$trusted_archive_candidate" >/dev/null 2>&1; then
+              mv "$trusted_archive_candidate" "$trusted_archive"
+              break
+            fi
+            if [ "$attempt" -eq 4 ]; then
+              echo "::error::Trusted governance archive could not be materialized after 4 attempts." >&2
+              exit 1
+            fi
+            echo "Trusted governance archive materialization attempt ${attempt} did not produce a valid archive; retrying." >&2
+            sleep $((attempt * 3))
+          done
           tar -xzf "$trusted_archive" -C "$trusted_workspace" --strip-components=1
           git init -q "$trusted_workspace"
           gh auth setup-git
