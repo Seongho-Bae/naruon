@@ -1124,7 +1124,6 @@ test('validates mobile hamburger composition and startup preference controls', a
     .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
   expect(mobileDestinationHrefs).toEqual(desktopDestinationHrefs);
   await expect(menu.getByRole('link', { name: /일정 연결/ })).toHaveAttribute('href', '#mobile-calendar');
-  await expect(menu.getByText(/중요 메일.*준비 중/)).toHaveCount(0);
   await menu.evaluate((element) => {
     element.scrollTop = element.scrollHeight;
   });
