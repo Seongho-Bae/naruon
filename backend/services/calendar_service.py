@@ -75,4 +75,4 @@ async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
     except CalendarServiceError:
         raise
     except Exception as e:
-        raise CalendarServiceError(f"Failed to create event: {str(e)}") from e
+        raise CalendarServiceError("Failed to create event") from e

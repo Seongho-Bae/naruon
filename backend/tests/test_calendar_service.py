@@ -13,7 +13,7 @@ async def test_create_calendar_event_unauthorized():
         with pytest.raises(CalendarServiceError) as exc_info:
             await create_calendar_event("Buy milk", {"token": "dummy"})
 
-        assert "Invalid credentials" in str(exc_info.value)
+        assert str(exc_info.value) == "Failed to create event"
 
 
 @pytest.mark.asyncio
