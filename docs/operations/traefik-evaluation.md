@@ -9,6 +9,10 @@
   container. Run it with the base compose stack or inject `DATABASE_URL` and
   `AUTH_SESSION_HMAC_SECRET` explicitly; the backend must fail closed instead of
   inventing a database URL or session secret.
+- The evaluation stack must not publish unauthenticated management planes.
+  Traefik's insecure dashboard/API is disabled, Keycloak has no direct host port
+  mapping, and Keycloak admin credentials must be injected through
+  `KEYCLOAK_ADMIN` and `KEYCLOAK_ADMIN_PASSWORD`.
 
 ## Traefik & Keycloak/Casdoor 평가 (Issue #138)
 
