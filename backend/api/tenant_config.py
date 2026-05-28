@@ -107,7 +107,16 @@ def _field_value(
     return None
 
 
-def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> None:
+def validate_mail_config_update(
+    config_data: dict, db_config: TenantConfig | None
+) -> None:
+    smtp_server = _field_value(config_data, db_config, "smtp_server")
+    smtp_port = _field_value(config_data, db_config, "smtp_port")
+    imap_server = _field_value(config_data, db_config, "imap_server")
+    imap_port = _field_value(config_data, db_config, "imap_port")
+    pop3_server = _field_value(config_data, db_config, "pop3_server")
+    pop3_port = _field_value(config_data, db_config, "pop3_port")
+
     try:
         if smtp_server is not None:
             validate_smtp_host(smtp_server, resolve_host=True)
@@ -118,7 +127,6 @@ def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> Non
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> None:
     try:
         if imap_server is not None and imap_port is not None:
             validate_imap_destination(imap_server, imap_port)
@@ -132,7 +140,6 @@ def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> Non
             detail=f"imap_server/imap_port validation failed: {exc}",
         ) from exc
 
-def _validate_pop3_config(pop3_server: str | None, pop3_port: int | None) -> None:
     try:
         if pop3_server is not None and pop3_port is not None:
             validate_pop3_destination(pop3_server, pop3_port)
@@ -145,20 +152,6 @@ def _validate_pop3_config(pop3_server: str | None, pop3_port: int | None) -> Non
             status_code=400,
             detail=f"pop3_server/pop3_port validation failed: {exc}",
         ) from exc
-
-def validate_mail_config_update(
-    config_data: dict, db_config: TenantConfig | None
-) -> None:
-    smtp_server = _field_value(config_data, db_config, "smtp_server")
-    smtp_port = _field_value(config_data, db_config, "smtp_port")
-    imap_server = _field_value(config_data, db_config, "imap_server")
-    imap_port = _field_value(config_data, db_config, "imap_port")
-    pop3_server = _field_value(config_data, db_config, "pop3_server")
-    pop3_port = _field_value(config_data, db_config, "pop3_port")
-
-    _validate_smtp_config(smtp_server, smtp_port)
-    _validate_imap_config(imap_server, imap_port)
-    _validate_pop3_config(pop3_server, pop3_port)
 
 
 @router.post("")
