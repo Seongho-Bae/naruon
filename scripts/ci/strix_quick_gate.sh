@@ -1975,11 +1975,24 @@ if not resolved_strix_bin:
     raise SystemExit(127)
 resolved_strix_bin = str(pathlib.Path(resolved_strix_bin).resolve(strict=True))
 
-command = [resolved_strix_bin, "-n", "-t", target_path, "--scan-mode", scan_mode]
+try:
+    target_cwd = pathlib.Path(target_path).resolve(strict=True)
+except OSError as exc:
+    sys.stderr.write(f"ERROR: Strix target path could not be canonicalized: {exc}\n")
+    raise SystemExit(2)
+if not target_cwd.is_dir():
+    sys.stderr.write("ERROR: Strix target path must be a directory.\n")
+    raise SystemExit(2)
+if any(ch in str(target_cwd) for ch in ("\x00", "\n", "\r")):
+    sys.stderr.write("ERROR: Strix target path contains unsupported control characters.\n")
+    raise SystemExit(2)
+
+command = [resolved_strix_bin, "-n", "-t", ".", "--scan-mode", scan_mode]
 
 try:
     process = subprocess.Popen(
         command,
+        cwd=str(target_cwd),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,

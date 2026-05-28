@@ -176,6 +176,12 @@ assert_strix_llm_file_read_is_literal_data() {
 	assert_file_not_contains "$GATE_SCRIPT" 'STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"' "strix gate avoids nested command substitution for model file content"
 }
 
+assert_strix_child_target_uses_constant_argument() {
+	assert_file_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", ".", "--scan-mode", scan_mode]' "strix gate passes a constant target argument to the child process"
+	assert_file_contains "$GATE_SCRIPT" 'cwd=str(target_cwd)' "strix gate runs the child process from the canonical target directory"
+	assert_file_not_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", target_path, "--scan-mode", scan_mode]' "strix gate must not forward raw target paths as child arguments"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -304,6 +310,9 @@ while [ "$#" -gt 0 ]; do
 	fi
 	shift
 done
+if [ "$target_path" = "." ]; then
+	target_path="$PWD"
+fi
 printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
@@ -4313,6 +4322,8 @@ assert_changed_file_membership_uses_cached_normalized_paths
 assert_absent_endpoint_search_uses_canonical_target_path
 
 assert_strix_llm_file_read_is_literal_data
+
+assert_strix_child_target_uses_constant_argument
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
