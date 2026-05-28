@@ -139,7 +139,8 @@ fi
 if ! STRIX_LLM_FILE="$(resolve_trusted_input_file "STRIX_LLM_FILE" "$STRIX_LLM_FILE")"; then
 	exit 2
 fi
-STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"
+STRIX_LLM_CONTENT="$(cat -- "$STRIX_LLM_FILE")"
+STRIX_LLM="$(trim_whitespace "$STRIX_LLM_CONTENT")"
 if [ -z "$STRIX_LLM" ]; then
 	echo "ERROR: STRIX_LLM_FILE must contain a non-empty model value." >&2
 	exit 2

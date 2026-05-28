@@ -174,6 +174,12 @@ assert_absent_endpoint_search_uses_canonical_target_path() {
 	assert_file_not_contains "$GATE_SCRIPT" 'candidate="${TARGET_PATH%/}/$dir_entry"' "absent-endpoint search avoids relative target path roots"
 }
 
+assert_strix_llm_file_read_is_literal_data() {
+	assert_file_contains "$GATE_SCRIPT" 'STRIX_LLM_CONTENT="$(cat -- "$STRIX_LLM_FILE")"' "strix gate reads model file content as data before trimming"
+	assert_file_contains "$GATE_SCRIPT" 'STRIX_LLM="$(trim_whitespace "$STRIX_LLM_CONTENT")"' "strix gate trims model file content without nested command substitution"
+	assert_file_not_contains "$GATE_SCRIPT" 'STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"' "strix gate avoids nested command substitution for model file content"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -3662,6 +3668,54 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_strix_llm_file_command_substitution_literal_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local output_log="$tmp_dir/output.log"
+	local call_count_file="$tmp_dir/strix_calls"
+	local marker_file="$tmp_dir/strix_marker"
+	local fake_strix="$tmp_dir/strix"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "1" >> "${STRIX_CALL_COUNT_FILE:?}"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf 'openai/gpt-5.4 $(touch %s)' "$marker_file" >"$strix_llm_file"
+	printf '%s' 'dummy-key' >"$llm_api_key_file"
+
+	set +e
+	env -u GITHUB_EVENT_NAME -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		PATH="$tmp_dir:$PATH" \
+		STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+		STRIX_TARGET_PATH="-" \
+		STRIX_DISABLE_PR_SCOPING="0" \
+		STRIX_LLM_FILE="$strix_llm_file" \
+		LLM_API_KEY_FILE="$llm_api_key_file" \
+		STRIX_CALL_COUNT_FILE="$call_count_file" \
+		bash "$GATE_SCRIPT" >"$output_log" 2>&1
+	local rc=$?
+	set -e
+
+	assert_equals "2" "$rc" "case=strix-llm-file-command-substitution-literal exit code"
+	assert_file_contains "$output_log" "ERROR: STRIX_TARGET_PATH contains unsupported path syntax" "case=strix-llm-file-command-substitution-literal output"
+	if [ -e "$marker_file" ]; then
+		record_failure "case=strix-llm-file-command-substitution-literal must not execute model file content"
+	fi
+
+	local actual_calls="0"
+	if [ -f "$call_count_file" ]; then
+		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
+	fi
+	assert_equals "0" "$actual_calls" "case=strix-llm-file-command-substitution-literal strix call count"
+
+	rm -rf "$tmp_dir"
+}
+
 run_vertex_without_llm_api_key_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -4253,6 +4307,8 @@ assert_strix_gate_target_scope_separated
 assert_changed_file_membership_uses_cached_normalized_paths
 
 assert_absent_endpoint_search_uses_canonical_target_path
+
+assert_strix_llm_file_read_is_literal_data
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
@@ -6282,6 +6338,7 @@ run_missing_config_case "missing-strix-llm" "" "dummy" "ERROR: STRIX_LLM_FILE mu
 run_missing_config_case "missing-llm-api-key" "openai/gpt-5.4" "" "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key."
 run_missing_config_case "whitespace-only-strix-llm" "   " "dummy" "ERROR: STRIX_LLM_FILE must contain a non-empty model value."
 run_missing_config_case "whitespace-only-llm-api-key" "openai/gpt-5.4" $'\t  ' "ERROR: LLM_API_KEY_FILE must contain a non-empty API key."
+run_strix_llm_file_command_substitution_literal_case
 run_vertex_without_llm_api_key_case
 run_vertex_with_llm_api_key_file_does_not_forward_case
 
