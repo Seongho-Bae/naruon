@@ -218,6 +218,140 @@ const operationalSignals = {
   ],
 };
 
+const securityAccessSurface = {
+  workspace_id: 'workspace-org-acme',
+  organization_id: 'org-acme',
+  audit_event: 'security.access_surface.viewed',
+  viewer: {
+    user_id: 'admin',
+    role: 'tenant_admin',
+    organization_id: 'org-acme',
+    group_ids: ['group-security'],
+    workspace_id: 'workspace-org-acme',
+  },
+  sources: [
+    {
+      source_id: 'webdav_src_primary',
+      source_type: 'webdav_repository',
+      source_label: 'WebDAV repository',
+      source_host: 'webdav.naruon.net',
+      owner_id: 'default',
+      organization_id: 'org-acme',
+      workspace_id: 'workspace-org-acme',
+      capabilities: ['read', 'write', 'etag'],
+      writeback_enabled: true,
+      provider_write_executed: false,
+      policy_decision: {
+        decision_uid: 'policy:webdav_src_primary',
+        resource_label: 'WebDAV repository',
+        resource_type: 'webdav_repository',
+        allowed: true,
+        reason: 'allowed',
+        evidence_source: 'webdav_accounts',
+      },
+      last_observed_at: '2026-05-28T04:00:00Z',
+    },
+    {
+      source_id: 'caldav-primary',
+      source_type: 'caldav_source',
+      source_label: 'Customer CalDAV',
+      source_host: 'calendar.acme.example',
+      owner_id: 'default',
+      organization_id: 'org-acme',
+      workspace_id: 'workspace-org-acme',
+      capabilities: ['read', 'write', 'etag'],
+      writeback_enabled: true,
+      provider_write_executed: false,
+      policy_decision: {
+        decision_uid: 'policy:caldav-primary',
+        resource_label: 'Customer CalDAV source',
+        resource_type: 'caldav_source',
+        allowed: true,
+        reason: 'allowed',
+        evidence_source: 'calendar_writeback_sources',
+      },
+      last_observed_at: '2026-05-28T04:00:00Z',
+    },
+  ],
+  connector_events: [
+    {
+      event_uid: 'connector_evt_heartbeat',
+      signal_key: 'connector_heartbeat',
+      state_code: 'heartbeat',
+      detail_text: 'outbound connector heartbeat received',
+      observed_at: '2026-05-28T04:00:00Z',
+    },
+  ],
+  policy_decisions: [
+    {
+      decision_uid: 'policy:webdav_src_primary',
+      resource_label: 'WebDAV repository',
+      resource_type: 'webdav_repository',
+      allowed: true,
+      reason: 'allowed',
+      evidence_source: 'webdav_accounts',
+    },
+    {
+      decision_uid: 'policy:cross-organization-deny',
+      resource_label: 'Cross-organization provider secret',
+      resource_type: 'provider_secret',
+      allowed: false,
+      reason: 'organization_denied',
+      evidence_source: 'access_policy.evaluate_access',
+    },
+    {
+      decision_uid: 'policy:data-region-deny',
+      resource_label: 'Regional export outside policy',
+      resource_type: 'data_export',
+      allowed: false,
+      reason: 'data_region_denied',
+      evidence_source: 'access_policy.evaluate_access',
+    },
+  ],
+  external_share_reviews: [
+    {
+      review_uid: 'share:webdav_src_primary',
+      source_id: 'webdav_src_primary',
+      source_type: 'webdav_repository',
+      review_label: 'WebDAV repository writeback boundary',
+      exposure_level: 'external_writeback',
+      decision_reason: 'allowed',
+      provider_write_executed: false,
+    },
+    {
+      review_uid: 'share:caldav-primary',
+      source_id: 'caldav-primary',
+      source_type: 'caldav_source',
+      review_label: 'Customer CalDAV writeback boundary',
+      exposure_level: 'external_writeback',
+      decision_reason: 'allowed',
+      provider_write_executed: false,
+    },
+  ],
+  policy_order: [
+    {
+      step_key: 'signed_session',
+      display_name: 'Signed session identity',
+      evidence_source: 'api.auth.get_auth_context',
+    },
+    {
+      step_key: 'organization_scope',
+      display_name: 'Organization and workspace scope',
+      evidence_source: 'organization_id and workspace_id claims',
+    },
+    {
+      step_key: 'data_region',
+      display_name: 'Data-region deny',
+      evidence_source: 'services.access_policy.evaluate_access',
+    },
+    {
+      step_key: 'rbac',
+      display_name: 'RBAC allow after ABAC denies',
+      evidence_source: 'services.access_policy.evaluate_access',
+    },
+  ],
+};
+
 const accountConfig = {
   user_id: 'default',
   smtp_server: 'smtp.example.com',
@@ -302,6 +436,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
 
     if (path === '/api/observability/operational-signals' && request.method() === 'GET') {
       await fulfillJson(route, operationalSignals);
+      return;
+    }
+
+    if (path === '/api/security/access-surface' && request.method() === 'GET') {
+      await fulfillJson(route, securityAccessSurface);
       return;
     }
 

@@ -289,6 +289,95 @@ for (const destination of [
   });
 }
 
+test('renders Security governance access audit sharing and policy with signed API headers', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-security-governance-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  const accessRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/security/access-surface' && request.method() === 'GET';
+  });
+  await page.goto('/security');
+  const accessHeaders = (await accessRequest).headers();
+  expect(accessHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  for (const headerName of publicIdentityHeaders) {
+    expect(accessHeaders[headerName]).toBeUndefined();
+  }
+
+  await expect(page.getByRole('heading', { name: '보안과 관리자' })).toBeVisible();
+  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
+  await expect(page.getByRole('row', { name: /webdav_src_primary/ })).toBeVisible();
+  await expect(page.getByText('곧 제공됩니다')).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-access.png'), fullPage: false });
+
+  await page.getByRole('button', { name: '감사 로그' }).click();
+  await expect(page.getByText('connector_evt_heartbeat')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-audit.png'), fullPage: false });
+
+  await page.getByRole('button', { name: '외부 공유' }).click();
+  await expect(page.getByText('WebDAV repository writeback boundary')).toBeVisible();
+  await page.getByRole('button', { name: '정책' }).click();
+  await expect(page.getByText('Deny-first policy order')).toBeVisible();
+  await expect(page.getByText('Cross-organization provider secret')).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-policy.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto('/security');
+  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
+  await page.getByRole('button', { name: '정책' }).click();
+  await expect(page.getByText('RBAC allow after ABAC denies')).toBeVisible();
+  const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(tabletOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('security-governance-tablet-policy.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/security');
+  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
+  const mobileWebdavSource = page.locator('article', { hasText: 'webdav_src_primary' }).first();
+  await mobileWebdavSource.scrollIntoViewIfNeeded();
+  await expect(mobileWebdavSource).toBeVisible();
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(mobileOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-access.png'), fullPage: false });
+  const securityScrollMetrics = await page.locator('#main-content main').evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(securityScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(securityScrollMetrics.after).toBeGreaterThan(securityScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-scroll.png'), fullPage: false });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
+  const menu = page.locator('#mobile-workspace-menu');
+  await expect(menu.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
+  await menu.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect(menu.getByRole('link', { name: '설정', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-hamburger.png'), fullPage: false });
+});
+
 test('renders sent mail reply tracking route with signed API headers', async ({ page }, testInfo) => {
   const expectedNaruonToken = 'signed-sent-mail-e2e-token';
   const publicIdentityHeaders = [
