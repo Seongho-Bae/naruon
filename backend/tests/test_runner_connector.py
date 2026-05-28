@@ -8,31 +8,131 @@ from runner.connector import SelfHostedConnector
 
 @pytest.mark.asyncio
 async def test_handle_message_dispatches_fetch_imap():
-    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    async def fetch_imap_adapter(payload):
+        assert payload["account"] == "mailbox-1"
+        return {
+            "status": "success",
+            "messages_imported": 2,
+            "provider_write_executed": False,
+        }
+
+    connector = SelfHostedConnector(
+        "ws://gateway.example/api/runner/ws",
+        "token",
+        imap_fetch_handler=fetch_imap_adapter,
+    )
     original_handler = connector._handle_fetch_imap
     connector._handle_fetch_imap = AsyncMock(wraps=original_handler)
     connector.send_response = AsyncMock()
 
-    await connector.handle_message(json.dumps({"action": "fetch_imap", "account": "mailbox-1"}))
+    await connector.handle_message(
+        json.dumps(
+            {
+                "action": "fetch_imap",
+                "account": "mailbox-1",
+                "request_id": "runner_req_1",
+            }
+        )
+    )
 
     connector._handle_fetch_imap.assert_awaited_once()
     connector.send_response.assert_awaited_once_with(
-        {"status": "success", "action": "fetch_imap", "data": "IMAP data placeholder"}
+        {
+            "status": "success",
+            "action": "fetch_imap",
+            "protocol": "IMAP",
+            "account": "mailbox-1",
+            "request_id": "runner_req_1",
+            "provider_write_executed": False,
+            "messages_imported": 2,
+        }
     )
 
 
 @pytest.mark.asyncio
 async def test_handle_message_dispatches_send_smtp():
-    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    async def send_smtp_adapter(payload):
+        assert payload["account"] == "mailbox-1"
+        return {
+            "status": "success",
+            "message_id": "<sent-123@example.com>",
+            "provider_write_executed": True,
+        }
+
+    connector = SelfHostedConnector(
+        "ws://gateway.example/api/runner/ws",
+        "token",
+        smtp_send_handler=send_smtp_adapter,
+    )
     original_handler = connector._handle_send_smtp
     connector._handle_send_smtp = AsyncMock(wraps=original_handler)
     connector.send_response = AsyncMock()
 
-    await connector.handle_message(json.dumps({"action": "send_smtp", "account": "mailbox-1"}))
+    await connector.handle_message(
+        json.dumps(
+            {
+                "action": "send_smtp",
+                "account": "mailbox-1",
+                "request_id": "runner_req_2",
+            }
+        )
+    )
 
     connector._handle_send_smtp.assert_awaited_once()
     connector.send_response.assert_awaited_once_with(
-        {"status": "success", "action": "send_smtp", "message_id": "mock_id_123"}
+        {
+            "status": "success",
+            "action": "send_smtp",
+            "protocol": "SMTP",
+            "account": "mailbox-1",
+            "request_id": "runner_req_2",
+            "provider_write_executed": True,
+            "message_id": "<sent-123@example.com>",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_fetch_imap_fails_closed_without_adapter():
+    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps({"action": "fetch_imap", "account": "mailbox-1"})
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "error",
+            "action": "fetch_imap",
+            "protocol": "IMAP",
+            "account": "mailbox-1",
+            "request_id": None,
+            "provider_write_executed": False,
+            "error": "adapter_not_configured",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_send_smtp_fails_closed_without_adapter():
+    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps({"action": "send_smtp", "account": "mailbox-1"})
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "error",
+            "action": "send_smtp",
+            "protocol": "SMTP",
+            "account": "mailbox-1",
+            "request_id": None,
+            "provider_write_executed": False,
+            "error": "adapter_not_configured",
+        }
     )
 
 

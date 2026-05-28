@@ -126,6 +126,11 @@
   and a server-side WorkspaceRunnerConfig registration token before accepting the
   socket. Do not use the raw path token as identity, a log value, or the sole
   active-connection key.
+- Self-hosted connector command handlers must never return placeholder or mock
+  success for IMAP/SMTP execution. If no local customer-network adapter is
+  configured, fail closed with `adapter_not_configured` and
+  `provider_write_executed=false`; if an adapter is configured, wrap only the
+  adapter's actual result in the standard runner response envelope.
 - Calendar UI actions must request `/api/calendar/writeback-intent` with
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
