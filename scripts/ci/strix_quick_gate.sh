@@ -2850,6 +2850,7 @@ run_current_target_scan() {
 		else
 			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
+		return 1
 	fi
 
 	if is_vertex_model "$PRIMARY_MODEL"; then
