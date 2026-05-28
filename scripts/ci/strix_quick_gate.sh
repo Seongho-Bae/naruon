@@ -2045,9 +2045,6 @@ is_llm_service_unavailable_error() {
 is_transient_same_model_retry_error() {
 	local model="${1-}"
 	if is_timeout_error; then
-		if [ -n "$model" ] && ! is_vertex_model "$model"; then
-			return 0
-		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
