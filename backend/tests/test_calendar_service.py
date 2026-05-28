@@ -32,6 +32,35 @@ async def test_create_calendar_event_rejects_unsafe_summary_before_google_build(
 
 
 @pytest.mark.asyncio
+async def test_create_calendar_event_rejects_untrusted_oauth_token_uri():
+    user_token = {
+        "token": "expired-token",
+        "refresh_token": "refresh-token",
+        "client_id": "client-id",
+        "client_secret": "client-secret",
+        "token_uri": "http://127.0.0.1:8080/token",
+    }
+
+    with patch("services.calendar_service.build") as mock_build:
+        with pytest.raises(CalendarServiceError, match="Invalid calendar credentials"):
+            await create_calendar_event("Buy milk", user_token)
+
+        mock_build.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_create_calendar_event_rejects_unexpected_oauth_fields():
+    user_token = {"token": "dummy", "token_uri": "https://oauth2.googleapis.com/token"}
+    user_token["metadata_url"] = "http://169.254.169.254/latest/meta-data"
+
+    with patch("services.calendar_service.build") as mock_build:
+        with pytest.raises(CalendarServiceError, match="Invalid calendar credentials"):
+            await create_calendar_event("Buy milk", user_token)
+
+        mock_build.assert_not_called()
+
+
+@pytest.mark.asyncio
 @patch("services.calendar_service.build")
 async def test_create_calendar_event_success(mock_build):
     # Mock the calendar service
