@@ -94,9 +94,9 @@ function useDashboardData() {
       apiClient.get<TaskItem[]>('/api/tasks').catch(() => [])
     ]).then(([emailRes, pendingReplyRes, tasksRes]) => {
       if (cancelled) return;
-      setEmails(emailRes.emails || []);
-      setPendingReplies(pendingReplyRes.emails || []);
-      setTasks(tasksRes || []);
+      setEmails(Array.isArray(emailRes.emails) ? emailRes.emails : []);
+      setPendingReplies(Array.isArray(pendingReplyRes.emails) ? pendingReplyRes.emails : []);
+      setTasks(Array.isArray(tasksRes) ? tasksRes : []);
       setLoading(false);
     });
 
