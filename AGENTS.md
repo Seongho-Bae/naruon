@@ -110,6 +110,10 @@
   no-op. Do not place sensitive credential values, secret-derived values, or
   password-shaped field names in logs or raised exception text; use static
   non-secret labels such as "credential secret" instead.
+- SMTP, IMAP, and POP3 host validation must reject legacy numeric IP literal
+  forms such as decimal integers, hexadecimal integers, and octal dotted forms
+  before DNS or socket connection; `socket.getaddrinfo` may resolve those forms
+  to loopback/private addresses even when `ipaddress.ip_address` rejects them.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and
