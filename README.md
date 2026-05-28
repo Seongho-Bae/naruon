@@ -28,11 +28,13 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
-- Strix PR/security evidence requires an OpenAI GPT-5.4-or-newer model through
-  an explicit `STRIX_OPENAI_API_KEY` OpenAI Platform credential. The workflow
-  fails closed rather than falling back to GitHub Models, Google/Vertex/Gemini,
-  `github.token`, or GPT-4-era models. Pending CodeRabbit or check evidence is
-  a wait state, not a hard blocker.
+- Strix PR/security evidence uses the organization-secret provider selected by
+  `STRIX_LLM` with `GCP_SA_KEY`. The validated operational route is
+  `vertex_ai/gemini-2.5-flash`; direct OpenAI GPT-5.4-or-newer remains
+  supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
+  closed rather than falling back to GitHub Models, `github.token`, generic
+  `LLM_API_KEY`, or GPT-4-era models. Pending CodeRabbit or check evidence is a
+  wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence, reuses the deny-first RBAC/ABAC policy engine, and returns

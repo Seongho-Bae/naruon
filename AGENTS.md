@@ -10,15 +10,18 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan must use an explicitly named `STRIX_OPENAI_API_KEY`
-  OpenAI Platform credential with an OpenAI GPT-5.4-or-newer model. Do not route
-  Strix through GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini,
-  Google/Vertex, GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
-  Direct OpenAI model names may be plain (`gpt-5.4`) or provider-qualified
-  (`openai/gpt-5.4`), but must never use the GitHub Models
-  `openai/openai/...` prefix.
-  Keep architecture docs and reusable Strix gate tests aligned with this rule so
-  stale GitHub Models examples cannot re-enter copied workflow guidance.
+- Strix Security Scan must not route through GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
+  route is `STRIX_LLM` with `GCP_SA_KEY`; `vertex_ai/gemini-2.5-flash` is the
+  validated operational model after run `26581416713` proved
+  `vertex_ai/gemini-3.1-pro-preview-customtools` returns Vertex 404/no-access in
+  this project. Expose Google/Vertex credentials only for Vertex provider mode.
+  Direct OpenAI GPT-5.4-or-newer scans remain supported only when selected
+  explicitly with `STRIX_OPENAI_API_KEY`. Do not silently fall back between
+  providers, and record provider evidence in the PR. Keep architecture docs and
+  reusable Strix gate tests aligned with this rule so stale GitHub Models,
+  OpenAI-only, unavailable-model, or generic-key examples cannot re-enter copied
+  workflow guidance.
 
 ## PR automation and review defaults
 
@@ -115,6 +118,10 @@
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When robot review cites an obsolete Strix provider policy, update the docs and
+  tests to the current secret contract before accepting a rollback suggestion;
+  do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
+  credential forwarding while trying to satisfy old comments.
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
