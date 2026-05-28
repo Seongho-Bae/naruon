@@ -82,6 +82,25 @@ def _provider_owner_filter(auth_context: AuthContext):
     return LLMProvider.organization_id == _required_provider_organization(auth_context)
 
 
+def _provider_audit_log(
+    *,
+    auth_context: AuthContext,
+    action: str,
+    provider_name: str,
+    resource_id: str | None = None,
+) -> AuditLog:
+    return AuditLog(
+        user_id=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
+        event_name=f"llm_provider.{action}",
+        action=action,
+        resource_type="llm_provider",
+        resource_id=resource_id,
+        details=f"{action.title()} provider {provider_name}",
+    )
+
+
 @router.get("", response_model=List[LLMProviderResponse])
 async def list_providers(
     db: AsyncSession = Depends(get_db),
@@ -125,11 +144,10 @@ async def create_provider(
         is_active=data.is_active,
     )
     db.add(provider)
-    audit = AuditLog(
-        user_id=auth_context.user_id,
+    audit = _provider_audit_log(
+        auth_context=auth_context,
         action="create",
-        resource_type="llm_provider",
-        details=f"Created provider {data.name}",
+        provider_name=data.name,
     )
     db.add(audit)
     try:
@@ -186,12 +204,11 @@ async def update_provider(
         updated = True
 
     if updated:
-        audit = AuditLog(
-            user_id=auth_context.user_id,
+        audit = _provider_audit_log(
+            auth_context=auth_context,
             action="update",
-            resource_type="llm_provider",
+            provider_name=provider.name,
             resource_id=str(provider.id),
-            details=f"Updated provider {provider.name}",
         )
         db.add(audit)
         await db.commit()
@@ -226,12 +243,11 @@ async def delete_provider(
         raise HTTPException(status_code=404, detail="Provider not found")
 
     await db.delete(provider)
-    audit = AuditLog(
-        user_id=auth_context.user_id,
+    audit = _provider_audit_log(
+        auth_context=auth_context,
         action="delete",
-        resource_type="llm_provider",
+        provider_name=provider.name,
         resource_id=str(provider.id),
-        details=f"Deleted provider {provider.name}",
     )
     db.add(audit)
     await db.commit()
