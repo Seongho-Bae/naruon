@@ -3733,11 +3733,11 @@ run_vertex_without_llm_api_key_case() {
 #!/usr/bin/env bash
 set -euo pipefail
 echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
-if [ -n "${LLM_API_KEY:-}" ]; then
+if [ "${LLM_API_KEY+x}" = "x" ]; then
 	echo "unexpected LLM_API_KEY for Vertex" >&2
 	exit 1
 fi
-if [ -n "${LLM_API_KEY_FILE:-}" ]; then
+if [ "${LLM_API_KEY_FILE+x}" = "x" ]; then
 	echo "unexpected LLM_API_KEY_FILE for Vertex" >&2
 	exit 1
 fi
@@ -3782,11 +3782,11 @@ run_vertex_with_llm_api_key_file_does_not_forward_case() {
 #!/usr/bin/env bash
 set -euo pipefail
 echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
-if [ -n "${LLM_API_KEY:-}" ]; then
+if [ "${LLM_API_KEY+x}" = "x" ]; then
 	echo "unexpected LLM_API_KEY for Vertex" >&2
 	exit 1
 fi
-if [ -n "${LLM_API_KEY_FILE:-}" ]; then
+if [ "${LLM_API_KEY_FILE+x}" = "x" ]; then
 	echo "unexpected LLM_API_KEY_FILE for Vertex" >&2
 	exit 1
 fi
