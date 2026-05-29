@@ -237,6 +237,11 @@
   explicitly labeled pending. Do not reintroduce static project names, inert
   report/filter buttons, provider write success claims, or sequential database
   ids in project UI/tests.
+- Project workspace folder rendering must prove owner scope before display:
+  `/api/webdav/folders` includes server-scoped `owner_user_id` and
+  `organization_id`, and the browser filters those folders against decoded
+  signed-session claims before building project cards. Keep `folder_uid` as an
+  internal opaque key only; do not render it as visible UI text.
 - Self-hosted connector APM history must be persisted as scoped control-plane
   signal events before the UI claims durable heartbeat evidence. Do not expose
   runner registration tokens, path tokens, or raw provider credentials in event

@@ -79,11 +79,15 @@ def stub_webdav_service(monkeypatch):
                 "folder_uid": "webdav_folder_demo_roadmap",
                 "project_name": "Naruon Roadmap 2026",
                 "webdav_path": "/Projects/Naruon_Roadmap_2026",
+                "owner_user_id": "alice",
+                "organization_id": "org-acme",
             },
             {
                 "folder_uid": "webdav_folder_demo_marketing",
                 "project_name": "Marketing Assets",
                 "webdav_path": "/Projects/Marketing_Assets",
+                "owner_user_id": "alice",
+                "organization_id": "org-acme",
             },
         ] if user_id == "alice" and organization_id == "org-acme" else []
 
@@ -241,6 +245,8 @@ def test_get_project_folders(auth_client):
     assert len(body) == 2
     assert body[0]["folder_uid"] == "webdav_folder_demo_roadmap"
     assert body[0]["project_name"] == "Naruon Roadmap 2026"
+    assert body[0]["owner_user_id"] == "alice"
+    assert body[0]["organization_id"] == "org-acme"
     assert body[1]["project_name"] == "Marketing Assets"
     assert "folder_id" not in body[0]
 
@@ -886,6 +892,8 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
             "folder_uid": folder_uid,
             "project_name": "Source-backed Folder",
             "webdav_path": "/Projects/Source_Backed_Folder",
+            "owner_user_id": user_id,
+            "organization_id": "org-acme",
         }
     ]
     assert "folder_id" not in body[0]

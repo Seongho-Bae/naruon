@@ -28,6 +28,11 @@ function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   } as Response);
 }
 
+function sessionToken(payload: Record<string, unknown>) {
+  const encode = (value: unknown) => btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}
+
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
@@ -49,10 +54,11 @@ describe("ProjectsPage", () => {
   });
 
   it("loads project folders and ticket tasks through signed APIs", async () => {
-    window.localStorage.setItem("naruon_session_token", "signed.projects.token");
+    const expectedSessionToken = sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" });
+    window.localStorage.setItem("naruon_session_token", expectedSessionToken);
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
-      expect(headers.get("Authorization")).toBe("Bearer signed.projects.token");
+      expect(headers.get("Authorization")).toBe(`Bearer ${expectedSessionToken}`);
       expect(headers.get("X-User-Id")).toBeNull();
       expect(headers.get("X-Organization-Id")).toBeNull();
 
@@ -63,6 +69,15 @@ describe("ProjectsPage", () => {
             folder_uid: "webdav_folder_roadmap",
             project_name: "Naruon Roadmap 2026",
             webdav_path: "/Projects/Naruon_Roadmap_2026",
+            owner_user_id: "alice",
+            organization_id: "org-acme",
+          },
+          {
+            folder_uid: "webdav_folder_rival",
+            project_name: "Rival Project",
+            webdav_path: "/Projects/Rival_Project",
+            owner_user_id: "mallory",
+            organization_id: "org-rival",
           },
         ]);
       }
@@ -108,6 +123,8 @@ describe("ProjectsPage", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/webdav/folders", expect.objectContaining({ headers: expect.any(Object) }));
     expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({ headers: expect.any(Object) }));
     expect(container.textContent).toContain("Naruon Roadmap 2026");
+    expect(container.textContent).not.toContain("Rival Project");
+    expect(container.textContent).not.toContain("webdav_folder_roadmap");
     expect(container.textContent).toContain("provider_write_executed=false");
     expect(container.textContent).toContain("리소스 배정 검토 회의");
     expect(container.textContent).toContain("순차 DB id는 화면에 노출하지 않습니다");

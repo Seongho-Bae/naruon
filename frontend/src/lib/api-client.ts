@@ -1,3 +1,9 @@
+export interface SessionClaims {
+  userId: string | null;
+  organizationId: string | null;
+  workspaceId: string | null;
+}
+
 const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
   'authorization',
   'x-dev-auth-token',
@@ -66,12 +72,16 @@ export class ApiClient {
     return stored || null;
   }
 
-  getCurrentUserId() {
+  getSessionClaims(): SessionClaims {
     const sessionToken = this.getSessionToken();
-    if (!sessionToken) return null;
+    if (!sessionToken) {
+      return { userId: null, organizationId: null, workspaceId: null };
+    }
 
     const [, payloadSegment] = sessionToken.split('.');
-    if (!payloadSegment) return null;
+    if (!payloadSegment) {
+      return { userId: null, organizationId: null, workspaceId: null };
+    }
 
     try {
       const normalizedPayload = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
@@ -79,12 +89,22 @@ export class ApiClient {
         Math.ceil(normalizedPayload.length / 4) * 4,
         '=',
       );
-      const decodedPayload = JSON.parse(atob(paddedPayload)) as { sub?: unknown };
-      if (typeof decodedPayload.sub !== 'string') return null;
-      return decodedPayload.sub.trim() || null;
+      const decodedPayload = JSON.parse(atob(paddedPayload)) as {
+        sub?: unknown;
+        org?: unknown;
+        workspace?: unknown;
+      };
+      const userId = typeof decodedPayload.sub === 'string' ? decodedPayload.sub.trim() || null : null;
+      const organizationId = typeof decodedPayload.org === 'string' ? decodedPayload.org.trim() || null : null;
+      const workspaceId = typeof decodedPayload.workspace === 'string' ? decodedPayload.workspace.trim() || null : null;
+      return { userId, organizationId, workspaceId };
     } catch {
-      return null;
+      return { userId: null, organizationId: null, workspaceId: null };
     }
+  }
+
+  getCurrentUserId() {
+    return this.getSessionClaims().userId;
   }
 
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {

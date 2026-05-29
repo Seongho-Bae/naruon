@@ -53,12 +53,16 @@ class WebDavService:
                 {
                     "folder_uid": "webdav_folder_demo_roadmap",
                     "project_name": "Naruon Roadmap 2026",
-                    "webdav_path": "/Projects/Naruon_Roadmap_2026"
+                    "webdav_path": "/Projects/Naruon_Roadmap_2026",
+                    "owner_user_id": "demo_user",
+                    "organization_id": None,
                 },
                 {
                     "folder_uid": "webdav_folder_demo_marketing",
                     "project_name": "Marketing Assets",
-                    "webdav_path": "/Projects/Marketing_Assets"
+                    "webdav_path": "/Projects/Marketing_Assets",
+                    "owner_user_id": "demo_user",
+                    "organization_id": None,
                 }
             ]
         }
@@ -121,6 +125,8 @@ class WebDavService:
                 "folder_uid": folder.folder_uid,
                 "project_name": folder.project_name,
                 "webdav_path": folder.webdav_path,
+                "owner_user_id": folder.user_id,
+                "organization_id": folder.organization_id,
             }
             for folder in result.scalars().all()
         ]

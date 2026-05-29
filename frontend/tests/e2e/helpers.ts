@@ -752,11 +752,15 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
           folder_uid: 'webdav_folder_roadmap',
           project_name: 'Naruon Roadmap 2026',
           webdav_path: '/Projects/Naruon_Roadmap_2026',
+          owner_user_id: 'alice',
+          organization_id: 'org-acme',
         },
         {
           folder_uid: 'webdav_folder_marketing',
           project_name: 'Marketing Assets',
           webdav_path: '/Projects/Marketing_Assets',
+          owner_user_id: 'alice',
+          organization_id: 'org-acme',
         },
       ]);
       return;
