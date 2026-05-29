@@ -8,6 +8,9 @@
 - Security scanners are required gates. Do not use `continue-on-error: true` to
   hide Bandit, Strix, CodeQL, or dependency findings; preserve artifacts with
   explicit `if: ${{ always() }}` upload steps when needed.
+- PR-scoped Strix scans must include trusted import context for changed backend
+  Python entrypoints; do not scan `backend/main.py` or routers as isolated
+  single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan must not route through GitHub Models, `github.token`,

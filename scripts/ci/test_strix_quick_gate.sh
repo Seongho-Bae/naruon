@@ -1651,6 +1651,14 @@ EOS
 			echo "Error: backend core config context missing from scoped target ($target_path)" >&2
 			exit 58
 		fi
+		if [ ! -f "$target_path/backend/core/runtime_secrets.py" ]; then
+			echo "Error: backend runtime secrets context missing from scoped target ($target_path)" >&2
+			exit 62
+		fi
+		if [ ! -f "$target_path/backend/api/search.py" ]; then
+			echo "Error: backend search router context missing from scoped target ($target_path)" >&2
+			exit 63
+		fi
 		if [ ! -f "$target_path/backend/db/session.py" ]; then
 			echo "Error: backend db session context missing from scoped target ($target_path)" >&2
 			exit 59
@@ -1907,8 +1915,10 @@ EOS
 		echo 'from db.session import get_db' >"$repo_root_dir/backend/api/emails.py"
 		echo 'from api.auth import ensure_organization_access' >"$repo_root_dir/backend/api/runner_config.py"
 		echo 'ensure_organization_access(auth_context, config.organization_id)' >>"$repo_root_dir/backend/api/runner_config.py"
+		echo 'router = object()' >"$repo_root_dir/backend/api/search.py"
 		echo 'TRUSTED_CONFIG = True' >"$repo_root_dir/backend/core/config.py"
 		echo 'class LocalError(Exception): pass' >"$repo_root_dir/backend/core/exceptions.py"
+		echo 'def validate_auth_session_hmac_secret_value(value): return value' >"$repo_root_dir/backend/core/runtime_secrets.py"
 		echo 'engine = object()' >"$repo_root_dir/backend/db/session.py"
 		echo 'class Email: pass' >"$repo_root_dir/backend/db/models.py"
 		echo 'class ServiceError(Exception): pass' >"$repo_root_dir/backend/services/exceptions.py"
@@ -2670,7 +2680,7 @@ while [ "$#" -gt 0 ]; do
 	shift
 done
 
-calendar_context_seen=0
+matched_backend_context=0
 if [ -f "$target_path/backend/api/calendar.py" ]; then
 	if [ ! -f "$target_path/backend/services/calendar_service.py" ]; then
 		echo "Error: calendar service backend dependency context missing from PR scope ($target_path)" >&2
@@ -2682,7 +2692,7 @@ if [ -f "$target_path/backend/api/calendar.py" ]; then
 		exit 73
 	fi
 	echo "scan ok with calendar service backend context"
-	calendar_context_seen=1
+	matched_backend_context=1
 fi
 
 if [ -f "$target_path/backend/api/emails.py" ]; then
@@ -2705,7 +2715,7 @@ if [ -f "$target_path/backend/api/emails.py" ]; then
 		exit 71
 	fi
 	echo "scan ok with PR-head backend dependency context"
-	exit 0
+	matched_backend_context=1
 fi
 
 if [ -f "$target_path/backend/api/llm_providers.py" ]; then
@@ -2719,7 +2729,7 @@ if [ -f "$target_path/backend/api/llm_providers.py" ]; then
 		exit 75
 	fi
 	echo "scan ok with PR-head LLM provider URL validation context"
-	exit 0
+	matched_backend_context=1
 fi
 
 if [ -f "$target_path/backend/services/email_parser.py" ]; then
@@ -2733,10 +2743,10 @@ if [ -f "$target_path/backend/services/email_parser.py" ]; then
 		exit 77
 	fi
 	echo "scan ok with PR-head email parser text safety context"
-	exit 0
+	matched_backend_context=1
 fi
 
-if [ "$calendar_context_seen" -eq 1 ]; then
+if [ "$matched_backend_context" -eq 1 ]; then
 	exit 0
 fi
 

@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     ALLOWED_POP3_PORTS: str = "995"
     ALLOWED_LLM_BASE_URL_HOSTS: str = ""
     ENABLE_PROMETHEUS_METRICS: bool = False
+    SECURITY_CONTENT_SECURITY_POLICY: str = (
+        "default-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
