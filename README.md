@@ -41,10 +41,11 @@ mail/calendar/file systems.
   RBAC/ABAC policy engine, and returns no sequential account ids, raw
   credentials, legacy unscoped audit rows, or fake security posture claims.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
-  The endpoint summarizes scoped repositories, ingestion inventory, embedding
-  coverage, quality checks, and connector evidence from existing rows, returns
-  `provider_write_executed=false`, and does not expose provider credentials,
-  raw usernames, server URLs, or sequential ids.
+  The endpoint summarizes scoped repositories, recent email-attachment file
+  assets, ingestion inventory, embedding coverage, quality checks, and connector
+  evidence from existing rows, returns `provider_write_executed=false`, and does
+  not expose provider credentials, raw usernames, server URLs, message bodies,
+  raw message/thread ids, or sequential ids.
 - Projects are source-backed through signed `/api/webdav/folders` and
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels

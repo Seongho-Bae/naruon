@@ -144,6 +144,11 @@
   or a narrower signed API. Do not reintroduce static model-score fixtures,
   fake workflow logs, or provider names that are not derived from prompt,
   provider, or audit data.
+- Data document repository assets must be backed by signed
+  `/api/data/quality-surface` evidence from scoped email and attachment rows.
+  Do not reintroduce static file lists, sequential attachment/email ids, raw
+  message ids, raw thread ids, message bodies, provider URLs, usernames,
+  credentials, or claims that Naruon itself stores customer file capacity.
 - Icon-only workspace controls must carry localized `aria-label` text matching
   the visible app language; do not rely on the SVG icon alone for Calendar,
   Tasks, drawer, modal, or toolbar actions.

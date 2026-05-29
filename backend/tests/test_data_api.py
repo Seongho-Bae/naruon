@@ -17,7 +17,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import get_auth_context, get_current_user
 from core.config import settings
-from db.models import Base, ConnectorSignalEvent, ProjectFolder, WebdavAccount
+from db.models import (
+    Attachment,
+    Base,
+    ConnectorSignalEvent,
+    Email,
+    ProjectFolder,
+    WebdavAccount,
+)
 from db.session import get_db
 from main import app
 
@@ -104,6 +111,30 @@ def _webdav_account(source_uid: str) -> WebdavAccount:
     )
 
 
+def _email(
+    message_id: str,
+    *,
+    thread_id: str | None,
+    subject: str = "Data source package",
+) -> Email:
+    return Email(
+        user_id="owner",
+        organization_id="org-acme",
+        message_id=message_id,
+        thread_id=thread_id,
+        fingerprint=f"sha256:{message_id}",
+        sender="partner@example.com",
+        recipients="owner@example.com",
+        subject=subject,
+        date=_now(),
+        body="source email body",
+    )
+
+
+def _attachment(filename: str, content: str) -> Attachment:
+    return Attachment(filename=filename, content=content)
+
+
 def _project_folder(folder_uid: str) -> ProjectFolder:
     return ProjectFolder(
         folder_uid=folder_uid,
@@ -129,6 +160,12 @@ def _connector_event(event_uid: str) -> ConnectorSignalEvent:
 
 @pytest.fixture
 def mock_db():
+    ready_email = _email("<asset-ready@example.com>", thread_id="thread-ready")
+    pending_email = _email(
+        "<asset-pending@example.com>",
+        thread_id=None,
+        subject="<script>Quarterly source pack</script>",
+    )
     return MockAsyncSession(
         [
             [_webdav_account("webdav_src_primary")],
@@ -141,6 +178,10 @@ def mock_db():
             3,
             1,
             [_connector_event("connector_evt_data_quality")],
+            [
+                (_attachment("roadmap.pdf", "extracted attachment text"), ready_email),
+                (_attachment("quarterly.md", ""), pending_email),
+            ],
         ]
     )
 
@@ -204,6 +245,23 @@ def test_data_quality_surface_returns_source_backed_counts_without_secrets(mock_
     assert quality_by_key["dedupe_fingerprint"]["issue_count"] == 2
     assert quality_by_key["attachment_content"]["issue_count"] == 1
     assert data["connector_events"][0]["event_uid"] == "connector_evt_data_quality"
+    assert data["repository_assets"][0] == {
+        "asset_key": data["repository_assets"][0]["asset_key"],
+        "asset_type": "email_attachment",
+        "display_name": "roadmap.pdf",
+        "source_label": "Data source package",
+        "state_code": "ready",
+        "detail_text": "content and thread evidence ready",
+        "content_chars": 25,
+        "captured_at": "2026-05-28T05:45:00Z",
+        "evidence_source": "attachments.content, emails.thread_id",
+        "thread_key": data["repository_assets"][0]["thread_key"],
+        "provider_write_executed": False,
+    }
+    assert data["repository_assets"][0]["asset_key"].startswith("asset_")
+    assert data["repository_assets"][0]["thread_key"].startswith("thread_")
+    assert data["repository_assets"][1]["state_code"] == "needs_attention"
+    assert data["repository_assets"][1]["source_label"] == "scriptQuarterly source pack/script"
 
     serialized = response.text
     for forbidden in (
@@ -216,6 +274,8 @@ def test_data_quality_surface_returns_source_backed_counts_without_secrets(mock_
         "https://files.acme.example",
         "webdav_path",
         "/Projects/Naruon_Roadmap_2026",
+        "<asset-ready@example.com>",
+        "thread-ready",
     ):
         assert forbidden not in serialized
 
@@ -269,6 +329,10 @@ def test_member_data_quality_queries_are_owner_scoped(mock_db):
 @pytest.mark.asyncio
 @pytest.mark.postgres
 async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
+    database_url = getattr(settings, "DATABASE_URL", None)
+    if not database_url:
+        pytest.skip("PostgreSQL smoke path unavailable: DATABASE_URL is not set")
+
     user_id = f"data_smoke_user_{uuid.uuid4().hex[:12]}"
     organization_id = f"data_smoke_org_{uuid.uuid4().hex[:12]}"
     workspace_id = f"workspace_{organization_id}"
@@ -279,7 +343,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
     folder_uid = f"webdav_folder_data_{uuid.uuid4().hex[:18]}"
     event_uid = f"connector_evt_data_{uuid.uuid4().hex[:18]}"
     other_workspace_event_uid = f"connector_evt_other_{uuid.uuid4().hex[:18]}"
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    engine = create_async_engine(database_url, echo=False)
     try:
         async with engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
@@ -557,6 +621,16 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
     assert quality_by_key["dedupe_fingerprint"]["issue_count"] == 1
     assert quality_by_key["attachment_content"]["issue_count"] == 1
     assert event_uid in {event["event_uid"] for event in data["connector_events"]}
+    asset_names = {asset["display_name"] for asset in data["repository_assets"]}
+    assert {"ready.txt", "blank.txt"} <= asset_names
+    assert "rival.txt" not in response.text
+    assets_by_name = {
+        asset["display_name"]: asset for asset in data["repository_assets"]
+    }
+    assert assets_by_name["ready.txt"]["state_code"] == "ready"
+    assert assets_by_name["blank.txt"]["state_code"] == "needs_attention"
+    assert assets_by_name["ready.txt"]["asset_key"].startswith("asset_")
+    assert assets_by_name["ready.txt"]["thread_key"].startswith("thread_")
     assert other_workspace_event_uid not in response.text
     assert "account_id" not in response.text
     assert "encrypted-data-secret" not in response.text

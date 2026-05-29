@@ -489,6 +489,11 @@ test('renders Data quality surface across viewports with signed API headers', as
 
   await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
   await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await expect(page.getByText('최근 파일/첨부 자산')).toBeVisible();
+  await expect(page.getByText('roadmap.pdf')).toBeVisible();
+  await expect(page.getByText('asset_repository_ready')).toBeVisible();
+  await expect(page.getByText('thread_repository_ready')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-repository-assets.png'), fullPage: false });
   await expect(page.getByText('connector_evt_data_quality')).toBeVisible();
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('4 emails and 3 attachments')).toBeVisible();
