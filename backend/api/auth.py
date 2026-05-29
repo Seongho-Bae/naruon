@@ -6,7 +6,7 @@ import json
 import logging
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, cast
 
 import jwt
@@ -35,6 +35,7 @@ RoleName = Literal[
     "group_admin",
     "member",
 ]
+SessionVerifier = Literal["hmac", "oidc", "override"]
 ALLOWED_ROLES: set[str] = {
     "system_admin",
     "tenant_admin",
@@ -59,6 +60,7 @@ class AuthContext:
     organization_id: str | None
     group_ids: tuple[str, ...]
     workspace_id: str
+    session_verifier: SessionVerifier = field(default="override", compare=False)
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
@@ -209,6 +211,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL
             )
+            payload["_session_verifier"] = "oidc"
             return payload
         except Exception:
             raise _authentication_error() from None
@@ -235,6 +238,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
 
     payload = _json_object_from_base64url_segment(payload_segment)
     _reject_hmac_system_admin_payload(payload)
+    payload["_session_verifier"] = "hmac"
     return payload
 
 
@@ -293,6 +297,9 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
 
 def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
     _validate_session_metadata(payload)
+    session_verifier = payload.get("_session_verifier", "override")
+    if session_verifier not in ("hmac", "oidc", "override"):
+        raise _authentication_error()
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
@@ -306,6 +313,7 @@ def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
         organization_id=organization_id,
         group_ids=_tuple_string_claim(payload, "groups"),
         workspace_id=_required_string_claim(payload, "workspace"),
+        session_verifier=cast(SessionVerifier, session_verifier),
     )
 
 

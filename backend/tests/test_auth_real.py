@@ -243,6 +243,7 @@ async def test_get_auth_context_accepts_signed_bearer_session():
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
     )
+    assert context.session_verifier == "hmac"
 
 
 @pytest.mark.asyncio
@@ -748,6 +749,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     assert context.user_id == "alice"
     assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
+    assert context.session_verifier == "oidc"
 
 
 @pytest.mark.asyncio
