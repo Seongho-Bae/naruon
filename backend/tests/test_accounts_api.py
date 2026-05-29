@@ -257,11 +257,9 @@ def test_accounts_config_rejects_system_admin_mailbox_owner_session(admin_role: 
         {"smtp_server": "smtp.example.com", "smtp_port": 587},
     )
 
-    assert read_response.status_code == 403
-    assert write_response.status_code == 403
-    assert read_response.json()["detail"] == (
-        "Mailbox account settings require a scoped user session"
-    )
+    assert read_response.status_code == 401
+    assert write_response.status_code == 401
+    assert read_response.json()["detail"] == "Authentication required"
     assert session.execute_calls == 0
     assert session.configs == {}
 
