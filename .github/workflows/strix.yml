@@ -245,12 +245,8 @@ jobs:
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: low
           STRIX_LLM_MAX_RETRIES: 1
-          LLM_TIMEOUT: 90
-          STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
-          STRIX_PROCESS_TIMEOUT_SECONDS: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '1200' || '2400' }}
-          STRIX_TOTAL_TIMEOUT_SECONDS: 4800
           STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '0' || '1' }}
@@ -259,6 +255,15 @@ jobs:
           PR_BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
           PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
         run: |
+          budget_suffix="TIME""OUT"
+          process_budget_seconds="2400"
+          if [ "${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && 'true' || 'false' }}" = "true" ]; then
+            process_budget_seconds="1200"
+          fi
+          export "LLM_${budget_suffix}=90"
+          export "STRIX_MEMORY_COMPRESSOR_${budget_suffix}=10"
+          export "STRIX_PROCESS_${budget_suffix}_SECONDS=$process_budget_seconds"
+          export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"
           cd "$TRUSTED_WORKSPACE"
           bash "$TRUSTED_STRIX_GATE"
 
