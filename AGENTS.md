@@ -32,6 +32,11 @@
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
+- HMAC fallback sessions are local/control-plane compatibility credentials, not
+  authoritative workspace-membership evidence. Sensitive tenant security posture
+  surfaces must require OIDC/JWKS-backed membership or an explicit dependency
+  override in tests; do not allow a signed HMAC `workspace` claim alone to open
+  cross-workspace security data.
 
 ## PR automation and review defaults
 

@@ -328,14 +328,18 @@ def test_access_surface_rejects_public_identity_headers_without_signed_session(m
     assert response.json() == {"detail": "Authentication required"}
 
 
-def test_access_surface_accepts_signed_bearer_session(mock_db):
+def test_access_surface_rejects_hmac_bearer_session_without_authoritative_workspace(
+    mock_db,
+):
     async def override_get_db():
         yield mock_db
 
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     original_overrides = dict(app.dependency_overrides)
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(_valid_session_payload())
+    token = _signed_session_token(
+        _valid_session_payload(workspace="another_workspace_id")
+    )
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
@@ -350,8 +354,10 @@ def test_access_surface_accepts_signed_bearer_session(mock_db):
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
 
-    assert response.status_code == 200, response.text
-    assert response.json()["viewer"]["user_id"] == "admin"
+    assert response.status_code == 403, response.text
+    assert response.json() == {
+        "detail": "Authoritative workspace membership is required for security access surface"
+    }
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -472,11 +472,20 @@ def _policy_order() -> list[PolicyOrderStep]:
     ]
 
 
+def _require_authoritative_workspace_scope(auth_context: AuthContext) -> None:
+    if auth_context.session_verifier == "hmac":
+        raise HTTPException(
+            status_code=403,
+            detail="Authoritative workspace membership is required for security access surface",
+        )
+
+
 @router.get("/access-surface", response_model=SecurityAccessSurfaceResponse)
 async def get_access_surface(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> SecurityAccessSurfaceResponse:
+    _require_authoritative_workspace_scope(auth_context)
     webdav_result = await db.execute(_webdav_scope_statement(auth_context))
     calendar_result = await db.execute(_calendar_scope_statement(auth_context))
     audit_result = await db.execute(_durable_audit_scope_statement(auth_context))

@@ -45,6 +45,9 @@ mail/calendar/file systems.
   connector evidence plus durable `security_audit_events`, reuses the deny-first
   RBAC/ABAC policy engine, and returns no sequential account ids, raw
   credentials, legacy unscoped audit rows, or fake security posture claims.
+  HMAC fallback sessions are not accepted as authoritative workspace-membership
+  evidence for this security posture surface; enterprise OIDC/JWKS or an
+  explicit server-side membership path must establish the workspace boundary.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
   The endpoint summarizes scoped repositories, recent email-attachment file
   assets, ingestion inventory, embedding coverage, quality checks, and connector
