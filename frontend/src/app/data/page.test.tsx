@@ -57,6 +57,34 @@ const dataQualitySurface = {
       provider_write_executed: false,
     },
   ],
+  repository_assets: [
+    {
+      asset_key: "asset_repository_ready",
+      asset_type: "email_attachment",
+      display_name: "roadmap.pdf",
+      source_label: "Q2 roadmap source email",
+      state_code: "ready",
+      detail_text: "content and thread evidence ready",
+      content_chars: 4096,
+      captured_at: "2026-05-28T05:45:00Z",
+      evidence_source: "attachments.content, emails.thread_id",
+      thread_key: "thread_repository_ready",
+      provider_write_executed: false,
+    },
+    {
+      asset_key: "asset_repository_pending",
+      asset_type: "email_attachment",
+      display_name: "blank-notes.md",
+      source_label: "Forwarded duplicate source email",
+      state_code: "needs_attention",
+      detail_text: "content extraction pending, canonical thread pending",
+      content_chars: 0,
+      captured_at: "2026-05-28T05:43:00Z",
+      evidence_source: "attachments.content, emails.thread_id",
+      thread_key: "thread_missing",
+      provider_write_executed: false,
+    },
+  ],
   pipeline_stages: [
     {
       stage_key: "source_registry",
@@ -267,6 +295,11 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("메일/첨부 저장소");
     expect(container.textContent).toContain("data.quality_surface.viewed");
     expect(container.textContent).toContain("connector_evt_data_quality");
+    expect(container.textContent).toContain("최근 파일/첨부 자산");
+    expect(container.textContent).toContain("roadmap.pdf");
+    expect(container.textContent).toContain("asset_repository_ready");
+    expect(container.textContent).toContain("thread_repository_ready");
+    expect(container.textContent).toContain("blank-notes.md");
     expect(container.textContent).toContain("WebDAV writeback intent 승인");
     expect(container.textContent).toContain("etag=etag-webdav-primary");
     expect(container.textContent).toContain("webdav_folder_roadmap");
@@ -310,6 +343,7 @@ describe("DataPage", () => {
     }
     expect(container.textContent).not.toContain("28,401");
     expect(container.textContent).not.toContain("23건");
+    expect(container.textContent).not.toContain("<asset-ready@example.com>");
   });
 
   it("renders API-backed pipeline embedding and quality tabs", async () => {

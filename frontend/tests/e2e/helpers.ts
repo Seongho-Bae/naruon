@@ -469,7 +469,7 @@ const dataQualitySurface = {
   organization_id: 'org-acme',
   audit_event: 'data.quality_surface.viewed',
   provider_write_executed: false,
-  repositories: [
+	  repositories: [
     {
       source_id: 'email_repository',
       repository_type: 'email_repository',
@@ -505,9 +505,37 @@ const dataQualitySurface = {
       writeback_enabled: null,
       evidence_source: 'project_folders',
       provider_write_executed: false,
-    },
-  ],
-  pipeline_stages: [
+	    },
+	  ],
+	  repository_assets: [
+	    {
+	      asset_key: 'asset_repository_ready',
+	      asset_type: 'email_attachment',
+	      display_name: 'roadmap.pdf',
+	      source_label: 'Q2 roadmap source email',
+	      state_code: 'ready',
+	      detail_text: 'content and thread evidence ready',
+	      content_chars: 4096,
+	      captured_at: '2026-05-28T05:45:00Z',
+	      evidence_source: 'attachments.content, emails.thread_id',
+	      thread_key: 'thread_repository_ready',
+	      provider_write_executed: false,
+	    },
+	    {
+	      asset_key: 'asset_repository_pending',
+	      asset_type: 'email_attachment',
+	      display_name: 'blank-notes.md',
+	      source_label: 'Forwarded duplicate source email',
+	      state_code: 'needs_attention',
+	      detail_text: 'content extraction pending, canonical thread pending',
+	      content_chars: 0,
+	      captured_at: '2026-05-28T05:43:00Z',
+	      evidence_source: 'attachments.content, emails.thread_id',
+	      thread_key: 'thread_missing',
+	      provider_write_executed: false,
+	    },
+	  ],
+	  pipeline_stages: [
     {
       stage_key: 'source_registry',
       display_name: 'Source registry',
