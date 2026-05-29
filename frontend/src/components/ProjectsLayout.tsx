@@ -174,7 +174,9 @@ export function ProjectsLayout() {
           </a>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input type="text" readOnly value="source evidence" aria-label="프로젝트 source 검색" className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm text-muted-foreground" />
+            <p aria-label="프로젝트 source 검색 상태" className="flex h-9 w-full items-center rounded-md border border-border bg-background pl-9 pr-4 text-sm text-muted-foreground">
+              source evidence
+            </p>
           </div>
         </div>
 
