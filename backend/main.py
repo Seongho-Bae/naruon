@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from api.auth import get_auth_context, preload_oidc_jwks
 from api.search import router as search_router
@@ -57,6 +58,15 @@ if settings.ENABLE_PROMETHEUS_METRICS:
     Instrumentator().instrument(app).expose(
         app, include_in_schema=False, should_gzip=True
     )
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 app.add_middleware(
     CORSMiddleware,
