@@ -7,7 +7,7 @@ import { apiClient } from '@/lib/api-client';
 type WebdavWritebackIntentResponse = {
   intent: string;
   source_id: string | null;
-  server_url: string | null;
+  target_label: string | null;
   requires_if_match: boolean;
   if_match?: string | null;
   provenance: string;
@@ -171,8 +171,7 @@ export function DataLayout() {
   
   interface WebdavAccount {
     source_id: string;
-    server_url: string;
-    username: string;
+    display_label: string;
     writeback_enabled: boolean;
     etag?: string | null;
   }
@@ -363,9 +362,9 @@ export function DataLayout() {
                         >
                           <Server className="mt-0.5 size-4 shrink-0 text-primary" />
                           <span className="min-w-0">
-                            <span className="block break-all font-medium text-foreground">{account.server_url}</span>
+                            <span className="block break-all font-medium text-foreground">{account.display_label}</span>
                             <span className="block break-all text-xs text-muted-foreground">
-                              {account.source_id} · {account.username} · {account.writeback_enabled ? 'writeback eligible' : 'read only'} · etag={account.etag ?? 'missing'}
+                              {account.source_id} · {account.writeback_enabled ? 'writeback eligible' : 'read only'} · etag={account.etag ?? 'missing'}
                             </span>
                           </span>
                         </button>
@@ -454,8 +453,8 @@ export function DataLayout() {
                         <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.provenance}</dd>
                       </div>
                       <div className="min-w-0 sm:col-span-2 lg:col-span-4">
-                        <dt className="font-black text-muted-foreground">SERVER_URL</dt>
-                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{writebackResult.server_url ?? 'none'}</dd>
+                        <dt className="font-black text-muted-foreground">TARGET_LABEL</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{writebackResult.target_label ?? 'none'}</dd>
                       </div>
                     </dl>
                   )}

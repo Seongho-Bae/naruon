@@ -28,20 +28,27 @@ mail/calendar/file systems.
   open-source observability.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
-- Strix PR/security evidence requires an OpenAI GPT-5.4-or-newer model through
-  an explicit `STRIX_OPENAI_API_KEY` OpenAI Platform credential. The workflow
-  fails closed rather than falling back to GitHub Models, Google/Vertex/Gemini,
-  `github.token`, or GPT-4-era models. Pending CodeRabbit or check evidence is
-  a wait state, not a hard blocker.
+- Strix PR/security evidence uses the organization-secret provider selected by
+  `STRIX_LLM` with `GCP_SA_KEY`. The validated operational route is
+  `vertex_ai/gemini-2.5-flash`; direct OpenAI GPT-5.4-or-newer remains
+  supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
+  closed rather than falling back to GitHub Models, `github.token`, generic
+  `LLM_API_KEY`, or GPT-4-era models. Pending CodeRabbit or check evidence is a
+  wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
-  connector evidence, reuses the deny-first RBAC/ABAC policy engine, and returns
-  no sequential account ids, raw credentials, or fake security posture claims.
+  connector evidence plus durable `security_audit_events`, reuses the deny-first
+  RBAC/ABAC policy engine, and returns no sequential account ids, raw
+  credentials, legacy unscoped audit rows, or fake security posture claims.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
   The endpoint summarizes scoped repositories, ingestion inventory, embedding
   coverage, quality checks, and connector evidence from existing rows, returns
   `provider_write_executed=false`, and does not expose provider credentials,
   raw usernames, server URLs, or sequential ids.
+- Projects are source-backed through signed `/api/webdav/folders` and
+  `/api/tasks`. The workspace derives project boundaries from customer-owned
+  WebDAV folders, task progress from opaque public ticket ids, and labels
+  provider writes as deferred intent work.
   
 ## Agentic Ontology & Auto-Organization
 
@@ -136,11 +143,13 @@ npm run build
 npm run dev
 ```
 
-`next.config.ts` caps static generation concurrency by default
-(`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
+`next.config.ts` applies a best-effort local guard for build worker fan-out and
+static generation concurrency (`NEXT_BUILD_CPUS=2`,
+`NEXT_STATIC_GENERATION_MAX_CONCURRENCY=2`,
 `NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER=50`) so constrained CI/build
-machines do not fan out excessive Node/PostCSS workers. Raise those values only
-with explicit build evidence.
+machines do not fan out excessive Node/PostCSS workers. Treat the Next.js CPU
+knob as experimental and enforce authoritative limits through CI, Docker, or the
+runner. Raise those values only with explicit build evidence.
 
 ## Threading proof points
 
@@ -292,7 +301,8 @@ Context Search, AI Hub, Data, Security, and Settings. The `/mail`, `/search`,
 `/settings` destinations must render real work-detail surfaces rather than
 static placeholder copy: calendar month/week/detail/coordination and CalDAV
 writeback queues, ticket task boards and source-linked details, integrated
-search result/detail graph timelines, project decision logs, document
+search result/detail graph timelines, source-backed project folders and
+decision-evidence logs, document
 repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
@@ -334,14 +344,16 @@ enforce ETag/If-Match and owner capability checks.
 WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
-eligibility, reject legacy `target_account_id` payloads, and keep sequential
+eligibility, surface `webdav_accounts.etag_value` as source-safe If-Match
+evidence, reject legacy `target_account_id` payloads, and keep sequential
 `account_id` values internal-only. The Data workspace exposes the WebDAV source
 as an explicit selected target and treats `409` If-Match/ETag responses as
 conflicts instead of generic failures, so UI copy never implies a provider write
-overwrote customer-owned files. Project folder listings are scoped by the signed
-session organization and expose opaque `project_folders.folder_uid` values
-instead of sequential `folder_id` values, and the `/dav` PUT skeleton fails
-closed until provider-backed source, capability, and ETag/If-Match checks exist.
+overwrote customer-owned files. Provider URLs, usernames, and credentials stay
+server-side. Project folder listings are scoped by the signed session
+organization and expose opaque `project_folders.folder_uid` values instead of
+sequential `folder_id` values, and the `/dav` PUT skeleton fails closed until
+provider-backed source, capability, and ETag/If-Match checks exist.
 Data repository, ingestion, embedding, and quality status is loaded from signed
 `/api/data/quality-surface`. The UI must not reintroduce static ingestion logs,
 fake vector counts, unsupported embedding model names, or fake quality totals;

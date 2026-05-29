@@ -121,8 +121,7 @@ interface CalendarWritebackSource {
 
 interface WebdavAccount {
   source_id: string;
-  server_url: string;
-  username: string;
+  display_label: string;
   writeback_enabled: boolean;
 }
 
@@ -664,8 +663,7 @@ export function SettingsLayout() {
                                       {account.writeback_enabled ? 'writeback intent enabled' : 'read-only intent'}
                                     </span>
                                   </div>
-                                  <p className="mt-2 break-all text-sm text-foreground">{account.server_url}</p>
-                                  <p className="mt-1 break-all text-xs text-muted-foreground">{account.username}</p>
+                                  <p className="mt-2 break-all text-sm text-foreground">{account.display_label}</p>
                                 </li>
                               ))}
                             </ul>

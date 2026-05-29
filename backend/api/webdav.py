@@ -18,14 +18,16 @@ WEB_DAV_ERROR_STATUS_CODES = {
 
 class WebdavAccountResponse(BaseModel):
     source_id: str
-    server_url: str
-    username: str
+    display_label: str
     writeback_enabled: bool
+    etag: str | None = None
 
 class ProjectFolderResponse(BaseModel):
     folder_uid: str
     project_name: str
     webdav_path: str
+    owner_user_id: str
+    organization_id: str | None
 
 class WritebackIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -35,8 +37,9 @@ class WritebackIntentRequest(BaseModel):
 class WritebackIntentResponse(BaseModel):
     intent: str
     source_id: str | None
-    server_url: str | None
+    target_label: str | None
     requires_if_match: bool
+    if_match: str | None = None
     provenance: str
     status: str | None = None
     message: str | None = None
@@ -55,9 +58,10 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     source_email_id: str | None
     source_thread_id: str | None
     source_id: str | None
-    server_url: str | None
+    target_label: str | None
     target_path: str
     requires_if_match: bool
+    if_match: str | None = None
     provenance: str
     provider_write_executed: bool
     audit_event: str

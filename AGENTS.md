@@ -10,15 +10,18 @@
   explicit `if: ${{ always() }}` upload steps when needed.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan must use an explicitly named `STRIX_OPENAI_API_KEY`
-  OpenAI Platform credential with an OpenAI GPT-5.4-or-newer model. Do not route
-  Strix through GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini,
-  Google/Vertex, GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
-  Direct OpenAI model names may be plain (`gpt-5.4`) or provider-qualified
-  (`openai/gpt-5.4`), but must never use the GitHub Models
-  `openai/openai/...` prefix.
-  Keep architecture docs and reusable Strix gate tests aligned with this rule so
-  stale GitHub Models examples cannot re-enter copied workflow guidance.
+- Strix Security Scan must not route through GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
+  route is `STRIX_LLM` with `GCP_SA_KEY`; `vertex_ai/gemini-2.5-flash` is the
+  validated operational model after run `26581416713` proved
+  `vertex_ai/gemini-3.1-pro-preview-customtools` returns Vertex 404/no-access in
+  this project. Expose Google/Vertex credentials only for Vertex provider mode.
+  Direct OpenAI GPT-5.4-or-newer scans remain supported only when selected
+  explicitly with `STRIX_OPENAI_API_KEY`. Do not silently fall back between
+  providers, and record provider evidence in the PR. Keep architecture docs and
+  reusable Strix gate tests aligned with this rule so stale GitHub Models,
+  OpenAI-only, unavailable-model, or generic-key examples cannot re-enter copied
+  workflow guidance.
 
 ## PR automation and review defaults
 
@@ -107,6 +110,10 @@
   no-op. Do not place sensitive credential values, secret-derived values, or
   password-shaped field names in logs or raised exception text; use static
   non-secret labels such as "credential secret" instead.
+- SMTP, IMAP, and POP3 host validation must reject legacy numeric IP literal
+  forms such as decimal integers, hexadecimal integers, and octal dotted forms
+  before DNS or socket connection; `socket.getaddrinfo` may resolve those forms
+  to loopback/private addresses even when `ipaddress.ip_address` rejects them.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and
@@ -114,10 +121,20 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
+- Public audit/event identifiers that may use human-readable prefixes must not
+  be stored in artificially short `varchar(n)` columns; use opaque source UIDs
+  that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When robot review cites an obsolete Strix provider policy, update the docs and
+  tests to the current secret contract before accepting a rollback suggestion;
+  do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
+  credential forwarding while trying to satisfy old comments.
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
+- Icon-only workspace controls must carry localized `aria-label` text matching
+  the visible app language; do not rely on the SVG icon alone for Calendar,
+  Tasks, drawer, modal, or toolbar actions.
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
@@ -160,9 +177,11 @@
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.
   Missing writeback eligibility must fail closed. Browser-visible source ids
-  must not reveal or be deterministically derived from account primary keys, and
-  provider mutations remain future work until connector execution can enforce
-  capability, consent, and ETag/If-Match checks.
+  must not reveal or be deterministically derived from account primary keys.
+  WebDAV account readiness may expose only source-safe labels and ETag/If-Match
+  evidence, never provider URLs, usernames, credentials, or sequential account
+  ids. Provider mutations remain future work until connector execution can
+  enforce capability, consent, and ETag/If-Match checks.
 - DAV/WebDAV folder and write paths must not expose sequential folder primary
   keys or claim provider write success from skeleton endpoints. Browser-visible
   project folders use opaque `folder_uid` values, and `/dav` mutation methods
@@ -213,6 +232,16 @@
   vector counts, unsupported embedding model names, static quality totals, or
   provider-write success claims; Data mocks and E2E fixtures must preserve the
   bearer-session call and omit public identity headers.
+- Project workspace lists, milestones, task links, and decision logs must be
+  source-backed by signed `/api/webdav/folders` and `/api/tasks` data or
+  explicitly labeled pending. Do not reintroduce static project names, inert
+  report/filter buttons, provider write success claims, or sequential database
+  ids in project UI/tests.
+- Project workspace folder rendering must prove owner scope before display:
+  `/api/webdav/folders` includes server-scoped `owner_user_id` and
+  `organization_id`, and the browser filters those folders against decoded
+  signed-session claims before building project cards. Keep `folder_uid` as an
+  internal opaque key only; do not render it as visible UI text.
 - Self-hosted connector APM history must be persisted as scoped control-plane
   signal events before the UI claims durable heartbeat evidence. Do not expose
   runner registration tokens, path tokens, or raw provider credentials in event

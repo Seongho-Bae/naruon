@@ -65,23 +65,27 @@ def thread_reply_candidate(
     if not user_addresses:
         return None
 
-    candidates = []
-    ordered_messages = sorted(thread_messages, key=lambda item: item.date)
-    for sent_message in ordered_messages:
-        if not message_is_from_user(sent_message, user_addresses):
+    ordered_messages = sorted(thread_messages, key=lambda item: item.date, reverse=True)
+
+    latest_external_date = None
+    for message in ordered_messages:
+        is_from_user = message_is_from_user(message, user_addresses)
+
+        if not is_from_user:
+            if latest_external_date is None or message.date > latest_external_date:
+                latest_external_date = message.date
             continue
-        if message_is_self_sent(sent_message, user_addresses):
-            continue
-        if not detect_reply_tracking({"body": sent_message.body}):
-            continue
-        has_later_external_reply = any(
-            not message_is_from_user(reply_message, user_addresses)
-            and reply_message.date > sent_message.date
-            for reply_message in ordered_messages
-        )
-        if not has_later_external_reply:
-            candidates.append(sent_message)
-    return candidates[-1] if candidates else None
+
+        if is_from_user and not message_is_self_sent(message, user_addresses):
+            has_later_external_reply = (
+                latest_external_date is not None
+                and latest_external_date > message.date
+            )
+            if not has_later_external_reply:
+                if detect_reply_tracking({"body": message.body}):
+                    return message
+
+    return None
 
 
 def thread_requires_reply(
