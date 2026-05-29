@@ -20,7 +20,7 @@ def test_pop3_sync_requires_credentials(caplog, monkeypatch):
         lambda host, port: (host, port),
     )
     with patch("services.pop3_worker.poplib.POP3_SSL", return_value=pop3_client):
-        with pytest.raises(RuntimeError, match="Missing POP3 username"):
+        with pytest.raises(RuntimeError, match="POP3 account configuration incomplete"):
             worker._do_pop3_sync(config)
 
     pop3_client.user.assert_not_called()

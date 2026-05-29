@@ -33,7 +33,10 @@ def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
             try:
                 connection.request("GET", request_path)
                 response = connection.getresponse()
-                assert response.status == 200
+                if response.status != 200:
+                    raise http.client.HTTPException(
+                        f"unexpected status: {response.status}"
+                    )
                 return json.loads(response.read().decode("utf-8"))
             finally:
                 connection.close()

@@ -112,7 +112,9 @@ class Pop3SyncWorker:
                     "POP3 account configuration incomplete for user %s.",
                     config.user_id,
                 )
-                raise RuntimeError(f"Missing POP3 username for user {config.user_id}")
+                raise RuntimeError(
+                    f"POP3 account configuration incomplete for user {config.user_id}"
+                )
             if not config.pop3_password:
                 logger.error(
                     "POP3 account configuration incomplete for user %s.",
