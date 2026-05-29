@@ -11,6 +11,11 @@
 - Pending checks are wait states, but a full-scan route that exceeds its process
   budget is not acceptable operating evidence under the no Timeout/Fatal/Warn/
   Denied policy.
+- PR #311 Strix run `26661237230` timed out the first PR-scope batch after
+  `1200s`, then found a HIGH OIDC admin-claim issue only after rebatching. The
+  next head run `26662731398` remained in `Run Strix (quick)` for more than one
+  hour, showing that a 12-file first batch is not operationally bounded enough
+  for current Vertex-backed PR evidence.
 
 ## Plan
 
@@ -26,6 +31,9 @@
    forwarding from PR #303.
 5. Add regression assertions so later edits cannot accidentally send full-repo
    scans through an unproven preview model.
+6. Start PR-scope evidence with single-file deterministic batches instead of
+   waiting for a 12-file batch to hit the process budget and rebalance after the
+   timeout.
 
 ## Non-Goals
 
