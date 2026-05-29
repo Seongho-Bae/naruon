@@ -289,6 +289,80 @@ for (const destination of [
   });
 }
 
+test('renders source-backed Projects workspace with signed API headers and mobile scroll', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-projects-e2e-token';
+  const publicIdentityHeaders = [
+    'x-user-id',
+    'x-organization-id',
+    'x-group-id',
+    'x-group-ids',
+    'x-user-role',
+    'x-dev-auth-token',
+  ];
+  await mockDashboardApi(page);
+  await page.addInitScript((token) => {
+    window.localStorage.setItem('naruon_session_token', token);
+  }, expectedNaruonToken);
+
+  await page.setViewportSize({ width: 1280, height: 1024 });
+  const desktopFoldersRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/folders' && request.method() === 'GET';
+  });
+  const desktopTasksRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/tasks' && request.method() === 'GET';
+  });
+  await page.goto('/projects');
+  for (const request of [await desktopFoldersRequest, await desktopTasksRequest]) {
+    const headers = request.headers();
+    expect(headers.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+    for (const headerName of publicIdentityHeaders) {
+      expect(headers[headerName]).toBeUndefined();
+    }
+  }
+
+  await expect(page.getByRole('heading', { name: '프로젝트 워크스페이스' })).toBeVisible();
+  await expect(page.getByText('Naruon Roadmap 2026').first()).toBeVisible();
+  await expect(page.getByText('provider_write_executed=false').first()).toBeVisible();
+  await expect(page.getByText('리소스 배정 검토 회의').first()).toBeVisible();
+  await expect(page.getByText('순차 DB id는 화면에 노출하지 않습니다').first()).toBeVisible();
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(desktopOverflow).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath('projects-source-backed-desktop.png'), fullPage: false });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileFoldersRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return url.pathname === '/api/webdav/folders' && request.method() === 'GET';
+  });
+  await page.goto('/projects');
+  expect((await mobileFoldersRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  await expect(page.getByRole('heading', { name: '프로젝트 워크스페이스' })).toBeVisible();
+  await page.getByRole('heading', { name: '연결 작업' }).scrollIntoViewIfNeeded();
+  await expect(page.getByText('첨부파일 WebDAV 폴더 정리')).toBeVisible();
+  const mobileScrollMetrics = await page.getByRole('region', { name: '프로젝트 내용' }).evaluate((scroller) => {
+    scroller.scrollTop = 0;
+    const before = scroller.scrollTop;
+    scroller.scrollTop = scroller.scrollHeight;
+    return {
+      before,
+      after: scroller.scrollTop,
+      maxScroll: scroller.scrollHeight - scroller.clientHeight,
+    };
+  });
+  expect(mobileScrollMetrics.maxScroll).toBeGreaterThan(0);
+  expect(mobileScrollMetrics.after).toBeGreaterThan(mobileScrollMetrics.before);
+  await page.screenshot({ path: testInfo.outputPath('projects-source-backed-mobile-scroll.png'), fullPage: false });
+
+  await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
+  const menu = page.getByRole('dialog', { name: '모바일 워크스페이스 메뉴' });
+  await menu.getByRole('link', { name: '프로젝트', exact: true }).scrollIntoViewIfNeeded();
+  await expect(menu.getByRole('link', { name: '프로젝트', exact: true })).toHaveAttribute('href', '/projects');
+  await expect(menu.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
+  await page.screenshot({ path: testInfo.outputPath('projects-source-backed-mobile-menu.png'), fullPage: false });
+});
+
 test('renders Security governance access audit sharing and policy with signed API headers', async ({ page }, testInfo) => {
   const expectedNaruonToken = 'signed-security-governance-e2e-token';
   const publicIdentityHeaders = [
