@@ -1951,6 +1951,7 @@ for key in (
     "http_proxy",
     "https_proxy",
     "no_proxy",
+    "PYTHONWARNINGS",
 ):
     value = os.environ.get(key)
     if value:

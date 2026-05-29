@@ -187,6 +187,29 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "unexpected_count" in scanner
 
 
+def test_strix_workflow_uses_configured_vertex_model_and_narrow_warning_filter() -> (
+    None
+):
+    workflow = read_repo_text(".github/workflows/strix.yml")
+    gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
+
+    assert "models: read" not in workflow
+    assert "provider_mode=github_models" not in workflow
+    assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
+    assert (
+        "vertex_ai/gemini-3.1-pro-preview-customtools | "
+        "vertex_ai/gemini-2.5-flash"
+        in workflow
+    )
+    assert "vertex_ai/* | vertex_ai_beta/*" not in workflow
+    assert (
+        'PYTHONWARNINGS: "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"'
+        in workflow
+    )
+    assert "ignore::UserWarning" not in workflow
+    assert '"PYTHONWARNINGS",' in gate_script
+
+
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
     None
 ):

@@ -86,9 +86,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
 	assert_file_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS: 4800" "strix workflow total Strix budget covers PR-scoped batches"
 	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12" "strix workflow reduces PR batch startup overhead"
-	assert_file_contains "$workflow_file" 'STRIX_MODEL: ${{ secrets.STRIX_LLM || '"'"'vertex_ai/gemini-2.5-flash'"'"' }}' "strix workflow defaults STRIX_LLM to the operational organization Vertex AI model"
+	assert_file_contains "$workflow_file" 'STRIX_MODEL: ${{ secrets.STRIX_LLM || '"'"'vertex_ai/gemini-3.1-pro-preview-customtools'"'"' }}' "strix workflow defaults STRIX_LLM to the operational organization Vertex AI model"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
-	assert_file_contains "$workflow_file" "vertex_ai/gemini-2.5-flash" "strix workflow accepts the validated organization Vertex AI operational model"
+	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash" "strix workflow accepts exact approved organization Vertex AI operational models"
+	assert_file_contains "$workflow_file" 'PYTHONWARNINGS: "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix workflow narrowly filters the known third-party Pydantic serializer warning"
+	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
 	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow uses provider-scoped LLM key material"
@@ -119,7 +121,7 @@ assert_strix_gpt54_model_guard_semantics() {
 	case "$model" in
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
 	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
-	vertex_ai/gemini-2.5-flash)
+	vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
 		return 0
 		;;
 	*)
@@ -144,8 +146,11 @@ assert_strix_gpt54_model_guard_cases() {
 	if assert_strix_gpt54_model_guard_semantics "openai/openai/gpt-5.4"; then
 		record_failure "strix GPT-5.4 guard must reject GitHub Models openai/openai/gpt-5.4"
 	fi
+	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-3.1-pro-preview-customtools"; then
+		record_failure "strix guard must accept the configured organization Vertex AI operational model"
+	fi
 	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-flash"; then
-		record_failure "strix guard must accept the validated organization Vertex AI operational model"
+		record_failure "strix guard must accept the fallback approved organization Vertex AI model"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-2.5-pro"; then
 		record_failure "strix guard must reject arbitrary Vertex models"
@@ -293,12 +298,13 @@ set -euo pipefail
 printf '%s\n' "${STRIX_LLM:-}" >> "${FAKE_STRIX_CALL_LOG:?}"
 printf '%s\n' "${LLM_API_BASE:-<unset>}" >> "${FAKE_STRIX_API_BASE_LOG:?}"
 if [ -n "${FAKE_STRIX_RUNTIME_ENV_LOG:-}" ]; then
-	printf 'LLM_TIMEOUT=%s;STRIX_MEMORY_COMPRESSOR_TIMEOUT=%s;STRIX_REASONING_EFFORT=%s;STRIX_LLM_MAX_RETRIES=%s;GEMINI_LOCATION=%s;UNRELATED_SECRET=%s\n' \
+	printf 'LLM_TIMEOUT=%s;STRIX_MEMORY_COMPRESSOR_TIMEOUT=%s;STRIX_REASONING_EFFORT=%s;STRIX_LLM_MAX_RETRIES=%s;GEMINI_LOCATION=%s;PYTHONWARNINGS=%s;UNRELATED_SECRET=%s\n' \
 		"${LLM_TIMEOUT:-<unset>}" \
 		"${STRIX_MEMORY_COMPRESSOR_TIMEOUT:-<unset>}" \
 		"${STRIX_REASONING_EFFORT:-<unset>}" \
 		"${STRIX_LLM_MAX_RETRIES:-<unset>}" \
 		"${GEMINI_LOCATION:-<unset>}" \
+		"${PYTHONWARNINGS:-<unset>}" \
 		"${UNRELATED_SECRET:-<unset>}" >> "${FAKE_STRIX_RUNTIME_ENV_LOG:?}"
 fi
 
@@ -1964,6 +1970,7 @@ EOS
 			STRIX_REASONING_EFFORT="minimal"
 			STRIX_LLM_MAX_RETRIES="1"
 			GEMINI_LOCATION="GLOBAL"
+			PYTHONWARNINGS="ignore:Pydantic serializer warnings:UserWarning:pydantic.main"
 			UNRELATED_SECRET="should-not-forward"
 		)
 	fi
@@ -2110,7 +2117,7 @@ EOS
 	if [ "$scenario" = "runtime-env-forwarding" ]; then
 		assert_file_contains \
 			"$runtime_env_log" \
-			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;UNRELATED_SECRET=<unset>" \
+			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;PYTHONWARNINGS=ignore:Pydantic serializer warnings:UserWarning:pydantic.main;UNRELATED_SECRET=<unset>" \
 			"scenario=$scenario runtime env forwarding"
 	fi
 
