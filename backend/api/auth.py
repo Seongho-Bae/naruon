@@ -178,6 +178,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL
             )
+            _reject_signed_session_system_admin_payload(payload)
             payload["_session_verifier"] = "oidc"
             return payload
         except Exception:
@@ -203,15 +204,17 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
         raise _authentication_error()
     if not isinstance(payload, dict):
         raise _authentication_error()
-    _reject_hmac_system_admin_payload(payload)
+    _reject_signed_session_system_admin_payload(payload)
     payload["_session_verifier"] = "hmac"
     return payload
 
 
-def _reject_hmac_system_admin_payload(payload: dict[str, Any]) -> None:
+def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None:
     role_claim = payload.get("role")
     if not isinstance(role_claim, str):
         raise _authentication_error()
+    # SaaS control-plane roles require explicit server-side assignment, not
+    # externally supplied HMAC or enterprise OIDC session claims.
     if role_claim in SYSTEM_ADMIN_ROLES:
         raise _authentication_error()
 

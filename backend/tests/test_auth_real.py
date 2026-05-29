@@ -814,6 +814,56 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("role_claim", ("system_admin", "platform_admin"))
+async def test_oidc_session_rejects_platform_system_admin_role_claim(
+    monkeypatch, role_claim: str
+):
+    import jwt
+
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+
+    class MockKey:
+        key_id = "test-key"
+        key = "public_key"
+
+    monkeypatch.setattr("api.auth.jwks_client", object())
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
+
+    def mock_jwt_decode(*args, **kwargs):
+        return {
+            "iss": "http://localhost:8081/realms/naruon",
+            "aud": "naruon-api",
+            "sub": "operator",
+            "role": role_claim,
+            "org": None,
+            "groups": [],
+            "workspace": "workspace-root",
+            "exp": int(time.time()) + 300,
+        }
+
+    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
+    )
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monkeypatch):
     import jwt
 
