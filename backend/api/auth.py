@@ -1,8 +1,3 @@
-import base64
-import binascii
-import hashlib
-import hmac
-import json
 import logging
 import math
 import time
@@ -167,34 +162,6 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def _base64url_decode(segment: str) -> bytes:
-    if not segment:
-        raise _authentication_error()
-    segment_bytes = _ascii_token_segment(segment)
-    padding = b"=" * (-len(segment_bytes) % 4)
-    try:
-        return base64.b64decode(segment_bytes + padding, altchars=b"-_", validate=True)
-    except (binascii.Error, ValueError):
-        raise _authentication_error() from None
-
-
-def _ascii_token_segment(segment: str) -> bytes:
-    try:
-        return segment.encode("ascii")
-    except UnicodeEncodeError:
-        raise _authentication_error() from None
-
-
-def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
-    try:
-        decoded = json.loads(_base64url_decode(segment).decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        raise _authentication_error() from None
-    if not isinstance(decoded, dict):
-        raise _authentication_error()
-    return decoded
-
-
 def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
     
@@ -216,27 +183,26 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
         except Exception:
             raise _authentication_error() from None
 
-    # Legacy HMAC HS256 Fallback
-    token_segments = token.split(".")
-    if len(token_segments) != 3:
-        raise _authentication_error()
-    header_segment, payload_segment, signature_segment = token_segments
-
-    header = _json_object_from_base64url_segment(header_segment)
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError:
+        raise _authentication_error() from None
     if header.get("alg") != SESSION_SIGNING_ALGORITHM:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 
-    secret = _session_secret_bytes()
-    signing_input = f"{header_segment}.{payload_segment}"
-    expected_signature = hmac.new(
-        secret, _ascii_token_segment(signing_input), hashlib.sha256
-    ).digest()
-    provided_signature = _base64url_decode(signature_segment)
-    if not hmac.compare_digest(expected_signature, provided_signature):
+    try:
+        payload = jwt.decode(
+            token,
+            _session_secret_bytes(),
+            algorithms=[SESSION_SIGNING_ALGORITHM],
+            audience=SESSION_AUDIENCE,
+            issuer=SESSION_ISSUER,
+        )
+    except jwt.PyJWTError:
         raise _authentication_error()
-
-    payload = _json_object_from_base64url_segment(payload_segment)
+    if not isinstance(payload, dict):
+        raise _authentication_error()
     _reject_hmac_system_admin_payload(payload)
     payload["_session_verifier"] = "hmac"
     return payload

@@ -15,7 +15,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api.auth import get_auth_context, get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
+from api.security import _webdav_scope_statement
 from core.config import settings
 from db.models import (
     CalendarWritebackSource,
@@ -64,29 +65,59 @@ class MockAsyncSession:
 
 
 def _scope_rows_for_query(query, rows):
-    params = query.compile().params
-    return [row for row in rows if _row_matches_query_params(row, params)]
+    compiled = query.compile()
+    null_columns = _null_predicate_columns(str(compiled))
+    return [
+        row
+        for row in rows
+        if _row_matches_query_params(row, compiled.params, null_columns)
+    ]
 
 
-def _row_matches_query_params(row, params) -> bool:
-    for value in params.values():
+def _null_predicate_columns(compiled_query: str) -> set[str]:
+    query_text = " ".join(compiled_query.lower().split())
+    return {
+        column_name
+        for column_name in (
+            "actor_user_id",
+            "organization_id",
+            "source_protocol",
+            "user_id",
+            "workspace_id",
+        )
+        if f".{column_name} is null" in query_text
+        or f" {column_name} is null" in query_text
+    }
+
+
+def _column_name_from_param(param_name: str) -> str | None:
+    column_name, separator, suffix = param_name.rpartition("_")
+    if separator == "_" and suffix.isdigit():
+        return column_name
+    return None
+
+
+def _row_matches_query_params(row, params, null_columns: set[str]) -> bool:
+    for column_name in null_columns:
+        if hasattr(row, column_name) and getattr(row, column_name) is not None:
+            return False
+
+    for param_name, value in params.items():
+        column_name = _column_name_from_param(param_name)
+        if column_name is None or not hasattr(row, column_name):
+            if isinstance(value, int):
+                continue
+            return False
+        row_value = getattr(row, column_name)
         if isinstance(value, list):
-            if hasattr(row, "source_protocol") and row.source_protocol not in value:
+            if row_value not in value:
                 return False
             continue
         if isinstance(value, int):
             continue
         if not isinstance(value, str):
             continue
-        if not any(
-            hasattr(row, attr) and getattr(row, attr) == value
-            for attr in (
-                "actor_user_id",
-                "organization_id",
-                "user_id",
-                "workspace_id",
-            )
-        ):
+        if row_value != value:
             return False
     return True
 
@@ -203,6 +234,46 @@ def _audit_event(
         detail_text="Updated provider configuration",
         observed_at=_now(),
     )
+
+
+def test_mock_query_scope_maps_params_to_specific_columns():
+    query = _webdav_scope_statement(
+        AuthContext(
+            user_id="member",
+            role="member",
+            organization_id="org-acme",
+            group_ids=(),
+            workspace_id="workspace-org-acme",
+        )
+    )
+    rows = [
+        _webdav_account("webdav_src_owned", "member", "org-acme"),
+        _webdav_account("webdav_src_cross_column", "org-acme", "member"),
+    ]
+
+    scoped_rows = _scope_rows_for_query(query, rows)
+
+    assert [row.source_uid for row in scoped_rows] == ["webdav_src_owned"]
+
+
+def test_mock_query_scope_enforces_null_organization_predicate():
+    query = _webdav_scope_statement(
+        AuthContext(
+            user_id="solo",
+            role="member",
+            organization_id=None,
+            group_ids=(),
+            workspace_id="workspace-personal",
+        )
+    )
+    rows = [
+        _webdav_account("webdav_src_personal", "solo", None),
+        _webdav_account("webdav_src_org_leak", "solo", "org-acme"),
+    ]
+
+    scoped_rows = _scope_rows_for_query(query, rows)
+
+    assert [row.source_uid for row in scoped_rows] == ["webdav_src_personal"]
 
 
 @pytest.fixture
