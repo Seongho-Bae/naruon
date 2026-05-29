@@ -132,10 +132,107 @@ const calendarCandidate = {
 };
 
 const aiHubPrompts = [
-  { id: 101, title: 'Q2 출시 판단', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
+  { id: 101, title: '의사결정 로그 요약', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
   { id: 102, title: '계약 리스크 점검', description: '계약서, 첨부, 메일 스레드를 판단 포인트로 정리합니다.' },
   { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
 ];
+
+const aiHubSurface = {
+  summary_cards: [
+    {
+      summary_key: 'prompt_templates',
+      label_text: '프롬프트',
+      value_text: '3',
+      detail_text: 'source-backed templates',
+      state_code: 'ready',
+    },
+    {
+      summary_key: 'workflow_blueprints',
+      label_text: '워크플로우',
+      value_text: '3',
+      detail_text: 'prompt-derived execution flows',
+      state_code: 'ready',
+    },
+    {
+      summary_key: 'ai_providers',
+      label_text: 'AI 에이전트',
+      value_text: '1/1',
+      detail_text: 'active organization providers',
+      state_code: 'ready',
+    },
+    {
+      summary_key: 'evaluation_readiness',
+      label_text: '평가',
+      value_text: '85%',
+      detail_text: 'derived operational readiness',
+      state_code: 'ready',
+    },
+    {
+      summary_key: 'run_events',
+      label_text: '실행 이력',
+      value_text: '2',
+      detail_text: 'scoped source evidence',
+      state_code: 'ready',
+    },
+  ],
+  prompt_cards: aiHubPrompts.map((prompt) => ({
+    prompt_key: `prompt_${prompt.id}`,
+    prompt_title: prompt.title,
+    description_text: prompt.description,
+    shared_scope: prompt.id === 102,
+    owner_label: prompt.id === 102 ? 'shared-template' : 'admin',
+    updated_at: '2026-05-29T09:30:00Z',
+  })),
+  workflow_cards: aiHubPrompts.map((prompt) => ({
+    workflow_key: `workflow_${prompt.id}`,
+    workflow_title: `${prompt.title} 실행 흐름`,
+    trigger_source: 'prompt_template',
+    state_code: 'ready',
+    evidence_text: 'active organization provider is available',
+  })),
+  agent_cards: [
+    {
+      agent_key: 'agent_primary',
+      agent_title: 'Primary OpenAI',
+      model_label: 'openai',
+      state_code: 'active',
+      configured: true,
+      governance_text: 'organization llm provider registry',
+    },
+  ],
+  evaluation_metrics: [
+    {
+      metric_key: 'provider_readiness',
+      metric_label: 'Provider 준비도',
+      score_value: 100,
+      trend_text: '1/1 active providers',
+    },
+    {
+      metric_key: 'execution_readiness',
+      metric_label: '실행 준비도',
+      score_value: 85,
+      trend_text: 'derived from provider, prompt, and audit evidence',
+    },
+  ],
+  run_events: [
+    {
+      event_key: 'event_provider_update',
+      event_title: 'llm_provider update',
+      state_code: 'recorded',
+      evidence_source: 'api.llm_providers',
+      observed_at: '2026-05-29T09:30:00Z',
+      detail_text: 'Updated provider configuration',
+    },
+    {
+      event_key: 'event_prompt_update',
+      event_title: 'prompt template updated: Q2 출시 판단',
+      state_code: 'recorded',
+      evidence_source: 'prompt_templates',
+      observed_at: '2026-05-29T09:31:00Z',
+      detail_text: '출시 일정과 파트너 리스크를 함께 검토합니다.',
+    },
+  ],
+};
 
 const runnerConfig = {
   workspace_id: 'workspace-org-acme',
@@ -599,6 +696,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
 
     if (path === '/api/prompts' && request.method() === 'GET') {
       await fulfillJson(route, aiHubPrompts);
+      return;
+    }
+
+    if (path === '/api/ai-hub/surface' && request.method() === 'GET') {
+      await fulfillJson(route, aiHubSurface);
       return;
     }
 

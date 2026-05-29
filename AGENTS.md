@@ -140,6 +140,10 @@
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
+- AI Hub tabs must be backed by signed source evidence from `/api/ai-hub/surface`
+  or a narrower signed API. Do not reintroduce static model-score fixtures,
+  fake workflow logs, or provider names that are not derived from prompt,
+  provider, or audit data.
 - Icon-only workspace controls must carry localized `aria-label` text matching
   the visible app language; do not rely on the SVG icon alone for Calendar,
   Tasks, drawer, modal, or toolbar actions.
