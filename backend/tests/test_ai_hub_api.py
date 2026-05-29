@@ -85,9 +85,16 @@ def _base64url_encode(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
-def _signed_session_token(payload: dict[str, object]) -> str:
+def _signed_session_token(
+    payload: dict[str, object],
+    *,
+    header: dict[str, object] | None = None,
+) -> str:
     header_segment = _base64url_encode(
-        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+        json.dumps(
+            header or {"alg": "HS256", "typ": "JWT"},
+            separators=(",", ":"),
+        ).encode()
     )
     payload_segment = _base64url_encode(
         json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
@@ -167,9 +174,11 @@ def _audit_event() -> SecurityAuditEvent:
 
 def _request_with_signed_session(
     db_session: MockSession,
+    header: dict[str, object] | None = None,
     **payload_overrides: object,
 ):
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    original_overrides = dict(app.dependency_overrides)
 
     async def scoped_db():
         yield db_session
@@ -177,7 +186,10 @@ def _request_with_signed_session(
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = scoped_db
     try:
-        token = _signed_session_token(_valid_session_payload(**payload_overrides))
+        token = _signed_session_token(
+            _valid_session_payload(**payload_overrides),
+            header=header,
+        )
         with TestClient(app) as client:
             return client.get(
                 "/api/ai-hub/surface",
@@ -186,6 +198,7 @@ def _request_with_signed_session(
     finally:
         settings.AUTH_SESSION_HMAC_SECRET = previous_secret
         app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
 
 
 def test_ai_hub_surface_uses_signed_source_evidence():
@@ -231,6 +244,7 @@ def test_ai_hub_surface_hides_provider_metadata_for_members():
 
 def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session():
     session = MockSession()
+    original_overrides = dict(app.dependency_overrides)
 
     async def scoped_db():
         yield session
@@ -248,6 +262,24 @@ def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session()
             )
     finally:
         app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+def test_ai_hub_surface_rejects_unsupported_signed_session_crit_header():
+    session = MockSession()
+
+    response = _request_with_signed_session(
+        session,
+        header={
+            "alg": "HS256",
+            "typ": "JWT",
+            "crit": ["x-custom-policy"],
+            "x-custom-policy": "require-mfa",
+        },
+    )
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}
@@ -256,11 +288,15 @@ def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session()
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
+    database_url = getattr(settings, "DATABASE_URL", None)
+    if not database_url:
+        pytest.skip("PostgreSQL smoke path unavailable: DATABASE_URL is not set")
+
     user_id = f"ai_hub_user_{uuid.uuid4().hex[:12]}"
     organization_id = f"ai_hub_org_{uuid.uuid4().hex[:12]}"
     workspace_id = f"workspace_{organization_id}"
     event_uid = f"audit_evt_ai_hub_{uuid.uuid4().hex[:18]}"
-    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    engine = create_async_engine(database_url, echo=False)
     session_factory = None
     try:
         async with engine.begin() as conn:
