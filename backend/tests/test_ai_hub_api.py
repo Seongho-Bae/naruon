@@ -4,13 +4,20 @@ import hashlib
 import hmac
 import json
 import time
+import uuid
 
+import asyncpg
+import httpx
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
 from core.config import settings
-from db.models import LLMProvider, PromptTemplate, SecurityAuditEvent
+from db.models import Base, LLMProvider, PromptTemplate, SecurityAuditEvent
 from db.session import get_db
 from main import app
 
@@ -46,11 +53,7 @@ class MockSession:
         if entity is PromptTemplate:
             owner_id = params.get("created_by_1")
             return MockResult(
-                [
-                    prompt
-                    for prompt in self.prompts
-                    if prompt.created_by == owner_id or prompt.is_shared
-                ]
+                [prompt for prompt in self.prompts if prompt.created_by == owner_id]
             )
         if entity is LLMProvider:
             organization_id = params.get("organization_id_1")
@@ -162,7 +165,10 @@ def _audit_event() -> SecurityAuditEvent:
     )
 
 
-def _request_with_signed_session(db_session: MockSession):
+def _request_with_signed_session(
+    db_session: MockSession,
+    **payload_overrides: object,
+):
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
 
     async def scoped_db():
@@ -171,7 +177,7 @@ def _request_with_signed_session(db_session: MockSession):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = scoped_db
     try:
-        token = _signed_session_token(_valid_session_payload())
+        token = _signed_session_token(_valid_session_payload(**payload_overrides))
         with TestClient(app) as client:
             return client.get(
                 "/api/ai-hub/surface",
@@ -196,8 +202,9 @@ def test_ai_hub_surface_uses_signed_source_evidence():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["summary_cards"][0]["value_text"] == "2"
+    assert data["summary_cards"][0]["value_text"] == "1"
     assert data["prompt_cards"][0]["prompt_title"] == "의사결정 로그 요약"
+    assert all(card["owner_label"] == "alice" for card in data["prompt_cards"])
     assert data["prompt_cards"][0]["prompt_key"].startswith("prompt_")
     assert "id" not in data["prompt_cards"][0]
     assert data["workflow_cards"][0]["state_code"] == "ready"
@@ -206,6 +213,20 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert data["evaluation_metrics"][1]["score_value"] == 100
     assert data["run_events"][0]["evidence_source"] == "api.llm_providers"
     assert "credential material" not in response.text
+
+
+def test_ai_hub_surface_hides_provider_metadata_for_members():
+    session = MockSession()
+    session.prompts = [_prompt(1, "멤버 프롬프트")]
+    session.providers = [_provider(1)]
+
+    response = _request_with_signed_session(session, role="member")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["prompt_cards"][0]["prompt_title"] == "멤버 프롬프트"
+    assert data["agent_cards"] == []
+    assert data["summary_cards"][2]["value_text"] == "0/0"
 
 
 def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session():
@@ -230,3 +251,122 @@ def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session()
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}
+
+
+@pytest.mark.postgres
+@pytest.mark.asyncio
+async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
+    user_id = f"ai_hub_user_{uuid.uuid4().hex[:12]}"
+    organization_id = f"ai_hub_org_{uuid.uuid4().hex[:12]}"
+    workspace_id = f"workspace_{organization_id}"
+    event_uid = f"audit_evt_ai_hub_{uuid.uuid4().hex[:18]}"
+    engine = create_async_engine(settings.DATABASE_URL, echo=False)
+    session_factory = None
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            await conn.run_sync(Base.metadata.create_all)
+
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as session:
+            prompt = PromptTemplate(
+                title="Postgres AI Hub prompt",
+                description="source-backed postgres smoke prompt",
+                content="Summarize {{email}}",
+                is_shared=False,
+                created_by=user_id,
+            )
+            provider = LLMProvider(
+                user_id=user_id,
+                organization_id=organization_id,
+                name="Postgres Provider",
+                provider_type="openai",
+                api_key=None,
+                is_active=True,
+            )
+            audit_event = SecurityAuditEvent(
+                event_uid=event_uid,
+                actor_user_id=user_id,
+                actor_role="tenant_admin",
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                event_action="update",
+                resource_type="llm_provider",
+                resource_uid="llm_provider:postgres",
+                evidence_source="api.llm_providers",
+                detail_text="Postgres provider evidence",
+                observed_at=_now(),
+            )
+            session.add_all([prompt, provider, audit_event])
+            await session.commit()
+    except (
+        ConnectionRefusedError,
+        OSError,
+        OperationalError,
+        asyncpg.CannotConnectNowError,
+        asyncpg.InvalidAuthorizationSpecificationError,
+        asyncpg.InvalidCatalogNameError,
+        asyncpg.InvalidPasswordError,
+    ) as exc:
+        await engine.dispose()
+        pytest.skip(f"PostgreSQL smoke path unavailable: {exc}")
+    except Exception:
+        await engine.dispose()
+        raise
+
+    assert session_factory is not None
+
+    async def override_real_db():
+        async with session_factory() as session:
+            yield session
+
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    original_overrides = dict(app.dependency_overrides)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            sub=user_id,
+            org=organization_id,
+            workspace=workspace_id,
+        )
+    )
+    app.dependency_overrides[get_db] = override_real_db
+    try:
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            headers={"Authorization": f"Bearer {token}"},
+        ) as client:
+            response = await client.get("/api/ai-hub/surface")
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM security_audit_events WHERE event_uid = :event_uid"),
+                {"event_uid": event_uid},
+            )
+            await conn.execute(
+                text(
+                    """
+                    DELETE FROM llm_providers
+                    WHERE user_id = :user_id AND organization_id = :organization_id
+                    """
+                ),
+                {"user_id": user_id, "organization_id": organization_id},
+            )
+            await conn.execute(
+                text("DELETE FROM prompt_templates WHERE created_by = :user_id"),
+                {"user_id": user_id},
+            )
+        await engine.dispose()
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["prompt_cards"][0]["prompt_title"] == "Postgres AI Hub prompt"
+    assert data["agent_cards"][0]["agent_title"] == "Postgres Provider"
+    assert data["agent_cards"][0]["configured"] is False
+    assert data["run_events"][0]["evidence_source"] == "api.llm_providers"

@@ -16,6 +16,15 @@ vi.mock('lucide-react', () => ({
 
 import AIHubPage from './page';
 
+const forbiddenIdentityHeaders = [
+  'x-user-id',
+  'x-organization-id',
+  'x-group-id',
+  'x-group-ids',
+  'x-user-role',
+  'x-dev-auth-token',
+];
+
 const aiHubSurface = {
   summary_cards: [
     {
@@ -145,7 +154,15 @@ describe('AIHubPage', () => {
       }),
     );
     const firstFetchCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.stringify(firstFetchCall[1]?.headers)).not.toContain('X-User-Id');
+    const sentHeaders = firstFetchCall[1]?.headers;
+    const headerNames =
+      sentHeaders && !Array.isArray(sentHeaders) && !(sentHeaders instanceof Headers)
+        ? Object.keys(sentHeaders)
+        : [];
+    const lowerHeaderNames = new Set(headerNames.map((name) => name.toLowerCase()));
+    for (const headerName of forbiddenIdentityHeaders) {
+      expect(lowerHeaderNames.has(headerName)).toBe(false);
+    }
     expect(container.textContent).toContain('AI 허브');
     expect(container.textContent).toContain('의사결정 로그 요약');
 

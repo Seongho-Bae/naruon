@@ -16,8 +16,11 @@
 
 - Add signed `GET /api/ai-hub/surface`.
 - Build the surface from existing source-backed objects:
-  - `PromptTemplate` rows visible to the user or shared in the workspace;
-  - organization-scoped `LLMProvider` rows, exposing only non-secret metadata;
+  - `PromptTemplate` rows owned by the signed user. Global `is_shared` prompts
+    are intentionally excluded until prompt rows have durable tenant/workspace
+    scope;
+  - organization-scoped `LLMProvider` rows for admin roles only, exposing only
+    non-secret metadata;
   - durable `SecurityAuditEvent` rows for provider governance events.
 - Return opaque stable keys for prompt, workflow, agent, and event cards instead
   of exposing sequential database identifiers.
@@ -29,7 +32,9 @@
 ## Verification
 
 - Backend tests cover signed-session AI Hub reads, source evidence rendering,
-  secret redaction, opaque keys, and public identity header rejection.
+  secret redaction, opaque keys, member provider redaction, shared prompt leak
+  prevention, public identity header rejection, and PostgreSQL smoke behavior
+  when a local test database is available.
 - Frontend tests cover bearer fetch headers and all five operational AI Hub tabs.
 - Browser evidence must capture desktop, tablet/mobile scroll, and hamburger
   navigation after this route is included in the responsive E2E pass.
@@ -37,6 +42,8 @@
 ## Remaining roadmap
 
 - Add a durable workflow registry before allowing workflow edits in AI Hub.
+- Add tenant/workspace scope columns to prompt templates before returning shared
+  prompt rows from AI Hub.
 - Add a real evaluation result store before presenting model benchmark trends as
   historical evaluation data.
 - Connect run history to actual agent execution rows once workflow execution is

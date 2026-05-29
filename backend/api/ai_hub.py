@@ -3,7 +3,7 @@ import hashlib
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import desc, or_, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
@@ -261,13 +261,8 @@ async def _list_prompts(
 ) -> list[PromptTemplate]:
     result = await db.execute(
         select(PromptTemplate)
-        .where(
-            or_(
-                PromptTemplate.created_by == auth_context.user_id,
-                PromptTemplate.is_shared.is_(True),
-            )
-        )
-        .order_by(desc(PromptTemplate.updated_at))
+        .where(PromptTemplate.created_by == auth_context.user_id)
+        .order_by(desc(PromptTemplate.updated_at), desc(PromptTemplate.id))
         .limit(8)
     )
     return list(result.scalars().all())
@@ -277,12 +272,12 @@ async def _list_providers(
     db: AsyncSession,
     auth_context: AuthContext,
 ) -> list[LLMProvider]:
-    if auth_context.organization_id is None:
+    if auth_context.organization_id is None or not is_admin_role(auth_context.role):
         return []
     result = await db.execute(
         select(LLMProvider)
         .where(LLMProvider.organization_id == auth_context.organization_id)
-        .order_by(desc(LLMProvider.updated_at))
+        .order_by(desc(LLMProvider.updated_at), desc(LLMProvider.id))
         .limit(8)
     )
     return list(result.scalars().all())
@@ -294,20 +289,23 @@ async def _list_audit_events(
 ) -> list[SecurityAuditEvent]:
     if auth_context.organization_id is None:
         return []
+    conditions = [
+        SecurityAuditEvent.organization_id == auth_context.organization_id,
+        SecurityAuditEvent.workspace_id == auth_context.workspace_id,
+        SecurityAuditEvent.resource_type == "llm_provider",
+    ]
+    if not is_admin_role(auth_context.role):
+        conditions.append(SecurityAuditEvent.actor_user_id == auth_context.user_id)
+
     statement = (
         select(SecurityAuditEvent)
-        .where(
-            SecurityAuditEvent.organization_id == auth_context.organization_id,
-            SecurityAuditEvent.workspace_id == auth_context.workspace_id,
-            SecurityAuditEvent.resource_type == "llm_provider",
+        .where(*conditions)
+        .order_by(
+            desc(SecurityAuditEvent.observed_at),
+            desc(SecurityAuditEvent.event_uid),
         )
-        .order_by(desc(SecurityAuditEvent.observed_at))
         .limit(8)
     )
-    if not is_admin_role(auth_context.role):
-        statement = statement.where(
-            SecurityAuditEvent.actor_user_id == auth_context.user_id
-        )
     result = await db.execute(statement)
     return list(result.scalars().all())
 
