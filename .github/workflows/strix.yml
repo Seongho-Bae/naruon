@@ -100,7 +100,7 @@ jobs:
       - name: Gate Strix secrets
         id: gate
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
+          STRIX_MODEL: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number == '')) && 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
           STRIX_OPENAI_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
           STRIX_VERTEX_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
         run: |
@@ -203,7 +203,7 @@ jobs:
       - name: Prepare Strix model input file
         if: steps.gate.outputs.enabled == 'true'
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
+          STRIX_MODEL: ${{ (github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.pr_number == '')) && 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"

@@ -196,6 +196,13 @@ def test_strix_workflow_uses_configured_vertex_model_and_narrow_warning_filter()
     assert "models: read" not in workflow
     assert "provider_mode=github_models" not in workflow
     assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
+    assert "github.event_name == 'push' || github.event_name == 'schedule'" in workflow
+    assert "github.event.inputs.pr_number == ''" in workflow
+    assert (
+        "&& 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || "
+        "'vertex_ai/gemini-3.1-pro-preview-customtools'"
+        in workflow
+    )
     assert (
         "vertex_ai/gemini-3.1-pro-preview-customtools | "
         "vertex_ai/gemini-2.5-flash"

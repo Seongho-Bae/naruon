@@ -16,10 +16,11 @@
 - Strix Security Scan must not route through GitHub Models, `github.token`,
   generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
   route is `STRIX_LLM` with `GCP_SA_KEY`;
-  `vertex_ai/gemini-3.1-pro-preview-customtools` is the configured operational
-  model after organization-secret visibility correction, and
-  `vertex_ai/gemini-2.5-flash` remains the exact approved fallback. Expose
-  Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
+  `vertex_ai/gemini-3.1-pro-preview-customtools` is the configured PR-scoped
+  model after organization-secret visibility correction. Protected-branch full
+  scans must use `vertex_ai/gemini-2.5-flash` until 3.1 full-scan evidence
+  completes without timeout. Expose Google/Vertex credentials only for Vertex
+  provider mode. Direct OpenAI
   GPT-5.4-or-newer scans remain supported only when selected explicitly with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
   record provider evidence in the PR. Known third-party Strix/Pydantic
