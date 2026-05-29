@@ -330,6 +330,9 @@ rather than an email host. Settings also exposes organization-admin
 self-hosted connector token rotation through `/api/runner-config/rotate`; the
 one-time token is shown only after rotation and is not included in the connector
 manifest.
+Mail worker logs and raised errors use generic account-configuration wording for
+missing POP3 credentials so operational logs do not reveal credential-type
+details.
 
 Email-derived work is tracked through `/api/tasks/from-email`. Created ticket
 tasks retain an internal source-email foreign key, expose source message/thread
