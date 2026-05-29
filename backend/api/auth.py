@@ -243,7 +243,10 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
 
 
 def _reject_hmac_system_admin_payload(payload: dict[str, Any]) -> None:
-    if payload.get("role") in SYSTEM_ADMIN_ROLES:
+    role_claim = payload.get("role")
+    if not isinstance(role_claim, str):
+        raise _authentication_error()
+    if role_claim in SYSTEM_ADMIN_ROLES:
         raise _authentication_error()
 
 

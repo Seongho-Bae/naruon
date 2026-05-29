@@ -504,6 +504,18 @@ async def test_hmac_session_rejects_platform_admin_role_claim():
     assert exc.value.status_code == 401
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role_claim", (["system_admin"], 123, True, None))
+async def test_hmac_session_rejects_non_string_role_claim(role_claim: object):
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(role=role_claim))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
 def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload())
