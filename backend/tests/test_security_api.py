@@ -58,10 +58,37 @@ class MockAsyncSession:
         self.execute_calls = 0
 
     async def execute(self, query):
-        del query
         result = self.results[self.execute_calls]
         self.execute_calls += 1
-        return MockResult(result)
+        return MockResult(_scope_rows_for_query(query, result))
+
+
+def _scope_rows_for_query(query, rows):
+    params = query.compile().params
+    return [row for row in rows if _row_matches_query_params(row, params)]
+
+
+def _row_matches_query_params(row, params) -> bool:
+    for value in params.values():
+        if isinstance(value, list):
+            if hasattr(row, "source_protocol") and row.source_protocol not in value:
+                return False
+            continue
+        if isinstance(value, int):
+            continue
+        if not isinstance(value, str):
+            continue
+        if not any(
+            hasattr(row, attr) and getattr(row, attr) == value
+            for attr in (
+                "actor_user_id",
+                "organization_id",
+                "user_id",
+                "workspace_id",
+            )
+        ):
+            return False
+    return True
 
 
 def _base64url_encode(data: bytes) -> str:

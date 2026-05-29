@@ -158,7 +158,10 @@ def _webdav_scope_statement(auth_context: AuthContext):
 def _calendar_scope_statement(auth_context: AuthContext):
     statement = (
         select(CalendarWritebackSource)
-        .where(CalendarWritebackSource.source_protocol.in_(("caldav", "carddav")))
+        .where(
+            CalendarWritebackSource.source_protocol.in_(("caldav", "carddav")),
+            CalendarWritebackSource.workspace_id == auth_context.workspace_id,
+        )
         .order_by(
             CalendarWritebackSource.created_at.asc(),
             CalendarWritebackSource.source_uid.asc(),
@@ -212,19 +215,6 @@ def _durable_audit_scope_statement(auth_context: AuthContext):
     return statement.where(
         SecurityAuditEvent.actor_user_id == auth_context.user_id,
         organization_filter,
-    )
-
-
-def _source_in_scope(
-    auth_context: AuthContext,
-    owner_id: str,
-    organization_id: str | None,
-) -> bool:
-    if _can_read_org_scope(auth_context):
-        return organization_id == auth_context.organization_id
-    return (
-        owner_id == auth_context.user_id
-        and organization_id == auth_context.organization_id
     )
 
 
@@ -493,39 +483,17 @@ async def get_access_surface(
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:
         connector_result = await db.execute(connector_statement)
-        connector_events = [
-            event
-            for event in connector_result.scalars().all()
-            if event.organization_id == auth_context.organization_id
-            and event.workspace_id == auth_context.workspace_id
-        ]
+        connector_events = connector_result.scalars().all()
 
-    durable_audit_events = [
-        event
-        for event in audit_result.scalars().all()
-        if event.workspace_id == auth_context.workspace_id
-        and (
-            (
-                _can_read_org_scope(auth_context)
-                and event.organization_id == auth_context.organization_id
-            )
-            or (
-                not _can_read_org_scope(auth_context)
-                and event.actor_user_id == auth_context.user_id
-                and event.organization_id == auth_context.organization_id
-            )
-        )
-    ]
+    durable_audit_events = audit_result.scalars().all()
 
     sources = [
         _webdav_source(account, auth_context)
         for account in webdav_result.scalars().all()
-        if _source_in_scope(auth_context, account.user_id, account.organization_id)
     ]
     sources.extend(
         _calendar_source(source, auth_context)
         for source in calendar_result.scalars().all()
-        if _source_in_scope(auth_context, source.user_id, source.organization_id)
     )
     source_decisions = [source.policy_decision for source in sources]
     policy_decisions = _canonical_policy_decisions(auth_context, source_decisions)
