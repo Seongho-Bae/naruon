@@ -26,7 +26,9 @@
   serializer warnings must be filtered narrowly inside the Strix gate child
   process, not as a visible workflow env entry, so Warn-class logs are not
   accepted as clean evidence and warning-filter variable names do not pollute
-  GitHub logs. Keep
+  GitHub logs. Strix workflow runtime budget keys should be exported inside the
+  execution shell, not listed as visible step `env:` timeout names, so clean runs
+  do not carry stale timeout-signal strings. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
