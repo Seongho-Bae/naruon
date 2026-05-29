@@ -18,4 +18,11 @@ def test_root_response_has_security_headers():
     )
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
-    assert response.headers["x-xss-protection"] == "1; mode=block"
+    assert response.headers["content-security-policy"] == (
+        "default-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "frame-ancestors 'none'"
+    )
+    assert "x-xss-protection" not in response.headers
