@@ -2,6 +2,11 @@ import { expect, test } from '@playwright/test';
 
 import { mockDashboardApi } from './helpers';
 
+function e2eSessionToken(payload: Record<string, unknown>) {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.signature`;
+}
+
 test('renders the desktop Naruon shell with local brand assets', async ({ page }) => {
   const requestedUrls: string[] = [];
   page.on('request', (request) => requestedUrls.push(request.url()));
@@ -290,7 +295,7 @@ for (const destination of [
 }
 
 test('renders source-backed Projects workspace with signed API headers and mobile scroll', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-projects-e2e-token';
+  const expectedNaruonToken = e2eSessionToken({ sub: 'alice', org: 'org-acme', workspace: 'workspace-org-acme' });
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -324,6 +329,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
 
   await expect(page.getByRole('heading', { name: '프로젝트 워크스페이스' })).toBeVisible();
   await expect(page.getByText('Naruon Roadmap 2026').first()).toBeVisible();
+  await expect(page.getByText('webdav_folder_roadmap')).toHaveCount(0);
   await expect(page.getByText('provider_write_executed=false').first()).toBeVisible();
   await expect(page.getByText('리소스 배정 검토 회의').first()).toBeVisible();
   await expect(page.getByText('순차 DB id는 화면에 노출하지 않습니다').first()).toBeVisible();

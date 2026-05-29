@@ -14,6 +14,8 @@ interface ProjectFolder {
   folder_uid: string;
   project_name: string;
   webdav_path: string;
+  owner_user_id: string;
+  organization_id: string | null;
 }
 
 interface TicketTask {
@@ -36,6 +38,11 @@ interface ProjectSummary {
   category: string;
   evidence: string;
   sourcePath: string | null;
+}
+
+interface ProjectAccessScope {
+  userId: string | null;
+  organizationId: string | null;
 }
 
 const projectStatusClass = {
@@ -88,6 +95,12 @@ function buildProjectStatus(tasks: TicketTask[]): ProjectSummary['status'] {
   return '대기 중';
 }
 
+function isAuthorizedToViewProject(folder: ProjectFolder, scope: ProjectAccessScope) {
+  const ownerUserId = safeText(folder.owner_user_id);
+  if (!ownerUserId || !scope.userId || ownerUserId !== scope.userId) return false;
+  return (folder.organization_id ?? null) === scope.organizationId;
+}
+
 function buildProjects(folders: ProjectFolder[], tasks: TicketTask[]): ProjectSummary[] {
   const progress = buildProgress(tasks);
   const status = buildProjectStatus(tasks);
@@ -127,6 +140,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
+  const projectScope = useMemo(() => {
+    const claims = apiClient.getSessionClaims();
+    return { userId: claims.userId, organizationId: claims.organizationId };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,7 +173,11 @@ export function ProjectsLayout() {
     };
   }, []);
 
-  const projects = useMemo(() => buildProjects(folders, tasks), [folders, tasks]);
+  const authorizedFolders = useMemo(
+    () => folders.filter((folder) => isAuthorizedToViewProject(folder, projectScope)),
+    [folders, projectScope],
+  );
+  const projects = useMemo(() => buildProjects(authorizedFolders, tasks), [authorizedFolders, tasks]);
   const activeProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
   const projectTasks = tasks;
   const openCount = countByStatus(projectTasks, 'open');
@@ -214,7 +235,7 @@ export function ProjectsLayout() {
             <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground">
               <span>{activeProject.category}</span>
               <span>/</span>
-              <span className="font-mono">{activeProject.id}</span>
+              <span className="font-mono">{activeProject.evidence}</span>
             </div>
             <h2 className="break-keep text-xl font-bold leading-tight lg:text-2xl">{activeProject.title}</h2>
           </div>
@@ -291,7 +312,7 @@ export function ProjectsLayout() {
                   <article className="p-5">
                     <div className="flex items-start justify-between gap-3">
                       <h3 className="flex items-center gap-2 font-bold text-base"><CheckCircle2 className="size-4 text-emerald-500" /> Source registry 연결</h3>
-                      <span className="text-xs text-muted-foreground">{folders.length} folders</span>
+                      <span className="text-xs text-muted-foreground">{authorizedFolders.length} folders</span>
                     </div>
                     <p className="mt-2 rounded-lg border border-border bg-background p-3 text-sm leading-6 text-foreground">
                       WebDAV project folder를 프로젝트 경계로 사용합니다. 원천 provider에 쓰는 작업은 Data/WebDAV intent에서 별도로 승인합니다.
@@ -376,7 +397,7 @@ export function ProjectsLayout() {
               <ul className="space-y-3 text-sm">
                 <li className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 font-semibold"><FolderOpen className="size-4 text-primary" /> WebDAV 폴더</span>
-                  <span className="font-mono text-xs text-muted-foreground">{folders.length}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{authorizedFolders.length}</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
                   <span className="flex items-center gap-2 font-semibold"><ListChecks className="size-4 text-primary" /> Ticket tasks</span>

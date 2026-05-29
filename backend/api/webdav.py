@@ -26,6 +26,8 @@ class ProjectFolderResponse(BaseModel):
     folder_uid: str
     project_name: str
     webdav_path: str
+    owner_user_id: str
+    organization_id: str | None
 
 class WritebackIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
