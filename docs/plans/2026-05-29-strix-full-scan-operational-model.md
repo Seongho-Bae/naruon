@@ -14,14 +14,14 @@
 
 ## Plan
 
-1. Keep PR-scoped Strix scans on the organization-secret `STRIX_LLM` route so
-   `vertex_ai/gemini-3.1-pro-preview-customtools` can be used after secret
-   visibility correction.
-2. Route protected-branch full scans (`push`, `schedule`, and manual
-   non-PR-scoped `workflow_dispatch`) to the previously validated exact Vertex
-   model `vertex_ai/gemini-2.5-flash`.
-3. Keep arbitrary Vertex model patterns disallowed; only the exact PR model and
-   exact full-scan model are accepted.
+1. Keep the organization-secret `STRIX_LLM` route, but quarantine the exact
+   `vertex_ai/gemini-3.1-pro-preview-customtools` value to
+   `vertex_ai/gemini-2.5-flash` until it has no-timeout evidence.
+2. Route PR-scoped and protected-branch scans to the previously validated exact
+   Vertex model `vertex_ai/gemini-2.5-flash` when the 3.1 preview value is
+   configured.
+3. Keep arbitrary Vertex model patterns disallowed; only the exact operational
+   Vertex model is accepted.
 4. Preserve the narrow Pydantic serializer warning filter and gate child-process
    forwarding from PR #303.
 5. Add regression assertions so later edits cannot accidentally send full-repo
@@ -32,4 +32,4 @@
 - This does not reintroduce GitHub Models or generic `LLM_API_KEY`.
 - This does not suppress scanner findings, timeouts, denied access, fatal
   errors, or application warnings.
-- This does not remove the 3.1 org-secret path for PR-scoped evidence.
+- This does not claim the 3.1 org-secret value is operational without evidence.

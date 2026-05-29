@@ -196,25 +196,24 @@ def test_strix_workflow_uses_configured_vertex_model_and_narrow_warning_filter()
     assert "models: read" not in workflow
     assert "provider_mode=github_models" not in workflow
     assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
-    assert "github.event_name == 'push' || github.event_name == 'schedule'" in workflow
-    assert "github.event.inputs.pr_number == ''" in workflow
     assert (
-        "&& 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || "
-        "'vertex_ai/gemini-3.1-pro-preview-customtools'"
+        "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' "
+        "&& 'vertex_ai/gemini-2.5-flash'"
         in workflow
     )
+    assert "|| secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash'" in workflow
     assert (
-        "vertex_ai/gemini-3.1-pro-preview-customtools | "
-        "vertex_ai/gemini-2.5-flash"
-        in workflow
+        "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
+        not in workflow
     )
     assert "vertex_ai/* | vertex_ai_beta/*" not in workflow
+    assert "PYTHONWARNINGS:" not in workflow
     assert (
-        'PYTHONWARNINGS: "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"'
-        in workflow
+        'child_env["PYTHONWARNINGS"] = '
+        '"ignore:Pydantic serializer warnings:UserWarning:pydantic.main"'
+        in gate_script
     )
     assert "ignore::UserWarning" not in workflow
-    assert '"PYTHONWARNINGS",' in gate_script
 
 
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (

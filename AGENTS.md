@@ -16,16 +16,17 @@
 - Strix Security Scan must not route through GitHub Models, `github.token`,
   generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
   route is `STRIX_LLM` with `GCP_SA_KEY`;
-  `vertex_ai/gemini-3.1-pro-preview-customtools` is the configured PR-scoped
-  model after organization-secret visibility correction. Protected-branch full
-  scans must use `vertex_ai/gemini-2.5-flash` until 3.1 full-scan evidence
-  completes without timeout. Expose Google/Vertex credentials only for Vertex
-  provider mode. Direct OpenAI
+  `vertex_ai/gemini-3.1-pro-preview-customtools` must be quarantined to
+  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR-scoped and
+  protected-branch full-scan evidence. Expose Google/Vertex credentials only for
+  Vertex provider mode. Direct OpenAI
   GPT-5.4-or-newer scans remain supported only when selected explicitly with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
   record provider evidence in the PR. Known third-party Strix/Pydantic
-  serializer warnings must be filtered narrowly through the workflow/gate env
-  contract so Warn-class logs are not accepted as clean evidence. Keep
+  serializer warnings must be filtered narrowly inside the Strix gate child
+  process, not as a visible workflow env entry, so Warn-class logs are not
+  accepted as clean evidence and warning-filter variable names do not pollute
+  GitHub logs. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.

@@ -1951,11 +1951,11 @@ for key in (
     "http_proxy",
     "https_proxy",
     "no_proxy",
-    "PYTHONWARNINGS",
 ):
     value = os.environ.get(key)
     if value:
         child_env[key] = value
+child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"
 child_env["STRIX_LLM"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_MODEL"] = os.environ["STRIX_CHILD_MODEL"]
 if os.environ.get("STRIX_CHILD_LLM_API_KEY"):

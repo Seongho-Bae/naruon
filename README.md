@@ -29,10 +29,10 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence uses the organization-secret provider selected by
-  `STRIX_LLM` with `GCP_SA_KEY` for PR-scoped scans. The configured PR route is
-  `vertex_ai/gemini-3.1-pro-preview-customtools`; protected-branch full scans
-  use `vertex_ai/gemini-2.5-flash` until the 3.1 full-scan route has
-  no-timeout evidence. Direct OpenAI GPT-5.4-or-newer remains
+  `STRIX_LLM` with `GCP_SA_KEY`, but the
+  `vertex_ai/gemini-3.1-pro-preview-customtools` value is quarantined to
+  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR and full-scan
+  evidence. Direct OpenAI GPT-5.4-or-newer remains
   supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
   closed rather than falling back to GitHub Models, `github.token`, generic
   `LLM_API_KEY`, or GPT-4-era models. Known third-party Strix/Pydantic
