@@ -30,11 +30,15 @@ mail/calendar/file systems.
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence uses the organization-secret provider selected by
   `STRIX_LLM` with `GCP_SA_KEY`. The validated operational route is
-  `vertex_ai/gemini-2.5-flash`; direct OpenAI GPT-5.4-or-newer remains
+  `vertex_ai/gemini-3.1-pro-preview-customtools`, with
+  `vertex_ai/gemini-2.5-flash` kept as an exact approved fallback; direct OpenAI
+  GPT-5.4-or-newer remains
   supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
   closed rather than falling back to GitHub Models, `github.token`, generic
-  `LLM_API_KEY`, or GPT-4-era models. Pending CodeRabbit or check evidence is a
-  wait state, not a hard blocker.
+  `LLM_API_KEY`, or GPT-4-era models. Known third-party Strix/Pydantic
+  serializer warnings are filtered narrowly instead of allowing Warn-class logs
+  into passing evidence. Pending CodeRabbit or check evidence is a wait state,
+  not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence plus durable `security_audit_events`, reuses the deny-first

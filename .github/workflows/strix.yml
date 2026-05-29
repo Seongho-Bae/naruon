@@ -100,7 +100,7 @@ jobs:
       - name: Gate Strix secrets
         id: gate
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash' }}
+          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
           STRIX_OPENAI_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
           STRIX_VERTEX_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
         run: |
@@ -117,7 +117,7 @@ jobs:
                 exit 1
               fi
               ;;
-            vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=vertex_ai' >> "$GITHUB_OUTPUT"
               sanitized_vertex_credentials="$(printf '%s' "$STRIX_VERTEX_CREDENTIALS" | tr -d '\r')"
@@ -203,7 +203,7 @@ jobs:
       - name: Prepare Strix model input file
         if: steps.gate.outputs.enabled == 'true'
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash' }}
+          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
@@ -215,7 +215,7 @@ jobs:
             gpt-*)
               printf 'openai/%s' "$strix_model" > "$strix_llm_file"
               ;;
-            vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
             *)
@@ -249,6 +249,7 @@ jobs:
           STRIX_MEMORY_COMPRESSOR_TIMEOUT: 10
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
+          PYTHONWARNINGS: "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"
           STRIX_PROCESS_TIMEOUT_SECONDS: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '1200' || '2400' }}
           STRIX_TOTAL_TIMEOUT_SECONDS: 4800
           STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12
