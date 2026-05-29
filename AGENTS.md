@@ -232,6 +232,11 @@
   vector counts, unsupported embedding model names, static quality totals, or
   provider-write success claims; Data mocks and E2E fixtures must preserve the
   bearer-session call and omit public identity headers.
+- Project workspace lists, milestones, task links, and decision logs must be
+  source-backed by signed `/api/webdav/folders` and `/api/tasks` data or
+  explicitly labeled pending. Do not reintroduce static project names, inert
+  report/filter buttons, provider write success claims, or sequential database
+  ids in project UI/tests.
 - Self-hosted connector APM history must be persisted as scoped control-plane
   signal events before the UI claims durable heartbeat evidence. Do not expose
   runner registration tokens, path tokens, or raw provider credentials in event

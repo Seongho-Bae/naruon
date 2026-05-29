@@ -45,6 +45,10 @@ mail/calendar/file systems.
   coverage, quality checks, and connector evidence from existing rows, returns
   `provider_write_executed=false`, and does not expose provider credentials,
   raw usernames, server URLs, or sequential ids.
+- Projects are source-backed through signed `/api/webdav/folders` and
+  `/api/tasks`. The workspace derives project boundaries from customer-owned
+  WebDAV folders, task progress from opaque public ticket ids, and labels
+  provider writes as deferred intent work.
   
 ## Agentic Ontology & Auto-Organization
 
@@ -297,7 +301,8 @@ Context Search, AI Hub, Data, Security, and Settings. The `/mail`, `/search`,
 `/settings` destinations must render real work-detail surfaces rather than
 static placeholder copy: calendar month/week/detail/coordination and CalDAV
 writeback queues, ticket task boards and source-linked details, integrated
-search result/detail graph timelines, project decision logs, document
+search result/detail graph timelines, source-backed project folders and
+decision-evidence logs, document
 repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
