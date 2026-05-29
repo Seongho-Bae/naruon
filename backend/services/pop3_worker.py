@@ -109,14 +109,17 @@ class Pop3SyncWorker:
         try:
             if not config.pop3_username:
                 logger.error(
-                    "Missing POP3 username for user %s; credential secret presence was not logged.",
+                    "POP3 account configuration incomplete for user %s.",
                     config.user_id,
                 )
                 raise RuntimeError(f"Missing POP3 username for user {config.user_id}")
             if not config.pop3_password:
-                logger.error("Missing POP3 credential secret for user %s.", config.user_id)
+                logger.error(
+                    "POP3 account configuration incomplete for user %s.",
+                    config.user_id,
+                )
                 raise RuntimeError(
-                    f"Missing POP3 credential secret for user {config.user_id}"
+                    f"POP3 account configuration incomplete for user {config.user_id}"
                 )
             pop3_client.user(config.pop3_username)
             pop3_client.pass_(config.pop3_password)

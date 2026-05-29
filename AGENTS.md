@@ -132,12 +132,21 @@
   credentials are required for POP3 sync;
   missing credentials must fail the sync path instead of logging a successful
   no-op. Do not place sensitive credential values, secret-derived values, or
-  password-shaped field names in logs or raised exception text; use static
-  non-secret labels such as "credential secret" instead.
+  password-shaped field names in logs or raised exception text; use generic
+  operation phrases such as "account configuration incomplete" instead of
+  credential-type labels.
 - SMTP, IMAP, and POP3 host validation must reject legacy numeric IP literal
   forms such as decimal integers, hexadecimal integers, and octal dotted forms
   before DNS or socket connection; `socket.getaddrinfo` may resolve those forms
   to loopback/private addresses even when `ipaddress.ip_address` rejects them.
+- GitHub Actions `run:` blocks must not directly interpolate `${{ github.* }}`,
+  `${{ inputs.* }}`, or other expression data into shell conditions or commands.
+  Pass expression values through step `env:` keys first, then quote shell
+  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script.
+- Test harness HTTP smoke helpers must not use broad URL opener APIs such as
+  `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
+  HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into
+  production examples.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and

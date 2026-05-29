@@ -3,21 +3,41 @@
 from __future__ import annotations
 
 import json
+import http.client
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
     last_error: Exception | None = None
     for _ in range(attempts):
         try:
-            with urllib.request.urlopen(url, timeout=5) as response:
+            parsed_url = urlsplit(url)
+            if parsed_url.scheme not in {"http", "https"} or not parsed_url.hostname:
+                raise ValueError("Only HTTP and HTTPS endpoint URLs are allowed")
+            connection_cls = (
+                http.client.HTTPSConnection
+                if parsed_url.scheme == "https"
+                else http.client.HTTPConnection
+            )
+            request_path = parsed_url.path or "/"
+            if parsed_url.query:
+                request_path = f"{request_path}?{parsed_url.query}"
+            connection = connection_cls(
+                parsed_url.hostname,
+                parsed_url.port,
+                timeout=5,
+            )
+            try:
+                connection.request("GET", request_path)
+                response = connection.getresponse()
                 assert response.status == 200
                 return json.loads(response.read().decode("utf-8"))
-        except (OSError, urllib.error.URLError) as exc:
+            finally:
+                connection.close()
+        except (OSError, http.client.HTTPException) as exc:
             last_error = exc
             time.sleep(1)
     raise AssertionError(f"live endpoint unavailable: {url}") from last_error
@@ -44,3 +64,11 @@ def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
         offenders.extend(term for term in forbidden_terms if term in source)
 
     assert offenders == []
+
+
+def test_live_harness_avoids_broad_url_opener_pattern() -> None:
+    source = Path(__file__).read_text(encoding="utf-8")
+    unsafe_terms = ("urllib" ".request", "url" "open")
+
+    for unsafe_term in unsafe_terms:
+        assert unsafe_term not in source
