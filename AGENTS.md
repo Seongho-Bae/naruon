@@ -112,6 +112,10 @@
   separate audited support flows; `/api/accounts/config` must reject forged or
   orgless privileged sessions before credential lookup, and tests must exercise
   the real signed bearer path rather than only dev public-header overrides.
+- HMAC fallback sessions must not authorize `system_admin` or `platform_admin`
+  roles. Platform-wide operators require the OIDC/JWKS path or a separately
+  audited support flow so compromise of an HMAC session secret cannot mint
+  platform administrator claims.
 - Reply-wait task escalation must reuse the server-authoritative pending reply
   path, create or update source-linked `reply_sla` ticket tasks by opaque task
   id, and sanitize generated task titles from email subjects before persistence.

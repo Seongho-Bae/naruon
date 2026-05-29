@@ -474,7 +474,7 @@ async def test_admin_subject_does_not_imply_system_admin_role():
 
 
 @pytest.mark.asyncio
-async def test_system_admin_requires_explicit_signed_role_claim():
+async def test_hmac_session_rejects_platform_system_admin_role_claim():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(
         _valid_session_payload(
@@ -482,12 +482,25 @@ async def test_system_admin_requires_explicit_signed_role_claim():
         )
     )
 
-    context = await get_auth_context(authorization=f"Bearer {token}")
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
 
-    assert context.user_id == "alice"
-    assert context.role == "system_admin"
-    assert context.organization_id is None
-    assert context.workspace_id == "workspace-root"
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_hmac_session_rejects_platform_admin_role_claim():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            role="platform_admin", org=None, workspace="workspace-root"
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
 
 
 def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():

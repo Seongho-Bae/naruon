@@ -233,7 +233,14 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     if not hmac.compare_digest(expected_signature, provided_signature):
         raise _authentication_error()
 
-    return _json_object_from_base64url_segment(payload_segment)
+    payload = _json_object_from_base64url_segment(payload_segment)
+    _reject_hmac_system_admin_payload(payload)
+    return payload
+
+
+def _reject_hmac_system_admin_payload(payload: dict[str, Any]) -> None:
+    if payload.get("role") in SYSTEM_ADMIN_ROLES:
+        raise _authentication_error()
 
 
 def _required_string_claim(payload: dict[str, Any], name: str) -> str:
