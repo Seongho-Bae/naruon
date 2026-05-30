@@ -287,6 +287,43 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("nrn_one_time_connector_token");
   });
 
+  it("marks external operational console links with explicit noopener", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SettingsLayout />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const developerTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "개발자",
+    );
+    expect(developerTab).toBeTruthy();
+    await act(async () => {
+      developerTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const externalLinks = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]'),
+    );
+    expect(externalLinks.map((link) => link.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Grafana"),
+        expect.stringContaining("Keycloak"),
+        expect.stringContaining("Loki"),
+        expect.stringContaining("Tempo"),
+      ]),
+    );
+    for (const link of externalLinks) {
+      expect(link.rel.split(/\s+/).sort()).toEqual(["noopener", "noreferrer"]);
+    }
+  });
+
   it("loads and saves source-backed mail account settings without public identity headers or secret replay", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);

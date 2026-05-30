@@ -45,6 +45,10 @@
   message body, provider URLs, usernames, credentials, or WebDAV storage claims.
 - Render the Data document repository tab with the recent file/attachment asset
   list before WebDAV writeback intent controls.
+- Add a selected asset detail panel backed by the existing safe
+  `repository_assets` fields so operators can inspect asset key, source label,
+  thread key, captured time, extraction state, evidence source, and
+  `provider_write_executed=false` without a new storage table or provider write.
 
 ## Verification Plan
 
@@ -65,5 +69,5 @@
   `snake_case`.
 - Add WebDAV provider write execution only after connector execution can enforce
   source capability, consent, credential reference, remote href, and If-Match.
-- Add a file metadata side panel only after source rows carry provider-safe MIME,
-  size, and classification evidence.
+- Extend the asset detail panel with MIME, size, classification, and version
+  history only after source rows carry provider-safe evidence for those fields.

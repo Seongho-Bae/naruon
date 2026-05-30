@@ -195,6 +195,10 @@
   be stored in artificially short `varchar(n)` columns; use opaque source UIDs
   that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When reviews find missing browser security headers or tabnabbing hardening,
+  update both backend header tests and frontend link tests. Global backend
+  responses must include `Referrer-Policy`, and `target="_blank"` links must
+  use explicit `rel="noopener noreferrer"`.
 - When robot review cites an obsolete Strix provider policy, update the docs and
   tests to the current secret contract before accepting a rollback suggestion;
   do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
@@ -293,6 +297,10 @@
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a
   global relationship graph as if it were current-thread evidence.
+- Sender DAG capture must start from a signed source email lookup, not
+  browser-submitted relationship classifications. Route layers should derive the
+  thread provenance server-side, persist only scoped ontology metadata, and keep
+  provider writes out of relationship capture.
 - Unique email and forwarded-import dedupe must use strong scoped signals:
   normalized Message-ID, References/In-Reply-To, persisted duplicate provenance,
   or exact body/attachment fingerprints. Do not merge threads from subject-only
