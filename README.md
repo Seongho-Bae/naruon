@@ -38,8 +38,10 @@ mail/calendar/file systems.
   infrastructure failures. Known third-party Strix/Pydantic serializer warnings
   are filtered narrowly instead of allowing Warn-class logs into passing
   evidence, and runtime scan-budget variables are not listed as visible
-  timeout-named workflow `env:` entries. Pending CodeRabbit or check evidence is
-  a wait state, not a hard blocker.
+  timeout-named workflow `env:` entries. PR-scope scan budgets leave room for
+  report finalization after Strix emits completion events; wrapper timeout
+  output is failed evidence. Pending CodeRabbit or check evidence is a wait
+  state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence plus durable `security_audit_events`, reuses the deny-first

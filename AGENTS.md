@@ -32,7 +32,10 @@
   accepted as clean evidence and warning-filter variable names do not pollute
   GitHub logs. Strix workflow runtime budget keys should be exported inside the
   execution shell, not listed as visible step `env:` timeout names, so clean runs
-  do not carry stale timeout-signal strings. Keep
+  do not carry stale timeout-signal strings. Keep PR-scope process budgets large
+  enough for Strix to finalize reports after the scanner emits completion
+  events; a wrapper timeout after `vulnerability_count: 0` is still failed
+  evidence, not a pass. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
@@ -115,8 +118,10 @@
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
   reject HTML-like execution item markup at the backend boundary rather than
   storing user-supplied tags for later UI rendering. Parsed email display fields
-  must not persist active HTML/script markup; preserve message/thread identifiers
-  separately from UI-safe subject/body, address, and attachment display text.
+  must not persist active HTML/script markup, and email API list/detail/thread
+  responses must sanitize stored subject/body/snippet/address display fields
+  before returning them. Preserve message/thread identifiers separately from
+  UI-safe subject/body, address, and attachment display text.
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
