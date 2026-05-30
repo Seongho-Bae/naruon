@@ -259,9 +259,7 @@ jobs:
           STRIX_VERTEX_FALLBACK_MODELS: ""
           STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 20
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
-          npm_config_ignore_scripts: "true"
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
-          pnpm_config_ignore_scripts: "true"
           YARN_ENABLE_SCRIPTS: "false"
           BUN_CONFIG_IGNORE_SCRIPTS: "true"
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
