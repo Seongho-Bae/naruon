@@ -7,6 +7,16 @@ function positiveIntegerFromEnv(name: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+// Backend origin for the same-origin `/api/*` rewrite. In local dev and Docker
+// Compose the frontend and backend run on the same host, so the loopback URL
+// is the correct fallback. In split deployments (Render Blueprint, Kubernetes,
+// etc.) the platform injects the backend's reachable URL via this variable.
+function backendRewriteDestination() {
+  const raw = process.env.BACKEND_INTERNAL_URL?.trim();
+  const base = raw && raw.length > 0 ? raw.replace(/\/+$/, "") : "http://127.0.0.1:8000";
+  return `${base}/api/:path*`;
+}
+
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1', 'localhost', '169.254.23.164'],
   devIndicators: false,
@@ -29,7 +39,7 @@ const nextConfig: NextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: 'http://127.0.0.1:8000/api/:path*',
+        destination: backendRewriteDestination(),
       },
     ];
   },

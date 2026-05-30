@@ -1,5 +1,14 @@
 ## [Unreleased]
 
+### 추가
+- Seongho Bae (@seonghobae): Render.com Blueprint(`render.yaml`)와
+  `docs/operations/render-deployment.md` runbook을 추가해 frontend와 backend를
+  각자의 Dockerfile로 분리 배포하면서 managed Postgres + pgvector + 서명-세션
+  bearer 경계를 그대로 유지하도록 했습니다. `frontend/next.config.ts`는
+  `BACKEND_INTERNAL_URL` 환경변수를 우선 사용해 `/api/*` rewrite destination을
+  결정하며, 미설정 시 기존 `http://127.0.0.1:8000` 폴백으로 로컬/Compose 경로는
+  무회귀로 동작합니다.
+
 ### 수정
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
   global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
