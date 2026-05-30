@@ -165,7 +165,10 @@
   variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script.
 - Privileged `pull_request_target` scanner jobs must treat PR-head blobs as
   non-executable input data. When copying PR-head files into temporary scan
-  scopes, strip executable bits instead of preserving `100755` modes.
+  scopes, strip executable bits instead of preserving `100755` modes. PR-scoped
+  Strix workflow runs should use the explicit `STRIX_TARGET_PATH=__PR_SCOPE__`
+  sentinel so the trusted base checkout is never presented as the PR scan
+  target.
 - Test harness HTTP smoke helpers must not use broad URL opener APIs such as
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into

@@ -103,6 +103,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' "strix workflow fails closed on timeout, fatal, warning, denied, or provider failure signals"
 	assert_file_not_contains "$workflow_file" "PYTHONWARNINGS:" "strix workflow must not expose warning-filter env names in GitHub logs"
 	assert_file_contains "$workflow_file" "temporary scope with execute bits stripped" "strix workflow documents PR-head blobs as non-executable scan data"
+	assert_file_contains "$workflow_file" "__PR_SCOPE__" "strix workflow uses explicit PR-scope target sentinel for PR evidence"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix gate child env narrowly filters the known third-party Pydantic serializer warning"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
@@ -176,6 +177,7 @@ assert_strix_gpt54_model_guard_cases() {
 assert_strix_gate_target_scope_separated() {
 	assert_file_not_contains "$GATE_SCRIPT" "or generated PR scope directories" "strix gate keeps user target validation separate from internal PR scopes"
 	assert_file_contains "$GATE_SCRIPT" "TARGET_PATH_IS_INTERNAL_PR_SCOPE" "strix gate marks internally generated PR scan scopes explicitly"
+	assert_file_contains "$GATE_SCRIPT" "PR_SCOPE_TARGET_SENTINEL=\"__PR_SCOPE__\"" "strix gate supports an explicit PR-scope target sentinel"
 	assert_file_contains "$GATE_SCRIPT" 'git diff --name-only "$base_sha" "$head_sha"' "strix gate falls back to explicit manual PR-scope diff when merge-base is unavailable"
 }
 
@@ -2202,6 +2204,7 @@ run_pull_request_target_head_scope_case() {
 	local head_content="$4"
 	local disable_pr_scoping="${5-0}"
 	local make_head_executable="${6-0}"
+	local target_path="${7-.}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2304,7 +2307,7 @@ EOF
 			STRIX_DISABLE_PR_SCOPING="$disable_pr_scoping" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
-			STRIX_TARGET_PATH="." \
+			STRIX_TARGET_PATH="$target_path" \
 			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
 			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
 	)
@@ -4422,6 +4425,15 @@ run_pull_request_target_head_scope_case \
 	"src/app.py" \
 	"BASE_CONTENT_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_CONTENT_SHOULD_BE_SCANNED"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-pr-scope-sentinel-uses-head-blob" \
+	"src/sentinel.py" \
+	"BASE_SENTINEL_CONTENT_SHOULD_NOT_BE_SCANNED" \
+	"HEAD_SENTINEL_CONTENT_SHOULD_BE_SCANNED" \
+	"0" \
+	"0" \
+	"__PR_SCOPE__"
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-added-file-uses-head-blob" \

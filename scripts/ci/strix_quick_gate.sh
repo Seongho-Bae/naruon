@@ -13,6 +13,8 @@ SCRIPT_DIR="$({ CDPATH='' && cd -P -- "$(dirname -- "$0")" && pwd -P; })"
 REPO_ROOT="$({ CDPATH='' && cd -P -- "$SCRIPT_DIR/../.." && pwd -P; })"
 RAW_TARGET_PATH="${STRIX_TARGET_PATH:-./}"
 TARGET_PATH=""
+PR_SCOPE_TARGET_SENTINEL="__PR_SCOPE__"
+TARGET_PATH_REQUESTS_PR_SCOPE=0
 RAW_SCAN_MODE="${STRIX_SCAN_MODE:-quick}"
 SCAN_MODE=""
 ARTIFACT_REPORTS_DIR="$REPO_ROOT/strix_runs"
@@ -239,7 +241,7 @@ validate_raw_target_path_input() {
 		return 2
 	fi
 	case "$raw_target" in
-	. | ./ | src | ./src)
+	. | ./ | src | ./src | "$PR_SCOPE_TARGET_SENTINEL")
 		printf '%s\n' "$raw_target"
 		return 0
 		;;
@@ -746,8 +748,17 @@ require_safe_scan_mode "$SCAN_MODE"
 if ! RAW_TARGET_PATH="$(validate_raw_target_path_input "$RAW_TARGET_PATH")"; then
 	exit 2
 fi
-if ! TARGET_PATH="$(resolve_scan_target_path "$RAW_TARGET_PATH")"; then
-	exit 2
+if [ "$RAW_TARGET_PATH" = "$PR_SCOPE_TARGET_SENTINEL" ]; then
+	if ! is_pull_request_event || [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
+		echo "ERROR: STRIX_TARGET_PATH=$PR_SCOPE_TARGET_SENTINEL requires PR scoping." >&2
+		exit 2
+	fi
+	TARGET_PATH="$REPO_ROOT"
+	TARGET_PATH_REQUESTS_PR_SCOPE=1
+else
+	if ! TARGET_PATH="$(resolve_scan_target_path "$RAW_TARGET_PATH")"; then
+		exit 2
+	fi
 fi
 
 load_pull_request_changed_files() {
@@ -2972,6 +2983,12 @@ run_current_target_scan() {
 }
 
 prepare_pull_request_scan_scope
+if [ "$TARGET_PATH_REQUESTS_PR_SCOPE" -eq 1 ] &&
+	[ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -ne 1 ] &&
+	[ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -eq 0 ]; then
+	echo "ERROR: STRIX_TARGET_PATH=$PR_SCOPE_TARGET_SENTINEL did not produce a PR scan scope." >&2
+	exit 2
+fi
 
 run_pull_request_batch_files() {
 	local batch_label="$1"

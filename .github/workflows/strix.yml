@@ -232,7 +232,8 @@ jobs:
         # Security invariant for pull_request_target: execute only from the
         # trusted base checkout. The gate copies PR-head blobs into an isolated
         # temporary scope with execute bits stripped, then scans that scope as
-        # data.
+        # data. PR evidence uses the __PR_SCOPE__ sentinel so the scanner target
+        # cannot accidentally remain the trusted base checkout.
         working-directory: ${{ runner.temp }}/trusted-workspace
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
@@ -248,7 +249,7 @@ jobs:
           CLOUDSDK_PROJECT: ${{ env.CLOUDSDK_PROJECT }}
           VERTEXAI_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-          STRIX_TARGET_PATH: ./
+          STRIX_TARGET_PATH: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '__PR_SCOPE__' || './' }}
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: low
           STRIX_LLM_MAX_RETRIES: 1

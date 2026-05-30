@@ -48,6 +48,9 @@
    allowlisted hostname.
 8. Copy PR-head blobs into privileged Strix scan scopes as non-executable data,
    even when the PR branch records the file as mode `100755`.
+9. Use `STRIX_TARGET_PATH=__PR_SCOPE__` for PR evidence runs so workflow-level
+   review and the gate script share the same contract: the scanner receives a
+   generated PR-head scope, not the trusted base checkout.
 
 ## Non-Goals
 
