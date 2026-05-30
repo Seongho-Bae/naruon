@@ -139,7 +139,10 @@ class MockTaskSession:
 
         if descriptions and descriptions[0].get("entity") is TicketTask:
             statement_text = str(stmt).lower()
-            params = stmt.compile().params
+            try:
+                params = stmt.compile().params
+            except Exception:
+                params = {}
             task_uid = params.get("task_uid_1")
             user_id = params.get("user_id_1")
             organization_id = params.get("organization_id_1")
@@ -164,6 +167,17 @@ class MockTaskSession:
                     return None
                 return source_email.message_id
 
+            # To handle IN clause params safely in the mock
+            if related_email_id is None and "IN" in str(stmt).upper():
+                related_email_id = []
+                for k, v in params.items():
+                    if isinstance(v, int):
+                        related_email_id.append(v)
+                    elif isinstance(v, list):
+                        related_email_id.extend(v)
+                if not related_email_id:
+                    related_email_id = None
+
             matching_tasks = [
                 task
                 for task in self.tasks
@@ -175,7 +189,8 @@ class MockTaskSession:
                 and (source_type is None or task.source_type == source_type)
                 and (
                     related_email_id is None
-                    or task.related_email_id == related_email_id
+                    or (isinstance(related_email_id, list) and task.related_email_id in related_email_id)
+                    or (not isinstance(related_email_id, list) and task.related_email_id == related_email_id)
                 )
             ]
             if returns_joined_email:
@@ -194,6 +209,7 @@ class MockTaskSession:
                 and task.source_type == obj.source_type
                 and task.related_email_id == obj.related_email_id
                 for task in self.tasks
+                if task is not obj
             ):
                 raise IntegrityError("duplicate reply_sla task", {}, None)
             obj.id = len(self.tasks) + 1
