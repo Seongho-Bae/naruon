@@ -206,6 +206,7 @@ export function DataLayout() {
   const [uniqueThreadResult, setUniqueThreadResult] = useState<UniqueThreadIntentResponse | null>(null);
   const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
   const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
+  const [selectedRepositoryAssetKey, setSelectedRepositoryAssetKey] = useState<string | null>(null);
 
   useEffect(() => {
     apiClient.get<DataQualitySurfaceResponse>('/api/data/quality-surface')
@@ -305,6 +306,9 @@ export function DataLayout() {
   const embeddingStage = dataQualitySurface?.pipeline_stages.find((stage) => stage.stage_key === 'embedding_inventory');
   const connectorEvents = dataQualitySurface?.connector_events ?? [];
   const repositoryAssets = dataQualitySurface?.repository_assets ?? [];
+  const selectedRepositoryAsset = repositoryAssets.find((asset) => asset.asset_key === selectedRepositoryAssetKey)
+    ?? repositoryAssets[0]
+    ?? null;
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -425,8 +429,25 @@ export function DataLayout() {
                   {dataSurfaceStatus === 'ready' && repositoryAssets.length === 0 && (
                     <p className="text-sm text-muted-foreground">이 워크스페이스에 source-linked 첨부 자산이 아직 없습니다.</p>
                   )}
-                  {repositoryAssets.map((asset) => (
-                    <article key={asset.asset_key} className="rounded-xl border border-border bg-background p-4">
+                  {repositoryAssets.map((asset) => {
+                    const assetSelected = selectedRepositoryAsset?.asset_key === asset.asset_key;
+                    return (
+                    <article
+                      key={asset.asset_key}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={assetSelected}
+                      onClick={() => setSelectedRepositoryAssetKey(asset.asset_key)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          setSelectedRepositoryAssetKey(asset.asset_key);
+                        }
+                      }}
+                      className={`cursor-pointer rounded-xl border bg-background p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                        assetSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
+                      }`}
+                    >
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <div className="flex min-w-0 items-start gap-3">
@@ -468,9 +489,57 @@ export function DataLayout() {
                         </div>
                       </dl>
                     </article>
-                  ))}
+                  );
+                  })}
                 </div>
               </section>
+
+              {selectedRepositoryAsset && (
+                <section aria-label="선택한 파일 자산 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase text-primary">Selected source asset</p>
+                      <h2 className="mt-1 break-all text-lg font-black">{selectedRepositoryAsset.display_name}</h2>
+                      <p className="mt-1 break-all text-sm text-muted-foreground">{selectedRepositoryAsset.source_label}</p>
+                    </div>
+                    <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${
+                      selectedRepositoryAsset.state_code === 'ready' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {selectedRepositoryAsset.state_code === 'ready' ? '정상' : '점검 필요'}
+                    </span>
+                  </div>
+                  <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <dt className="font-black text-muted-foreground">ASSET_KEY</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold">{selectedRepositoryAsset.asset_key}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-black text-muted-foreground">THREAD</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold">{selectedRepositoryAsset.thread_key}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-black text-muted-foreground">CAPTURED</dt>
+                      <dd className="mt-1 break-all text-sm font-bold">{selectedRepositoryAsset.captured_at}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-black text-muted-foreground">CONTENT</dt>
+                      <dd className="mt-1 text-sm font-bold">{formatCount(selectedRepositoryAsset.content_chars)} chars</dd>
+                    </div>
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <dt className="font-black text-muted-foreground">EVIDENCE</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">
+                        {selectedRepositoryAsset.evidence_source} · {selectedRepositoryAsset.detail_text}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <dt className="font-black text-muted-foreground">WRITEBACK_BOUNDARY</dt>
+                      <dd className="mt-1 text-sm font-bold">
+                        provider_write_executed={String(selectedRepositoryAsset.provider_write_executed)}
+                      </dd>
+                    </div>
+                  </dl>
+                </section>
+              )}
 
               <section aria-label="WebDAV writeback intent 승인" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
