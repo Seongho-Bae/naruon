@@ -50,6 +50,14 @@ assert_file_not_contains() {
 	fi
 }
 
+assert_strix_pr_scope_includes_deployment_context() {
+	assert_file_contains "$GATE_SCRIPT" "needs_deployment_context=0" "strix gate tracks deployment-context scoped PRs"
+	assert_file_contains "$GATE_SCRIPT" ".github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml" "strix gate recognizes deployment and CI files"
+	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
+	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
+	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
+}
+
 assert_strix_workflow_pr_trigger_hardened() {
 	local workflow_file="$REPO_ROOT/.github/workflows/strix.yml"
 
@@ -4363,6 +4371,8 @@ EOF
 }
 
 assert_strix_workflow_pr_trigger_hardened
+
+assert_strix_pr_scope_includes_deployment_context
 
 assert_strix_gpt54_model_guard_cases
 

@@ -1111,6 +1111,7 @@ is_scannable_changed_file() {
 pull_request_scope_context_files() {
 	local needs_backend_python=0
 	local needs_frontend_email_api_context=0
+	local needs_deployment_context=0
 	local changed_file normalized_changed_file
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
@@ -1122,6 +1123,13 @@ pull_request_scope_context_files() {
 		# shape frontend email retrieval flows; include backend auth context with them.
 		frontend/src/components/EmailDetail.tsx | frontend/src/components/EmailList.tsx | frontend/src/app/page.tsx | frontend/src/lib/api-client.ts | frontend/src/lib/email-threading.ts)
 			needs_frontend_email_api_context=1
+			;;
+		# Deployment and CI changes often reference build files that are not all
+		# changed in the PR. Include the trusted copies so Strix does not downgrade
+		# a clean finding to provider/failure-signal output due to missing Dockerfiles
+		# or VERSION context.
+		.github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml)
+			needs_deployment_context=1
 			;;
 		esac
 	done
@@ -1181,6 +1189,20 @@ backend/core/config.py
 backend/db/models.py
 backend/main.py
 backend/services/threading_service.py
+EOF
+	fi
+
+	if [ "$needs_deployment_context" -eq 1 ]; then
+		cat <<'EOF'
+Dockerfile
+frontend/Dockerfile
+frontend/package.json
+frontend/package-lock.json
+frontend/next.config.ts
+frontend/postcss.config.mjs
+docker-compose.yml
+render.yaml
+VERSION
 EOF
 	fi
 }
