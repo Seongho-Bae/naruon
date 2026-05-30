@@ -33,6 +33,7 @@ STRIX_INPUT_FILE_ROOT="${STRIX_INPUT_FILE_ROOT:-${RUNNER_TEMP:-}}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
 STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
+STRIX_FAIL_ON_PROVIDER_SIGNAL="${STRIX_FAIL_ON_PROVIDER_SIGNAL:-0}"
 RUN_START_EPOCH="$(date +%s)"
 PREEXISTING_REPORT_DIRS=()
 REPO_NAME="${REPO_ROOT##*/}"
@@ -563,6 +564,14 @@ require_non_negative_integer "$STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS" "STRIX_TRA
 require_non_negative_integer "$STRIX_PROCESS_TIMEOUT_SECONDS" "STRIX_PROCESS_TIMEOUT_SECONDS"
 require_non_negative_integer "$STRIX_TOTAL_TIMEOUT_SECONDS" "STRIX_TOTAL_TIMEOUT_SECONDS"
 require_positive_integer "$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH"
+case "$STRIX_FAIL_ON_PROVIDER_SIGNAL" in
+0 | 1)
+	;;
+*)
+	echo "ERROR: STRIX_FAIL_ON_PROVIDER_SIGNAL must be 0 or 1, got '$STRIX_FAIL_ON_PROVIDER_SIGNAL'." >&2
+	exit 2
+	;;
+esac
 
 if [ "$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")" -lt 0 ]; then
 	echo "ERROR: STRIX_FAIL_ON_MIN_SEVERITY must be one of CRITICAL/HIGH/MEDIUM/LOW/INFO/INFORMATIONAL/NONE, got '$STRIX_FAIL_ON_MIN_SEVERITY'." >&2
@@ -583,6 +592,10 @@ remaining_total_budget() {
 		remaining=0
 	fi
 	echo "$remaining"
+}
+
+provider_signal_fail_closed_enabled() {
+	[ "$STRIX_FAIL_ON_PROVIDER_SIGNAL" = "1" ]
 }
 
 capture_preexisting_report_dirs
@@ -1470,6 +1483,9 @@ should_rebalance_pull_request_batch() {
 	if [ "$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT" -le 1 ]; then
 		return 1
 	fi
+	if provider_signal_fail_closed_enabled; then
+		return 1
+	fi
 	if [ "$INFRA_ERROR_DETECTED" -ne 1 ]; then
 		return 1
 	fi
@@ -2058,6 +2074,14 @@ PY
 		echo "Strix run timed out after ${timeout_seconds}s." | tee -a "$STRIX_LOG" >&2
 	fi
 
+	if has_detected_infrastructure_error; then
+		INFRA_ERROR_DETECTED=1
+		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
+	fi
+
 	if [ "$rc" -eq 0 ]; then
 		printf "Strix run succeeded for model '%s' in %ds.\n" "$model" "$elapsed" >&2
 		return 0
@@ -2071,10 +2095,6 @@ PY
 	# would only see the *last* attempt's log — missing infrastructure errors
 	# from earlier attempts whose partial reports may still sit in the reports
 	# directory.
-	if has_detected_infrastructure_error; then
-		INFRA_ERROR_DETECTED=1
-	fi
-
 	return 1
 }
 
@@ -2104,9 +2124,8 @@ is_llm_service_unavailable_error() {
 ##   - litellm API connection failures with LLM-provider evidence
 ##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Timeouts remain infrastructure errors for guard logic, but the caller should
-## move directly to fallback model evaluation instead of spending the remaining
-## budget retrying the same slow model.
+## Timeouts are infrastructure failures. In strict CI mode they fail closed;
+## otherwise the caller may still move to fallback model evaluation.
 is_transient_same_model_retry_error() {
 	local model="${1-}"
 	if is_timeout_error; then
@@ -2162,8 +2181,6 @@ run_strix_with_transient_retry() {
 			retry_reason="LLM API connection"
 		elif is_llm_service_unavailable_error; then
 			retry_reason="LLM service unavailable"
-		elif is_timeout_error; then
-			retry_reason="LLM timeout"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
@@ -2236,9 +2253,10 @@ is_rate_limit_error() {
 ##      Requires LLM_PROVIDER_ONLY_REGEX to avoid misclassifying target-app
 ##      or infrastructure network timeouts as LLM errors.
 ##
-## All three tiers feed into infrastructure-error detection and trigger
-## fallback model evaluation before the total budget is exhausted.  Same-model
-## retries remain reserved for rate-limit and mid-stream fallback errors.
+## All three tiers feed into infrastructure-error detection. Strict CI mode
+## fails closed; non-strict callers may still evaluate fallback models.
+## Same-model retries remain reserved for rate-limit and mid-stream fallback
+## errors.
 is_timeout_error() {
 	# Tier 1: litellm SDK timeout — provider-specific, always trusted.
 	if grep -Fq 'litellm.exceptions.Timeout' "$STRIX_LOG"; then
@@ -2298,6 +2316,10 @@ LLM_PROVIDER_ONLY_REGEX='(litellm|openai|anthropic|VertexAI|Vertex_ai|vertex\.ai
 # was interrupted or incomplete.  Used as a guard to prevent the
 # below-threshold override from silently passing an aborted scan.
 has_detected_infrastructure_error() {
+	if grep -Eiq '(^|[^[:alpha:]])(Fatal|FATAL|Denied|DENIED|Warn|WARN|Warning|WARNING)([^[:alpha:]]|$)' "$STRIX_LOG"; then
+		return 0
+	fi
+
 	if is_timeout_error; then
 		return 0
 	fi
@@ -2492,7 +2514,7 @@ strix_reported_zero_vulnerabilities_in_file() {
 	grep -Eq 'Vulnerabilities[[:space:]]+0([^0-9]|$)' "$source_path"
 }
 
-should_allow_pull_request_infra_zero_finding_bypass() {
+should_fail_pull_request_infra_zero_findings() {
 	if ! is_pull_request_event; then
 		return 1
 	fi
@@ -2509,7 +2531,7 @@ should_allow_pull_request_infra_zero_finding_bypass() {
 		return 1
 	fi
 
-	echo "Strix reported zero vulnerabilities before provider infrastructure failure; allowing pull request continuation and deferring provider outage follow-up." >&2
+	echo "Strix reported zero vulnerabilities before provider infrastructure failure; failing closed because provider infrastructure failures are not clean scan evidence." >&2
 	return 0
 }
 
@@ -2775,6 +2797,9 @@ is_model_retryable_error() {
 	fi
 
 	if is_timeout_error; then
+		if provider_signal_fail_closed_enabled; then
+			return 1
+		fi
 		return 0
 	fi
 
@@ -2816,10 +2841,19 @@ run_current_target_scan() {
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
+			return 1
+		fi
 		return 0
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
 		return 2
+	fi
+
+	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+		echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+		return 1
 	fi
 
 	if should_rebalance_pull_request_batch; then
@@ -2873,11 +2907,20 @@ run_current_target_scan() {
 		local fallback_scan_rc=0
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		if [ "$fallback_scan_rc" -eq 0 ]; then
+			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
+				return 1
+			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
 		fi
 		if [ "$fallback_scan_rc" -eq 2 ]; then
 			return 2
+		fi
+
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2900,8 +2943,8 @@ run_current_target_scan() {
 		fi
 		done
 
-	if should_allow_pull_request_infra_zero_finding_bypass; then
-		return 0
+	if should_fail_pull_request_infra_zero_findings; then
+		return 1
 	fi
 
 	if [ "$fallback_tried" -eq 0 ]; then

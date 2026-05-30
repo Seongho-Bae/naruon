@@ -20,7 +20,12 @@ def _dav_path_owner_user_id(path: str) -> str | None:
 
 def _ensure_dav_owner_scope(path: str, auth_context: AuthContext) -> None:
     owner_user_id = _dav_path_owner_user_id(path)
-    if owner_user_id is None or owner_user_id == auth_context.user_id:
+    if owner_user_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail="DAV path must include an owner user",
+        )
+    if owner_user_id == auth_context.user_id:
         return
     raise HTTPException(
         status_code=403,

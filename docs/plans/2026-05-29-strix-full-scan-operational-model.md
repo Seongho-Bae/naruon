@@ -16,21 +16,25 @@
   next head run `26662731398` remained in `Run Strix (quick)` for more than one
   hour, showing that a 12-file first batch is not operationally bounded enough
   for current Vertex-backed PR evidence.
+- PR #312 run `26669020785` used the old quarantine path and then failed after
+  repeated `MidStreamFallbackError` and timeout-class provider failures while
+  printing zero vulnerabilities. Under the no Timeout/Fatal/Warn/Denied policy,
+  that is not clean PR evidence.
 
 ## Plan
 
-1. Keep the organization-secret `STRIX_LLM` route, but quarantine the exact
-   `vertex_ai/gemini-3.1-pro-preview-customtools` value to
-   `vertex_ai/gemini-2.5-flash` until it has no-timeout evidence.
-2. Route PR-scoped and protected-branch scans to the previously validated exact
-   Vertex model `vertex_ai/gemini-2.5-flash` when the 3.1 preview value is
-   configured.
-3. Keep arbitrary Vertex model patterns disallowed; only the exact operational
-   Vertex model is accepted.
+1. Keep the organization-secret `STRIX_LLM` route and honor the exact
+   `vertex_ai/gemini-3.1-pro-preview-customtools` value now that organization
+   secret visibility is available.
+2. Default missing `STRIX_LLM` to
+   `vertex_ai/gemini-3.1-pro-preview-customtools` rather than silently routing
+   to GitHub Models or a downgraded Vertex fallback.
+3. Keep arbitrary Vertex model patterns disallowed; only exact approved Vertex
+   models are accepted.
 4. Preserve the narrow Pydantic serializer warning filter and gate child-process
    forwarding from PR #303.
-5. Add regression assertions so later edits cannot accidentally send full-repo
-   scans through an unproven preview model.
+5. Add regression assertions so later edits cannot accidentally quarantine the
+   approved 3.1 route or pass after timeout/provider failure output.
 6. Start PR-scope evidence with single-file deterministic batches instead of
    waiting for a 12-file batch to hit the process budget and rebalance after the
    timeout.
@@ -40,4 +44,5 @@
 - This does not reintroduce GitHub Models or generic `LLM_API_KEY`.
 - This does not suppress scanner findings, timeouts, denied access, fatal
   errors, or application warnings.
-- This does not claim the 3.1 org-secret value is operational without evidence.
+- This does not treat zero-vulnerability text as sufficient evidence after a
+  timeout, denied, fatal, warning, or provider infrastructure failure.

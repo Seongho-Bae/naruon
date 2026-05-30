@@ -16,13 +16,17 @@
 - Strix Security Scan must not route through GitHub Models, `github.token`,
   generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
   route is `STRIX_LLM` with `GCP_SA_KEY`;
-  `vertex_ai/gemini-3.1-pro-preview-customtools` must be quarantined to
-  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR-scoped and
-  protected-branch full-scan evidence. Expose Google/Vertex credentials only for
-  Vertex provider mode. Direct OpenAI
+  `vertex_ai/gemini-3.1-pro-preview-customtools` is the default approved Vertex
+  model now that organization-secret visibility is available, with
+  `vertex_ai/gemini-2.5-flash` allowed only as an explicit legacy selection.
+  Expose Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
   GPT-5.4-or-newer scans remain supported only when selected explicitly with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
-  record provider evidence in the PR. Known third-party Strix/Pydantic
+  do not treat timeout-class provider infrastructure failures as clean PR
+  evidence even when Strix printed zero vulnerabilities before failing. Disable
+  silent Vertex fallback models in the workflow unless a future PR proves a new
+  exact fallback contract with no Timeout/Fatal/Warn/Denied output. Record
+  provider evidence in the PR. Known third-party Strix/Pydantic
   serializer warnings must be filtered narrowly inside the Strix gate child
   process, not as a visible workflow env entry, so Warn-class logs are not
   accepted as clean evidence and warning-filter variable names do not pollute
@@ -198,7 +202,8 @@
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
   require the signed-session dependency in handler signatures, enforce route
-  owner scope before capability/discovery/read/writeback responses, escape XML
+  owner scope before capability/discovery/read/writeback responses, reject
+  ownerless DAV paths instead of treating them as shared roots, escape XML
   response fields before interpolation, and keep path values separate from
   log-safe display values.
 - Self-hosted runner WebSocket routes must validate both a signed bearer session

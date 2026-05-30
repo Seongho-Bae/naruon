@@ -45,6 +45,23 @@ def test_dav_rejects_different_user_path(dev_auth_dependency_overrides):
         assert response.json()["detail"] == "DAV path belongs to a different user"
 
 
+def test_dav_rejects_ownerless_path(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request("PROPFIND", "/dav/", headers=AUTH_HEADERS)
+        assert response.status_code == 403
+        assert response.json()["detail"] == "DAV path must include an owner user"
+
+
+def test_dav_rejects_ownerless_options_before_capability_discovery(
+    dev_auth_dependency_overrides,
+):
+    with TestClient(app) as client:
+        response = client.options("/dav/", headers=AUTH_HEADERS)
+        assert response.status_code == 403
+        assert "dav" not in {header.lower() for header in response.headers}
+        assert response.json()["detail"] == "DAV path must include an owner user"
+
+
 def test_dav_propfind(dev_auth_dependency_overrides):
     with TestClient(app) as client:
         response = client.request(

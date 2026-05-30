@@ -29,17 +29,17 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence uses the organization-secret provider selected by
-  `STRIX_LLM` with `GCP_SA_KEY`, but the
-  `vertex_ai/gemini-3.1-pro-preview-customtools` value is quarantined to
-  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR and full-scan
-  evidence. Direct OpenAI GPT-5.4-or-newer remains
-  supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
-  closed rather than falling back to GitHub Models, `github.token`, generic
-  `LLM_API_KEY`, or GPT-4-era models. Known third-party Strix/Pydantic
-  serializer warnings are filtered narrowly instead of allowing Warn-class logs
-  into passing evidence, and runtime scan-budget variables are not listed as
-  visible timeout-named workflow `env:` entries. Pending CodeRabbit or check
-  evidence is a wait state, not a hard blocker.
+  `STRIX_LLM` with `GCP_SA_KEY`; missing `STRIX_LLM` defaults to the approved
+  `vertex_ai/gemini-3.1-pro-preview-customtools` Vertex route now that
+  organization-secret visibility is available. Direct OpenAI GPT-5.4-or-newer
+  remains supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow
+  fails closed rather than falling back to GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4-era models, or timeout-class provider
+  infrastructure failures. Known third-party Strix/Pydantic serializer warnings
+  are filtered narrowly instead of allowing Warn-class logs into passing
+  evidence, and runtime scan-budget variables are not listed as visible
+  timeout-named workflow `env:` entries. Pending CodeRabbit or check evidence is
+  a wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence plus durable `security_audit_events`, reuses the deny-first
