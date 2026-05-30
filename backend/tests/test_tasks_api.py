@@ -107,7 +107,9 @@ class MockTaskSession:
                 return self.scalar_one_or_none()
 
         if descriptions and descriptions[0].get("entity") is TenantConfig:
-            return MockResult([] if self.tenant_config is None else [self.tenant_config])
+            return MockResult(
+                [] if self.tenant_config is None else [self.tenant_config]
+            )
 
         if descriptions and descriptions[0].get("entity") is Email:
             params = stmt.compile().params
@@ -167,16 +169,24 @@ class MockTaskSession:
                     return None
                 return source_email.message_id
 
-            # To handle IN clause params safely in the mock
-            if related_email_id is None and "IN" in str(stmt).upper():
-                related_email_id = []
-                for k, v in params.items():
-                    if isinstance(v, int):
-                        related_email_id.append(v)
-                    elif isinstance(v, list):
-                        related_email_id.extend(v)
-                if not related_email_id:
-                    related_email_id = None
+            if (
+                related_email_id is None
+                and "ticket_tasks.email_id in" in statement_text
+            ):
+                related_email_ids: list[int] = []
+                for key, value in params.items():
+                    if not key.startswith("email_id"):
+                        continue
+                    if isinstance(value, int):
+                        related_email_ids.append(value)
+                    elif isinstance(value, (list, tuple, set)):
+                        related_email_ids.extend(
+                            candidate
+                            for candidate in value
+                            if isinstance(candidate, int)
+                        )
+                if related_email_ids:
+                    related_email_id = related_email_ids
 
             matching_tasks = [
                 task
@@ -189,8 +199,14 @@ class MockTaskSession:
                 and (source_type is None or task.source_type == source_type)
                 and (
                     related_email_id is None
-                    or (isinstance(related_email_id, list) and task.related_email_id in related_email_id)
-                    or (not isinstance(related_email_id, list) and task.related_email_id == related_email_id)
+                    or (
+                        isinstance(related_email_id, (list, tuple, set))
+                        and task.related_email_id in related_email_id
+                    )
+                    or (
+                        not isinstance(related_email_id, (list, tuple, set))
+                        and task.related_email_id == related_email_id
+                    )
                 )
             ]
             if returns_joined_email:
@@ -254,6 +270,64 @@ def auth_client():
         headers={"X-User-Id": "alice", "X-Organization-Id": "org-acme"},
     ) as client:
         yield client
+
+
+@pytest.mark.asyncio
+async def test_mock_task_session_related_email_in_ignores_unrelated_int_params():
+    session = MockTaskSession()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    session.tasks.extend(
+        [
+            TicketTask(
+                id=1,
+                task_uid="email-21",
+                user_id="alice",
+                organization_id="org-acme",
+                title="Related email 21",
+                status="blocked",
+                priority="urgent",
+                source_type="reply_sla",
+                related_email_id=21,
+                related_thread_id="thread-21",
+                created_at=now,
+                updated_at=now,
+            ),
+            TicketTask(
+                id=999,
+                task_uid="email-999",
+                user_id="alice",
+                organization_id="org-acme",
+                title="Unrelated task id",
+                status="blocked",
+                priority="urgent",
+                source_type="reply_sla",
+                related_email_id=999,
+                related_thread_id="thread-999",
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+
+    class FakeCompiled:
+        params = {"email_id_2": [21], "task_id_1": 999}
+
+    class FakeStatement:
+        column_descriptions = [{"entity": TicketTask}]
+
+        def compile(self):
+            return FakeCompiled()
+
+        def __str__(self):
+            return (
+                "SELECT * FROM ticket_tasks "
+                "WHERE ticket_tasks.email_id IN (__[POSTCOMPILE_email_id_2]) "
+                "AND ticket_tasks.task_id = :task_id_1"
+            )
+
+    result = await session.execute(FakeStatement())
+
+    assert [task.related_email_id for task in result.scalars().all()] == [21]
 
 
 def test_create_ticket_tasks_accepts_signed_bearer_session():
@@ -449,6 +523,55 @@ def test_reply_sla_escalation_is_idempotent_for_existing_task(auth_client):
     assert len(mock_session.tasks) == 1
     assert mock_session.tasks[0].title == "답변 SLA 확인: Existing SLA follow-up"
     assert mock_session.tasks[0].updated_at > previous_update
+
+
+def test_reply_sla_escalation_conflict_returns_machine_readable_detail(auth_client):
+    class ConflictTaskSession(MockTaskSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commit_attempts = 0
+            self.in_fallback = False
+
+        def add(self, obj):
+            if self.in_fallback:
+                raise IntegrityError("duplicate reply_sla task", {}, None)
+            super().add(obj)
+
+        async def commit(self):
+            self.commit_attempts += 1
+            if self.commit_attempts == 1:
+                raise IntegrityError("batch reply_sla conflict", {}, None)
+
+        async def rollback(self):
+            self.in_fallback = True
+            self.tasks.clear()
+
+    conflict_session = ConflictTaskSession()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    conflict_session.emails[41] = make_email(
+        email_id=41,
+        message_id="<conflict-sla@example.com>",
+        thread_id="<thread-conflict-sla>",
+        sender="alice@example.com",
+        recipients="vendor@example.com",
+        subject="Conflict SLA follow-up",
+        body="Please reply by tomorrow.",
+        date=now - datetime.timedelta(days=4),
+    )
+    app.dependency_overrides[get_db] = lambda: conflict_session
+
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 48},
+    )
+
+    assert response.status_code == 409, response.text
+    assert response.json() == {
+        "detail": {
+            "error_code": "reply_sla_task_conflict",
+            "message": "Reply SLA task conflict",
+        }
+    }
 
 
 @pytest.mark.postgres

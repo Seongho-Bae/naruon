@@ -206,10 +206,12 @@ async def create_reply_sla_escalations(
             escalated_tasks.append((task, email.message_id))
 
     try:
-        if created_count > 0 or any(email.id in existing_tasks_by_email for email in overdue_replies):
+        if created_count > 0 or any(
+            email.id in existing_tasks_by_email for email in overdue_replies
+        ):
             await db.commit()
 
-            # Fetch updated values (e.g. task_uid) efficiently instead of looping db.refresh
+            # Fetch updated values efficiently instead of looping db.refresh.
             if created_count > 0:
                 refreshed_result = await db.execute(
                     select(TicketTask)
@@ -221,13 +223,18 @@ async def create_reply_sla_escalations(
                     )
                     .order_by(TicketTask.updated_at.desc())
                 )
-                refreshed_tasks_by_email = {t.related_email_id: t for t in refreshed_result.scalars().all()}
+                refreshed_tasks_by_email = {
+                    t.related_email_id: t for t in refreshed_result.scalars().all()
+                }
 
-                # Replace the un-refreshed tasks with the refreshed ones to avoid validation errors
+                # Replace un-refreshed tasks to avoid validation errors.
                 for i in range(len(escalated_tasks)):
                     task, message_id = escalated_tasks[i]
                     if task.related_email_id in refreshed_tasks_by_email:
-                        escalated_tasks[i] = (refreshed_tasks_by_email[task.related_email_id], message_id)
+                        escalated_tasks[i] = (
+                            refreshed_tasks_by_email[task.related_email_id],
+                            message_id,
+                        )
     except IntegrityError:
         await db.rollback()
         created_count = 0
@@ -264,7 +271,11 @@ async def create_reply_sla_escalations(
                 existing_tasks_fallback = existing_result.scalars().all()
                 if not existing_tasks_fallback:
                     raise HTTPException(
-                        status_code=409, detail="Reply SLA task conflict"
+                        status_code=409,
+                        detail={
+                            "error_code": "reply_sla_task_conflict",
+                            "message": "Reply SLA task conflict",
+                        },
                     ) from None
                 task = existing_tasks_fallback[0]
 
