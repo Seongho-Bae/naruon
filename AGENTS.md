@@ -168,7 +168,10 @@
   scopes, strip executable bits instead of preserving `100755` modes. PR-scoped
   Strix workflow runs should use the explicit `STRIX_TARGET_PATH=__PR_SCOPE__`
   sentinel so the trusted base checkout is never presented as the PR scan
-  target.
+  target. Strix child processes that inspect untrusted PR scope data must set
+  package-manager lifecycle script guards such as `NPM_CONFIG_IGNORE_SCRIPTS`,
+  `PNPM_CONFIG_IGNORE_SCRIPTS`, and `YARN_ENABLE_SCRIPTS=false`; do not allow a
+  scanner dependency install to execute PR-provided `package.json` scripts.
 - Test harness HTTP smoke helpers must not use broad URL opener APIs such as
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into

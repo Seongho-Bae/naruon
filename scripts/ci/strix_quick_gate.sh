@@ -1988,6 +1988,12 @@ for key in (
     if value:
         child_env[key] = value
 child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"
+child_env["NPM_CONFIG_IGNORE_SCRIPTS"] = "true"
+child_env["npm_config_ignore_scripts"] = "true"
+child_env["PNPM_CONFIG_IGNORE_SCRIPTS"] = "true"
+child_env["pnpm_config_ignore_scripts"] = "true"
+child_env["YARN_ENABLE_SCRIPTS"] = "false"
+child_env["BUN_CONFIG_IGNORE_SCRIPTS"] = "true"
 child_env["STRIX_LLM"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_MODEL"] = os.environ["STRIX_CHILD_MODEL"]
 if os.environ.get("STRIX_CHILD_LLM_API_KEY"):

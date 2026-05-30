@@ -41,9 +41,10 @@ mail/calendar/file systems.
   timeout-named workflow `env:` entries. PR-scope scan budgets leave room for
   report finalization after Strix emits completion events; workflow PR evidence
   uses `STRIX_TARGET_PATH=__PR_SCOPE__` so the scanner target is the generated
-  PR-head scope, not the trusted base checkout. Wrapper timeout output is failed
-  evidence. Pending CodeRabbit or check evidence is a wait state, not a hard
-  blocker.
+  PR-head scope, not the trusted base checkout. Scanner child processes disable
+  npm, pnpm, yarn, and bun lifecycle scripts while inspecting PR scope data.
+  Wrapper timeout output is failed evidence. Pending CodeRabbit or check
+  evidence is a wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence plus durable `security_audit_events`, reuses the deny-first

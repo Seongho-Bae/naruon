@@ -51,6 +51,9 @@
 9. Use `STRIX_TARGET_PATH=__PR_SCOPE__` for PR evidence runs so workflow-level
    review and the gate script share the same contract: the scanner receives a
    generated PR-head scope, not the trusted base checkout.
+10. Disable package-manager lifecycle scripts in the Strix child process
+    environment while scanning untrusted PR-head scope data, covering npm, pnpm,
+    yarn, and bun script execution knobs.
 
 ## Non-Goals
 
