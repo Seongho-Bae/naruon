@@ -774,13 +774,15 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
-		if pull_request_head_blob_required; then
-			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
-			return 2
+		if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" -- 2>/dev/null)"; then
+			if ! changed_files_output="$(git diff --name-only "$base_sha..$head_sha" --)"; then
+				if pull_request_head_blob_required; then
+					echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+					return 2
+				fi
+				return 1
+			fi
 		fi
-		return 1
-	fi
 
 	while IFS= read -r changed_file; do
 		if [ -n "$changed_file" ]; then
@@ -2039,15 +2041,12 @@ is_llm_service_unavailable_error() {
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
 ## Vertex timeouts remain infrastructure errors for guard logic, but the caller
 ## should move directly to fallback model evaluation instead of spending the
-## remaining budget retrying the same slow model. Non-Vertex models have no
-## provider-specific fallback path in this gate, so LLM timeouts are retried on
-## the same model before being treated as non-recoverable.
+## remaining budget retrying the same slow model. All models have no
+## provider-specific fallback path in this gate, so LLM timeouts trigger
+## a fallback model evaluation directly.
 is_transient_same_model_retry_error() {
 	local model="${1-}"
 	if is_timeout_error; then
-		if [ -n "$model" ] && ! is_vertex_model "$model"; then
-			return 0
-		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
