@@ -75,6 +75,14 @@ jobs:
             echo "::error::PR number and head SHA are required for trusted PR-scope Strix evidence."
             exit 1
           fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR head SHA must be a 40-character git SHA."
+            exit 1
+          fi
+          if [ -n "$PR_BASE_SHA" ] && ! [[ "$PR_BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR base SHA must be a 40-character git SHA."
+            exit 1
+          fi
           if [ -n "$PR_BASE_SHA" ]; then
             git -C "$TRUSTED_WORKSPACE" fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
             git -C "$TRUSTED_WORKSPACE" cat-file -e "$PR_BASE_SHA^{commit}"

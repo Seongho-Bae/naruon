@@ -54,6 +54,9 @@
 10. Disable package-manager lifecycle scripts in the Strix child process
     environment while scanning untrusted PR-head scope data, covering npm, pnpm,
     yarn, and bun script execution knobs.
+11. Validate PR base/head SHA inputs in the workflow shell before any trusted
+    fetch or PR-scope evidence handoff so workflow_dispatch cannot pass
+    shell-shaped data into the gate.
 
 ## Non-Goals
 

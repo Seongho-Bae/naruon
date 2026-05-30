@@ -162,7 +162,9 @@
 - GitHub Actions `run:` blocks must not directly interpolate `${{ github.* }}`,
   `${{ inputs.* }}`, or other expression data into shell conditions or commands.
   Pass expression values through step `env:` keys first, then quote shell
-  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script.
+  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script. PR base/head
+  SHA values from manual workflow inputs must be regex-validated as git SHAs
+  before any fetch, diff, or artifact metadata use.
 - Privileged `pull_request_target` scanner jobs must treat PR-head blobs as
   non-executable input data. When copying PR-head files into temporary scan
   scopes, strip executable bits instead of preserving `100755` modes. PR-scoped
