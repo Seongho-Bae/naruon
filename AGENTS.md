@@ -16,19 +16,28 @@
 - Strix Security Scan must not route through GitHub Models, `github.token`,
   generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
   route is `STRIX_LLM` with `GCP_SA_KEY`;
-  `vertex_ai/gemini-3.1-pro-preview-customtools` must be quarantined to
-  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR-scoped and
-  protected-branch full-scan evidence. Expose Google/Vertex credentials only for
-  Vertex provider mode. Direct OpenAI
+  `vertex_ai/gemini-3.1-pro-preview-customtools` is the default approved Vertex
+  model now that organization-secret visibility is available, with
+  `vertex_ai/gemini-2.5-flash` allowed only as an explicit legacy selection.
+  Expose Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
   GPT-5.4-or-newer scans remain supported only when selected explicitly with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
-  record provider evidence in the PR. Known third-party Strix/Pydantic
+  do not treat timeout-class provider infrastructure failures as clean PR
+  evidence even when Strix printed zero vulnerabilities before failing. Disable
+  silent Vertex fallback models in the workflow unless a future PR proves a new
+  exact fallback contract with no Timeout/Fatal/Warn/Denied output. Record
+  provider evidence in the PR. Known third-party Strix/Pydantic
   serializer warnings must be filtered narrowly inside the Strix gate child
   process, not as a visible workflow env entry, so Warn-class logs are not
   accepted as clean evidence and warning-filter variable names do not pollute
   GitHub logs. Strix workflow runtime budget keys should be exported inside the
   execution shell, not listed as visible step `env:` timeout names, so clean runs
-  do not carry stale timeout-signal strings. Keep
+  do not carry stale timeout-signal strings. Keep PR-scope process budgets large
+  enough for Strix to finalize reports after the scanner emits completion
+  events; a wrapper timeout after `vulnerability_count: 0` is still failed
+  evidence, not a pass. PR evidence should use deterministic single-file
+  batches until the Vertex-backed scanner proves bounded multi-file completion.
+  Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
@@ -85,6 +94,10 @@
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
+- Session authority is a server-side verification result, not a token payload
+  claim. HMAC and OIDC paths must pass `session_verifier` from the code path that
+  validated the signature/key; never derive it from `_session_verifier` or a
+  similar user-controlled JWT claim.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/` may omit it. Keep runtime feature/configuration
@@ -96,14 +109,27 @@
   registry endpoints must enforce role checks in addition to authentication. LLM
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
-  addresses.
+  addresses. Runtime LLM calls that use a custom provider `base_url` must build
+  their `httpx` client through `build_llm_provider_http_client` so TCP
+  connections are pinned to the already validated global address while TLS/SNI
+  still uses the allowlisted hostname; do not hand a freshly validated URL to a
+  generic client that can resolve DNS again at connect time.
+- OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
+  must use HTTPS, must not include userinfo or fragments, must reject localhost
+  and non-global IP literals, and must be exact-host allowlisted by
+  `ALLOWED_OIDC_HOSTS` before any JWKS preload or token verification path can
+  use them. Allowlisted OIDC hostnames must also resolve only to global
+  addresses, and JWKS retrieval must connect to the already validated pinned
+  address while preserving TLS/SNI for the allowlisted hostname.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
   reject HTML-like execution item markup at the backend boundary rather than
   storing user-supplied tags for later UI rendering. Parsed email display fields
-  must not persist active HTML/script markup; preserve message/thread identifiers
-  separately from UI-safe subject/body, address, and attachment display text.
+  must not persist active HTML/script markup, and email API list/detail/thread
+  responses must sanitize stored subject/body/snippet/address display fields
+  before returning them. Preserve message/thread identifiers separately from
+  UI-safe subject/body, address, and attachment display text.
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
@@ -142,7 +168,18 @@
 - GitHub Actions `run:` blocks must not directly interpolate `${{ github.* }}`,
   `${{ inputs.* }}`, or other expression data into shell conditions or commands.
   Pass expression values through step `env:` keys first, then quote shell
-  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script.
+  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script. PR base/head
+  SHA values from manual workflow inputs must be regex-validated as git SHAs
+  before any fetch, diff, or artifact metadata use.
+- Privileged `pull_request_target` scanner jobs must treat PR-head blobs as
+  non-executable input data. When copying PR-head files into temporary scan
+  scopes, strip executable bits instead of preserving `100755` modes. PR-scoped
+  Strix workflow runs should use the explicit `STRIX_TARGET_PATH=__PR_SCOPE__`
+  sentinel so the trusted base checkout is never presented as the PR scan
+  target. Strix child processes that inspect untrusted PR scope data must set
+  package-manager lifecycle script guards such as `NPM_CONFIG_IGNORE_SCRIPTS`,
+  `PNPM_CONFIG_IGNORE_SCRIPTS`, and `YARN_ENABLE_SCRIPTS=false`; do not allow a
+  scanner dependency install to execute PR-provided `package.json` scripts.
 - Test harness HTTP smoke helpers must not use broad URL opener APIs such as
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into
@@ -192,8 +229,11 @@
   Pydantic import tracebacks for missing runtime settings.
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
-  escape XML response fields before interpolation, and keep path values separate
-  from log-safe display values.
+  require the signed-session dependency in handler signatures, enforce route
+  owner scope before capability/discovery/read/writeback responses, reject
+  ownerless DAV paths instead of treating them as shared roots, escape XML
+  response fields before interpolation, and keep path values separate from
+  log-safe display values.
 - Self-hosted runner WebSocket routes must validate both a signed bearer session
   and a server-side WorkspaceRunnerConfig registration token before accepting the
   socket. Do not use the raw path token as identity, a log value, or the sole

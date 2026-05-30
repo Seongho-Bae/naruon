@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
 from core.exceptions import LLMServiceError
+from services import llm_provider_urls as provider_urls
 from services.llm_service import (
     extract_todos_and_summary,
     draft_reply,
@@ -23,6 +24,57 @@ def mock_openai():
 
 
 # Removed reset_client fixture
+
+
+@pytest.mark.asyncio
+async def test_llm_provider_pinned_backend_uses_validated_ip_address():
+    calls = []
+    stream = object()
+    backend = provider_urls._PinnedLLMProviderNetworkBackend(
+        "llm-gateway.example.com",
+        443,
+        ("93.184.216.34",),
+    )
+
+    class FakeBackend:
+        async def connect_tcp(
+            self,
+            host,
+            port,
+            timeout=None,
+            local_address=None,
+            socket_options=None,
+        ):
+            calls.append((host, port, timeout, local_address, socket_options))
+            return stream
+
+        async def sleep(self, seconds):
+            return None
+
+    backend._backend = FakeBackend()
+
+    result = await backend.connect_tcp(
+        b"llm-gateway.example.com",
+        443,
+        timeout=3.0,
+        local_address=None,
+        socket_options=None,
+    )
+
+    assert result is stream
+    assert calls == [("93.184.216.34", 443, 3.0, None, None)]
+
+
+@pytest.mark.asyncio
+async def test_llm_provider_pinned_backend_rejects_host_changes():
+    backend = provider_urls._PinnedLLMProviderNetworkBackend(
+        "llm-gateway.example.com",
+        443,
+        ("93.184.216.34",),
+    )
+
+    with pytest.raises(OSError, match="host changed"):
+        await backend.connect_tcp("metadata.google.internal", 443)
 
 
 @pytest.mark.asyncio
