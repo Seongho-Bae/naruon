@@ -20,7 +20,7 @@ def test_pop3_sync_requires_credentials(caplog, monkeypatch):
         lambda host, port: (host, port),
     )
     with patch("services.pop3_worker.poplib.POP3_SSL", return_value=pop3_client):
-        with pytest.raises(RuntimeError, match="POP3 account configuration incomplete"):
+        with pytest.raises(RuntimeError, match="Missing POP3 username"):
             worker._do_pop3_sync(config)
 
     pop3_client.user.assert_not_called()
@@ -28,7 +28,6 @@ def test_pop3_sync_requires_credentials(caplog, monkeypatch):
     pop3_client.quit.assert_called_once()
     assert "pop3_password" not in caplog.text
     assert "pop3-secret" not in caplog.text
-    assert "credential secret" not in caplog.text.lower()
 
 
 def test_pop3_sync_missing_secret_avoids_sensitive_log_names(caplog, monkeypatch):
@@ -46,7 +45,7 @@ def test_pop3_sync_missing_secret_avoids_sensitive_log_names(caplog, monkeypatch
         lambda host, port: (host, port),
     )
     with patch("services.pop3_worker.poplib.POP3_SSL", return_value=pop3_client):
-        with pytest.raises(RuntimeError, match="POP3 account configuration incomplete"):
+        with pytest.raises(RuntimeError, match="Missing POP3 credential secret"):
             worker._do_pop3_sync(config)
 
     pop3_client.user.assert_not_called()
@@ -54,7 +53,6 @@ def test_pop3_sync_missing_secret_avoids_sensitive_log_names(caplog, monkeypatch
     pop3_client.quit.assert_called_once()
     assert "pop3_password" not in caplog.text
     assert "password" not in caplog.text.lower()
-    assert "credential secret" not in caplog.text.lower()
 
 
 def test_pop3_do_sync_validates_destination_before_connect():

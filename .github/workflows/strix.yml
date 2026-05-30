@@ -160,11 +160,10 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         env:
           LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == 'openai_direct' && secrets.STRIX_OPENAI_API_KEY || '' }}
-          PROVIDER_MODE: ${{ steps.gate.outputs.provider_mode }}
         run: |
           sanitized="$(printf '%s' "$LLM_API_KEY_SECRET" | tr -d '\r\n')"
           trimmed="$(printf '%s' "$sanitized" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          if [ -z "$trimmed" ] && [ "$PROVIDER_MODE" = "openai_direct" ]; then
+          if [ -z "$trimmed" ] && [ "${{ steps.gate.outputs.provider_mode }}" = "openai_direct" ]; then
             echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
             exit 1
           fi
@@ -248,18 +247,17 @@ jobs:
           STRIX_LLM_MAX_RETRIES: 1
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
-          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 1
+          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 12
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '0' || '1' }}
           GH_TOKEN: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && github.token || '' }}
           PR_NUMBER: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.inputs.pr_number }}
           PR_BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
           PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
-          IS_PR_EVIDENCE_RUN: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && 'true' || 'false' }}
         run: |
           budget_suffix="TIME""OUT"
           process_budget_seconds="2400"
-          if [ "$IS_PR_EVIDENCE_RUN" = "true" ]; then
+          if [ "${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && 'true' || 'false' }}" = "true" ]; then
             process_budget_seconds="1200"
           fi
           export "LLM_${budget_suffix}=90"
