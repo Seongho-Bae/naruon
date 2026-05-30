@@ -11,11 +11,10 @@
 - Pending checks are wait states, but a full-scan route that exceeds its process
   budget is not acceptable operating evidence under the no Timeout/Fatal/Warn/
   Denied policy.
-- PR #311 Strix run `26661237230` timed out the first PR-scope batch after
-  `1200s`, then found a HIGH OIDC admin-claim issue only after rebatching. The
-  next head run `26662731398` remained in `Run Strix (quick)` for more than one
-  hour, showing that a 12-file first batch is not operationally bounded enough
-  for current Vertex-backed PR evidence.
+- PR #311 Strix run `26661237230` exceeded the earlier process budget before
+  later surfacing a HIGH OIDC admin-claim issue. The next head run `26662731398`
+  remained in `Run Strix (quick)` for more than one hour, showing that the
+  Vertex-backed provider path itself needed clearer timeout evidence handling.
 - PR #312 run `26669020785` used the old quarantine path and then failed after
   repeated `MidStreamFallbackError` and timeout-class provider failures while
   printing zero vulnerabilities. Under the no Timeout/Fatal/Warn/Denied policy,
@@ -30,8 +29,9 @@
   HMAC/OIDC verification path.
 - PR #312 manual current-head run `26686952879` printed zero vulnerabilities but
   still timed out after `2400s`. That confirms zero-vulnerability text is not
-  enough; the PR-scope runner must avoid large multi-file batches that do not
-  complete cleanly.
+  enough; timeout-class evidence remains failed evidence. PR scope must still be
+  presented to Strix as one whole-context target rather than split into separate
+  scanner runs.
 
 ## Plan
 
@@ -47,9 +47,9 @@
    forwarding from PR #303.
 5. Add regression assertions so later edits cannot accidentally quarantine the
    approved 3.1 route or pass after timeout/provider failure output.
-6. Start PR-scope evidence with single-file deterministic batches instead of
-   waiting for a 12-file batch to hit the process budget and rebalance after the
-   timeout.
+6. Present the generated PR-head scope to Strix in one scanner invocation. Do not
+   split changed files into separate scanner runs because Strix's whole-context
+   review model expects all relevant files together.
 7. Validate OIDC issuer/JWKS hostnames by resolving every address to a global IP
    before startup accepts the configuration, and make JWKS preload fetches
    connect to that validated pinned address while preserving TLS/SNI for the

@@ -86,9 +86,9 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "GOOGLE_APPLICATION_CREDENTIALS" "strix workflow exports Vertex AI credentials only for Vertex provider mode"
 	assert_file_contains "$workflow_file" "VERTEXAI_PROJECT" "strix workflow exports LiteLLM Vertex project env"
 	assert_file_contains "$workflow_file" "VERTEXAI_LOCATION" "strix workflow exports LiteLLM Vertex location env"
-	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix batches"
+	assert_file_contains "$workflow_file" "timeout-minutes: 90" "strix workflow job budget covers PR-scoped Strix scans"
 	assert_file_contains "$workflow_file" 'budget_suffix="TIME""OUT"' "strix workflow builds budget env keys without visible timeout signal text"
-	assert_file_contains "$workflow_file" 'export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"' "strix workflow total Strix budget covers PR-scoped batches"
+	assert_file_contains "$workflow_file" 'export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"' "strix workflow total Strix budget covers PR-scoped scans"
 	assert_file_contains "$workflow_file" 'process_budget_seconds="2400"' "strix workflow keeps PR-scoped process budget large enough for report finalization"
 	assert_file_contains "$workflow_file" 'IS_PR_EVIDENCE_RUN: ${{ (github.event_name == '"'"'pull_request_target'"'"' || github.event.inputs.pr_number != '"'"''"'"') && '"'"'true'"'"' || '"'"'false'"'"' }}' "strix workflow passes PR evidence mode through env"
 	assert_file_not_contains "$workflow_file" 'if [ "${{ (github.event_name == '"'"'pull_request_target'"'"' || github.event.inputs.pr_number != '"'"''"'"') && '"'"'true'"'"' || '"'"'false'"'"' }}" = "true" ]; then' "strix workflow does not interpolate GitHub context inside shell condition"
@@ -96,7 +96,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "STRIX_MEMORY_COMPRESSOR_TIMEOUT:" "strix workflow must not expose compressor timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_PROCESS_TIMEOUT_SECONDS:" "strix workflow must not expose process timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS:" "strix workflow must not expose total timeout env names in GitHub logs"
-	assert_file_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 1" "strix workflow uses deterministic single-file PR batches"
+	assert_file_not_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "strix workflow must not split Strix PR evidence into separate scanner runs"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash'" "strix workflow must not quarantine the approved Vertex preview model after organization secret visibility is fixed"
 	assert_file_contains "$workflow_file" "secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools'" "strix workflow defaults missing STRIX_LLM to the approved organization Vertex model"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
@@ -271,7 +271,7 @@ run_gate_case() {
 	local github_event_name="${19-}"
 	local changed_files_override="${20-}"
 	local event_name_override="${21-}"
-	local pr_scope_max_files_per_batch="${22-}"
+	local legacy_scope_size_ignored="${22-}"
 	local disable_pr_scoping="${23-0}"
 	local test_pr_sca_status_override="${24-}"
 	local current_pr_number="${25-}"
@@ -746,7 +746,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	pr-batch-zero-finding-does-not-leak)
+	pr-scope-zero-finding-does-not-leak)
 		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ]; then
 			echo "Vulnerabilities 0"
 			echo "LLM CONNECTION FAILED"
@@ -758,7 +758,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.Timeout: Connection timed out after None seconds."
 			exit 1
 		fi
-		echo "Error: unexpected PR batch zero-finding leak target layout ($target_path)" >&2
+		echo "Error: unexpected PR scope zero-finding leak target layout ($target_path)" >&2
 		exit 41
 		;;
 	service-unavailable-no-llm-marker-nonrecoverable)
@@ -1722,7 +1722,7 @@ EOS
 		echo "scan ok with python dependency scope"
 		exit 0
 		;;
-	pr-changed-scope-batched)
+	pr-changed-scope-full)
 		attempt="0"
 		if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
 			attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
@@ -1745,44 +1745,29 @@ EOS
 			echo "scan ok with full changed-file scope"
 			exit 0
 		fi
-		echo "Error: unexpected batch attempt $attempt" >&2
+		echo "Error: unexpected full-scope scan attempt $attempt" >&2
 		exit 50
 		;;
-	pr-changed-scope-max-batches)
+	pr-changed-scope-full-set)
 		attempt="0"
 		if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
 			attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
 		fi
 		attempt="$((attempt + 1))"
 		echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
-		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			echo "Error: PR changed-file scope was not split by STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
-			exit 53
-		fi
 		if [ "$attempt" -eq 1 ] && \
 		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
 		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			echo "scan ok with first configured max-size batch"
-			exit 0
-		fi
-		if [ "$attempt" -eq 2 ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
 		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
 		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			echo "scan ok with second configured max-size batch"
+			echo "scan ok with full configured PR scope"
 			exit 0
 		fi
-		echo "Error: unexpected configured max-size batch layout attempt $attempt ($target_path)" >&2
+		echo "Error: PR changed-file scope did not include the complete changed-file set on one scan attempt $attempt ($target_path)" >&2
 		exit 54
 		;;
-	pr-large-scope-four-batches)
-		echo "scan ok with large PR batch"
+	pr-large-scope-full-set)
+		echo "scan ok with large full PR scope"
 		exit 0
 		;;
 	pr-changed-scope-includes-ci-dependency)
@@ -1792,34 +1777,6 @@ EOS
 		fi
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
-		;;
-	pr-changed-scope-rebalanced)
-		if [ -z "$target_path" ]; then
-			echo "Error: target path missing" >&2
-			exit 51
-		fi
-		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			exit 124
-		fi
-		if [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			echo "scan ok after rebalance (first half)"
-			exit 0
-		fi
-		if [ ! -e "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" ] && \
-		   [ ! -e "$target_path/sync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java" ] && \
-		   [ -f "$target_path/sync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java" ]; then
-			echo "scan ok after rebalance (second half)"
-			exit 0
-		fi
-		echo "Error: unexpected rebalance target layout ($target_path)" >&2
-		exit 52
 		;;
 	*)
 		echo "unknown scenario ${FAKE_STRIX_SCENARIO:?}" >&2
@@ -1976,7 +1933,7 @@ EOS
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
-	elif [ "$scenario" = "pr-large-scope-four-batches" ]; then
+		elif [ "$scenario" = "pr-large-scope-full-set" ]; then
 		mkdir -p "$repo_root_dir/backend/large-scope"
 		local large_scope_index
 		for large_scope_index in $(seq 1 38); do
@@ -2068,9 +2025,7 @@ EOS
 	if [ -n "$custom_source_dirs" ]; then
 		env_cmd+=(STRIX_SOURCE_DIRS="$custom_source_dirs")
 	fi
-	if [ -n "$pr_scope_max_files_per_batch" ]; then
-		env_cmd+=(STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="$pr_scope_max_files_per_batch")
-	fi
+	: "$legacy_scope_size_ignored"
 	if [ -n "$github_event_name" ]; then
 		env_cmd+=(GITHUB_EVENT_NAME="$github_event_name")
 	fi
@@ -2163,7 +2118,7 @@ EOS
 			"scenario=$scenario runtime env forwarding"
 	fi
 
-	if [ "$scenario" = "pr-changed-scope-max-batches" ]; then
+	if [ "$scenario" = "pr-changed-scope-full-set" ]; then
 		assert_internal_pr_scope_targets "$target_log" "$repo_root_dir" "$expected_calls"
 	fi
 
@@ -2634,12 +2589,7 @@ if [ "$attempt" -eq 1 ]; then
 	exit 0
 fi
 
-if [ "$attempt" -eq 2 ]; then
-	echo "scan ok with changed context file batch"
-	exit 0
-fi
-
-echo "Error: unexpected changed context batch attempt $attempt" >&2
+echo "Error: unexpected changed context scan attempt $attempt" >&2
 exit 71
 EOF
 	chmod +x "$fake_strix"
@@ -2691,7 +2641,6 @@ EOF
 			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
 			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
 			FAKE_STRIX_STATE_FILE="$state_file" \
-			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2703,8 +2652,7 @@ EOF
 	set -e
 
 	assert_equals "0" "$rc" "case=pull-request-target-changed-context-uses-pr-head exit code"
-	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-target-changed-context-uses-pr-head first batch output"
-	assert_file_contains "$output_log" "scan ok with changed context file batch" "case=pull-request-target-changed-context-uses-pr-head second batch output"
+	assert_file_contains "$output_log" "scan ok with changed PR head backend context" "case=pull-request-target-changed-context-uses-pr-head output"
 
 	printf '0' >"$state_file"
 	(
@@ -2728,7 +2676,6 @@ EOF
 			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
 			FAKE_STRIX_UNEXPECTED_BASE_REQUIREMENTS="BASE_REQUIREMENTS_SHOULD_NOT_BE_SCANNED" \
 			FAKE_STRIX_STATE_FILE="$state_file" \
-			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2846,7 +2793,7 @@ if [ "$matched_backend_context" -eq 1 ]; then
 	exit 0
 fi
 
-echo "scan ok with non-email backend batch"
+echo "scan ok with non-email backend scope"
 EOF
 	chmod +x "$fake_strix"
 	printf '%s' 'gemini/test-model' >"$strix_llm_file"
@@ -2928,7 +2875,6 @@ EOF
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
-			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -2945,7 +2891,7 @@ EOF
 	assert_file_contains "$output_log" "scan ok with PR-head backend dependency context" "case=pull-request-target-changed-backend-context-uses-head-blob output"
 	assert_file_contains "$output_log" "scan ok with PR-head LLM provider URL validation context" "case=pull-request-target-changed-backend-context-includes-llm-provider-url-validation output"
 	assert_file_contains "$output_log" "scan ok with PR-head email parser text safety context" "case=pull-request-target-changed-backend-context-includes-email-parser-text-safety output"
-	assert_equals "12" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
+	assert_equals "1" "$(wc -l <"$call_log" | tr -d ' ')" "case=pull-request-target-changed-backend-context-uses-head-blob strix call count"
 
 	rm -rf "$tmp_dir"
 }
@@ -3147,7 +3093,7 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local fake_git_fail_command="$5"
 	local disable_pr_scoping="${6-0}"
 	local expected_exit="1"
-	if [ "$fake_git_fail_command" = "ls-tree" ] || [ "$fake_git_fail_command" = "diff" ] || [ "$disable_pr_scoping" = "1" ]; then
+	if [ "$fake_git_fail_command" = "ls-tree" ] || [ "$fake_git_fail_command" = "show" ] || [ "$fake_git_fail_command" = "diff" ] || [ "$disable_pr_scoping" = "1" ]; then
 		expected_exit="2"
 	fi
 	local expected_message="pull request changed file could not be read from PR head; failing closed"
@@ -4022,7 +3968,7 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
-run_pr_batched_llm_api_base_file_config_failure_exits_2_case() {
+run_pr_scoped_llm_api_base_file_config_failure_exits_2_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
 	local repo_root_dir="$tmp_dir/workspace/smart-crawling-server"
@@ -4061,7 +4007,6 @@ EOF
 			RUNNER_TEMP="$allowed_input_dir" \
 			GITHUB_EVENT_NAME="pull_request" \
 			STRIX_TEST_CHANGED_FILES_OVERRIDE=$'src/one.py\nsrc/two.py' \
-			STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="1" \
 			FAKE_STRIX_CALL_LOG="$call_log" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
@@ -4072,10 +4017,10 @@ EOF
 	local rc=$?
 	set -e
 
-	assert_equals "2" "$rc" "case=pr-batched-llm-api-base-file-config-failure exit code"
-	assert_file_contains "$output_log" "LLM_API_BASE_FILE must be inside the trusted input file root" "case=pr-batched-llm-api-base-file-config-failure output"
+	assert_equals "2" "$rc" "case=pr-scoped-llm-api-base-file-config-failure exit code"
+	assert_file_contains "$output_log" "LLM_API_BASE_FILE must be inside the trusted input file root" "case=pr-scoped-llm-api-base-file-config-failure output"
 	if [ -f "$call_log" ]; then
-		record_failure "case=pr-batched-llm-api-base-file-config-failure should reject before invoking strix"
+		record_failure "case=pr-scoped-llm-api-base-file-config-failure should reject before invoking strix"
 	fi
 
 	rm -rf "$tmp_dir"
@@ -4892,13 +4837,13 @@ run_gate_case_allow_provider_signal "gemini-zero-findings-timeout-fallback-allow
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
-run_gate_case_allow_provider_signal "pr-batch-zero-finding-does-not-leak" \
-	"gemini/batch-zero-leak-primary" \
+run_gate_case_allow_provider_signal "pr-scope-zero-finding-does-not-leak" \
+	"gemini/scope-zero-leak-primary" \
 	"" \
 	"1" \
 	"Strix reported zero vulnerabilities before provider infrastructure failure; failing closed because provider infrastructure failures are not clean scan evidence." \
 	"1" \
-	"gemini/batch-zero-leak-primary" \
+	"gemini/scope-zero-leak-primary" \
 	"https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
@@ -5686,7 +5631,7 @@ run_required_input_file_outside_input_root_fails_closed_case "STRIX_LLM_FILE"
 run_required_input_file_outside_input_root_fails_closed_case "LLM_API_KEY_FILE"
 run_vertex_model_ignores_untrusted_llm_api_base_file_case
 run_llm_api_base_file_outside_input_root_fails_closed_case
-run_pr_batched_llm_api_base_file_config_failure_exits_2_case
+run_pr_scoped_llm_api_base_file_config_failure_exits_2_case
 run_input_file_root_override_takes_precedence_over_runner_temp_case
 run_stale_report_case
 run_symlink_report_case
@@ -5775,7 +5720,7 @@ run_gate_case "pr-python-scope-context" \
 	"pull_request" \
 	"backend/api/emails.py"
 
-run_gate_case "pr-changed-scope-batched" \
+run_gate_case "pr-changed-scope-full" \
 	"openai/gpt-4o-mini" \
 	"" \
 	"0" \
@@ -5796,14 +5741,14 @@ run_gate_case "pr-changed-scope-batched" \
 	"pull_request" \
 	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java'
 
-run_gate_case "pr-changed-scope-max-batches" \
+run_gate_case "pr-changed-scope-full-set" \
 	"openai/gpt-4o-mini" \
 	"" \
 	"0" \
-	"Running pull request Strix batch 2/2." \
-	"2" \
-	"openai/gpt-4o-mini|openai/gpt-4o-mini" \
-	"https://example.invalid|https://example.invalid" \
+	"scan ok with full configured PR scope" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
 	"" \
@@ -5828,14 +5773,14 @@ for large_pr_index in $(seq 1 38); do
 	large_pr_changed_files+="$large_pr_path"
 done
 
-run_gate_case "pr-large-scope-four-batches" \
+run_gate_case "pr-large-scope-full-set" \
 	"openai/gpt-4o-mini" \
 	"" \
 	"0" \
-	"Running pull request Strix batch 4/4." \
-	"4" \
-	"openai/gpt-4o-mini|openai/gpt-4o-mini|openai/gpt-4o-mini|openai/gpt-4o-mini" \
-	"https://example.invalid|https://example.invalid|https://example.invalid|https://example.invalid" \
+	"scan ok with large full PR scope" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
 	"" \
@@ -5871,29 +5816,6 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
-
-run_gate_case_allow_provider_signal "pr-changed-scope-rebalanced" \
-	"vertex_ai/gemini-2.5-flash" \
-	"vertex_ai/gemini-2.5-pro" \
-	"0" \
-	"Rebalancing pull request Strix batch 1/1 into smaller batches after timeout." \
-	"3" \
-	"vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash|vertex_ai/gemini-2.5-flash" \
-	"<unset>|<unset>|<unset>" \
-	"vertex_ai" \
-	"__DEFAULT__" \
-	"" \
-	"0" \
-	"CRITICAL" \
-	"0" \
-	"" \
-	"" \
-	"1200" \
-	"3000" \
-	"pull_request" \
-	$'sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java\nsync-module-system/smart-crawling-playwright/src/main/java/org/empasy/sync/mcp/service/PlayWrightService.java\nsync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java\nsync-module-system/smart-crawling-common/src/main/java/org/empasy/sync/common/system/util/JwtUtil.java' \
-	"" \
-	"4"
 
 run_gate_case "pr-empty-diff-skip" \
 	"openai/gpt-4o-mini" \
