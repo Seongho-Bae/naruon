@@ -35,9 +35,9 @@
   do not carry stale timeout-signal strings. Keep PR-scope process budgets large
   enough for Strix to finalize reports after the scanner emits completion
   events; a wrapper timeout after `vulnerability_count: 0` is still failed
-  evidence, not a pass. PR evidence should use deterministic single-file
-  batches until the Vertex-backed scanner proves bounded multi-file completion.
-  Keep
+  evidence, not a pass. PR evidence must present the full PR-head scope to
+  Strix in one scanner invocation; do not split changed files into separate
+  scanner runs because that breaks Strix's required whole-context contract. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
