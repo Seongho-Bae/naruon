@@ -837,14 +837,16 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" -- 2>/dev/null)"; then
 		if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && pull_request_metadata_env_present; then
-			if changed_files_output="$(git diff --name-only "$base_sha" "$head_sha" --)"; then
+			if changed_files_output="$(git diff --name-only "$base_sha" "$head_sha" -- 2>/dev/null)"; then
 				echo "Using explicit base/head diff for workflow_dispatch PR-scope Strix evidence." >&2
 			else
 				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
 				return 2
 			fi
+		elif changed_files_output="$(git diff --name-only "$base_sha..$head_sha" -- 2>/dev/null)"; then
+			echo "INFO: Unable to compute PR merge base; falling back to direct base/head diff for changed file enumeration." >&2
 		else
 			if pull_request_head_blob_required; then
 				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
@@ -2957,10 +2959,15 @@ run_current_target_scan() {
 	if [ "$fallback_tried" -eq 0 ]; then
 		local fallback_config_name
 		fallback_config_name="$(fallback_models_config_name_for_model "$PRIMARY_MODEL")"
-		if [ "${#FALLBACK_MODELS[@]}" -eq 0 ]; then
+		local configured_fallback_count=0
+		for candidate_raw in "${FALLBACK_MODELS[@]}"; do
+			candidate="$(normalize_model "$candidate_raw")"
+			[ -n "$candidate" ] && configured_fallback_count=$((configured_fallback_count + 1))
+		done
+		if [ "$configured_fallback_count" -eq 0 ]; then
 			echo "ERROR: No fallback models configured ($fallback_config_name is empty). Configure distinct models." >&2
 		else
-			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
+			echo "ERROR: All configured fallback models are the same as the primary model" >&2
 		fi
 		return 1
 	fi

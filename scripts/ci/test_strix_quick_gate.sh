@@ -3093,6 +3093,100 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+run_pull_request_target_shallow_head_merge_base_fallback_case() {
+	local tmp_dir
+	tmp_dir="$(mktemp -d)"
+	local bin_dir="$tmp_dir/bin"
+	local origin_repo_dir="$tmp_dir/origin"
+	local repo_root_dir="$tmp_dir/repo"
+	mkdir -p "$bin_dir" "$origin_repo_dir" "$repo_root_dir/scripts/ci"
+
+	cp "$GATE_SCRIPT" "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+	cp "$REPO_ROOT/scripts/ci/strix_model_utils.sh" "$repo_root_dir/scripts/ci/strix_model_utils.sh"
+	chmod +x "$repo_root_dir/scripts/ci/strix_quick_gate.sh"
+
+	local fake_strix="$bin_dir/strix"
+	local output_log="$tmp_dir/output.log"
+	local strix_llm_file="$tmp_dir/strix_llm.txt"
+	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
+
+	cat >"$fake_strix" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "scan ok"
+exit 0
+EOF
+	chmod +x "$fake_strix"
+	printf '%s' 'gemini/test-model' >"$strix_llm_file"
+	printf '%s' 'dummy' >"$llm_api_key_file"
+
+	(
+		cd "$origin_repo_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		mkdir -p src
+		printf '%s\n' 'BASE_CONTENT' >src/app.py
+		git add .
+		git commit -qm 'base commit'
+		printf '%s\n' 'MID_CONTENT' >src/app.py
+		git add .
+		git commit -qm 'mid commit'
+		printf '%s\n' 'HEAD_CONTENT' >src/app.py
+		git add .
+		git commit -qm 'head commit'
+	)
+	local base_sha
+	base_sha="$(git -C "$origin_repo_dir" rev-list --max-parents=0 HEAD)"
+	local head_sha
+	head_sha="$(git -C "$origin_repo_dir" rev-parse HEAD)"
+
+	(
+		cd "$repo_root_dir"
+		git init -q
+		git config user.name 'Strix Test'
+		git config user.email 'strix-test@example.invalid'
+		git remote add origin "$origin_repo_dir"
+		git fetch -q --depth=1 origin "$base_sha"
+		git checkout -q FETCH_HEAD
+		git fetch -q --depth=1 origin "$head_sha"
+	)
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		git diff --name-only "$base_sha...$head_sha" -- >/dev/null 2>&1
+	)
+	local merge_base_diff_rc=$?
+	set -e
+	if [ "$merge_base_diff_rc" -eq 0 ]; then
+		record_failure "case=pull-request-target-shallow-head expected base...head diff to fail"
+	fi
+
+	set +e
+	(
+		cd "$repo_root_dir"
+		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+			PATH="$bin_dir:$PATH" \
+			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
+			GITHUB_EVENT_NAME="pull_request_target" \
+			PR_BASE_SHA="$base_sha" \
+			PR_HEAD_SHA="$head_sha" \
+			STRIX_LLM_FILE="$strix_llm_file" \
+			LLM_API_KEY_FILE="$llm_api_key_file" \
+			STRIX_TARGET_PATH="." \
+			STRIX_REPORTS_DIR="$repo_root_dir/strix_runs" \
+			bash "./scripts/ci/strix_quick_gate.sh" >"$output_log" 2>&1
+	)
+	local rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "case=pull-request-target-shallow-head exit code"
+	assert_file_contains "$output_log" "falling back to direct base/head diff" "case=pull-request-target-shallow-head output"
+
+	rm -rf "$tmp_dir"
+}
+
 run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local case_name="$1"
 	local changed_file="$2"
@@ -4428,6 +4522,8 @@ run_pull_request_target_head_scope_case \
 	"1"
 
 run_pull_request_target_plaintext_runner_token_fails_closed_case
+
+run_pull_request_target_shallow_head_merge_base_fallback_case
 
 run_pull_request_target_rejects_unsafe_changed_path_case \
 	"pull-request-target-parent-directory-changed-path-fails-closed" \
