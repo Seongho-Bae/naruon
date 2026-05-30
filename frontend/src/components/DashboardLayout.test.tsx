@@ -69,8 +69,9 @@ describe("DashboardLayout", () => {
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/security"]')?.textContent).toContain("보안");
     expect(primaryNav?.querySelector<HTMLAnchorElement>('a[href="/settings"]')?.textContent).toContain("설정");
     expect(mobileNav).not.toBeNull();
-    expect(banner?.querySelector('button[aria-label="알림 보기"]')).not.toBeNull();
-    expect(banner?.querySelector('button[aria-label="프로필 메뉴"]')).not.toBeNull();
+    expect(banner?.querySelector<HTMLAnchorElement>('a[aria-label="알림 보기"]')?.getAttribute("href")).toBe("/security");
+    expect(banner?.querySelector<HTMLAnchorElement>('a[aria-label="도움말 보기"]')?.getAttribute("href")).toBe("/settings#help");
+    expect(banner?.querySelector<HTMLAnchorElement>('a[aria-label="프로필 메뉴"]')?.getAttribute("href")).toBe("/settings#profile");
     expect(mobileMenuButton?.getAttribute("aria-expanded")).toBe("false");
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
     expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "일정", "더보기"]);

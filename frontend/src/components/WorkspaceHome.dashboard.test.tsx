@@ -235,4 +235,84 @@ describe("WorkspaceHome Today dashboard", () => {
     }
     expect(container.textContent).toContain("1개 SLA 티켓 생성, 2개 답변 대기 확인");
   });
+
+  it("routes Today dashboard task calendar and quick actions to implemented workspaces", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "task-home-route",
+              title: "계약 승인 확인",
+              status: "open",
+              priority: "high",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+          ]),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인") ?? false);
+
+    const linkHrefByText = (label: string) =>
+      Array.from(container?.querySelectorAll<HTMLAnchorElement>("a") ?? [])
+        .find((link) => link.textContent?.includes(label))
+        ?.getAttribute("href");
+
+    expect(linkHrefByText("작업 바로가기")).toBe("/tasks");
+    expect(linkHrefByText("전체 작업 보기")).toBe("/tasks");
+    expect(linkHrefByText("일정 조정하기")).toBe("/calendar");
+
+    const quickActions = container.querySelector<HTMLElement>('[aria-label="홈 빠른 실행"]');
+    expect(quickActions).not.toBeNull();
+    expect(Array.from(quickActions?.querySelectorAll("button") ?? [])).toHaveLength(0);
+    expect(linkHrefByText("메일함 열기")).toBe("/mail");
+    expect(linkHrefByText("보낸 메일 답변 추적")).toBe("/mail?folder=sent");
+    expect(linkHrefByText("일정 후보 검토")).toBe("/calendar");
+    expect(linkHrefByText("작업 보드")).toBe("/tasks");
+    expect(linkHrefByText("프로젝트 의사결정")).toBe("/projects");
+    expect(linkHrefByText("AI 허브")).toBe("/ai-hub");
+    expect(linkHrefByText("데이터 품질 점검")).toBe("/data");
+    expect(linkHrefByText("보안 감사 로그")).toBe("/security");
+  });
 });
