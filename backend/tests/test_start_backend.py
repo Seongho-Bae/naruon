@@ -12,6 +12,7 @@ def _clear_runtime_settings(monkeypatch) -> None:
         "OIDC_ISSUER_URL",
         "OIDC_CLIENT_ID",
         "OIDC_JWKS_URL",
+        "ALLOWED_OIDC_HOSTS",
     ):
         monkeypatch.delenv(setting_name, raising=False)
 
@@ -76,4 +77,39 @@ def test_start_backend_rejects_partial_oidc_configuration(monkeypatch, tmp_path)
 
     assert start_backend.validate_runtime_settings() == [
         "OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL must be set together"
+    ]
+
+
+def test_start_backend_rejects_oidc_without_allowed_hosts(monkeypatch, tmp_path):
+    _clear_runtime_settings(monkeypatch)
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.test/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.test/realms/naruon/jwks")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+
+    assert start_backend.validate_runtime_settings() == [
+        "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
+    ]
+
+
+def test_start_backend_rejects_untrusted_oidc_jwks_host(monkeypatch, tmp_path):
+    _clear_runtime_settings(monkeypatch)
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.test/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://127.0.0.1/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.test")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+
+    assert start_backend.validate_runtime_settings() == [
+        "OIDC_JWKS_URL host must be listed in ALLOWED_OIDC_HOSTS"
     ]

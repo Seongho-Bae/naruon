@@ -723,7 +723,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     
@@ -736,7 +736,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     
     def mock_jwt_decode(*args, **kwargs):
         return {
-            "iss": "http://localhost:8081/realms/naruon",
+            "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "alice",
             "role": "tenant_admin",
@@ -771,7 +771,7 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
@@ -823,7 +823,7 @@ async def test_oidc_session_rejects_platform_system_admin_role_claim(
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
@@ -836,7 +836,7 @@ async def test_oidc_session_rejects_platform_system_admin_role_claim(
 
     def mock_jwt_decode(*args, **kwargs):
         return {
-            "iss": "http://localhost:8081/realms/naruon",
+            "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "operator",
             "role": role_claim,
@@ -870,7 +870,7 @@ async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monke
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
@@ -906,7 +906,7 @@ async def test_oidc_request_path_requires_preloaded_jwks(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", ())

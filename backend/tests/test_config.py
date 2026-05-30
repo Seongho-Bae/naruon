@@ -213,7 +213,73 @@ def test_oidc_settings_accept_complete_configuration(monkeypatch):
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
 
     loaded_settings = _settings_without_env_file()
 
     assert loaded_settings.OIDC_CLIENT_ID == "naruon-api"
+
+
+def test_oidc_settings_reject_missing_allowed_hosts(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
+    monkeypatch.delenv("ALLOWED_OIDC_HOSTS", raising=False)
+
+    with pytest.raises(
+        ValidationError,
+        match="ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts",
+    ):
+        _settings_without_env_file()
+
+
+def test_oidc_settings_reject_untrusted_jwks_host(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://metadata.google.internal/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
+
+    with pytest.raises(
+        ValidationError,
+        match="OIDC_JWKS_URL host must be listed in ALLOWED_OIDC_HOSTS",
+    ):
+        _settings_without_env_file()
+
+
+def test_oidc_settings_reject_non_https_issuer(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "http://login.example.com/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
+
+    with pytest.raises(ValidationError, match="OIDC_ISSUER_URL must use https"):
+        _settings_without_env_file()
+
+
+def test_oidc_settings_reject_private_ip_literal_even_when_allowlisted(monkeypatch):
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://127.0.0.1/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://127.0.0.1/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "127.0.0.1")
+
+    with pytest.raises(
+        ValidationError,
+        match="OIDC_ISSUER_URL IP host must be globally routable",
+    ):
+        _settings_without_env_file()

@@ -97,6 +97,11 @@
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
   addresses.
+- OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
+  must use HTTPS, must not include userinfo or fragments, must reject localhost
+  and non-global IP literals, and must be exact-host allowlisted by
+  `ALLOWED_OIDC_HOSTS` before any JWKS preload or token verification path can
+  use them.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
