@@ -5055,6 +5055,9 @@ run_gate_case "multi-source-dirs-existing-endpoint" \
 	"" \
 	"src api"
 
+# Bug 2 follow-up: multi-entry STRIX_SOURCE_DIRS test for hallucinated endpoint.
+# Endpoint /api/ghost-admin does not exist in src/ or api/.
+# The gate must treat the finding as hallucinated -> fallback (exit 0).
 run_gate_case "multi-source-dirs-hallucinated-endpoint" \
 	"vertex_ai/hallucination-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
