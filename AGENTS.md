@@ -35,7 +35,9 @@
   do not carry stale timeout-signal strings. Keep PR-scope process budgets large
   enough for Strix to finalize reports after the scanner emits completion
   events; a wrapper timeout after `vulnerability_count: 0` is still failed
-  evidence, not a pass. Keep
+  evidence, not a pass. PR evidence should use deterministic single-file
+  batches until the Vertex-backed scanner proves bounded multi-file completion.
+  Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
   stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
@@ -92,6 +94,10 @@
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
+- Session authority is a server-side verification result, not a token payload
+  claim. HMAC and OIDC paths must pass `session_verifier` from the code path that
+  validated the signature/key; never derive it from `_session_verifier` or a
+  similar user-controlled JWT claim.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/` may omit it. Keep runtime feature/configuration

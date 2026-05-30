@@ -247,6 +247,16 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 
 
 @pytest.mark.asyncio
+async def test_signed_bearer_session_uses_server_hmac_verifier():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(_session_verifier="oidc"))
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.session_verifier == "hmac"
+
+
+@pytest.mark.asyncio
 async def test_signed_bearer_session_rejects_tampered_payload():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload(role="member"))
@@ -813,6 +823,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
             "groups": ["group-1", "group-2"],
             "workspace": "workspace-org-acme",
             "exp": int(time.time()) + 300,
+            "_session_verifier": "hmac",
         }
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 

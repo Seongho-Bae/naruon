@@ -197,8 +197,8 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
     dependency path. Endpoint tests that need fixture identities must continue to
     use explicit FastAPI dependency overrides.
     """
-    payload = _verify_signed_session_payload(authorization)
-    return _auth_context_from_session_payload(payload)
+    payload, session_verifier = _verify_signed_session_payload(authorization)
+    return _auth_context_from_session_payload(payload, session_verifier)
 
 
 def _authentication_error() -> HTTPException:
@@ -264,9 +264,11 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
+def _verify_signed_session_payload(
+    authorization: str | None,
+) -> tuple[dict[str, Any], SessionVerifier]:
     token = _extract_bearer_token(authorization)
-    
+
     # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
@@ -281,8 +283,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
                 issuer=settings.OIDC_ISSUER_URL
             )
             _reject_signed_session_system_admin_payload(payload)
-            payload["_session_verifier"] = "oidc"
-            return payload
+            return payload, "oidc"
         except Exception:
             raise _authentication_error() from None
 
@@ -307,8 +308,7 @@ def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise _authentication_error()
     _reject_signed_session_system_admin_payload(payload)
-    payload["_session_verifier"] = "hmac"
-    return payload
+    return payload, "hmac"
 
 
 def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None:
@@ -369,11 +369,10 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
         raise _authentication_error()
 
 
-def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
+def _auth_context_from_session_payload(
+    payload: dict[str, Any], session_verifier: SessionVerifier
+) -> AuthContext:
     _validate_session_metadata(payload)
-    session_verifier = payload.get("_session_verifier", "override")
-    if session_verifier not in ("hmac", "oidc", "override"):
-        raise _authentication_error()
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()

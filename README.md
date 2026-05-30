@@ -41,7 +41,9 @@ mail/calendar/file systems.
   timeout-named workflow `env:` entries. PR-scope scan budgets leave room for
   report finalization after Strix emits completion events; workflow PR evidence
   uses `STRIX_TARGET_PATH=__PR_SCOPE__` so the scanner target is the generated
-  PR-head scope, not the trusted base checkout. Scanner child processes disable
+  PR-head scope, not the trusted base checkout, and runs deterministic
+  single-file batches so large PR scopes do not wait for a multi-file batch to
+  hit the process budget. Scanner child processes disable
   npm, pnpm, yarn, and bun lifecycle scripts while inspecting PR scope data.
   Wrapper timeout output is failed evidence. Pending CodeRabbit or check
   evidence is a wait state, not a hard blocker.
@@ -71,7 +73,9 @@ mail/calendar/file systems.
   exact-allowlisted HTTPS hosts must resolve only to global addresses, and JWKS
   preload fetches connect to the validated pinned address while keeping TLS/SNI
   on the allowlisted hostname.
-  
+- Session authority is assigned by the verified HMAC or OIDC code path, not by a
+  `_session_verifier` JWT payload claim supplied inside the token.
+
 ## Agentic Ontology & Auto-Organization
 
 - **Sender ontology**: The backend classifies sender relationships and returns a

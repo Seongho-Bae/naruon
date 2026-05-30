@@ -24,6 +24,14 @@
   OIDC issuer/JWKS allowlisting still allowed trusted hostnames to resolve to
   private addresses, and the privileged PR scanner preserved PR-head executable
   bits when materializing scan data.
+- PR #312 automatic Strix evidence then flagged session verifier authority as a
+  token-claim trust issue. Even when a tampered JWT would fail HMAC validation,
+  the safer contract is to derive `session_verifier` only from the server-side
+  HMAC/OIDC verification path.
+- PR #312 manual current-head run `26686952879` printed zero vulnerabilities but
+  still timed out after `2400s`. That confirms zero-vulnerability text is not
+  enough; the PR-scope runner must avoid large multi-file batches that do not
+  complete cleanly.
 
 ## Plan
 
@@ -57,6 +65,9 @@
 11. Validate PR base/head SHA inputs in the workflow shell before any trusted
     fetch or PR-scope evidence handoff so workflow_dispatch cannot pass
     shell-shaped data into the gate.
+12. Keep JWT session authority outside user-controlled payload claims: HMAC and
+    OIDC verification paths must pass `session_verifier` into auth-context
+    construction instead of reading `_session_verifier` from the decoded payload.
 
 ## Non-Goals
 
