@@ -632,22 +632,28 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-		gemini-timeout-retry-same-model-success)
-			case "${STRIX_LLM:-}" in
-			gemini/retry-timeout-primary)
+	gemini-timeout-retry-same-model-success)
+		case "${STRIX_LLM:-}" in
+		gemini/retry-timeout-primary)
+			attempt="0"
+			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
+				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
+			fi
+			attempt="$((attempt + 1))"
+			echo "$attempt" >"${FAKE_STRIX_STATE_FILE:?}"
+			if [ "$attempt" -eq 1 ]; then
 				echo "LLM CONNECTION FAILED"
 				echo "Error: litellm.Timeout: Connection timed out after None seconds."
 				exit 1
-				;;
-			vertex_ai/fallback-one)
-				echo "scan ok after timeout fallback"
-				exit 0
-				;;
-			*)
-				echo "Error: gemini timeout retry path unexpected (${STRIX_LLM:-})" >&2
-				exit 38
-				;;
-			esac
+			fi
+			echo "scan ok after same-model timeout retry"
+			exit 0
+			;;
+		*)
+			echo "Error: gemini timeout retry path unexpected (${STRIX_LLM:-})" >&2
+			exit 38
+			;;
+		esac
 		;;
 	gemini-timeout-fallback-success|gemini-generic-fallback-success)
 		case "${STRIX_LLM:-}" in
@@ -4512,45 +4518,45 @@ run_gate_case "gemini-high-demand-retry-same-model-success" \
 	"" \
 	"1"
 
-	run_gate_case "gemini-timeout-retry-same-model-success" \
-		"gemini/retry-timeout-primary" \
-		"vertex_ai/fallback-one vertex_ai/fallback-two" \
-		"0" \
-		"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
-		"2" \
-		"gemini/retry-timeout-primary|vertex_ai/fallback-one" \
-		"https://example.invalid|<unset>" \
-		"vertex_ai" \
-		"__DEFAULT__" \
-		"" \
-		"1"
+run_gate_case "gemini-timeout-retry-same-model-success" \
+	"gemini/retry-timeout-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after same-model timeout retry" \
+	"2" \
+	"gemini/retry-timeout-primary|gemini/retry-timeout-primary" \
+	"https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
 
-	run_gate_case "gemini-timeout-fallback-success" \
-		"gemini/timeout-fallback-primary" \
-		"gemini/fallback-one gemini/fallback-two" \
-		"0" \
-		"scan ok after gemini fallback" \
-		"2" \
-		"gemini/timeout-fallback-primary|gemini/fallback-one" \
-		"https://example.invalid|https://example.invalid" \
-		"vertex_ai" \
-		"__DEFAULT__" \
-		"" \
-		"1"
+run_gate_case "gemini-timeout-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"gemini/fallback-one gemini/fallback-two" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1"
 
-	run_gate_case "gemini-generic-fallback-success" \
-		"gemini/timeout-fallback-primary" \
-		"" \
-		"0" \
-		"scan ok after gemini fallback" \
-		"2" \
-		"gemini/timeout-fallback-primary|gemini/fallback-one" \
-		"https://example.invalid|https://example.invalid" \
-		"vertex_ai" \
-		"__DEFAULT__" \
-		"" \
-		"1" \
-		"CRITICAL" \
+run_gate_case "gemini-generic-fallback-success" \
+	"gemini/timeout-fallback-primary" \
+	"" \
+	"0" \
+	"scan ok after gemini fallback" \
+	"3" \
+	"gemini/timeout-fallback-primary|gemini/timeout-fallback-primary|gemini/fallback-one" \
+	"https://example.invalid|https://example.invalid|https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"1" \
+	"CRITICAL" \
 	"0" \
 	"" \
 	"" \

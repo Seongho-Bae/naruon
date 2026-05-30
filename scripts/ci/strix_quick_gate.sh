@@ -774,13 +774,15 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
-		if pull_request_head_blob_required; then
-			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
-			return 2
+		if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" -- 2>/dev/null)"; then
+			if ! changed_files_output="$(git diff --name-only "$base_sha..$head_sha" --)"; then
+				if pull_request_head_blob_required; then
+					echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+					return 2
+				fi
+				return 1
+			fi
 		fi
-		return 1
-	fi
 
 	while IFS= read -r changed_file; do
 		if [ -n "$changed_file" ]; then
@@ -2043,6 +2045,7 @@ is_llm_service_unavailable_error() {
 ## provider-specific fallback path in this gate, so LLM timeouts trigger
 ## a fallback model evaluation directly.
 is_transient_same_model_retry_error() {
+	local model="${1-}"
 	if is_timeout_error; then
 		return 1
 	fi
@@ -2171,9 +2174,8 @@ is_rate_limit_error() {
 ##      or infrastructure network timeouts as LLM errors.
 ##
 ## All three tiers feed into infrastructure-error detection and trigger
-## fallback model evaluation before the total budget is exhausted. Same-model
-## retries remain reserved for transient errors (rate-limit, API connection,
-## service unavailable, mid-stream fallback), excluding timeouts.
+## fallback model evaluation before the total budget is exhausted.  Same-model
+## retries remain reserved for rate-limit and mid-stream fallback errors.
 is_timeout_error() {
 	# Tier 1: litellm SDK timeout — provider-specific, always trusted.
 	if grep -Fq 'litellm.exceptions.Timeout' "$STRIX_LOG"; then
