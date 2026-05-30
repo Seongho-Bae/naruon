@@ -24,7 +24,6 @@ ACTIVE_REPORTS_DIR="$STRIX_RUNTIME_DIR/reports"
 STRIX_REPORTS_DIR="$ACTIVE_REPORTS_DIR"
 STRIX_PROCESS_TIMEOUT_SECONDS="${STRIX_PROCESS_TIMEOUT_SECONDS:-1200}"
 STRIX_TOTAL_TIMEOUT_SECONDS="${STRIX_TOTAL_TIMEOUT_SECONDS:-0}"
-STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="${STRIX_PR_SCOPE_MAX_FILES_PER_BATCH:-20}"
 STRIX_DISABLE_PR_SCOPING="${STRIX_DISABLE_PR_SCOPING:-1}"
 # shellcheck disable=SC2034  # consumed by sourced normalize_model helper
 DEFAULT_PROVIDER_RAW="${STRIX_LLM_DEFAULT_PROVIDER:-}"
@@ -54,8 +53,6 @@ CHANGED_FILES=()
 PULL_REQUEST_CHANGED_FILES=()
 NORMALIZED_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
-PULL_REQUEST_SCOPE_FILE_BATCHES=()
-CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
 TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
@@ -570,7 +567,6 @@ require_non_negative_integer "$STRIX_TRANSIENT_RETRY_PER_MODEL" "STRIX_TRANSIENT
 require_non_negative_integer "$STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS" "STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS"
 require_non_negative_integer "$STRIX_PROCESS_TIMEOUT_SECONDS" "STRIX_PROCESS_TIMEOUT_SECONDS"
 require_non_negative_integer "$STRIX_TOTAL_TIMEOUT_SECONDS" "STRIX_TOTAL_TIMEOUT_SECONDS"
-require_positive_integer "$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH"
 case "$STRIX_FAIL_ON_PROVIDER_SIGNAL" in
 0 | 1)
 	;;
@@ -1449,7 +1445,6 @@ PY
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
-				PULL_REQUEST_SCOPE_FILE_BATCHES=()
 				return 0
 			fi
 			return 2
@@ -1472,46 +1467,18 @@ PY
 				printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 			fi
 		fi
-		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
 	fi
-	PULL_REQUEST_SCOPE_FILE_BATCHES=()
-	local batch_start=0
-	while [ "$batch_start" -lt "$total_files" ]; do
-		local batch_files=("${CHANGED_FILES[@]:batch_start:STRIX_PR_SCOPE_MAX_FILES_PER_BATCH}")
-		PULL_REQUEST_SCOPE_FILE_BATCHES+=("$(printf '%s\n' "${batch_files[@]}")")
-		batch_start=$((batch_start + STRIX_PR_SCOPE_MAX_FILES_PER_BATCH))
-	done
+	local build_scope_rc=0
+	build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+	if [ "$build_scope_rc" -ne 0 ]; then
+		return 2
+	fi
+	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
 	printf ".\n" >&2
-	if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 1 ]; then
-		printf "Split pull request Strix scan into %s batch(es) of at most %s file(s).\n" \
-			"${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" \
-			"$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
-	fi
 	return 0
-}
-
-should_rebalance_pull_request_batch() {
-	if ! is_pull_request_event; then
-		return 1
-	fi
-	if [ "$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT" -le 1 ]; then
-		return 1
-	fi
-	if provider_signal_fail_closed_enabled; then
-		return 1
-	fi
-	if [ "$INFRA_ERROR_DETECTED" -ne 1 ]; then
-		return 1
-	fi
-	if [ "$(remaining_total_budget)" -le 0 ]; then
-		return 1
-	fi
-	if is_timeout_error; then
-		return 0
-	fi
-	return 1
 }
 
 extract_vulnerability_locations() {
@@ -2878,10 +2845,6 @@ run_current_target_scan() {
 		return 1
 	fi
 
-	if should_rebalance_pull_request_batch; then
-		return 75
-	fi
-
 	if has_only_below_threshold_vulnerabilities; then
 		return 0
 	fi
@@ -2990,96 +2953,9 @@ run_current_target_scan() {
 
 prepare_pull_request_scan_scope
 if [ "$TARGET_PATH_REQUESTS_PR_SCOPE" -eq 1 ] &&
-	[ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -ne 1 ] &&
-	[ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -eq 0 ]; then
+	[ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -ne 1 ]; then
 	echo "ERROR: STRIX_TARGET_PATH=$PR_SCOPE_TARGET_SENTINEL did not produce a PR scan scope." >&2
 	exit 2
-fi
-
-run_pull_request_batch_files() {
-	local batch_label="$1"
-	local total_batches="$2"
-	local batch_files_text="$3"
-	local -a batch_files=()
-	local previous_target_path="$TARGET_PATH"
-	local previous_target_is_internal="$TARGET_PATH_IS_INTERNAL_PR_SCOPE"
-	mapfile -t batch_files <<<"$batch_files_text"
-	if [ "${#batch_files[@]}" -eq 0 ]; then
-		echo "ERROR: pull request Strix batch '$batch_label' has no files to scan." >&2
-		return 1
-	fi
-
-	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
-	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 1
-	fi
-	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
-	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
-
-	local batch_rc=0
-	run_current_target_scan || batch_rc=$?
-	if [ "$batch_rc" -eq 0 ]; then
-		capture_preexisting_report_dirs
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 0
-	fi
-
-	if [ "$batch_rc" -eq 75 ]; then
-		local midpoint=$((CURRENT_PULL_REQUEST_BATCH_FILE_COUNT / 2))
-		if [ "$midpoint" -le 0 ]; then
-			midpoint=1
-		fi
-		echo "Rebalancing pull request Strix batch ${batch_label}/${total_batches} into smaller batches after timeout." >&2
-		local first_half second_half
-		first_half="$(printf '%s\n' "${batch_files[@]:0:midpoint}")"
-		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
-		local first_half_rc=0
-		run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half" || first_half_rc=$?
-		if [ "$first_half_rc" -ne 0 ]; then
-			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-			TARGET_PATH="$previous_target_path"
-			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return "$first_half_rc"
-		fi
-		local second_half_rc=0
-		run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half" || second_half_rc=$?
-		if [ "$second_half_rc" -ne 0 ]; then
-			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-			TARGET_PATH="$previous_target_path"
-			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return "$second_half_rc"
-		fi
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 0
-	fi
-
-	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-	TARGET_PATH="$previous_target_path"
-	TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-	return "$batch_rc"
-}
-
-if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
-	total_batches="${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"
-	batch_number=0
-	for batch_files_text in "${PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"; do
-		batch_number=$((batch_number + 1))
-		batch_rc=0
-		run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text" || batch_rc=$?
-		if [ "$batch_rc" -ne 0 ]; then
-			exit "$batch_rc"
-		fi
-	done
-	exit 0
 fi
 
 scan_rc=0
