@@ -42,7 +42,17 @@ function normalizeHost(parsed: URL): string {
   return parsed.hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
 }
 
-function assertSafeBackendInternalUrl(raw: string, opts: { allowInsecure: boolean }): URL {
+function isAllowedComposeBackendUrl(parsed: URL): boolean {
+  return (
+    process.env.ALLOW_DOCKER_BACKEND_INTERNAL_URL === "1" &&
+    parsed.protocol === "http:" &&
+    normalizeHost(parsed) === "backend" &&
+    parsed.port === "8000" &&
+    (parsed.pathname === "" || parsed.pathname === "/")
+  );
+}
+
+function assertSafeBackendInternalUrl(raw: string): URL {
   let parsed: URL;
   try {
     parsed = new URL(raw);
@@ -51,7 +61,10 @@ function assertSafeBackendInternalUrl(raw: string, opts: { allowInsecure: boolea
       `BACKEND_INTERNAL_URL is not a valid URL: ${JSON.stringify(raw)}`,
     );
   }
-  if (!opts.allowInsecure && parsed.protocol !== "https:") {
+  if (isAllowedComposeBackendUrl(parsed)) {
+    return parsed;
+  }
+  if (parsed.protocol !== "https:") {
     throw new Error(
       `BACKEND_INTERNAL_URL must use https:// in split deployments, got ${parsed.protocol}//`,
     );
@@ -60,13 +73,11 @@ function assertSafeBackendInternalUrl(raw: string, opts: { allowInsecure: boolea
   if (!host) {
     throw new Error("BACKEND_INTERNAL_URL must include a hostname");
   }
-  if (!opts.allowInsecure) {
-    for (const pattern of DENIED_BACKEND_HOST_PATTERNS) {
-      if (pattern.test(host)) {
-        throw new Error(
-          `BACKEND_INTERNAL_URL host ${host} is in a private/loopback/link-local range`,
-        );
-      }
+  for (const pattern of DENIED_BACKEND_HOST_PATTERNS) {
+    if (pattern.test(host)) {
+      throw new Error(
+        `BACKEND_INTERNAL_URL host ${host} is in a private/loopback/link-local range`,
+      );
     }
   }
   return parsed;
@@ -74,14 +85,12 @@ function assertSafeBackendInternalUrl(raw: string, opts: { allowInsecure: boolea
 
 function backendRewriteDestination() {
   const raw = process.env.BACKEND_INTERNAL_URL?.trim();
-  // Allow http:// and private/loopback hosts only when the operator
-  // explicitly opts in. The docker-compose stack uses this for the
-  // service-to-service hostname `backend:8000`; Render production
-  // deployments never set it and therefore inherit the fail-closed
-  // HTTPS + global-address policy.
-  const allowInsecure = process.env.ALLOW_INSECURE_BACKEND_INTERNAL_URL === "1";
+  // The docker-compose stack uses the in-network service hostname
+  // `http://backend:8000`. That exact URL has a separate opt-in via
+  // ALLOW_DOCKER_BACKEND_INTERNAL_URL; every other explicit URL must pass
+  // the HTTPS + global-host policy.
   if (raw) {
-    const parsed = assertSafeBackendInternalUrl(raw, { allowInsecure });
+    const parsed = assertSafeBackendInternalUrl(raw);
     const base = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
     return `${base}/api/:path*`;
   }

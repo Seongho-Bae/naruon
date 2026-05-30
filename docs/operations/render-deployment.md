@@ -39,19 +39,20 @@ backend secrets.
   `./frontend/Dockerfile`. Receives the backend's public URL via the
   `BACKEND_INTERNAL_URL` env var, populated from
   `naruon-backend`'s `RENDER_EXTERNAL_URL`. `next.config.ts` reads
-  `BACKEND_INTERNAL_URL` at runtime and rewrites `/api/*` to that
-  origin. The browser only ever talks to the frontend's own origin, so
-  no public identity headers cross the boundary.
+  `BACKEND_INTERNAL_URL` during `next build` and bakes the `/api/*`
+  rewrite destination into the build manifest. The browser only ever
+  talks to the frontend's own origin, so no public identity headers
+  cross the boundary.
 
   When `BACKEND_INTERNAL_URL` is set explicitly, `next.config.ts`
   enforces SSRF guards before accepting it: the URL must use `https://`
   and the hostname must not fall into a private (RFC 1918), loopback,
   IPv6 ULA/link-local, or cloud metadata (`169.254.0.0/16`) range.
   Render's `RENDER_EXTERNAL_URL` is an HTTPS `*.onrender.com` host and
-  satisfies these checks. If the variable is unset, the loopback
-  fallback `http://127.0.0.1:8000` is used — this is the intended
-  local-dev path only and the guards are intentionally bypassed for
-  the no-config case so `docker compose up` keeps working.
+  satisfies these checks. In `NODE_ENV=production`, a missing value
+  fails the build instead of falling back to loopback. The only
+  non-HTTPS exception is the explicit Compose opt-in for exactly
+  `http://backend:8000`.
 
 ## First-time setup
 
@@ -130,9 +131,13 @@ Remove the variable when you want IMAP sync to run.
 ## Local development is unaffected
 
 `docker-compose up` continues to work with no Render-specific
-environment variables. `next.config.ts` falls back to
-`http://127.0.0.1:8000` when `BACKEND_INTERNAL_URL` is unset, which is
-the same loopback the rewrite used before this change.
+environment variables. The Compose file passes
+`BACKEND_INTERNAL_URL=http://backend:8000` plus the exact
+`ALLOW_DOCKER_BACKEND_INTERNAL_URL=1` opt-in so `next build` can bake a
+Docker-network rewrite destination without weakening the Render
+production guard. Plain local dev still falls back to
+`http://127.0.0.1:8000` when `BACKEND_INTERNAL_URL` is unset and
+`NODE_ENV` is not `production`.
 
 ## What this Blueprint deliberately does not do
 

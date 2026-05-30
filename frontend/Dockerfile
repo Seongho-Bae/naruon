@@ -20,16 +20,16 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # next.config.ts. The rewrite destination is read from BACKEND_INTERNAL_URL
 # at build time (Next.js bakes rewrites into the build manifest). Render
 # injects the value via fromService; docker-compose passes the in-network
-# hostname together with ALLOW_INSECURE_BACKEND_INTERNAL_URL=1 because the
-# private-range / http:// guards in next.config.ts otherwise fail closed.
+# hostname together with ALLOW_DOCKER_BACKEND_INTERNAL_URL=1 because the
+# default HTTPS-only guard in next.config.ts otherwise fails closed.
 # NEXT_PUBLIC_API_URL is kept for backwards compatibility with callers that
 # explicitly construct a base URL; new code should rely on the rewrite.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ARG BACKEND_INTERNAL_URL
 ENV BACKEND_INTERNAL_URL=$BACKEND_INTERNAL_URL
-ARG ALLOW_INSECURE_BACKEND_INTERNAL_URL
-ENV ALLOW_INSECURE_BACKEND_INTERNAL_URL=$ALLOW_INSECURE_BACKEND_INTERNAL_URL
+ARG ALLOW_DOCKER_BACKEND_INTERNAL_URL
+ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=$ALLOW_DOCKER_BACKEND_INTERNAL_URL
 
 RUN npm run build
 

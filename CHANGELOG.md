@@ -15,10 +15,9 @@
   지적을 fail-closed 가드로 해소했습니다. 명시적 값은 HTTPS와 글로벌 호스트만
   허용하고(IPv4 RFC 1918/loopback/169.254/16, IPv6 ULA/link-local 거부),
   `NODE_ENV=production`에서는 변수가 없으면 빌드를 즉시 실패시킵니다. 도커
-  네트워크 hostname을 사용하는 docker-compose 빌드용으로 명시적 opt-in
-  `ALLOW_INSECURE_BACKEND_INTERNAL_URL=1`을 추가하고 compose stack에 반영했습니다.
-
-### 수정
+  네트워크 hostname을 사용하는 docker-compose 빌드용으로 exact opt-in
+  `ALLOW_DOCKER_BACKEND_INTERNAL_URL=1`을 추가해 `http://backend:8000`만 예외로
+  허용하고, CI/frontend image build에는 안전한 HTTPS backend origin을 주입했습니다.
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
   global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
   provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.
