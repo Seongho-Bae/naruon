@@ -60,7 +60,9 @@ mail/calendar/file systems.
   assets, ingestion inventory, embedding coverage, quality checks, and connector
   evidence from existing rows, returns `provider_write_executed=false`, and does
   not expose provider credentials, raw usernames, server URLs, message bodies,
-  raw message/thread ids, or sequential ids.
+  raw message/thread ids, or sequential ids. The Data workspace lets operators
+  select a source-linked attachment asset and inspect safe provenance fields
+  without turning Naruon into a file-storage source of truth.
 - Projects are source-backed through signed `/api/webdav/folders` and
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels
@@ -82,7 +84,11 @@ mail/calendar/file systems.
   deterministic next-action hint, such as reply/task tracking for colleagues or
   summary-first handling for newsletters. Relationship graph reads can be
   filtered by source message/thread ids so the Search workspace can show the
-  sender DAG beside the originating mail context.
+  sender DAG beside the originating mail context. If no relationship exists for
+  the selected search result, the browser can call signed
+  `/api/ontology/relationships/capture-source`; the backend re-reads the source
+  email under owner/organization scope and derives the thread provenance
+  server-side before storing the relationship.
 - **Self-sent knowledge capture**: IMAP-imported emails sent from a user to the
   same address now create one idempotent, source-linked `self_sent_knowledge`
   ticket task with a plain-text memo title. The Tasks workspace can request a

@@ -303,6 +303,22 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("WebDAV writeback intent 승인");
     expect(container.textContent).toContain("etag=etag-webdav-primary");
     expect(container.textContent).toContain("webdav_folder_roadmap");
+
+    const assetDetail = container.querySelector('[aria-label="선택한 파일 자산 상세"]');
+    expect(assetDetail?.textContent).toContain("roadmap.pdf");
+    expect(assetDetail?.textContent).toContain("content and thread evidence ready");
+
+    const pendingAsset = Array.from(container.querySelectorAll('[role="button"][aria-pressed]')).find((candidate) =>
+      candidate.textContent?.includes("blank-notes.md"),
+    );
+    expect(pendingAsset).toBeDefined();
+    await act(async () => {
+      pendingAsset?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    const updatedAssetDetail = container.querySelector('[aria-label="선택한 파일 자산 상세"]');
+    expect(updatedAssetDetail?.textContent).toContain("blank-notes.md");
+    expect(updatedAssetDetail?.textContent).toContain("thread_missing");
+    expect(updatedAssetDetail?.textContent).toContain("content extraction pending, canonical thread pending");
   });
 
   it("loads signed data quality surface without public identity headers", async () => {
