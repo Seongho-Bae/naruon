@@ -93,7 +93,7 @@ the worker logs harmless errors on its retry loop. To silence them
 until you are ready, add the following to the **Environment** tab of
 `naruon-backend`:
 
-```
+```bash
 DISABLE_BACKGROUND_WORKERS=1
 ```
 
