@@ -293,6 +293,10 @@
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a
   global relationship graph as if it were current-thread evidence.
+- Sender DAG capture must start from a signed source email lookup, not
+  browser-submitted relationship classifications. Route layers should derive the
+  thread provenance server-side, persist only scoped ontology metadata, and keep
+  provider writes out of relationship capture.
 - Unique email and forwarded-import dedupe must use strong scoped signals:
   normalized Message-ID, References/In-Reply-To, persisted duplicate provenance,
   or exact body/attachment fingerprints. Do not merge threads from subject-only
