@@ -36,6 +36,15 @@ def test_dav_options(dev_auth_dependency_overrides):
         assert "calendar-access" in response.headers.get("DAV", "")
 
 
+def test_dav_rejects_different_user_path(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request(
+            "PROPFIND", "/dav/other-user/projects/", headers=AUTH_HEADERS
+        )
+        assert response.status_code == 403
+        assert response.json()["detail"] == "DAV path belongs to a different user"
+
+
 def test_dav_propfind(dev_auth_dependency_overrides):
     with TestClient(app) as client:
         response = client.request(

@@ -197,8 +197,10 @@
   Pydantic import tracebacks for missing runtime settings.
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
-  escape XML response fields before interpolation, and keep path values separate
-  from log-safe display values.
+  require the signed-session dependency in handler signatures, enforce route
+  owner scope before capability/discovery/read/writeback responses, escape XML
+  response fields before interpolation, and keep path values separate from
+  log-safe display values.
 - Self-hosted runner WebSocket routes must validate both a signed bearer session
   and a server-side WorkspaceRunnerConfig registration token before accepting the
   socket. Do not use the raw path token as identity, a log value, or the sole
