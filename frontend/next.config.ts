@@ -10,10 +10,75 @@ function positiveIntegerFromEnv(name: string, fallback: number) {
 // Backend origin for the same-origin `/api/*` rewrite. In local dev and Docker
 // Compose the frontend and backend run on the same host, so the loopback URL
 // is the correct fallback. In split deployments (Render Blueprint, Kubernetes,
-// etc.) the platform injects the backend's reachable URL via this variable.
+// etc.) the platform injects the backend's reachable URL via BACKEND_INTERNAL_URL.
+//
+// Security: an unvalidated BACKEND_INTERNAL_URL would let any operator with
+// env-var control redirect /api/* through Next.js to an arbitrary host —
+// including cloud metadata endpoints (169.254.169.254) and private RFC 1918
+// ranges. Strix flagged this as SSRF. We enforce HTTPS and a hostname denylist
+// for any *explicit* value while still allowing the documented loopback
+// fallback when the variable is unset (the intended local dev path).
+// Patterns are matched against the normalized hostname (lowercased, IPv6
+// brackets stripped). Cover IPv4 loopback/private and IPv6 loopback/ULA/
+// link-local ranges, plus the cloud metadata link-local /16.
+const DENIED_BACKEND_HOST_PATTERNS: readonly RegExp[] = [
+  /^localhost$/,
+  /^127\./, // IPv4 loopback
+  /^0\./, // IPv4 unspecified
+  /^10\./, // RFC 1918
+  /^192\.168\./, // RFC 1918
+  /^172\.(1[6-9]|2\d|3[01])\./, // RFC 1918
+  /^169\.254\./, // IPv4 link-local incl. cloud metadata
+  /^::1$/, // IPv6 loopback
+  /^::$/, // IPv6 unspecified
+  /^fc[0-9a-f]{2}:/, // IPv6 unique local (fc00::/7)
+  /^fd[0-9a-f]{2}:/,
+  /^fe[89ab][0-9a-f]:/, // IPv6 link-local (fe80::/10)
+];
+
+function normalizeHost(parsed: URL): string {
+  // URL.hostname keeps IPv6 brackets; strip them so a single set of patterns
+  // matches both IPv4 and IPv6 literals.
+  return parsed.hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
+}
+
+function assertSafeBackendInternalUrl(raw: string): URL {
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error(
+      `BACKEND_INTERNAL_URL is not a valid URL: ${JSON.stringify(raw)}`,
+    );
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error(
+      `BACKEND_INTERNAL_URL must use https:// in split deployments, got ${parsed.protocol}//`,
+    );
+  }
+  const host = normalizeHost(parsed);
+  if (!host) {
+    throw new Error("BACKEND_INTERNAL_URL must include a hostname");
+  }
+  for (const pattern of DENIED_BACKEND_HOST_PATTERNS) {
+    if (pattern.test(host)) {
+      throw new Error(
+        `BACKEND_INTERNAL_URL host ${host} is in a private/loopback/link-local range`,
+      );
+    }
+  }
+  return parsed;
+}
+
 function backendRewriteDestination() {
   const raw = process.env.BACKEND_INTERNAL_URL?.trim();
-  const base = raw && raw.length > 0 ? raw.replace(/\/+$/, "") : "http://127.0.0.1:8000";
+  if (!raw) {
+    // No explicit value → local dev / Compose fallback. Loopback is the
+    // intended target here and is reachable only from the same host.
+    return "http://127.0.0.1:8000/api/:path*";
+  }
+  const parsed = assertSafeBackendInternalUrl(raw);
+  const base = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
   return `${base}/api/:path*`;
 }
 

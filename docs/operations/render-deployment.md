@@ -43,6 +43,16 @@ backend secrets.
   origin. The browser only ever talks to the frontend's own origin, so
   no public identity headers cross the boundary.
 
+  When `BACKEND_INTERNAL_URL` is set explicitly, `next.config.ts`
+  enforces SSRF guards before accepting it: the URL must use `https://`
+  and the hostname must not fall into a private (RFC 1918), loopback,
+  IPv6 ULA/link-local, or cloud metadata (`169.254.0.0/16`) range.
+  Render's `RENDER_EXTERNAL_URL` is an HTTPS `*.onrender.com` host and
+  satisfies these checks. If the variable is unset, the loopback
+  fallback `http://127.0.0.1:8000` is used — this is the intended
+  local-dev path only and the guards are intentionally bypassed for
+  the no-config case so `docker compose up` keeps working.
+
 ## First-time setup
 
 1. Push this branch (with `render.yaml`) to GitHub.
