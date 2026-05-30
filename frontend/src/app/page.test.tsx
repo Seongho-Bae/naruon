@@ -52,6 +52,8 @@ vi.mock("lucide-react", () => ({
   CheckCircle2: () => <svg aria-hidden="true" />,
   Inbox: () => <svg aria-hidden="true" />,
   Network: () => <svg aria-hidden="true" />,
+  Send: () => <svg aria-hidden="true" />,
+  Settings: () => <svg aria-hidden="true" />,
   Sparkles: () => <svg aria-hidden="true" />,
 }));
 
@@ -77,7 +79,7 @@ async function waitForCondition(condition: () => boolean) {
   throw new Error("waitForCondition timed out after 20 attempts");
 }
 
-describe.skip("Home workspace action bridge", () => {
+describe("Home workspace action bridge", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
@@ -318,7 +320,7 @@ describe.skip("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("김나루님");
-    expect(container.textContent).toContain("이메일 작업공간 열기");
+    expect(container.textContent).toContain("메일함 바로가기");
     expect(window.location.hash).toBe("");
   });
 
@@ -377,11 +379,11 @@ describe.skip("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("김나루님");
-    expect(container.textContent).toContain("이메일 작업공간 열기");
+    expect(container.textContent).toContain("메일함 바로가기");
 
     await act(async () => {
       Array.from(container?.querySelectorAll<HTMLButtonElement>("button") ?? [])
-        .find((button) => button.textContent?.includes("이메일 작업공간 열기"))
+        .find((button) => button.textContent?.includes("메일함 바로가기"))
         ?.click();
     });
     await flushAsyncWork();
@@ -390,19 +392,36 @@ describe.skip("Home workspace action bridge", () => {
     expect(container.textContent).toContain("email:none");
   });
 
-  it("backs the desktop startup dashboard with live search data instead of fixed counters", async () => {
+  it("backs the desktop startup dashboard with live mail reply and task data", async () => {
     localStorage.setItem("naruon_startup_view", "dashboard");
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/api/search")) {
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
         return Promise.resolve({
           ok: true,
           json: async () => ({
-            results: [
-              { id: 101, subject: "고객 계약 승인 대기", sender: "legal@example.com", date: "2026-05-17T09:00:00Z", snippet: "오늘 승인해야 하는 계약 검토 요청" },
+            emails: [
               { id: 102, subject: "출시 리뷰 일정 조율", sender: "pm@example.com", date: "2026-05-17T10:00:00Z", snippet: "캘린더 반영 후보" },
             ],
           }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              { id: 101, subject: "고객 계약 승인 대기", sender: "legal@example.com", date: "2026-05-17T09:00:00Z", snippet: "오늘 승인해야 하는 계약 검토 요청", unread: true },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            { id: "task_public_1", title: "계약 승인 확인", status: "open", priority: "high", created_at: "2026-05-17T09:00:00Z", updated_at: "2026-05-17T09:00:00Z" },
+          ]),
         });
       }
       throw new Error(`Unexpected fetch: ${url}`);
@@ -414,12 +433,14 @@ describe.skip("Home workspace action bridge", () => {
     await act(async () => {
       root?.render(<Home />);
     });
-    await waitForCondition(() => container?.textContent?.includes("고객 계약 승인 대기") ?? false);
+    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인") ?? false);
 
     expect(container.textContent).toContain("고객 계약 승인 대기");
     expect(container.textContent).toContain("출시 리뷰 일정 조율");
-    expect(container.textContent).not.toContain("오늘 답장 또는 위임이 필요한 스레드");
-    expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
+    expect(container.textContent).toContain("계약 승인 확인");
+    expect(fetch).toHaveBeenCalledWith("/api/emails", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/api/emails/pending-replies?limit=3", expect.any(Object));
+    expect(fetch).toHaveBeenCalledWith("/api/tasks", expect.any(Object));
   });
 
   it("backs the desktop calendar startup view with live calendar candidates", async () => {
@@ -452,7 +473,7 @@ describe.skip("Home workspace action bridge", () => {
     expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
   });
 
-  it("shows startup dashboard empty and error states from the search API", async () => {
+  it("shows startup dashboard empty states and ignores malformed API payloads", async () => {
     localStorage.setItem("naruon_startup_view", "dashboard");
     vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
       ok: true,
@@ -465,26 +486,11 @@ describe.skip("Home workspace action bridge", () => {
     await act(async () => {
       root?.render(<Home />);
     });
-    await waitForCondition(() => container?.textContent?.includes("오늘 표시할 실행 후보가 없습니다.") ?? false);
+    await waitForCondition(() => container?.textContent?.includes("수신된 메일이 없습니다.") ?? false);
 
-    expect(container.textContent).toContain("오늘 표시할 실행 후보가 없습니다.");
-
-    act(() => root?.unmount());
-    container.textContent = "";
-    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve({
-      ok: false,
-      status: 503,
-      statusText: "Service Unavailable",
-      json: async () => ({}),
-    })));
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<Home />);
-    });
-    await waitForCondition(() => container?.textContent?.includes("대시보드 후보를 불러오지 못했습니다.") ?? false);
-
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("대시보드 후보를 불러오지 못했습니다.");
+    expect(container.textContent).toContain("수신된 메일이 없습니다.");
+    expect(container.textContent).toContain("답변 대기 중인 보낸 메일이 없습니다.");
+    expect(container.textContent).toContain("대기 중인 작업이 없습니다.");
   });
 
   it("shows desktop calendar empty and error states from the search API", async () => {
@@ -708,7 +714,6 @@ describe.skip("Home workspace action bridge", () => {
 
     expect(container.querySelector('#mobile-search')?.className).toContain("flex");
     expect(container.textContent).toContain("검색 결과를 불러오는 중입니다.");
-    expect(container.textContent).not.toContain("메일 결과 준비 중");
     expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
   });
 

@@ -43,12 +43,21 @@ async function flushAsyncWork() {
 function lowerCaseHeaders(headers: HeadersInit | undefined) {
   if (!headers) return {};
   if (headers instanceof Headers) {
-    return Object.fromEntries(Array.from(headers.entries()).map(([key, value]) => [key.toLowerCase(), value]));
+    return Object.fromEntries(
+      Array.from(headers.entries()).map(([key, value]) => [
+        key.toLowerCase(),
+        value,
+      ]),
+    );
   }
   if (Array.isArray(headers)) {
-    return Object.fromEntries(headers.map(([key, value]) => [key.toLowerCase(), value]));
+    return Object.fromEntries(
+      headers.map(([key, value]) => [key.toLowerCase(), value]),
+    );
   }
-  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
+  );
 }
 
 describe("SearchPage", () => {
@@ -79,7 +88,8 @@ describe("SearchPage", () => {
                 subject: "Q2 출시 계획 및 우선순위 조정",
                 sender: "김지현 PM",
                 date: "2026-05-11T09:30:00Z",
-                snippet: "Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬했습니다.",
+                snippet:
+                  "Q2 출시 일정과 마케팅 계획을 우선순위 기준으로 재정렬했습니다.",
                 thread_id: "thread-q2",
                 reply_count: 3,
                 score: 0.87,
@@ -99,7 +109,8 @@ describe("SearchPage", () => {
               relationship_type: "colleague",
               confidence_score: 0.85,
               next_action: "track_reply_and_tasks",
-              action_reason: "Same-domain sender; preserve reply and task follow-up.",
+              action_reason:
+                "Same-domain sender; preserve reply and task follow-up.",
             },
           ]),
         );
@@ -108,14 +119,24 @@ describe("SearchPage", () => {
         return Promise.resolve(
           jsonResponse({
             nodes: [{ id: "sender-1", label: "김지현 PM", title: "PM" }],
-            edges: [{ source: "sender-1", target: "sender-1", weight: 1, title: "관련 메일" }],
+            edges: [
+              {
+                source: "sender-1",
+                target: "sender-1",
+                weight: 1,
+                title: "관련 메일",
+              },
+            ],
           }),
         );
       }
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
-    window.localStorage.setItem("naruon_session_token", "signed-search-session");
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-search-session",
+    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -133,25 +154,147 @@ describe("SearchPage", () => {
     expect(container.textContent).toContain("track_reply_and_tasks");
     expect(container.textContent).toContain("source=<q2@example.com>");
 
-    const searchCall = fetchMock.mock.calls.find(([input]) => String(input).endsWith("/api/search"));
+    const searchCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith("/api/search"),
+    );
     expect(searchCall).toBeDefined();
     expect(searchCall?.[1]?.method).toBe("POST");
-    expect(searchCall?.[1]?.body).toBe(JSON.stringify({ query: "런칭 캠페인", limit: 8 }));
+    expect(searchCall?.[1]?.body).toBe(
+      JSON.stringify({ query: "런칭 캠페인", limit: 8 }),
+    );
     const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
     expect(headers.authorization).toBe("Bearer signed-search-session");
-    for (const headerName of ["x-user-id", "x-organization-id", "x-group-id", "x-group-ids", "x-user-role", "x-dev-auth-token"]) {
+    for (const headerName of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
       expect(headers[headerName]).toBeUndefined();
     }
 
-    const ontologyCall = fetchMock.mock.calls.find(([input]) => String(input).includes("/api/ontology/relationships"));
+    const ontologyCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes("/api/ontology/relationships"),
+    );
     expect(ontologyCall).toBeDefined();
-    expect(String(ontologyCall?.[0])).toContain("source_message_id=%3Cq2%40example.com%3E");
+    expect(String(ontologyCall?.[0])).toContain(
+      "source_message_id=%3Cq2%40example.com%3E",
+    );
     expect(String(ontologyCall?.[0])).toContain("source_thread_id=thread-q2");
     const ontologyHeaders = lowerCaseHeaders(ontologyCall?.[1]?.headers);
     expect(ontologyHeaders.authorization).toBe("Bearer signed-search-session");
-    for (const headerName of ["x-user-id", "x-organization-id", "x-group-id", "x-group-ids", "x-user-role", "x-dev-auth-token"]) {
+    for (const headerName of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
       expect(ontologyHeaders[headerName]).toBeUndefined();
     }
+  });
+
+  it("captures a source-backed sender DAG relationship through signed headers", async () => {
+    const fetchMock = vi.fn((...args: [RequestInfo | URL, RequestInit?]) => {
+      const [input] = args;
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve(
+          jsonResponse({
+            results: [
+              {
+                id: 8,
+                source_message_id: "<capture@example.com>",
+                subject: "관계 캡처 대상",
+                sender: "박민재",
+                date: "2026-05-29T09:30:00Z",
+                snippet: "같은 thread에서 발신자 관계를 캡처합니다.",
+                thread_id: "thread-capture",
+                reply_count: 1,
+                score: 0.72,
+              },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/ontology/relationships/capture-source")) {
+        return Promise.resolve(
+          jsonResponse({
+            sender_email: "minjae@naruon.ai",
+            parent_sender_email: null,
+            source_message_id: "<capture@example.com>",
+            source_thread_id: "thread-capture",
+            relationship_type: "colleague",
+            confidence_score: 0.85,
+            next_action: "track_reply_and_tasks",
+            action_reason:
+              "Same-domain sender; preserve reply and task follow-up.",
+          }),
+        );
+      }
+      if (url.includes("/api/ontology/relationships")) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      if (url.endsWith("/api/network/graph")) {
+        return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
+      }
+      return Promise.resolve(jsonResponse({}, false, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-capture-session",
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SearchPage />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain(
+      "이 검색 결과에 연결된 발신자 관계가 아직 없습니다.",
+    );
+    const captureButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("발신자 관계 캡처"),
+    );
+    expect(captureButton).toBeDefined();
+
+    await act(async () => {
+      captureButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    const captureCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).includes("/api/ontology/relationships/capture-source"),
+    );
+    expect(captureCall).toBeDefined();
+    expect(captureCall?.[1]?.method).toBe("POST");
+    expect(captureCall?.[1]?.body).toBe(
+      JSON.stringify({ source_message_id: "<capture@example.com>" }),
+    );
+    const captureHeaders = lowerCaseHeaders(captureCall?.[1]?.headers);
+    expect(captureHeaders.authorization).toBe("Bearer signed-capture-session");
+    for (const headerName of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(captureHeaders[headerName]).toBeUndefined();
+    }
+    expect(container.textContent).toContain("minjae@naruon.ai");
+    expect(container.textContent).toContain("track_reply_and_tasks");
+    expect(container.textContent).toContain(
+      "source=<capture@example.com> / thread=thread-capture",
+    );
   });
 
   it("renders a fail-closed error state when the search API rejects the query", async () => {
@@ -159,9 +302,18 @@ describe("SearchPage", () => {
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        if (url.endsWith("/api/search")) return Promise.resolve(jsonResponse({ detail: "OpenAI API key not configured" }, false, 400));
-        if (url.includes("/api/ontology/relationships")) return Promise.resolve(jsonResponse([]));
-        if (url.endsWith("/api/network/graph")) return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
+        if (url.endsWith("/api/search"))
+          return Promise.resolve(
+            jsonResponse(
+              { detail: "OpenAI API key not configured" },
+              false,
+              400,
+            ),
+          );
+        if (url.includes("/api/ontology/relationships"))
+          return Promise.resolve(jsonResponse([]));
+        if (url.endsWith("/api/network/graph"))
+          return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
         return Promise.resolve(jsonResponse({}, false, 404));
       }),
     );

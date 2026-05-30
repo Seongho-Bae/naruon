@@ -88,6 +88,10 @@ describe("CalendarPage", () => {
     expect(container.textContent).toContain("새 일정");
     expect(container.textContent).toContain("CalDAV/CardDAV/WebDAV writeback intent");
     expect(container.textContent).not.toContain("뷰는 아직 구현 중입니다");
+    expect(container.querySelector('button[aria-label="이전 달"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="다음 달"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="설정"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="닫기"]')).not.toBeNull();
   });
 
   it("creates a signed customer-owned calendar writeback intent", async () => {

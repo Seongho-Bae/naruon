@@ -1,6 +1,7 @@
 import os
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from api.auth import get_auth_context, preload_oidc_jwks
 from api.search import router as search_router
@@ -22,6 +23,7 @@ from api.accounts import router as accounts_router
 from api.webdav import router as webdav_router
 from api.security import router as security_router
 from api.data import router as data_router
+from api.ai_hub import router as ai_hub_router
 from core.config import settings
 from core.telemetry import setup_telemetry
 from services.imap_worker import ImapSyncWorker
@@ -58,6 +60,19 @@ if settings.ENABLE_PROMETHEUS_METRICS:
         app, include_in_schema=False, should_gzip=True
     )
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if settings.SECURITY_CONTENT_SECURITY_POLICY:
+        response.headers["Content-Security-Policy"] = (
+            settings.SECURITY_CONTENT_SECURITY_POLICY
+        )
+    return response
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -90,6 +105,7 @@ app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(security_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(data_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(ai_hub_router, dependencies=PRIVATE_API_DEPENDENCIES)
 
 
 @app.get("/")

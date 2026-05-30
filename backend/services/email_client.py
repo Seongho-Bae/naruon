@@ -45,6 +45,22 @@ class ValidatedSmtpDestination:
     proto: int
     sockaddr: tuple[Any, ...]
 
+@dataclass(frozen=True)
+class EmailMessageParams:
+    to_address: str
+    subject: str
+    body: str
+    in_reply_to: str | None = None
+    references: str | None = None
+
+@dataclass(frozen=True)
+class SmtpConfig:
+    smtp_server: str
+    smtp_port: int
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+
+
 
 def generate_oauth2_string(user: str, access_token: str) -> bytes:
     """Generates an OAuth2 string for IMAP/SMTP authentication."""
@@ -176,12 +192,23 @@ def _is_ip_literal(candidate: str) -> bool:
     return True
 
 
+def _is_legacy_numeric_ip_component(component: str) -> bool:
+    if not component:
+        return False
+    if component.startswith("0x"):
+        return len(component) > 2 and all(
+            character in "0123456789abcdef" for character in component[2:]
+        )
+    return component.isdigit()
+
+
 def _looks_like_ip_literal(candidate: str) -> bool:
-    compact_candidate = candidate.replace(".", "").lower()
-    return (
-        ":" in candidate
-        or compact_candidate.isdigit()
-        or compact_candidate.startswith("0x")
+    normalized_candidate = candidate.lower()
+    if ":" in normalized_candidate:
+        return True
+    return all(
+        _is_legacy_numeric_ip_component(component)
+        for component in normalized_candidate.split(".")
     )
 
 
@@ -494,56 +521,46 @@ async def _send_pinned_smtp_message(
 
 
 def build_email_message(
-    to_address: str,
-    subject: str,
-    body: str,
+    message_params: EmailMessageParams,
     from_address: str,
-    in_reply_to: str | None = None,
-    references: str | None = None,
 ) -> EmailMessage:
     """Build an outbound email message with optional threading headers."""
     message = EmailMessage()
     message["From"] = _validate_email_header_value(from_address)
-    message["To"] = _validate_email_header_value(to_address)
-    message["Subject"] = _validate_email_header_value(subject)
-    if in_reply_to:
-        message["In-Reply-To"] = _validate_email_header_value(in_reply_to)
-    if references:
-        message["References"] = _validate_email_header_value(references)
-    message.set_content(body)
+    message["To"] = _validate_email_header_value(message_params.to_address)
+    message["Subject"] = _validate_email_header_value(message_params.subject)
+    if message_params.in_reply_to:
+        message["In-Reply-To"] = _validate_email_header_value(message_params.in_reply_to)
+    if message_params.references:
+        message["References"] = _validate_email_header_value(message_params.references)
+    message.set_content(message_params.body)
     return message
 
 
 async def send_email(
-    to_address: str,
-    subject: str,
-    body: str,
-    smtp_server: str | None = None,
-    smtp_port: int | None = None,
-    smtp_username: str | None = None,
-    smtp_password: str | None = None,
-    in_reply_to: str | None = None,
-    references: str | None = None,
+    message_params: EmailMessageParams,
+    smtp_config: SmtpConfig | None = None,
 ) -> SendEmailResult:
     """Sends an email using SMTP."""
-    safe_to_address = _sanitize_log_value(to_address)
+    safe_to_address = _sanitize_log_value(message_params.to_address)
+
+    from_address = "me@example.com"
+    if smtp_config and smtp_config.smtp_username:
+        from_address = smtp_config.smtp_username
+
     message = build_email_message(
-        to_address=to_address,
-        subject=subject,
-        body=body,
-        from_address=smtp_username or "me@example.com",
-        in_reply_to=in_reply_to,
-        references=references,
+        message_params=message_params,
+        from_address=from_address,
     )
 
-    if not smtp_server or not smtp_port:
+    if not smtp_config or not smtp_config.smtp_server or not smtp_config.smtp_port:
         logger.info(
             "Simulating sending email to %s (no SMTP server configured)",
             safe_to_address,
         )
         return {"status": "simulated", "simulated": True}
 
-    smtp_destination = validate_smtp_destination(smtp_server, smtp_port)
+    smtp_destination = validate_smtp_destination(smtp_config.smtp_server, smtp_config.smtp_port)
 
     try:
         smtp_socket = await _connect_validated_smtp_socket(smtp_destination)
@@ -553,8 +570,8 @@ async def send_email(
                 smtp_socket=smtp_socket,
                 smtp_server=smtp_destination.hostname,
                 smtp_port=smtp_destination.port,
-                smtp_username=smtp_username,
-                smtp_password=smtp_password,
+                smtp_username=smtp_config.smtp_username,
+                smtp_password=smtp_config.smtp_password,
             )
         finally:
             smtp_socket.close()

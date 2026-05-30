@@ -468,7 +468,7 @@ def test_calendar_writeback_targeted_authorization_hides_source_existence(
     assert missing_response.json() == cross_org_response.json()
 
 
-def test_calendar_writeback_allows_org_admin_to_target_same_org_source(
+def test_calendar_writeback_rejects_org_admin_cross_user_targeting(
     writeback_source_override,
 ):
     writeback_source_override(
@@ -503,8 +503,8 @@ def test_calendar_writeback_allows_org_admin_to_target_same_org_source(
         },
     )
 
-    assert response.status_code == 200
-    assert response.json()["target_source_id"] == "shared-calendar"
+    assert response.status_code == 403
+
 
 
 def test_calendar_writeback_allows_system_admin_to_target_any_org_source(

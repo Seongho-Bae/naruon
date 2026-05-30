@@ -8,14 +8,44 @@
 - Security scanners are required gates. Do not use `continue-on-error: true` to
   hide Bandit, Strix, CodeQL, or dependency findings; preserve artifacts with
   explicit `if: ${{ always() }}` upload steps when needed.
+- PR-scoped Strix scans must include trusted import context for changed backend
+  Python entrypoints; do not scan `backend/main.py` or routers as isolated
+  single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan must use an explicitly named `STRIX_OPENAI_API_KEY`
-  OpenAI Platform credential with an OpenAI GPT-5.4-or-newer model. Do not route
-  Strix through GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini,
-  Google/Vertex, GPT-4o, or GPT-4.1; record direct-provider evidence in the PR.
-  Keep architecture docs and reusable Strix gate tests aligned with this rule so
-  stale GitHub Models examples cannot re-enter copied workflow guidance.
+- Strix Security Scan must not route through GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
+  route is `STRIX_LLM` with `GCP_SA_KEY`;
+  `vertex_ai/gemini-3.1-pro-preview-customtools` is the default approved Vertex
+  model now that organization-secret visibility is available, with
+  `vertex_ai/gemini-2.5-flash` allowed only as an explicit legacy selection.
+  Expose Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
+  GPT-5.4-or-newer scans remain supported only when selected explicitly with
+  `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
+  do not treat timeout-class provider infrastructure failures as clean PR
+  evidence even when Strix printed zero vulnerabilities before failing. Disable
+  silent Vertex fallback models in the workflow unless a future PR proves a new
+  exact fallback contract with no Timeout/Fatal/Warn/Denied output. Record
+  provider evidence in the PR. Known third-party Strix/Pydantic
+  serializer warnings must be filtered narrowly inside the Strix gate child
+  process, not as a visible workflow env entry, so Warn-class logs are not
+  accepted as clean evidence and warning-filter variable names do not pollute
+  GitHub logs. Strix workflow runtime budget keys should be exported inside the
+  execution shell, not listed as visible step `env:` timeout names, so clean runs
+  do not carry stale timeout-signal strings. Keep PR-scope process budgets large
+  enough for Strix to finalize reports after the scanner emits completion
+  events; a wrapper timeout after `vulnerability_count: 0` is still failed
+  evidence, not a pass. PR evidence must present the full PR-head scope to
+  Strix in one scanner invocation; do not split changed files into separate
+  scanner runs because that breaks Strix's required whole-context contract. Keep
+  architecture docs and reusable Strix gate tests aligned with this rule so
+  stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
+  generic-key examples cannot re-enter copied workflow guidance.
+- HMAC fallback sessions are local/control-plane compatibility credentials, not
+  authoritative workspace-membership evidence. Sensitive tenant security posture
+  surfaces must require OIDC/JWKS-backed membership or an explicit dependency
+  override in tests; do not allow a signed HMAC `workspace` claim alone to open
+  cross-workspace security data.
 
 ## PR automation and review defaults
 
@@ -64,6 +94,10 @@
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
+- Session authority is a server-side verification result, not a token payload
+  claim. HMAC and OIDC paths must pass `session_verifier` from the code path that
+  validated the signature/key; never derive it from `_session_verifier` or a
+  similar user-controlled JWT claim.
 - Private backend `/api/*` routers must be registered with the default
   `get_auth_context` signed-session dependency; only explicitly documented
   public endpoints such as `/` may omit it. Keep runtime feature/configuration
@@ -75,14 +109,27 @@
   registry endpoints must enforce role checks in addition to authentication. LLM
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
-  addresses.
+  addresses. Runtime LLM calls that use a custom provider `base_url` must build
+  their `httpx` client through `build_llm_provider_http_client` so TCP
+  connections are pinned to the already validated global address while TLS/SNI
+  still uses the allowlisted hostname; do not hand a freshly validated URL to a
+  generic client that can resolve DNS again at connect time.
+- OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
+  must use HTTPS, must not include userinfo or fragments, must reject localhost
+  and non-global IP literals, and must be exact-host allowlisted by
+  `ALLOWED_OIDC_HOSTS` before any JWKS preload or token verification path can
+  use them. Allowlisted OIDC hostnames must also resolve only to global
+  addresses, and JWKS retrieval must connect to the already validated pinned
+  address while preserving TLS/SNI for the allowlisted hostname.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
   reject HTML-like execution item markup at the backend boundary rather than
   storing user-supplied tags for later UI rendering. Parsed email display fields
-  must not persist active HTML/script markup; preserve message/thread identifiers
-  separately from UI-safe subject/body, address, and attachment display text.
+  must not persist active HTML/script markup, and email API list/detail/thread
+  responses must sanitize stored subject/body/snippet/address display fields
+  before returning them. Preserve message/thread identifiers separately from
+  UI-safe subject/body, address, and attachment display text.
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
@@ -93,6 +140,15 @@
   by `user_id` only. Frontend Settings onboarding must use bearer-session API
   calls for account config, CalDAV/WebDAV source readiness, and runner token
   rotation, and mocks must not reintroduce public identity headers.
+- User-owned mailbox/provider account endpoints must not treat `system_admin`
+  or `platform_admin` JWT roles as an owner session. Elevated operators need
+  separate audited support flows; `/api/accounts/config` must reject forged or
+  orgless privileged sessions before credential lookup, and tests must exercise
+  the real signed bearer path rather than only dev public-header overrides.
+- HMAC fallback sessions must not authorize `system_admin` or `platform_admin`
+  roles. Platform-wide operators require the OIDC/JWKS path or a separately
+  audited support flow so compromise of an HMAC session secret cannot mint
+  platform administrator claims.
 - Reply-wait task escalation must reuse the server-authoritative pending reply
   path, create or update source-linked `reply_sla` ticket tasks by opaque task
   id, and sanitize generated task titles from email subjects before persistence.
@@ -102,8 +158,32 @@
   credentials are required for POP3 sync;
   missing credentials must fail the sync path instead of logging a successful
   no-op. Do not place sensitive credential values, secret-derived values, or
-  password-shaped field names in logs or raised exception text; use static
-  non-secret labels such as "credential secret" instead.
+  password-shaped field names in logs or raised exception text; use generic
+  operation phrases such as "account configuration incomplete" instead of
+  credential-type labels.
+- SMTP, IMAP, and POP3 host validation must reject legacy numeric IP literal
+  forms such as decimal integers, hexadecimal integers, and octal dotted forms
+  before DNS or socket connection; `socket.getaddrinfo` may resolve those forms
+  to loopback/private addresses even when `ipaddress.ip_address` rejects them.
+- GitHub Actions `run:` blocks must not directly interpolate `${{ github.* }}`,
+  `${{ inputs.* }}`, or other expression data into shell conditions or commands.
+  Pass expression values through step `env:` keys first, then quote shell
+  variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script. PR base/head
+  SHA values from manual workflow inputs must be regex-validated as git SHAs
+  before any fetch, diff, or artifact metadata use.
+- Privileged `pull_request_target` scanner jobs must treat PR-head blobs as
+  non-executable input data. When copying PR-head files into temporary scan
+  scopes, strip executable bits instead of preserving `100755` modes. PR-scoped
+  Strix workflow runs should use the explicit `STRIX_TARGET_PATH=__PR_SCOPE__`
+  sentinel so the trusted base checkout is never presented as the PR scan
+  target. Strix child processes that inspect untrusted PR scope data must set
+  package-manager lifecycle script guards such as `NPM_CONFIG_IGNORE_SCRIPTS`,
+  `PNPM_CONFIG_IGNORE_SCRIPTS`, and `YARN_ENABLE_SCRIPTS=false`; do not allow a
+  scanner dependency install to execute PR-provided `package.json` scripts.
+- Test harness HTTP smoke helpers must not use broad URL opener APIs such as
+  `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
+  HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into
+  production examples.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and
@@ -111,21 +191,62 @@
 - New database tables and columns must use at least two-word `snake_case` names;
   avoid single-token columns such as `id`, `title`, `status`, or `priority` on
   newly introduced objects.
+- Public audit/event identifiers that may use human-readable prefixes must not
+  be stored in artificially short `varchar(n)` columns; use opaque source UIDs
+  that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When reviews find missing browser security headers or tabnabbing hardening,
+  update both backend header tests and frontend link tests. Global backend
+  responses must include `Referrer-Policy`, and `target="_blank"` links must
+  use explicit `rel="noopener noreferrer"`.
+- When robot review cites an obsolete Strix provider policy, update the docs and
+  tests to the current secret contract before accepting a rollback suggestion;
+  do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
+  credential forwarding while trying to satisfy old comments.
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
+- AI Hub tabs must be backed by signed source evidence from `/api/ai-hub/surface`
+  or a narrower signed API. Do not reintroduce static model-score fixtures,
+  fake workflow logs, or provider names that are not derived from prompt,
+  provider, or audit data.
+- Data document repository assets must be backed by signed
+  `/api/data/quality-surface` evidence from scoped email and attachment rows.
+  Do not reintroduce static file lists, sequential attachment/email ids, raw
+  message ids, raw thread ids, message bodies, provider URLs, usernames,
+  credentials, or claims that Naruon itself stores customer file capacity.
+- Icon-only workspace controls must carry localized `aria-label` text matching
+  the visible app language; do not rely on the SVG icon alone for Calendar,
+  Tasks, drawer, modal, or toolbar actions.
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
+- When a backend container reports missing `DATABASE_URL` or
+  `AUTH_SESSION_HMAC_SECRET`, verify the runtime path injects the operator env
+  through `scripts/naruon_compose.sh`, Kubernetes secrets, or an explicit
+  orchestrator secret. Do not add code defaults, and do not mount or declare the
+  full `~/.env` as a Compose `env_file` because unrelated local secrets may leak
+  into the backend container.
+- Backend container entrypoints must pass through `python scripts/start_backend.py`
+  before `uvicorn` imports `main:app`. Do not reintroduce Dockerfile, Compose,
+  live-E2E, or gateway commands that call `uvicorn main:app` directly and expose
+  Pydantic import tracebacks for missing runtime settings.
 - DAV/WebDAV/CalDAV routes are private integration surfaces unless explicitly
   documented otherwise. Register them with the default signed-session dependency,
-  escape XML response fields before interpolation, and keep path values separate
-  from log-safe display values.
+  require the signed-session dependency in handler signatures, enforce route
+  owner scope before capability/discovery/read/writeback responses, reject
+  ownerless DAV paths instead of treating them as shared roots, escape XML
+  response fields before interpolation, and keep path values separate from
+  log-safe display values.
 - Self-hosted runner WebSocket routes must validate both a signed bearer session
   and a server-side WorkspaceRunnerConfig registration token before accepting the
   socket. Do not use the raw path token as identity, a log value, or the sole
   active-connection key.
+- Self-hosted connector command handlers must never return placeholder or mock
+  success for IMAP/SMTP execution. If no local customer-network adapter is
+  configured, fail closed with `adapter_not_configured` and
+  `provider_write_executed=false`; if an adapter is configured, wrap only the
+  adapter's actual result in the standard runner response envelope.
 - Calendar UI actions must request `/api/calendar/writeback-intent` with
   server-authoritative source selection and provenance. Do not wire browser
   actions back to legacy `/api/calendar/sync` unless a trusted backend credential
@@ -142,9 +263,11 @@
   `source_uid` values, signed-session organization scope, and persisted
   writeback eligibility, not sequential CalDAV or WebDAV account ids.
   Missing writeback eligibility must fail closed. Browser-visible source ids
-  must not reveal or be deterministically derived from account primary keys, and
-  provider mutations remain future work until connector execution can enforce
-  capability, consent, and ETag/If-Match checks.
+  must not reveal or be deterministically derived from account primary keys.
+  WebDAV account readiness may expose only source-safe labels and ETag/If-Match
+  evidence, never provider URLs, usernames, credentials, or sequential account
+  ids. Provider mutations remain future work until connector execution can
+  enforce capability, consent, and ETag/If-Match checks.
 - DAV/WebDAV folder and write paths must not expose sequential folder primary
   keys or claim provider write success from skeleton endpoints. Browser-visible
   project folders use opaque `folder_uid` values, and `/dav` mutation methods
@@ -174,6 +297,10 @@
   session owner and organization. Source-backed UI panels must request
   `source_message_id` and `source_thread_id` filters instead of presenting a
   global relationship graph as if it were current-thread evidence.
+- Sender DAG capture must start from a signed source email lookup, not
+  browser-submitted relationship classifications. Route layers should derive the
+  thread provenance server-side, persist only scoped ontology metadata, and keep
+  provider writes out of relationship capture.
 - Unique email and forwarded-import dedupe must use strong scoped signals:
   normalized Message-ID, References/In-Reply-To, persisted duplicate provenance,
   or exact body/attachment fingerprints. Do not merge threads from subject-only
@@ -195,6 +322,16 @@
   vector counts, unsupported embedding model names, static quality totals, or
   provider-write success claims; Data mocks and E2E fixtures must preserve the
   bearer-session call and omit public identity headers.
+- Project workspace lists, milestones, task links, and decision logs must be
+  source-backed by signed `/api/webdav/folders` and `/api/tasks` data or
+  explicitly labeled pending. Do not reintroduce static project names, inert
+  report/filter buttons, provider write success claims, or sequential database
+  ids in project UI/tests.
+- Project workspace folder rendering must prove owner scope before display:
+  `/api/webdav/folders` includes server-scoped `owner_user_id` and
+  `organization_id`, and the browser filters those folders against decoded
+  signed-session claims before building project cards. Keep `folder_uid` as an
+  internal opaque key only; do not render it as visible UI text.
 - Self-hosted connector APM history must be persisted as scoped control-plane
   signal events before the UI claims durable heartbeat evidence. Do not expose
   runner registration tokens, path tokens, or raw provider credentials in event

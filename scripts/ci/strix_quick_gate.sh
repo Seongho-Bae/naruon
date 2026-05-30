@@ -13,6 +13,8 @@ SCRIPT_DIR="$({ CDPATH='' && cd -P -- "$(dirname -- "$0")" && pwd -P; })"
 REPO_ROOT="$({ CDPATH='' && cd -P -- "$SCRIPT_DIR/../.." && pwd -P; })"
 RAW_TARGET_PATH="${STRIX_TARGET_PATH:-./}"
 TARGET_PATH=""
+PR_SCOPE_TARGET_SENTINEL="__PR_SCOPE__"
+TARGET_PATH_REQUESTS_PR_SCOPE=0
 RAW_SCAN_MODE="${STRIX_SCAN_MODE:-quick}"
 SCAN_MODE=""
 ARTIFACT_REPORTS_DIR="$REPO_ROOT/strix_runs"
@@ -22,7 +24,6 @@ ACTIVE_REPORTS_DIR="$STRIX_RUNTIME_DIR/reports"
 STRIX_REPORTS_DIR="$ACTIVE_REPORTS_DIR"
 STRIX_PROCESS_TIMEOUT_SECONDS="${STRIX_PROCESS_TIMEOUT_SECONDS:-1200}"
 STRIX_TOTAL_TIMEOUT_SECONDS="${STRIX_TOTAL_TIMEOUT_SECONDS:-0}"
-STRIX_PR_SCOPE_MAX_FILES_PER_BATCH="${STRIX_PR_SCOPE_MAX_FILES_PER_BATCH:-20}"
 STRIX_DISABLE_PR_SCOPING="${STRIX_DISABLE_PR_SCOPING:-1}"
 # shellcheck disable=SC2034  # consumed by sourced normalize_model helper
 DEFAULT_PROVIDER_RAW="${STRIX_LLM_DEFAULT_PROVIDER:-}"
@@ -33,6 +34,7 @@ STRIX_INPUT_FILE_ROOT="${STRIX_INPUT_FILE_ROOT:-${RUNNER_TEMP:-}}"
 STRIX_TRANSIENT_RETRY_PER_MODEL="${STRIX_TRANSIENT_RETRY_PER_MODEL:-0}"
 STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="${STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS:-3}"
 STRIX_FAIL_ON_MIN_SEVERITY="${STRIX_FAIL_ON_MIN_SEVERITY:-MEDIUM}"
+STRIX_FAIL_ON_PROVIDER_SIGNAL="${STRIX_FAIL_ON_PROVIDER_SIGNAL:-0}"
 RUN_START_EPOCH="$(date +%s)"
 PREEXISTING_REPORT_DIRS=()
 REPO_NAME="${REPO_ROOT##*/}"
@@ -51,8 +53,6 @@ CHANGED_FILES=()
 PULL_REQUEST_CHANGED_FILES=()
 NORMALIZED_CHANGED_FILES=()
 PULL_REQUEST_SCOPE_DIRS=()
-PULL_REQUEST_SCOPE_FILE_BATCHES=()
-CURRENT_PULL_REQUEST_BATCH_FILE_COUNT=0
 LAST_PULL_REQUEST_SCOPE_DIR=""
 TARGET_PATH_IS_INTERNAL_PR_SCOPE=0
 
@@ -110,6 +110,13 @@ publish_artifact_reports() {
 	if [ -d "$ACTIVE_REPORTS_DIR" ]; then
 		cp -R -- "$ACTIVE_REPORTS_DIR"/. "$ARTIFACT_REPORTS_DIR"/
 	fi
+	local scope_dir scope_reports_dir
+	for scope_dir in "${PULL_REQUEST_SCOPE_DIRS[@]}"; do
+		scope_reports_dir="$scope_dir/strix_runs"
+		if [ -d "$scope_reports_dir" ] && [ ! -L "$scope_reports_dir" ]; then
+			cp -R -- "$scope_reports_dir"/. "$ARTIFACT_REPORTS_DIR"/
+		fi
+	done
 }
 
 # shellcheck disable=SC2317,SC2329  # invoked from EXIT/INT/TERM trap
@@ -139,26 +146,54 @@ fi
 if ! STRIX_LLM_FILE="$(resolve_trusted_input_file "STRIX_LLM_FILE" "$STRIX_LLM_FILE")"; then
 	exit 2
 fi
-STRIX_LLM="$(trim_whitespace "$(cat -- "$STRIX_LLM_FILE")")"
+STRIX_LLM_CONTENT="$(cat -- "$STRIX_LLM_FILE")"
+STRIX_LLM="$(trim_whitespace "$STRIX_LLM_CONTENT")"
 if [ -z "$STRIX_LLM" ]; then
 	echo "ERROR: STRIX_LLM_FILE must contain a non-empty model value." >&2
 	exit 2
 fi
 
+is_vertex_model() {
+	case "$1" in
+	vertex_ai/* | vertex_ai_beta/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_gemini_model() {
+	case "$1" in
+	gemini/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+NORMALIZED_STRIX_LLM="$(normalize_model "$STRIX_LLM")"
+
 LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
-if [ -z "$LLM_API_KEY_FILE" ]; then
+if [ -z "$LLM_API_KEY_FILE" ] && ! is_vertex_model "$NORMALIZED_STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
 	exit 2
 fi
-if [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; then
+if [ -n "$LLM_API_KEY_FILE" ] && { [ ! -f "$LLM_API_KEY_FILE" ] || [ -L "$LLM_API_KEY_FILE" ]; }; then
 	echo "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key." >&2
 	exit 2
 fi
-if ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
+if [ -n "$LLM_API_KEY_FILE" ] && ! LLM_API_KEY_FILE="$(resolve_trusted_input_file "LLM_API_KEY_FILE" "$LLM_API_KEY_FILE")"; then
 	exit 2
 fi
-LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
-if [ -z "$LLM_API_KEY" ]; then
+LLM_API_KEY=""
+if [ -n "$LLM_API_KEY_FILE" ]; then
+	LLM_API_KEY="$(trim_whitespace "$(cat -- "$LLM_API_KEY_FILE")")"
+fi
+if [ -z "$LLM_API_KEY" ] && ! is_vertex_model "$NORMALIZED_STRIX_LLM"; then
 	echo "ERROR: LLM_API_KEY_FILE must contain a non-empty API key." >&2
 	exit 2
 fi
@@ -203,7 +238,7 @@ validate_raw_target_path_input() {
 		return 2
 	fi
 	case "$raw_target" in
-	. | ./ | src | ./src)
+	. | ./ | src | ./src | "$PR_SCOPE_TARGET_SENTINEL")
 		printf '%s\n' "$raw_target"
 		return 0
 		;;
@@ -265,8 +300,15 @@ normalize_changed_files_cache() {
 	done
 }
 
+pull_request_metadata_env_present() {
+	[ -n "$(trim_whitespace "${PR_NUMBER:-}")" ] &&
+		[ -n "$(trim_whitespace "${PR_BASE_SHA:-}")" ] &&
+		[ -n "$(trim_whitespace "${PR_HEAD_SHA:-}")" ]
+}
+
 pull_request_head_blob_required() {
-	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ]
+	[ "${GITHUB_EVENT_NAME:-}" = "pull_request_target" ] ||
+		{ [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && pull_request_metadata_env_present; }
 }
 
 is_valid_git_commit_sha() {
@@ -373,10 +415,10 @@ changed_file_exists_for_scan() {
 copy_pr_head_blob_to_file() {
 	local relative_path="$1"
 	local dst_path="$2"
-	local head_sha mode mode_rc tmp_dst
+	local head_sha mode_rc tmp_dst
 	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
 	mode_rc=0
-	mode="$(pr_head_regular_file_mode "$relative_path")" || mode_rc=$?
+	pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
 	if [ "$mode_rc" -ne 0 ]; then
 		return 2
 	fi
@@ -389,11 +431,9 @@ copy_pr_head_blob_to_file() {
 		rm -f -- "$tmp_dst"
 		return 2
 	fi
-	if [ "$mode" = "100755" ]; then
-		chmod 755 "$dst_path" || return 2
-	else
-		chmod 644 "$dst_path" || return 2
-	fi
+	# PR-head files are scanner input data in privileged workflows. Preserve the
+	# blob content only; never preserve executable bits from untrusted heads.
+	chmod 644 "$dst_path" || return 2
 }
 
 is_supported_source_file() {
@@ -527,7 +567,14 @@ require_non_negative_integer "$STRIX_TRANSIENT_RETRY_PER_MODEL" "STRIX_TRANSIENT
 require_non_negative_integer "$STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS" "STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS"
 require_non_negative_integer "$STRIX_PROCESS_TIMEOUT_SECONDS" "STRIX_PROCESS_TIMEOUT_SECONDS"
 require_non_negative_integer "$STRIX_TOTAL_TIMEOUT_SECONDS" "STRIX_TOTAL_TIMEOUT_SECONDS"
-require_positive_integer "$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH"
+case "$STRIX_FAIL_ON_PROVIDER_SIGNAL" in
+0 | 1)
+	;;
+*)
+	echo "ERROR: STRIX_FAIL_ON_PROVIDER_SIGNAL must be 0 or 1, got '$STRIX_FAIL_ON_PROVIDER_SIGNAL'." >&2
+	exit 2
+	;;
+esac
 
 if [ "$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")" -lt 0 ]; then
 	echo "ERROR: STRIX_FAIL_ON_MIN_SEVERITY must be one of CRITICAL/HIGH/MEDIUM/LOW/INFO/INFORMATIONAL/NONE, got '$STRIX_FAIL_ON_MIN_SEVERITY'." >&2
@@ -548,6 +595,10 @@ remaining_total_budget() {
 		remaining=0
 	fi
 	echo "$remaining"
+}
+
+provider_signal_fail_closed_enabled() {
+	[ "$STRIX_FAIL_ON_PROVIDER_SIGNAL" = "1" ]
 }
 
 capture_preexisting_report_dirs
@@ -574,6 +625,9 @@ is_pull_request_event() {
 	case "${GITHUB_EVENT_NAME:-}" in
 	pull_request | pull_request_target)
 		github_event_payload_has_pull_request
+		;;
+	workflow_dispatch)
+		pull_request_metadata_env_present
 		;;
 	*)
 		return 1
@@ -690,8 +744,17 @@ require_safe_scan_mode "$SCAN_MODE"
 if ! RAW_TARGET_PATH="$(validate_raw_target_path_input "$RAW_TARGET_PATH")"; then
 	exit 2
 fi
-if ! TARGET_PATH="$(resolve_scan_target_path "$RAW_TARGET_PATH")"; then
-	exit 2
+if [ "$RAW_TARGET_PATH" = "$PR_SCOPE_TARGET_SENTINEL" ]; then
+	if ! is_pull_request_event || [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
+		echo "ERROR: STRIX_TARGET_PATH=$PR_SCOPE_TARGET_SENTINEL requires PR scoping." >&2
+		exit 2
+	fi
+	TARGET_PATH="$REPO_ROOT"
+	TARGET_PATH_REQUESTS_PR_SCOPE=1
+else
+	if ! TARGET_PATH="$(resolve_scan_target_path "$RAW_TARGET_PATH")"; then
+		exit 2
+	fi
 fi
 
 load_pull_request_changed_files() {
@@ -775,11 +838,20 @@ PY
 
 	local changed_files_output
 	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
-		if pull_request_head_blob_required; then
-			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
-			return 2
+		if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && pull_request_metadata_env_present; then
+			if changed_files_output="$(git diff --name-only "$base_sha" "$head_sha" --)"; then
+				echo "Using explicit base/head diff for workflow_dispatch PR-scope Strix evidence." >&2
+			else
+				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+				return 2
+			fi
+		else
+			if pull_request_head_blob_required; then
+				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+				return 2
+			fi
+			return 1
 		fi
-		return 1
 	fi
 
 	while IFS= read -r changed_file; do
@@ -1039,6 +1111,7 @@ is_scannable_changed_file() {
 pull_request_scope_context_files() {
 	local needs_backend_python=0
 	local needs_frontend_email_api_context=0
+	local needs_deployment_context=0
 	local changed_file normalized_changed_file
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
@@ -1051,6 +1124,13 @@ pull_request_scope_context_files() {
 		frontend/src/components/EmailDetail.tsx | frontend/src/components/EmailList.tsx | frontend/src/app/page.tsx | frontend/src/lib/api-client.ts | frontend/src/lib/email-threading.ts)
 			needs_frontend_email_api_context=1
 			;;
+		# Deployment and CI changes often reference build files that are not all
+		# changed in the PR. Include the trusted copies so Strix does not downgrade
+		# a clean finding to provider/failure-signal output due to missing Dockerfiles
+		# or VERSION context.
+		.github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml)
+			needs_deployment_context=1
+			;;
 		esac
 	done
 
@@ -1058,12 +1138,32 @@ pull_request_scope_context_files() {
 		cat <<'EOF'
 backend/requirements.txt
 backend/api/__init__.py
+backend/api/accounts.py
 backend/api/auth.py
+backend/api/calendar.py
+backend/api/dav.py
+backend/api/data.py
+backend/api/emails.py
+backend/api/llm.py
+backend/api/llm_providers.py
 backend/api/mailbox_scope.py
+backend/api/network.py
+backend/api/observability.py
+backend/api/ontology.py
+backend/api/prompts.py
 backend/api/runner_config.py
+backend/api/runner_ws.py
+backend/api/runtime_config.py
+backend/api/search.py
+backend/api/security.py
+backend/api/tasks.py
+backend/api/tenant_config.py
+backend/api/webdav.py
 backend/core/__init__.py
 backend/core/config.py
 backend/core/exceptions.py
+backend/core/runtime_secrets.py
+backend/core/telemetry.py
 backend/db/__init__.py
 backend/db/models.py
 backend/db/session.py
@@ -1074,6 +1174,7 @@ backend/services/email_client.py
 backend/services/email_parser.py
 backend/services/embedding.py
 backend/services/exceptions.py
+backend/services/imap_worker.py
 backend/services/llm_provider_urls.py
 backend/services/text_safety.py
 backend/services/threading_service.py
@@ -1088,6 +1189,20 @@ backend/core/config.py
 backend/db/models.py
 backend/main.py
 backend/services/threading_service.py
+EOF
+	fi
+
+	if [ "$needs_deployment_context" -eq 1 ]; then
+		cat <<'EOF'
+Dockerfile
+frontend/Dockerfile
+frontend/package.json
+frontend/package-lock.json
+frontend/next.config.ts
+frontend/postcss.config.mjs
+docker-compose.yml
+render.yaml
+VERSION
 EOF
 	fi
 }
@@ -1352,7 +1467,6 @@ PY
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
-				PULL_REQUEST_SCOPE_FILE_BATCHES=()
 				return 0
 			fi
 			return 2
@@ -1375,43 +1489,18 @@ PY
 				printf "Using full target path for pull request Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 			fi
 		fi
-		PULL_REQUEST_SCOPE_FILE_BATCHES=()
 		return 0
 	fi
-	PULL_REQUEST_SCOPE_FILE_BATCHES=()
-	local batch_start=0
-	while [ "$batch_start" -lt "$total_files" ]; do
-		local batch_files=("${CHANGED_FILES[@]:batch_start:STRIX_PR_SCOPE_MAX_FILES_PER_BATCH}")
-		PULL_REQUEST_SCOPE_FILE_BATCHES+=("$(printf '%s\n' "${batch_files[@]}")")
-		batch_start=$((batch_start + STRIX_PR_SCOPE_MAX_FILES_PER_BATCH))
-	done
+	local build_scope_rc=0
+	build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+	if [ "$build_scope_rc" -ne 0 ]; then
+		return 2
+	fi
+	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
+	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
 	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
 	printf ".\n" >&2
-	if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 1 ]; then
-		printf "Split pull request Strix scan into %s batch(es) of at most %s file(s).\n" \
-			"${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" \
-			"$STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" >&2
-	fi
 	return 0
-}
-
-should_rebalance_pull_request_batch() {
-	if ! is_pull_request_event; then
-		return 1
-	fi
-	if [ "$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT" -le 1 ]; then
-		return 1
-	fi
-	if [ "$INFRA_ERROR_DETECTED" -ne 1 ]; then
-		return 1
-	fi
-	if [ "$(remaining_total_budget)" -le 0 ]; then
-		return 1
-	fi
-	if is_timeout_error; then
-		return 0
-	fi
-	return 1
 }
 
 extract_vulnerability_locations() {
@@ -1729,28 +1818,6 @@ evaluate_pull_request_findings() {
 	return 1
 }
 
-is_vertex_model() {
-	case "$1" in
-	vertex_ai/* | vertex_ai_beta/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
-is_gemini_model() {
-	case "$1" in
-	gemini/*)
-		return 0
-		;;
-	*)
-		return 1
-		;;
-	esac
-}
-
 fallback_models_raw_for_model() {
 	local model="$1"
 
@@ -1864,10 +1931,14 @@ run_strix_once() {
 	fi
 	local start_epoch
 	start_epoch="$(date +%s)"
+	local child_llm_api_key=""
+	if ! is_vertex_model "$(normalize_model "$model")"; then
+		child_llm_api_key="$LLM_API_KEY"
+	fi
 	set -o pipefail
 	set +e
 	STRIX_CHILD_MODEL="$model" \
-		STRIX_CHILD_LLM_API_KEY="$LLM_API_KEY" \
+		STRIX_CHILD_LLM_API_KEY="$child_llm_api_key" \
 		STRIX_CHILD_LLM_API_BASE="$llm_api_base_value" \
 		STRIX_CHILD_REPORTS_DIR="$ACTIVE_REPORTS_DIR" \
 		python3 - "$timeout_seconds" "$resolved_target_path" "$SCAN_MODE" "$STRIX_LOG" <<'PY'
@@ -1905,20 +1976,30 @@ for key in (
     value = os.environ.get(key)
     if value:
         child_env[key] = value
+child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"
+child_env["NPM_CONFIG_IGNORE_SCRIPTS"] = "true"
+child_env["npm_config_ignore_scripts"] = "true"
+child_env["PNPM_CONFIG_IGNORE_SCRIPTS"] = "true"
+child_env["pnpm_config_ignore_scripts"] = "true"
+child_env["YARN_ENABLE_SCRIPTS"] = "false"
+child_env["BUN_CONFIG_IGNORE_SCRIPTS"] = "true"
 child_env["STRIX_LLM"] = os.environ["STRIX_CHILD_MODEL"]
 child_env["LLM_MODEL"] = os.environ["STRIX_CHILD_MODEL"]
-child_env["LLM_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
+if os.environ.get("STRIX_CHILD_LLM_API_KEY"):
+    child_env["LLM_API_KEY"] = os.environ["STRIX_CHILD_LLM_API_KEY"]
 child_env["STRIX_REPORTS_DIR"] = os.environ["STRIX_CHILD_REPORTS_DIR"]
 for key, value in os.environ.items():
     if key.startswith("FAKE_STRIX_") and value:
         child_env[key] = value
 for key in (
-    "GOOGLE_GHA_CREDS_PATH",
-    "GOOGLE_APPLICATION_CREDENTIALS",
-    "CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
-    "VERTEX_LOCATION",
-    "GEMINI_LOCATION",
-    "LLM_TIMEOUT",
+	"GOOGLE_GHA_CREDS_PATH",
+	"GOOGLE_APPLICATION_CREDENTIALS",
+	"CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE",
+	"VERTEXAI_PROJECT",
+	"VERTEXAI_LOCATION",
+	"VERTEX_LOCATION",
+	"GEMINI_LOCATION",
+	"LLM_TIMEOUT",
     "STRIX_MEMORY_COMPRESSOR_TIMEOUT",
     "STRIX_REASONING_EFFORT",
     "STRIX_LLM_MAX_RETRIES",
@@ -1943,11 +2024,24 @@ if not resolved_strix_bin:
     raise SystemExit(127)
 resolved_strix_bin = str(pathlib.Path(resolved_strix_bin).resolve(strict=True))
 
-command = [resolved_strix_bin, "-n", "-t", target_path, "--scan-mode", scan_mode]
+try:
+    target_cwd = pathlib.Path(target_path).resolve(strict=True)
+except OSError as exc:
+    sys.stderr.write(f"ERROR: Strix target path could not be canonicalized: {exc}\n")
+    raise SystemExit(2)
+if not target_cwd.is_dir():
+    sys.stderr.write("ERROR: Strix target path must be a directory.\n")
+    raise SystemExit(2)
+if any(ch in str(target_cwd) for ch in ("\x00", "\n", "\r")):
+    sys.stderr.write("ERROR: Strix target path contains unsupported control characters.\n")
+    raise SystemExit(2)
+
+command = [resolved_strix_bin, "-n", "-t", ".", "--scan-mode", scan_mode]
 
 try:
     process = subprocess.Popen(
         command,
+        cwd=str(target_cwd),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -1991,6 +2085,14 @@ PY
 		echo "Strix run timed out after ${timeout_seconds}s." | tee -a "$STRIX_LOG" >&2
 	fi
 
+	if has_detected_infrastructure_error; then
+		INFRA_ERROR_DETECTED=1
+		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
+	fi
+
 	if [ "$rc" -eq 0 ]; then
 		printf "Strix run succeeded for model '%s' in %ds.\n" "$model" "$elapsed" >&2
 		return 0
@@ -2004,10 +2106,6 @@ PY
 	# would only see the *last* attempt's log — missing infrastructure errors
 	# from earlier attempts whose partial reports may still sit in the reports
 	# directory.
-	if has_detected_infrastructure_error; then
-		INFRA_ERROR_DETECTED=1
-	fi
-
 	return 1
 }
 
@@ -2037,17 +2135,11 @@ is_llm_service_unavailable_error() {
 ##   - litellm API connection failures with LLM-provider evidence
 ##   - litellm service-unavailable / high-demand provider failures
 ##   - MidStreamFallbackError (litellm mid-stream provider switch)
-## Vertex timeouts remain infrastructure errors for guard logic, but the caller
-## should move directly to fallback model evaluation instead of spending the
-## remaining budget retrying the same slow model. Non-Vertex models have no
-## provider-specific fallback path in this gate, so LLM timeouts are retried on
-## the same model before being treated as non-recoverable.
+## Timeouts are infrastructure failures. In strict CI mode they fail closed;
+## otherwise the caller may still move to fallback model evaluation.
 is_transient_same_model_retry_error() {
 	local model="${1-}"
 	if is_timeout_error; then
-		if [ -n "$model" ] && ! is_vertex_model "$model"; then
-			return 0
-		fi
 		return 1
 	fi
 	if is_llm_api_connection_error; then
@@ -2100,8 +2192,6 @@ run_strix_with_transient_retry() {
 			retry_reason="LLM API connection"
 		elif is_llm_service_unavailable_error; then
 			retry_reason="LLM service unavailable"
-		elif is_timeout_error; then
-			retry_reason="LLM timeout"
 		elif is_midstream_fallback_error; then
 			retry_reason="midstream fallback"
 		fi
@@ -2174,9 +2264,10 @@ is_rate_limit_error() {
 ##      Requires LLM_PROVIDER_ONLY_REGEX to avoid misclassifying target-app
 ##      or infrastructure network timeouts as LLM errors.
 ##
-## All three tiers feed into infrastructure-error detection and trigger
-## fallback model evaluation before the total budget is exhausted.  Same-model
-## retries remain reserved for rate-limit and mid-stream fallback errors.
+## All three tiers feed into infrastructure-error detection. Strict CI mode
+## fails closed; non-strict callers may still evaluate fallback models.
+## Same-model retries remain reserved for rate-limit and mid-stream fallback
+## errors.
 is_timeout_error() {
 	# Tier 1: litellm SDK timeout — provider-specific, always trusted.
 	if grep -Fq 'litellm.exceptions.Timeout' "$STRIX_LOG"; then
@@ -2236,6 +2327,10 @@ LLM_PROVIDER_ONLY_REGEX='(litellm|openai|anthropic|VertexAI|Vertex_ai|vertex\.ai
 # was interrupted or incomplete.  Used as a guard to prevent the
 # below-threshold override from silently passing an aborted scan.
 has_detected_infrastructure_error() {
+	if grep -Eiq '(^|[^[:alpha:]])(Fatal|Denied|Warn|Warning)([^[:alpha:]]|$)' "$STRIX_LOG"; then
+		return 0
+	fi
+
 	if is_timeout_error; then
 		return 0
 	fi
@@ -2430,7 +2525,7 @@ strix_reported_zero_vulnerabilities_in_file() {
 	grep -Eq 'Vulnerabilities[[:space:]]+0([^0-9]|$)' "$source_path"
 }
 
-should_allow_pull_request_infra_zero_finding_bypass() {
+should_fail_pull_request_infra_zero_findings() {
 	if ! is_pull_request_event; then
 		return 1
 	fi
@@ -2447,7 +2542,7 @@ should_allow_pull_request_infra_zero_finding_bypass() {
 		return 1
 	fi
 
-	echo "Strix reported zero vulnerabilities before provider infrastructure failure; allowing pull request continuation and deferring provider outage follow-up." >&2
+	echo "Strix reported zero vulnerabilities before provider infrastructure failure; failing closed because provider infrastructure failures are not clean scan evidence." >&2
 	return 0
 }
 
@@ -2713,6 +2808,9 @@ is_model_retryable_error() {
 	fi
 
 	if is_timeout_error; then
+		if provider_signal_fail_closed_enabled; then
+			return 1
+		fi
 		return 0
 	fi
 
@@ -2754,14 +2852,19 @@ run_current_target_scan() {
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
+			return 1
+		fi
 		return 0
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
 		return 2
 	fi
 
-	if should_rebalance_pull_request_batch; then
-		return 75
+	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+		echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+		return 1
 	fi
 
 	if has_only_below_threshold_vulnerabilities; then
@@ -2811,11 +2914,20 @@ run_current_target_scan() {
 		local fallback_scan_rc=0
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		if [ "$fallback_scan_rc" -eq 0 ]; then
+			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
+				return 1
+			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate'."
 			return 0
 		fi
 		if [ "$fallback_scan_rc" -eq 2 ]; then
 			return 2
+		fi
+
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2838,8 +2950,8 @@ run_current_target_scan() {
 		fi
 		done
 
-	if should_allow_pull_request_infra_zero_finding_bypass; then
-		return 0
+	if should_fail_pull_request_infra_zero_findings; then
+		return 1
 	fi
 
 	if [ "$fallback_tried" -eq 0 ]; then
@@ -2850,6 +2962,7 @@ run_current_target_scan() {
 		else
 			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
 		fi
+		return 1
 	fi
 
 	if is_vertex_model "$PRIMARY_MODEL"; then
@@ -2861,91 +2974,10 @@ run_current_target_scan() {
 }
 
 prepare_pull_request_scan_scope
-
-run_pull_request_batch_files() {
-	local batch_label="$1"
-	local total_batches="$2"
-	local batch_files_text="$3"
-	local -a batch_files=()
-	local previous_target_path="$TARGET_PATH"
-	local previous_target_is_internal="$TARGET_PATH_IS_INTERNAL_PR_SCOPE"
-	mapfile -t batch_files <<<"$batch_files_text"
-	if [ "${#batch_files[@]}" -eq 0 ]; then
-		echo "ERROR: pull request Strix batch '$batch_label' has no files to scan." >&2
-		return 1
-	fi
-
-	local previous_batch_file_count="$CURRENT_PULL_REQUEST_BATCH_FILE_COUNT"
-	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="${#batch_files[@]}"
-	if ! build_pull_request_scope_dir "${batch_files[@]}"; then
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 1
-	fi
-	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
-	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-	echo "Running pull request Strix batch ${batch_label}/${total_batches}." >&2
-
-	local batch_rc=0
-	run_current_target_scan || batch_rc=$?
-	if [ "$batch_rc" -eq 0 ]; then
-		capture_preexisting_report_dirs
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 0
-	fi
-
-	if [ "$batch_rc" -eq 75 ]; then
-		local midpoint=$((CURRENT_PULL_REQUEST_BATCH_FILE_COUNT / 2))
-		if [ "$midpoint" -le 0 ]; then
-			midpoint=1
-		fi
-		echo "Rebalancing pull request Strix batch ${batch_label}/${total_batches} into smaller batches after timeout." >&2
-		local first_half second_half
-		first_half="$(printf '%s\n' "${batch_files[@]:0:midpoint}")"
-		second_half="$(printf '%s\n' "${batch_files[@]:midpoint}")"
-		local first_half_rc=0
-		run_pull_request_batch_files "${batch_label}.1" "$total_batches" "$first_half" || first_half_rc=$?
-		if [ "$first_half_rc" -ne 0 ]; then
-			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-			TARGET_PATH="$previous_target_path"
-			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return "$first_half_rc"
-		fi
-		local second_half_rc=0
-		run_pull_request_batch_files "${batch_label}.2" "$total_batches" "$second_half" || second_half_rc=$?
-		if [ "$second_half_rc" -ne 0 ]; then
-			CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-			TARGET_PATH="$previous_target_path"
-			TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-			return "$second_half_rc"
-		fi
-		CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-		TARGET_PATH="$previous_target_path"
-		TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-		return 0
-	fi
-
-	CURRENT_PULL_REQUEST_BATCH_FILE_COUNT="$previous_batch_file_count"
-	TARGET_PATH="$previous_target_path"
-	TARGET_PATH_IS_INTERNAL_PR_SCOPE="$previous_target_is_internal"
-	return "$batch_rc"
-}
-
-if [ "${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}" -gt 0 ]; then
-	total_batches="${#PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"
-	batch_number=0
-	for batch_files_text in "${PULL_REQUEST_SCOPE_FILE_BATCHES[@]}"; do
-		batch_number=$((batch_number + 1))
-		batch_rc=0
-		run_pull_request_batch_files "$batch_number" "$total_batches" "$batch_files_text" || batch_rc=$?
-		if [ "$batch_rc" -ne 0 ]; then
-			exit "$batch_rc"
-		fi
-	done
-	exit 0
+if [ "$TARGET_PATH_REQUESTS_PR_SCOPE" -eq 1 ] &&
+	[ "$TARGET_PATH_IS_INTERNAL_PR_SCOPE" -ne 1 ]; then
+	echo "ERROR: STRIX_TARGET_PATH=$PR_SCOPE_TARGET_SENTINEL did not produce a PR scan scope." >&2
+	exit 2
 fi
 
 scan_rc=0

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Sequence
 from typing import Literal
 
@@ -91,10 +92,7 @@ def _registry_scope_statement(auth_context: AuthContext):
     )
     if is_system_admin_role(auth_context.role):
         return statement
-    if is_tenant_admin_role(auth_context.role) and auth_context.organization_id:
-        return statement.where(
-            CalendarWritebackSource.organization_id == auth_context.organization_id
-        )
+
     organization_filter = (
         CalendarWritebackSource.organization_id == auth_context.organization_id
         if auth_context.organization_id is not None
@@ -184,8 +182,6 @@ def _can_target_writeback_source(
         return True
     if target_source.organization_id != auth_context.organization_id:
         return False
-    if is_tenant_admin_role(auth_context.role):
-        return True
     return target_source.owner_id == auth_context.user_id
 
 
@@ -223,11 +219,9 @@ async def sync_todos(
         )
     try:
         safe_todos = [validate_calendar_todo_text(todo) for todo in request.todos]
-        results = []
-        for safe_todo in safe_todos:
-            event = await create_calendar_event(safe_todo, user_token)
-            results.append(event)
-        return {"synced": len(results), "events": results}
+        coros = [create_calendar_event(safe_todo, user_token) for safe_todo in safe_todos]
+        results = await asyncio.gather(*coros)
+        return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:

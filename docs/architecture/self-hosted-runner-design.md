@@ -26,6 +26,10 @@ To connect to these private network mail servers without exposing them to the pu
 - Written in Python (sharing models/schemas with the main Naruon backend) or Go (for minimal footprint).
 - Authenticates with Naruon using a `Registration Token` mapped to the `organization_id` and `workspace_id`.
 - Periodically polls or maintains a persistent connection for tasks (e.g., "Send email", "Fetch new emails").
+- Executes private-network protocol commands only through configured local
+  adapters. Missing IMAP/SMTP adapters must return `adapter_not_configured` with
+  `provider_write_executed=false`; the runner must not create mock message ids,
+  placeholder IMAP data, or other fake provider-success evidence.
 
 ## Security & RBAC/ABAC
 - The runner only executes commands authorized by the Naruon RBAC/ABAC policy engine.
