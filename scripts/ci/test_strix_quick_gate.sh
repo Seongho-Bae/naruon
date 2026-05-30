@@ -102,6 +102,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" 'STRIX_VERTEX_FALLBACK_MODELS: ""' "strix workflow disables silent Vertex fallbacks so timeout-class failures fail closed"
 	assert_file_contains "$workflow_file" 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' "strix workflow fails closed on timeout, fatal, warning, denied, or provider failure signals"
 	assert_file_not_contains "$workflow_file" "PYTHONWARNINGS:" "strix workflow must not expose warning-filter env names in GitHub logs"
+	assert_file_contains "$workflow_file" "temporary scope with execute bits stripped" "strix workflow documents PR-head blobs as non-executable scan data"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix gate child env narrowly filters the known third-party Pydantic serializer warning"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
@@ -2200,6 +2201,7 @@ run_pull_request_target_head_scope_case() {
 	local base_content="$3"
 	local head_content="$4"
 	local disable_pr_scoping="${5-0}"
+	local make_head_executable="${6-0}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2243,6 +2245,10 @@ if [ -n "${FAKE_STRIX_UNEXPECTED_BASE_CONTENT:-}" ] && grep -Fq -- "$FAKE_STRIX_
 	cat -- "$scoped_file" >&2
 	exit 63
 fi
+if [ -x "$scoped_file" ]; then
+	echo "Error: PR head scoped file must be copied as non-executable data" >&2
+	exit 64
+fi
 echo "scan ok with PR head content"
 EOF
 	chmod +x "$fake_strix"
@@ -2268,6 +2274,9 @@ EOF
 		cd "$repo_root_dir"
 		mkdir -p "$(dirname -- "$changed_file")"
 		printf '%s\n' "$head_content" >"$changed_file"
+		if [ "$make_head_executable" = "1" ]; then
+			chmod +x "$changed_file"
+		fi
 		git add .
 		git commit -qm 'head commit'
 	)
@@ -4431,6 +4440,14 @@ run_pull_request_target_head_scope_case \
 	"frontend/src/app/labels/[slug]/page.tsx" \
 	"BASE_BRACKET_ROUTE_CONTENT_SHOULD_NOT_BE_SCANNED" \
 	"HEAD_BRACKET_ROUTE_CONTENT_SHOULD_BE_SCANNED"
+
+run_pull_request_target_head_scope_case \
+	"pull-request-target-executable-file-copied-nonexecutable" \
+	"scripts/ci/untrusted.sh" \
+	"__ABSENT__" \
+	"HEAD_EXECUTABLE_SHOULD_BE_SCANNED_AS_DATA" \
+	"0" \
+	"1"
 
 run_pull_request_target_plaintext_runner_token_fails_closed_case
 

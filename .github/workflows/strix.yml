@@ -231,7 +231,8 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         # Security invariant for pull_request_target: execute only from the
         # trusted base checkout. The gate copies PR-head blobs into an isolated
-        # temporary scope and scans that scope as data.
+        # temporary scope with execute bits stripped, then scans that scope as
+        # data.
         working-directory: ${{ runner.temp }}/trusted-workspace
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}

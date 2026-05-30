@@ -112,7 +112,9 @@
   must use HTTPS, must not include userinfo or fragments, must reject localhost
   and non-global IP literals, and must be exact-host allowlisted by
   `ALLOWED_OIDC_HOSTS` before any JWKS preload or token verification path can
-  use them.
+  use them. Allowlisted OIDC hostnames must also resolve only to global
+  addresses, and JWKS retrieval must connect to the already validated pinned
+  address while preserving TLS/SNI for the allowlisted hostname.
 - Email-derived tasks must stay source-linked to the email/thread and tenant
   owner scope. Do not expose new sequential database ids through task APIs; use
   opaque public ids for user-visible ticket tasks. Task titles are plain text:
@@ -161,6 +163,9 @@
   `${{ inputs.* }}`, or other expression data into shell conditions or commands.
   Pass expression values through step `env:` keys first, then quote shell
   variables such as `"$IS_PR_EVIDENCE_RUN"` inside the script.
+- Privileged `pull_request_target` scanner jobs must treat PR-head blobs as
+  non-executable input data. When copying PR-head files into temporary scan
+  scopes, strip executable bits instead of preserving `100755` modes.
 - Test harness HTTP smoke helpers must not use broad URL opener APIs such as
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into

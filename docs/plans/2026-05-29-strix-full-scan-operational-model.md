@@ -20,6 +20,10 @@
   repeated `MidStreamFallbackError` and timeout-class provider failures while
   printing zero vulnerabilities. Under the no Timeout/Fatal/Warn/Denied policy,
   that is not clean PR evidence.
+- PR #312 current-head Strix evidence then found two real hardening gaps:
+  OIDC issuer/JWKS allowlisting still allowed trusted hostnames to resolve to
+  private addresses, and the privileged PR scanner preserved PR-head executable
+  bits when materializing scan data.
 
 ## Plan
 
@@ -38,6 +42,12 @@
 6. Start PR-scope evidence with single-file deterministic batches instead of
    waiting for a 12-file batch to hit the process budget and rebalance after the
    timeout.
+7. Validate OIDC issuer/JWKS hostnames by resolving every address to a global IP
+   before startup accepts the configuration, and make JWKS preload fetches
+   connect to that validated pinned address while preserving TLS/SNI for the
+   allowlisted hostname.
+8. Copy PR-head blobs into privileged Strix scan scopes as non-executable data,
+   even when the PR branch records the file as mode `100755`.
 
 ## Non-Goals
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import socket
 
 from scripts import start_backend
 
@@ -15,6 +16,15 @@ def _clear_runtime_settings(monkeypatch) -> None:
         "ALLOWED_OIDC_HOSTS",
     ):
         monkeypatch.delenv(setting_name, raising=False)
+
+
+def _patch_oidc_dns(monkeypatch, address: str) -> None:
+    def fake_getaddrinfo(host: str, port: int, *args, **kwargs):
+        if host != "login.example.test":
+            raise socket.gaierror(f"test DNS blocked for {host}")
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, port))]
+
+    monkeypatch.setattr("core.url_validation.socket.getaddrinfo", fake_getaddrinfo)
 
 
 def test_start_backend_reports_missing_database_url_without_import_traceback(
@@ -109,7 +119,30 @@ def test_start_backend_rejects_untrusted_oidc_jwks_host(monkeypatch, tmp_path):
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.test")
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.chdir(tmp_path)
+    _patch_oidc_dns(monkeypatch, "93.184.216.34")
 
     assert start_backend.validate_runtime_settings() == [
         "OIDC_JWKS_URL host must be listed in ALLOWED_OIDC_HOSTS"
+    ]
+
+
+def test_start_backend_rejects_oidc_hostname_resolving_private_address(
+    monkeypatch, tmp_path
+):
+    _clear_runtime_settings(monkeypatch)
+    monkeypatch.setenv(
+        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
+    )
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", secrets.token_urlsafe(48))
+    monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.test/realms/naruon")
+    monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.test/realms/naruon/jwks")
+    monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.test")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.chdir(tmp_path)
+    _patch_oidc_dns(monkeypatch, "192.168.1.1")
+
+    assert start_backend.validate_runtime_settings() == [
+        "OIDC_ISSUER_URL resolved IP host must be globally routable",
+        "OIDC_JWKS_URL resolved IP host must be globally routable",
     ]

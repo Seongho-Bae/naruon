@@ -64,6 +64,10 @@ mail/calendar/file systems.
   exact-allowlisted, HTTPS-only, and resolved to global addresses. Runtime calls
   use a pinned-address `httpx` transport so DNS is not resolved a second time
   after validation.
+- OIDC issuer and JWKS URLs follow the same outbound fetch posture:
+  exact-allowlisted HTTPS hosts must resolve only to global addresses, and JWKS
+  preload fetches connect to the validated pinned address while keeping TLS/SNI
+  on the allowlisted hostname.
   
 ## Agentic Ontology & Auto-Organization
 

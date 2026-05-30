@@ -416,10 +416,10 @@ changed_file_exists_for_scan() {
 copy_pr_head_blob_to_file() {
 	local relative_path="$1"
 	local dst_path="$2"
-	local head_sha mode mode_rc tmp_dst
+	local head_sha mode_rc tmp_dst
 	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
 	mode_rc=0
-	mode="$(pr_head_regular_file_mode "$relative_path")" || mode_rc=$?
+	pr_head_regular_file_mode "$relative_path" >/dev/null || mode_rc=$?
 	if [ "$mode_rc" -ne 0 ]; then
 		return 2
 	fi
@@ -432,11 +432,9 @@ copy_pr_head_blob_to_file() {
 		rm -f -- "$tmp_dst"
 		return 2
 	fi
-	if [ "$mode" = "100755" ]; then
-		chmod 755 "$dst_path" || return 2
-	else
-		chmod 644 "$dst_path" || return 2
-	fi
+	# PR-head files are scanner input data in privileged workflows. Preserve the
+	# blob content only; never preserve executable bits from untrusted heads.
+	chmod 644 "$dst_path" || return 2
 }
 
 is_supported_source_file() {

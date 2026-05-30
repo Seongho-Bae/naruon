@@ -716,6 +716,75 @@ def test_ensure_organization_access_rejects_cross_scope_resource():
     assert exc.value.status_code == 403
     assert exc.value.detail == "Resource belongs to a different organization"
 
+
+def test_oidc_jwks_client_fetches_from_validated_pinned_address(monkeypatch):
+    from api import auth as auth_module
+    from core.url_validation import ValidatedHTTPSURLHost
+
+    calls: list[dict[str, object]] = []
+
+    class FakeResponse:
+        status = 200
+
+        def read(self, size: int) -> bytes:
+            return b'{"keys":[]}'
+
+    class FakeConnection:
+        def __init__(
+            self,
+            address: str,
+            *,
+            port: int,
+            server_hostname: str,
+            timeout: float,
+            context: object,
+        ):
+            calls.append(
+                {
+                    "address": address,
+                    "port": port,
+                    "server_hostname": server_hostname,
+                    "timeout": timeout,
+                    "closed": False,
+                }
+            )
+
+        def request(self, method: str, target: str, headers: dict[str, str]) -> None:
+            calls[-1]["method"] = method
+            calls[-1]["target"] = target
+            calls[-1]["host"] = headers["Host"]
+
+        def getresponse(self) -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            calls[-1]["closed"] = True
+
+    monkeypatch.setattr(auth_module, "_PinnedHTTPSConnection", FakeConnection)
+    client = auth_module._PinnedOIDCJWKSClient(
+        ValidatedHTTPSURLHost(
+            normalized_url="https://login.example.test:8443/realms/naruon/jwks?rev=1",
+            hostname="login.example.test",
+            port=8443,
+            addresses=("93.184.216.34",),
+        )
+    )
+
+    assert client.fetch_data() == {"keys": []}
+    assert calls == [
+        {
+            "address": "93.184.216.34",
+            "port": 8443,
+            "server_hostname": "login.example.test",
+            "timeout": auth_module.OIDC_JWKS_TIMEOUT_SECONDS,
+            "closed": True,
+            "method": "GET",
+            "target": "/realms/naruon/jwks?rev=1",
+            "host": "login.example.test:8443",
+        }
+    ]
+
+
 @pytest.mark.asyncio
 async def test_signed_bearer_session_with_oidc(monkeypatch):
     import jwt
