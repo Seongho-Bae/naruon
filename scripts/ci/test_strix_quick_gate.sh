@@ -266,7 +266,7 @@ run_gate_case() {
 	local authoritative_sca_runs_json="${26-}"
 	local gemini_fallback_models="${27-__SAME_AS_FALLBACK_MODELS__}"
 	local generic_fallback_models="${28-}"
-	local fail_on_provider_signal="${29-0}"
+	local fail_on_provider_signal="${29-1}"
 
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
@@ -2153,6 +2153,44 @@ EOS
 	fi
 
 	rm -rf "$tmp_dir"
+}
+
+run_gate_case_with_provider_signal_mode() {
+	local provider_signal_mode="$1"
+	shift
+	local args=("$@")
+	local default_args=(
+		"vertex_ai"
+		"__DEFAULT__"
+		""
+		"0"
+		"CRITICAL"
+		"0"
+		""
+		""
+		"1200"
+		"0"
+		""
+		""
+		""
+		""
+		"0"
+		""
+		""
+		""
+		"__SAME_AS_FALLBACK_MODELS__"
+		""
+	)
+
+	while [ "${#args[@]}" -lt 28 ]; do
+		args+=("${default_args[${#args[@]} - 8]}")
+	done
+	args+=("$provider_signal_mode")
+	run_gate_case "${args[@]}"
+}
+
+run_gate_case_allow_provider_signal() {
+	run_gate_case_with_provider_signal_mode "0" "$@"
 }
 
 run_pull_request_target_head_scope_case() {
@@ -4648,7 +4686,7 @@ run_gate_case "multiline-fallback-success" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one|vertex_ai/fallback-two" \
 	"<unset>|<unset>|<unset>"
 
-run_gate_case "vertex-primary-ratelimit-fallback-success" \
+run_gate_case_allow_provider_signal "vertex-primary-ratelimit-fallback-success" \
 	"vertex_ai/ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4657,7 +4695,7 @@ run_gate_case "vertex-primary-ratelimit-fallback-success" \
 	"vertex_ai/ratelimit-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
 
-run_gate_case "vertex-primary-resource-exhausted-fallback-success" \
+run_gate_case_allow_provider_signal "vertex-primary-resource-exhausted-fallback-success" \
 	"vertex_ai/resource-exhausted-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4666,7 +4704,7 @@ run_gate_case "vertex-primary-resource-exhausted-fallback-success" \
 	"vertex_ai/resource-exhausted-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
 
-run_gate_case "vertex-primary-429-fallback-success" \
+run_gate_case_allow_provider_signal "vertex-primary-429-fallback-success" \
 	"vertex_ai/http429-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4675,7 +4713,7 @@ run_gate_case "vertex-primary-429-fallback-success" \
 	"vertex_ai/http429-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
 
-run_gate_case "vertex-primary-midstream-fallback-success" \
+run_gate_case_allow_provider_signal "vertex-primary-midstream-fallback-success" \
 	"vertex_ai/midstream-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4684,7 +4722,7 @@ run_gate_case "vertex-primary-midstream-fallback-success" \
 	"vertex_ai/midstream-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
 
-run_gate_case "vertex-primary-midstream-retry-same-model-success" \
+run_gate_case_allow_provider_signal "vertex-primary-midstream-retry-same-model-success" \
 	"vertex_ai/retry-midstream-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4698,7 +4736,7 @@ run_gate_case "vertex-primary-midstream-retry-same-model-success" \
 	"1"
 
 # Bug 9: Rate-limit transient same-model retry (previously untested path)
-run_gate_case "vertex-primary-ratelimit-retry-same-model-success" \
+run_gate_case_allow_provider_signal "vertex-primary-ratelimit-retry-same-model-success" \
 	"vertex_ai/retry-ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4711,7 +4749,7 @@ run_gate_case "vertex-primary-ratelimit-retry-same-model-success" \
 	"" \
 	"1"
 
-run_gate_case "vertex-primary-api-connection-retry-same-model-success" \
+run_gate_case_allow_provider_signal "vertex-primary-api-connection-retry-same-model-success" \
 	"gemini/retry-api-connection-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4724,7 +4762,7 @@ run_gate_case "vertex-primary-api-connection-retry-same-model-success" \
 	"" \
 	"1"
 
-run_gate_case "gemini-high-demand-retry-same-model-success" \
+run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
 	"gemini/retry-high-demand-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4737,7 +4775,7 @@ run_gate_case "gemini-high-demand-retry-same-model-success" \
 	"" \
 	"1"
 
-run_gate_case "gemini-timeout-direct-fallback-success" \
+run_gate_case_allow_provider_signal "gemini-timeout-direct-fallback-success" \
 	"gemini/retry-timeout-primary" \
 	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
@@ -4750,7 +4788,7 @@ run_gate_case "gemini-timeout-direct-fallback-success" \
 	"" \
 	"1"
 
-run_gate_case "gemini-timeout-fallback-success" \
+run_gate_case_allow_provider_signal "gemini-timeout-fallback-success" \
 	"gemini/timeout-fallback-primary" \
 	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
@@ -4763,7 +4801,7 @@ run_gate_case "gemini-timeout-fallback-success" \
 	"" \
 	"1"
 
-run_gate_case "gemini-generic-fallback-success" \
+run_gate_case_allow_provider_signal "gemini-generic-fallback-success" \
 	"gemini/timeout-fallback-primary" \
 	"" \
 	"0" \
@@ -4792,7 +4830,7 @@ run_gate_case "gemini-generic-fallback-success" \
 	"__UNSET__" \
 	"gemini/fallback-one gemini/fallback-two"
 
-run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
+run_gate_case_allow_provider_signal "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"gemini/zero-timeout-primary" \
 	"gemini/fallback-one" \
 	"1" \
@@ -4813,7 +4851,7 @@ run_gate_case "gemini-zero-findings-timeout-fallback-allows-pr" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
-run_gate_case "pr-batch-zero-finding-does-not-leak" \
+run_gate_case_allow_provider_signal "pr-batch-zero-finding-does-not-leak" \
 	"gemini/batch-zero-leak-primary" \
 	"" \
 	"1" \
@@ -4859,7 +4897,7 @@ run_gate_case "server-disconnect-no-llm-marker-nonrecoverable" \
 	"<unset>"
 
 # Bug 11: Timeout should move directly to fallback instead of retrying the same model.
-run_gate_case "vertex-primary-timeout-retry-same-model-success" \
+run_gate_case_allow_provider_signal "vertex-primary-timeout-retry-same-model-success" \
 	"vertex_ai/retry-timeout-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4873,7 +4911,7 @@ run_gate_case "vertex-primary-timeout-retry-same-model-success" \
 	"1"
 
 # Bug 11b: Timeout → immediate fallback model succeeds.
-run_gate_case "vertex-primary-timeout-exhausted-fallback-success" \
+run_gate_case_allow_provider_signal "vertex-primary-timeout-exhausted-fallback-success" \
 	"vertex_ai/timeout-exhaust-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -4886,7 +4924,7 @@ run_gate_case "vertex-primary-timeout-exhausted-fallback-success" \
 	"" \
 	"1"
 
-run_gate_case "zero-findings-timeout-all-models" \
+run_gate_case_allow_provider_signal "zero-findings-timeout-all-models" \
 	"vertex_ai/zero-timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"1" \
@@ -4907,7 +4945,7 @@ run_gate_case "zero-findings-timeout-all-models" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
-run_gate_case "zero-findings-timeout-all-models" \
+run_gate_case_allow_provider_signal "zero-findings-timeout-all-models" \
 	"vertex_ai/zero-timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"1" \
@@ -4927,7 +4965,7 @@ run_gate_case "zero-findings-timeout-all-models" \
 	"0" \
 	"push"
 
-run_gate_case "zero-findings-sticky-across-fallback" \
+run_gate_case_allow_provider_signal "zero-findings-sticky-across-fallback" \
 	"vertex_ai/zero-sticky-primary" \
 	"vertex_ai/fallback-one" \
 	"1" \
@@ -4948,7 +4986,7 @@ run_gate_case "zero-findings-sticky-across-fallback" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
 
-run_gate_case "zero-findings-with-low-report-timeout" \
+run_gate_case_allow_provider_signal "zero-findings-with-low-report-timeout" \
 	"vertex_ai/zero-low-primary" \
 	"vertex_ai/fallback-one" \
 	"1" \
@@ -5089,7 +5127,7 @@ run_gate_case "provider-denied-success-signal" \
 	"" \
 	"1"
 
-run_gate_case "vertex-all-ratelimited" \
+run_gate_case_allow_provider_signal "vertex-all-ratelimited" \
 	"vertex_ai/ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"1" \
@@ -5158,7 +5196,7 @@ run_gate_case "pr-stale-source-plus-real-finding-blocks" \
 	"pull_request" \
 	$'backend/db/models.py\nbackend/api/emails.py'
 
-run_gate_case "pr-changed-finding-with-retry-marker-blocks" \
+run_gate_case_allow_provider_signal "pr-changed-finding-with-retry-marker-blocks" \
 	"vertex_ai/changed-finding-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"1" \
@@ -5240,7 +5278,7 @@ run_gate_case "medium-vuln-default-threshold" \
 # The below-threshold check runs first but detects infrastructure errors in the
 # strix log and refuses bypass.  The timeout is also vertex-retryable, so the
 # gate continues into the fallback loop.  All attempts see the same timeout.
-run_gate_case "below-threshold-with-timeout" \
+run_gate_case_allow_provider_signal "below-threshold-with-timeout" \
 	"vertex_ai/low-timeout-primary" \
 	"vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash" \
 	"1" \
@@ -5252,7 +5290,7 @@ run_gate_case "below-threshold-with-timeout" \
 # Guard test 2: LOW finding + rate-limit → should fail (exit 1).
 # Below-threshold check refuses bypass due to infra errors.
 # Rate-limit is vertex-retryable, so the gate also tries fallback models.
-run_gate_case "below-threshold-with-ratelimit" \
+run_gate_case_allow_provider_signal "below-threshold-with-ratelimit" \
 	"vertex_ai/low-ratelimit-primary" \
 	"vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash" \
 	"1" \
@@ -5263,7 +5301,7 @@ run_gate_case "below-threshold-with-ratelimit" \
 
 # Guard test 3: INFO finding + ConnectionError → should fail (exit 1).
 # ConnectionError is NOT vertex-retryable, so only the primary model is tried.
-run_gate_case "below-threshold-with-connection-error" \
+run_gate_case_allow_provider_signal "below-threshold-with-connection-error" \
 	"vertex_ai/info-conn-primary" \
 	"" \
 	"1" \
@@ -5308,7 +5346,7 @@ run_gate_case "below-threshold-with-requests-connection-error" \
 # Guard test 4: MEDIUM finding + MidStreamFallbackError → should fail (exit 1).
 # Midstream is vertex-retryable, so the gate also tries fallback models
 # (after the below-threshold check refuses bypass due to infra errors).
-run_gate_case "below-threshold-with-midstream" \
+run_gate_case_allow_provider_signal "below-threshold-with-midstream" \
 	"vertex_ai/medium-midstream-primary" \
 	"vertex_ai/gemini-2.5-pro vertex_ai/gemini-2.5-flash" \
 	"1" \
@@ -5435,7 +5473,7 @@ run_gate_case "all-fallbacks-same-as-primary" \
 	"<unset>"
 
 # Bug 14: Timeout should fall back rather than emit a same-model retry message.
-run_gate_case "vertex-primary-timeout-retry-reason-message" \
+run_gate_case_allow_provider_signal "vertex-primary-timeout-retry-reason-message" \
 	"vertex_ai/retry-timeout-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -5449,7 +5487,7 @@ run_gate_case "vertex-primary-timeout-retry-reason-message" \
 	"2"
 
 # Bug 14: Retry reason messages — rate-limit retry should say "due to rate limit".
-run_gate_case "vertex-primary-ratelimit-retry-reason-message" \
+run_gate_case_allow_provider_signal "vertex-primary-ratelimit-retry-reason-message" \
 	"vertex_ai/retry-ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
@@ -5494,7 +5532,7 @@ run_gate_case "bare-timeout-no-provider-marker" \
 
 # is_timeout_error() Tier 2: httpx.ReadTimeout + provider-context marker.
 # The timeout should be classified for fallback, not same-model retry.
-run_gate_case "httpx-read-timeout-with-provider-marker" \
+run_gate_case_allow_provider_signal "httpx-read-timeout-with-provider-marker" \
 	"vertex_ai/httpx-timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -5525,7 +5563,7 @@ run_gate_case "httpx-read-timeout-no-provider-marker" \
 
 # is_timeout_error() Tier 2b: httpcore.ReadTimeout + provider-context marker.
 # Mirrors the httpx.ReadTimeout positive case above, but falls back immediately.
-run_gate_case "httpcore-read-timeout-with-provider-marker" \
+run_gate_case_allow_provider_signal "httpcore-read-timeout-with-provider-marker" \
 	"vertex_ai/httpcore-timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -5557,7 +5595,7 @@ run_gate_case "httpcore-read-timeout-no-provider-marker" \
 # is_timeout_error() positive branch for "Connection timed out" + provider marker:
 # When "Connection timed out" appears alongside an LLM provider marker, the
 # gate should classify it as a timeout and move to fallback.
-run_gate_case "bare-timeout-with-provider-marker" \
+run_gate_case_allow_provider_signal "bare-timeout-with-provider-marker" \
 	"vertex_ai/bare-timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -5572,7 +5610,7 @@ run_gate_case "bare-timeout-with-provider-marker" \
 
 # Bare "Connection timed out" + provider marker: primary fails once,
 # then gate falls back to fallback-one which succeeds.
-run_gate_case "bare-timeout-provider-marker-exhausted-fallback" \
+run_gate_case_allow_provider_signal "bare-timeout-provider-marker-exhausted-fallback" \
 	"vertex_ai/bare-timeout-exhaust-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -5589,7 +5627,7 @@ run_gate_case "bare-timeout-provider-marker-exhausted-fallback" \
 # second call fails with a non-retryable error but leaves a partial LOW report.
 # The gate must refuse the below-threshold bypass because an infrastructure
 # error was detected during this pipeline run.
-run_gate_case "infra-error-sticky-flag" \
+run_gate_case_allow_provider_signal "infra-error-sticky-flag" \
 	"vertex_ai/sticky-flag-primary" \
 	"" \
 	"1" \
@@ -5614,7 +5652,7 @@ run_symlink_report_case
 run_unsafe_target_path_case
 run_absolute_outside_target_path_case
 
-run_gate_case "slow-timeout" \
+run_gate_case_allow_provider_signal "slow-timeout" \
 	"vertex_ai/slow-primary" \
 	"" \
 	"1" \
@@ -5793,7 +5831,7 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
 
-run_gate_case "pr-changed-scope-rebalanced" \
+run_gate_case_allow_provider_signal "pr-changed-scope-rebalanced" \
 	"vertex_ai/gemini-2.5-flash" \
 	"vertex_ai/gemini-2.5-pro" \
 	"0" \
@@ -6405,7 +6443,7 @@ run_gate_case "pr-critical-manifest-only-pom-current-pr-authoritative" \
 	"123" \
 	'{"workflow_runs":[{"id":301,"name":"Dependency review","path":".github/workflows/dependency-review.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]},{"id":302,"name":"OSV-Scanner","path":".github/workflows/osvscanner.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]}]}'
 
-run_gate_case "pr-critical-manifest-only-pom-after-fallback-authoritative" \
+run_gate_case_allow_provider_signal "pr-critical-manifest-only-pom-after-fallback-authoritative" \
 	"vertex_ai/timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -6432,7 +6470,7 @@ run_gate_case "pr-critical-manifest-only-pom-after-fallback-authoritative" \
 	"123" \
 	'{"workflow_runs":[{"id":401,"name":"Dependency review","path":".github/workflows/dependency-review.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]},{"id":402,"name":"OSV-Scanner","path":".github/workflows/osvscanner.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]}]}'
 
-run_gate_case "pr-critical-manifest-only-pom-console-only-after-fallback-authoritative" \
+run_gate_case_allow_provider_signal "pr-critical-manifest-only-pom-console-only-after-fallback-authoritative" \
 	"vertex_ai/timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -6459,7 +6497,7 @@ run_gate_case "pr-critical-manifest-only-pom-console-only-after-fallback-authori
 	"123" \
 	'{"workflow_runs":[{"id":403,"name":"Dependency review","path":".github/workflows/dependency-review.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]},{"id":404,"name":"OSV-Scanner","path":".github/workflows/osvscanner.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]}]}'
 
-run_gate_case "pr-critical-manifest-only-pom-console-target-only-after-fallback-authoritative" \
+run_gate_case_allow_provider_signal "pr-critical-manifest-only-pom-console-target-only-after-fallback-authoritative" \
 	"vertex_ai/timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
@@ -6486,7 +6524,7 @@ run_gate_case "pr-critical-manifest-only-pom-console-target-only-after-fallback-
 	"123" \
 	'{"workflow_runs":[{"id":405,"name":"Dependency review","path":".github/workflows/dependency-review.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]},{"id":406,"name":"OSV-Scanner","path":".github/workflows/osvscanner.yml","head_sha":"test-head-sha","status":"completed","conclusion":"success","pull_requests":[{"number":123}]}]}'
 
-run_gate_case "pr-low-markdown-plus-console-critical-manifest-after-fallback-authoritative" \
+run_gate_case_allow_provider_signal "pr-low-markdown-plus-console-critical-manifest-after-fallback-authoritative" \
 	"vertex_ai/timeout-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
