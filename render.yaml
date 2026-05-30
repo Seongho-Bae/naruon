@@ -78,9 +78,9 @@ services:
     dockerContext: .
     healthCheckPath: /
     envVars:
-      # next.config.ts reads BACKEND_INTERNAL_URL at runtime to rewrite
-      # /api/* to the backend. RENDER_EXTERNAL_URL on the backend web
-      # service is the public HTTPS URL Render assigns to it.
+      # The frontend /api/* route handler reads BACKEND_INTERNAL_URL at runtime
+      # and proxies to this backend. RENDER_EXTERNAL_URL is the public HTTPS URL
+      # Render assigns to the backend web service.
       - key: BACKEND_INTERNAL_URL
         fromService:
           name: naruon-backend

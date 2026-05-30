@@ -38,21 +38,21 @@ backend secrets.
 * **`naruon-frontend`** (`type: web`, `runtime: docker`) — builds from
   `./frontend/Dockerfile`. Receives the backend's public URL via the
   `BACKEND_INTERNAL_URL` env var, populated from
-  `naruon-backend`'s `RENDER_EXTERNAL_URL`. `next.config.ts` reads
-  `BACKEND_INTERNAL_URL` during `next build` and bakes the `/api/*`
-  rewrite destination into the build manifest. The browser only ever
-  talks to the frontend's own origin, so no public identity headers
-  cross the boundary.
+  `naruon-backend`'s `RENDER_EXTERNAL_URL`. The frontend `/api/*`
+  route handler reads that value at runtime and proxies same-origin
+  browser requests to the backend, so the published Docker image is not
+  permanently wired to one deployment environment and no public
+  identity headers cross the browser boundary.
 
-  When `BACKEND_INTERNAL_URL` is set explicitly, `next.config.ts`
+  When `BACKEND_INTERNAL_URL` is set explicitly, the route handler
   enforces SSRF guards before accepting it: the URL must use `https://`
   and the hostname must not fall into a private (RFC 1918), loopback,
-  IPv6 ULA/link-local, or cloud metadata (`169.254.0.0/16`) range.
-  Render's `RENDER_EXTERNAL_URL` is an HTTPS `*.onrender.com` host and
-  satisfies these checks. In `NODE_ENV=production`, a missing value
-  fails the build instead of falling back to loopback. The only
-  non-HTTPS exception is the explicit Compose opt-in for exactly
-  `http://backend:8000`.
+  IPv4-mapped IPv6, IPv6 ULA/link-local, or cloud metadata
+  (`169.254.0.0/16`) range. Render's `RENDER_EXTERNAL_URL` is an HTTPS
+  `*.onrender.com` host and satisfies these checks. In production
+  runtime, a missing value fails the request instead of falling back to
+  loopback. The only non-HTTPS exception is the explicit Compose opt-in
+  for exactly `http://backend:8000`.
 
 ## First-time setup
 
@@ -90,7 +90,7 @@ backend secrets.
 2. Visit `https://naruon-frontend.onrender.com/` — the Next.js app
    should render.
 3. From the frontend service's URL, exercise a feature that calls
-   `/api/...`. The request is rewritten to the backend via
+   `/api/...`. The request is proxied to the backend via
    `BACKEND_INTERNAL_URL`. If the frontend logs a 502 on `/api/*`,
    double-check that `BACKEND_INTERNAL_URL` resolves to the backend's
    `RENDER_EXTERNAL_URL` (visible in the frontend service's
@@ -133,9 +133,9 @@ Remove the variable when you want IMAP sync to run.
 `docker-compose up` continues to work with no Render-specific
 environment variables. The Compose file passes
 `BACKEND_INTERNAL_URL=http://backend:8000` plus the exact
-`ALLOW_DOCKER_BACKEND_INTERNAL_URL=1` opt-in so `next build` can bake a
-Docker-network rewrite destination without weakening the Render
-production guard. Plain local dev still falls back to
+`ALLOW_DOCKER_BACKEND_INTERNAL_URL=1` opt-in so the runtime route
+handler can proxy to the Docker-network backend without weakening the
+Render production guard. Plain local dev still falls back to
 `http://127.0.0.1:8000` when `BACKEND_INTERNAL_URL` is unset and
 `NODE_ENV` is not `production`.
 
@@ -147,9 +147,9 @@ production guard. Plain local dev still falls back to
   repo (Compose, K8s) is built around, and Render does not require
   it.
 * It does not modify the backend `Dockerfile` or `k8s/*.yaml`. It
-  updates `frontend/Dockerfile` and `docker-compose.yml` only to pass
-  the build-time rewrite origin needed by `next.config.ts`; those
-  paths remain the source of truth for non-Render environments.
+  updates `frontend/Dockerfile` and `docker-compose.yml` only to keep
+  the same runtime `/api/*` proxy contract in non-Render environments;
+  those paths remain the source of truth for non-Render environments.
 * It does not pin `OPENAI_MODEL` to anything other than the existing
   Compose default. Adjust in the dashboard if your account uses a
   different model.
