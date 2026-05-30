@@ -812,14 +812,9 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
-		if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] && pull_request_metadata_env_present; then
-			if changed_files_output="$(git diff --name-only "$base_sha" "$head_sha" --)"; then
-				echo "Using explicit base/head diff for workflow_dispatch PR-scope Strix evidence." >&2
-			else
-				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
-				return 2
-			fi
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" -- 2>/dev/null)"; then
+		if changed_files_output="$(git diff --name-only "$base_sha" "$head_sha" -- 2>/dev/null)"; then
+			echo "Using explicit base/head diff for PR-scope Strix evidence." >&2
 		else
 			if pull_request_head_blob_required; then
 				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
