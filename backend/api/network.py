@@ -26,12 +26,13 @@ class GraphResponse(BaseModel):
     edges: list[Edge]
 
 
+EMAIL_PATTERN = re.compile(r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+")
+
+
 def extract_emails(text: str | None) -> list[str]:
     if not text:
         return []
-    # simple email extraction regex
-    email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
-    return re.findall(email_pattern, text)
+    return EMAIL_PATTERN.findall(text)
 
 
 @router.get("/graph", response_model=GraphResponse)
