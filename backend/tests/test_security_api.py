@@ -15,9 +15,15 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api.auth import get_auth_context, get_current_user
+from api.auth import AuthContext, get_auth_context, get_current_user
+from api.security import _webdav_scope_statement
 from core.config import settings
-from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
+from db.models import (
+    CalendarWritebackSource,
+    ConnectorSignalEvent,
+    SecurityAuditEvent,
+    WebdavAccount,
+)
 from db.session import get_db
 from main import app
 
@@ -41,20 +47,79 @@ class MockAsyncSession:
         self,
         webdav_accounts: list[WebdavAccount] | None = None,
         calendar_sources: list[CalendarWritebackSource] | None = None,
+        audit_events: list[SecurityAuditEvent] | None = None,
         connector_events: list[ConnectorSignalEvent] | None = None,
     ):
         self.results = [
             webdav_accounts or [],
             calendar_sources or [],
+            audit_events or [],
             connector_events or [],
         ]
         self.execute_calls = 0
 
     async def execute(self, query):
-        del query
         result = self.results[self.execute_calls]
         self.execute_calls += 1
-        return MockResult(result)
+        return MockResult(_scope_rows_for_query(query, result))
+
+
+def _scope_rows_for_query(query, rows):
+    compiled = query.compile()
+    null_columns = _null_predicate_columns(str(compiled))
+    return [
+        row
+        for row in rows
+        if _row_matches_query_params(row, compiled.params, null_columns)
+    ]
+
+
+def _null_predicate_columns(compiled_query: str) -> set[str]:
+    query_text = " ".join(compiled_query.lower().split())
+    return {
+        column_name
+        for column_name in (
+            "actor_user_id",
+            "organization_id",
+            "source_protocol",
+            "user_id",
+            "workspace_id",
+        )
+        if f".{column_name} is null" in query_text
+        or f" {column_name} is null" in query_text
+    }
+
+
+def _column_name_from_param(param_name: str) -> str | None:
+    column_name, separator, suffix = param_name.rpartition("_")
+    if separator == "_" and suffix.isdigit():
+        return column_name
+    return None
+
+
+def _row_matches_query_params(row, params, null_columns: set[str]) -> bool:
+    for column_name in null_columns:
+        if hasattr(row, column_name) and getattr(row, column_name) is not None:
+            return False
+
+    for param_name, value in params.items():
+        column_name = _column_name_from_param(param_name)
+        if column_name is None or not hasattr(row, column_name):
+            if isinstance(value, int):
+                continue
+            return False
+        row_value = getattr(row, column_name)
+        if isinstance(value, list):
+            if row_value not in value:
+                return False
+            continue
+        if isinstance(value, int):
+            continue
+        if not isinstance(value, str):
+            continue
+        if row_value != value:
+            return False
+    return True
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -150,6 +215,67 @@ def _connector_event(
     )
 
 
+def _audit_event(
+    event_uid: str,
+    actor_user_id: str = "admin",
+    organization_id: str | None = "org-acme",
+    workspace_id: str = "workspace-org-acme",
+) -> SecurityAuditEvent:
+    return SecurityAuditEvent(
+        event_uid=event_uid,
+        actor_user_id=actor_user_id,
+        actor_role="tenant_admin",
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        event_action="update",
+        resource_type="llm_provider",
+        resource_uid="llm_provider:provider_primary",
+        evidence_source="api.llm_providers",
+        detail_text="Updated provider configuration",
+        observed_at=_now(),
+    )
+
+
+def test_mock_query_scope_maps_params_to_specific_columns():
+    query = _webdav_scope_statement(
+        AuthContext(
+            user_id="member",
+            role="member",
+            organization_id="org-acme",
+            group_ids=(),
+            workspace_id="workspace-org-acme",
+        )
+    )
+    rows = [
+        _webdav_account("webdav_src_owned", "member", "org-acme"),
+        _webdav_account("webdav_src_cross_column", "org-acme", "member"),
+    ]
+
+    scoped_rows = _scope_rows_for_query(query, rows)
+
+    assert [row.source_uid for row in scoped_rows] == ["webdav_src_owned"]
+
+
+def test_mock_query_scope_enforces_null_organization_predicate():
+    query = _webdav_scope_statement(
+        AuthContext(
+            user_id="solo",
+            role="member",
+            organization_id=None,
+            group_ids=(),
+            workspace_id="workspace-personal",
+        )
+    )
+    rows = [
+        _webdav_account("webdav_src_personal", "solo", None),
+        _webdav_account("webdav_src_org_leak", "solo", "org-acme"),
+    ]
+
+    scoped_rows = _scope_rows_for_query(query, rows)
+
+    assert [row.source_uid for row in scoped_rows] == ["webdav_src_personal"]
+
+
 @pytest.fixture
 def mock_db():
     return MockAsyncSession(
@@ -160,6 +286,10 @@ def mock_db():
         calendar_sources=[
             _calendar_source("caldav_src_primary", "owner"),
             _calendar_source("caldav_src_other_org", "owner", "org-rival"),
+        ],
+        audit_events=[
+            _audit_event("audit_evt_provider_update"),
+            _audit_event("audit_evt_other_org", organization_id="org-rival"),
         ],
         connector_events=[
             _connector_event("connector_evt_heartbeat"),
@@ -201,6 +331,10 @@ def test_access_surface_returns_org_scoped_sources_and_policy_decisions(admin_cl
     assert "caldav_src_other_org" not in response.text
     assert data["connector_events"][0]["event_uid"] == "connector_evt_heartbeat"
     assert "connector_evt_other_org" not in response.text
+    audit_event_ids = {event["event_uid"] for event in data["durable_audit_events"]}
+    assert audit_event_ids == {"audit_evt_provider_update"}
+    assert "audit_evt_other_org" not in response.text
+    assert data["durable_audit_events"][0]["workspace_id"] == "workspace-org-acme"
     reasons = {decision["reason"] for decision in data["policy_decisions"]}
     assert "organization_denied" in reasons
     assert "data_region_denied" in reasons
@@ -218,6 +352,9 @@ def test_access_surface_redacts_sequential_ids_and_credentials(admin_client):
         "credential secret",
         "username",
         "files@example.com",
+        "api_key",
+        "sk-",
+        "audit_id",
     ):
         assert forbidden not in serialized
 
@@ -232,6 +369,10 @@ def test_member_surface_only_returns_owned_sources(mock_db):
             calendar_sources=[
                 _calendar_source("caldav_src_owned", "member"),
                 _calendar_source("caldav_src_admin", "admin"),
+            ],
+            audit_events=[
+                _audit_event("audit_evt_member", actor_user_id="member"),
+                _audit_event("audit_evt_admin", actor_user_id="admin"),
             ],
             connector_events=[],
         )
@@ -253,6 +394,10 @@ def test_member_surface_only_returns_owned_sources(mock_db):
     assert response.status_code == 200, response.text
     source_ids = {source["source_id"] for source in response.json()["sources"]}
     assert source_ids == {"webdav_src_owned", "caldav_src_owned"}
+    audit_event_ids = {
+        event["event_uid"] for event in response.json()["durable_audit_events"]
+    }
+    assert audit_event_ids == {"audit_evt_member"}
 
 
 def test_access_surface_rejects_public_identity_headers_without_signed_session(mock_db):
@@ -281,14 +426,18 @@ def test_access_surface_rejects_public_identity_headers_without_signed_session(m
     assert response.json() == {"detail": "Authentication required"}
 
 
-def test_access_surface_accepts_signed_bearer_session(mock_db):
+def test_access_surface_rejects_hmac_bearer_session_without_authoritative_workspace(
+    mock_db,
+):
     async def override_get_db():
         yield mock_db
 
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     original_overrides = dict(app.dependency_overrides)
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(_valid_session_payload())
+    token = _signed_session_token(
+        _valid_session_payload(workspace="another_workspace_id")
+    )
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
@@ -303,8 +452,10 @@ def test_access_surface_accepts_signed_bearer_session(mock_db):
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
 
-    assert response.status_code == 200, response.text
-    assert response.json()["viewer"]["user_id"] == "admin"
+    assert response.status_code == 403, response.text
+    assert response.json() == {
+        "detail": "Authoritative workspace membership is required for security access surface"
+    }
 
 
 @pytest.mark.asyncio
@@ -313,6 +464,7 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     source_uid = f"webdav_src_security_{uuid.uuid4().hex[:18]}"
     caldav_uid = f"caldav_src_security_{uuid.uuid4().hex[:18]}"
     event_uid = f"connector_evt_security_{uuid.uuid4().hex[:18]}"
+    audit_uid = f"audit_evt_security_{uuid.uuid4().hex[:18]}"
     engine = create_async_engine(settings.DATABASE_URL, echo=False)
     try:
         async with engine.begin() as conn:
@@ -421,6 +573,48 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                     "detail_text": "security smoke connector heartbeat",
                 },
             )
+            await conn.execute(
+                text(
+                    """
+                    INSERT INTO security_audit_events (
+                        event_uid,
+                        actor_user_id,
+                        actor_role,
+                        organization_id,
+                        workspace_id,
+                        event_action,
+                        resource_type,
+                        resource_uid,
+                        evidence_source,
+                        detail_text
+                    )
+                    VALUES (
+                        :event_uid,
+                        :actor_user_id,
+                        :actor_role,
+                        :organization_id,
+                        :workspace_id,
+                        :event_action,
+                        :resource_type,
+                        :resource_uid,
+                        :evidence_source,
+                        :detail_text
+                    )
+                    """
+                ),
+                {
+                    "event_uid": audit_uid,
+                    "actor_user_id": user_id,
+                    "actor_role": "tenant_admin",
+                    "organization_id": "org-acme",
+                    "workspace_id": "workspace-org-acme",
+                    "event_action": "update",
+                    "resource_type": "llm_provider",
+                    "resource_uid": "llm_provider:security_smoke",
+                    "evidence_source": "api.llm_providers",
+                    "detail_text": "Updated provider configuration",
+                },
+            )
     except (
         ConnectionRefusedError,
         OSError,
@@ -482,6 +676,13 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                 ),
                 {"event_uid": event_uid},
             )
+            await conn.execute(
+                text(
+                    "DELETE FROM security_audit_events "
+                    "WHERE event_uid = :event_uid"
+                ),
+                {"event_uid": audit_uid},
+            )
         await engine.dispose()
 
     assert response.status_code == 200, response.text
@@ -490,5 +691,8 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     assert source_uid in source_ids
     assert caldav_uid in source_ids
     assert event_uid in {event["event_uid"] for event in body["connector_events"]}
+    assert audit_uid in {
+        event["event_uid"] for event in body["durable_audit_events"]
+    }
     assert "account_id" not in response.text
     assert "security-smoke@example.com" not in response.text
