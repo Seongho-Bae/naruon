@@ -18,6 +18,7 @@ def test_root_response_has_security_headers():
     )
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert response.headers["content-security-policy"] == (
         "default-src 'self'; "
         "object-src 'none'; "
