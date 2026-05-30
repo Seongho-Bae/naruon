@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
+const SIGNED_SESSION_TOKEN = "signed-session-token";
 
 describe("/api runtime proxy route", () => {
   beforeEach(() => {
@@ -37,7 +38,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer signed-session-token",
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
           "Content-Type": "application/json",
           "X-User-Id": "public-user-id",
         },
@@ -54,6 +55,63 @@ describe("/api runtime proxy route", () => {
       auth_header: "Bearer signed-session-token",
       user_header: null,
       request_body: '{"state":"open"}',
+    });
+  });
+
+  it("rejects unsupported query parameters before proxying", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/tasks?filename=../../../../etc/passwd",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+        },
+        body: "{}",
+      },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["tasks"] }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_proxy_query",
+      message: "Unsupported query parameter: filename",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("re-encodes allowed query parameters instead of copying the raw search string", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | RequestInfo) =>
+        Response.json({ target_url: String(input) }),
+      ),
+    );
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/ontology/relationships?source_message_id=%3Cabc@example.com%3E&source_thread_id=thread/one",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+        },
+        body: "{}",
+      },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["ontology", "relationships"] }),
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      target_url:
+        "https://api.naruon.net/api/ontology/relationships?source_message_id=%3Cabc%40example.com%3E&source_thread_id=thread%2Fone",
     });
   });
 });
