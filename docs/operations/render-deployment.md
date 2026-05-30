@@ -146,9 +146,10 @@ production guard. Plain local dev still falls back to
   the "one container, one process" principle that the rest of the
   repo (Compose, K8s) is built around, and Render does not require
   it.
-* It does not modify `Dockerfile`, `frontend/Dockerfile`,
-  `docker-compose.yml`, or `k8s/*.yaml`. Those remain the source of
-  truth for non-Render environments.
+* It does not modify the backend `Dockerfile` or `k8s/*.yaml`. It
+  updates `frontend/Dockerfile` and `docker-compose.yml` only to pass
+  the build-time rewrite origin needed by `next.config.ts`; those
+  paths remain the source of truth for non-Render environments.
 * It does not pin `OPENAI_MODEL` to anything other than the existing
   Compose default. Adjust in the dashboard if your account uses a
   different model.
