@@ -29,16 +29,23 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence uses the organization-secret provider selected by
-  `STRIX_LLM` with `GCP_SA_KEY`, but the
-  `vertex_ai/gemini-3.1-pro-preview-customtools` value is quarantined to
-  `vertex_ai/gemini-2.5-flash` until it has no-timeout PR and full-scan
-  evidence. Direct OpenAI GPT-5.4-or-newer remains
-  supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow fails
-  closed rather than falling back to GitHub Models, `github.token`, generic
-  `LLM_API_KEY`, or GPT-4-era models. Known third-party Strix/Pydantic
-  serializer warnings are filtered narrowly instead of allowing Warn-class logs
-  into passing evidence, and runtime scan-budget variables are not listed as
-  visible timeout-named workflow `env:` entries. Pending CodeRabbit or check
+  `STRIX_LLM` with `GCP_SA_KEY`; missing `STRIX_LLM` defaults to the approved
+  `vertex_ai/gemini-3.1-pro-preview-customtools` Vertex route now that
+  organization-secret visibility is available. Direct OpenAI GPT-5.4-or-newer
+  remains supported only with an explicit `STRIX_OPENAI_API_KEY`. The workflow
+  fails closed rather than falling back to GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4-era models, or timeout-class provider
+  infrastructure failures. Known third-party Strix/Pydantic serializer warnings
+  are filtered narrowly instead of allowing Warn-class logs into passing
+  evidence, and runtime scan-budget variables are not listed as visible
+  timeout-named workflow `env:` entries. PR-scope scan budgets leave room for
+  report finalization after Strix emits completion events; workflow PR evidence
+  uses `STRIX_TARGET_PATH=__PR_SCOPE__` so the scanner target is the generated
+  PR-head scope, not the trusted base checkout, and runs deterministic
+  single-file batches so large PR scopes do not wait for a multi-file batch to
+  hit the process budget. Scanner child processes disable
+  npm, pnpm, yarn, and bun lifecycle scripts while inspecting PR scope data.
+  Wrapper timeout output is failed evidence. Pending CodeRabbit or check
   evidence is a wait state, not a hard blocker.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
@@ -58,7 +65,17 @@ mail/calendar/file systems.
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels
   provider writes as deferred intent work.
-  
+- Custom LLM provider `base_url` calls fail closed unless the host is
+  exact-allowlisted, HTTPS-only, and resolved to global addresses. Runtime calls
+  use a pinned-address `httpx` transport so DNS is not resolved a second time
+  after validation.
+- OIDC issuer and JWKS URLs follow the same outbound fetch posture:
+  exact-allowlisted HTTPS hosts must resolve only to global addresses, and JWKS
+  preload fetches connect to the validated pinned address while keeping TLS/SNI
+  on the allowlisted hostname.
+- Session authority is assigned by the verified HMAC or OIDC code path, not by a
+  `_session_verifier` JWT payload claim supplied inside the token.
+
 ## Agentic Ontology & Auto-Organization
 
 - **Sender ontology**: The backend classifies sender relationships and returns a

@@ -6,6 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from core.runtime_secrets import (
     validate_auth_session_hmac_secret_value,
 )
+from core.url_validation import parse_allowed_hosts, validate_https_url_host
 
 
 class Settings(BaseSettings):
@@ -39,6 +40,7 @@ class Settings(BaseSettings):
     OIDC_ISSUER_URL: str | None = None
     OIDC_CLIENT_ID: str | None = None
     OIDC_JWKS_URL: str | None = None
+    ALLOWED_OIDC_HOSTS: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("~/.env", "../.env", ".env"),
@@ -68,6 +70,24 @@ class Settings(BaseSettings):
         if configured_oidc_values and len(configured_oidc_values) != len(oidc_values):
             raise ValueError(
                 "OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL must be set together"
+            )
+        if len(configured_oidc_values) == len(oidc_values):
+            allowed_oidc_hosts = parse_allowed_hosts(self.ALLOWED_OIDC_HOSTS)
+            if not allowed_oidc_hosts:
+                raise ValueError(
+                    "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
+                )
+            validate_https_url_host(
+                "OIDC_ISSUER_URL",
+                self.OIDC_ISSUER_URL or "",
+                allowed_oidc_hosts,
+                "ALLOWED_OIDC_HOSTS",
+            )
+            validate_https_url_host(
+                "OIDC_JWKS_URL",
+                self.OIDC_JWKS_URL or "",
+                allowed_oidc_hosts,
+                "ALLOWED_OIDC_HOSTS",
             )
         return self
 

@@ -199,12 +199,14 @@ def test_strix_workflow_uses_configured_vertex_model_and_narrow_warning_filter()
     assert (
         "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' "
         "&& 'vertex_ai/gemini-2.5-flash'"
-        in workflow
+        not in workflow
     )
-    assert "|| secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash'" in workflow
+    assert "secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools'" in workflow
+    assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
+    assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
     assert (
         "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
-        not in workflow
+        in workflow
     )
     assert "vertex_ai/* | vertex_ai_beta/*" not in workflow
     assert "PYTHONWARNINGS:" not in workflow

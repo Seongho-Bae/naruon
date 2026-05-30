@@ -16,28 +16,63 @@
   next head run `26662731398` remained in `Run Strix (quick)` for more than one
   hour, showing that a 12-file first batch is not operationally bounded enough
   for current Vertex-backed PR evidence.
+- PR #312 run `26669020785` used the old quarantine path and then failed after
+  repeated `MidStreamFallbackError` and timeout-class provider failures while
+  printing zero vulnerabilities. Under the no Timeout/Fatal/Warn/Denied policy,
+  that is not clean PR evidence.
+- PR #312 current-head Strix evidence then found two real hardening gaps:
+  OIDC issuer/JWKS allowlisting still allowed trusted hostnames to resolve to
+  private addresses, and the privileged PR scanner preserved PR-head executable
+  bits when materializing scan data.
+- PR #312 automatic Strix evidence then flagged session verifier authority as a
+  token-claim trust issue. Even when a tampered JWT would fail HMAC validation,
+  the safer contract is to derive `session_verifier` only from the server-side
+  HMAC/OIDC verification path.
+- PR #312 manual current-head run `26686952879` printed zero vulnerabilities but
+  still timed out after `2400s`. That confirms zero-vulnerability text is not
+  enough; the PR-scope runner must avoid large multi-file batches that do not
+  complete cleanly.
 
 ## Plan
 
-1. Keep the organization-secret `STRIX_LLM` route, but quarantine the exact
-   `vertex_ai/gemini-3.1-pro-preview-customtools` value to
-   `vertex_ai/gemini-2.5-flash` until it has no-timeout evidence.
-2. Route PR-scoped and protected-branch scans to the previously validated exact
-   Vertex model `vertex_ai/gemini-2.5-flash` when the 3.1 preview value is
-   configured.
-3. Keep arbitrary Vertex model patterns disallowed; only the exact operational
-   Vertex model is accepted.
+1. Keep the organization-secret `STRIX_LLM` route and honor the exact
+   `vertex_ai/gemini-3.1-pro-preview-customtools` value now that organization
+   secret visibility is available.
+2. Default missing `STRIX_LLM` to
+   `vertex_ai/gemini-3.1-pro-preview-customtools` rather than silently routing
+   to GitHub Models or a downgraded Vertex fallback.
+3. Keep arbitrary Vertex model patterns disallowed; only exact approved Vertex
+   models are accepted.
 4. Preserve the narrow Pydantic serializer warning filter and gate child-process
    forwarding from PR #303.
-5. Add regression assertions so later edits cannot accidentally send full-repo
-   scans through an unproven preview model.
+5. Add regression assertions so later edits cannot accidentally quarantine the
+   approved 3.1 route or pass after timeout/provider failure output.
 6. Start PR-scope evidence with single-file deterministic batches instead of
    waiting for a 12-file batch to hit the process budget and rebalance after the
    timeout.
+7. Validate OIDC issuer/JWKS hostnames by resolving every address to a global IP
+   before startup accepts the configuration, and make JWKS preload fetches
+   connect to that validated pinned address while preserving TLS/SNI for the
+   allowlisted hostname.
+8. Copy PR-head blobs into privileged Strix scan scopes as non-executable data,
+   even when the PR branch records the file as mode `100755`.
+9. Use `STRIX_TARGET_PATH=__PR_SCOPE__` for PR evidence runs so workflow-level
+   review and the gate script share the same contract: the scanner receives a
+   generated PR-head scope, not the trusted base checkout.
+10. Disable package-manager lifecycle scripts in the Strix child process
+    environment while scanning untrusted PR-head scope data, covering npm, pnpm,
+    yarn, and bun script execution knobs.
+11. Validate PR base/head SHA inputs in the workflow shell before any trusted
+    fetch or PR-scope evidence handoff so workflow_dispatch cannot pass
+    shell-shaped data into the gate.
+12. Keep JWT session authority outside user-controlled payload claims: HMAC and
+    OIDC verification paths must pass `session_verifier` into auth-context
+    construction instead of reading `_session_verifier` from the decoded payload.
 
 ## Non-Goals
 
 - This does not reintroduce GitHub Models or generic `LLM_API_KEY`.
 - This does not suppress scanner findings, timeouts, denied access, fatal
   errors, or application warnings.
-- This does not claim the 3.1 org-secret value is operational without evidence.
+- This does not treat zero-vulnerability text as sufficient evidence after a
+  timeout, denied, fatal, warning, or provider infrastructure failure.

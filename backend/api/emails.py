@@ -21,6 +21,7 @@ from services.email_dedupe_service import (
     candidate_strong_fingerprint,
     email_strong_fingerprint,
 )
+from services.text_safety import strip_html_markup
 import logging
 from api.auth import AuthContext, get_auth_context
 from services.tenant_config_scope import get_scoped_tenant_config
@@ -85,6 +86,59 @@ def _email_message_lookup_values(email_row: Email) -> set[str]:
     if not normalized:
         return set()
     return {normalized, f"<{normalized}>"}
+
+
+def _safe_email_display_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return strip_html_markup(str(value).replace("\x00", ""))
+
+
+def _safe_email_body(value: str | None) -> str:
+    return _safe_email_display_text(value) or ""
+
+
+def _safe_email_snippet(value: str | None) -> str:
+    body = _safe_email_body(value)
+    return body[:100] + "..." if len(body) > 100 else body
+
+
+def _email_list_item(
+    *,
+    email: Email,
+    thread_id: str,
+    reply_count: int | None,
+    is_self_sent: bool,
+    requires_reply: bool,
+) -> "EmailListItem":
+    return EmailListItem(
+        id=email.id,
+        subject=_safe_email_display_text(email.subject),
+        sender=_safe_email_body(email.sender),
+        reply_to=_safe_email_display_text(email.reply_to),
+        date=email.date,
+        snippet=_safe_email_snippet(email.body),
+        thread_id=thread_id,
+        reply_count=reply_count,
+        is_self_sent=is_self_sent,
+        requires_reply=requires_reply,
+    )
+
+
+def _email_detail_response(email: Email) -> "EmailDetailResponse":
+    return EmailDetailResponse(
+        id=email.id,
+        message_id=email.message_id,
+        sender=_safe_email_body(email.sender),
+        reply_to=_safe_email_display_text(email.reply_to),
+        recipients=_safe_email_display_text(email.recipients),
+        subject=_safe_email_display_text(email.subject),
+        date=email.date,
+        body=_safe_email_body(email.body),
+        thread_id=canonical_thread_key(email),
+        in_reply_to=email.in_reply_to,
+        references=email.references,
+    )
 
 
 class EmailListItem(BaseModel):
@@ -199,15 +253,9 @@ async def get_emails(
     items = []
     for email in sorted_groups:
         group_key = canonical_thread_key(email)
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
-            EmailListItem(
-                id=email.id,
-                subject=email.subject,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                date=email.date,
-                snippet=snippet,
+            _email_list_item(
+                email=email,
                 thread_id=group_key,
                 reply_count=reply_counts[group_key],
                 is_self_sent=message_is_self_sent(email, user_addresses),
@@ -230,15 +278,9 @@ async def get_pending_replies(
     )
     items = []
     for email in pending_emails[:limit]:
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
-            EmailListItem(
-                id=email.id,
-                subject=email.subject,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                date=email.date,
-                snippet=snippet,
+            _email_list_item(
+                email=email,
                 thread_id=canonical_thread_key(email),
                 reply_count=None,
                 is_self_sent=False,
@@ -378,19 +420,7 @@ async def get_email(
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
-    return EmailDetailResponse(
-        id=email.id,
-        message_id=email.message_id,
-        sender=email.sender,
-        reply_to=email.reply_to,
-        recipients=email.recipients,
-        subject=email.subject,
-        date=email.date,
-        body=email.body,
-        thread_id=canonical_thread_key(email),
-        in_reply_to=email.in_reply_to,
-        references=email.references,
-    )
+    return _email_detail_response(email)
 
 
 @router.get(
@@ -419,21 +449,7 @@ async def get_email_thread(
 
     items = []
     for email in emails:
-        items.append(
-            EmailDetailResponse(
-                id=email.id,
-                message_id=email.message_id,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                recipients=email.recipients,
-                subject=email.subject,
-                date=email.date,
-                body=email.body,
-                thread_id=canonical_thread_key(email),
-                in_reply_to=email.in_reply_to,
-                references=email.references,
-            )
-        )
+        items.append(_email_detail_response(email))
     return {"thread": items}
 
 

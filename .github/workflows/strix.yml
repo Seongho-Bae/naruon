@@ -75,6 +75,14 @@ jobs:
             echo "::error::PR number and head SHA are required for trusted PR-scope Strix evidence."
             exit 1
           fi
+          if ! [[ "$PR_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR head SHA must be a 40-character git SHA."
+            exit 1
+          fi
+          if [ -n "$PR_BASE_SHA" ] && ! [[ "$PR_BASE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "::error::PR base SHA must be a 40-character git SHA."
+            exit 1
+          fi
           if [ -n "$PR_BASE_SHA" ]; then
             git -C "$TRUSTED_WORKSPACE" fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
             git -C "$TRUSTED_WORKSPACE" cat-file -e "$PR_BASE_SHA^{commit}"
@@ -95,12 +103,13 @@ jobs:
           exit 1
 
       - name: Self-test Strix gate script
+        working-directory: ${{ runner.temp }}/trusted-workspace
         run: bash "$TRUSTED_STRIX_GATE_TEST"
 
       - name: Gate Strix secrets
         id: gate
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash' }}
+          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
           STRIX_OPENAI_API_KEY: ${{ secrets.STRIX_OPENAI_API_KEY }}
           STRIX_VERTEX_CREDENTIALS: ${{ secrets.GCP_SA_KEY }}
         run: |
@@ -117,7 +126,7 @@ jobs:
                 exit 1
               fi
               ;;
-            vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=vertex_ai' >> "$GITHUB_OUTPUT"
               sanitized_vertex_credentials="$(printf '%s' "$STRIX_VERTEX_CREDENTIALS" | tr -d '\r')"
@@ -135,8 +144,8 @@ jobs:
 
       - name: Install Strix
         if: steps.gate.outputs.enabled == 'true'
+        working-directory: ${{ runner.temp }}/trusted-workspace
         run: |
-          cd "$TRUSTED_WORKSPACE"
           python3 -m pip install --upgrade pip
           python3 -m pip install --no-cache-dir -r requirements-strix-ci.txt
 
@@ -204,7 +213,7 @@ jobs:
       - name: Prepare Strix model input file
         if: steps.gate.outputs.enabled == 'true'
         env:
-          STRIX_MODEL: ${{ secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash' || secrets.STRIX_LLM || 'vertex_ai/gemini-2.5-flash' }}
+          STRIX_MODEL: ${{ secrets.STRIX_LLM || 'vertex_ai/gemini-3.1-pro-preview-customtools' }}
         run: |
           umask 077
           strix_llm_file="$RUNNER_TEMP/strix_llm.txt"
@@ -216,7 +225,7 @@ jobs:
             gpt-*)
               printf 'openai/%s' "$strix_model" > "$strix_llm_file"
               ;;
-            vertex_ai/gemini-2.5-flash)
+            vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
             *)
@@ -228,6 +237,12 @@ jobs:
 
       - name: Run Strix (quick)
         if: steps.gate.outputs.enabled == 'true'
+        # Security invariant for pull_request_target: execute only from the
+        # trusted base checkout. The gate copies PR-head blobs into an isolated
+        # temporary scope with execute bits stripped, then scans that scope as
+        # data. PR evidence uses the __PR_SCOPE__ sentinel so the scanner target
+        # cannot accidentally remain the trusted base checkout.
+        working-directory: ${{ runner.temp }}/trusted-workspace
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
           STRIX_LLM_DEFAULT_PROVIDER: ${{ steps.gate.outputs.provider_mode == 'vertex_ai' && 'vertex_ai' || 'openai' }}
@@ -242,13 +257,19 @@ jobs:
           CLOUDSDK_PROJECT: ${{ env.CLOUDSDK_PROJECT }}
           VERTEXAI_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
-          STRIX_TARGET_PATH: ./
+          STRIX_TARGET_PATH: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '__PR_SCOPE__' || './' }}
           STRIX_SOURCE_DIRS: .
           STRIX_REASONING_EFFORT: low
           STRIX_LLM_MAX_RETRIES: 1
           STRIX_TRANSIENT_RETRY_PER_MODEL: 2
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
+          STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"
+          STRIX_VERTEX_FALLBACK_MODELS: ""
           STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 1
+          NPM_CONFIG_IGNORE_SCRIPTS: "true"
+          PNPM_CONFIG_IGNORE_SCRIPTS: "true"
+          YARN_ENABLE_SCRIPTS: "false"
+          BUN_CONFIG_IGNORE_SCRIPTS: "true"
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '0' || '1' }}
           GH_TOKEN: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && github.token || '' }}
@@ -260,17 +281,18 @@ jobs:
           budget_suffix="TIME""OUT"
           process_budget_seconds="2400"
           if [ "$IS_PR_EVIDENCE_RUN" = "true" ]; then
-            process_budget_seconds="1200"
+            process_budget_seconds="2400"
           fi
           export "LLM_${budget_suffix}=90"
           export "STRIX_MEMORY_COMPRESSOR_${budget_suffix}=10"
           export "STRIX_PROCESS_${budget_suffix}_SECONDS=$process_budget_seconds"
           export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"
-          cd "$TRUSTED_WORKSPACE"
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload
         if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
+        env:
+          PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
         run: |
           set -euo pipefail
           mkdir -p "$GITHUB_WORKSPACE/strix_runs"
@@ -285,10 +307,11 @@ jobs:
             copied_reports=1
           fi
           if [ "$copied_reports" -eq 0 ]; then
+            summary_head_sha="${PR_HEAD_SHA:-$GITHUB_SHA}"
             {
               echo "Strix scan completed without structured report files."
               echo "run_id=$GITHUB_RUN_ID"
-              echo "head_sha=$GITHUB_SHA"
+              echo "head_sha=$summary_head_sha"
             } > "$GITHUB_WORKSPACE/strix_runs/scan-summary.txt"
           fi
 
