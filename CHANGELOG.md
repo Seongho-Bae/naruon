@@ -6,8 +6,17 @@
   각자의 Dockerfile로 분리 배포하면서 managed Postgres + pgvector + 서명-세션
   bearer 경계를 그대로 유지하도록 했습니다. `frontend/next.config.ts`는
   `BACKEND_INTERNAL_URL` 환경변수를 우선 사용해 `/api/*` rewrite destination을
-  결정하며, 미설정 시 기존 `http://127.0.0.1:8000` 폴백으로 로컬/Compose 경로는
+  결정하며, 미설정 시 기존 `http://127.0.0.1:8000` 폴백으로 로컬 dev 경로는
   무회귀로 동작합니다.
+
+### 수정
+- Seongho Bae (@seonghobae): `frontend/next.config.ts`의 `/api/*` rewrite가
+  `BACKEND_INTERNAL_URL`을 검증 없이 수용해 SSRF 표면이 될 수 있다는 Strix
+  지적을 fail-closed 가드로 해소했습니다. 명시적 값은 HTTPS와 글로벌 호스트만
+  허용하고(IPv4 RFC 1918/loopback/169.254/16, IPv6 ULA/link-local 거부),
+  `NODE_ENV=production`에서는 변수가 없으면 빌드를 즉시 실패시킵니다. 도커
+  네트워크 hostname을 사용하는 docker-compose 빌드용으로 명시적 opt-in
+  `ALLOW_INSECURE_BACKEND_INTERNAL_URL=1`을 추가하고 compose stack에 반영했습니다.
 
 ### 수정
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와

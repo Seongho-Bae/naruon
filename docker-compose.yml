@@ -39,11 +39,21 @@ services:
       dockerfile: frontend/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:8000
+        # next.config.ts requires BACKEND_INTERNAL_URL in production builds
+        # (NODE_ENV=production is the default for `next build`) and rejects
+        # http:// + private-range hosts by default. The Compose stack reaches
+        # the backend over the Docker network with the service hostname, so
+        # opt into the relaxed validation only here. Render production
+        # deployments leave the flag unset and keep the HTTPS-only policy.
+        BACKEND_INTERNAL_URL: http://backend:8000
+        ALLOW_INSECURE_BACKEND_INTERNAL_URL: "1"
     environment:
       # NEXT_PUBLIC_API_URL is baked into browser-side client code. Keep this
       # host-reachable URL for local Compose; http://backend:8000 is only
       # resolvable inside the Docker network, not from the user's browser.
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      BACKEND_INTERNAL_URL: http://backend:8000
+      ALLOW_INSECURE_BACKEND_INTERNAL_URL: "1"
     depends_on:
       - backend
     ports:

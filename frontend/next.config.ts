@@ -42,7 +42,7 @@ function normalizeHost(parsed: URL): string {
   return parsed.hostname.replace(/^\[/, "").replace(/\]$/, "").toLowerCase();
 }
 
-function assertSafeBackendInternalUrl(raw: string): URL {
+function assertSafeBackendInternalUrl(raw: string, opts: { allowInsecure: boolean }): URL {
   let parsed: URL;
   try {
     parsed = new URL(raw);
@@ -51,7 +51,7 @@ function assertSafeBackendInternalUrl(raw: string): URL {
       `BACKEND_INTERNAL_URL is not a valid URL: ${JSON.stringify(raw)}`,
     );
   }
-  if (parsed.protocol !== "https:") {
+  if (!opts.allowInsecure && parsed.protocol !== "https:") {
     throw new Error(
       `BACKEND_INTERNAL_URL must use https:// in split deployments, got ${parsed.protocol}//`,
     );
@@ -60,11 +60,13 @@ function assertSafeBackendInternalUrl(raw: string): URL {
   if (!host) {
     throw new Error("BACKEND_INTERNAL_URL must include a hostname");
   }
-  for (const pattern of DENIED_BACKEND_HOST_PATTERNS) {
-    if (pattern.test(host)) {
-      throw new Error(
-        `BACKEND_INTERNAL_URL host ${host} is in a private/loopback/link-local range`,
-      );
+  if (!opts.allowInsecure) {
+    for (const pattern of DENIED_BACKEND_HOST_PATTERNS) {
+      if (pattern.test(host)) {
+        throw new Error(
+          `BACKEND_INTERNAL_URL host ${host} is in a private/loopback/link-local range`,
+        );
+      }
     }
   }
   return parsed;
@@ -72,14 +74,30 @@ function assertSafeBackendInternalUrl(raw: string): URL {
 
 function backendRewriteDestination() {
   const raw = process.env.BACKEND_INTERNAL_URL?.trim();
-  if (!raw) {
-    // No explicit value → local dev / Compose fallback. Loopback is the
-    // intended target here and is reachable only from the same host.
-    return "http://127.0.0.1:8000/api/:path*";
+  // Allow http:// and private/loopback hosts only when the operator
+  // explicitly opts in. The docker-compose stack uses this for the
+  // service-to-service hostname `backend:8000`; Render production
+  // deployments never set it and therefore inherit the fail-closed
+  // HTTPS + global-address policy.
+  const allowInsecure = process.env.ALLOW_INSECURE_BACKEND_INTERNAL_URL === "1";
+  if (raw) {
+    const parsed = assertSafeBackendInternalUrl(raw, { allowInsecure });
+    const base = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
+    return `${base}/api/:path*`;
   }
-  const parsed = assertSafeBackendInternalUrl(raw);
-  const base = `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
-  return `${base}/api/:path*`;
+  // No explicit value. The loopback fallback is only safe for local dev
+  // and tests where `127.0.0.1` is the same host as the operator's
+  // machine. In production builds Strix correctly flagged the
+  // unconditional fallback as a residual SSRF vector, so require an
+  // explicit BACKEND_INTERNAL_URL there instead.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "BACKEND_INTERNAL_URL must be set in production builds. " +
+        "Set it to the backend's public HTTPS origin (e.g. Render's " +
+        "RENDER_EXTERNAL_URL for naruon-backend).",
+    );
+  }
+  return "http://127.0.0.1:8000/api/:path*";
 }
 
 const nextConfig: NextConfig = {
