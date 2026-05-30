@@ -58,6 +58,10 @@ mail/calendar/file systems.
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels
   provider writes as deferred intent work.
+- Custom LLM provider `base_url` calls fail closed unless the host is
+  exact-allowlisted, HTTPS-only, and resolved to global addresses. Runtime calls
+  use a pinned-address `httpx` transport so DNS is not resolved a second time
+  after validation.
   
 ## Agentic Ontology & Auto-Organization
 

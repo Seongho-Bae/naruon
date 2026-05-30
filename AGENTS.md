@@ -100,7 +100,11 @@
   registry endpoints must enforce role checks in addition to authentication. LLM
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
-  addresses.
+  addresses. Runtime LLM calls that use a custom provider `base_url` must build
+  their `httpx` client through `build_llm_provider_http_client` so TCP
+  connections are pinned to the already validated global address while TLS/SNI
+  still uses the allowlisted hostname; do not hand a freshly validated URL to a
+  generic client that can resolve DNS again at connect time.
 - OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
   must use HTTPS, must not include userinfo or fragments, must reject localhost
   and non-global IP literals, and must be exact-host allowlisted by
