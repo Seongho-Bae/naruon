@@ -255,7 +255,7 @@ jobs:
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
           STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"
           STRIX_VERTEX_FALLBACK_MODELS: ""
-          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 1
+          STRIX_PR_SCOPE_MAX_FILES_PER_BATCH: 20
           STRIX_FAIL_ON_MIN_SEVERITY: MEDIUM
           STRIX_DISABLE_PR_SCOPING: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '0' || '1' }}
           GH_TOKEN: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && github.token || '' }}
