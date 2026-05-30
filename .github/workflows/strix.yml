@@ -95,6 +95,7 @@ jobs:
           exit 1
 
       - name: Self-test Strix gate script
+        working-directory: ${{ runner.temp }}/trusted-workspace
         run: bash "$TRUSTED_STRIX_GATE_TEST"
 
       - name: Gate Strix secrets
@@ -135,8 +136,8 @@ jobs:
 
       - name: Install Strix
         if: steps.gate.outputs.enabled == 'true'
+        working-directory: ${{ runner.temp }}/trusted-workspace
         run: |
-          cd "$TRUSTED_WORKSPACE"
           python3 -m pip install --upgrade pip
           python3 -m pip install --no-cache-dir -r requirements-strix-ci.txt
 
@@ -228,6 +229,10 @@ jobs:
 
       - name: Run Strix (quick)
         if: steps.gate.outputs.enabled == 'true'
+        # Security invariant for pull_request_target: execute only from the
+        # trusted base checkout. The gate copies PR-head blobs into an isolated
+        # temporary scope and scans that scope as data.
+        working-directory: ${{ runner.temp }}/trusted-workspace
         env:
           STRIX_LLM_FILE: ${{ env.STRIX_LLM_FILE }}
           STRIX_LLM_DEFAULT_PROVIDER: ${{ steps.gate.outputs.provider_mode == 'vertex_ai' && 'vertex_ai' || 'openai' }}
@@ -268,7 +273,6 @@ jobs:
           export "STRIX_MEMORY_COMPRESSOR_${budget_suffix}=10"
           export "STRIX_PROCESS_${budget_suffix}_SECONDS=$process_budget_seconds"
           export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"
-          cd "$TRUSTED_WORKSPACE"
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload

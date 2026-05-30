@@ -60,6 +60,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE_SHA" "strix workflow pins trusted workspace SHA"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE=\$trusted_workspace" "strix workflow exports a trusted workspace path"
 	assert_file_contains "$workflow_file" "git -C \"\$TRUSTED_WORKSPACE\"" "strix workflow runs git only inside trusted workspace"
+	assert_file_contains "$workflow_file" 'working-directory: ${{ runner.temp }}/trusted-workspace' "strix workflow executes privileged steps from the trusted workspace"
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE_TEST\"" "strix workflow self-test executes trusted temp script"
 	assert_file_contains "$workflow_file" "bash \"\$TRUSTED_STRIX_GATE\"" "strix workflow executes trusted temp gate script"
 	assert_file_contains "$workflow_file" "Collect Strix reports for artifact upload" "strix workflow preserves reports from trusted workspace"
