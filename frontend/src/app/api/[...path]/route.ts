@@ -26,9 +26,26 @@ const CLIENT_AUTHORITY_HEADERS = new Set([
   "x-user-role",
 ]);
 
+const ALLOWED_BACKEND_QUERY_PARAMS = new Set([
+  "folder",
+  "limit",
+  "source_message_id",
+  "source_thread_id",
+]);
+const MAX_QUERY_PARAM_COUNT = 12;
+const MAX_QUERY_PARAM_VALUE_LENGTH = 2048;
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+
 type ApiRouteContext = {
   params: Promise<{ path?: string[] }> | { path?: string[] };
 };
+
+class InvalidProxyQueryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidProxyQueryError";
+  }
+}
 
 function filteredRequestHeaders(request: NextRequest): Headers {
   const headers = new Headers();
@@ -50,6 +67,36 @@ function filteredResponseHeaders(response: Response): Headers {
   return headers;
 }
 
+function safeBackendQuery(searchParams: URLSearchParams): string {
+  const forwardedParams = new URLSearchParams();
+  const seenNames = new Set<string>();
+  let paramCount = 0;
+
+  for (const [name, value] of searchParams) {
+    paramCount += 1;
+    if (paramCount > MAX_QUERY_PARAM_COUNT) {
+      throw new InvalidProxyQueryError("Too many query parameters");
+    }
+    if (!ALLOWED_BACKEND_QUERY_PARAMS.has(name)) {
+      throw new InvalidProxyQueryError(`Unsupported query parameter: ${name}`);
+    }
+    if (seenNames.has(name)) {
+      throw new InvalidProxyQueryError(`Duplicate query parameter: ${name}`);
+    }
+    if (
+      value.length > MAX_QUERY_PARAM_VALUE_LENGTH ||
+      CONTROL_CHARACTER_PATTERN.test(value)
+    ) {
+      throw new InvalidProxyQueryError(`Invalid query parameter value: ${name}`);
+    }
+    seenNames.add(name);
+    forwardedParams.set(name, value);
+  }
+
+  const query = forwardedParams.toString();
+  return query ? `?${query}` : "";
+}
+
 async function proxyApiRequest(
   request: NextRequest,
   context: ApiRouteContext,
@@ -58,7 +105,20 @@ async function proxyApiRequest(
   const path = params.path ?? [];
   const target = backendApiBaseUrl();
   target.pathname = `/api/${path.map(encodeURIComponent).join("/")}`;
-  target.search = request.nextUrl.search;
+  try {
+    target.search = safeBackendQuery(request.nextUrl.searchParams);
+  } catch (error) {
+    if (error instanceof InvalidProxyQueryError) {
+      return NextResponse.json(
+        {
+          error_code: "invalid_proxy_query",
+          message: error.message,
+        },
+        { status: 400 },
+      );
+    }
+    throw error;
+  }
 
   const init: RequestInit = {
     method: request.method,

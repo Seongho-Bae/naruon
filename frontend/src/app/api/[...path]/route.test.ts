@@ -56,4 +56,48 @@ describe("/api runtime proxy route", () => {
       request_body: '{"state":"open"}',
     });
   });
+
+  it("rejects unsupported query parameters before proxying", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/tasks?filename=../../../../etc/passwd",
+      { method: "POST", body: "{}" },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["tasks"] }),
+    });
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_proxy_query",
+      message: "Unsupported query parameter: filename",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("re-encodes allowed query parameters instead of copying the raw search string", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | RequestInfo) =>
+        Response.json({ target_url: String(input) }),
+      ),
+    );
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/ontology/relationships?source_message_id=%3Cabc@example.com%3E&source_thread_id=thread/one",
+      { method: "POST", body: "{}" },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["ontology", "relationships"] }),
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      target_url:
+        "https://api.naruon.net/api/ontology/relationships?source_message_id=%3Cabc%40example.com%3E&source_thread_id=thread%2Fone",
+    });
+  });
 });
