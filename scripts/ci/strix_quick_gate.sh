@@ -2845,10 +2845,15 @@ run_current_target_scan() {
 	if [ "$fallback_tried" -eq 0 ]; then
 		local fallback_config_name
 		fallback_config_name="$(fallback_models_config_name_for_model "$PRIMARY_MODEL")"
-		if [ "${#FALLBACK_MODELS[@]}" -eq 0 ]; then
+		local configured_fallback_count=0
+		for candidate_raw in "${FALLBACK_MODELS[@]}"; do
+			candidate="$(normalize_model "$candidate_raw")"
+			[ -n "$candidate" ] && configured_fallback_count=$((configured_fallback_count + 1))
+		done
+		if [ "$configured_fallback_count" -eq 0 ]; then
 			echo "ERROR: No fallback models configured ($fallback_config_name is empty). Configure distinct models." >&2
 		else
-			echo "ERROR: All configured fallback models are the same as the primary model '$PRIMARY_MODEL'. Configure distinct models in $fallback_config_name." >&2
+			echo "ERROR: All configured fallback models are the same as the primary model" >&2
 		fi
 	fi
 
