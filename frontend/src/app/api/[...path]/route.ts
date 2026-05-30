@@ -114,7 +114,12 @@ async function proxyApiRequest(
           error_code: "invalid_proxy_query",
           message: error.message,
         },
-        { status: 400 },
+        {
+          status: 400,
+          headers: {
+            "Referrer-Policy": "no-referrer",
+          },
+        },
       );
     }
     throw error;
