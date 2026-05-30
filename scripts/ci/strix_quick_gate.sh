@@ -774,12 +774,20 @@ PY
 	fi
 
 	local changed_files_output
-	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" --)"; then
-		if pull_request_head_blob_required; then
-			echo "ERROR: pull request changed file list could not be read; failing closed." >&2
-			return 2
+	if ! changed_files_output="$(git diff --name-only "$base_sha...$head_sha" -- 2>/dev/null)"; then
+		# In pull_request_target workflows, the PR head is often fetched with shallow history,
+		# which can make `base...head` (merge-base diff) fail with "no merge base" despite the
+		# commits being related. Fall back to a direct base/head diff so we still enumerate
+		# changed files and can build a conservative scan scope.
+		if changed_files_output="$(git diff --name-only "$base_sha..$head_sha" -- 2>/dev/null)"; then
+			echo "INFO: Unable to compute PR merge base; falling back to direct base/head diff for changed file enumeration." >&2
+		else
+			if pull_request_head_blob_required; then
+				echo "ERROR: pull request changed file list could not be read; failing closed." >&2
+				return 2
+			fi
+			return 1
 		fi
-		return 1
 	fi
 
 	while IFS= read -r changed_file; do
