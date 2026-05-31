@@ -85,17 +85,21 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None = None,
+        workspace_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        stmt = select(
-            WebdavAccount.source_uid,
-            WebdavAccount.writeback_enabled,
-            WebdavAccount.etag_value,
-        ).where(
+        scope_filters = [
             WebdavAccount.user_id == user_id,
             WebdavAccount.organization_id == organization_id
             if organization_id is not None
             else WebdavAccount.organization_id.is_(None),
-        )
+        ]
+        if workspace_id is not None:
+            scope_filters.append(WebdavAccount.workspace_id == workspace_id)
+        stmt = select(
+            WebdavAccount.source_uid,
+            WebdavAccount.writeback_enabled,
+            WebdavAccount.etag_value,
+        ).where(*scope_filters)
         result = await session.execute(stmt)
         return [
             {
@@ -156,10 +160,11 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None = None,
+        workspace_id: str | None = None,
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
         accounts = await self.get_connected_accounts_from_db(
-            session, user_id, organization_id
+            session, user_id, organization_id, workspace_id
         )
         return self.determine_webdav_writeback_intent_from_accounts(
             accounts,
@@ -171,6 +176,7 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None,
+        workspace_id: str | None,
         source_task_id: str,
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
@@ -214,6 +220,7 @@ class WebDavService:
             session,
             user_id,
             organization_id,
+            workspace_id,
             target_source_id=target_source_id,
         )
         if result.get("status") == "error":
