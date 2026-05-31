@@ -110,10 +110,10 @@
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
   addresses. Runtime LLM calls that use a custom provider `base_url` must build
-  their `httpx` client through `build_llm_provider_http_client` so TCP
-  connections are pinned to the already validated global address while TLS/SNI
-  still uses the allowlisted hostname; do not hand a freshly validated URL to a
-  generic client that can resolve DNS again at connect time.
+  their `httpx` client through `build_llm_provider_http_client` so TCP connects
+  only to prevalidated global IP addresses while TLS/SNI still uses the
+  allowlisted hostname; do not hand a freshly validated URL to a generic client
+  that can resolve DNS again at connect time.
 - OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
   must use HTTPS, must not include userinfo or fragments, must reject localhost
   and non-global IP literals, and must be exact-host allowlisted by
@@ -140,6 +140,14 @@
   by `user_id` only. Frontend Settings onboarding must use bearer-session API
   calls for account config, CalDAV/WebDAV source readiness, and runner token
   rotation, and mocks must not reintroduce public identity headers.
+- Self-service mailbox configuration routes must enforce owner-required
+  RBAC/ABAC through `services.access_policy`; system/platform admins may not use
+  user-facing `/api/config` routes to read or mutate another user's mailbox
+  credentials. Cross-user administration needs a dedicated audited admin route.
+- Workspace-scoped resources must carry `workspace_id` through both
+  `AccessRequest` and `ResourcePolicy`, and SQL scopes for WebDAV/Data/Security
+  surfaces must filter the current workspace in addition to owner and
+  organization. Do not expose same-organization cross-workspace records.
 - User-owned mailbox/provider account endpoints must not treat `system_admin`
   or `platform_admin` JWT roles as an owner session. Elevated operators need
   separate audited support flows; `/api/accounts/config` must reject forged or
