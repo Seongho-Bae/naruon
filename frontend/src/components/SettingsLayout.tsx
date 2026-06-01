@@ -498,7 +498,7 @@ export function SettingsLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
             {settingsTabs.map((tab) => (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${activeTab === tab.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
@@ -532,7 +532,7 @@ export function SettingsLayout() {
                         { label: '이메일', value: 'email', desc: '인박스 중심으로 확인' },
                         { label: '일정 관리', value: 'calendar', desc: '오늘의 회의와 스케줄 확인' }
                       ].map((view) => (
-                        <button
+                        <button type="button"
                           key={view.value}
                           onClick={() => setWorkspaceStartupView(view.value as 'dashboard' | 'email' | 'calendar')}
                           className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${

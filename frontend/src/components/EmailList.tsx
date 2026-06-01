@@ -180,7 +180,7 @@ export function EmailList({
               const safeSnippet = toSafeReactText(email.snippet);
 
               return (
-              <button 
+              <button type="button"
                 key={email.id} 
                 onClick={() => onSelectEmail(email.id)}
                 aria-current={selected ? "true" : undefined}

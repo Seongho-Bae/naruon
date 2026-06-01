@@ -255,7 +255,7 @@ export function TasksLayout() {
           <p className="sr-only">리소스 배정 검토 회의</p>
           <div className="flex max-w-full overflow-x-auto rounded-md border border-border">
             {['내 작업', '위임한 작업', '칸반', '작업 상세'].map((mode) => (
-              <button
+              <button type="button"
                 key={mode}
                 onClick={() => setViewMode(mode as '내 작업' | '위임한 작업' | '칸반' | '작업 상세')}
                 className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
@@ -270,10 +270,10 @@ export function TasksLayout() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input type="text" placeholder="작업 검색..." className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64" />
           </div>
-          <button className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
+          <button type="button" className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
             <Filter className="size-4" /> 필터
           </button>
-          <button className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+          <button type="button" className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
             <Plus className="size-4" /> 새 작업
           </button>
         </div>
@@ -498,7 +498,7 @@ export function TasksLayout() {
                     <h2 className="font-bold text-sm">{col.title}</h2>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.color}`}>{col.count}</span>
                   </div>
-                  <button aria-label="더보기" className="text-muted-foreground hover:text-foreground"><MoreHorizontal className="size-4" /></button>
+                  <button type="button" aria-label="더보기" className="text-muted-foreground hover:text-foreground"><MoreHorizontal className="size-4" /></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
                   {tasks[col.id as keyof typeof MOCK_TASKS].map((task) => (
@@ -533,7 +533,7 @@ export function TasksLayout() {
                   ))}
                 </div>
                 <div className="p-3 border-t border-border">
-                  <button className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground">
+                  <button type="button" className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground">
                     <Plus className="size-4" /> 항목 추가
                   </button>
                 </div>
@@ -594,7 +594,7 @@ export function TasksLayout() {
                 </div>
                 <h2 className="text-2xl font-bold">{task.title}</h2>
               </div>
-              <button className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90">상태 변경</button>
+              <button type="button" className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90">상태 변경</button>
             </div>
             
             <div className="grid grid-cols-3 gap-6 mb-6">

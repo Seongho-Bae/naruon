@@ -213,7 +213,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           </div>
           <div className="relative flex flex-wrap items-center gap-3">
             <span suppressHydrationWarning className="break-keep text-sm font-medium text-muted-foreground">{currentTimestamp || '현재 시간 확인 중'}</span>
-            <button
+            <button type="button"
               aria-controls={settingsMenuId}
               aria-expanded={isSettingsOpen}
               aria-haspopup="menu"
@@ -227,13 +227,13 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div id={settingsMenuId} role="menu" className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-card p-2 shadow-lg">
                 <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
                 <div className="mt-1 flex flex-col gap-1">
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
                     대시보드
                   </button>
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
                     이메일 우선
                   </button>
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
                     일정 우선
                   </button>
                 </div>
@@ -298,7 +298,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div>
                 <p className="break-keep font-bold">회의 2건 예정</p>
                 <p className="text-xs text-muted-foreground mt-1">오전 10:30, 오후 14:00</p>
-                <button onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline">일정 확인하기</button>
+                <button type="button" onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline">일정 확인하기</button>
               </div>
             </div>
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
@@ -427,7 +427,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 </div>
               ))}
             </div>
-            <button onClick={() => onOpenView('email')} className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">메일함 바로가기</button>
+            <button type="button" onClick={() => onOpenView('email')} className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">메일함 바로가기</button>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -726,7 +726,7 @@ export function WorkspaceHome({
             className={`mobile-workspace-panel h-full flex-col ${effectiveMobileView === 'detail' && selectedEmail !== null ? 'flex' : 'hidden'}`}
           >
             <div className="p-3 border-b border-border bg-card">
-              <button
+              <button type="button"
                 onClick={() => {
                   setSelectedEmail(null);
                   setMobileDetailActionCommand(null);
