@@ -337,7 +337,7 @@ export function AIHubLayout() {
           <button
             type="button"
             onClick={requestRefresh}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-bold hover:bg-secondary"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <RefreshCw className="size-4" aria-hidden="true" />
             새로고침

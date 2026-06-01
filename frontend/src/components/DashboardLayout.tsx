@@ -194,7 +194,7 @@ export function NavLink({
     <Link
       href={href}
       aria-current={active ? (splitHref(href).hash ? 'location' : 'page') : undefined}
-      className={`group flex min-h-9 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+      className={`group flex min-h-9 items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
         active
           ? 'bg-primary text-primary-foreground shadow-[0_12px_28px_rgba(37,99,255,0.24)]'
           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary'
@@ -228,7 +228,7 @@ function PrimaryNavLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`inline-flex h-10 shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+      className={`inline-flex h-10 shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
         active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
       }`}
     >
@@ -257,7 +257,7 @@ function HeaderActionButton({
       data-header-action={action}
       popoverTarget={`header-action-${action}`}
       onClick={handleClick}
-      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+      className="inline-flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3 text-xs font-semibold text-foreground shadow-sm transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
     >
       <Icon className="size-4 text-primary" aria-hidden={true} />
       {label}
@@ -342,7 +342,7 @@ export function DashboardLayout({
             aria-haspopup="dialog"
             popoverTarget="mobile-workspace-menu"
             onClick={() => setIsWorkspaceMenuOpen((open) => !open)}
-            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:hidden"
+            className="grid size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 xl:hidden"
           >
             <Menu className="size-5" aria-hidden="true" />
           </button>
@@ -376,7 +376,7 @@ export function DashboardLayout({
                   aria-pressed={active}
                   title={description}
                   onClick={() => handleStartupViewChange(view)}
-                  className={`h-8 rounded-xl px-2 text-[11px] font-black transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                  className={`h-8 rounded-xl px-2 text-[11px] font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-primary'
                   }`}
                 >
@@ -401,13 +401,13 @@ export function DashboardLayout({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2 xl:ml-0">
-            <button type="button" aria-label="알림 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
+            <button type="button" aria-label="알림 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:grid">
               <Bell className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
+            <button type="button" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 md:grid">
               <HelpCircle className="size-4" aria-hidden="true" />
             </button>
-            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:inline-flex">
+            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 xl:inline-flex">
               <UserCircle className="size-4 text-primary" aria-hidden="true" />
               Seongho
             </button>
@@ -457,7 +457,7 @@ export function DashboardLayout({
             popoverTarget="mobile-workspace-menu"
             popoverTargetAction="hide"
             onClick={closeMobileWorkspaceMenu}
-            className="grid size-10 place-items-center rounded-2xl border border-border bg-background text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            className="grid size-10 place-items-center rounded-2xl border border-border bg-background text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             ×
           </button>
@@ -478,7 +478,7 @@ export function DashboardLayout({
                     popoverTarget="mobile-workspace-menu"
                     popoverTargetAction="hide"
                     onClick={() => handleStartupViewChange(view)}
-                    className={`min-h-11 rounded-2xl border px-2 text-xs font-black focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                    className={`min-h-11 rounded-2xl border px-2 text-xs font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                       active ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background/70 text-foreground'
                     }`}
                   >
@@ -499,7 +499,7 @@ export function DashboardLayout({
                   href={href}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => closeMobileWorkspaceMenu()}
-                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
                   }`}
                 >
@@ -524,7 +524,7 @@ export function DashboardLayout({
                   data-mobile-workspace-shortcut={view}
                   aria-current={active ? 'page' : undefined}
                   onClick={(event) => handleMobileWorkspaceChange(view, event)}
-                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
                   }`}
                 >
@@ -548,7 +548,7 @@ export function DashboardLayout({
                   href={href}
                   aria-current={active ? 'page' : undefined}
                   onClick={() => closeMobileWorkspaceMenu()}
-                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                  className={`flex min-h-11 items-center gap-3 rounded-2xl border px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     active ? 'border-primary bg-primary text-primary-foreground' : 'border-border/70 bg-background/70 text-foreground'
                   }`}
                 >
@@ -564,7 +564,7 @@ export function DashboardLayout({
             <Link
               href="/settings"
               onClick={() => closeMobileWorkspaceMenu()}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <Settings className="size-4 text-primary" aria-hidden="true" />
               <span className="flex flex-col leading-tight">
@@ -575,7 +575,7 @@ export function DashboardLayout({
             <Link
               href="/settings#help"
               onClick={() => closeMobileWorkspaceMenu()}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <HelpCircle className="size-4 text-primary" aria-hidden="true" />
               <span>도움말</span>
@@ -583,7 +583,7 @@ export function DashboardLayout({
             <Link
               href="/settings#profile"
               onClick={() => closeMobileWorkspaceMenu()}
-              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              className="flex min-h-11 items-center gap-3 rounded-2xl border border-border/70 bg-background/70 px-3 py-2 text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <UserCircle className="size-4 text-primary" aria-hidden="true" />
               <span>프로필</span>
@@ -617,7 +617,7 @@ export function DashboardLayout({
           aria-haspopup="dialog"
           aria-controls="mobile-ai-action-menu"
           popoverTarget="mobile-ai-action-menu"
-          className="mx-auto grid size-14 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(37,99,255,0.35)] transition-transform focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-[-10px]"
+          className="mx-auto grid size-14 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(37,99,255,0.35)] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:translate-y-[-10px]"
         >
           <Sparkles className="size-6" aria-hidden="true" />
         </button>
@@ -663,7 +663,7 @@ export function DashboardLayout({
                 popoverTarget="mobile-ai-action-menu"
                 popoverTargetAction="hide"
                 onClick={() => handleHeaderAction(action)}
-                className="flex min-h-12 items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-3 py-2 text-left text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+                className="flex min-h-12 items-center gap-3 rounded-2xl border border-border/80 bg-background/80 px-3 py-2 text-left text-sm font-bold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <Icon className="size-4 text-primary" aria-hidden="true" />
                 <span className="flex flex-col leading-tight">

@@ -207,7 +207,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               aria-expanded={isSettingsOpen}
               aria-haspopup="menu"
               onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+              className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             >
               <Settings className="size-4" aria-hidden="true" />
               홈 설정
@@ -216,13 +216,13 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div id={settingsMenuId} role="menu" className="absolute right-0 top-full z-50 mt-2 w-48 rounded-xl border border-border bg-card p-2 shadow-lg">
                 <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
                 <div className="mt-1 flex flex-col gap-1">
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     대시보드
                   </button>
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     이메일 우선
                   </button>
-                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent">
+                  <button role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     일정 우선
                   </button>
                 </div>
@@ -264,13 +264,13 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 <p className="break-keep font-bold">답변 대기 {loading ? '-' : pendingReplyCount}건</p>
                 <p className="text-xs text-muted-foreground mt-1">보낸 메일 중 회신 확인이 필요한 항목입니다.</p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <a href="/mail?folder=sent" className="inline-flex text-xs font-semibold text-primary hover:underline">보낸 메일 보기</a>
+                  <a href="/mail?folder=sent" className="inline-flex text-xs font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">보낸 메일 보기</a>
                   <button
                     type="button"
                     aria-label="홈에서 보낸 메일 답변 SLA 티켓 생성"
                     disabled={loading || pendingReplyCount === 0 || replySlaStatus === 'loading'}
                     onClick={() => void handleReplySlaEscalation()}
-                    className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+                    className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
                     {replySlaStatus === 'loading' ? 'SLA 확인 중' : 'SLA 티켓 생성'}
                   </button>
@@ -287,7 +287,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div>
                 <p className="break-keep font-bold">회의 2건 예정</p>
                 <p className="text-xs text-muted-foreground mt-1">오전 10:30, 오후 14:00</p>
-                <button onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline">일정 확인하기</button>
+                <button onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 확인하기</button>
               </div>
             </div>
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
@@ -295,7 +295,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div>
                 <p className="break-keep font-bold">완료 가능 작업 {loading ? '-' : pendingTasks.length}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 마감 전 완료해보세요.</p>
-                <button className="mt-2 text-xs font-semibold text-primary hover:underline">작업 바로가기</button>
+                <button className="mt-2 text-xs font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">작업 바로가기</button>
               </div>
             </div>
           </div>
@@ -330,7 +330,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            <a href="/mail?folder=sent" className="mt-4 block w-full text-center text-sm font-semibold text-primary hover:underline">보낸 메일 전체 보기</a>
+            <a href="/mail?folder=sent" className="mt-4 block w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">보낸 메일 전체 보기</a>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -358,7 +358,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">전체 작업 보기</button>
+            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">전체 작업 보기</button>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -382,7 +382,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 </div>
               ))}
             </div>
-            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">일정 조정하기</button>
+            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조정하기</button>
           </div>
         </div>
 
@@ -416,7 +416,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 </div>
               ))}
             </div>
-            <button onClick={() => onOpenView('email')} className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline">메일함 바로가기</button>
+            <button onClick={() => onOpenView('email')} className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">메일함 바로가기</button>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -434,7 +434,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 { label: '문서 작성', icon: CheckCircle2, color: 'text-blue-500' },
                 { label: '파일 업로드', icon: Network, color: 'text-blue-500' },
               ].map((action, i) => (
-                <button key={i} className="flex items-center justify-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+                <button key={i} className="flex items-center justify-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                   <action.icon className={`size-5 shrink-0 ${action.color}`} />
                   <span className="truncate">{action.label}</span>
                 </button>
@@ -461,7 +461,7 @@ function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupVi
           <button
             type="button"
             onClick={() => onOpenView('email')}
-            className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+            className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <Inbox className="size-4" aria-hidden="true" />
             이메일 작업공간 열기
@@ -687,7 +687,7 @@ export function WorkspaceHome({
             <EmailDetail emailId={selectedEmail} actionCommand={desktopDetailActionCommand?.target === 'tablet' && desktopDetailActionCommand.modeVersion === desktopViewportModeVersion ? desktopDetailActionCommand : null} />
           </div>
           <details aria-label="태블릿 맥락 그래프" className="shrink-0 rounded-2xl border border-primary/15 bg-gradient-to-r from-primary/5 via-card to-emerald-500/5 shadow-sm">
-            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
+            <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
               <span className="flex items-center gap-2">
                 <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary">
                   <Network className="size-4" aria-hidden="true" />
