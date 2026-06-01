@@ -4303,7 +4303,7 @@ run_gate_case "vertex-primary-notfound-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4339,7 +4339,7 @@ run_gate_case "provider-prefix-fallback-normalization" \
 	"missing-primary" \
 	"fallback-one fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4367,7 +4367,7 @@ run_gate_case "provider-prefix-resource-path-primary-notfound-fallback-success" 
 	"projects/p1/locations/us-central1/publishers/google/models/missing-primary" \
 	"projects/p1/locations/us-central1/publishers/google/models/fallback-one projects/p1/locations/us-central1/publishers/google/models/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4388,7 +4388,7 @@ run_gate_case "vertex-notfound-without-status-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4397,7 +4397,7 @@ run_gate_case "vertex-notfound-compact-status-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4415,7 +4415,7 @@ run_gate_case "primary-duplicate-in-fallback" \
 	"missing-primary" \
 	"vertex_ai/missing-primary fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4424,7 +4424,7 @@ run_gate_case "multiline-fallback-success" \
 	"vertex_ai/missing-primary" \
 	$'vertex_ai/fallback-one\nvertex_ai/fallback-two' \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-two'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-two' in " \
 	"3" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one|vertex_ai/fallback-two" \
 	"<unset>|<unset>|<unset>"
@@ -4433,7 +4433,7 @@ run_gate_case "vertex-primary-ratelimit-fallback-success" \
 	"vertex_ai/ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/ratelimit-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4442,7 +4442,7 @@ run_gate_case "vertex-primary-resource-exhausted-fallback-success" \
 	"vertex_ai/resource-exhausted-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/resource-exhausted-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4451,7 +4451,7 @@ run_gate_case "vertex-primary-429-fallback-success" \
 	"vertex_ai/http429-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/http429-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4460,7 +4460,7 @@ run_gate_case "vertex-primary-midstream-fallback-success" \
 	"vertex_ai/midstream-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/midstream-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4763,7 +4763,7 @@ run_gate_case "vertex-primary-hallucinated-endpoint-fallback-success" \
 	"vertex_ai/hallucination-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/hallucination-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -5029,7 +5029,7 @@ run_gate_case "target-path-src-default-source-dirs" \
 	"vertex_ai/hallucination-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/hallucination-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>" \
@@ -5079,7 +5079,7 @@ run_gate_case "default-fallback-order-fast-first" \
 	"vertex_ai/missing-primary" \
 	"" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/gemini-2.5-pro'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/gemini-2.5-pro' in " \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/gemini-2.5-pro" \
 	"<unset>|<unset>"
@@ -5100,7 +5100,7 @@ run_gate_case "vertex-primary-timeout-retry-reason-message" \
 	"vertex_ai/retry-timeout-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in " \
 	"2" \
 	"vertex_ai/retry-timeout-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>" \
@@ -5128,7 +5128,7 @@ run_gate_case "vertex-primary-success-timing-message" \
 	"vertex_ai/ready-primary" \
 	"" \
 	"0" \
-	"Strix run succeeded for model 'vertex_ai/ready-primary' in " \
+	"Strix run succeeded for model 'vertex_ai/ready-primary' in" \
 	"1" \
 	"vertex_ai/ready-primary" \
 	"<unset>"

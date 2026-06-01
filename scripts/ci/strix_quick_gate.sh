@@ -1992,7 +1992,7 @@ PY
 	fi
 
 	if [ "$rc" -eq 0 ]; then
-		printf "Strix run succeeded for model '%s' in %ds.\n" "$model" "$elapsed" >&2
+		echo "Strix run succeeded for model '$model' in ${elapsed}s." >&2
 		return 0
 	fi
 
@@ -2809,9 +2809,12 @@ run_current_target_scan() {
 			echo "Primary model unavailable; retrying with fallback '$candidate'."
 		fi
 		local fallback_scan_rc=0
+		local fallback_start_epoch
+		fallback_start_epoch="$(date +%s)"
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
+		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
-			echo "Strix quick scan succeeded with fallback model '$candidate'."
+			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
 		if [ "$fallback_scan_rc" -eq 2 ]; then
