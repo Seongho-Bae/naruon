@@ -5128,7 +5128,7 @@ run_gate_case "vertex-primary-success-timing-message" \
 	"vertex_ai/ready-primary" \
 	"" \
 	"0" \
-	"Strix run succeeded for model 'vertex_ai/ready-primary' in" \
+	"Strix run succeeded for model 'vertex_ai/ready-primary' in " \
 	"1" \
 	"vertex_ai/ready-primary" \
 	"<unset>"

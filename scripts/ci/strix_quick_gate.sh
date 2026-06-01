@@ -1992,7 +1992,7 @@ PY
 	fi
 
 	if [ "$rc" -eq 0 ]; then
-		echo "Strix run succeeded for model '$model' in ${elapsed}s." >&2
+		printf "Strix run succeeded for model '%s' in %ds.\n" "$model" "$elapsed" >&2
 		return 0
 	fi
 
