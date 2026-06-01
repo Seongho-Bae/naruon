@@ -1,9 +1,20 @@
+import base64
+import hashlib
+import hmac
+import json
+import time
+
 import pytest
 from fastapi.testclient import TestClient
-from main import app
-from db.session import get_db
+from pydantic import SecretStr
 
-pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
+from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
+from core.config import settings
+from db.session import get_db
+from main import app
+
+TEST_SESSION_HMAC_SECRET = "accounts-mailbox-owner-hmac-value-20260529"  # noqa: S105
+
 
 class MockTenantConfig:
     def __init__(self, user_id, organization_id=None):
@@ -35,6 +46,7 @@ class MockSession:
     def __init__(self):
         self.configs = {}
         self.commits = 0
+        self.execute_calls = 0
 
     def _query_key(self, stmt):
         params = dict(stmt.compile().params)
@@ -43,6 +55,7 @@ class MockSession:
         return user_id, organization_id
 
     async def execute(self, stmt):
+        self.execute_calls += 1
         return MockResult(self.configs.get(self._query_key(stmt)))
 
     def add(self, obj):
@@ -57,8 +70,73 @@ class MockSession:
 async def override_get_db():
     yield MockSession()
 
+
+def _base64url_encode(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def _signed_session_token(payload: dict[str, object]) -> str:
+    header_segment = _base64url_encode(
+        json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode()
+    )
+    payload_segment = _base64url_encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    )
+    signing_input = f"{header_segment}.{payload_segment}"
+    signature = hmac.new(
+        TEST_SESSION_HMAC_SECRET.encode("utf-8"),
+        signing_input.encode("ascii"),
+        hashlib.sha256,
+    ).digest()
+    return f"{signing_input}.{_base64url_encode(signature)}"
+
+
+def _valid_session_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "ver": 1,
+        "iss": SESSION_ISSUER,
+        "aud": SESSION_AUDIENCE,
+        "sub": "mailbox-owner",
+        "role": "member",
+        "org": "org-acme",
+        "groups": [],
+        "workspace": "workspace-org-acme",
+        "exp": int(time.time()) + 300,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _request_with_signed_session(
+    method: str,
+    path: str,
+    db_session: MockSession,
+    payload: dict[str, object],
+    json_body: dict[str, object] | None = None,
+):
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+
+    async def scoped_db():
+        yield db_session
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    app.dependency_overrides[get_db] = scoped_db
+    try:
+        token = _signed_session_token(payload)
+        with TestClient(app) as c:
+            kwargs: dict[str, object] = {
+                "headers": {"Authorization": f"Bearer {token}"}
+            }
+            if json_body is not None:
+                kwargs["json"] = json_body
+            return c.request(method, path, **kwargs)
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        app.dependency_overrides.clear()
+
+
 @pytest.fixture
-def client():
+def client(dev_auth_dependency_overrides):
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
         yield c
@@ -107,7 +185,9 @@ def test_get_and_update_tenant_config(client: TestClient, monkeypatch):
     assert data["has_pop3_password"] is True
 
 
-def test_accounts_config_uses_signed_session_organization_scope(monkeypatch):
+def test_accounts_config_uses_signed_session_organization_scope(
+    dev_auth_dependency_overrides, monkeypatch
+):
     monkeypatch.setattr(
         "api.tenant_config.validate_smtp_host",
         lambda host, *, resolve_host=True: host,
@@ -151,6 +231,52 @@ def test_accounts_config_uses_signed_session_organization_scope(monkeypatch):
     assert rival_read.json()["smtp_server"] == "smtp.other.com"
     assert ("shared-user", "org-acme") in session.configs
     assert ("shared-user", "org-rival") in session.configs
+
+
+@pytest.mark.parametrize("admin_role", ("system_admin", "platform_admin"))
+def test_accounts_config_rejects_system_admin_mailbox_owner_session(admin_role: str):
+    session = MockSession()
+    payload = _valid_session_payload(
+        sub="strix-admin",
+        role=admin_role,
+        org=None,
+        workspace="workspace-system",
+    )
+
+    read_response = _request_with_signed_session(
+        "GET",
+        "/api/accounts/config",
+        session,
+        payload,
+    )
+    write_response = _request_with_signed_session(
+        "PUT",
+        "/api/accounts/config",
+        session,
+        payload,
+        {"smtp_server": "smtp.example.com", "smtp_port": 587},
+    )
+
+    assert read_response.status_code == 401
+    assert write_response.status_code == 401
+    assert read_response.json()["detail"] == "Authentication required"
+    assert session.execute_calls == 0
+    assert session.configs == {}
+
+
+def test_accounts_config_preserves_scoped_signed_member_session():
+    session = MockSession()
+    response = _request_with_signed_session(
+        "GET",
+        "/api/accounts/config",
+        session,
+        _valid_session_payload(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "mailbox-owner"
+    assert response.json()["smtp_server"] is None
+    assert session.execute_calls == 1
 
 
 def test_accounts_config_rejects_private_imap_host(client: TestClient):

@@ -44,6 +44,8 @@ services:
       # host-reachable URL for local Compose; http://backend:8000 is only
       # resolvable inside the Docker network, not from the user's browser.
       NEXT_PUBLIC_API_URL: http://localhost:8000
+      BACKEND_INTERNAL_URL: http://backend:8000
+      ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"
     depends_on:
       - backend
     ports:

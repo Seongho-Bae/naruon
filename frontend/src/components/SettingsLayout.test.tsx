@@ -142,8 +142,7 @@ describe("SettingsLayout", () => {
           return jsonResponse([
             {
               source_id: "webdav_src_primary",
-              server_url: "https://files.example.com/dav",
-              username: "files@example.com",
+              display_label: "WebDAV source webdav_src_primary",
               writeback_enabled: true,
             },
           ]);
@@ -288,6 +287,43 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("nrn_one_time_connector_token");
   });
 
+  it("marks external operational console links with explicit noopener", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SettingsLayout />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const developerTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent === "개발자",
+    );
+    expect(developerTab).toBeTruthy();
+    await act(async () => {
+      developerTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const externalLinks = Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('a[target="_blank"]'),
+    );
+    expect(externalLinks.map((link) => link.textContent)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Grafana"),
+        expect.stringContaining("Keycloak"),
+        expect.stringContaining("Loki"),
+        expect.stringContaining("Tempo"),
+      ]),
+    );
+    for (const link of externalLinks) {
+      expect(link.rel.split(/\s+/).sort()).toEqual(["noopener", "noreferrer"]);
+    }
+  });
+
   it("loads and saves source-backed mail account settings without public identity headers or secret replay", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -349,6 +385,9 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("Source readiness");
     expect(container.textContent).toContain("caldav_src_fastmail_primary");
     expect(container.textContent).toContain("webdav_src_primary");
+    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("https://files.example.com/dav");
+    expect(container.textContent).not.toContain("files@example.com");
     expect(container.textContent).toContain("writeback intent enabled");
     expect(container.textContent).toContain("저장된 secret 유지");
     expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");

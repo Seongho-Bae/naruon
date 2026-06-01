@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from core.runtime_secrets import validate_auth_session_hmac_secret_value
+from core.url_validation import parse_allowed_hosts, validate_https_url_host
 
 DEFAULT_SERVER_HOST = "127.0.0.1"
 DEFAULT_SERVER_PORT = 8000
@@ -83,6 +84,23 @@ def validate_runtime_settings() -> list[str]:
         messages.append(
             "OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL must be set together"
         )
+    if len(configured_oidc) == len(OIDC_SETTINGS):
+        allowed_oidc_hosts = parse_allowed_hosts(values.get("ALLOWED_OIDC_HOSTS", ""))
+        if not allowed_oidc_hosts:
+            messages.append(
+                "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
+            )
+        else:
+            for setting_name in ("OIDC_ISSUER_URL", "OIDC_JWKS_URL"):
+                try:
+                    validate_https_url_host(
+                        setting_name,
+                        values[setting_name],
+                        allowed_oidc_hosts,
+                        "ALLOWED_OIDC_HOSTS",
+                    )
+                except ValueError as exc:
+                    messages.append(str(exc))
 
     return messages
 
