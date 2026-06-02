@@ -5486,7 +5486,7 @@ run_gate_case "model-disagreement-critical-in-earlier-report" \
 	"vertex_ai/model-a" \
 	"vertex_ai/model-b" \
 	"1" \
-	"Configured Vertex model and fallback models were unavailable." \
+	"Strix quick scan failed with a non-recoverable error." \
 	"2" \
 	"vertex_ai/model-a|vertex_ai/model-b" \
 	"<unset>|<unset>"
