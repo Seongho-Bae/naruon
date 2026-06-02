@@ -40,6 +40,16 @@ assert_file_contains() {
 	fi
 }
 
+assert_file_matches() {
+	local file_path="$1"
+	local pattern="$2"
+	local message="$3"
+
+	if ! grep -Eq -- "$pattern" "$file_path"; then
+		record_failure "$message (missing pattern '$pattern')"
+	fi
+}
+
 assert_file_not_contains() {
 	local file_path="$1"
 	local needle="$2"
@@ -63,6 +73,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
+	assert_file_contains "$workflow_file" 'group: strix-${{ github.repository }}' "strix workflow serializes scans per repository for GitHub Models quota"
+	assert_file_contains "$workflow_file" "cancel-in-progress: false" "strix workflow never cancels in-progress security evidence"
 	assert_file_contains "$workflow_file" "models: read" "strix workflow grants only the GitHub Models read permission needed for Strix"
 	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE_SHA" "strix workflow pins trusted workspace SHA"
@@ -670,7 +682,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		;;
 	vertex-primary-api-connection-retry-same-model-success)
 		case "${STRIX_LLM:-}" in
-		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary)
+		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary|openai/openai/retry-api-connection-primary)
 			attempt="0"
 			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
 				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
@@ -678,8 +690,14 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			attempt="$((attempt + 1))"
 			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
 			if [ "$attempt" -eq 1 ]; then
-				echo "LLM CONNECTION FAILED"
-				echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				if [ "${STRIX_LLM:-}" = "openai/openai/retry-api-connection-primary" ]; then
+					echo "LLM CONNECTION FAILED"
+					echo "Could not establish connection to the language model."
+					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error."
+				else
+					echo "LLM CONNECTION FAILED"
+					echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				fi
 				exit 1
 			fi
 			echo "scan ok after same-model api connection retry"
@@ -2091,7 +2109,14 @@ EOS
 	assert_equals "$expected_exit" "$rc" "scenario=$scenario exit code"
 
 	if [ -n "$expected_message" ]; then
-		assert_file_contains "$output_log" "$expected_message" "scenario=$scenario output"
+		case "$expected_message" in
+		REGEX:*)
+			assert_file_matches "$output_log" "${expected_message#REGEX:}" "scenario=$scenario output"
+			;;
+		*)
+			assert_file_contains "$output_log" "$expected_message" "scenario=$scenario output"
+			;;
+		esac
 	fi
 
 	local call_count
@@ -4664,7 +4689,7 @@ run_gate_case "vertex-primary-notfound-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4700,7 +4725,7 @@ run_gate_case "provider-prefix-fallback-normalization" \
 	"missing-primary" \
 	"fallback-one fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4728,7 +4753,7 @@ run_gate_case "provider-prefix-resource-path-primary-notfound-fallback-success" 
 	"projects/p1/locations/us-central1/publishers/google/models/missing-primary" \
 	"projects/p1/locations/us-central1/publishers/google/models/fallback-one projects/p1/locations/us-central1/publishers/google/models/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4749,7 +4774,7 @@ run_gate_case "vertex-notfound-without-status-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4758,7 +4783,7 @@ run_gate_case "vertex-notfound-compact-status-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"vertex_ai/fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4776,7 +4801,7 @@ run_gate_case "primary-duplicate-in-fallback" \
 	"missing-primary" \
 	"vertex_ai/missing-primary fallback-one" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4785,7 +4810,7 @@ run_gate_case "multiline-fallback-success" \
 	"vertex_ai/missing-primary" \
 	$'vertex_ai/fallback-one\nvertex_ai/fallback-two' \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-two'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-two' in [0-9]+s\\." \
 	"3" \
 	"vertex_ai/missing-primary|vertex_ai/fallback-one|vertex_ai/fallback-two" \
 	"<unset>|<unset>|<unset>"
@@ -4794,7 +4819,7 @@ run_gate_case_allow_provider_signal "vertex-primary-ratelimit-fallback-success" 
 	"vertex_ai/ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/ratelimit-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4803,7 +4828,7 @@ run_gate_case_allow_provider_signal "vertex-primary-resource-exhausted-fallback-
 	"vertex_ai/resource-exhausted-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/resource-exhausted-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4812,7 +4837,7 @@ run_gate_case_allow_provider_signal "vertex-primary-429-fallback-success" \
 	"vertex_ai/http429-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/http429-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4821,7 +4846,7 @@ run_gate_case_allow_provider_signal "vertex-primary-midstream-fallback-success" 
 	"vertex_ai/midstream-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/midstream-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -4866,6 +4891,19 @@ run_gate_case_allow_provider_signal "vertex-primary-api-connection-retry-same-mo
 	"" \
 	"1"
 
+run_gate_case_allow_provider_signal "github-models-internal-server-connection-retry-same-model-success" \
+	"openai/openai/retry-api-connection-primary" \
+	"" \
+	"0" \
+	"scan ok after same-model api connection retry" \
+	"2" \
+	"openai/openai/retry-api-connection-primary|openai/openai/retry-api-connection-primary" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"1"
+
 run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
 	"gemini/retry-high-demand-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
@@ -4883,7 +4921,7 @@ run_gate_case_allow_provider_signal "gemini-timeout-direct-fallback-success" \
 	"gemini/retry-timeout-primary" \
 	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
-	"scan ok after timeout fallback" \
+	"REGEX:Strix quick scan succeeded with fallback model 'gemini/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"gemini/retry-timeout-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
@@ -4896,7 +4934,7 @@ run_gate_case_allow_provider_signal "gemini-timeout-fallback-success" \
 	"gemini/timeout-fallback-primary" \
 	"gemini/fallback-one gemini/fallback-two" \
 	"0" \
-	"scan ok after gemini fallback" \
+	"REGEX:Strix quick scan succeeded with fallback model 'gemini/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"gemini/timeout-fallback-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
@@ -4909,7 +4947,7 @@ run_gate_case_allow_provider_signal "gemini-generic-fallback-success" \
 	"gemini/timeout-fallback-primary" \
 	"" \
 	"0" \
-	"scan ok after gemini fallback" \
+	"REGEX:Strix quick scan succeeded with fallback model 'gemini/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"gemini/timeout-fallback-primary|gemini/fallback-one" \
 	"https://example.invalid|https://example.invalid" \
@@ -5244,7 +5282,7 @@ run_gate_case "vertex-primary-hallucinated-endpoint-fallback-success" \
 	"vertex_ai/hallucination-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/hallucination-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>"
@@ -5486,7 +5524,7 @@ run_gate_case "model-disagreement-critical-in-earlier-report" \
 	"vertex_ai/model-a" \
 	"vertex_ai/model-b" \
 	"1" \
-	"Configured Vertex model and fallback models were unavailable." \
+	"Strix quick scan failed with a non-recoverable error." \
 	"2" \
 	"vertex_ai/model-a|vertex_ai/model-b" \
 	"<unset>|<unset>"
@@ -5510,7 +5548,7 @@ run_gate_case "target-path-src-default-source-dirs" \
 	"vertex_ai/hallucination-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/hallucination-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>" \
@@ -5560,7 +5598,7 @@ run_gate_case "default-fallback-order-fast-first" \
 	"vertex_ai/missing-primary" \
 	"" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/gemini-2.5-pro'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/gemini-2[.]5-pro' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|vertex_ai/gemini-2.5-pro" \
 	"<unset>|<unset>"
@@ -5581,7 +5619,7 @@ run_gate_case_allow_provider_signal "vertex-primary-timeout-retry-reason-message
 	"vertex_ai/retry-timeout-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'vertex_ai/fallback-one' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/retry-timeout-primary|vertex_ai/fallback-one" \
 	"<unset>|<unset>" \
@@ -5609,7 +5647,7 @@ run_gate_case "vertex-primary-success-timing-message" \
 	"vertex_ai/ready-primary" \
 	"" \
 	"0" \
-	"Strix run succeeded for model 'vertex_ai/ready-primary' in " \
+	"REGEX:Strix run succeeded for model 'vertex_ai/ready-primary' in [0-9]+s\\." \
 	"1" \
 	"vertex_ai/ready-primary" \
 	"<unset>"
@@ -6830,7 +6868,7 @@ run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
 	"openai/openai/gpt-5.4" \
 	"0" \
-	"Strix quick scan succeeded with fallback model 'openai/openai/gpt-5.4'." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/openai/gpt-5[.]4' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|openai/openai/gpt-5.4" \
 	"<unset>|https://models.github.ai/inference" \

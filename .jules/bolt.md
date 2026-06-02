@@ -7,3 +7,6 @@
 ## 2026-06-01 - O(n^2) nested loop optimization in extract_reference_ids
 **Learning:** `extract_reference_ids` and `assign_thread_id` used `not in list` to deduplicate email references resulting in an O(n^2) complexity over large headers.
 **Action:** By keeping a `seen = set()` for O(1) lookups, the operation runs in O(n) time.
+## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
+**Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
+**Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
