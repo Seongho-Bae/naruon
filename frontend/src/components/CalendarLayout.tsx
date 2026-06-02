@@ -157,8 +157,8 @@ export function CalendarLayout() {
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
             <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
             <div className="flex items-center gap-1">
-              <button type="button" aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronLeft className="size-5" /></button>
-              <button type="button" aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronRight className="size-5" /></button>
+              <button type="button" aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronLeft className="size-5" /></button>
+              <button type="button" aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronRight className="size-5" /></button>
             </div>
             <h1 className="text-xl font-bold">일정 관리</h1>
             <h2 className="text-sm font-bold text-muted-foreground lg:ml-2">2026년 5월</h2>
@@ -175,7 +175,7 @@ export function CalendarLayout() {
                 </button>
               ))}
             </div>
-            <button type="button" aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary">
+            <button type="button" aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
               <Settings className="size-5" />
             </button>
           </div>
@@ -206,7 +206,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
                   disabled={isWritebackActionDisabled}
-                  className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
+                  className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   ETag 업데이트 점검
                 </button>
@@ -224,7 +224,7 @@ export function CalendarLayout() {
                     disabled={!sourceWritable}
                     aria-pressed={sourceSelected}
                     onClick={() => setSelectedSourceId(source.source_id)}
-                    className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
+                    className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
                       sourceSelected
                         ? 'border-primary bg-primary/10 shadow-sm'
                         : 'border-border bg-background/70 hover:border-primary/40'
@@ -385,7 +385,7 @@ export function CalendarLayout() {
                     </div>
                     <span className="text-xs font-bold text-primary">제안하기</span>
                   </button>
-                  <button type="button" className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-secondary transition-colors">
+                  <button type="button" className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     <div className="flex items-center gap-3">
                       <span className="grid size-8 place-items-center rounded-lg bg-secondary text-muted-foreground font-bold">2안</span>
                       <div className="text-left">
@@ -428,7 +428,7 @@ export function CalendarLayout() {
             <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><X className="size-4" /></button>
+            <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
           </div>
         </div>
         
@@ -451,7 +451,7 @@ export function CalendarLayout() {
           <div className="flex gap-3 items-center">
             <Video className="size-5 text-muted-foreground shrink-0" />
             <p className="text-sm font-semibold">회의실 A (4층)</p>
-            <button type="button" className="text-xs text-primary font-semibold ml-auto hover:underline">위치 보기</button>
+            <button type="button" className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
           </div>
           <div className="flex gap-3 items-start">
             <Users className="size-5 text-muted-foreground shrink-0" />
@@ -491,8 +491,8 @@ export function CalendarLayout() {
         </div>
 
         <div className="mt-8 flex gap-3">
-          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary">삭제</button>
-          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary">복사</button>
+          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
+          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
           <button type="button" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
         </div>
       </aside>

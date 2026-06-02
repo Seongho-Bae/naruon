@@ -28,7 +28,7 @@ on:
         type: string
 
 concurrency:
-  group: strix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: strix-${{ github.repository }}
   # cancel-in-progress deliberately disabled: an attacker could force-push
   # a benign commit to cancel an in-progress scan of a malicious commit.
   cancel-in-progress: false

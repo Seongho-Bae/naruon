@@ -481,7 +481,7 @@ export function SettingsLayout() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+              className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                 activeTab === tab.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-background text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -535,7 +535,7 @@ export function SettingsLayout() {
                         <button type="button"
                           key={view.value}
                           onClick={() => setWorkspaceStartupView(view.value as 'dashboard' | 'email' | 'calendar')}
-                          className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                          className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                             startupView === view.value
                               ? 'border-primary bg-primary/5 shadow-sm'
                               : 'border-border hover:bg-secondary hover:border-primary/50'

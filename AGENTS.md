@@ -372,3 +372,5 @@
 - **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
 - **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
 - **Goal**: Actively manage tasks to ensure open PR counts converge to 0.
+
+- When the gate exhausts fallbacks after the primary model produces a finding at or above threshold and then fails with a retryable error (like `NOT_FOUND`), ensure the final output explicitly reports `Strix quick scan failed with a non-recoverable error.` to prevent downgrading the finding to pass or misleadingly reporting an unavailability error.
