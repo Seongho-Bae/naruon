@@ -73,6 +73,32 @@ def test_unrestricted_resource_data_region_allows_request_region():
     assert decision.reason == "allowed"
 
 
+def test_workspace_denial_precedes_data_region_and_ownership_allow():
+    decision = evaluate_access(
+        AccessRequest(
+            user_id="alice",
+            role="member",
+            organization_id="org-acme",
+            group_ids=(),
+            data_region="eu",
+            consent_scopes=("mail.read",),
+            workspace_id="workspace-alpha",
+        ),
+        ResourcePolicy(
+            owner_id="alice",
+            organization_id="org-acme",
+            permitted_roles=("member",),
+            permitted_group_ids=(),
+            data_region="eu",
+            required_consent_scopes=("mail.read",),
+            workspace_id="workspace-beta",
+        ),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "workspace_denied"
+
+
 def test_missing_request_data_region_denies_regional_resource():
     decision = evaluate_access(
         AccessRequest(
@@ -114,6 +140,56 @@ def test_system_admin_bypasses_organization_and_ownership_when_role_permitted():
             permitted_group_ids=(),
             data_region="eu",
             required_consent_scopes=("mail.read",),
+        ),
+    )
+
+    assert decision.allowed is True
+    assert decision.reason == "allowed"
+
+
+def test_system_admin_owner_bypass_can_be_disabled_for_self_service_resources():
+    decision = evaluate_access(
+        AccessRequest(
+            user_id="root",
+            role="system_admin",
+            organization_id=None,
+            group_ids=(),
+            data_region="eu",
+            consent_scopes=("mail.read",),
+        ),
+        ResourcePolicy(
+            owner_id="alice",
+            organization_id="org-acme",
+            permitted_roles=("system_admin",),
+            permitted_group_ids=(),
+            data_region="eu",
+            required_consent_scopes=("mail.read",),
+            require_owner_match=True,
+        ),
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "ownership_denied"
+
+
+def test_system_admin_can_access_owned_self_service_resource_when_owner_required():
+    decision = evaluate_access(
+        AccessRequest(
+            user_id="root",
+            role="system_admin",
+            organization_id=None,
+            group_ids=(),
+            data_region="eu",
+            consent_scopes=("mail.read",),
+        ),
+        ResourcePolicy(
+            owner_id="root",
+            organization_id="org-acme",
+            permitted_roles=("system_admin",),
+            permitted_group_ids=(),
+            data_region="eu",
+            required_consent_scopes=("mail.read",),
+            require_owner_match=True,
         ),
     )
 

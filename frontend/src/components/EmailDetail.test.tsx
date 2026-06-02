@@ -47,6 +47,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
   RefreshCw: () => <svg aria-hidden="true" />,
   Info: () => <svg aria-hidden="true" />,
+  Loader2: () => <svg aria-hidden="true" />,
 }));
 
 import { EmailDetail } from "./EmailDetail";

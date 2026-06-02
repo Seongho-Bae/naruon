@@ -62,8 +62,8 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
 
 @pytest.fixture(autouse=True)
 def stub_webdav_service(monkeypatch):
-    async def fake_accounts(db, user_id, organization_id=None):
-        del organization_id
+    async def fake_accounts(db, user_id, organization_id=None, workspace_id=None):
+        del organization_id, workspace_id
         return [
             {
                 "source_id": "webdav_src_demo_primary",
@@ -91,9 +91,15 @@ def stub_webdav_service(monkeypatch):
             },
         ] if user_id == "alice" and organization_id == "org-acme" else []
 
-    async def fake_intent(db, user_id, organization_id=None, target_source_id=None):
+    async def fake_intent(
+        db,
+        user_id,
+        organization_id=None,
+        workspace_id=None,
+        target_source_id=None,
+    ):
         return webdav_service.determine_webdav_writeback_intent_from_accounts(
-            await fake_accounts(db, user_id),
+            await fake_accounts(db, user_id, organization_id, workspace_id),
             target_source_id=target_source_id,
         )
 
@@ -101,6 +107,7 @@ def stub_webdav_service(monkeypatch):
         db,
         user_id,
         organization_id,
+        workspace_id,
         source_task_id,
         target_source_id=None,
     ):
@@ -120,6 +127,7 @@ def stub_webdav_service(monkeypatch):
             db,
             user_id,
             organization_id=organization_id,
+            workspace_id=workspace_id,
             target_source_id=target_source_id,
         )
         if result.get("status") == "error":
@@ -425,13 +433,14 @@ async def test_knowledge_materialization_rejects_non_self_sent_task(monkeypatch)
     monkeypatch.setattr(
         webdav_service,
         "get_connected_accounts_from_db",
-        lambda session, user_id: [],
+        lambda session, user_id, organization_id=None, workspace_id=None: [],
     )
 
     result = await webdav_service.determine_knowledge_materialization_intent_from_db(
         Session(),
         "alice",
         "org-acme",
+        "workspace-org-acme",
         "task-email",
     )
 
@@ -473,6 +482,7 @@ async def test_knowledge_materialization_requires_source_email_provenance(monkey
         Session(),
         "alice",
         "org-acme",
+        "workspace-org-acme",
         "task-self-no-email",
     )
 
@@ -560,6 +570,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         account_id INTEGER PRIMARY KEY,
                         source_uid VARCHAR UNIQUE NOT NULL,
                         organization_id VARCHAR,
+                        workspace_id VARCHAR NOT NULL,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
@@ -581,6 +592,12 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                 text(
                     "ALTER TABLE webdav_accounts "
                     "ADD COLUMN IF NOT EXISTS organization_id VARCHAR"
+                )
+            )
+            await conn.execute(
+                text(
+                    "ALTER TABLE webdav_accounts "
+                    "ADD COLUMN IF NOT EXISTS workspace_id VARCHAR"
                 )
             )
             await conn.execute(
@@ -612,6 +629,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         account_id,
                         source_uid,
                         organization_id,
+                        workspace_id,
                         user_id,
                         server_url,
                         username,
@@ -623,6 +641,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         :account_id,
                         :source_uid,
                         :organization_id,
+                        :workspace_id,
                         :user_id,
                         :server_url,
                         :username,
@@ -636,6 +655,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                     "account_id": 10_000 + (uuid.uuid4().int % 1_000_000),
                     "source_uid": source_uid,
                     "organization_id": "org-acme",
+                    "workspace_id": "workspace-org-acme",
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,
@@ -1001,6 +1021,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         account_id INTEGER PRIMARY KEY,
                         source_uid VARCHAR UNIQUE NOT NULL,
                         organization_id VARCHAR,
+                        workspace_id VARCHAR NOT NULL,
                         user_id VARCHAR NOT NULL,
                         server_url VARCHAR NOT NULL,
                         username VARCHAR NOT NULL,
@@ -1085,6 +1106,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         account_id,
                         source_uid,
                         organization_id,
+                        workspace_id,
                         user_id,
                         server_url,
                         username,
@@ -1096,6 +1118,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         :account_id,
                         :source_uid,
                         :organization_id,
+                        :workspace_id,
                         :user_id,
                         :server_url,
                         :username,
@@ -1109,6 +1132,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                     "account_id": smoke_id + 1,
                     "source_uid": source_uid,
                     "organization_id": "org-acme",
+                    "workspace_id": "workspace-org-acme",
                     "user_id": user_id,
                     "server_url": "https://real-webdav.naruon.net",
                     "username": user_id,

@@ -71,6 +71,17 @@ type ReplySlaEscalationResponse = {
   };
 };
 
+const dashboardQuickActions = [
+  { label: '메일함 열기', href: '/mail', icon: Inbox, color: 'text-blue-500' },
+  { label: '보낸 메일 답변 추적', href: '/mail?folder=sent', icon: Send, color: 'text-rose-500' },
+  { label: '일정 후보 검토', href: '/calendar', icon: CalendarDays, color: 'text-blue-500' },
+  { label: '작업 보드', href: '/tasks', icon: CheckCircle2, color: 'text-green-500' },
+  { label: '프로젝트 의사결정', href: '/projects', icon: Network, color: 'text-purple-500' },
+  { label: 'AI 허브', href: '/ai-hub', icon: Network, color: 'text-purple-500' },
+  { label: '데이터 품질 점검', href: '/data', icon: Network, color: 'text-blue-500' },
+  { label: '보안 감사 로그', href: '/security', icon: CheckCircle2, color: 'text-emerald-500' },
+];
+
 interface EmailItem {
   id: number;
   subject: string | null;
@@ -295,7 +306,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               <div>
                 <p className="break-keep font-bold">완료 가능 작업 {loading ? '-' : pendingTasks.length}건</p>
                 <p className="text-xs text-muted-foreground mt-1">오늘 마감 전 완료해보세요.</p>
-                <button className="mt-2 text-xs font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">작업 바로가기</button>
+                <a href="/tasks" className="mt-2 inline-flex rounded-sm text-xs font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">작업 바로가기</a>
               </div>
             </div>
           </div>
@@ -358,7 +369,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">전체 작업 보기</button>
+            <a href="/tasks" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">전체 작업 보기</a>
           </div>
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
@@ -382,7 +393,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 </div>
               ))}
             </div>
-            <button className="mt-4 w-full text-center text-sm font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조정하기</button>
+            <a href="/calendar" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조정하기</a>
           </div>
         </div>
 
@@ -423,21 +434,12 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">빠른 실행</h2>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { label: '새 메일 작성', icon: Inbox, color: 'text-blue-500' },
-                { label: '일정 추가', icon: CalendarDays, color: 'text-blue-500' },
-                { label: '새 프로젝트', icon: Network, color: 'text-purple-500' },
-                { label: '작업 만들기', icon: CheckCircle2, color: 'text-green-500' },
-                { label: 'AI 허브로 이동', icon: Network, color: 'text-purple-500' },
-                { label: '데이터 대시보드', icon: Network, color: 'text-purple-500' },
-                { label: '문서 작성', icon: CheckCircle2, color: 'text-blue-500' },
-                { label: '파일 업로드', icon: Network, color: 'text-blue-500' },
-              ].map((action, i) => (
-                <button key={i} className="flex items-center justify-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-xs font-bold hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <div aria-label="홈 빠른 실행" className="grid grid-cols-2 gap-3">
+              {dashboardQuickActions.map((action) => (
+                <a key={action.href} href={action.href} className="flex items-center justify-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-xs font-bold transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40">
                   <action.icon className={`size-5 shrink-0 ${action.color}`} />
                   <span className="truncate">{action.label}</span>
-                </button>
+                </a>
               ))}
             </div>
           </div>
