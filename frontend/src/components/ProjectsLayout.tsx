@@ -265,7 +265,7 @@ export function ProjectsLayout() {
               ))}
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <a href="/tasks" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">작업 보드</a>
+              <a href="/tasks" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">작업 보드</a>
               <a href="/data" className="rounded-md bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">Data evidence</a>
             </div>
           </div>

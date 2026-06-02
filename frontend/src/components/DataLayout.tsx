@@ -375,7 +375,7 @@ export function DataLayout() {
                           disabled={!account.writeback_enabled}
                           aria-pressed={accountSelected}
                           onClick={() => setSelectedWebdavSourceId(account.source_id)}
-                          className={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
+                          className={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
                             accountSelected ? 'border-primary bg-primary/10' : 'border-transparent bg-secondary/50 hover:border-primary/40'
                           }`}
                         >
@@ -444,7 +444,7 @@ export function DataLayout() {
                           setSelectedRepositoryAssetKey(asset.asset_key);
                         }
                       }}
-                      className={`cursor-pointer rounded-xl border bg-background p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                      className={`cursor-pointer rounded-xl border bg-background p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
                         assetSelected ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/40'
                       }`}
                     >
@@ -684,7 +684,7 @@ export function DataLayout() {
                 </div>
                 <div className="p-4 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                   {projectFolders.length > 0 ? projectFolders.map(folder => (
-                    <div key={folder.folder_uid} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                    <div key={folder.folder_uid} className="border border-border rounded-xl p-4 bg-background hover:bg-secondary/20 transition-colors">
                       <div className="flex items-center gap-3 mb-2">
                         <FolderOpen className="size-5 text-primary" />
                         <span className="font-bold truncate">{folder.project_name}</span>
@@ -713,7 +713,7 @@ export function DataLayout() {
                     <div className="p-4 text-sm text-muted-foreground">이 워크스페이스에 기록된 connector evidence가 아직 없습니다.</div>
                   )}
                   {connectorEvents.map((event) => (
-                    <div key={event.event_uid} className="p-4 flex flex-col gap-3 hover:bg-secondary/10 transition-colors sm:flex-row sm:items-center sm:justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                    <div key={event.event_uid} className="p-4 flex flex-col gap-3 hover:bg-secondary/10 transition-colors sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex min-w-0 items-center gap-4">
                         <div className="p-2 rounded-lg bg-blue-100 text-blue-700"><RefreshCw className="size-4" /></div>
                         <div>

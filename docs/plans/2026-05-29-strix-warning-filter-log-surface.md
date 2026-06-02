@@ -24,5 +24,4 @@
 
 - Do not suppress Strix findings, timeouts, fatal errors, denied access, or
   application warnings.
-- Keep GitHub Models on the explicit `provider_mode=github_models` path and do
-  not reintroduce generic LLM credentials.
+- Do not reintroduce GitHub Models or generic LLM credentials.

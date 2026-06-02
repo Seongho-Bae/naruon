@@ -270,7 +270,7 @@ export function TasksLayout() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <input type="text" placeholder="작업 검색..." className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64" />
           </div>
-          <button type="button" className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+          <button type="button" className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary">
             <Filter className="size-4" /> 필터
           </button>
           <button type="button" className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
@@ -533,7 +533,7 @@ export function TasksLayout() {
                   ))}
                 </div>
                 <div className="p-3 border-t border-border">
-                  <button type="button" className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                  <button type="button" className="flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-sm font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground">
                     <Plus className="size-4" /> 항목 추가
                   </button>
                 </div>
