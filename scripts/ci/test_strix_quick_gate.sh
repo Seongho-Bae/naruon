@@ -682,7 +682,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		;;
 	vertex-primary-api-connection-retry-same-model-success)
 		case "${STRIX_LLM:-}" in
-		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary)
+		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary|openai/openai/retry-api-connection-primary)
 			attempt="0"
 			if [ -f "${FAKE_STRIX_STATE_FILE:?}" ]; then
 				attempt="$(cat "${FAKE_STRIX_STATE_FILE:?}")"
@@ -690,8 +690,14 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			attempt="$((attempt + 1))"
 			echo "$attempt" > "${FAKE_STRIX_STATE_FILE:?}"
 			if [ "$attempt" -eq 1 ]; then
-				echo "LLM CONNECTION FAILED"
-				echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				if [ "${STRIX_LLM:-}" = "openai/openai/retry-api-connection-primary" ]; then
+					echo "LLM CONNECTION FAILED"
+					echo "Could not establish connection to the language model."
+					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error."
+				else
+					echo "LLM CONNECTION FAILED"
+					echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
+				fi
 				exit 1
 			fi
 			echo "scan ok after same-model api connection retry"
@@ -4882,6 +4888,19 @@ run_gate_case_allow_provider_signal "vertex-primary-api-connection-retry-same-mo
 	"https://example.invalid|https://example.invalid" \
 	"vertex_ai" \
 	"__DEFAULT__" \
+	"" \
+	"1"
+
+run_gate_case_allow_provider_signal "github-models-internal-server-connection-retry-same-model-success" \
+	"openai/openai/retry-api-connection-primary" \
+	"" \
+	"0" \
+	"scan ok after same-model api connection retry" \
+	"2" \
+	"openai/openai/retry-api-connection-primary|openai/openai/retry-api-connection-primary" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
 	"" \
 	"1"
 
