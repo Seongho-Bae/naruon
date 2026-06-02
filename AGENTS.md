@@ -13,18 +13,14 @@
   single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan uses GitHub Models by default through `github.token`,
-  `models: read`, `STRIX_LLM=openai/openai/gpt-4.1`, and
-  `LLM_API_BASE_FILE` pointing at a trusted file containing
-  `https://models.github.ai/inference`. Keep the GitHub Models endpoint in a
-  trusted input file and pass the token only through the
-  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets must
-  not override PR, push, or scheduled Strix defaults. Vertex remains available
-  only for manual `workflow_dispatch` evidence when the `strix_llm` input
-  explicitly selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
-  `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; expose Google/Vertex
-  credentials only for Vertex provider mode. Direct OpenAI GPT-5.4-or-newer
-  scans remain supported only for manual `strix_llm` selections with
+- Strix Security Scan must not route through GitHub Models, `github.token`,
+  generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
+  route is `STRIX_LLM` with `GCP_SA_KEY`;
+  `vertex_ai/gemini-3.1-pro-preview-customtools` is the default approved Vertex
+  model now that organization-secret visibility is available, with
+  `vertex_ai/gemini-2.5-flash` allowed only as an explicit legacy selection.
+  Expose Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
+  GPT-5.4-or-newer scans remain supported only when selected explicitly with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
   do not treat timeout-class provider infrastructure failures as clean PR
   evidence even when Strix printed zero vulnerabilities before failing. Disable
@@ -43,7 +39,7 @@
   Strix in one scanner invocation; do not split changed files into separate
   scanner runs because that breaks Strix's required whole-context contract. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
-  stale Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or
+  stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
 - HMAC fallback sessions are local/control-plane compatibility credentials, not
   authoritative workspace-membership evidence. Sensitive tenant security posture
@@ -212,9 +208,9 @@
   responses must include `Referrer-Policy`, and `target="_blank"` links must
   use explicit `rel="noopener noreferrer"`.
 - When robot review cites an obsolete Strix provider policy, update the docs and
-  tests to the current GitHub Models default contract before accepting a
-  rollback suggestion; do not reintroduce generic `LLM_API_KEY` or
-  cross-provider credential forwarding while trying to satisfy old comments.
+  tests to the current secret contract before accepting a rollback suggestion;
+  do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
+  credential forwarding while trying to satisfy old comments.
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
