@@ -99,6 +99,20 @@
   code cannot reintroduce the development-header trust boundary.
 - Caller-provided `Authorization` is also discarded by the browser API client;
   only the stored `naruon_session_token` may populate the backend bearer session.
+- When `NEXT_PUBLIC_OIDC_ISSUER_URL` and `NEXT_PUBLIC_OIDC_CLIENT_ID` are set,
+  the browser can start an Authorization Code + PKCE login against the configured
+  Keycloak/Casdoor issuer, complete `/auth/callback`, store the returned OIDC
+  `access_token` as `naruon_session_token`, and send that token on private API
+  calls. Public endpoint overrides may be supplied with
+  `NEXT_PUBLIC_OIDC_AUTHORIZATION_ENDPOINT`, `NEXT_PUBLIC_OIDC_TOKEN_ENDPOINT`,
+  `NEXT_PUBLIC_OIDC_END_SESSION_ENDPOINT`, `NEXT_PUBLIC_OIDC_REDIRECT_URI`, and
+  `NEXT_PUBLIC_OIDC_SCOPE`; otherwise Keycloak's
+  `/protocol/openid-connect/{auth,token,logout}` endpoints are derived from the
+  issuer URL.
+- Browser-side OIDC support does not mint local roles. The IdP token must still
+  satisfy the backend's signed claim contract: verified issuer/audience, subject,
+  explicit non-platform role, organization, groups, workspace, expiry, and no
+  unsupported critical headers.
 
 ## Keycloak/Casdoor decision path
 
@@ -115,6 +129,6 @@
 
 - Compare Keycloak and Casdoor on OIDC support, operational complexity, admin UX,
   self-hosting footprint, backup/restore, and integration with gateway auth.
-- Replace the HMAC session bridge with verified OIDC/JWT claims while keeping
-  regression tests that prove every email/search/network query path is scoped to
-  the authenticated mailbox owner and organization.
+- Complete production IdP onboarding runbooks and key rotation procedures while
+  keeping regression tests that prove every email/search/network query path is
+  scoped to the authenticated mailbox owner and organization.
