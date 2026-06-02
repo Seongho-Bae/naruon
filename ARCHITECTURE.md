@@ -159,12 +159,14 @@ Pull request scans present the generated PR-head scope to Strix in one
 whole-context invocation, rather than splitting changed files into separate
 scanner runs. Strix remains a required Medium-or-higher gate. The workflow
 defaults to GitHub Models with
-`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-4.1`,
+`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-5`,
 and `LLM_API_BASE=https://models.github.ai/inference`, while keeping the token
 and API base isolated to trusted input files and the Strix child-process
-environment. Explicit Vertex and direct OpenAI routes remain supported only
-through their provider-scoped credential paths, and provider infrastructure
-errors still fail closed.
+environment. Legacy `STRIX_LLM` secrets do not override PR, push, or scheduled
+Strix defaults; explicit Vertex and direct OpenAI routes remain supported only
+through manual `workflow_dispatch` `strix_llm` selections and their
+provider-scoped credential paths. Provider infrastructure errors still fail
+closed.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
 

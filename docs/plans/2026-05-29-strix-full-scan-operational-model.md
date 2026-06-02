@@ -36,11 +36,12 @@
 ## Plan
 
 1. Keep the GitHub Models default route with
-   `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+   `STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
    `LLM_API_BASE=https://models.github.ai/inference`.
-2. Keep organization-secret Vertex routes explicit through `STRIX_LLM` and
-   `GCP_SA_KEY`, and keep direct OpenAI explicit through
-   `STRIX_OPENAI_API_KEY`.
+2. Keep legacy `STRIX_LLM` secrets from overriding PR, push, or scheduled
+   defaults. Keep Vertex routes explicit through manual `workflow_dispatch`
+   `strix_llm` selections plus `GCP_SA_KEY`, and keep direct OpenAI explicit
+   through manual `strix_llm` selections plus `STRIX_OPENAI_API_KEY`.
 3. Keep arbitrary Vertex model patterns disallowed; only exact approved Vertex
    models are accepted.
 4. Preserve the narrow Pydantic serializer warning filter and gate child-process

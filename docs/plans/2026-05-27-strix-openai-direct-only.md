@@ -6,13 +6,14 @@
 
 Keep the required Strix security gate on, but make the provider contract
 unambiguous. The active default route is GitHub Models selected through
-`STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
-`LLM_API_BASE=https://models.github.ai/inference`. The organization-secret
-Vertex AI provider remains available only when explicitly selected through
-`STRIX_LLM` with `GCP_SA_KEY`, and direct OpenAI GPT-5.4-or-newer remains
-allowed only when explicitly selected with `STRIX_OPENAI_API_KEY`. Strix must
-not route through a generic `LLM_API_KEY` or silently fall back across
-providers.
+`STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
+`LLM_API_BASE=https://models.github.ai/inference`. Legacy `STRIX_LLM` secrets
+must not override PR, push, or scheduled Strix defaults. Vertex AI remains
+available only for manual `workflow_dispatch` evidence when `strix_llm`
+explicitly selects an approved Vertex model with `GCP_SA_KEY`, and direct OpenAI
+GPT-5.4-or-newer remains allowed only for manual `strix_llm` selections with
+`STRIX_OPENAI_API_KEY`. Strix must not route through a generic `LLM_API_KEY` or
+silently fall back across providers.
 
 ## Evidence
 
@@ -21,8 +22,8 @@ providers.
   provider exhaustion, not a GitHub Models path.
 - On 2026-06-02 the operator selected GitHub Models as the default route for
   Strix failures. The workflow therefore keeps GitHub Models as the default,
-  while retaining narrow Vertex branches and direct OpenAI as explicit alternate
-  paths.
+  while retaining narrow manual Vertex branches and direct OpenAI as explicit
+  alternate paths.
 
 ## Implementation
 
@@ -30,9 +31,9 @@ providers.
   with `github.token` passed through the trusted child-process key file and
   `LLM_API_BASE` supplied from a trusted temp file.
 - Keep GCP credential gating, Google Cloud authentication, and credential export
-  only inside `provider_mode=vertex_ai`, and only for approved Vertex model
-  names.
-- Keep direct OpenAI isolated behind `provider_mode=openai_direct` and
+  only inside manual `provider_mode=vertex_ai`, and only for approved Vertex
+  model names.
+- Keep direct OpenAI isolated behind manual `provider_mode=openai_direct` and
   `STRIX_OPENAI_API_KEY`.
 - Keep the privileged PR pattern: trusted-base workspace materialization,
   immutable PR-head fetch as data, self-test from trusted workspace, and pinned

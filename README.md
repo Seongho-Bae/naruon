@@ -29,15 +29,16 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence defaults to GitHub Models through
-  `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+  `STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
   `LLM_API_BASE=https://models.github.ai/inference`. The workflow keeps that
   endpoint in a trusted input file and passes the token only through the
-  provider-scoped Strix child-process key path. The organization-secret Vertex
-  route remains available only when `STRIX_LLM` explicitly selects
-  `vertex_ai/gemini-3.1-pro-preview-customtools` or
+  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets do
+  not override PR, push, or scheduled Strix defaults. Vertex remains available
+  only for manual `workflow_dispatch` evidence when `strix_llm` explicitly
+  selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
   `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; direct OpenAI
-  GPT-5.4-or-newer remains supported only with an explicit
-  `STRIX_OPENAI_API_KEY`. The workflow fails closed rather than using generic
+  GPT-5.4-or-newer remains supported only for manual `strix_llm` selections
+  with `STRIX_OPENAI_API_KEY`. The workflow fails closed rather than using generic
   `LLM_API_KEY`, silently falling back across providers, or treating
   timeout-class provider infrastructure failures as clean evidence. Known
   third-party Strix/Pydantic serializer warnings are filtered narrowly instead
