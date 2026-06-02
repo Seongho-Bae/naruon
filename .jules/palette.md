@@ -1,3 +1,0 @@
-## 2024-05-24 - Interactive Element Keyboard Accessibility
-**Learning:** Found several native `<button>` and `<a>` elements acting as UI controls across various components that relied on hover states (like `hover:underline` and `hover:bg-secondary`) but lacked explicit focus visibility styling (`focus-visible:ring-2`). This causes them to be virtually invisible to keyboard-only users who rely on focus outlines to navigate.
-**Action:** Added explicit Tailwind `focus-visible` ring utility classes (e.g. `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40`) to all such interactive elements to ensure clear keyboard accessibility across the frontend application.

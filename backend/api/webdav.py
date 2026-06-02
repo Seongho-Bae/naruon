@@ -76,7 +76,6 @@ async def get_webdav_accounts(
         db,
         user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
     )
 
 @router.get("/folders", response_model=List[ProjectFolderResponse])
@@ -102,7 +101,6 @@ async def get_webdav_writeback_intent(
         db,
         user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
         target_source_id=req.target_source_id,
     )
     if result.get("status") == "error":
@@ -122,7 +120,6 @@ async def get_knowledge_materialization_intent(
         db,
         auth_context.user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
         req.source_task_id,
         target_source_id=req.target_source_id,
     )

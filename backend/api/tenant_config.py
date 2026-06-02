@@ -15,12 +15,6 @@ from services.tenant_config_scope import (
     get_scoped_tenant_config,
     new_scoped_tenant_config,
 )
-from services.access_policy import (
-    AccessRequest,
-    PolicyRoleName,
-    ResourcePolicy,
-    evaluate_access,
-)
 from services.email_client import (
     validate_imap_destination,
     validate_imap_port,
@@ -103,44 +97,6 @@ MAILBOX_MANAGE_FORBIDDEN = (
 MAILBOX_VIEW_FORBIDDEN = (
     "Mailbox settings are personal and can only be viewed by the authenticated user"
 )
-MAILBOX_SELF_SERVICE_ROLES: tuple[PolicyRoleName, ...] = (
-    "system_admin",
-    "platform_admin",
-    "tenant_admin",
-    "organization_admin",
-    "group_admin",
-    "member",
-)
-
-
-def ensure_mailbox_config_self_access(
-    target_user_id: str, auth_context: AuthContext, forbidden_detail: str
-) -> None:
-    decision = evaluate_access(
-        AccessRequest(
-            user_id=auth_context.user_id,
-            role=auth_context.role,
-            organization_id=auth_context.organization_id,
-            group_ids=auth_context.group_ids,
-            data_region=None,
-            consent_scopes=(),
-            workspace_id=auth_context.workspace_id,
-        ),
-        ResourcePolicy(
-            owner_id=target_user_id,
-            organization_id=auth_context.organization_id,
-            permitted_roles=MAILBOX_SELF_SERVICE_ROLES,
-            permitted_group_ids=(),
-            data_region=None,
-            required_consent_scopes=(),
-            workspace_id=auth_context.workspace_id,
-            require_owner_match=True,
-        ),
-    )
-    if not decision.allowed:
-        raise HTTPException(status_code=403, detail=forbidden_detail)
-
-
 def _field_value(
     config_data: dict, db_config: TenantConfig | None, field_name: str
 ):
@@ -204,11 +160,8 @@ async def create_or_update_config(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
-    ensure_mailbox_config_self_access(
-        config.user_id,
-        auth_context,
-        MAILBOX_MANAGE_FORBIDDEN,
-    )
+    if config.user_id != auth_context.user_id:
+        raise HTTPException(status_code=403, detail=MAILBOX_MANAGE_FORBIDDEN)
 
     db_config = await get_scoped_tenant_config(
         db,
@@ -254,11 +207,8 @@ async def get_config(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
-    ensure_mailbox_config_self_access(
-        user_id,
-        auth_context,
-        MAILBOX_VIEW_FORBIDDEN,
-    )
+    if user_id != auth_context.user_id:
+        raise HTTPException(status_code=403, detail=MAILBOX_VIEW_FORBIDDEN)
 
     db_config = await get_scoped_tenant_config(
         db,

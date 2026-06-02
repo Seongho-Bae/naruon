@@ -174,27 +174,8 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
         self._hostname = hostname
         self._port = port
-        self._addresses = tuple(
-            _validate_global_address(address) for address in addresses
-        )
+        self._addresses = addresses
         self._backend = AutoBackend()
-
-    async def _connect_validated_ip_address(
-        self,
-        address: str,
-        port: int,
-        timeout: float | None,
-        local_address: str | None,
-        socket_options,
-    ):
-        pinned_address = _validate_global_address(address)
-        return await self._backend.connect_tcp(
-            pinned_address,
-            port,
-            timeout=timeout,
-            local_address=local_address,
-            socket_options=socket_options,
-        )
 
     async def connect_tcp(
         self,
@@ -211,8 +192,9 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
 
         last_error: Exception | None = None
         for address in self._addresses:
+            _validate_global_address(address)
             try:
-                return await self._connect_validated_ip_address(
+                return await self._backend.connect_tcp(
                     address,
                     port,
                     timeout=timeout,

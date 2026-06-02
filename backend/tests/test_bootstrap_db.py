@@ -152,11 +152,6 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
-        "alter table webdav_accounts add column if not exists workspace_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
         "alter table webdav_accounts add column if not exists writeback_enabled"
         in statement
         for statement in statements
@@ -186,17 +181,7 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     )
     assert not any("account_id::text" in statement for statement in statements)
     assert any(
-        "update webdav_accounts set workspace_id" in statement
-        and "'workspace-' || organization_id" in statement
-        for statement in statements
-    )
-    assert any(
         "alter table webdav_accounts alter column source_uid set not null"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts alter column workspace_id set not null"
         in statement
         for statement in statements
     )
@@ -208,12 +193,6 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     assert any(
         "create index if not exists ix_webdav_accounts_organization_id"
         in statement
-        for statement in statements
-    )
-    assert any(
-        "create index if not exists ix_webdav_accounts_workspace_scope"
-        in statement
-        and "user_id, organization_id, workspace_id" in statement
         for statement in statements
     )
     assert any(

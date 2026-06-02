@@ -1,23 +1,6 @@
 ## [Unreleased]
 
-### 추가
-- Seongho Bae (@seonghobae): Render.com Blueprint(`render.yaml`)와
-  `docs/operations/render-deployment.md` runbook을 추가해 frontend와 backend를
-  각자의 Dockerfile로 분리 배포하면서 managed Postgres + pgvector + 서명-세션
-  bearer 경계를 그대로 유지하도록 했습니다. frontend `/api/*` route handler는
-  런타임 `BACKEND_INTERNAL_URL`을 검증해 backend로 proxy하므로 published Docker
-  image가 특정 production backend에 고정되지 않습니다.
-
 ### 수정
-- Seongho Bae (@seonghobae): frontend `/api/*` runtime proxy가
-  `BACKEND_INTERNAL_URL`을 검증 없이 수용해 SSRF 표면이 될 수 있다는 Strix
-  지적을 fail-closed 가드로 해소했습니다. 명시적 값은 HTTPS와 글로벌 호스트만
-  허용하고(IPv4 RFC 1918/loopback/169.254/16, IPv4-mapped IPv6,
-  IPv6 ULA/link-local 거부), `NODE_ENV=production`에서는 변수가 없으면
-  요청을 즉시 실패시킵니다. 도커 네트워크 hostname을 사용하는 docker-compose
-  런타임용으로 exact opt-in
-  `ALLOW_DOCKER_BACKEND_INTERNAL_URL=1`을 추가해 `http://backend:8000`만 예외로
-  허용합니다.
 - Seongho Bae (@seonghobae): LLM provider `base_url`을 HTTPS/exact-host allowlist와
   global DNS 응답 검증으로 제한하고, LLM 호출 sink에서도 같은 검증을 반복해
   provider registry 기반 SSRF 경로를 fail-closed 처리했습니다.

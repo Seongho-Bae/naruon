@@ -66,7 +66,6 @@ async def add_security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     if settings.SECURITY_CONTENT_SECURITY_POLICY:
         response.headers["Content-Security-Policy"] = (
             settings.SECURITY_CONTENT_SECURITY_POLICY

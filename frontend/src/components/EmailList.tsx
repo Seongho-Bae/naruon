@@ -184,7 +184,7 @@ export function EmailList({
                 key={email.id} 
                 onClick={() => onSelectEmail(email.id)}
                 aria-current={selected ? "true" : undefined}
-                className={`group relative flex min-h-20 flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 pl-4 text-left text-sm transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
+                className={`group relative flex min-h-20 flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 pl-4 text-left text-sm transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
               >
                 <span className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${selected ? 'bg-primary' : 'bg-transparent group-hover:bg-primary/50'}`} aria-hidden="true" />
                 <div className="flex w-full flex-col gap-1">

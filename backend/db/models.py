@@ -531,7 +531,6 @@ class WebdavAccount(Base):
     )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     server_url: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)
     credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)

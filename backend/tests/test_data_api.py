@@ -103,7 +103,6 @@ def _webdav_account(source_uid: str) -> WebdavAccount:
         source_uid=source_uid,
         user_id="owner",
         organization_id="org-acme",
-        workspace_id="workspace-org-acme",
         server_url="https://files.acme.example/dav",
         username="files@example.com",
         credentials_encrypted="credential secret",
@@ -323,7 +322,6 @@ def test_member_data_quality_queries_are_owner_scoped(mock_db):
     assert response.status_code == 200, response.text
     rendered_queries = "\n".join(str(query) for query in mock_db.queries)
     assert "webdav_accounts.user_id = :user_id_1" in rendered_queries
-    assert "webdav_accounts.workspace_id = :workspace_id_1" in rendered_queries
     assert "project_folders.user_id = :user_id_1" in rendered_queries
     assert "emails.user_id = :user_id_1" in rendered_queries
 
@@ -450,19 +448,17 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
                 text(
                     """
                     INSERT INTO webdav_accounts (
-                        source_uid, user_id, organization_id, workspace_id,
-                        server_url, username, credentials_encrypted,
-                        writeback_enabled
+                        source_uid, user_id, organization_id, server_url, username,
+                        credentials_encrypted, writeback_enabled
                     )
                     VALUES
                     (
-                        :webdav_uid, :user_id, :organization_id, :workspace_id,
+                        :webdav_uid, :user_id, :organization_id,
                         'https://data-files.example/dav', 'data@example.com',
                         'encrypted-data-secret', true
                     ),
                     (
                         :rival_webdav_uid, :rival_user_id, :rival_organization_id,
-                        :rival_workspace_id,
                         'https://rival-files.example/dav', 'rival@example.com',
                         'encrypted-rival-secret', true
                     )
@@ -472,11 +468,9 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
                     "webdav_uid": webdav_uid,
                     "user_id": user_id,
                     "organization_id": organization_id,
-                    "workspace_id": workspace_id,
                     "rival_webdav_uid": rival_webdav_uid,
                     "rival_user_id": rival_user_id,
                     "rival_organization_id": rival_organization_id,
-                    "rival_workspace_id": f"workspace_{rival_organization_id}",
                 },
             )
             await conn.execute(

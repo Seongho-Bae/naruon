@@ -27,8 +27,7 @@ exist yet.
 
 - No IMAP/SMTP/CalDAV/WebDAV provider execution.
 - No Naruon-hosted mailbox/storage claim.
-- No generic LLM credentials or cross-provider fallback for Strix or security
-  scans.
+- No GitHub Models routing for Strix or security scans.
 - No queue-depth, provider-throttling, sync-lag, or writeback-conflict
   execution events until source-backed connector jobs emit them.
 

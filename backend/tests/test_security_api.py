@@ -166,13 +166,11 @@ def _webdav_account(
     source_uid: str,
     user_id: str,
     organization_id: str | None = "org-acme",
-    workspace_id: str = "workspace-org-acme",
 ) -> WebdavAccount:
     return WebdavAccount(
         source_uid=source_uid,
         user_id=user_id,
         organization_id=organization_id,
-        workspace_id=workspace_id,
         server_url="https://files.acme.example/dav",
         username="files@example.com",
         credentials_encrypted="credential secret",
@@ -269,53 +267,13 @@ def test_mock_query_scope_enforces_null_organization_predicate():
         )
     )
     rows = [
-        _webdav_account(
-            "webdav_src_personal",
-            "solo",
-            None,
-            workspace_id="workspace-personal",
-        ),
-        _webdav_account(
-            "webdav_src_org_leak",
-            "solo",
-            "org-acme",
-            workspace_id="workspace-personal",
-        ),
+        _webdav_account("webdav_src_personal", "solo", None),
+        _webdav_account("webdav_src_org_leak", "solo", "org-acme"),
     ]
 
     scoped_rows = _scope_rows_for_query(query, rows)
 
     assert [row.source_uid for row in scoped_rows] == ["webdav_src_personal"]
-
-
-def test_mock_query_scope_enforces_webdav_workspace_predicate():
-    query = _webdav_scope_statement(
-        AuthContext(
-            user_id="member",
-            role="member",
-            organization_id="org-acme",
-            group_ids=(),
-            workspace_id="workspace-active",
-        )
-    )
-    rows = [
-        _webdav_account(
-            "webdav_src_active",
-            "member",
-            "org-acme",
-            workspace_id="workspace-active",
-        ),
-        _webdav_account(
-            "webdav_src_other_workspace",
-            "member",
-            "org-acme",
-            workspace_id="workspace-other",
-        ),
-    ]
-
-    scoped_rows = _scope_rows_for_query(query, rows)
-
-    assert [row.source_uid for row in scoped_rows] == ["webdav_src_active"]
 
 
 @pytest.fixture
@@ -517,7 +475,6 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                         source_uid,
                         user_id,
                         organization_id,
-                        workspace_id,
                         server_url,
                         username,
                         credentials_encrypted,
@@ -527,7 +484,6 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                         :source_uid,
                         :user_id,
                         :organization_id,
-                        :workspace_id,
                         :server_url,
                         :username,
                         :credentials_encrypted,
@@ -539,7 +495,6 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
                     "source_uid": source_uid,
                     "user_id": user_id,
                     "organization_id": "org-acme",
-                    "workspace_id": "workspace-org-acme",
                     "server_url": "https://security-files.example/dav",
                     "username": "security-smoke@example.com",
                     "credentials_encrypted": "test-only-placeholder",

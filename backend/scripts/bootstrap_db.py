@@ -78,10 +78,6 @@ def schema_backfill_sql():
         ),
         text(
             "ALTER TABLE webdav_accounts "
-            "ADD COLUMN IF NOT EXISTS workspace_id varchar"
-        ),
-        text(
-            "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS writeback_enabled boolean NOT NULL DEFAULT false"
         ),
         text(
@@ -156,15 +152,7 @@ def schema_backfill_sql():
             ") "
             "WHERE source_uid IS NULL OR source_uid = ''"
         ),
-        text(
-            "UPDATE webdav_accounts "
-            "SET workspace_id = CASE "
-            "WHEN organization_id IS NOT NULL THEN 'workspace-' || organization_id "
-            "ELSE 'workspace-' || user_id END "
-            "WHERE workspace_id IS NULL OR workspace_id = ''"
-        ),
         text("ALTER TABLE webdav_accounts ALTER COLUMN source_uid SET NOT NULL"),
-        text("ALTER TABLE webdav_accounts ALTER COLUMN workspace_id SET NOT NULL"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_webdav_accounts_source_uid "
             "ON webdav_accounts (source_uid)"
@@ -172,10 +160,6 @@ def schema_backfill_sql():
         text(
             "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_organization_id "
             "ON webdav_accounts (organization_id)"
-        ),
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_workspace_scope "
-            "ON webdav_accounts (user_id, organization_id, workspace_id)"
         ),
         text(
             "UPDATE project_folders "
