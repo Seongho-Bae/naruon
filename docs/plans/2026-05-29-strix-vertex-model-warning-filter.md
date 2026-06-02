@@ -8,9 +8,10 @@
 - Project policy treats `Timeout`, `Fatal`, `Warn`, and `Denied` output as
   failure evidence even when the GitHub job conclusion is success.
 - The active default route is GitHub Models via
-  `STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
-  `LLM_API_BASE=https://models.github.ai/inference`. Explicit Vertex routes
-  still require organization `GCP_SA_KEY` credentials.
+  `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+  `LLM_API_BASE_FILE` pointing at a trusted file containing
+  `https://models.github.ai/inference`. Explicit Vertex routes still require
+  organization `GCP_SA_KEY` credentials.
 
 ## Plan
 

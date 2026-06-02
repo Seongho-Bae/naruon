@@ -159,10 +159,11 @@ Pull request scans present the generated PR-head scope to Strix in one
 whole-context invocation, rather than splitting changed files into separate
 scanner runs. Strix remains a required Medium-or-higher gate. The workflow
 defaults to GitHub Models with
-`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-5`,
-and `LLM_API_BASE=https://models.github.ai/inference`, while keeping the token
-and API base isolated to trusted input files and the Strix child-process
-environment. Legacy `STRIX_LLM` secrets do not override PR, push, or scheduled
+`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-4.1`,
+and `LLM_API_BASE_FILE` pointing at a trusted file containing
+`https://models.github.ai/inference`, while keeping the token and API base
+isolated to trusted input files and the Strix child-process environment. Legacy
+`STRIX_LLM` secrets do not override PR, push, or scheduled
 Strix defaults; explicit Vertex and direct OpenAI routes remain supported only
 through manual `workflow_dispatch` `strix_llm` selections and their
 provider-scoped credential paths. Provider infrastructure errors still fail

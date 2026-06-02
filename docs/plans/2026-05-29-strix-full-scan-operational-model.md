@@ -36,8 +36,9 @@
 ## Plan
 
 1. Keep the GitHub Models default route with
-   `STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
-   `LLM_API_BASE=https://models.github.ai/inference`.
+   `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+   `LLM_API_BASE_FILE` pointing at a trusted file containing
+   `https://models.github.ai/inference`.
 2. Keep legacy `STRIX_LLM` secrets from overriding PR, push, or scheduled
    defaults. Keep Vertex routes explicit through manual `workflow_dispatch`
    `strix_llm` selections plus `GCP_SA_KEY`, and keep direct OpenAI explicit

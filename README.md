@@ -29,9 +29,10 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence defaults to GitHub Models through
-  `STRIX_LLM=openai/openai/gpt-5`, `models: read`, `github.token`, and
-  `LLM_API_BASE=https://models.github.ai/inference`. The workflow keeps that
-  endpoint in a trusted input file and passes the token only through the
+  `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+  `LLM_API_BASE_FILE` pointing at a trusted file containing
+  `https://models.github.ai/inference`. The workflow keeps that endpoint in a
+  trusted input file and passes the token only through the
   provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets do
   not override PR, push, or scheduled Strix defaults. Vertex remains available
   only for manual `workflow_dispatch` evidence when `strix_llm` explicitly

@@ -14,9 +14,10 @@
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan uses GitHub Models by default through `github.token`,
-  `models: read`, `STRIX_LLM=openai/openai/gpt-5`, and
-  `LLM_API_BASE=https://models.github.ai/inference`. Keep the GitHub Models
-  endpoint in a trusted input file and pass the token only through the
+  `models: read`, `STRIX_LLM=openai/openai/gpt-4.1`, and
+  `LLM_API_BASE_FILE` pointing at a trusted file containing
+  `https://models.github.ai/inference`. Keep the GitHub Models endpoint in a
+  trusted input file and pass the token only through the
   provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets must
   not override PR, push, or scheduled Strix defaults. Vertex remains available
   only for manual `workflow_dispatch` evidence when the `strix_llm` input

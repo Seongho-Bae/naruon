@@ -107,7 +107,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS:" "strix workflow must not expose total timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "strix workflow must not split Strix PR evidence into separate scanner runs"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash'" "strix workflow must not quarantine the approved Vertex preview model after organization secret visibility is fixed"
-	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models"
+	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/openai/gpt-4.1'" "strix workflow defaults PR Strix scans to GitHub Models"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM ||" "strix workflow must not let the legacy STRIX_LLM secret override PR defaults"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select GitHub Models openai/openai/*, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
 	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)" "strix workflow accepts only exact approved organization Vertex AI models"
