@@ -122,7 +122,7 @@ export function CalendarLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground">
       {/* Left Sidebar - Calendar List */}
       <aside className="w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4 hidden lg:flex">
-        <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
+        <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
           <Plus className="size-4" />새 일정
         </button>
 
@@ -145,7 +145,7 @@ export function CalendarLayout() {
               </li>
             ))}
           </ul>
-          <button className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary">
+          <button type="button" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary">
             <Plus className="size-4" /> 캘린더 추가
           </button>
         </div>
@@ -155,10 +155,10 @@ export function CalendarLayout() {
       <main className="flex min-w-0 flex-1 flex-col bg-background">
         <header className="flex h-auto min-h-16 shrink-0 flex-col items-start gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
-            <button className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
+            <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
             <div className="flex items-center gap-1">
-              <button aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronLeft className="size-5" /></button>
-              <button aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronRight className="size-5" /></button>
+              <button type="button" aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronLeft className="size-5" /></button>
+              <button type="button" aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronRight className="size-5" /></button>
             </div>
             <h1 className="text-xl font-bold">일정 관리</h1>
             <h2 className="text-sm font-bold text-muted-foreground lg:ml-2">2026년 5월</h2>
@@ -166,7 +166,7 @@ export function CalendarLayout() {
           <div className="flex w-full min-w-0 items-center gap-3">
             <div className="flex min-w-0 overflow-x-auto rounded-md border border-border">
               {['월간 캘린더', '주간 캘린더', '일정 상세', '회의 조율', '일정 후보'].map((mode) => (
-                <button
+                <button type="button"
                   key={mode}
                   onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
                   className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
@@ -175,7 +175,7 @@ export function CalendarLayout() {
                 </button>
               ))}
             </div>
-            <button aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <button type="button" aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
               <Settings className="size-5" />
             </button>
           </div>
@@ -375,7 +375,7 @@ export function CalendarLayout() {
                 <h3 className="text-lg font-bold mb-4">회의 조율 (Coordination)</h3>
                 <p className="text-sm text-muted-foreground mb-4">참석자들의 캘린더(CalDAV)를 종합 분석하여 최적의 시간을 제안합니다.</p>
                 <div className="grid gap-3 max-w-lg">
-                  <button className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
+                  <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
                     <div className="flex items-center gap-3">
                       <span className="grid size-8 place-items-center rounded-lg bg-primary/20 text-primary font-bold">1안</span>
                       <div className="text-left">
@@ -385,7 +385,7 @@ export function CalendarLayout() {
                     </div>
                     <span className="text-xs font-bold text-primary">제안하기</span>
                   </button>
-                  <button className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                  <button type="button" className="flex items-center justify-between rounded-xl border border-border bg-card p-4 hover:bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     <div className="flex items-center gap-3">
                       <span className="grid size-8 place-items-center rounded-lg bg-secondary text-muted-foreground font-bold">2안</span>
                       <div className="text-left">
@@ -428,7 +428,7 @@ export function CalendarLayout() {
             <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
           </div>
           <div className="flex items-center gap-2">
-            <button aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
+            <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
           </div>
         </div>
         
@@ -451,7 +451,7 @@ export function CalendarLayout() {
           <div className="flex gap-3 items-center">
             <Video className="size-5 text-muted-foreground shrink-0" />
             <p className="text-sm font-semibold">회의실 A (4층)</p>
-            <button className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
+            <button type="button" className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
           </div>
           <div className="flex gap-3 items-start">
             <Users className="size-5 text-muted-foreground shrink-0" />
@@ -491,9 +491,9 @@ export function CalendarLayout() {
         </div>
 
         <div className="mt-8 flex gap-3">
-          <button className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
-          <button className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
-          <button className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
+          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
+          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
+          <button type="button" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
         </div>
       </aside>
     </div>

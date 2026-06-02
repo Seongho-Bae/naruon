@@ -568,7 +568,7 @@ export function SecurityLayout() {
         <p className="sr-only">관리자 경계</p>
         <div className="ml-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 md:ml-8">
           {tabs.map((tab) => (
-            <button
+            <button type="button"
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`shrink-0 whitespace-nowrap rounded-md px-3 py-2 text-sm font-bold transition-colors md:px-4 ${
