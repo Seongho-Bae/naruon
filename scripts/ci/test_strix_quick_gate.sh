@@ -381,7 +381,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-requires-api-base)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -6785,7 +6785,11 @@ run_gate_case "github-models-model-prefix-requires-api-base" \
 	"" \
 	"2" \
 	"GitHub Models Strix scans require LLM_API_BASE_FILE" \
-	"0"
+	"0" \
+	"" \
+	"" \
+	"openai" \
+	""
 
 run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"openai/gpt-5.4" \
@@ -6816,7 +6820,9 @@ run_gate_case "github-models-fallback-requires-api-base" \
 	"GitHub Models Strix scans require LLM_API_BASE_FILE" \
 	"1" \
 	"vertex_ai/missing-primary" \
-	"<unset>"
+	"<unset>" \
+	"vertex_ai" \
+	""
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
