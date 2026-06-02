@@ -155,13 +155,16 @@ request branch scripts in the privileged Strix job.
 
 The gate fails closed when a changed PR-head blob cannot be validated or copied;
 it must never fall back to scanning trusted-base content for a modified PR path.
-Pull request scans split scoped changed files into small bounded batches before
-the timeout-driven rebalance path, so large PRs do not spend the whole required
-check budget on one oversized Strix invocation. Strix remains a required
-Medium-or-higher gate. The workflow uses only the explicit
-`STRIX_OPENAI_API_KEY` OpenAI Platform credential with an OpenAI
-GPT-5.4-or-newer model, rejects GitHub Models routing and `github.token` LLM
-credentials, and fails closed when direct credentials are missing or exhausted.
+Pull request scans present the generated PR-head scope to Strix in one
+whole-context invocation, rather than splitting changed files into separate
+scanner runs. Strix remains a required Medium-or-higher gate. The workflow
+defaults to GitHub Models with
+`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-4.1`,
+and `LLM_API_BASE=https://models.github.ai/inference`, while keeping the token
+and API base isolated to trusted input files and the Strix child-process
+environment. Explicit Vertex and direct OpenAI routes remain supported only
+through their provider-scoped credential paths, and provider infrastructure
+errors still fail closed.
 Merge-gate governance for Strix, CodeRabbit, and required review evidence is
 documented in `docs/development/merge-gate-policy.md`.
 
