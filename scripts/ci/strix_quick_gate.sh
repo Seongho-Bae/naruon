@@ -2402,6 +2402,7 @@ has_only_below_threshold_vulnerabilities() {
 
 	local found_any_vuln_file=0
 	local global_max_rank=-1
+	STRIX_MAX_SEVERITY_RANK=-1
 	local saw_any_severity=0
 
 	update_max_severity_from_stream() {
@@ -2424,6 +2425,7 @@ has_only_below_threshold_vulnerabilities() {
 			saw_any_severity=1
 			if [ "$rank" -gt "$global_max_rank" ]; then
 				global_max_rank="$rank"
+				STRIX_MAX_SEVERITY_RANK="$rank"
 			fi
 		done < <(grep -Ei 'severity[[:space:]]*:' "$source_path" || true)
 	}
@@ -2972,6 +2974,13 @@ run_current_target_scan() {
 		else
 			echo "ERROR: All configured fallback models are the same as the primary model" >&2
 		fi
+		return 1
+	fi
+
+	local threshold_rank
+	threshold_rank="$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")"
+	if [ "${STRIX_MAX_SEVERITY_RANK:--1}" -ge "$threshold_rank" ]; then
+		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
 	fi
 
