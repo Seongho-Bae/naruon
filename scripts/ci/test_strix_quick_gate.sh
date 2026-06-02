@@ -680,7 +680,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	vertex-primary-api-connection-retry-same-model-success)
+	vertex-primary-api-connection-retry-same-model-success|github-models-internal-server-connection-retry-same-model-success)
 		case "${STRIX_LLM:-}" in
 		gemini/retry-api-connection-primary|vertex_ai/retry-api-connection-primary|openai/openai/retry-api-connection-primary)
 			attempt="0"
