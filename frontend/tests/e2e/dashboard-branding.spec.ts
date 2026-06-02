@@ -30,8 +30,9 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(primaryNav.getByRole('link', { name: '데이터', exact: true })).toHaveAttribute('href', '/data');
   await expect(primaryNav.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
   await expect(primaryNav.getByRole('link', { name: '설정', exact: true })).toHaveAttribute('href', '/settings');
-  await expect(header.getByRole('button', { name: '알림 보기' })).toBeVisible();
-  await expect(header.getByRole('button', { name: '프로필 메뉴' })).toBeVisible();
+  await expect(header.getByRole('link', { name: '알림 보기' })).toHaveAttribute('href', '/security');
+  await expect(header.getByRole('link', { name: '도움말 보기' })).toHaveAttribute('href', '/settings#help');
+  await expect(header.getByRole('link', { name: '프로필 메뉴' })).toHaveAttribute('href', '/settings#profile');
   await expect(header.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
   await expect(header.getByRole('button', { name: '답장 초안' })).toBeVisible();
   await expect(header.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
@@ -41,6 +42,11 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
 
   await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+  const homeQuickActions = page.getByLabel('홈 빠른 실행');
+  await expect(homeQuickActions.getByRole('link', { name: '메일함 열기' })).toHaveAttribute('href', '/mail');
+  await expect(homeQuickActions.getByRole('link', { name: '보낸 메일 답변 추적' })).toHaveAttribute('href', '/mail?folder=sent');
+  await expect(homeQuickActions.getByRole('link', { name: '일정 후보 검토' })).toHaveAttribute('href', '/calendar');
+  await expect(homeQuickActions.getByRole('link', { name: '작업 보드' })).toHaveAttribute('href', '/tasks');
   await expect(page.getByRole('button', { name: '메일함 바로가기' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '일정 확인하기' }).first()).toBeVisible();
   await page.getByRole('button', { name: '메일함 바로가기' }).first().click();

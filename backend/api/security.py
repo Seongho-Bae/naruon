@@ -29,6 +29,7 @@ SourceType = Literal["caldav_source", "carddav_source", "webdav_repository"]
 DecisionReason = Literal[
     "allowed",
     "organization_denied",
+    "workspace_denied",
     "data_region_denied",
     "consent_denied",
     "ownership_denied",
@@ -142,8 +143,11 @@ def _webdav_scope_statement(auth_context: AuthContext):
         WebdavAccount.created_at.asc(),
         WebdavAccount.source_uid.asc(),
     )
+    statement = statement.where(WebdavAccount.workspace_id == auth_context.workspace_id)
     if _can_read_org_scope(auth_context):
-        return statement.where(WebdavAccount.organization_id == auth_context.organization_id)
+        return statement.where(
+            WebdavAccount.organization_id == auth_context.organization_id
+        )
     organization_filter = (
         WebdavAccount.organization_id == auth_context.organization_id
         if auth_context.organization_id is not None
@@ -226,6 +230,7 @@ def _access_request(auth_context: AuthContext) -> AccessRequest:
         group_ids=auth_context.group_ids,
         data_region="kr",
         consent_scopes=("mail.read", "calendar.read", "webdav.write"),
+        workspace_id=auth_context.workspace_id,
     )
 
 
@@ -253,11 +258,15 @@ def _source_policy(
     auth_context: AuthContext,
     owner_id: str,
     organization_id: str | None,
+    workspace_id: str,
     writeback_enabled: bool,
 ) -> ResourcePolicy:
     delegated_user_ids: tuple[str, ...] = (
         (auth_context.user_id,)
-        if is_admin_role(auth_context.role) and organization_id == auth_context.organization_id
+        if (
+            is_admin_role(auth_context.role)
+            and organization_id == auth_context.organization_id
+        )
         else ()
     )
     required_consent = ("webdav.write",) if writeback_enabled else ()
@@ -268,6 +277,7 @@ def _source_policy(
         permitted_group_ids=auth_context.group_ids,
         data_region="kr",
         required_consent_scopes=required_consent,
+        workspace_id=workspace_id,
         delegated_user_ids=delegated_user_ids,
     )
 
@@ -284,6 +294,7 @@ def _webdav_source(
             auth_context,
             account.user_id,
             account.organization_id,
+            account.workspace_id,
             bool(account.writeback_enabled),
         ),
         evidence_source="webdav_accounts",
@@ -295,7 +306,7 @@ def _webdav_source(
         source_host=_host_from_url(account.server_url),
         owner_id=account.user_id,
         organization_id=account.organization_id,
-        workspace_id=auth_context.workspace_id,
+        workspace_id=account.workspace_id,
         capabilities=["read", "write", "etag"] if account.writeback_enabled else ["read"],
         writeback_enabled=bool(account.writeback_enabled),
         provider_write_executed=False,
@@ -319,6 +330,7 @@ def _calendar_source(
             auth_context,
             source.user_id,
             source.organization_id,
+            source.workspace_id,
             bool(source.writeback_enabled),
         ),
         evidence_source="calendar_writeback_sources",
@@ -386,6 +398,7 @@ def _canonical_policy_decisions(
                 permitted_group_ids=(),
                 data_region="kr",
                 required_consent_scopes=(),
+                workspace_id=auth_context.workspace_id,
             ),
             evidence_source="access_policy.evaluate_access",
         )
@@ -403,6 +416,7 @@ def _canonical_policy_decisions(
                 permitted_group_ids=auth_context.group_ids,
                 data_region="eu",
                 required_consent_scopes=(),
+                workspace_id=auth_context.workspace_id,
             ),
             evidence_source="access_policy.evaluate_access",
         )

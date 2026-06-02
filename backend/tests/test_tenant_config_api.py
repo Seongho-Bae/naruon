@@ -193,13 +193,18 @@ def test_legacy_tenant_config_endpoint_keeps_organization_scope(
     assert ("shared_user", "org-rival") in mock_db.objects
 
 
-def test_tenant_config_stays_user_owned_even_for_admin_headers(client):
+@pytest.mark.parametrize(
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
+)
+def test_tenant_config_post_stays_user_owned_even_for_admin_headers(
+    client, admin_role
+):
     response = client.post(
         "/api/config",
         json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "tenant_admin",
+            "X-User-Role": admin_role,
             "X-Organization-Id": "org-acme",
         },
     )
@@ -382,13 +387,16 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
     assert "pop3_port" in response.json()["detail"]
 
 
-def test_tenant_config_get_rejects_cross_user_access(client):
+@pytest.mark.parametrize(
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
+)
+def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
     response = client.get(
         "/api/config",
         params={"user_id": "member-user"},
         headers={
             "X-User-Id": "admin",
-            "X-User-Role": "system_admin",
+            "X-User-Role": admin_role,
             "X-Organization-Id": "org-acme",
         },
     )
@@ -397,6 +405,7 @@ def test_tenant_config_get_rejects_cross_user_access(client):
     assert response.json() == {
         "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
     }
+
 
 def test_global_config_requires_admin(client):
     response = client.get(

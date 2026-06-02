@@ -156,6 +156,8 @@ def _can_read_org_scope(auth_context: AuthContext) -> bool:
 
 def _owner_scope_statement(model, auth_context: AuthContext):
     statement = select(model)
+    if hasattr(model, "workspace_id"):
+        statement = statement.where(model.workspace_id == auth_context.workspace_id)
     if _can_read_org_scope(auth_context):
         return statement.where(model.organization_id == auth_context.organization_id)
     organization_filter = (
