@@ -192,12 +192,23 @@ def _is_ip_literal(candidate: str) -> bool:
     return True
 
 
+def _is_legacy_numeric_ip_component(component: str) -> bool:
+    if not component:
+        return False
+    if component.startswith("0x"):
+        return len(component) > 2 and all(
+            character in "0123456789abcdef" for character in component[2:]
+        )
+    return component.isdigit()
+
+
 def _looks_like_ip_literal(candidate: str) -> bool:
-    compact_candidate = candidate.replace(".", "").lower()
-    return (
-        ":" in candidate
-        or compact_candidate.isdigit()
-        or compact_candidate.startswith("0x")
+    normalized_candidate = candidate.lower()
+    if ":" in normalized_candidate:
+        return True
+    return all(
+        _is_legacy_numeric_ip_component(component)
+        for component in normalized_candidate.split(".")
     )
 
 

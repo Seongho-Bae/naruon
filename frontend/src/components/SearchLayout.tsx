@@ -1,15 +1,25 @@
 "use client";
 
-import type { FormEvent } from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock, CornerDownRight, Mail, Network, Search } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import type { FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  CornerDownRight,
+  Mail,
+  Network,
+  Search,
+} from "lucide-react";
+import dynamic from "next/dynamic";
 
-import { apiClient } from '@/lib/api-client';
+import { apiClient } from "@/lib/api-client";
 
-const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
+const NetworkGraph = dynamic(() => import("@/components/NetworkGraph"), {
+  ssr: false,
+});
 
-const DEFAULT_QUERY = '런칭 캠페인';
+const DEFAULT_QUERY = "런칭 캠페인";
 
 type SearchResultItem = {
   id: number;
@@ -44,55 +54,69 @@ type RelationshipState = {
   error: string | null;
 };
 
-type ResultFilter = 'all' | 'thread' | 'single';
+type ResultFilter = "all" | "thread" | "single";
+type CaptureStatus = "idle" | "loading" | "success" | "error";
 
 const resultFilters: { key: ResultFilter; label: string }[] = [
-  { key: 'all', label: '전체' },
-  { key: 'thread', label: '스레드' },
-  { key: 'single', label: '단건' },
+  { key: "all", label: "전체" },
+  { key: "thread", label: "스레드" },
+  { key: "single", label: "단건" },
 ];
 
 function formatResultDate(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
 
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(parsed);
 }
 
 function resultTitle(result: SearchResultItem) {
-  return result.subject?.trim() || '(제목 없음)';
+  return result.subject?.trim() || "(제목 없음)";
 }
 
 function ontologySourceKey(result: SearchResultItem | null) {
   if (!result) return null;
-  return `${result.id}:${result.source_message_id ?? ''}:${result.thread_id ?? ''}`;
+  return `${result.id}:${result.source_message_id ?? ""}:${result.thread_id ?? ""}`;
 }
 
 function buildOntologyUrl(result: SearchResultItem) {
   const params = new URLSearchParams();
-  if (result.source_message_id) params.set('source_message_id', result.source_message_id);
-  if (result.thread_id) params.set('source_thread_id', result.thread_id);
+  if (result.source_message_id)
+    params.set("source_message_id", result.source_message_id);
+  if (result.thread_id) params.set("source_thread_id", result.thread_id);
   const query = params.toString();
-  return query ? `/api/ontology/relationships?${query}` : '/api/ontology/relationships';
+  return query
+    ? `/api/ontology/relationships?${query}`
+    : "/api/ontology/relationships";
 }
 
 function SenderDagPanel({
   relationships,
   loading,
   error,
+  canCapture,
+  captureStatus,
+  onCapture,
 }: {
   relationships: SenderRelationship[];
   loading: boolean;
   error: string | null;
+  canCapture: boolean;
+  captureStatus: CaptureStatus;
+  onCapture: () => void;
 }) {
   if (loading) {
     return (
-      <div role="status" aria-live="polite" className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
+      <div
+        role="status"
+        aria-live="polite"
+        className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground"
+      >
         발신자 DAG를 불러오는 중입니다.
       </div>
     );
@@ -100,7 +124,10 @@ function SenderDagPanel({
 
   if (error) {
     return (
-      <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+      <div
+        role="alert"
+        className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive"
+      >
         {error}
       </div>
     );
@@ -109,7 +136,27 @@ function SenderDagPanel({
   if (relationships.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
-        이 검색 결과에 연결된 발신자 관계가 아직 없습니다.
+        <p>이 검색 결과에 연결된 발신자 관계가 아직 없습니다.</p>
+        {canCapture ? (
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs">
+              원본 메일의 sender/thread 근거로 관계와 다음 액션을 캡처합니다.
+            </p>
+            <button
+              type="button"
+              onClick={onCapture}
+              disabled={captureStatus === "loading"}
+              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+            >
+              {captureStatus === "loading" ? "캡처 중" : "발신자 관계 캡처"}
+            </button>
+          </div>
+        ) : null}
+        {captureStatus === "error" ? (
+          <p className="mt-2 text-xs font-bold text-destructive">
+            발신자 관계 캡처에 실패했습니다.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -118,32 +165,41 @@ function SenderDagPanel({
     <div className="space-y-3">
       {relationships.map((relationship) => (
         <article
-          key={`${relationship.sender_email}:${relationship.source_message_id ?? 'global'}:${relationship.source_thread_id ?? 'none'}`}
+          key={`${relationship.sender_email}:${relationship.source_message_id ?? "global"}:${relationship.source_thread_id ?? "none"}`}
           className="rounded-lg border border-border bg-background p-4"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
-              <p className="truncate text-sm font-black text-foreground">{relationship.sender_email}</p>
+              <p className="truncate text-sm font-black text-foreground">
+                {relationship.sender_email}
+              </p>
               <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                상위 맥락: {relationship.parent_sender_email ?? '사용자 직접 관계'}
+                상위 맥락:{" "}
+                {relationship.parent_sender_email ?? "사용자 직접 관계"}
               </p>
             </div>
             <div className="shrink-0 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
-              {relationship.relationship_type} · {(relationship.confidence_score * 100).toFixed(0)}%
+              {relationship.relationship_type} ·{" "}
+              {(relationship.confidence_score * 100).toFixed(0)}%
             </div>
           </div>
           <div className="mt-4 grid gap-2 text-xs font-semibold text-muted-foreground sm:grid-cols-2">
             <div className="rounded border border-border bg-card px-3 py-2">
-              <p className="break-all text-foreground">{relationship.next_action}</p>
+              <p className="break-all text-foreground">
+                {relationship.next_action}
+              </p>
               <p className="mt-1">Agent next action</p>
             </div>
             <div className="rounded border border-border bg-card px-3 py-2">
-              <p className="break-words text-foreground">{relationship.action_reason}</p>
+              <p className="break-words text-foreground">
+                {relationship.action_reason}
+              </p>
               <p className="mt-1">판단 근거</p>
             </div>
           </div>
           <p className="mt-3 break-words rounded bg-secondary/40 px-3 py-2 text-[11px] font-semibold text-muted-foreground">
-            source={relationship.source_message_id ?? 'global'} / thread={relationship.source_thread_id ?? 'none'}
+            source={relationship.source_message_id ?? "global"} / thread=
+            {relationship.source_thread_id ?? "none"}
           </p>
         </article>
       ))}
@@ -154,14 +210,20 @@ function SenderDagPanel({
 export function SearchLayout() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
-  const [activeFilter, setActiveFilter] = useState<ResultFilter>('all');
+  const [activeFilter, setActiveFilter] = useState<ResultFilter>("all");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [activeResultId, setActiveResultId] = useState<number | null>(null);
-  const [relationshipState, setRelationshipState] = useState<RelationshipState>({
-    sourceKey: null,
-    items: [],
-    error: null,
-  });
+  const [relationshipState, setRelationshipState] = useState<RelationshipState>(
+    {
+      sourceKey: null,
+      items: [],
+      error: null,
+    },
+  );
+  const [captureState, setCaptureState] = useState<{
+    sourceKey: string | null;
+    status: CaptureStatus;
+  }>({ sourceKey: null, status: "idle" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -172,7 +234,11 @@ export function SearchLayout() {
     if (!trimmedQuery) return () => controller.abort();
 
     apiClient
-      .post<SearchResponse>('/api/search', { query: trimmedQuery, limit: 8 }, { signal: controller.signal })
+      .post<SearchResponse>(
+        "/api/search",
+        { query: trimmedQuery, limit: 8 },
+        { signal: controller.signal },
+      )
       .then((response) => {
         if (controller.signal.aborted) return;
         setResults(response.results);
@@ -182,7 +248,7 @@ export function SearchLayout() {
         if (controller.signal.aborted) return;
         setResults([]);
         setActiveResultId(null);
-        setError('검색 결과를 불러오지 못했습니다.');
+        setError("검색 결과를 불러오지 못했습니다.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -192,19 +258,40 @@ export function SearchLayout() {
   }, [submittedQuery]);
 
   const filteredResults = useMemo(() => {
-    if (activeFilter === 'thread') return results.filter((result) => (result.reply_count ?? 1) > 1);
-    if (activeFilter === 'single') return results.filter((result) => (result.reply_count ?? 1) <= 1);
+    if (activeFilter === "thread")
+      return results.filter((result) => (result.reply_count ?? 1) > 1);
+    if (activeFilter === "single")
+      return results.filter((result) => (result.reply_count ?? 1) <= 1);
     return results;
   }, [activeFilter, results]);
 
-  const activeResult = filteredResults.find((result) => result.id === activeResultId) ?? filteredResults[0] ?? null;
+  const activeResult =
+    filteredResults.find((result) => result.id === activeResultId) ??
+    filteredResults[0] ??
+    null;
   const activeOntologySourceKey = ontologySourceKey(activeResult);
-  const activeOntologyUrl = activeResult ? buildOntologyUrl(activeResult) : null;
+  const activeOntologyUrl = activeResult
+    ? buildOntologyUrl(activeResult)
+    : null;
   const relationshipsLoading = Boolean(
-    activeOntologySourceKey && relationshipState.sourceKey !== activeOntologySourceKey,
+    activeOntologySourceKey &&
+    relationshipState.sourceKey !== activeOntologySourceKey,
   );
   const relationships = relationshipsLoading ? [] : relationshipState.items;
-  const relationshipError = relationshipsLoading ? null : relationshipState.error;
+  const relationshipError = relationshipsLoading
+    ? null
+    : relationshipState.error;
+  const captureStatus =
+    captureState.sourceKey === activeOntologySourceKey
+      ? captureState.status
+      : "idle";
+  const canCaptureRelationship = Boolean(
+    activeResult?.source_message_id &&
+    activeOntologySourceKey &&
+    !relationshipsLoading &&
+    !relationshipError &&
+    relationships.length === 0,
+  );
 
   useEffect(() => {
     if (!activeOntologyUrl || !activeOntologySourceKey) return;
@@ -212,7 +299,9 @@ export function SearchLayout() {
     const controller = new AbortController();
 
     apiClient
-      .get<SenderRelationship[]>(activeOntologyUrl, { signal: controller.signal })
+      .get<SenderRelationship[]>(activeOntologyUrl, {
+        signal: controller.signal,
+      })
       .then((response) => {
         if (controller.signal.aborted) return;
         setRelationshipState({
@@ -226,7 +315,7 @@ export function SearchLayout() {
         setRelationshipState({
           sourceKey: activeOntologySourceKey,
           items: [],
-          error: '발신자 DAG를 불러오지 못했습니다.',
+          error: "발신자 DAG를 불러오지 못했습니다.",
         });
       });
 
@@ -236,7 +325,7 @@ export function SearchLayout() {
   const submitSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedQuery = query.trim();
-    setActiveFilter('all');
+    setActiveFilter("all");
     setError(null);
     setResults([]);
     setActiveResultId(null);
@@ -244,19 +333,54 @@ export function SearchLayout() {
     setSubmittedQuery(trimmedQuery);
   };
 
+  const captureSenderRelationship = () => {
+    if (!activeResult?.source_message_id || !activeOntologySourceKey) return;
+    setCaptureState({ sourceKey: activeOntologySourceKey, status: "loading" });
+    apiClient
+      .post<SenderRelationship>("/api/ontology/relationships/capture-source", {
+        source_message_id: activeResult.source_message_id,
+      })
+      .then((response) => {
+        setRelationshipState({
+          sourceKey: activeOntologySourceKey,
+          items: [response],
+          error: null,
+        });
+        setCaptureState({
+          sourceKey: activeOntologySourceKey,
+          status: "success",
+        });
+      })
+      .catch(() => {
+        setCaptureState({
+          sourceKey: activeOntologySourceKey,
+          status: "error",
+        });
+      });
+  };
+
   const resultList = (
     <div className="divide-y divide-border">
       {loading ? (
-        <div role="status" aria-live="polite" className="p-5 text-sm font-semibold text-muted-foreground">
+        <div
+          role="status"
+          aria-live="polite"
+          className="p-5 text-sm font-semibold text-muted-foreground"
+        >
           검색 결과를 불러오는 중입니다.
         </div>
       ) : error ? (
-        <div role="alert" className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive">
+        <div
+          role="alert"
+          className="m-4 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm font-semibold text-destructive"
+        >
           <AlertCircle className="mr-2 inline size-4" aria-hidden="true" />
           {error}
         </div>
       ) : filteredResults.length === 0 ? (
-        <div className="p-5 text-sm font-semibold text-muted-foreground">검색 결과가 없습니다.</div>
+        <div className="p-5 text-sm font-semibold text-muted-foreground">
+          검색 결과가 없습니다.
+        </div>
       ) : (
         filteredResults.map((result) => {
           const isActive = activeResult?.id === result.id;
@@ -266,9 +390,11 @@ export function SearchLayout() {
               key={result.id}
               type="button"
               onClick={() => setActiveResultId(result.id)}
-              aria-current={isActive ? 'true' : undefined}
+              aria-current={isActive ? "true" : undefined}
               className={`w-full border-l-4 p-4 text-left transition-colors ${
-                isActive ? 'border-primary bg-secondary/50' : 'border-transparent hover:bg-secondary/20'
+                isActive
+                  ? "border-primary bg-secondary/50"
+                  : "border-transparent hover:bg-secondary/20"
               }`}
             >
               <div className="flex items-start gap-3">
@@ -276,15 +402,24 @@ export function SearchLayout() {
                   <Mail className="size-4 text-primary" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-bold">{resultTitle(result)}</h3>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">{result.sender}</p>
-                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{result.snippet}</p>
+                  <h3 className="truncate text-sm font-bold">
+                    {resultTitle(result)}
+                  </h3>
+                  <p className="mt-1 truncate text-xs text-muted-foreground">
+                    {result.sender}
+                  </p>
+                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                    {result.snippet}
+                  </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                      {result.thread_id ? '메일 스레드' : '메일'}
+                      {result.thread_id ? "메일 스레드" : "메일"}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      <Clock className="mr-0.5 inline size-3" aria-hidden="true" />
+                      <Clock
+                        className="mr-0.5 inline size-3"
+                        aria-hidden="true"
+                      />
                       {formatResultDate(result.date)}
                     </span>
                     <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
@@ -304,9 +439,15 @@ export function SearchLayout() {
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <header className="shrink-0 border-b border-border bg-card px-4 py-4 md:px-8">
         <h1 className="sr-only">맥락 검색</h1>
-        <form onSubmit={submitSearch} className="mx-auto flex w-full max-w-4xl gap-2">
+        <form
+          onSubmit={submitSearch}
+          className="mx-auto flex w-full max-w-4xl gap-2"
+        >
           <div className="relative min-w-0 flex-1">
-            <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-primary" aria-hidden="true" />
+            <Search
+              className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-primary"
+              aria-hidden="true"
+            />
             <input
               type="search"
               value={query}
@@ -315,7 +456,10 @@ export function SearchLayout() {
               className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-4 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
             />
           </div>
-          <button type="submit" className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+          <button
+            type="submit"
+            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+          >
             검색
           </button>
         </form>
@@ -336,7 +480,9 @@ export function SearchLayout() {
                 type="button"
                 onClick={() => setActiveFilter(filter.key)}
                 className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
-                  activeFilter === filter.key ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                  activeFilter === filter.key
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-muted-foreground hover:bg-secondary/80"
                 }`}
               >
                 {filter.label}
@@ -350,35 +496,52 @@ export function SearchLayout() {
           <div className="mx-auto max-w-5xl space-y-6">
             {!activeResult ? (
               <div className="rounded-lg border border-border bg-card p-6 text-sm font-semibold text-muted-foreground shadow-sm">
-                결과를 선택하면 메일 스레드, 답장 추적, 발신자 관계를 함께 보여줍니다.
+                결과를 선택하면 메일 스레드, 답장 추적, 발신자 관계를 함께
+                보여줍니다.
               </div>
             ) : (
               <>
-                <section aria-label="검색 결과 상세" className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
+                <section
+                  aria-label="검색 결과 상세"
+                  className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6"
+                >
                   <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div className="flex min-w-0 items-start gap-4">
                       <div className="rounded-lg bg-primary/10 p-4">
-                        <Mail className="size-7 text-primary" aria-hidden="true" />
+                        <Mail
+                          className="size-7 text-primary"
+                          aria-hidden="true"
+                        />
                       </div>
                       <div className="min-w-0">
                         <span className="mb-2 inline-block rounded bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary">
                           메일 스레드
                         </span>
-                        <h2 className="text-xl font-bold md:text-2xl">{resultTitle(activeResult)}</h2>
-                        <p className="mt-1 text-sm text-muted-foreground">{activeResult.sender}</p>
+                        <h2 className="text-xl font-bold md:text-2xl">
+                          {resultTitle(activeResult)}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {activeResult.sender}
+                        </p>
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-muted-foreground">
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
-                        <p className="break-all text-foreground">{activeResult.thread_id ?? 'thread 없음'}</p>
+                        <p className="break-all text-foreground">
+                          {activeResult.thread_id ?? "thread 없음"}
+                        </p>
                         <p className="mt-1">THREAD_ID</p>
                       </div>
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
-                        <p className="text-foreground">{activeResult.reply_count ?? 1}건</p>
+                        <p className="text-foreground">
+                          {activeResult.reply_count ?? 1}건
+                        </p>
                         <p className="mt-1">답장 추적</p>
                       </div>
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
-                        <p className="text-foreground">{(activeResult.score ?? 0).toFixed(2)}</p>
+                        <p className="text-foreground">
+                          {(activeResult.score ?? 0).toFixed(2)}
+                        </p>
                         <p className="mt-1">점수</p>
                       </div>
                     </div>
@@ -398,12 +561,26 @@ export function SearchLayout() {
                 <div className="grid gap-6 xl:grid-cols-2">
                   <section className="flex min-h-[420px] flex-col rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
                     <div className="mb-4 flex items-center gap-2">
-                      <Network className="size-5 text-primary" aria-hidden="true" />
-                      <h3 className="text-lg font-bold">발신자 DAG (Ontology)</h3>
+                      <Network
+                        className="size-5 text-primary"
+                        aria-hidden="true"
+                      />
+                      <h3 className="text-lg font-bold">
+                        발신자 DAG (Ontology)
+                      </h3>
                     </div>
-                    <SenderDagPanel relationships={relationships} loading={relationshipsLoading} error={relationshipError} />
+                    <SenderDagPanel
+                      relationships={relationships}
+                      loading={relationshipsLoading}
+                      error={relationshipError}
+                      canCapture={canCaptureRelationship}
+                      captureStatus={captureStatus}
+                      onCapture={captureSenderRelationship}
+                    />
                     <div className="my-4 border-t border-border" />
-                    <h4 className="mb-3 text-sm font-black text-foreground">네트워크 그래프</h4>
+                    <h4 className="mb-3 text-sm font-black text-foreground">
+                      네트워크 그래프
+                    </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
                       <NetworkGraph />
                     </div>
@@ -411,19 +588,30 @@ export function SearchLayout() {
 
                   <section className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6">
                     <div className="mb-6 flex items-center gap-2">
-                      <Clock className="size-5 text-primary" aria-hidden="true" />
+                      <Clock
+                        className="size-5 text-primary"
+                        aria-hidden="true"
+                      />
                       <h3 className="text-lg font-bold">타임라인 (Timeline)</h3>
                     </div>
                     <div className="relative ml-3 space-y-6 border-l-2 border-border">
                       <div className="relative pl-6">
                         <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-primary" />
-                        <p className="mb-1 text-xs font-bold text-primary">현재</p>
-                        <h4 className="inline-block rounded bg-secondary px-2 py-1 text-sm font-bold">검색 결과 선택됨</h4>
+                        <p className="mb-1 text-xs font-bold text-primary">
+                          현재
+                        </p>
+                        <h4 className="inline-block rounded bg-secondary px-2 py-1 text-sm font-bold">
+                          검색 결과 선택됨
+                        </h4>
                       </div>
                       <div className="relative pl-6">
                         <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border" />
-                        <p className="mb-1 text-xs font-bold text-muted-foreground">{formatResultDate(activeResult.date)}</p>
-                        <h4 className="text-sm font-bold text-muted-foreground">{resultTitle(activeResult)}</h4>
+                        <p className="mb-1 text-xs font-bold text-muted-foreground">
+                          {formatResultDate(activeResult.date)}
+                        </p>
+                        <h4 className="text-sm font-bold text-muted-foreground">
+                          {resultTitle(activeResult)}
+                        </h4>
                         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                           <CheckCircle2 className="size-3" aria-hidden="true" />
                           thread reply_count={activeResult.reply_count ?? 1}
@@ -432,9 +620,14 @@ export function SearchLayout() {
                       {activeResult.thread_id ? (
                         <div className="relative pl-6">
                           <div className="absolute -left-[9px] top-1 size-4 rounded-full border-2 border-card bg-border" />
-                          <p className="mb-1 text-xs font-bold text-muted-foreground">스레드 기준</p>
+                          <p className="mb-1 text-xs font-bold text-muted-foreground">
+                            스레드 기준
+                          </p>
                           <h4 className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
-                            <CornerDownRight className="size-4" aria-hidden="true" />
+                            <CornerDownRight
+                              className="size-4"
+                              aria-hidden="true"
+                            />
                             {activeResult.thread_id}
                           </h4>
                         </div>
