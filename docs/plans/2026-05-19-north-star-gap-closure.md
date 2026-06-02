@@ -36,10 +36,11 @@ connector, and PR governance is metadata-only.
   the exact `Strix Security Scan` workflow, runs a trusted-base governance script,
   separates pending/waiting states from failures, and updates an idempotent marker
   comment instead of posting duplicates.
-- [x] Strix GPT-5 hardening: the workflow keeps GPT-5.4-or-newer as the model
-  requirement and uses only an explicitly named `STRIX_OPENAI_API_KEY` OpenAI
-  Platform credential. It fails closed instead of routing scanner traffic
-  through GitHub Models, `github.token`, Gemini, GPT-4o, or GPT-4.1.
+- [x] Strix provider hardening: the workflow now defaults to GitHub Models via
+  `models: read`, `github.token`, and a trusted `LLM_API_BASE` input file while
+  still failing closed on generic `LLM_API_KEY`, cross-provider fallback, and
+  provider infrastructure failures. Vertex and direct OpenAI remain
+  explicit-only alternate provider paths.
 - [x] CalDAV source registry: `/api/calendar/writeback-intent` now resolves
   DB-backed `calendar_writeback_sources` rows with opaque `source_uid` values
   instead of exposing sequential CalDAV account ids or accepting browser-supplied

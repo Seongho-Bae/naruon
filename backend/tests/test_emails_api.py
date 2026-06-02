@@ -222,6 +222,27 @@ async def test_get_emails(client: AsyncClient, db_session):
 
 
 @pytest.mark.asyncio
+async def test_get_emails_returns_ui_safe_display_fields(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.subject = "<script>alert('x')</script>Quarter plan"
+    sample_email.sender = '"<img/src=x onerror=alert(1)>" <sender@example.com>'
+    sample_email.reply_to = '"<script>alert(1)</script>" <reply@example.com>'
+    sample_email.body = "<p>Hello</p><script>alert('body')</script>"
+
+    response = await client.get("/api/emails?limit=10")
+
+    assert response.status_code == 200
+    item = response.json()["emails"][0]
+    assert item["subject"] == "Quarter plan"
+    assert item["sender"] == '"" <sender@example.com>'
+    assert item["reply_to"] == '"" <reply@example.com>'
+    assert item["snippet"] == "Hello"
+    assert "<" not in item["subject"]
+    assert "<script" not in item["snippet"].lower()
+
+
+@pytest.mark.asyncio
 async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window(
     client: AsyncClient, db_session
 ):
@@ -769,6 +790,26 @@ async def test_get_email_by_id(client: AsyncClient, db_session, sample_email: Em
 
 
 @pytest.mark.asyncio
+async def test_get_email_by_id_returns_ui_safe_display_fields(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.subject = "<script>alert('x')</script>Quarter plan"
+    sample_email.sender = '"<img/src=x onerror=alert(1)>" <sender@example.com>'
+    sample_email.recipients = '"<script>alert(1)</script>" <user@example.com>'
+    sample_email.body = "<p>Hello</p><script>alert('body')</script>"
+
+    response = await client.get(f"/api/emails/{sample_email.id}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["subject"] == "Quarter plan"
+    assert data["sender"] == '"" <sender@example.com>'
+    assert data["recipients"] == '"" <user@example.com>'
+    assert data["body"] == "Hello"
+    assert "<script" not in data["body"].lower()
+
+
+@pytest.mark.asyncio
 async def test_get_email_thread(client: AsyncClient, db_session, sample_email: Email):
     response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
     assert response.status_code == 200
@@ -776,6 +817,23 @@ async def test_get_email_thread(client: AsyncClient, db_session, sample_email: E
     assert "thread" in data
     assert len(data["thread"]) == 1
     assert data["thread"][0]["id"] == sample_email.id
+
+
+@pytest.mark.asyncio
+async def test_get_email_thread_returns_ui_safe_display_fields(
+    client: AsyncClient, db_session, sample_email: Email
+):
+    sample_email.subject = "<img/src=x onerror=alert(1)>Thread"
+    sample_email.body = "<svg/onload=alert(1)>Thread body"
+
+    response = await client.get(f"/api/emails/thread/{sample_email.thread_id}")
+
+    assert response.status_code == 200
+    item = response.json()["thread"][0]
+    assert item["subject"] == "Thread"
+    assert item["body"] == "Thread body"
+    assert "<" not in item["subject"]
+    assert "<" not in item["body"]
 
 
 @pytest.mark.asyncio
@@ -1106,11 +1164,11 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
         user_id="testuser",
         message_id="msg3",
         thread_id="thread3",
-        sender="testuser@example.com",
+        sender='"<img/src=x onerror=alert(1)>" <testuser@example.com>',
         recipients="target@example.com",
-        subject="Did you get this?",
+        subject="<script>alert('x')</script>Did you get this?",
         date=datetime.datetime(2026, 4, 28, 10, 0, tzinfo=datetime.timezone.utc),
-        body="Please reply when you can.",
+        body="<p>Please reply when you can.</p><script>alert('body')</script>",
     )
     answered_sent_email = Email(
         id=4,
@@ -1143,7 +1201,9 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     assert response.status_code == 200
     data = response.json()
     assert len(data["emails"]) == 1
-    assert data["emails"][0]["sender"] == "testuser@example.com"
+    assert data["emails"][0]["sender"] == '"" <testuser@example.com>'
+    assert data["emails"][0]["subject"] == "Did you get this?"
+    assert data["emails"][0]["snippet"] == "Please reply when you can."
     assert data["emails"][0]["thread_id"] == "thread3"
     assert data["emails"][0]["requires_reply"] is True
 

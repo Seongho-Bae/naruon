@@ -21,6 +21,7 @@ from services.email_dedupe_service import (
     candidate_strong_fingerprint,
     email_strong_fingerprint,
 )
+from services.text_safety import strip_html_markup
 import logging
 from api.auth import AuthContext, get_auth_context
 from services.tenant_config_scope import get_scoped_tenant_config
@@ -85,6 +86,59 @@ def _email_message_lookup_values(email_row: Email) -> set[str]:
     if not normalized:
         return set()
     return {normalized, f"<{normalized}>"}
+
+
+def _safe_email_display_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return strip_html_markup(str(value).replace("\x00", ""))
+
+
+def _safe_email_body(value: str | None) -> str:
+    return _safe_email_display_text(value) or ""
+
+
+def _safe_email_snippet(value: str | None) -> str:
+    body = _safe_email_body(value)
+    return body[:100] + "..." if len(body) > 100 else body
+
+
+def _email_list_item(
+    *,
+    email: Email,
+    thread_id: str,
+    reply_count: int | None,
+    is_self_sent: bool,
+    requires_reply: bool,
+) -> "EmailListItem":
+    return EmailListItem(
+        id=email.id,
+        subject=_safe_email_display_text(email.subject),
+        sender=_safe_email_body(email.sender),
+        reply_to=_safe_email_display_text(email.reply_to),
+        date=email.date,
+        snippet=_safe_email_snippet(email.body),
+        thread_id=thread_id,
+        reply_count=reply_count,
+        is_self_sent=is_self_sent,
+        requires_reply=requires_reply,
+    )
+
+
+def _email_detail_response(email: Email) -> "EmailDetailResponse":
+    return EmailDetailResponse(
+        id=email.id,
+        message_id=email.message_id,
+        sender=_safe_email_body(email.sender),
+        reply_to=_safe_email_display_text(email.reply_to),
+        recipients=_safe_email_display_text(email.recipients),
+        subject=_safe_email_display_text(email.subject),
+        date=email.date,
+        body=_safe_email_body(email.body),
+        thread_id=canonical_thread_key(email),
+        in_reply_to=email.in_reply_to,
+        references=email.references,
+    )
 
 
 class EmailListItem(BaseModel):
@@ -199,15 +253,9 @@ async def get_emails(
     items = []
     for email in sorted_groups:
         group_key = canonical_thread_key(email)
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
-            EmailListItem(
-                id=email.id,
-                subject=email.subject,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                date=email.date,
-                snippet=snippet,
+            _email_list_item(
+                email=email,
                 thread_id=group_key,
                 reply_count=reply_counts[group_key],
                 is_self_sent=message_is_self_sent(email, user_addresses),
@@ -230,15 +278,9 @@ async def get_pending_replies(
     )
     items = []
     for email in pending_emails[:limit]:
-        snippet = email.body[:100] + "..." if len(email.body) > 100 else email.body
         items.append(
-            EmailListItem(
-                id=email.id,
-                subject=email.subject,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                date=email.date,
-                snippet=snippet,
+            _email_list_item(
+                email=email,
                 thread_id=canonical_thread_key(email),
                 reply_count=None,
                 is_self_sent=False,
@@ -248,13 +290,8 @@ async def get_pending_replies(
     return {"emails": items}
 
 
-@router.post("/unique-thread-intent", response_model=UniqueThreadIntentResponse)
-async def create_unique_thread_intent(
-    request: UniqueThreadIntentRequest,
-    db: AsyncSession = Depends(get_db),
-    auth_context: AuthContext = Depends(get_auth_context),
-):
-    candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
+
+def _extract_candidate_lookups(candidates: list[EmailDedupeCandidate]) -> tuple[set[str], set[str]]:
     message_lookup_values: set[str] = set()
     fingerprint_values: set[str] = set()
     for candidate in candidates:
@@ -262,23 +299,36 @@ async def create_unique_thread_intent(
         candidate_fingerprint = candidate_strong_fingerprint(candidate)
         if candidate_fingerprint:
             fingerprint_values.add(candidate_fingerprint)
+    return message_lookup_values, fingerprint_values
 
+
+async def _fetch_existing_emails_for_candidates(
+    db: AsyncSession,
+    auth_context: AuthContext,
+    message_lookup_values: set[str],
+    fingerprint_values: set[str],
+) -> list[Email]:
     predicates = []
     if message_lookup_values:
         predicates.append(Email.message_id.in_(message_lookup_values))
     if fingerprint_values:
         predicates.append(Email.fingerprint.in_(fingerprint_values))
 
-    existing_emails: list[Email] = []
-    if predicates:
-        result = await db.execute(
-            select(Email).where(
-                *email_owner_filters(auth_context),
-                or_(*predicates),
-            )
-        )
-        existing_emails = list(result.scalars().all())
+    if not predicates:
+        return []
 
+    result = await db.execute(
+        select(Email).where(
+            *email_owner_filters(auth_context),
+            or_(*predicates),
+        )
+    )
+    return list(result.scalars().all())
+
+
+def _build_email_lookup_dicts(
+    existing_emails: list[Email],
+) -> tuple[dict[str, Email], dict[str, Email]]:
     by_message_id: dict[str, Email] = {}
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
@@ -289,7 +339,14 @@ async def create_unique_thread_intent(
             by_fingerprint.setdefault(row_fingerprint, email_row)
         if email_row.fingerprint:
             by_fingerprint.setdefault(email_row.fingerprint, email_row)
+    return by_message_id, by_fingerprint
 
+
+def _find_matches_for_candidates(
+    candidates: list[EmailDedupeCandidate],
+    by_message_id: dict[str, Email],
+    by_fingerprint: dict[str, Email],
+) -> list[UniqueThreadUpdate]:
     updates: list[UniqueThreadUpdate] = []
     for candidate in candidates:
         matched_email: Email | None = None
@@ -323,6 +380,22 @@ async def create_unique_thread_intent(
                     ),
                 )
             )
+    return updates
+
+
+@router.post("/unique-thread-intent", response_model=UniqueThreadIntentResponse)
+async def create_unique_thread_intent(
+    request: UniqueThreadIntentRequest,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
+    message_lookup_values, fingerprint_values = _extract_candidate_lookups(candidates)
+    existing_emails = await _fetch_existing_emails_for_candidates(
+        db, auth_context, message_lookup_values, fingerprint_values
+    )
+    by_message_id, by_fingerprint = _build_email_lookup_dicts(existing_emails)
+    updates = _find_matches_for_candidates(candidates, by_message_id, by_fingerprint)
 
     return UniqueThreadIntentResponse(
         status="intent_ready",
@@ -347,19 +420,7 @@ async def get_email(
     email = result.scalar_one_or_none()
     if not email:
         raise HTTPException(status_code=404, detail="Email not found")
-    return EmailDetailResponse(
-        id=email.id,
-        message_id=email.message_id,
-        sender=email.sender,
-        reply_to=email.reply_to,
-        recipients=email.recipients,
-        subject=email.subject,
-        date=email.date,
-        body=email.body,
-        thread_id=canonical_thread_key(email),
-        in_reply_to=email.in_reply_to,
-        references=email.references,
-    )
+    return _email_detail_response(email)
 
 
 @router.get(
@@ -388,21 +449,7 @@ async def get_email_thread(
 
     items = []
     for email in emails:
-        items.append(
-            EmailDetailResponse(
-                id=email.id,
-                message_id=email.message_id,
-                sender=email.sender,
-                reply_to=email.reply_to,
-                recipients=email.recipients,
-                subject=email.subject,
-                date=email.date,
-                body=email.body,
-                thread_id=canonical_thread_key(email),
-                in_reply_to=email.in_reply_to,
-                references=email.references,
-            )
-        )
+        items.append(_email_detail_response(email))
     return {"thread": items}
 
 

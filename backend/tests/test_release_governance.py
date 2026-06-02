@@ -167,6 +167,16 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
+    assert '"scripts/start_backend.py"' in dockerfile
+    assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
+
+
+def test_backend_compose_commands_use_startup_preflight() -> None:
+    compose = read_repo_text("docker-compose.yml")
+    live_e2e_compose = read_repo_text("docker-compose.live-e2e.yml")
+
+    assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
+    assert '"scripts/start_backend.py"' in live_e2e_compose
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
@@ -175,6 +185,42 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "warning|warn|deprecated|notice|fatal|denied|unable" in scanner
     assert "allowed_count" in scanner
     assert "unexpected_count" in scanner
+
+
+def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> (
+    None
+):
+    workflow = read_repo_text(".github/workflows/strix.yml")
+    gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
+
+    assert "models: read" in workflow
+    assert "provider_mode=github_models" in workflow
+    assert "strix_llm:" in workflow
+    assert "github.event.inputs.strix_llm || 'openai/openai/gpt-4.1'" in workflow
+    assert "secrets.STRIX_LLM ||" not in workflow
+    assert "https://models.github.ai/inference" in workflow
+    assert "LLM_API_BASE_FILE" in workflow
+    assert "github.token is required for GitHub Models Strix scans" in workflow
+    assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
+    assert (
+        "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' "
+        "&& 'vertex_ai/gemini-2.5-flash'"
+        not in workflow
+    )
+    assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
+    assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
+    assert (
+        "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
+        in workflow
+    )
+    assert "vertex_ai/* | vertex_ai_beta/*" not in workflow
+    assert "PYTHONWARNINGS:" not in workflow
+    assert (
+        'child_env["PYTHONWARNINGS"] = '
+        '"ignore:Pydantic serializer warnings:UserWarning:pydantic.main"'
+        in gate_script
+    )
+    assert "ignore::UserWarning" not in workflow
 
 
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (

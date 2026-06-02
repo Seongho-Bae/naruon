@@ -56,6 +56,21 @@ def schema_backfill_sql():
             "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS security_audit_events ("
+            "event_uid varchar PRIMARY KEY, "
+            "actor_user_id varchar NOT NULL, "
+            "actor_role varchar NOT NULL, "
+            "organization_id varchar, "
+            "workspace_id varchar NOT NULL, "
+            "event_action varchar NOT NULL, "
+            "resource_type varchar NOT NULL, "
+            "resource_uid varchar, "
+            "evidence_source varchar NOT NULL, "
+            "detail_text text, "
+            "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ),
         text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS source_uid varchar"),
         text(
             "ALTER TABLE webdav_accounts "
@@ -63,7 +78,15 @@ def schema_backfill_sql():
         ),
         text(
             "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS workspace_id varchar"
+        ),
+        text(
+            "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS writeback_enabled boolean NOT NULL DEFAULT false"
+        ),
+        text(
+            "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS etag_value varchar"
         ),
         text("ALTER TABLE project_folders ADD COLUMN IF NOT EXISTS folder_uid varchar"),
         text(
@@ -116,6 +139,16 @@ def schema_backfill_sql():
             "(organization_id, workspace_id, observed_at)"
         ),
         text(
+            "CREATE INDEX IF NOT EXISTS ix_security_audit_events_scope_time "
+            "ON security_audit_events "
+            "(organization_id, workspace_id, observed_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_security_audit_events_actor_scope "
+            "ON security_audit_events "
+            "(actor_user_id, organization_id, workspace_id)"
+        ),
+        text(
             "UPDATE webdav_accounts "
             "SET source_uid = 'webdav_src_' || md5("
             "random()::text || ':' || clock_timestamp()::text || ':' || "
@@ -123,7 +156,15 @@ def schema_backfill_sql():
             ") "
             "WHERE source_uid IS NULL OR source_uid = ''"
         ),
+        text(
+            "UPDATE webdav_accounts "
+            "SET workspace_id = CASE "
+            "WHEN organization_id IS NOT NULL THEN 'workspace-' || organization_id "
+            "ELSE 'workspace-' || user_id END "
+            "WHERE workspace_id IS NULL OR workspace_id = ''"
+        ),
         text("ALTER TABLE webdav_accounts ALTER COLUMN source_uid SET NOT NULL"),
+        text("ALTER TABLE webdav_accounts ALTER COLUMN workspace_id SET NOT NULL"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_webdav_accounts_source_uid "
             "ON webdav_accounts (source_uid)"
@@ -131,6 +172,10 @@ def schema_backfill_sql():
         text(
             "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_organization_id "
             "ON webdav_accounts (organization_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_webdav_accounts_workspace_scope "
+            "ON webdav_accounts (user_id, organization_id, workspace_id)"
         ),
         text(
             "UPDATE project_folders "

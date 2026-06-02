@@ -228,6 +228,47 @@ def _mask_angle_emails(value: str) -> tuple[str, dict[str, str]]:
     return "".join(parts), placeholders
 
 
+def _skip_spaces(text: str, start: int) -> int:
+    cursor = start
+    while cursor < len(text) and text[cursor].isspace():
+        cursor += 1
+    return cursor
+
+
+def _check_html_tag_at(decoded: str, cursor: int) -> tuple[bool, int]:
+    tag_start = cursor + 1
+
+    if decoded.startswith("!--", tag_start):
+        return True, 0
+
+    if decoded[tag_start].isspace():
+        space_cursor = _skip_spaces(decoded, tag_start)
+        if space_cursor >= len(decoded) or decoded[space_cursor] != "/":
+            return False, cursor + 1
+        tag_start = space_cursor
+
+    if decoded[tag_start] in {"!", "?"}:
+        return True, 0
+
+    if decoded[tag_start] == "/":
+        tag_start = _skip_spaces(decoded, tag_start + 1)
+
+    closing = decoded.find(">", tag_start + 1)
+    if tag_start < len(decoded) and decoded[tag_start].isalpha():
+        tag_content = decoded[
+            tag_start : closing if closing != -1 else None
+        ].strip()
+        next_cursor = closing + 1 if closing != -1 else len(decoded)
+
+        if _looks_like_angle_email(tag_content):
+            return False, next_cursor
+        if _is_tag_like_segment(tag_content):
+            return True, 0
+        return False, next_cursor
+
+    return False, cursor + 1
+
+
 def contains_html_markup(value: str) -> bool:
     decoded = _decode_entities(value)
     cursor = 0
@@ -236,46 +277,14 @@ def contains_html_markup(value: str) -> bool:
             cursor += 1
             continue
 
-        tag_start = cursor + 1
-        if tag_start >= len(decoded):
+        if cursor + 1 >= len(decoded):
             return False
 
-        if decoded.startswith("!--", tag_start):
+        found_markup, next_cursor = _check_html_tag_at(decoded, cursor)
+        if found_markup:
             return True
+        cursor = next_cursor
 
-        if decoded[tag_start].isspace():
-            space_cursor = tag_start
-            while space_cursor < len(decoded) and decoded[space_cursor].isspace():
-                space_cursor += 1
-            if space_cursor >= len(decoded):
-                cursor += 1
-                continue
-            if decoded[space_cursor] != "/":
-                cursor += 1
-                continue
-            tag_start = space_cursor
-
-        if decoded[tag_start] in {"!", "?"}:
-            return True
-
-        if decoded[tag_start] == "/":
-            tag_start += 1
-            while tag_start < len(decoded) and decoded[tag_start].isspace():
-                tag_start += 1
-
-        closing = decoded.find(">", tag_start + 1)
-        if tag_start < len(decoded) and decoded[tag_start].isalpha():
-            tag_content = decoded[
-                tag_start : closing if closing != -1 else None
-            ].strip()
-            if _looks_like_angle_email(tag_content):
-                cursor = closing + 1 if closing != -1 else len(decoded)
-                continue
-            if _is_tag_like_segment(tag_content):
-                return True
-            cursor = closing + 1 if closing != -1 else len(decoded)
-            continue
-        cursor += 1
     return False
 
 

@@ -243,6 +243,17 @@ async def test_get_auth_context_accepts_signed_bearer_session():
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
     )
+    assert context.session_verifier == "hmac"
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_uses_server_hmac_verifier():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(_session_verifier="oidc"))
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.session_verifier == "hmac"
 
 
 @pytest.mark.asyncio
@@ -474,7 +485,7 @@ async def test_admin_subject_does_not_imply_system_admin_role():
 
 
 @pytest.mark.asyncio
-async def test_system_admin_requires_explicit_signed_role_claim():
+async def test_hmac_session_rejects_platform_system_admin_role_claim():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(
         _valid_session_payload(
@@ -482,12 +493,37 @@ async def test_system_admin_requires_explicit_signed_role_claim():
         )
     )
 
-    context = await get_auth_context(authorization=f"Bearer {token}")
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
 
-    assert context.user_id == "alice"
-    assert context.role == "system_admin"
-    assert context.organization_id is None
-    assert context.workspace_id == "workspace-root"
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_hmac_session_rejects_platform_admin_role_claim():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            role="platform_admin", org=None, workspace="workspace-root"
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role_claim", (["system_admin"], 123, True, None))
+async def test_hmac_session_rejects_non_string_role_claim(role_claim: object):
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload(role=role_claim))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
 
 
 def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
@@ -690,6 +726,75 @@ def test_ensure_organization_access_rejects_cross_scope_resource():
     assert exc.value.status_code == 403
     assert exc.value.detail == "Resource belongs to a different organization"
 
+
+def test_oidc_jwks_client_fetches_from_validated_pinned_address(monkeypatch):
+    from api import auth as auth_module
+    from core.url_validation import ValidatedHTTPSURLHost
+
+    calls: list[dict[str, object]] = []
+
+    class FakeResponse:
+        status = 200
+
+        def read(self, size: int) -> bytes:
+            return b'{"keys":[]}'
+
+    class FakeConnection:
+        def __init__(
+            self,
+            address: str,
+            *,
+            port: int,
+            server_hostname: str,
+            timeout: float,
+            context: object,
+        ):
+            calls.append(
+                {
+                    "address": address,
+                    "port": port,
+                    "server_hostname": server_hostname,
+                    "timeout": timeout,
+                    "closed": False,
+                }
+            )
+
+        def request(self, method: str, target: str, headers: dict[str, str]) -> None:
+            calls[-1]["method"] = method
+            calls[-1]["target"] = target
+            calls[-1]["host"] = headers["Host"]
+
+        def getresponse(self) -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            calls[-1]["closed"] = True
+
+    monkeypatch.setattr(auth_module, "_PinnedHTTPSConnection", FakeConnection)
+    client = auth_module._PinnedOIDCJWKSClient(
+        ValidatedHTTPSURLHost(
+            normalized_url="https://login.example.test:8443/realms/naruon/jwks?rev=1",
+            hostname="login.example.test",
+            port=8443,
+            addresses=("93.184.216.34",),
+        )
+    )
+
+    assert client.fetch_data() == {"keys": []}
+    assert calls == [
+        {
+            "address": "93.184.216.34",
+            "port": 8443,
+            "server_hostname": "login.example.test",
+            "timeout": auth_module.OIDC_JWKS_TIMEOUT_SECONDS,
+            "closed": True,
+            "method": "GET",
+            "target": "/realms/naruon/jwks?rev=1",
+            "host": "login.example.test:8443",
+        }
+    ]
+
+
 @pytest.mark.asyncio
 async def test_signed_bearer_session_with_oidc(monkeypatch):
     import jwt
@@ -697,7 +802,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     
@@ -710,7 +815,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     
     def mock_jwt_decode(*args, **kwargs):
         return {
-            "iss": "http://localhost:8081/realms/naruon",
+            "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "alice",
             "role": "tenant_admin",
@@ -718,6 +823,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
             "groups": ["group-1", "group-2"],
             "workspace": "workspace-org-acme",
             "exp": int(time.time()) + 300,
+            "_session_verifier": "hmac",
         }
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 
@@ -735,6 +841,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     assert context.user_id == "alice"
     assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
+    assert context.session_verifier == "oidc"
 
 
 @pytest.mark.asyncio
@@ -744,7 +851,7 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
@@ -787,13 +894,63 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("role_claim", ("system_admin", "platform_admin"))
+async def test_oidc_session_rejects_platform_system_admin_role_claim(
+    monkeypatch, role_claim: str
+):
+    import jwt
+
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+
+    class MockKey:
+        key_id = "test-key"
+        key = "public_key"
+
+    monkeypatch.setattr("api.auth.jwks_client", object())
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
+
+    def mock_jwt_decode(*args, **kwargs):
+        return {
+            "iss": "https://login.example.test/realms/naruon",
+            "aud": "naruon-api",
+            "sub": "operator",
+            "role": role_claim,
+            "org": None,
+            "groups": [],
+            "workspace": "workspace-root",
+            "exp": int(time.time()) + 300,
+        }
+
+    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
+    )
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monkeypatch):
     import jwt
 
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
 
@@ -829,7 +986,7 @@ async def test_oidc_request_path_requires_preloaded_jwks(monkeypatch):
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "http://localhost:8081/realms/naruon"
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", ())
