@@ -21,8 +21,7 @@ opaque `webdav_accounts.source_uid` values, matching the CalDAV source-id rule.
   bearer sessions without public identity headers.
 - Keep provider writes out of scope; these endpoints still create intent
   metadata only.
-- Keep Strix on the current provider governance contract: validated org-secret
-  Vertex AI by default, explicit direct OpenAI only when selected, and no GitHub
+- Keep Strix on direct OpenAI Platform credentials only. Do not use GitHub
   Models.
 
 ## Verification

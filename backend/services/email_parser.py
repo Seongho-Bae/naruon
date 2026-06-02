@@ -50,62 +50,58 @@ def _sanitize_address_display_text(text: str) -> str:
     return _sanitize_display_text(text)
 
 
-def _process_multipart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
+def parse_eml(file_path: str | Path) -> EmailData:
+    """Parses an EML file and extracts email metadata and body.
+
+    Raises:
+        EmailParseError: If there is an issue reading the file.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            msg = email.message_from_binary_file(f, policy=policy.default)
+    except OSError as e:
+        raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
+
     plain_body = ""
     html_body = ""
     attachments = []
 
-    for part in msg.walk():
-        content_type = part.get_content_type()
-        filename = part.get_filename()
-        # Skip attachments
-        if filename:
+    if msg.is_multipart():
+        for part in msg.walk():
+            content_type = part.get_content_type()
+            filename = part.get_filename()
+            # Skip attachments
+            if filename:
+                if content_type == "text/plain":
+                    part_content = part.get_content()
+                    if isinstance(part_content, str):
+                        attachments.append(
+                            {
+                                "filename": _sanitize_display_text(filename),
+                                "content": _sanitize_display_text(part_content),
+                            }
+                        )
+                continue
+
             if content_type == "text/plain":
                 part_content = part.get_content()
                 if isinstance(part_content, str):
-                    attachments.append(
-                        {
-                            "filename": _sanitize_display_text(filename),
-                            "content": _sanitize_display_text(part_content),
-                        }
-                    )
-            continue
-
-        if content_type == "text/plain":
-            part_content = part.get_content()
-            if isinstance(part_content, str):
-                plain_body += part_content
-        elif content_type == "text/html":
-            part_content = part.get_content()
-            if isinstance(part_content, str):
-                html_body += part_content
-    return plain_body, html_body, attachments
-
-
-def _process_singlepart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
-    plain_body = ""
-    html_body = ""
-    content_type = msg.get_content_type()
-    part_content = msg.get_content()
-    if isinstance(part_content, str):
-        if content_type == "text/html":
-            html_body = part_content
-        else:
-            plain_body = part_content
-    return plain_body, html_body, []
-
-
-def _extract_body_and_attachments(msg: email.message.Message) -> tuple[str, list[dict]]:
-    if msg.is_multipart():
-        plain_body, html_body, attachments = _process_multipart_body(msg)
+                    plain_body += part_content
+            elif content_type == "text/html":
+                part_content = part.get_content()
+                if isinstance(part_content, str):
+                    html_body += part_content
     else:
-        plain_body, html_body, attachments = _process_singlepart_body(msg)
+        content_type = msg.get_content_type()
+        part_content = msg.get_content()
+        if isinstance(part_content, str):
+            if content_type == "text/html":
+                html_body = part_content
+            else:
+                plain_body = part_content
 
     body = plain_body if plain_body else html_body
-    return body, attachments
 
-
-def _extract_date(msg: email.message.Message) -> datetime.datetime:
     date_header = msg.get("Date")
     parsed_date = None
     if date_header:
@@ -116,10 +112,10 @@ def _extract_date(msg: email.message.Message) -> datetime.datetime:
 
     if not parsed_date:
         parsed_date = datetime.datetime.now(datetime.timezone.utc)
-    return parsed_date
 
+    message_id = _sanitize_nul(msg.get("Message-ID", ""))
 
-def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | None:
+    # Extract thread_id
     thread_id = None
     references = msg.get("References")  # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
@@ -137,26 +133,6 @@ def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | Non
 
     if not thread_id:
         thread_id = message_id
-
-    return thread_id
-
-
-def parse_eml(file_path: str | Path) -> EmailData:
-    """Parses an EML file and extracts email metadata and body.
-
-    Raises:
-        EmailParseError: If there is an issue reading the file.
-    """
-    try:
-        with open(file_path, "rb") as f:
-            msg = email.message_from_binary_file(f, policy=policy.default)
-    except OSError as e:
-        raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
-
-    body, attachments = _extract_body_and_attachments(msg)
-    parsed_date = _extract_date(msg)
-    message_id = _sanitize_nul(msg.get("Message-ID", ""))
-    thread_id = _extract_thread_id(msg, message_id)
 
     return {
         "message_id": message_id,

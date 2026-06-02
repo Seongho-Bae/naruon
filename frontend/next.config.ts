@@ -14,8 +14,6 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   experimental: {
-    // Best-effort local guard only: CI/Docker/runner CPU limits remain authoritative.
-    cpus: positiveIntegerFromEnv("NEXT_BUILD_CPUS", 2),
     staticGenerationMaxConcurrency: positiveIntegerFromEnv(
       "NEXT_STATIC_GENERATION_MAX_CONCURRENCY",
       2,
@@ -24,6 +22,14 @@ const nextConfig: NextConfig = {
       "NEXT_STATIC_GENERATION_MIN_PAGES_PER_WORKER",
       50,
     ),
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://127.0.0.1:8000/api/:path*',
+      },
+    ];
   },
 };
 

@@ -17,14 +17,7 @@ from typing import cast
 from api.auth import AuthContext, RoleName, get_auth_context, get_current_user
 from main import app
 
-TEST_SCOPED_ROLES = {
-    "system_admin",
-    "platform_admin",
-    "tenant_admin",
-    "organization_admin",
-    "group_admin",
-    "member",
-}
+TEST_SCOPED_ROLES = {"system_admin", "tenant_admin", "group_admin", "member"}
 
 
 def _normalize_header_value(value: str | None) -> str | None:

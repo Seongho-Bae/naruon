@@ -69,7 +69,6 @@ describe("TasksPage", () => {
     expect(container.textContent).toContain("위임한 작업");
     expect(container.textContent).toContain("실제 티켓 큐");
     expect(container.textContent).toContain("연결된 티켓 없음");
-    expect(container.querySelector('button[aria-label="더보기"]')).not.toBeNull();
   });
 
   it("loads source-linked tickets from the signed task API", async () => {
@@ -260,7 +259,7 @@ describe("TasksPage", () => {
           source_email_id: "<self-note@example.com>",
           source_thread_id: "thread-self-note",
           source_id: "webdav_src_primary",
-          target_label: "WebDAV source webdav_src_primary",
+          server_url: "https://webdav.naruon.net",
           target_path: "/Naruon/Notes/task-self-knowledge.md",
           requires_if_match: true,
           provenance: "server-authoritative",
@@ -304,8 +303,7 @@ describe("TasksPage", () => {
       method: "POST",
     }));
     expect(container.textContent).toContain("/Naruon/Notes/task-self-knowledge.md");
-    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
-    expect(container.textContent).not.toContain("https://webdav.naruon.net");
+    expect(container.textContent).toContain("https://webdav.naruon.net");
     expect(container.textContent).toContain("provider_write_executed=false");
     expect(container.textContent).toContain("webdav.self_sent_knowledge_intent.created");
   });

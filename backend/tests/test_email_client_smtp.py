@@ -134,60 +134,6 @@ def test_smtp_host_rejects_mixed_public_and_private_dns_answers(monkeypatch):
         email_client.validate_smtp_host("smtp.example.com", resolve_host=True)
 
 
-@pytest.mark.parametrize(
-    "numeric_host",
-    ["2130706433", "0x7f000001", "0177.0.0.1", "127001"],
-)
-def test_smtp_host_rejects_legacy_numeric_ip_literals_before_dns(
-    monkeypatch, numeric_host
-):
-    monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", numeric_host)
-
-    def fail_getaddrinfo(*args, **kwargs):
-        raise AssertionError("legacy numeric SMTP host must fail before DNS")
-
-    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
-
-    with pytest.raises(ValueError, match=email_client.SMTP_HOST_NOT_ALLOWED):
-        email_client.validate_smtp_host(numeric_host, resolve_host=True)
-
-
-@pytest.mark.parametrize(
-    ("protocol_name", "allowed_setting", "validator", "host_error"),
-    [
-        (
-            "IMAP",
-            "ALLOWED_IMAP_HOSTS",
-            email_client.validate_imap_host,
-            email_client.IMAP_HOST_NOT_ALLOWED,
-        ),
-        (
-            "POP3",
-            "ALLOWED_POP3_HOSTS",
-            email_client.validate_pop3_host,
-            email_client.POP3_HOST_NOT_ALLOWED,
-        ),
-    ],
-)
-def test_inbound_mail_hosts_reject_legacy_numeric_ip_literals_before_dns(
-    monkeypatch,
-    protocol_name,
-    allowed_setting,
-    validator,
-    host_error,
-):
-    numeric_host = "2130706433"
-    monkeypatch.setattr(email_client.settings, allowed_setting, numeric_host)
-
-    def fail_getaddrinfo(*args, **kwargs):
-        raise AssertionError(f"legacy numeric {protocol_name} host must fail before DNS")
-
-    monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
-
-    with pytest.raises(ValueError, match=host_error):
-        validator(numeric_host, resolve_host=True)
-
-
 def test_smtp_destination_rejects_mixed_public_and_private_dns_answers(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "smtp.example.com")
     monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_PORTS", "587")

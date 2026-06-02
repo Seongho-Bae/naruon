@@ -37,4 +37,4 @@
 
 - [x] **Step 1: Add `/api/calendar/writeback-intent` with provenance**
 - [x] **Step 2: Support ETag / If-Match collision checks**
-- [x] **Step 3: Write DAG/Ontology placeholder processing**
+- [ ] **Step 3: Write DAG/Ontology placeholder processing**

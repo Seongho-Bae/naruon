@@ -20,31 +20,6 @@ ontology evidence instead of a global, unscoped relationship graph.
 - Render a Search detail sender DAG panel that shows relationship type,
   confidence, next action, and source/thread provenance.
 
-## External best-practice inputs checked
-
-- W3C PROV models provenance around entities, activities, agents, and qualified
-  relationships. This slice keeps the relationship tied to the source email and
-  thread entity instead of presenting a global sender label as current evidence.
-  Source: https://www.w3.org/TR/prov-o/
-- Schema.org `potentialAction` provides a lightweight precedent for attaching
-  possible next actions to an entity. Naruon keeps this as deterministic
-  `next_action` metadata, not autonomous provider mutation.
-  Source: https://schema.org/potentialAction
-
-## Implemented capture slice
-
-- Add signed `POST /api/ontology/relationships/capture-source`.
-- The endpoint accepts a `source_message_id`, re-reads the source `Email` row
-  under the signed owner and organization scope, derives the thread id
-  server-side, and writes/updates `sender_relationships` through the existing
-  ontology service.
-- The browser sends only the source message id from the selected Search result.
-  It does not submit public identity headers, relationship labels, confidence
-  scores, or provider write claims.
-- Search detail now shows a `발신자 관계 캡처` action when the current source has
-  no DAG evidence. The returned relationship immediately replaces the empty
-  state and shows the next action.
-
 ## Non-Goals
 
 - No provider writeback.

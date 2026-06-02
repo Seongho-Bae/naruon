@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,12 +14,7 @@ from api.auth import (
     get_auth_context,
     is_admin_role,
 )
-from db.models import (
-    CalendarWritebackSource,
-    ConnectorSignalEvent,
-    SecurityAuditEvent,
-    WebdavAccount,
-)
+from db.models import CalendarWritebackSource, ConnectorSignalEvent, WebdavAccount
 from db.session import get_db
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
@@ -29,7 +24,6 @@ SourceType = Literal["caldav_source", "carddav_source", "webdav_repository"]
 DecisionReason = Literal[
     "allowed",
     "organization_denied",
-    "workspace_denied",
     "data_region_denied",
     "consent_denied",
     "ownership_denied",
@@ -77,20 +71,6 @@ class ConnectorEvidence(BaseModel):
     observed_at: str
 
 
-class DurableAuditEvidence(BaseModel):
-    event_uid: str
-    actor_user_id: str
-    actor_role: str
-    organization_id: str | None
-    workspace_id: str
-    event_action: str
-    resource_type: str
-    resource_uid: str | None
-    evidence_source: str
-    detail_text: str | None
-    observed_at: str
-
-
 class ExternalShareReview(BaseModel):
     review_uid: str
     source_id: str
@@ -114,7 +94,6 @@ class SecurityAccessSurfaceResponse(BaseModel):
     viewer: ViewerContext
     sources: list[GovernanceSource]
     connector_events: list[ConnectorEvidence]
-    durable_audit_events: list[DurableAuditEvidence]
     policy_decisions: list[PolicyDecisionSummary]
     external_share_reviews: list[ExternalShareReview]
     policy_order: list[PolicyOrderStep]
@@ -143,11 +122,8 @@ def _webdav_scope_statement(auth_context: AuthContext):
         WebdavAccount.created_at.asc(),
         WebdavAccount.source_uid.asc(),
     )
-    statement = statement.where(WebdavAccount.workspace_id == auth_context.workspace_id)
     if _can_read_org_scope(auth_context):
-        return statement.where(
-            WebdavAccount.organization_id == auth_context.organization_id
-        )
+        return statement.where(WebdavAccount.organization_id == auth_context.organization_id)
     organization_filter = (
         WebdavAccount.organization_id == auth_context.organization_id
         if auth_context.organization_id is not None
@@ -162,10 +138,7 @@ def _webdav_scope_statement(auth_context: AuthContext):
 def _calendar_scope_statement(auth_context: AuthContext):
     statement = (
         select(CalendarWritebackSource)
-        .where(
-            CalendarWritebackSource.source_protocol.in_(("caldav", "carddav")),
-            CalendarWritebackSource.workspace_id == auth_context.workspace_id,
-        )
+        .where(CalendarWritebackSource.source_protocol.in_(("caldav", "carddav")))
         .order_by(
             CalendarWritebackSource.created_at.asc(),
             CalendarWritebackSource.source_uid.asc(),
@@ -200,25 +173,16 @@ def _connector_scope_statement(auth_context: AuthContext):
     )
 
 
-def _durable_audit_scope_statement(auth_context: AuthContext):
-    statement = (
-        select(SecurityAuditEvent)
-        .where(SecurityAuditEvent.workspace_id == auth_context.workspace_id)
-        .order_by(SecurityAuditEvent.observed_at.desc())
-        .limit(12)
-    )
+def _source_in_scope(
+    auth_context: AuthContext,
+    owner_id: str,
+    organization_id: str | None,
+) -> bool:
     if _can_read_org_scope(auth_context):
-        return statement.where(
-            SecurityAuditEvent.organization_id == auth_context.organization_id
-        )
-    organization_filter = (
-        SecurityAuditEvent.organization_id == auth_context.organization_id
-        if auth_context.organization_id is not None
-        else SecurityAuditEvent.organization_id.is_(None)
-    )
-    return statement.where(
-        SecurityAuditEvent.actor_user_id == auth_context.user_id,
-        organization_filter,
+        return organization_id == auth_context.organization_id
+    return (
+        owner_id == auth_context.user_id
+        and organization_id == auth_context.organization_id
     )
 
 
@@ -230,7 +194,6 @@ def _access_request(auth_context: AuthContext) -> AccessRequest:
         group_ids=auth_context.group_ids,
         data_region="kr",
         consent_scopes=("mail.read", "calendar.read", "webdav.write"),
-        workspace_id=auth_context.workspace_id,
     )
 
 
@@ -258,15 +221,11 @@ def _source_policy(
     auth_context: AuthContext,
     owner_id: str,
     organization_id: str | None,
-    workspace_id: str,
     writeback_enabled: bool,
 ) -> ResourcePolicy:
     delegated_user_ids: tuple[str, ...] = (
         (auth_context.user_id,)
-        if (
-            is_admin_role(auth_context.role)
-            and organization_id == auth_context.organization_id
-        )
+        if is_admin_role(auth_context.role) and organization_id == auth_context.organization_id
         else ()
     )
     required_consent = ("webdav.write",) if writeback_enabled else ()
@@ -277,7 +236,6 @@ def _source_policy(
         permitted_group_ids=auth_context.group_ids,
         data_region="kr",
         required_consent_scopes=required_consent,
-        workspace_id=workspace_id,
         delegated_user_ids=delegated_user_ids,
     )
 
@@ -294,7 +252,6 @@ def _webdav_source(
             auth_context,
             account.user_id,
             account.organization_id,
-            account.workspace_id,
             bool(account.writeback_enabled),
         ),
         evidence_source="webdav_accounts",
@@ -306,7 +263,7 @@ def _webdav_source(
         source_host=_host_from_url(account.server_url),
         owner_id=account.user_id,
         organization_id=account.organization_id,
-        workspace_id=account.workspace_id,
+        workspace_id=auth_context.workspace_id,
         capabilities=["read", "write", "etag"] if account.writeback_enabled else ["read"],
         writeback_enabled=bool(account.writeback_enabled),
         provider_write_executed=False,
@@ -330,7 +287,6 @@ def _calendar_source(
             auth_context,
             source.user_id,
             source.organization_id,
-            source.workspace_id,
             bool(source.writeback_enabled),
         ),
         evidence_source="calendar_writeback_sources",
@@ -364,22 +320,6 @@ def _connector_evidence(event: ConnectorSignalEvent) -> ConnectorEvidence:
     )
 
 
-def _durable_audit_evidence(event: SecurityAuditEvent) -> DurableAuditEvidence:
-    return DurableAuditEvidence(
-        event_uid=event.event_uid,
-        actor_user_id=event.actor_user_id,
-        actor_role=event.actor_role,
-        organization_id=event.organization_id,
-        workspace_id=event.workspace_id,
-        event_action=event.event_action,
-        resource_type=event.resource_type,
-        resource_uid=event.resource_uid,
-        evidence_source=event.evidence_source,
-        detail_text=event.detail_text,
-        observed_at=_datetime_to_utc_iso(event.observed_at),
-    )
-
-
 def _canonical_policy_decisions(
     auth_context: AuthContext,
     source_decisions: list[PolicyDecisionSummary],
@@ -398,7 +338,6 @@ def _canonical_policy_decisions(
                 permitted_group_ids=(),
                 data_region="kr",
                 required_consent_scopes=(),
-                workspace_id=auth_context.workspace_id,
             ),
             evidence_source="access_policy.evaluate_access",
         )
@@ -416,7 +355,6 @@ def _canonical_policy_decisions(
                 permitted_group_ids=auth_context.group_ids,
                 data_region="eu",
                 required_consent_scopes=(),
-                workspace_id=auth_context.workspace_id,
             ),
             evidence_source="access_policy.evaluate_access",
         )
@@ -476,38 +414,33 @@ def _policy_order() -> list[PolicyOrderStep]:
     ]
 
 
-def _require_authoritative_workspace_scope(auth_context: AuthContext) -> None:
-    if auth_context.session_verifier == "hmac":
-        raise HTTPException(
-            status_code=403,
-            detail="Authoritative workspace membership is required for security access surface",
-        )
-
-
 @router.get("/access-surface", response_model=SecurityAccessSurfaceResponse)
 async def get_access_surface(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> SecurityAccessSurfaceResponse:
-    _require_authoritative_workspace_scope(auth_context)
     webdav_result = await db.execute(_webdav_scope_statement(auth_context))
     calendar_result = await db.execute(_calendar_scope_statement(auth_context))
-    audit_result = await db.execute(_durable_audit_scope_statement(auth_context))
     connector_statement = _connector_scope_statement(auth_context)
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:
         connector_result = await db.execute(connector_statement)
-        connector_events = connector_result.scalars().all()
-
-    durable_audit_events = audit_result.scalars().all()
+        connector_events = [
+            event
+            for event in connector_result.scalars().all()
+            if event.organization_id == auth_context.organization_id
+            and event.workspace_id == auth_context.workspace_id
+        ]
 
     sources = [
         _webdav_source(account, auth_context)
         for account in webdav_result.scalars().all()
+        if _source_in_scope(auth_context, account.user_id, account.organization_id)
     ]
     sources.extend(
         _calendar_source(source, auth_context)
         for source in calendar_result.scalars().all()
+        if _source_in_scope(auth_context, source.user_id, source.organization_id)
     )
     source_decisions = [source.policy_decision for source in sources]
     policy_decisions = _canonical_policy_decisions(auth_context, source_decisions)
@@ -525,9 +458,6 @@ async def get_access_surface(
         ),
         sources=sources,
         connector_events=[_connector_evidence(event) for event in connector_events],
-        durable_audit_events=[
-            _durable_audit_evidence(event) for event in durable_audit_events
-        ],
         policy_decisions=policy_decisions,
         external_share_reviews=_share_reviews(sources),
         policy_order=_policy_order(),

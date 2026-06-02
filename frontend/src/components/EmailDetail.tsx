@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Loader2, MessagesSquare } from "lucide-react";
+import { MessagesSquare } from "lucide-react";
 import { InsightCard } from "@/components/InsightCard";
 import {
   buildThreadUrl,
@@ -366,7 +366,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     disabled={isSyncing}
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
-                    {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                     {isSyncing ? "동기화 중" : "캘린더 반영"}
                   </Button>
                 )}
@@ -378,7 +377,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     disabled={isCreatingTask}
                     className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
                   >
-                    {isCreatingTask && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                     {isCreatingTask ? "추적 중" : "할 일 만들기"}
                   </Button>
                 )}
@@ -463,7 +461,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 size="sm"
                 className="h-10 rounded-xl border-purple-500/30 px-4 text-purple-700 hover:bg-purple-500/10"
               >
-                {isDrafting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                 {isDrafting ? "초안 작성 중" : "AI 답장 초안"}
               </Button>
             </div>
@@ -505,7 +502,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                   size="sm"
                   className="h-9 rounded-xl px-4"
                 >
-                  {isSending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
                   {isSending ? "전송 중" : "답장 보내기"}
                 </Button>
               </div>

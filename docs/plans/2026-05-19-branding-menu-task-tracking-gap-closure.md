@@ -54,16 +54,6 @@
   reply-tracking notifications, ETag-aware WebDAV/Notes provider execution for
   self-sent knowledge, and source-id filtered sender DAG views.
 
-## 2026-05-31 dashboard dead-control closure
-
-- The Today dashboard task and calendar controls now route to implemented
-  `/tasks` and `/calendar` workspaces instead of inert buttons.
-- The Home quick-action grid links only to implemented workspace routes:
-  `/mail`, `/mail?folder=sent`, `/calendar`, `/tasks`, `/projects`, `/ai-hub`,
-  `/data`, and `/security`.
-- Header notification, help, and profile icons route to existing Security and
-  Settings surfaces so branded chrome controls are no longer decorative.
-
 ## Task 1: Governance wait-state correction
 
 **Files:**

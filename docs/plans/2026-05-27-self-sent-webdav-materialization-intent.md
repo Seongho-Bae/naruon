@@ -58,9 +58,6 @@ Browser evidence to inspect:
 
 ## Governance
 
-- Strix follows the current provider governance contract: GitHub Models is the
-  default via `models: read`, `github.token`, and a trusted `LLM_API_BASE`
-  input file, while Vertex and direct OpenAI remain explicit-only provider
-  paths.
-- Generic `LLM_API_KEY`, arbitrary Gemini/Vertex fallback, and cross-provider
-  credential forwarding are not valid Strix routes.
+- Strix remains OpenAI Platform direct-only through `STRIX_OPENAI_API_KEY`.
+- GitHub Models, `github.token`, generic `LLM_API_KEY`, Gemini/Vertex fallback,
+  GPT-4o, and GPT-4.1 are not valid Strix routes.

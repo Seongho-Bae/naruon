@@ -18,16 +18,14 @@ WEB_DAV_ERROR_STATUS_CODES = {
 
 class WebdavAccountResponse(BaseModel):
     source_id: str
-    display_label: str
+    server_url: str
+    username: str
     writeback_enabled: bool
-    etag: str | None = None
 
 class ProjectFolderResponse(BaseModel):
     folder_uid: str
     project_name: str
     webdav_path: str
-    owner_user_id: str
-    organization_id: str | None
 
 class WritebackIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -37,9 +35,8 @@ class WritebackIntentRequest(BaseModel):
 class WritebackIntentResponse(BaseModel):
     intent: str
     source_id: str | None
-    target_label: str | None
+    server_url: str | None
     requires_if_match: bool
-    if_match: str | None = None
     provenance: str
     status: str | None = None
     message: str | None = None
@@ -58,10 +55,9 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     source_email_id: str | None
     source_thread_id: str | None
     source_id: str | None
-    target_label: str | None
+    server_url: str | None
     target_path: str
     requires_if_match: bool
-    if_match: str | None = None
     provenance: str
     provider_write_executed: bool
     audit_event: str
@@ -76,7 +72,6 @@ async def get_webdav_accounts(
         db,
         user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
     )
 
 @router.get("/folders", response_model=List[ProjectFolderResponse])
@@ -102,7 +97,6 @@ async def get_webdav_writeback_intent(
         db,
         user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
         target_source_id=req.target_source_id,
     )
     if result.get("status") == "error":
@@ -122,7 +116,6 @@ async def get_knowledge_materialization_intent(
         db,
         auth_context.user_id,
         auth_context.organization_id,
-        auth_context.workspace_id,
         req.source_task_id,
         target_source_id=req.target_source_id,
     )

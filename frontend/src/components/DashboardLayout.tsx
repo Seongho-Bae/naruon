@@ -401,16 +401,16 @@ export function DashboardLayout({
             ))}
           </div>
           <div className="ml-auto flex items-center gap-2 xl:ml-0">
-            <Link href="/security" aria-label="알림 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
+            <button type="button" aria-label="알림 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
               <Bell className="size-4" aria-hidden="true" />
-            </Link>
-            <Link href="/settings#help" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
+            </button>
+            <button type="button" aria-label="도움말 보기" className="hidden size-10 place-items-center rounded-xl border border-border text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 md:grid">
               <HelpCircle className="size-4" aria-hidden="true" />
-            </Link>
-            <Link href="/settings#profile" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:inline-flex">
+            </button>
+            <button type="button" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:inline-flex">
               <UserCircle className="size-4 text-primary" aria-hidden="true" />
               Seongho
-            </Link>
+            </button>
             <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary xl:inline-flex">
               답장 추적
             </span>

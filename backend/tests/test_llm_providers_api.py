@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from core.config import settings
-from db.models import AuditLog, LLMProvider, SecurityAuditEvent
+from db.models import AuditLog, LLMProvider
 from db.session import get_db
 from main import app
 
@@ -36,7 +36,6 @@ class MockSession:
     def __init__(self):
         self.providers: list[LLMProvider] = []
         self.audits: list[AuditLog] = []
-        self.security_audits: list[SecurityAuditEvent] = []
 
     async def execute(self, stmt):
         stmt_str = str(stmt).lower()
@@ -71,8 +70,6 @@ class MockSession:
             self.providers.append(obj)
         elif isinstance(obj, AuditLog):
             self.audits.append(obj)
-        elif isinstance(obj, SecurityAuditEvent):
-            self.security_audits.append(obj)
 
     async def delete(self, obj):
         self.providers = [
@@ -80,9 +77,6 @@ class MockSession:
         ]
 
     async def commit(self):
-        return None
-
-    async def flush(self):
         return None
 
     async def refresh(self, obj):
@@ -102,7 +96,6 @@ def override_get_db():
     app.dependency_overrides.clear()
     mock_session.providers = []
     mock_session.audits = []
-    mock_session.security_audits = []
 
 
 @pytest.fixture
@@ -163,31 +156,6 @@ def test_llm_provider_crud_admin(admin_client):
 
     response = admin_client.delete(f"/api/llm-providers/{provider_id}")
     assert response.status_code == 204
-    assert [event.event_action for event in mock_session.security_audits] == [
-        "create",
-        "update",
-        "delete",
-    ]
-    assert {event.actor_user_id for event in mock_session.security_audits} == {"admin"}
-    assert {event.actor_role for event in mock_session.security_audits} == {
-        "tenant_admin"
-    }
-    assert {event.organization_id for event in mock_session.security_audits} == {
-        "org-acme"
-    }
-    assert {event.workspace_id for event in mock_session.security_audits} == {
-        "workspace-org-acme"
-    }
-    assert all(
-        event.resource_uid and event.resource_uid.startswith("llm_provider:")
-        for event in mock_session.security_audits
-    )
-    serialized_security_audits = " ".join(
-        f"{event.resource_uid or ''} {event.detail_text or ''}"
-        for event in mock_session.security_audits
-    )
-    assert "sk-12345" not in serialized_security_audits
-    assert "Primary OpenAI" not in serialized_security_audits
 
 
 def test_llm_provider_rejects_internal_base_url_on_create(admin_client):

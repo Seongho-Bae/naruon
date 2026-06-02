@@ -49,20 +49,6 @@ type ConnectorEvidence = {
   observed_at: string;
 };
 
-type DurableAuditEvidence = {
-  event_uid: string;
-  actor_user_id: string;
-  actor_role: string;
-  organization_id: string | null;
-  workspace_id: string;
-  event_action: string;
-  resource_type: string;
-  resource_uid: string | null;
-  evidence_source: string;
-  detail_text: string | null;
-  observed_at: string;
-};
-
 type ExternalShareReview = {
   review_uid: string;
   source_id: string;
@@ -92,7 +78,6 @@ type SecurityAccessSurface = {
   };
   sources: GovernanceSource[];
   connector_events: ConnectorEvidence[];
-  durable_audit_events: DurableAuditEvidence[];
   policy_decisions: PolicyDecisionSummary[];
   external_share_reviews: ExternalShareReview[];
   policy_order: PolicyOrderStep[];
@@ -343,65 +328,14 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
   return (
     <section aria-label="보안 감사 로그" className="space-y-5">
       <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">Durable audit evidence</h2>
+        <h2 className="text-base font-bold">Connector evidence와 감사 이벤트</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          organization_id와 workspace_id가 있는 새 감사 이벤트만 표시하고 legacy AuditLog는 직접 노출하지 않습니다.
+          AuditLog 직접 노출 대신 scoped connector evidence와 API audit event만 표시합니다.
         </p>
         <div className="mt-4 rounded-lg border border-border bg-background p-3">
           <p className="text-xs font-bold text-muted-foreground">API audit event</p>
           <p className="mt-1 font-mono text-sm">{data.audit_event}</p>
         </div>
-        {data.durable_audit_events.length === 0 ? (
-          <div className="mt-4">
-            <EmptyState label="durable audit event" />
-          </div>
-        ) : (
-          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {data.durable_audit_events.map((event) => (
-              <article key={event.event_uid} className="rounded-lg border border-border bg-background p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold">{event.event_action} / {event.resource_type}</h3>
-                    <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{event.resource_uid ?? event.event_uid}</p>
-                  </div>
-                  <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">{event.actor_role}</span>
-                </div>
-                <dl className="mt-3 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-                  <div>
-                    <dt className="font-bold text-muted-foreground">event_uid</dt>
-                    <dd className="break-all font-mono">{event.event_uid}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-bold text-muted-foreground">actor_user_id</dt>
-                    <dd className="break-all font-mono">{event.actor_user_id}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-bold text-muted-foreground">workspace_id</dt>
-                    <dd className="break-all font-mono">{event.workspace_id}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-bold text-muted-foreground">evidence_source</dt>
-                    <dd className="break-all font-mono">{event.evidence_source}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-bold text-muted-foreground">observed_at</dt>
-                    <dd className="break-all font-mono">{event.observed_at}</dd>
-                  </div>
-                </dl>
-                {event.detail_text ? (
-                  <p className="mt-3 break-words text-sm text-muted-foreground">{event.detail_text}</p>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-bold">Connector evidence</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          outbound connector가 남긴 workspace-scoped 운영 신호입니다.
-        </p>
         {data.connector_events.length === 0 ? (
           <div className="mt-4">
             <EmptyState label="connector evidence" />

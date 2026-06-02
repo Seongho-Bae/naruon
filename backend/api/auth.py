@@ -1,127 +1,30 @@
-import http.client
+import base64
+import binascii
+import hashlib
+import hmac
 import json
 import logging
 import math
-import socket
-import ssl
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal, cast
-from urllib.parse import urlsplit
 
 import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException
 
 from core.config import settings, validate_auth_session_hmac_secret_value
-from core.url_validation import (
-    ValidatedHTTPSURLHost,
-    parse_allowed_hosts,
-    validate_https_url_host_details,
-)
 
 logger = logging.getLogger(__name__)
 OIDC_JWKS_TIMEOUT_SECONDS = 5
-OIDC_JWKS_MAX_RESPONSE_BYTES = 1024 * 1024
 
-
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    def __init__(
-        self,
-        address: str,
-        *,
-        port: int,
-        server_hostname: str,
-        timeout: float,
-        context: ssl.SSLContext,
-    ):
-        super().__init__(address, port=port, timeout=timeout, context=context)
-        self._server_hostname = server_hostname
-
-    def connect(self) -> None:
-        self.sock = socket.create_connection(
-            (self.host, self.port),
-            self.timeout,
-            self.source_address,
-        )
-        self.sock = self._context.wrap_socket(
-            self.sock,
-            server_hostname=self._server_hostname,
-        )
-
-
-class _PinnedOIDCJWKSClient(PyJWKClient):
-    def __init__(self, validated_url: ValidatedHTTPSURLHost):
-        super().__init__(
-            validated_url.normalized_url,
-            cache_keys=True,
-            timeout=OIDC_JWKS_TIMEOUT_SECONDS,
-        )
-        self._validated_url = validated_url
-        self._ssl_context = ssl.create_default_context()
-
-    def fetch_data(self) -> Any:
-        parsed = urlsplit(self.uri)
-        target = parsed.path or "/"
-        if parsed.query:
-            target = f"{target}?{parsed.query}"
-        host_header = self._validated_url.hostname
-        if self._validated_url.port != 443:
-            host_header = f"{host_header}:{self._validated_url.port}"
-
-        last_error: Exception | None = None
-        for address in self._validated_url.addresses:
-            try:
-                connection = _PinnedHTTPSConnection(
-                    address,
-                    port=self._validated_url.port,
-                    server_hostname=self._validated_url.hostname,
-                    timeout=self.timeout,
-                    context=self._ssl_context,
-                )
-                try:
-                    connection.request(
-                        "GET",
-                        target,
-                        headers={
-                            **self.headers,
-                            "Host": host_header,
-                        },
-                    )
-                    response = connection.getresponse()
-                    response_body = response.read(OIDC_JWKS_MAX_RESPONSE_BYTES + 1)
-                    if len(response_body) > OIDC_JWKS_MAX_RESPONSE_BYTES:
-                        raise ValueError("OIDC JWKS response is too large")
-                    if response.status >= 400:
-                        raise ValueError(
-                            f"OIDC JWKS endpoint returned {response.status}"
-                        )
-                    jwk_set = json.loads(response_body.decode("utf-8"))
-                finally:
-                    connection.close()
-                if self.jwk_set_cache is not None:
-                    self.jwk_set_cache.put(jwk_set)
-                return jwk_set
-            except Exception as exc:
-                last_error = exc
-        raise jwt.PyJWKClientConnectionError(
-            f'Fail to fetch data from the url, err: "{last_error}"'
-        ) from last_error
-
-
-def _build_oidc_jwks_client() -> PyJWKClient | None:
-    if not settings.OIDC_JWKS_URL:
-        return None
-    validated_url = validate_https_url_host_details(
-        "OIDC_JWKS_URL",
+jwks_client = None
+if settings.OIDC_JWKS_URL:
+    jwks_client = PyJWKClient(
         settings.OIDC_JWKS_URL,
-        parse_allowed_hosts(settings.ALLOWED_OIDC_HOSTS),
-        "ALLOWED_OIDC_HOSTS",
+        cache_keys=True,
+        timeout=OIDC_JWKS_TIMEOUT_SECONDS,
     )
-    return _PinnedOIDCJWKSClient(validated_url)
-
-
-jwks_client = _build_oidc_jwks_client()
 _cached_oidc_signing_keys: tuple[Any, ...] = ()
 
 RoleName = Literal[
@@ -132,7 +35,6 @@ RoleName = Literal[
     "group_admin",
     "member",
 ]
-SessionVerifier = Literal["hmac", "oidc", "override"]
 ALLOWED_ROLES: set[str] = {
     "system_admin",
     "tenant_admin",
@@ -157,7 +59,6 @@ class AuthContext:
     organization_id: str | None
     group_ids: tuple[str, ...]
     workspace_id: str
-    session_verifier: SessionVerifier = field(default="override", compare=False)
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
@@ -197,8 +98,8 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
     dependency path. Endpoint tests that need fixture identities must continue to
     use explicit FastAPI dependency overrides.
     """
-    payload, session_verifier = _verify_signed_session_payload(authorization)
-    return _auth_context_from_session_payload(payload, session_verifier)
+    payload = _verify_signed_session_payload(authorization)
+    return _auth_context_from_session_payload(payload)
 
 
 def _authentication_error() -> HTTPException:
@@ -264,9 +165,35 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def _verify_signed_session_payload(
-    authorization: str | None,
-) -> tuple[dict[str, Any], SessionVerifier]:
+def _base64url_decode(segment: str) -> bytes:
+    if not segment:
+        raise _authentication_error()
+    segment_bytes = _ascii_token_segment(segment)
+    padding = b"=" * (-len(segment_bytes) % 4)
+    try:
+        return base64.b64decode(segment_bytes + padding, altchars=b"-_", validate=True)
+    except (binascii.Error, ValueError):
+        raise _authentication_error() from None
+
+
+def _ascii_token_segment(segment: str) -> bytes:
+    try:
+        return segment.encode("ascii")
+    except UnicodeEncodeError:
+        raise _authentication_error() from None
+
+
+def _json_object_from_base64url_segment(segment: str) -> dict[str, Any]:
+    try:
+        decoded = json.loads(_base64url_decode(segment).decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise _authentication_error() from None
+    if not isinstance(decoded, dict):
+        raise _authentication_error()
+    return decoded
+
+
+def _verify_signed_session_payload(authorization: str | None) -> dict[str, Any]:
     token = _extract_bearer_token(authorization)
 
     # OIDC RS256 verification is authoritative when configured.
@@ -282,43 +209,31 @@ def _verify_signed_session_payload(
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL
             )
-            _reject_signed_session_system_admin_payload(payload)
-            return payload, "oidc"
+            return payload
         except Exception:
             raise _authentication_error() from None
 
-    try:
-        header = jwt.get_unverified_header(token)
-    except jwt.PyJWTError:
-        raise _authentication_error() from None
+    # Legacy HMAC HS256 Fallback
+    token_segments = token.split(".")
+    if len(token_segments) != 3:
+        raise _authentication_error()
+    header_segment, payload_segment, signature_segment = token_segments
+
+    header = _json_object_from_base64url_segment(header_segment)
     if header.get("alg") != SESSION_SIGNING_ALGORITHM:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 
-    try:
-        payload = jwt.decode(
-            token,
-            _session_secret_bytes(),
-            algorithms=[SESSION_SIGNING_ALGORITHM],
-            audience=SESSION_AUDIENCE,
-            issuer=SESSION_ISSUER,
-        )
-    except jwt.PyJWTError:
+    secret = _session_secret_bytes()
+    signing_input = f"{header_segment}.{payload_segment}"
+    expected_signature = hmac.new(
+        secret, _ascii_token_segment(signing_input), hashlib.sha256
+    ).digest()
+    provided_signature = _base64url_decode(signature_segment)
+    if not hmac.compare_digest(expected_signature, provided_signature):
         raise _authentication_error()
-    if not isinstance(payload, dict):
-        raise _authentication_error()
-    _reject_signed_session_system_admin_payload(payload)
-    return payload, "hmac"
 
-
-def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None:
-    role_claim = payload.get("role")
-    if not isinstance(role_claim, str):
-        raise _authentication_error()
-    # SaaS control-plane roles require explicit server-side assignment, not
-    # externally supplied HMAC or enterprise OIDC session claims.
-    if role_claim in SYSTEM_ADMIN_ROLES:
-        raise _authentication_error()
+    return _json_object_from_base64url_segment(payload_segment)
 
 
 def _required_string_claim(payload: dict[str, Any], name: str) -> str:
@@ -369,9 +284,7 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
         raise _authentication_error()
 
 
-def _auth_context_from_session_payload(
-    payload: dict[str, Any], session_verifier: SessionVerifier
-) -> AuthContext:
+def _auth_context_from_session_payload(payload: dict[str, Any]) -> AuthContext:
     _validate_session_metadata(payload)
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
@@ -386,7 +299,6 @@ def _auth_context_from_session_payload(
         organization_id=organization_id,
         group_ids=_tuple_string_claim(payload, "groups"),
         workspace_id=_required_string_claim(payload, "workspace"),
-        session_verifier=cast(SessionVerifier, session_verifier),
     )
 
 

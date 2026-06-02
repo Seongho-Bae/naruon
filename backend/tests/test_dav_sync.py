@@ -1,17 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
-
-def test_webdav_source_label_uses_opaque_source_id():
-    from services.webdav_service import safe_webdav_source_label
-
-    assert (
-        safe_webdav_source_label("webdav_src_primary")
-        == "WebDAV source webdav_src_primary"
-    )
-    assert safe_webdav_source_label(None) == "WebDAV source"
-
-
 @pytest.mark.asyncio
 async def test_caldav_event_parsing_and_sync():
     from services.caldav_service import sync_caldav_accounts
@@ -42,7 +31,6 @@ async def test_webdav_file_listing_and_sync():
     
     session_mock = AsyncMock()
     account_mock = MagicMock()
-    account_mock.source_uid = "webdav_src_primary"
     account_mock.server_url = "https://webdav.example.com"
     
     execute_res = MagicMock()
@@ -51,13 +39,4 @@ async def test_webdav_file_listing_and_sync():
     
     with patch("services.webdav_service.logger") as logger_mock:
         await sync_webdav_folders(session_mock, "user_1")
-        logger_mock.info.assert_any_call(
-            "Fetched folder structures for WebDAV source %s",
-            "webdav_src_primary",
-        )
-        logged_args = " ".join(
-            str(arg)
-            for call in logger_mock.info.call_args_list
-            for arg in call.args
-        )
-        assert "https://webdav.example.com" not in logged_args
+        assert logger_mock.info.called

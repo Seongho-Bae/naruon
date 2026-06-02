@@ -9,13 +9,6 @@ from services.knowledge_extractor import SELF_SENT_KNOWLEDGE_SOURCE
 
 logger = logging.getLogger(__name__)
 
-
-def safe_webdav_source_label(source_id: str | None) -> str:
-    if not source_id:
-        return "WebDAV source"
-    return f"WebDAV source {source_id}"
-
-
 async def sync_webdav_folders(session, user_id: str):
     """
     Fetch folder structures for all WebDAV accounts of the user.
@@ -28,10 +21,7 @@ async def sync_webdav_folders(session, user_id: str):
     res = await session.execute(stmt)
     accounts = res.scalars().all()
     for account in accounts:
-        logger.info(
-            "Fetched folder structures for WebDAV source %s",
-            account.source_uid or "unknown",
-        )
+        logger.info(f"Fetched folder structures for WebDAV account {account.server_url}")
     return True
 
 class WebDavService:
@@ -42,9 +32,7 @@ class WebDavService:
                     "source_id": "webdav_src_demo_primary",
                     "server_url": "https://webdav.naruon.net",
                     "username": "demo_user",
-                    "display_label": "WebDAV source webdav_src_demo_primary",
                     "writeback_enabled": True,
-                    "etag": "etag-webdav-demo-primary",
                 }
             ]
         }
@@ -53,16 +41,12 @@ class WebDavService:
                 {
                     "folder_uid": "webdav_folder_demo_roadmap",
                     "project_name": "Naruon Roadmap 2026",
-                    "webdav_path": "/Projects/Naruon_Roadmap_2026",
-                    "owner_user_id": "demo_user",
-                    "organization_id": None,
+                    "webdav_path": "/Projects/Naruon_Roadmap_2026"
                 },
                 {
                     "folder_uid": "webdav_folder_demo_marketing",
                     "project_name": "Marketing Assets",
-                    "webdav_path": "/Projects/Marketing_Assets",
-                    "owner_user_id": "demo_user",
-                    "organization_id": None,
+                    "webdav_path": "/Projects/Marketing_Assets"
                 }
             ]
         }
@@ -85,30 +69,27 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None = None,
-        workspace_id: str | None = None,
     ) -> List[Dict[str, Any]]:
-        scope_filters = [
+        stmt = select(
+            WebdavAccount.source_uid,
+            WebdavAccount.server_url,
+            WebdavAccount.username,
+            WebdavAccount.writeback_enabled,
+        ).where(
             WebdavAccount.user_id == user_id,
             WebdavAccount.organization_id == organization_id
             if organization_id is not None
             else WebdavAccount.organization_id.is_(None),
-        ]
-        if workspace_id is not None:
-            scope_filters.append(WebdavAccount.workspace_id == workspace_id)
-        stmt = select(
-            WebdavAccount.source_uid,
-            WebdavAccount.writeback_enabled,
-            WebdavAccount.etag_value,
-        ).where(*scope_filters)
+        )
         result = await session.execute(stmt)
         return [
             {
                 "source_id": source_uid,
-                "display_label": safe_webdav_source_label(source_uid),
+                "server_url": server_url,
+                "username": username,
                 "writeback_enabled": bool(writeback_enabled),
-                "etag": etag_value,
             }
-            for source_uid, writeback_enabled, etag_value in result.all()
+            for source_uid, server_url, username, writeback_enabled in result.all()
         ]
 
     async def get_project_folders_from_db(
@@ -129,8 +110,6 @@ class WebDavService:
                 "folder_uid": folder.folder_uid,
                 "project_name": folder.project_name,
                 "webdav_path": folder.webdav_path,
-                "owner_user_id": folder.user_id,
-                "organization_id": folder.organization_id,
             }
             for folder in result.scalars().all()
         ]
@@ -160,11 +139,10 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None = None,
-        workspace_id: str | None = None,
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
         accounts = await self.get_connected_accounts_from_db(
-            session, user_id, organization_id, workspace_id
+            session, user_id, organization_id
         )
         return self.determine_webdav_writeback_intent_from_accounts(
             accounts,
@@ -176,7 +154,6 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None,
-        workspace_id: str | None,
         source_task_id: str,
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
@@ -220,7 +197,6 @@ class WebDavService:
             session,
             user_id,
             organization_id,
-            workspace_id,
             target_source_id=target_source_id,
         )
         if result.get("status") == "error":
@@ -234,10 +210,9 @@ class WebDavService:
             "source_email_id": source_email_id,
             "source_thread_id": task.related_thread_id,
             "source_id": result["source_id"],
-            "target_label": result["target_label"],
+            "server_url": result["server_url"],
             "target_path": f"/Naruon/Notes/{task.task_uid}.md",
             "requires_if_match": result["requires_if_match"],
-            "if_match": result.get("if_match"),
             "provenance": result["provenance"],
             "provider_write_executed": False,
             "audit_event": "webdav.self_sent_knowledge_intent.created",
@@ -275,11 +250,8 @@ class WebDavService:
         return {
             "intent": "writeback",
             "source_id": selected_account["source_id"],
-            "target_label": selected_account.get("display_label")
-            or safe_webdav_source_label(selected_account["source_id"]),
+            "server_url": selected_account["server_url"],
             "requires_if_match": True,
-            "if_match": selected_account.get("etag")
-            or selected_account.get("etag_value"),
             "provenance": "server-authoritative"
         }
 

@@ -15,9 +15,8 @@ client/control plane, not a calendar host.
   target any row.
 - Return intent metadata only: protocol, provider, ETag/If-Match requirement,
   provenance, and audit event. No provider write is executed in this slice.
-- Keep Strix on the current provider governance contract: validated org-secret
-  Vertex AI by default, explicit direct OpenAI only when selected, and no GitHub
-  Models path as part of this work.
+- Keep Strix on direct OpenAI Platform credentials only; no GitHub Models path is
+  part of this work.
 
 ## Verification
 

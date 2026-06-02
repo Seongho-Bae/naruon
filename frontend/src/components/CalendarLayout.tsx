@@ -157,8 +157,8 @@ export function CalendarLayout() {
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
             <button className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
             <div className="flex items-center gap-1">
-              <button aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronLeft className="size-5" /></button>
-              <button aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronRight className="size-5" /></button>
+              <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronLeft className="size-5" /></button>
+              <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><ChevronRight className="size-5" /></button>
             </div>
             <h1 className="text-xl font-bold">일정 관리</h1>
             <h2 className="text-sm font-bold text-muted-foreground lg:ml-2">2026년 5월</h2>
@@ -175,7 +175,7 @@ export function CalendarLayout() {
                 </button>
               ))}
             </div>
-            <button aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary">
+            <button className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary">
               <Settings className="size-5" />
             </button>
           </div>
@@ -428,7 +428,7 @@ export function CalendarLayout() {
             <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
           </div>
           <div className="flex items-center gap-2">
-            <button aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary"><X className="size-4" /></button>
+            <button className="grid size-8 place-items-center rounded-md hover:bg-secondary"><X className="size-4" /></button>
           </div>
         </div>
         

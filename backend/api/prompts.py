@@ -3,6 +3,7 @@ import json
 import re
 from typing import List, Optional
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import AuthContext, get_auth_context, get_current_user
 from db.models import LLMProvider, PromptTemplate
 from db.session import get_db
-from services.llm_provider_urls import build_llm_provider_http_client
+from services.llm_provider_urls import validate_llm_provider_base_url_async
 from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api/prompts", tags=["prompts"])
@@ -81,7 +82,7 @@ async def execute_prompt_with_llm(
     from openai import AsyncOpenAI
     from core.config import settings
 
-    validated_base_url, http_client = await build_llm_provider_http_client(base_url)
+    validated_base_url = await validate_llm_provider_base_url_async(base_url)
     messages = []
     if system_message:
         messages.append({"role": "system", "content": system_message})
@@ -89,7 +90,7 @@ async def execute_prompt_with_llm(
     client = AsyncOpenAI(
         api_key=api_key,
         base_url=validated_base_url,
-        http_client=http_client,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.chat.completions.create(

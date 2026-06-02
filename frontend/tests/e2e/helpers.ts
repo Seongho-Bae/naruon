@@ -132,107 +132,10 @@ const calendarCandidate = {
 };
 
 const aiHubPrompts = [
-  { id: 101, title: '의사결정 로그 요약', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
+  { id: 101, title: 'Q2 출시 판단', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
   { id: 102, title: '계약 리스크 점검', description: '계약서, 첨부, 메일 스레드를 판단 포인트로 정리합니다.' },
   { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
 ];
-
-const aiHubSurface = {
-  summary_cards: [
-    {
-      summary_key: 'prompt_templates',
-      label_text: '프롬프트',
-      value_text: '3',
-      detail_text: 'source-backed templates',
-      state_code: 'ready',
-    },
-    {
-      summary_key: 'workflow_blueprints',
-      label_text: '워크플로우',
-      value_text: '3',
-      detail_text: 'prompt-derived execution flows',
-      state_code: 'ready',
-    },
-    {
-      summary_key: 'ai_providers',
-      label_text: 'AI 에이전트',
-      value_text: '1/1',
-      detail_text: 'active organization providers',
-      state_code: 'ready',
-    },
-    {
-      summary_key: 'evaluation_readiness',
-      label_text: '평가',
-      value_text: '85%',
-      detail_text: 'derived operational readiness',
-      state_code: 'ready',
-    },
-    {
-      summary_key: 'run_events',
-      label_text: '실행 이력',
-      value_text: '2',
-      detail_text: 'scoped source evidence',
-      state_code: 'ready',
-    },
-  ],
-  prompt_cards: aiHubPrompts.map((prompt) => ({
-    prompt_key: `prompt_${prompt.id}`,
-    prompt_title: prompt.title,
-    description_text: prompt.description,
-    shared_scope: prompt.id === 102,
-    owner_label: prompt.id === 102 ? 'shared-template' : 'admin',
-    updated_at: '2026-05-29T09:30:00Z',
-  })),
-  workflow_cards: aiHubPrompts.map((prompt) => ({
-    workflow_key: `workflow_${prompt.id}`,
-    workflow_title: `${prompt.title} 실행 흐름`,
-    trigger_source: 'prompt_template',
-    state_code: 'ready',
-    evidence_text: 'active organization provider is available',
-  })),
-  agent_cards: [
-    {
-      agent_key: 'agent_primary',
-      agent_title: 'Primary OpenAI',
-      model_label: 'openai',
-      state_code: 'active',
-      configured: true,
-      governance_text: 'organization llm provider registry',
-    },
-  ],
-  evaluation_metrics: [
-    {
-      metric_key: 'provider_readiness',
-      metric_label: 'Provider 준비도',
-      score_value: 100,
-      trend_text: '1/1 active providers',
-    },
-    {
-      metric_key: 'execution_readiness',
-      metric_label: '실행 준비도',
-      score_value: 85,
-      trend_text: 'derived from provider, prompt, and audit evidence',
-    },
-  ],
-  run_events: [
-    {
-      event_key: 'event_provider_update',
-      event_title: 'llm_provider update',
-      state_code: 'recorded',
-      evidence_source: 'api.llm_providers',
-      observed_at: '2026-05-29T09:30:00Z',
-      detail_text: 'Updated provider configuration',
-    },
-    {
-      event_key: 'event_prompt_update',
-      event_title: 'prompt template updated: Q2 출시 판단',
-      state_code: 'recorded',
-      evidence_source: 'prompt_templates',
-      observed_at: '2026-05-29T09:31:00Z',
-      detail_text: '출시 일정과 파트너 리스크를 함께 검토합니다.',
-    },
-  ],
-};
 
 const runnerConfig = {
   workspace_id: 'workspace-org-acme',
@@ -379,21 +282,6 @@ const securityAccessSurface = {
       observed_at: '2026-05-28T04:00:00Z',
     },
   ],
-  durable_audit_events: [
-    {
-      event_uid: 'audit_evt_provider_update',
-      actor_user_id: 'admin',
-      actor_role: 'tenant_admin',
-      organization_id: 'org-acme',
-      workspace_id: 'workspace-org-acme',
-      event_action: 'update',
-      resource_type: 'llm_provider',
-      resource_uid: 'llm_provider:provider_primary',
-      evidence_source: 'api.llm_providers',
-      detail_text: 'Updated provider configuration',
-      observed_at: '2026-05-28T04:02:00Z',
-    },
-  ],
   policy_decisions: [
     {
       decision_uid: 'policy:webdav_src_primary',
@@ -469,7 +357,7 @@ const dataQualitySurface = {
   organization_id: 'org-acme',
   audit_event: 'data.quality_surface.viewed',
   provider_write_executed: false,
-	  repositories: [
+  repositories: [
     {
       source_id: 'email_repository',
       repository_type: 'email_repository',
@@ -505,37 +393,9 @@ const dataQualitySurface = {
       writeback_enabled: null,
       evidence_source: 'project_folders',
       provider_write_executed: false,
-	    },
-	  ],
-	  repository_assets: [
-	    {
-	      asset_key: 'asset_repository_ready',
-	      asset_type: 'email_attachment',
-	      display_name: 'roadmap.pdf',
-	      source_label: 'Q2 roadmap source email',
-	      state_code: 'ready',
-	      detail_text: 'content and thread evidence ready',
-	      content_chars: 4096,
-	      captured_at: '2026-05-28T05:45:00Z',
-	      evidence_source: 'attachments.content, emails.thread_id',
-	      thread_key: 'thread_repository_ready',
-	      provider_write_executed: false,
-	    },
-	    {
-	      asset_key: 'asset_repository_pending',
-	      asset_type: 'email_attachment',
-	      display_name: 'blank-notes.md',
-	      source_label: 'Forwarded duplicate source email',
-	      state_code: 'needs_attention',
-	      detail_text: 'content extraction pending, canonical thread pending',
-	      content_chars: 0,
-	      captured_at: '2026-05-28T05:43:00Z',
-	      evidence_source: 'attachments.content, emails.thread_id',
-	      thread_key: 'thread_missing',
-	      provider_write_executed: false,
-	    },
-	  ],
-	  pipeline_stages: [
+    },
+  ],
+  pipeline_stages: [
     {
       stage_key: 'source_registry',
       display_name: 'Source registry',
@@ -727,11 +587,6 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
       return;
     }
 
-    if (path === '/api/ai-hub/surface' && request.method() === 'GET') {
-      await fulfillJson(route, aiHubSurface);
-      return;
-    }
-
     if (path === '/api/runner-config' && request.method() === 'GET') {
       await fulfillJson(route, runnerConfig);
       return;
@@ -868,7 +723,8 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
       await fulfillJson(route, [
         {
           source_id: 'webdav_src_primary',
-          display_label: 'WebDAV source webdav_src_primary',
+          server_url: 'https://webdav.naruon.net',
+          username: 'demo_user',
           writeback_enabled: true,
           etag: 'etag-webdav-primary',
         },
@@ -882,15 +738,11 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
           folder_uid: 'webdav_folder_roadmap',
           project_name: 'Naruon Roadmap 2026',
           webdav_path: '/Projects/Naruon_Roadmap_2026',
-          owner_user_id: 'alice',
-          organization_id: 'org-acme',
         },
         {
           folder_uid: 'webdav_folder_marketing',
           project_name: 'Marketing Assets',
           webdav_path: '/Projects/Marketing_Assets',
-          owner_user_id: 'alice',
-          organization_id: 'org-acme',
         },
       ]);
       return;
@@ -900,9 +752,8 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
       await fulfillJson(route, {
         intent: 'writeback',
         source_id: 'webdav_src_primary',
-        target_label: 'WebDAV source webdav_src_primary',
+        server_url: 'https://webdav.naruon.net',
         requires_if_match: true,
-        if_match: 'etag-webdav-primary',
         provenance: 'server-authoritative',
       });
       return;
@@ -945,10 +796,9 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
         source_email_id: '<self-note@example.com>',
         source_thread_id: 'thread-self-note',
         source_id: 'webdav_src_primary',
-        target_label: 'WebDAV source webdav_src_primary',
+        server_url: 'https://webdav.naruon.net',
         target_path: '/Naruon/Notes/task-self-knowledge.md',
         requires_if_match: true,
-        if_match: 'etag-webdav-primary',
         provenance: 'server-authoritative',
         provider_write_executed: false,
         audit_event: 'webdav.self_sent_knowledge_intent.created',

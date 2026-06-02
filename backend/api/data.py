@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import hashlib
 from typing import Literal
 
 from fastapi import APIRouter, Depends
@@ -31,7 +30,6 @@ SurfaceStatus = Literal[
     "no_source",
 ]
 QualityStatus = Literal["pass", "needs_attention", "pending"]
-RepositoryAssetState = Literal["ready", "needs_attention"]
 RepositoryType = Literal[
     "webdav_account",
     "project_folder",
@@ -47,20 +45,6 @@ class DataRepositorySummary(BaseModel):
     object_count: int
     writeback_enabled: bool | None
     evidence_source: str
-    provider_write_executed: bool
-
-
-class DataRepositoryAsset(BaseModel):
-    asset_key: str
-    asset_type: Literal["email_attachment"]
-    display_name: str
-    source_label: str
-    state_code: RepositoryAssetState
-    detail_text: str
-    content_chars: int
-    captured_at: str
-    evidence_source: str
-    thread_key: str
     provider_write_executed: bool
 
 
@@ -111,7 +95,6 @@ class DataQualitySurfaceResponse(BaseModel):
     audit_event: Literal["data.quality_surface.viewed"]
     provider_write_executed: bool
     repositories: list[DataRepositorySummary]
-    repository_assets: list[DataRepositoryAsset]
     pipeline_stages: list[DataPipelineStage]
     embedding_collections: list[DataEmbeddingCollection]
     quality_checks: list[DataQualityCheck]
@@ -124,40 +107,12 @@ def _datetime_to_utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _safe_display_text(value: str | None, fallback: str) -> str:
-    cleaned = (value or fallback).replace("<", "").replace(">", "").strip()
-    return " ".join(cleaned.split())[:120] or fallback
-
-
-def _opaque_asset_key(email: Email, attachment: Attachment) -> str:
-    digest = hashlib.sha256(
-        "|".join(
-            [
-                email.user_id,
-                email.organization_id,
-                email.message_id,
-                attachment.filename,
-            ]
-        ).encode("utf-8")
-    ).hexdigest()
-    return f"asset_{digest[:24]}"
-
-
-def _opaque_thread_key(email: Email) -> str:
-    if not email.thread_id:
-        return "thread_missing"
-    digest = hashlib.sha256(email.thread_id.encode("utf-8")).hexdigest()
-    return f"thread_{digest[:16]}"
-
-
 def _can_read_org_scope(auth_context: AuthContext) -> bool:
     return is_admin_role(auth_context.role) and auth_context.organization_id is not None
 
 
 def _owner_scope_statement(model, auth_context: AuthContext):
     statement = select(model)
-    if hasattr(model, "workspace_id"):
-        statement = statement.where(model.workspace_id == auth_context.workspace_id)
     if _can_read_org_scope(auth_context):
         return statement.where(model.organization_id == auth_context.organization_id)
     organization_filter = (
@@ -292,39 +247,6 @@ def _repository_summaries(
         for folder in project_folders
     )
     return repositories
-
-
-def _repository_assets(rows) -> list[DataRepositoryAsset]:
-    assets: list[DataRepositoryAsset] = []
-    for attachment, email in rows:
-        content_chars = len((attachment.content or "").strip())
-        has_thread = bool((email.thread_id or "").strip())
-        state_code: RepositoryAssetState = (
-            "ready" if content_chars > 0 and has_thread else "needs_attention"
-        )
-        detail_parts: list[str] = []
-        if content_chars <= 0:
-            detail_parts.append("content extraction pending")
-        if not has_thread:
-            detail_parts.append("canonical thread pending")
-        if not detail_parts:
-            detail_parts.append("content and thread evidence ready")
-        assets.append(
-            DataRepositoryAsset(
-                asset_key=_opaque_asset_key(email, attachment),
-                asset_type="email_attachment",
-                display_name=_safe_display_text(attachment.filename, "email attachment"),
-                source_label=_safe_display_text(email.subject, "untitled email"),
-                state_code=state_code,
-                detail_text=", ".join(detail_parts),
-                content_chars=content_chars,
-                captured_at=_datetime_to_utc_iso(email.date),
-                evidence_source="attachments.content, emails.thread_id",
-                thread_key=_opaque_thread_key(email),
-                provider_write_executed=False,
-            )
-        )
-    return assets
 
 
 def _pipeline_stages(
@@ -584,14 +506,6 @@ async def get_data_quality_surface(
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:
         connector_events = await _scoped_rows(db, connector_statement)
-    attachment_asset_result = await db.execute(
-        select(Attachment, Email)
-        .join(Email)
-        .where(*email_scope)
-        .order_by(Email.date.desc(), Attachment.filename.asc())
-        .limit(8)
-    )
-    attachment_asset_rows = list(attachment_asset_result.all())
 
     source_count = len(webdav_accounts) + len(project_folders)
     embedded_total = embedded_email_count + embedded_attachment_count
@@ -607,7 +521,6 @@ async def get_data_quality_surface(
             email_count,
             attachment_count,
         ),
-        repository_assets=_repository_assets(attachment_asset_rows),
         pipeline_stages=_pipeline_stages(
             source_count=source_count,
             email_count=email_count,

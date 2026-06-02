@@ -55,10 +55,8 @@
 
 ## Follow-up roadmap
 
-- Durable org/workspace-scoped audit history was split into
-  `docs/plans/2026-05-29-security-durable-audit-surface.md` and implemented as
-  a separate `security_audit_events` source. Do not expose the legacy unscoped
-  `AuditLog` table directly.
+- Persist org/workspace scope on centralized audit log rows before exposing
+  durable audit history outside connector events.
 - Add policy mutation APIs only after versioned policy objects and approval
   workflows exist.
 - Add external sharing approval/revocation APIs only after provider connector

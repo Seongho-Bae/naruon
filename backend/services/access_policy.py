@@ -18,7 +18,6 @@ PolicyRoleName = Literal[
 DecisionReason = Literal[
     "allowed",
     "organization_denied",
-    "workspace_denied",
     "data_region_denied",
     "consent_denied",
     "ownership_denied",
@@ -34,7 +33,6 @@ class AccessRequest:
     group_ids: tuple[str, ...]
     data_region: str | None
     consent_scopes: tuple[str, ...]
-    workspace_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -45,9 +43,7 @@ class ResourcePolicy:
     permitted_group_ids: tuple[str, ...]
     data_region: str | None
     required_consent_scopes: tuple[str, ...]
-    workspace_id: str | None = None
     delegated_user_ids: tuple[str, ...] = field(default_factory=tuple)
-    require_owner_match: bool = False
 
 
 @dataclass(frozen=True)
@@ -112,12 +108,6 @@ def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessD
     ):
         return AccessDecision(allowed=False, reason="organization_denied")
 
-    if (
-        resource.workspace_id is not None
-        and request.workspace_id != resource.workspace_id
-    ):
-        return AccessDecision(allowed=False, reason="workspace_denied")
-
     if resource.data_region is not None and request.data_region != resource.data_region:
         return AccessDecision(allowed=False, reason="data_region_denied")
 
@@ -129,8 +119,7 @@ def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessD
 
     owns_resource = request.user_id == resource.owner_id
     has_delegation = request.user_id in resource.delegated_user_ids
-    owner_match_required = resource.require_owner_match or not system_admin_allowed
-    if owner_match_required and not owns_resource and not has_delegation:
+    if not system_admin_allowed and not owns_resource and not has_delegation:
         return AccessDecision(allowed=False, reason="ownership_denied")
 
     if not role_allowed and not group_allowed:

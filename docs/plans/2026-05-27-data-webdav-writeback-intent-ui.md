@@ -14,9 +14,8 @@ AI-organized files or attachments are written back to their own storage.
   `apiClient` session path.
 - The browser chooses optional targets with opaque `target_source_id`; legacy
   sequential `target_account_id` payloads fail closed.
-- The UI shows intent, opaque source id, source-safe label, If-Match/ETag
-  requirement, and provenance only. It does not claim provider write execution
-  and does not expose provider URLs or usernames.
+- The UI shows intent, source id, server URL, If-Match requirement, and
+  provenance only. It does not claim provider write execution.
 - Public identity headers must not be emitted by browser write requests.
 
 ## Implementation
@@ -27,8 +26,8 @@ AI-organized files or attachments are written back to their own storage.
   `webdav_accounts.source_uid`, only permits accounts with persisted
   `writeback_enabled=true`, and fails closed when no eligible source or signed
   session is available.
-- The source card shows the opaque source id, source-safe label, writeback
-  eligibility, and current ETag state before the intent request.
+- The source card shows the WebDAV endpoint, opaque source id, username,
+  writeback eligibility, and current ETag state before the intent request.
 - `409` responses now render as If-Match/ETag conflicts instead of generic
   failures, preserving the customer-owned source-of-truth boundary.
 - Data repository cards now use responsive grid tracks so mobile verification

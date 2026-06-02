@@ -3,10 +3,26 @@ from typing import Any, cast
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from core.runtime_secrets import (
-    validate_auth_session_hmac_secret_value,
+MIN_AUTH_SESSION_HMAC_SECRET_BYTES = 32
+_LOW_ENTROPY_PLACEHOLDER_TERMS = ("change", "example", "password", "secret")
+_KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS = frozenset(
+    {"naruon-session-hmac-token-32-byte-minimum"}
 )
-from core.url_validation import parse_allowed_hosts, validate_https_url_host
+
+
+def validate_auth_session_hmac_secret_value(secret: str) -> None:
+    secret_bytes = secret.encode("utf-8")
+    if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
+        raise ValueError(
+            "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"
+        )
+    if len(set(secret)) == 1:
+        raise ValueError("AUTH_SESSION_HMAC_SECRET must not be a repeated character")
+    normalized_secret = secret.lower()
+    if normalized_secret in _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS:
+        raise ValueError("AUTH_SESSION_HMAC_SECRET must not use a public fixture value")
+    if any(term in normalized_secret for term in _LOW_ENTROPY_PLACEHOLDER_TERMS):
+        raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
 
 
 class Settings(BaseSettings):
@@ -24,13 +40,6 @@ class Settings(BaseSettings):
     ALLOWED_POP3_PORTS: str = "995"
     ALLOWED_LLM_BASE_URL_HOSTS: str = ""
     ENABLE_PROMETHEUS_METRICS: bool = False
-    SECURITY_CONTENT_SECURITY_POLICY: str = (
-        "default-src 'self'; "
-        "object-src 'none'; "
-        "base-uri 'self'; "
-        "form-action 'self'; "
-        "frame-ancestors 'none'"
-    )
 
     # OpenAI Settings
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -40,7 +49,6 @@ class Settings(BaseSettings):
     OIDC_ISSUER_URL: str | None = None
     OIDC_CLIENT_ID: str | None = None
     OIDC_JWKS_URL: str | None = None
-    ALLOWED_OIDC_HOSTS: str = ""
 
     model_config = SettingsConfigDict(
         env_file=("~/.env", "../.env", ".env"),
@@ -70,24 +78,6 @@ class Settings(BaseSettings):
         if configured_oidc_values and len(configured_oidc_values) != len(oidc_values):
             raise ValueError(
                 "OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL must be set together"
-            )
-        if len(configured_oidc_values) == len(oidc_values):
-            allowed_oidc_hosts = parse_allowed_hosts(self.ALLOWED_OIDC_HOSTS)
-            if not allowed_oidc_hosts:
-                raise ValueError(
-                    "ALLOWED_OIDC_HOSTS must list trusted OIDC issuer and JWKS hosts"
-                )
-            validate_https_url_host(
-                "OIDC_ISSUER_URL",
-                self.OIDC_ISSUER_URL or "",
-                allowed_oidc_hosts,
-                "ALLOWED_OIDC_HOSTS",
-            )
-            validate_https_url_host(
-                "OIDC_JWKS_URL",
-                self.OIDC_JWKS_URL or "",
-                allowed_oidc_hosts,
-                "ALLOWED_OIDC_HOSTS",
             )
         return self
 

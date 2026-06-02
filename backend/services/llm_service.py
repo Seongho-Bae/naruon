@@ -1,10 +1,11 @@
 import logging
 
+import httpx
 from openai import AsyncOpenAI
 from core.config import settings
 from core.exceptions import LLMServiceError
 from pydantic import BaseModel
-from services.llm_provider_urls import build_llm_provider_http_client
+from services.llm_provider_urls import validate_llm_provider_base_url_async
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,11 @@ async def extract_todos_and_summary(
     if not openai_api_key:
         raise ValueError("API Key is not set")
 
-    validated_base_url, http_client = await build_llm_provider_http_client(base_url)
+    validated_base_url = await validate_llm_provider_base_url_async(base_url)
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,
-        http_client=http_client,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.beta.chat.completions.parse(
@@ -62,11 +63,11 @@ async def draft_reply(
     if not openai_api_key:
         raise ValueError("API Key is not set")
 
-    validated_base_url, http_client = await build_llm_provider_http_client(base_url)
+    validated_base_url = await validate_llm_provider_base_url_async(base_url)
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,
-        http_client=http_client,
+        http_client=httpx.AsyncClient(follow_redirects=False),
     )
     try:
         response = await client.chat.completions.create(

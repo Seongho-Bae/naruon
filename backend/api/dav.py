@@ -1,53 +1,23 @@
 import logging
 from html import escape as escape_xml_text
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
-
-from api.auth import AuthContext, get_auth_context
+from fastapi import APIRouter, Request, Response
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/dav", tags=["dav"])
 
 
-def _dav_path_owner_user_id(path: str) -> str | None:
-    normalized_path = path.strip("/")
-    if not normalized_path:
-        return None
-    owner_user_id, _, _ = normalized_path.partition("/")
-    return owner_user_id or None
-
-
-def _ensure_dav_owner_scope(path: str, auth_context: AuthContext) -> None:
-    owner_user_id = _dav_path_owner_user_id(path)
-    if owner_user_id is None:
-        raise HTTPException(
-            status_code=403,
-            detail="DAV path must include an owner user",
-        )
-    if owner_user_id == auth_context.user_id:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail="DAV path belongs to a different user",
-    )
-
-
 @router.api_route(
     "/{path:path}",
     methods=["PROPFIND", "REPORT", "MKCOL", "GET", "PUT", "DELETE", "OPTIONS"],
 )
-async def dav_handler(
-    request: Request,
-    path: str,
-    auth_context: AuthContext = Depends(get_auth_context),
-):
+async def dav_handler(request: Request, path: str):
     """
     Skeleton endpoint for CalDAV / WebDAV routing.
     In the future, this will parse XML namespaces and bridge
     Naruon's Tasks and Events into DAV compliant responses.
     """
-    _ensure_dav_owner_scope(path, auth_context)
     safe_path = path.replace("\n", "").replace("\r", "")
     logger.info("DAV Request: %s /%s", request.method, safe_path)
 

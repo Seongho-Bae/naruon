@@ -1,12 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
-from datetime import datetime, timezone
 from main import app
-from db.models import Email, SenderRelationship
 from db.session import get_db
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
-
 
 class MockRow:
     def __init__(
@@ -25,7 +22,6 @@ class MockRow:
         self.source_message_id = source_message_id
         self.source_thread_id = source_thread_id
 
-
 class MockResult:
     def __init__(self, items):
         self.items = items
@@ -38,10 +34,6 @@ class MockResult:
 
     def first(self):
         return self.items[0] if self.items else None
-
-    def scalar_one_or_none(self):
-        return self.items[0] if self.items else None
-
 
 class MockSession:
     def __init__(self):
@@ -76,7 +68,6 @@ class MockSession:
     async def refresh(self, obj):
         pass
 
-
 class ExistingRelationshipSession(MockSession):
     def __init__(self):
         super().__init__()
@@ -85,44 +76,8 @@ class ExistingRelationshipSession(MockSession):
     async def execute(self, stmt):
         return MockResult(self.items)
 
-
-class CaptureRelationshipSession:
-    def __init__(self):
-        self.email = Email(
-            id=77,
-            user_id="owner@example.com",
-            organization_id="org-acme",
-            message_id="<q2@example.com>",
-            thread_id="thread-q2",
-            sender="Teammate <teammate@example.com>",
-            recipients="owner@example.com",
-            subject="Q2 launch",
-            date=datetime(2026, 5, 30, tzinfo=timezone.utc),
-            body="Let's align the project decision.",
-        )
-        self.statements = []
-        self.added = []
-        self.committed = False
-
-    async def execute(self, stmt):
-        self.statements.append(stmt)
-        if len(self.statements) == 1:
-            return MockResult([self.email])
-        return MockResult([])
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def commit(self):
-        self.committed = True
-
-    async def refresh(self, obj):
-        pass
-
-
 async def override_get_db():
     yield MockSession()
-
 
 @pytest.fixture
 def client():
@@ -135,10 +90,7 @@ def client():
 def test_get_relationships(client: TestClient):
     resp = client.get(
         "/api/ontology/relationships",
-        params={
-            "source_message_id": "<q2@example.com>",
-            "source_thread_id": "thread-q2",
-        },
+        params={"source_message_id": "<q2@example.com>", "source_thread_id": "thread-q2"},
     )
     assert resp.status_code == 200
     items = resp.json()
@@ -177,7 +129,6 @@ def test_get_relationships_filters_by_source_and_owner_scope():
     assert "sender_relationships.source_message_id" in query_text
     assert "sender_relationships.source_thread_id" in query_text
 
-
 def test_create_relationship(client: TestClient):
     resp = client.post(
         "/api/ontology/relationships",
@@ -187,8 +138,8 @@ def test_create_relationship(client: TestClient):
             "source_message_id": "<vendor@example.com>",
             "source_thread_id": "thread-vendor",
             "relationship_type": "vendor",
-            "confidence_score": 0.8,
-        },
+            "confidence_score": 0.8
+        }
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -223,46 +174,3 @@ def test_update_relationship_preserves_existing_parent_when_omitted():
     assert data["sender_email"] == "vendor@example.com"
     assert data["parent_sender_email"] == "buyer@example.com"
     assert data["relationship_type"] == "customer"
-
-
-def test_capture_relationship_from_source_email_uses_signed_owner_scope():
-    session = CaptureRelationshipSession()
-
-    async def override_capture_get_db():
-        yield session
-
-    app.dependency_overrides[get_db] = override_capture_get_db
-    try:
-        with TestClient(
-            app,
-            headers={
-                "X-User-Id": "owner@example.com",
-                "X-Organization-Id": "org-acme",
-            },
-        ) as test_client:
-            resp = test_client.post(
-                "/api/ontology/relationships/capture-source",
-                json={"source_message_id": "<q2@example.com>"},
-            )
-    finally:
-        app.dependency_overrides.clear()
-
-    assert resp.status_code == 200, resp.text
-    data = resp.json()
-    assert data["sender_email"] == "teammate@example.com"
-    assert data["source_message_id"] == "<q2@example.com>"
-    assert data["source_thread_id"] == "thread-q2"
-    assert data["relationship_type"] == "Colleague"
-    assert data["next_action"] == "track_reply_and_tasks"
-    assert session.committed is True
-    assert len(session.added) == 1
-    added = session.added[0]
-    assert isinstance(added, SenderRelationship)
-    assert added.user_id == "owner@example.com"
-    assert added.organization_id == "org-acme"
-    assert added.source_message_id == "<q2@example.com>"
-    assert added.source_thread_id == "thread-q2"
-    query_text = str(session.statements[0]).lower()
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
-    assert "emails.message_id" in query_text

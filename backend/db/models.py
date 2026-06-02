@@ -82,42 +82,6 @@ class AuditLog(Base):
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class SecurityAuditEvent(Base):
-    __tablename__ = "security_audit_events"
-
-    event_uid: Mapped[str] = mapped_column(
-        String, default=lambda: uuid.uuid4().hex, primary_key=True
-    )
-    actor_user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    actor_role: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    event_action: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    resource_type: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    resource_uid: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    evidence_source: Mapped[str] = mapped_column(String, nullable=False)
-    detail_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    observed_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.datetime.now(datetime.timezone.utc),
-        index=True,
-    )
-    __table_args__ = (
-        Index(
-            "ix_security_audit_events_scope_time",
-            "organization_id",
-            "workspace_id",
-            "observed_at",
-        ),
-        Index(
-            "ix_security_audit_events_actor_scope",
-            "actor_user_id",
-            "organization_id",
-            "workspace_id",
-        ),
-    )
-
-
 class LLMProvider(Base):
     __tablename__ = "llm_providers"
     __table_args__ = (
@@ -531,12 +495,10 @@ class WebdavAccount(Base):
     )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     server_url: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)
     credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
     writeback_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    etag_value: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
