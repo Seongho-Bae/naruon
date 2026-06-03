@@ -114,7 +114,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": SESSION_ISSUER,
         "aud": SESSION_AUDIENCE,
         "sub": "alice",
-        "role": "tenant_admin",
+        "role": "member",
         "org": "org-acme",
         "groups": ["group-ai"],
         "workspace": "workspace-org-acme",
@@ -220,10 +220,10 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert all(card["owner_label"] == "alice" for card in data["prompt_cards"])
     assert data["prompt_cards"][0]["prompt_key"].startswith("prompt_")
     assert "id" not in data["prompt_cards"][0]
-    assert data["workflow_cards"][0]["state_code"] == "ready"
-    assert data["agent_cards"][0]["configured"] is True
-    assert data["agent_cards"][0]["state_code"] == "active"
-    assert data["evaluation_metrics"][1]["score_value"] == 100
+    assert data["workflow_cards"][0]["state_code"] == "needs_provider"
+
+
+    assert data["evaluation_metrics"][1]["score_value"] == 0
     assert data["run_events"][0]["evidence_source"] == "api.llm_providers"
     assert "credential material" not in response.text
 

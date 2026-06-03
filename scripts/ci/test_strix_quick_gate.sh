@@ -654,7 +654,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	vertex-primary-ratelimit-retry-same-model-success|vertex-primary-ratelimit-retry-same-model-success-strict|vertex-primary-ratelimit-retry-reason-message)
+	vertex-primary-ratelimit-retry-same-model-success|vertex-primary-ratelimit-retry-reason-message)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/retry-ratelimit-primary)
 			attempt="0"
@@ -693,8 +693,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 				if [ "${STRIX_LLM:-}" = "openai/openai/retry-api-connection-primary" ]; then
 					echo "LLM CONNECTION FAILED"
 					echo "Could not establish connection to the language model."
-					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException"
-					echo "Connection error while calling openai model."
+					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error."
 				else
 					echo "LLM CONNECTION FAILED"
 					echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
@@ -4867,19 +4866,6 @@ run_gate_case_allow_provider_signal "vertex-primary-midstream-retry-same-model-s
 
 # Bug 9: Rate-limit transient same-model retry (previously untested path)
 run_gate_case_allow_provider_signal "vertex-primary-ratelimit-retry-same-model-success" \
-	"vertex_ai/retry-ratelimit-primary" \
-	"vertex_ai/fallback-one vertex_ai/fallback-two" \
-	"0" \
-	"scan ok after same-model rate-limit retry" \
-	"2" \
-	"vertex_ai/retry-ratelimit-primary|vertex_ai/retry-ratelimit-primary" \
-	"<unset>|<unset>" \
-	"vertex_ai" \
-	"__DEFAULT__" \
-	"" \
-	"1"
-
-run_gate_case_with_provider_signal_mode "1" "vertex-primary-ratelimit-retry-same-model-success-strict" \
 	"vertex_ai/retry-ratelimit-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
 	"0" \

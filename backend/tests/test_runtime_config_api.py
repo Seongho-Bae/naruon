@@ -32,7 +32,7 @@ def _signed_session_token() -> str:
             "iss": "naruon-control-plane",
             "aud": "naruon-api",
             "sub": "alice",
-            "role": "tenant_admin",
+            "role": "member",
             "org": "org-acme",
             "groups": ["group-1"],
             "workspace": "workspace-org-acme",
