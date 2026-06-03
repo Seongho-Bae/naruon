@@ -49,6 +49,7 @@ REPO_NAME="${REPO_ROOT##*/}"
 INFRA_ERROR_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
+LAST_MODEL_RECOVERED_TRANSIENT_RETRY=0
 CHANGED_FILES=()
 PULL_REQUEST_CHANGED_FILES=()
 NORMALIZED_CHANGED_FILES=()
@@ -2121,10 +2122,26 @@ is_llm_api_connection_error() {
 		return 0
 	fi
 
-	if grep -Eiq 'litellm(\.exceptions)?\.InternalServerError' "$STRIX_LOG" &&
-		grep -Eiq 'OpenAIException' "$STRIX_LOG" &&
-		grep -Eiq 'Connection error' "$STRIX_LOG" &&
-		grep -Eiq '(openai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
+	if python3 - "$STRIX_LOG" <<'PY'
+import re
+import sys
+
+try:
+    log_text = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+except OSError:
+    raise SystemExit(1)
+
+pattern = re.compile(
+    r"(?is)"
+    r"(?=[\s\S]{0,500}litellm(?:\.exceptions)?\.InternalServerError)"
+    r"(?=[\s\S]{0,500}OpenAIException)"
+    r"(?=[\s\S]{0,500}Connection error)"
+    r"(?=[\s\S]{0,500}(?:openai|LLM CONNECTION FAILED|Could not establish connection to the language model))"
+    r"[\s\S]{1,500}"
+)
+raise SystemExit(0 if pattern.search(log_text) else 1)
+PY
+	then
 		return 0
 	fi
 
@@ -2174,11 +2191,16 @@ run_strix_with_transient_retry() {
 	local model="$1"
 	local max_attempts=$((STRIX_TRANSIENT_RETRY_PER_MODEL + 1))
 	local attempt=1
+	local transient_retry_attempted=0
+	LAST_MODEL_RECOVERED_TRANSIENT_RETRY=0
 
 	while [ "$attempt" -le "$max_attempts" ]; do
 		local run_rc=0
 		run_strix_once "$model" || run_rc=$?
 		if [ "$run_rc" -eq 0 ]; then
+			if [ "$transient_retry_attempted" -eq 1 ]; then
+				LAST_MODEL_RECOVERED_TRANSIENT_RETRY=1
+			fi
 			return 0
 		fi
 		if [ "$run_rc" -eq 2 ]; then
@@ -2197,6 +2219,7 @@ run_strix_with_transient_retry() {
 		if ! is_transient_same_model_retry_error "$model"; then
 			return 1
 		fi
+		transient_retry_attempted=1
 
 		local retry_reason="transient error"
 		if is_rate_limit_error; then
@@ -2861,12 +2884,18 @@ is_model_retryable_error() {
 }
 
 run_current_target_scan() {
+	RUN_START_EPOCH="$(date +%s)"
 	INFRA_ERROR_DETECTED=0
 	ZERO_FINDINGS_REPORTED=0
+	LAST_MODEL_RECOVERED_TRANSIENT_RETRY=0
 
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && [ "$LAST_MODEL_RECOVERED_TRANSIENT_RETRY" -ne 1 ] && provider_signal_fail_closed_enabled; then
+			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
+			return 1
+		fi
 		return 0
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
@@ -2920,10 +2949,16 @@ run_current_target_scan() {
 		fi
 		local fallback_scan_rc=0
 		local fallback_start_epoch
+		local fallback_infra_before
 		fallback_start_epoch="$(date +%s)"
+		fallback_infra_before="$INFRA_ERROR_DETECTED"
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
+			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && { [ "$fallback_infra_before" -eq 1 ] || [ "$LAST_MODEL_RECOVERED_TRANSIENT_RETRY" -ne 1 ]; } && provider_signal_fail_closed_enabled; then
+				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
+				return 1
+			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
