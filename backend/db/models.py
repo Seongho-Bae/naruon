@@ -90,7 +90,9 @@ class SecurityAuditEvent(Base):
     )
     actor_user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     actor_role: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     event_action: Mapped[str] = mapped_column(String, index=True, nullable=False)
     resource_type: Mapped[str] = mapped_column(String, index=True, nullable=False)
@@ -258,6 +260,7 @@ class PromptTemplate(Base):
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
+
 class Email(Base):
     __tablename__ = "emails"
     __table_args__ = (
@@ -276,9 +279,7 @@ class Email(Base):
     thread_id: Mapped[str | None] = mapped_column(
         String, index=True, nullable=True
     )  # O3: email threading support
-    fingerprint: Mapped[str | None] = mapped_column(
-        String, index=True, nullable=True
-    )
+    fingerprint: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     sender: Mapped[str] = mapped_column(String)
     reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     recipients: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -431,9 +432,15 @@ class SenderRelationship(Base):
         nullable=True,
     )
     sender_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    parent_sender_email: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    source_message_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
-    source_thread_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    parent_sender_email: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    source_message_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    source_thread_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     relationship_type: Mapped[str] = mapped_column(String, nullable=False)
     confidence_score: Mapped[float] = mapped_column(default=1.0)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -477,13 +484,17 @@ class CalendarWritebackSource(Base):
 
     source_uid: Mapped[str] = mapped_column(String, primary_key=True)
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     account_ref: Mapped[str | None] = mapped_column(String, nullable=True)
     provider_name: Mapped[str] = mapped_column(String, nullable=False)
     source_protocol: Mapped[str] = mapped_column(String, nullable=False)
     source_host: Mapped[str] = mapped_column(String, nullable=False)
-    writeback_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    writeback_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     etag_value: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -506,7 +517,9 @@ class ReplyTracker(Base):
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     message_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     status_code: Mapped[str] = mapped_column(String, default="waiting", index=True)
-    follow_up_date: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    follow_up_date: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -530,12 +543,16 @@ class WebdavAccount(Base):
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     server_url: Mapped[str] = mapped_column(String, nullable=False)
     username: Mapped[str] = mapped_column(String, nullable=False)
     credentials_encrypted: Mapped[str] = mapped_column(EncryptedString, nullable=False)
-    writeback_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    writeback_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     etag_value: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -555,7 +572,9 @@ class ProjectFolder(Base):
         nullable=False,
     )
     user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
     project_name: Mapped[str] = mapped_column(String, index=True, nullable=False)
     webdav_path: Mapped[str] = mapped_column(String, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -565,9 +584,17 @@ class ProjectFolder(Base):
 
 
 class Workspace(Base):
-    __tablename__ = "workspaces"
+    __tablename__ = "workspace_records"
 
-    workspace_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"workspace_{uuid.uuid4().hex}")
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"workspace_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    owner_user_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     workspace_name: Mapped[str] = mapped_column(String, nullable=False)
     workspace_domain: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -575,23 +602,64 @@ class Workspace(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-class User(Base):
-    __tablename__ = "users"
 
-    user_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"user_{uuid.uuid4().hex}")
+class User(Base):
+    __tablename__ = "workspace_users"
+
+    user_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"user_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
     user_name: Mapped[str] = mapped_column(String, nullable=False)
-    user_email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    user_email: Mapped[str] = mapped_column(String, index=True, nullable=False)
     role_code: Mapped[str] = mapped_column(String, default="member")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+    __table_args__ = (
+        Index(
+            "ix_workspace_users_scope_email",
+            "organization_id",
+            "workspace_id",
+            "user_email",
+        ),
+    )
+
 
 class Account(Base):
-    __tablename__ = "accounts"
+    __tablename__ = "provider_accounts"
 
-    account_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"account_{uuid.uuid4().hex}")
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.user_id"), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"account_{uuid.uuid4().hex}",
+    )
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_users.user_id"),
+        index=True,
+        nullable=False,
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
     account_type: Mapped[str] = mapped_column(String, nullable=False)
     account_status: Mapped[str] = mapped_column(String, default="active")
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -599,37 +667,121 @@ class Account(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-class EmailRaw(Base):
-    __tablename__ = "email_raws"
 
-    raw_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"raw_{uuid.uuid4().hex}")
+class EmailRaw(Base):
+    __tablename__ = "raw_email_records"
+
+    raw_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"raw_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
     provider_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("provider_accounts.account_id"),
+        index=True,
+        nullable=False,
+    )
+    raw_mime_hash: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     raw_content: Mapped[str] = mapped_column(Text, nullable=False)
     ingested_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-class EmailMessage(Base):
-    __tablename__ = "email_messages"
 
-    message_uid: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"msg_{uuid.uuid4().hex}")
-    rfc_message_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    canonical_hash: Mapped[str] = mapped_column(String, nullable=False)
+class EmailMessage(Base):
+    __tablename__ = "canonical_email_messages"
+
+    message_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"msg_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
+    rfc_message_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    canonical_hash: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    body_hash: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    body_simhash: Mapped[str | None] = mapped_column(String, nullable=True)
+    attachment_manifest_hash: Mapped[str | None] = mapped_column(
+        String,
+        index=True,
+        nullable=True,
+    )
+    identity_confidence_score: Mapped[float] = mapped_column(
+        default=1.0, nullable=False
+    )
     message_subject: Mapped[str] = mapped_column(String, nullable=True)
     message_body: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+    __table_args__ = (
+        Index(
+            "ix_canonical_email_messages_scope_message",
+            "organization_id",
+            "workspace_id",
+            "rfc_message_id",
+        ),
+        Index(
+            "ix_canonical_email_messages_scope_hash",
+            "organization_id",
+            "workspace_id",
+            "canonical_hash",
+        ),
+    )
+
 
 class EmailInstance(Base):
-    __tablename__ = "email_instances"
+    __tablename__ = "email_account_instances"
 
-    instance_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"inst_{uuid.uuid4().hex}")
-    message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
-    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
+    instance_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"inst_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
+    message_uid: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("canonical_email_messages.message_uid"),
+        index=True,
+        nullable=False,
+    )
+    account_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("provider_accounts.account_id"),
+        index=True,
+        nullable=False,
+    )
     folder_name: Mapped[str] = mapped_column(String, nullable=False)
     label_names: Mapped[str] = mapped_column(String, nullable=True)
     instance_status: Mapped[str] = mapped_column(String, default="unread")
@@ -638,10 +790,24 @@ class EmailInstance(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-class EmailThread(Base):
-    __tablename__ = "email_threads"
 
-    thread_uid: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"thread_{uuid.uuid4().hex}")
+class EmailThread(Base):
+    __tablename__ = "canonical_email_threads"
+
+    thread_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"thread_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
     thread_subject: Mapped[str] = mapped_column(String, nullable=True)
     participant_summary: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -649,13 +815,42 @@ class EmailThread(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
+
 class EmailThreadEdge(Base):
     __tablename__ = "email_thread_edges"
 
-    edge_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"edge_{uuid.uuid4().hex}")
-    thread_uid: Mapped[str] = mapped_column(String, ForeignKey("email_threads.thread_uid"), index=True, nullable=False)
-    parent_message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
-    child_message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
+    edge_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"edge_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
+    thread_uid: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("canonical_email_threads.thread_uid"),
+        index=True,
+        nullable=False,
+    )
+    parent_message_uid: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("canonical_email_messages.message_uid"),
+        index=True,
+        nullable=False,
+    )
+    child_message_uid: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("canonical_email_messages.message_uid"),
+        index=True,
+        nullable=False,
+    )
     edge_type: Mapped[str] = mapped_column(String, nullable=False)
     confidence_score: Mapped[float] = mapped_column(default=1.0)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -663,11 +858,25 @@ class EmailThreadEdge(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
 
-class Document(Base):
-    __tablename__ = "documents"
 
-    document_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"doc_{uuid.uuid4().hex}")
-    workspace_id: Mapped[str] = mapped_column(String, ForeignKey("workspaces.workspace_id"), index=True, nullable=False)
+class Document(Base):
+    __tablename__ = "workspace_documents"
+
+    document_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"doc_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("workspace_records.workspace_id"),
+        index=True,
+        nullable=False,
+    )
+    owner_user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     document_name: Mapped[str] = mapped_column(String, nullable=False)
     document_type: Mapped[str] = mapped_column(String, nullable=False)
     document_content: Mapped[str] = mapped_column(Text, nullable=True)

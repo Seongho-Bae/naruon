@@ -8,14 +8,23 @@ from core.config import settings
 from db.models import Base
 from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
+    Account,
     CalendarWritebackSource,
     ConnectorSignalEvent,
+    Document,
+    EmailInstance,
+    EmailMessage,
+    EmailRaw,
+    EmailThread,
+    EmailThreadEdge,
     ProjectFolder,
     SecurityAuditEvent,
     SenderRelationship,
     TenantConfig,
     TicketTask,
+    User,
     WebdavAccount,
+    Workspace,
 )
 
 
@@ -450,6 +459,48 @@ def test_project_folder_model_exposes_opaque_folder_uid():
     assert "organization_id" in column_names
     assert ProjectFolder.__table__.c.folder_uid.nullable is False
     assert ProjectFolder.__table__.c.folder_uid.unique is True
+
+
+def test_phase_one_foundational_models_are_scoped_and_message_id_optional():
+    model_tables = {
+        Workspace: "workspace_records",
+        User: "workspace_users",
+        Account: "provider_accounts",
+        EmailRaw: "raw_email_records",
+        EmailMessage: "canonical_email_messages",
+        EmailInstance: "email_account_instances",
+        EmailThread: "canonical_email_threads",
+        EmailThreadEdge: "email_thread_edges",
+        Document: "workspace_documents",
+    }
+
+    for model, table_name in model_tables.items():
+        assert model.__tablename__ == table_name
+        assert "_" in table_name
+
+    scoped_models = [
+        Account,
+        EmailRaw,
+        EmailMessage,
+        EmailInstance,
+        EmailThread,
+        EmailThreadEdge,
+        Document,
+    ]
+    for model in scoped_models:
+        column_names = {column.name for column in model.__table__.columns}
+        assert {"organization_id", "workspace_id"}.issubset(column_names)
+
+    assert EmailMessage.__table__.c.rfc_message_id.nullable is True
+    message_columns = {column.name for column in EmailMessage.__table__.columns}
+    assert {
+        "canonical_hash",
+        "body_hash",
+        "body_simhash",
+        "attachment_manifest_hash",
+        "identity_confidence_score",
+    }.issubset(message_columns)
+    assert EmailRaw.__table__.c.raw_mime_hash.nullable is True
 
 
 def test_connector_signal_event_model_uses_two_word_names():
