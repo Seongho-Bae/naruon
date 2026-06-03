@@ -562,3 +562,117 @@ class ProjectFolder(Base):
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+
+
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    workspace_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"workspace_{uuid.uuid4().hex}")
+    workspace_name: Mapped[str] = mapped_column(String, nullable=False)
+    workspace_domain: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class User(Base):
+    __tablename__ = "users"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"user_{uuid.uuid4().hex}")
+    user_name: Mapped[str] = mapped_column(String, nullable=False)
+    user_email: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    role_code: Mapped[str] = mapped_column(String, default="member")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class Account(Base):
+    __tablename__ = "accounts"
+
+    account_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"account_{uuid.uuid4().hex}")
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.user_id"), index=True, nullable=False)
+    account_type: Mapped[str] = mapped_column(String, nullable=False)
+    account_status: Mapped[str] = mapped_column(String, default="active")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class EmailRaw(Base):
+    __tablename__ = "email_raws"
+
+    raw_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"raw_{uuid.uuid4().hex}")
+    provider_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
+    raw_content: Mapped[str] = mapped_column(Text, nullable=False)
+    ingested_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class EmailMessage(Base):
+    __tablename__ = "email_messages"
+
+    message_uid: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"msg_{uuid.uuid4().hex}")
+    rfc_message_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    canonical_hash: Mapped[str] = mapped_column(String, nullable=False)
+    message_subject: Mapped[str] = mapped_column(String, nullable=True)
+    message_body: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class EmailInstance(Base):
+    __tablename__ = "email_instances"
+
+    instance_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"inst_{uuid.uuid4().hex}")
+    message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
+    folder_name: Mapped[str] = mapped_column(String, nullable=False)
+    label_names: Mapped[str] = mapped_column(String, nullable=True)
+    instance_status: Mapped[str] = mapped_column(String, default="unread")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class EmailThread(Base):
+    __tablename__ = "email_threads"
+
+    thread_uid: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"thread_{uuid.uuid4().hex}")
+    thread_subject: Mapped[str] = mapped_column(String, nullable=True)
+    participant_summary: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class EmailThreadEdge(Base):
+    __tablename__ = "email_thread_edges"
+
+    edge_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"edge_{uuid.uuid4().hex}")
+    thread_uid: Mapped[str] = mapped_column(String, ForeignKey("email_threads.thread_uid"), index=True, nullable=False)
+    parent_message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
+    child_message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
+    edge_type: Mapped[str] = mapped_column(String, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(default=1.0)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
+
+class Document(Base):
+    __tablename__ = "documents"
+
+    document_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"doc_{uuid.uuid4().hex}")
+    workspace_id: Mapped[str] = mapped_column(String, ForeignKey("workspaces.workspace_id"), index=True, nullable=False)
+    document_name: Mapped[str] = mapped_column(String, nullable=False)
+    document_type: Mapped[str] = mapped_column(String, nullable=False)
+    document_content: Mapped[str] = mapped_column(Text, nullable=True)
+    document_status: Mapped[str] = mapped_column(String, default="pending")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+    )
