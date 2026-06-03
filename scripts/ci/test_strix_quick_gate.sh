@@ -693,8 +693,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 				if [ "${STRIX_LLM:-}" = "openai/openai/retry-api-connection-primary" ]; then
 					echo "LLM CONNECTION FAILED"
 					echo "Could not establish connection to the language model."
-					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException"
-					echo "Connection error while calling openai model."
+					echo "Error: litellm.InternalServerError: InternalServerError: OpenAIException - Connection error."
 				else
 					echo "LLM CONNECTION FAILED"
 					echo "litellm.APIConnectionError: GeminiException - Server disconnected without sending a response."
