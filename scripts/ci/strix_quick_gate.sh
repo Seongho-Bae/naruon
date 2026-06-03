@@ -2121,10 +2121,9 @@ is_llm_api_connection_error() {
 		return 0
 	fi
 
-	if grep -Eiq 'litellm(\.exceptions)?\.InternalServerError' "$STRIX_LOG" &&
-		grep -Eiq 'OpenAIException' "$STRIX_LOG" &&
-		grep -Eiq 'Connection error' "$STRIX_LOG" &&
-		grep -Eiq '(openai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
+	local internal_server_connection_pattern
+	internal_server_connection_pattern='(?s)(?=[\s\S]{0,500}litellm(\.exceptions)?\.InternalServerError)(?=[\s\S]{0,500}OpenAIException)(?=[\s\S]{0,500}Connection error)(?=[\s\S]{0,500}(openai|LLM CONNECTION FAILED|Could not establish connection to the language model))[\s\S]{1,500}'
+	if LC_ALL=C grep -Pzqi "$internal_server_connection_pattern" "$STRIX_LOG"; then
 		return 0
 	fi
 

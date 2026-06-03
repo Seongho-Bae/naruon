@@ -731,8 +731,8 @@ class EmailMessage(Base):
     identity_confidence_score: Mapped[float] = mapped_column(
         default=1.0, nullable=False
     )
-    message_subject: Mapped[str] = mapped_column(String, nullable=True)
-    message_body: Mapped[str] = mapped_column(Text, nullable=True)
+    message_subject: Mapped[str | None] = mapped_column(String, nullable=True)
+    message_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -783,7 +783,7 @@ class EmailInstance(Base):
         nullable=False,
     )
     folder_name: Mapped[str] = mapped_column(String, nullable=False)
-    label_names: Mapped[str] = mapped_column(String, nullable=True)
+    label_names: Mapped[str | None] = mapped_column(String, nullable=True)
     instance_status: Mapped[str] = mapped_column(String, default="unread")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -808,8 +808,8 @@ class EmailThread(Base):
         index=True,
         nullable=False,
     )
-    thread_subject: Mapped[str] = mapped_column(String, nullable=True)
-    participant_summary: Mapped[str] = mapped_column(Text, nullable=True)
+    thread_subject: Mapped[str | None] = mapped_column(String, nullable=True)
+    participant_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
@@ -879,7 +879,7 @@ class Document(Base):
     owner_user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
     document_name: Mapped[str] = mapped_column(String, nullable=False)
     document_type: Mapped[str] = mapped_column(String, nullable=False)
-    document_content: Mapped[str] = mapped_column(Text, nullable=True)
+    document_content: Mapped[str | None] = mapped_column(Text, nullable=True)
     document_status: Mapped[str] = mapped_column(String, default="pending")
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
