@@ -1534,5 +1534,5 @@ test('keeps selected mobile email detail and actions above the bottom navigation
 
   await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
   await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
-  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목로 추적합니다.')).toBeVisible();
+  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목으로 추적합니다.')).toBeVisible();
 });

@@ -520,9 +520,9 @@ export function TasksLayout() {
                             <CalendarDays className="size-3.5" />
                             <span className={task.due.includes('오늘') ? 'text-red-500' : ''}>{task.due}</span>
                           </div>
-                          <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer" title="메일 출처 바로가기">
+                          <div className="flex items-center gap-1" title="작업 출처">
                             {col.id === 'blocked' ? <AlertCircle className="size-3.5" /> : <Inbox className="size-3.5" />}
-                            <span className="underline decoration-muted-foreground/30 underline-offset-2">{task.source}</span>
+                            <span>{task.source}</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-center size-6 rounded-full bg-primary/10 text-primary" title={task.assignee}>
@@ -613,7 +613,7 @@ export function TasksLayout() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold mb-1">출처</p>
-                <div className="flex items-center gap-2 text-sm font-bold hover:text-primary cursor-pointer underline underline-offset-2 decoration-muted-foreground/30">
+                <div className="flex items-center gap-2 text-sm font-bold">
                   <Inbox className="size-4" /> {task.source}
                 </div>
               </div>
