@@ -52,5 +52,5 @@ test('selects an email on mobile and executes visible detail task actions', asyn
   await expect(detailRegion.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
   await expect(detailRegion.getByRole('heading', { name: '실행 항목' })).toBeVisible();
   await detailRegion.getByRole('button', { name: '실행 항목 생성' }).click();
-  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목로 추적합니다.')).toBeVisible();
+  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목으로 추적합니다.')).toBeVisible();
 });

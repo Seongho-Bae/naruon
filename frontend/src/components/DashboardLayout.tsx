@@ -73,7 +73,7 @@ const mobileWorkspaceMenuItems = [
 const headerActions = [
   { label: '일정 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
   { label: '답장 초안', action: 'reply-draft', message: '메일 상세 패널에서 답장 초안을 생성합니다.', icon: PenLine },
-  { label: '실행 항목 생성', action: 'create-task', message: '메일 상세 패널에서 실행 항목을 실행 항목으로 정리합니다.', icon: CheckCircle2 },
+  { label: '실행 항목 생성', action: 'create-task', message: '메일 상세 패널에서 메일 후속 작업을 실행 항목으로 정리합니다.', icon: CheckCircle2 },
 ];
 
 
