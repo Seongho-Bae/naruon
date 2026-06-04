@@ -35,14 +35,12 @@
 
 ## Plan
 
-1. Keep the GitHub Models default route with
-   `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
-   `LLM_API_BASE_FILE` pointing at a trusted file containing
-   `https://models.github.ai/inference`.
-2. Keep legacy `STRIX_LLM` secrets from overriding PR, push, or scheduled
-   defaults. Keep Vertex routes explicit through manual `workflow_dispatch`
-   `strix_llm` selections plus `GCP_SA_KEY`, and keep direct OpenAI explicit
-   through manual `strix_llm` selections plus `STRIX_OPENAI_API_KEY`.
+1. Keep the organization-secret `STRIX_LLM` route and honor the exact
+   `vertex_ai/gemini-3.1-pro-preview-customtools` value now that organization
+   secret visibility is available.
+2. Default missing `STRIX_LLM` to
+   `vertex_ai/gemini-3.1-pro-preview-customtools` rather than silently routing
+   to GitHub Models or a downgraded Vertex fallback.
 3. Keep arbitrary Vertex model patterns disallowed; only exact approved Vertex
    models are accepted.
 4. Preserve the narrow Pydantic serializer warning filter and gate child-process
@@ -73,8 +71,7 @@
 
 ## Non-Goals
 
-- This does not reintroduce generic `LLM_API_KEY` or cross-provider credential
-  forwarding.
+- This does not reintroduce GitHub Models or generic `LLM_API_KEY`.
 - This does not suppress scanner findings, timeouts, denied access, fatal
   errors, or application warnings.
 - This does not treat zero-vulnerability text as sufficient evidence after a
