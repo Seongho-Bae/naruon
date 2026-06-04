@@ -227,7 +227,8 @@ async def get_emails(
         .limit(candidate_window)
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    # ⚡ Bolt: Replaced O(N log N) sort with O(N) in-place reverse
+    emails.reverse()
 
     grouped = {}
     reply_counts = {}
@@ -449,7 +450,7 @@ async def get_email_thread(
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    # ⚡ Bolt: Removed redundant in-memory sort
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
 

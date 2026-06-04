@@ -10,3 +10,7 @@
 ## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
 **Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
 **Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
+
+## 2026-04-27 - Redundant In-Memory Sorting & Missing Index
+**Learning:** A common performance anti-pattern was found where SQLAlchemy query results were being sorted again in Python using `sorted()`, despite the DB natively sorting them via `.order_by()`. This wastes CPU cycles (O(N log N)) on large datasets and is completely redundant. In addition, an explicit composite index for columns frequently used in `.order_by()` is crucial.
+**Action:** When working with SQLAlchemy list queries, verify if the DB already returns ordered scalars before applying `.sort()` or `sorted()` in API routes. Use in-place `.reverse()` if O(N) reversal of descending limit queries is required. Always add indices for query access patterns.

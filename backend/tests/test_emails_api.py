@@ -862,7 +862,7 @@ async def test_get_email_thread_returns_chronological_order(
         date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
         body="Older body",
     )
-    db_session.items = [newer, older]
+    db_session.items = [older, newer]
 
     response = await client.get("/api/emails/thread/thread123")
 

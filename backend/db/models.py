@@ -267,6 +267,12 @@ class Email(Base):
             "message_id",
             name="uq_emails_owner_message_id",
         ),
+        Index(
+            "ix_emails_owner_date",
+            "user_id",
+            "organization_id",
+            "date",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
