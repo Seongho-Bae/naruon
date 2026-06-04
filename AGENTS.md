@@ -13,14 +13,18 @@
   single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan must not route through GitHub Models, `github.token`,
-  generic `LLM_API_KEY`, GPT-4o, or GPT-4.1. The current organization-secret
-  route is `STRIX_LLM` with `GCP_SA_KEY`;
-  `vertex_ai/gemini-3.1-pro-preview-customtools` is the default approved Vertex
-  model now that organization-secret visibility is available, with
-  `vertex_ai/gemini-2.5-flash` allowed only as an explicit legacy selection.
-  Expose Google/Vertex credentials only for Vertex provider mode. Direct OpenAI
-  GPT-5.4-or-newer scans remain supported only when selected explicitly with
+- Strix Security Scan uses GitHub Models by default through `github.token`,
+  `models: read`, `STRIX_LLM=openai/openai/gpt-4.1`, and
+  `LLM_API_BASE_FILE` pointing at a trusted file containing
+  `https://models.github.ai/inference`. Keep the GitHub Models endpoint in a
+  trusted input file and pass the token only through the
+  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets must
+  not override PR, push, or scheduled Strix defaults. Vertex remains available
+  only for manual `workflow_dispatch` evidence when the `strix_llm` input
+  explicitly selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
+  `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; expose Google/Vertex
+  credentials only for Vertex provider mode. Direct OpenAI GPT-5.4-or-newer
+  scans remain supported only for manual `strix_llm` selections with
   `STRIX_OPENAI_API_KEY`. Do not silently fall back between providers, and
   do not treat timeout-class provider infrastructure failures as clean PR
   evidence even when Strix printed zero vulnerabilities before failing. Disable
@@ -39,7 +43,7 @@
   Strix in one scanner invocation; do not split changed files into separate
   scanner runs because that breaks Strix's required whole-context contract. Keep
   architecture docs and reusable Strix gate tests aligned with this rule so
-  stale GitHub Models, OpenAI-only, unavailable-model, blanket-warning, or
+  stale Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or
   generic-key examples cannot re-enter copied workflow guidance.
 - HMAC fallback sessions are local/control-plane compatibility credentials, not
   authoritative workspace-membership evidence. Sensitive tenant security posture
@@ -110,10 +114,10 @@
   provider `base_url` values must fail closed unless they are HTTPS, exact-host
   allowlisted by `ALLOWED_LLM_BASE_URL_HOSTS`, and resolve only to global
   addresses. Runtime LLM calls that use a custom provider `base_url` must build
-  their `httpx` client through `build_llm_provider_http_client` so TCP
-  connections are pinned to the already validated global address while TLS/SNI
-  still uses the allowlisted hostname; do not hand a freshly validated URL to a
-  generic client that can resolve DNS again at connect time.
+  their `httpx` client through `build_llm_provider_http_client` so TCP connects
+  only to prevalidated global IP addresses while TLS/SNI still uses the
+  allowlisted hostname; do not hand a freshly validated URL to a generic client
+  that can resolve DNS again at connect time.
 - OIDC issuer and JWKS URLs are outbound identity-provider fetch surfaces. They
   must use HTTPS, must not include userinfo or fragments, must reject localhost
   and non-global IP literals, and must be exact-host allowlisted by
@@ -140,6 +144,14 @@
   by `user_id` only. Frontend Settings onboarding must use bearer-session API
   calls for account config, CalDAV/WebDAV source readiness, and runner token
   rotation, and mocks must not reintroduce public identity headers.
+- Self-service mailbox configuration routes must enforce owner-required
+  RBAC/ABAC through `services.access_policy`; system/platform admins may not use
+  user-facing `/api/config` routes to read or mutate another user's mailbox
+  credentials. Cross-user administration needs a dedicated audited admin route.
+- Workspace-scoped resources must carry `workspace_id` through both
+  `AccessRequest` and `ResourcePolicy`, and SQL scopes for WebDAV/Data/Security
+  surfaces must filter the current workspace in addition to owner and
+  organization. Do not expose same-organization cross-workspace records.
 - User-owned mailbox/provider account endpoints must not treat `system_admin`
   or `platform_admin` JWT roles as an owner session. Elevated operators need
   separate audited support flows; `/api/accounts/config` must reject forged or
@@ -195,10 +207,14 @@
   be stored in artificially short `varchar(n)` columns; use opaque source UIDs
   that fit seeded smoke data and provider evidence without truncation.
 - When reviews find public/private identifier leaks, stale API fixture shapes, or recurring bug patterns, update tests, frontend mocks, E2E mocks, README examples, architecture docs, and explicitly record the anti-pattern in `AGENTS.md` so the same bug pattern does not reappear in copied examples.
+- When reviews find missing browser security headers or tabnabbing hardening,
+  update both backend header tests and frontend link tests. Global backend
+  responses must include `Referrer-Policy`, and `target="_blank"` links must
+  use explicit `rel="noopener noreferrer"`.
 - When robot review cites an obsolete Strix provider policy, update the docs and
-  tests to the current secret contract before accepting a rollback suggestion;
-  do not reintroduce generic `LLM_API_KEY`, GitHub Models, or cross-provider
-  credential forwarding while trying to satisfy old comments.
+  tests to the current GitHub Models default contract before accepting a
+  rollback suggestion; do not reintroduce generic `LLM_API_KEY` or
+  cross-provider credential forwarding while trying to satisfy old comments.
 - When reviews find inert navigation/dead-space controls, either wire them to an
   implemented workspace route/API or remove the control; do not leave
   high-traffic drawer/sidebar entries as permanent `준비 중` copy.
@@ -356,3 +372,5 @@
 - **UI/Browser Testing**: Use a real browser for testing (do not rely on assumptions).
 - **Strict Errors**: Treat `Timeout`, `Fatal`, `Warn`, and `Denied` outputs as hard failures.
 - **Goal**: Actively manage tasks to ensure open PR counts converge to 0.
+
+- When the gate exhausts fallbacks after the primary model produces a finding at or above threshold and then fails with a retryable error (like `NOT_FOUND`), ensure the final output explicitly reports `Strix quick scan failed with a non-recoverable error.` to prevent downgrading the finding to pass or misleadingly reporting an unavailability error.

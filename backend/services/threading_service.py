@@ -44,9 +44,12 @@ def extract_reference_ids(value: str | None) -> list[str]:
         refs = str(value).split()
 
     normalized_refs: list[str] = []
+    # Optimization: Use a set for O(1) membership checks to avoid O(n^2) scaling on long reference lists
+    seen: set[str] = set()
     for ref in refs:
         normalized = normalize_message_id(ref)
-        if normalized and normalized not in normalized_refs:
+        if normalized and normalized not in seen:
+            seen.add(normalized)
             normalized_refs.append(normalized)
     return normalized_refs
 
@@ -92,11 +95,15 @@ async def assign_thread_id(
     references = extract_reference_ids(email_data.get("references"))
 
     existing_candidates = []
+    # Optimization: Use a set for O(1) membership checks to prevent O(n^2) deduplication of candidates
+    seen = set()
     if in_reply_to:
         existing_candidates.append(in_reply_to)
-    existing_candidates.extend(
-        ref for ref in references if ref not in existing_candidates
-    )
+        seen.add(in_reply_to)
+    for ref in references:
+        if ref not in seen:
+            seen.add(ref)
+            existing_candidates.append(ref)
 
     for candidate in existing_candidates:
         thread_id = await _find_existing_thread_id(

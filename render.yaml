@@ -1,0 +1,93 @@
+# Render Blueprint for Naruon (frontend + backend + Postgres).
+#
+# Why a Blueprint?
+# Render's single-service "Dockerfile Path" form only accepts one Dockerfile
+# per service. This Blueprint registers two web services that each point at
+# their own Dockerfile, matching the two-Dockerfile layout used by
+# docker-compose.yml and k8s/*.yaml in this repo.
+#
+# AGENTS.md constraints preserved:
+#   * backend boots via `python scripts/start_backend.py` (no direct uvicorn).
+#   * DATABASE_URL and AUTH_SESSION_HMAC_SECRET are injected from Render
+#     (fromDatabase / generateValue) — no code defaults, no .env mounts.
+#   * frontend talks to backend through the same-origin `/api/*` rewrite,
+#     so no public identity headers cross the browser boundary.
+#
+# pgvector: backend/scripts/bootstrap_db.py runs `CREATE EXTENSION IF
+# NOT EXISTS vector` on every boot. If Render's app role lacks that
+# privilege, run the same statement once via the Render dashboard
+# `PSQL Command` and redeploy backend. See
+# docs/operations/render-deployment.md for the full runbook.
+
+databases:
+  - name: naruon-postgres
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: naruon-backend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Render injects $PORT into the container. We keep the Dockerfile CMD
+    # untouched and override it here so start_backend.py receives the
+    # platform-assigned port. bootstrap_db.py runs first (idempotent) so
+    # schema migrations land before uvicorn starts serving.
+    #
+    # Render's managed Postgres exposes a `postgresql://` URL via
+    # fromDatabase.connectionString, but backend/db/session.py uses
+    # SQLAlchemy create_async_engine which requires the async driver
+    # prefix `postgresql+asyncpg://`. Render Blueprints do not support
+    # variable interpolation, so we rewrite the prefix in the start
+    # command itself. This is a transport-layer fix only; no code default
+    # is introduced (AGENTS.md rule preserved).
+    dockerCommand: >-
+      sh -c '
+      export DATABASE_URL="$(printf %s "$DATABASE_URL" | sed -E "s#^postgres(ql)?://#postgresql+asyncpg://#")" &&
+      python scripts/bootstrap_db.py &&
+      python scripts/start_backend.py --host 0.0.0.0 --port "$PORT"
+      '
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: naruon-postgres
+          property: connectionString
+      - key: AUTH_SESSION_HMAC_SECRET
+        generateValue: true
+      - key: DEBUG
+        value: "false"
+      - key: ALLOWED_CORS_ORIGINS
+        fromService:
+          name: naruon-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      # Secret-bearing variables are prompted on first Blueprint sync and
+      # then managed in the Render dashboard. Leave blank here.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: OPENAI_MODEL
+        value: gpt-4o
+
+  - type: web
+    name: naruon-frontend
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./frontend/Dockerfile
+    # Build context must be the repo root because frontend/Dockerfile uses
+    # `COPY frontend ./` and `COPY frontend/package*.json ./`.
+    dockerContext: .
+    healthCheckPath: /
+    envVars:
+      # The frontend /api/* route handler reads BACKEND_INTERNAL_URL at runtime
+      # and proxies to this backend. RENDER_EXTERNAL_URL is the public HTTPS URL
+      # Render assigns to the backend web service.
+      - key: BACKEND_INTERNAL_URL
+        fromService:
+          name: naruon-backend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
