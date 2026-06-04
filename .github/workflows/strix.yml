@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   strix:
-    timeout-minutes: 120
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
@@ -311,14 +311,14 @@ jobs:
           IS_PR_EVIDENCE_RUN: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && 'true' || 'false' }}
         run: |
           budget_suffix="TIME""OUT"
-          process_budget_seconds="3600"
+          process_budget_seconds="2400"
           if [ "$IS_PR_EVIDENCE_RUN" = "true" ]; then
-            process_budget_seconds="3600"
+            process_budget_seconds="2400"
           fi
           export "LLM_${budget_suffix}=120"
           export "STRIX_MEMORY_COMPRESSOR_${budget_suffix}=10"
           export "STRIX_PROCESS_${budget_suffix}_SECONDS=$process_budget_seconds"
-          export "STRIX_TOTAL_${budget_suffix}_SECONDS=7200"
+          export "STRIX_TOTAL_${budget_suffix}_SECONDS=4800"
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload
