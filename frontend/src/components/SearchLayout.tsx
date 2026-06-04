@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   CornerDownRight,
+  Loader2,
   Mail,
   Network,
   Search,
@@ -146,8 +147,11 @@ function SenderDagPanel({
               type="button"
               onClick={onCapture}
               disabled={captureStatus === "loading"}
-              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto inline-flex items-center justify-center"
             >
+              {captureStatus === "loading" && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+              )}
               {captureStatus === "loading" ? "캡처 중" : "발신자 관계 캡처"}
             </button>
           </div>
