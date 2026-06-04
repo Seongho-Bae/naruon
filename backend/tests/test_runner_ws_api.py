@@ -96,7 +96,7 @@ def _valid_session_headers() -> dict[str, str]:
             "iss": "naruon-control-plane",
             "aud": "naruon-api",
             "sub": "alice",
-            "role": "organization_admin",
+            "role": "member",
             "org": "org-acme",
             "groups": ["group-1"],
             "workspace": "workspace-org-acme",

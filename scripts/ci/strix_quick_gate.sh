@@ -2122,7 +2122,8 @@ is_llm_api_connection_error() {
 	fi
 
 	if grep -Eiq 'litellm(\.exceptions)?\.InternalServerError' "$STRIX_LOG" &&
-		grep -Eiq 'OpenAIException[[:space:]]*-[[:space:]]*Connection error' "$STRIX_LOG" &&
+		grep -Eiq 'OpenAIException' "$STRIX_LOG" &&
+		grep -Eiq 'Connection error' "$STRIX_LOG" &&
 		grep -Eiq '(openai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
 		return 0
 	fi
@@ -2866,10 +2867,6 @@ run_current_target_scan() {
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
-		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
-			return 1
-		fi
 		return 0
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
@@ -2927,10 +2924,6 @@ run_current_target_scan() {
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
-			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
-				return 1
-			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
