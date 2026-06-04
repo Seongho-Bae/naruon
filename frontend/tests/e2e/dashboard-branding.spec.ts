@@ -33,15 +33,15 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(header.getByRole('link', { name: '알림 보기' })).toHaveAttribute('href', '/security');
   await expect(header.getByRole('link', { name: '도움말 보기' })).toHaveAttribute('href', '/settings#help');
   await expect(header.getByRole('link', { name: '프로필 메뉴' })).toHaveAttribute('href', '/settings#profile');
-  await expect(header.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
+  await expect(header.getByRole('button', { name: '일정 반영' })).toBeVisible();
   await expect(header.getByRole('button', { name: '답장 초안' })).toBeVisible();
-  await expect(header.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(header.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
   await header.getByRole('button', { name: '답장 초안' }).click();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
 
-  await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
   const homeQuickActions = page.getByLabel('홈 빠른 실행');
   await expect(homeQuickActions.getByRole('link', { name: '메일함 열기' })).toHaveAttribute('href', '/mail');
   await expect(homeQuickActions.getByRole('link', { name: '보낸 메일 답변 추적' })).toHaveAttribute('href', '/mail?folder=sent');
@@ -56,8 +56,8 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
 
   const desktopStartup = page.getByRole('region', { name: 'Desktop startup preference' });
   await expect(desktopStartup).toBeVisible();
-  await expect(desktopStartup.getByRole('button', { name: '대시보드' })).toBeVisible();
-  await expect(desktopStartup.getByRole('button', { name: '이메일' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '홈' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '메일' })).toBeVisible();
   await expect(desktopStartup.getByRole('button', { name: '일정' })).toBeVisible();
 
   expect(
@@ -97,7 +97,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
 
-  const desktopDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  const desktopDashboard = page.locator('section[aria-label="홈 개요"]:visible').first();
   await expect(desktopDashboard).toBeVisible();
   await expect(page.getByRole('article', { name: '답변 대기' }).first()).toBeVisible();
   await expect(desktopDashboard.getByText('답변 대기 메일')).toBeVisible();
@@ -125,7 +125,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   });
   await page.goto('/');
   expect((await mobilePendingRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
-  const mobileDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  const mobileDashboard = page.locator('section[aria-label="홈 개요"]:visible').first();
   await expect(mobileDashboard).toBeVisible();
   await mobileDashboard.getByText('답변 대기 메일').scrollIntoViewIfNeeded();
   await expect(mobileDashboard.getByText('답변 대기 메일')).toBeVisible();
@@ -168,7 +168,7 @@ test('keeps the short mobile AI quick action menu inside the viewport with scrol
 
   const menu = page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
   const bounds = await menu.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
@@ -209,7 +209,7 @@ test('renders compact mobile navigation without hover-only controls', async ({ p
 
   await page.getByRole('link', { name: '일정' }).click();
   await expect(page.getByRole('region', { name: '모바일 일정 연결' })).toBeVisible();
-  await expect(page.getByText('캘린더 반영 대기')).toBeVisible();
+  await expect(page.getByText('일정 반영 대기')).toBeVisible();
 });
 
 const responsiveViewports = [
@@ -230,7 +230,7 @@ for (const viewport of responsiveViewports) {
 
     await expect(page.locator('main#main-content')).toBeVisible();
     await expect(page.locator('header[aria-label="Naruon workspace header"]')).toBeVisible();
-    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
     if (viewport.width <= 390) {
       const metricLabel = page
         .getByRole('article', { name: '받은 메일' })
@@ -261,9 +261,9 @@ for (const viewport of responsiveViewports) {
       await expect(page.getByRole('region', { name: '태블릿 메일 작업공간' })).toBeVisible();
       await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeHidden();
       await expect(page.getByText('태블릿 맥락 패널')).toBeVisible();
-      await expect(page.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '일정 반영' })).toBeVisible();
       await expect(page.getByRole('button', { name: '답장 초안' })).toBeVisible();
-      await expect(page.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
     } else {
       await expect(page.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeVisible();
       await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeVisible();
@@ -274,7 +274,7 @@ for (const viewport of responsiveViewports) {
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
   { path: '/calendar', heading: '일정 관리', marker: { text: 'CalDAV/CardDAV/WebDAV writeback intent' } },
-  { path: '/tasks', heading: '할 일 추적', marker: { name: '리소스 배정 검토 회의' } },
+  { path: '/tasks', heading: '실행 항목 추적', marker: { name: '리소스 배정 검토 회의' } },
   { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
   { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },
@@ -654,7 +654,7 @@ test('updates source-linked task ticket status with signed API headers', async (
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
   await page.getByRole('button', { name: '리소스 배정 검토 회의 상태를 완료로 변경' }).click();
   const requestHeaders = (await patchRequest).headers();
@@ -671,7 +671,7 @@ test('updates source-linked task ticket status with signed API headers', async (
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
   await expect(page.getByText('실제 티켓 큐')).toBeVisible();
   await expect(page.getByText('5개 티켓 연결')).toBeVisible();
@@ -715,7 +715,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const desktopRequest = await desktopEscalationRequest;
   const desktopHeaders = desktopRequest.headers();
@@ -739,7 +739,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
     return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
   });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const mobileRequestHeaders = (await mobileEscalationRequest).headers();
   expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -788,7 +788,7 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'self-sent knowledge WebDAV materialization' })).toBeVisible();
   await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
   const request = await desktopIntentRequest;
@@ -812,7 +812,7 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
     return url.pathname === '/api/webdav/knowledge-materialization-intent' && mobileRequest.method() === 'POST';
   });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
   const mobileRequest = await mobileIntentRequest;
   expect(mobileRequest.headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -847,7 +847,7 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   await page.getByRole('button', { name: '개발자' }).first().click();
 
   await expect(page.getByText('Self-hosted connector manifest')).toBeVisible();
-  await expect(page.getByText('Naruon은 이메일 서버가 아닙니다')).toBeVisible();
+  await expect(page.getByText('Naruon은 메일 서버가 아닙니다')).toBeVisible();
   await expect(page.getByText('naruon.net', { exact: true })).toBeVisible();
   await expect(page.getByText('ci_smoke_only')).toBeVisible();
   await expect(page.getByText('smtp_server')).toBeVisible();
@@ -1370,7 +1370,7 @@ test('captures responsive startup evidence for desktop tablet mobile and the mob
   ] as const) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto('/');
-    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`startup-${viewport.name}.png`), fullPage: true });
     if (viewport.name === 'mobile') {
       await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
@@ -1391,8 +1391,8 @@ test('validates mobile hamburger composition and startup preference controls', a
   const menuWidth = await menu.evaluate((element) => element.getBoundingClientRect().width);
   expect(menuWidth).toBeGreaterThanOrEqual(340);
   await expect(menu.getByText('시작 화면', { exact: true })).toBeVisible();
-  await expect(menu.getByRole('button', { name: '대시보드' })).toBeVisible();
-  await expect(menu.getByRole('button', { name: '이메일' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '홈' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '메일' })).toBeVisible();
   await expect(menu.getByRole('button', { name: '일정' })).toBeVisible();
   await expect(menu.getByRole('link', { name: '홈', exact: true })).toHaveAttribute('href', '/');
   await expect(menu.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
@@ -1521,7 +1521,7 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   await expect(detailRegion).toBeVisible();
   await expect(detailRegion.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
   await expect(detailRegion.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
-  await expect(detailRegion.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(detailRegion.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
 
   const replyButton = detailRegion.getByRole('button', { name: '답장 보내기' });
   await replyButton.scrollIntoViewIfNeeded();
@@ -1533,6 +1533,6 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   expect(bottomGap).toBeGreaterThanOrEqual(0);
 
   await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
-  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '할 일 만들기' }).click();
-  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 할 일로 추적합니다.')).toBeVisible();
+  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
+  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목로 추적합니다.')).toBeVisible();
 });

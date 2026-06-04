@@ -220,7 +220,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).not.toContain("Thread A stale sibling body");
   });
 
-  it("renders AI summary, action items, and reply drafting in reusable insight cards", async () => {
+  it("renders 맥락 종합, action items, and reply drafting in reusable insight cards", async () => {
     const email: TestEmail = {
       id: 7,
       message_id: "<insight@example.com>",
@@ -320,7 +320,7 @@ describe("EmailDetail", () => {
       (card) => card.getAttribute("aria-label") === "실행 항목",
     );
     const createTaskButton = Array.from(actionCard?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
-      (button) => button.textContent?.includes("할 일 만들기"),
+      (button) => button.textContent?.includes("실행 항목 생성"),
     );
 
     expect(createTaskButton).not.toBeUndefined();
@@ -330,7 +330,7 @@ describe("EmailDetail", () => {
     });
 
     expect(fetchMock.mock.calls.map(([input]) => String(input))).toContain("/api/tasks/from-email");
-    expect(actionCard?.textContent).toContain("2개 실행 항목을 티켓형 할 일로 추적합니다.");
+    expect(actionCard?.textContent).toContain("2개 실행 항목을 티켓형 실행 항목으로 추적합니다.");
   });
 
   it("clears conversation loading when the latest email has no thread", async () => {
@@ -411,7 +411,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).not.toContain("대화 흐름을 불러오는 중입니다...");
   });
 
-  it("uses Korean-first labels for AI summary and execution actions", async () => {
+  it("uses Korean-first labels for 맥락 종합 and execution actions", async () => {
     const email: TestEmail = {
       id: 5,
       message_id: "<label@example.com>",

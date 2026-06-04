@@ -29,7 +29,7 @@ describe("brand control sizing", () => {
       root?.render(
         <>
           <Button>버튼</Button>
-          <Input aria-label="이메일" />
+          <Input aria-label="메일" />
           <Textarea aria-label="답장" />
         </>,
       );

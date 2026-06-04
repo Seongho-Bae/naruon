@@ -42,7 +42,7 @@ const mobileSearchCopy: MobilePanelCopy = {
 
 const mobileCalendarCopy: MobilePanelCopy = {
   eyebrow: '일정 연결',
-  title: '캘린더 반영 대기',
+  title: '일정 반영 대기',
   description: '메일에서 추출한 회의, 마감, 후속 조치를 모바일에서 바로 확인합니다.',
   loading: '일정 후보를 불러오는 중입니다.',
   empty: '일정 후보가 없습니다.',

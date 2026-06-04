@@ -82,7 +82,7 @@ describe("DashboardLayout", () => {
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
-    expect(headerActionButtons).toEqual(["캘린더 반영", "답장 초안", "할 일 만들기"]);
+    expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
     expect(headerActionGroup?.className).not.toContain("xl:flex");
     expect(skipLink?.textContent).toBe("Skip to main content");
@@ -103,8 +103,8 @@ describe("DashboardLayout", () => {
     const desktopStartupPreference = container.querySelector<HTMLElement>('section[aria-label="Desktop startup preference"]');
     expect(desktopStartupPreference).not.toBeNull();
     expect(desktopStartupPreference?.textContent ?? "").toContain("시작 화면");
-    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="dashboard"]')?.textContent).toContain("대시보드");
-    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="email"]')?.textContent).toContain("이메일");
+    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="dashboard"]')?.textContent).toContain("홈");
+    expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="email"]')?.textContent).toContain("메일");
     expect(desktopStartupPreference?.querySelector<HTMLButtonElement>('button[data-desktop-startup-view="calendar"]')?.textContent).toContain("일정");
 
     act(() => {
@@ -124,8 +124,8 @@ describe("DashboardLayout", () => {
     expect(mobileMenu?.className).toContain("inset-y-0");
     expect(mobileMenu?.querySelector<HTMLButtonElement>('button[aria-label="모바일 워크스페이스 메뉴 닫기"]')).not.toBeNull();
     expect(mobileMenu?.textContent ?? "").toContain("시작 화면");
-    expect(mobileMenu?.textContent ?? "").toContain("대시보드");
-    expect(mobileMenu?.textContent ?? "").toContain("이메일");
+    expect(mobileMenu?.textContent ?? "").toContain("홈");
+    expect(mobileMenu?.textContent ?? "").toContain("메일");
     expect(mobileMenu?.textContent ?? "").toContain("일정");
     expect(mobileMenu?.textContent ?? "").toContain("메일");
     expect(mobileMenu?.textContent ?? "").toContain("워크스페이스");

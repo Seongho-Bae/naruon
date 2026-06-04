@@ -58,22 +58,22 @@ const primaryNavItems = [
 ];
 
 const startupViewItems = [
-  { label: '대시보드', view: 'dashboard' as const, description: '오늘의 실행 요약' },
-  { label: '이메일', view: 'email' as const, description: '받은편지함 작업공간' },
+  { label: '홈', view: 'dashboard' as const, description: '오늘의 실행 맥락 종합' },
+  { label: '메일', view: 'email' as const, description: '받은편지함 작업공간' },
   { label: '일정', view: 'calendar' as const, description: '캘린더 연결 먼저 보기' },
 ];
 
 const mobileWorkspaceMenuItems = [
   { label: '받은편지함', description: '메일 스레드', icon: Inbox, href: '#mobile-inbox', view: 'inbox' as const },
   { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
-  { label: '일정 연결', description: '캘린더 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
+  { label: '일정 연결', description: '일정 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
   { label: 'AI 실행', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
 ];
 
 const headerActions = [
-  { label: '캘린더 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
+  { label: '일정 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
   { label: '답장 초안', action: 'reply-draft', message: '메일 상세 패널에서 답장 초안을 생성합니다.', icon: PenLine },
-  { label: '할 일 만들기', action: 'create-task', message: '메일 상세 패널에서 실행 항목을 할 일로 정리합니다.', icon: CheckCircle2 },
+  { label: '실행 항목 생성', action: 'create-task', message: '메일 상세 패널에서 실행 항목을 실행 항목으로 정리합니다.', icon: CheckCircle2 },
 ];
 
 
@@ -449,7 +449,7 @@ export function DashboardLayout({
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
-            <p className="mt-1 text-xs text-muted-foreground">메일, 일정, 할 일, 데이터와 보안 메뉴로 이동합니다.</p>
+            <p className="mt-1 text-xs text-muted-foreground">메일, 일정, 실행 항목, 데이터와 보안 메뉴로 이동합니다.</p>
           </div>
           <button
             type="button"

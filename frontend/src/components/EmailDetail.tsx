@@ -146,7 +146,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           setLlmData(llmJson);
         } catch (llmErr) {
           console.error("Error generating LLM summary:", llmErr);
-          if (isMounted) setLlmError("요약을 생성하지 못했습니다.");
+          if (isMounted) setLlmError("맥락 종합을 생성하지 못했습니다.");
         }
       } catch (err) {
         console.error("Error fetching email details:", err);
@@ -190,7 +190,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       setSendStatus({
         type: 'success',
         message: data.simulated
-          ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.'
+          ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 메일은 전송되지 않았습니다.'
           : '답장을 전송했습니다.',
       });
       setDraft('');
@@ -250,10 +250,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         items: llmData.todos,
       });
       if (!isCurrentEmail()) return;
-      setTaskStatus(`${data.created}개 실행 항목을 티켓형 할 일로 추적합니다.`);
+      setTaskStatus(`${data.created}개 실행 항목을 티켓형 실행 항목으로 추적합니다.`);
     } catch {
       if (!isCurrentEmail()) return;
-      setTaskStatus('티켓형 할 일 생성에 실패했습니다.');
+      setTaskStatus('티켓형 실행 항목 생성에 실패했습니다.');
     } finally {
       if (isCurrentEmail()) setIsCreatingTask(false);
     }
@@ -290,7 +290,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         <div className="max-w-md rounded-3xl border border-primary/15 bg-card p-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
           <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">✦</div>
           <h2 className="text-xl font-black tracking-tight text-foreground">메일을 선택하세요</h2>
-          <p className="mt-2 text-sm leading-6">왼쪽 받은편지함에서 메일을 선택하면 Naruon이 요약, 판단 포인트, 실행 항목을 연결합니다.</p>
+          <p className="mt-2 text-sm leading-6">왼쪽 받은편지함에서 메일을 선택하면 Naruon이 맥락 종합, 판단 포인트, 실행 항목을 연결합니다.</p>
         </div>
       </div>
     );
@@ -367,7 +367,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "동기화 중" : "캘린더 반영"}
+                    {isSyncing ? "동기화 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
@@ -379,7 +379,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
                   >
                     {isCreatingTask && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isCreatingTask ? "추적 중" : "할 일 만들기"}
+                    {isCreatingTask ? "추적 중" : "실행 항목 생성"}
                   </Button>
                 )}
                 {syncStatus && (
