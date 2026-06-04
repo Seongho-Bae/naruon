@@ -251,7 +251,7 @@ export function TasksLayout() {
       {/* Top Header */}
       <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-card px-4 py-3 lg:h-16 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-0">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:gap-6">
-          <h1 className="text-xl font-bold">할 일 추적</h1>
+          <h1 className="text-xl font-bold">실행 항목 추적</h1>
           <p className="sr-only">리소스 배정 검토 회의</p>
           <div className="flex max-w-full overflow-x-auto rounded-md border border-border">
             {['내 작업', '위임한 작업', '칸반', '작업 상세'].map((mode) => (
@@ -520,9 +520,9 @@ export function TasksLayout() {
                             <CalendarDays className="size-3.5" />
                             <span className={task.due.includes('오늘') ? 'text-red-500' : ''}>{task.due}</span>
                           </div>
-                          <div className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer" title="이메일 출처 바로가기">
+                          <div className="flex items-center gap-1" title="작업 출처">
                             {col.id === 'blocked' ? <AlertCircle className="size-3.5" /> : <Inbox className="size-3.5" />}
-                            <span className="underline decoration-muted-foreground/30 underline-offset-2">{task.source}</span>
+                            <span>{task.source}</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-center size-6 rounded-full bg-primary/10 text-primary" title={task.assignee}>
@@ -613,7 +613,7 @@ export function TasksLayout() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold mb-1">출처</p>
-                <div className="flex items-center gap-2 text-sm font-bold hover:text-primary cursor-pointer underline underline-offset-2 decoration-muted-foreground/30">
+                <div className="flex items-center gap-2 text-sm font-bold">
                   <Inbox className="size-4" /> {task.source}
                 </div>
               </div>

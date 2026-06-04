@@ -45,7 +45,7 @@ const aiHubSurface = {
   prompt_cards: [
     {
       prompt_key: 'prompt_safe',
-      prompt_title: '의사결정 로그 요약',
+      prompt_title: '의사결정 로그 맥락 종합',
       description_text: '메일에서 판단 포인트를 추출합니다.',
       shared_scope: false,
       owner_label: 'alice',
@@ -55,7 +55,7 @@ const aiHubSurface = {
   workflow_cards: [
     {
       workflow_key: 'workflow_prompt_safe',
-      workflow_title: '의사결정 로그 요약 실행 흐름',
+      workflow_title: '의사결정 로그 맥락 종합 실행 흐름',
       trigger_source: 'prompt_template',
       state_code: 'ready',
       evidence_text: 'active organization provider is available',
@@ -164,10 +164,10 @@ describe('AIHubPage', () => {
       expect(lowerHeaderNames.has(headerName)).toBe(false);
     }
     expect(container.textContent).toContain('AI 허브');
-    expect(container.textContent).toContain('의사결정 로그 요약');
+    expect(container.textContent).toContain('의사결정 로그 맥락 종합');
 
     clickButton(container, '워크플로우');
-    expect(container.textContent).toContain('의사결정 로그 요약 실행 흐름');
+    expect(container.textContent).toContain('의사결정 로그 맥락 종합 실행 흐름');
 
     clickButton(container, 'AI 에이전트');
     expect(container.textContent).toContain('Primary OpenAI');

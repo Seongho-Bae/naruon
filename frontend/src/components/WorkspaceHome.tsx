@@ -203,7 +203,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   };
 
   return (
-    <section role="region" aria-label="홈 개요 대시보드" className="h-full overflow-y-auto bg-background p-4 sm:p-6">
+    <section role="region" aria-label="홈 개요" className="h-full overflow-y-auto bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         
         {/* Header Section */}
@@ -228,10 +228,10 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 <p className="px-2 py-1 text-xs font-semibold text-muted-foreground">시작 화면 설정</p>
                 <div className="mt-1 flex flex-col gap-1">
                   <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('dashboard'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-                    대시보드
+                    홈
                   </button>
                   <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('email'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-                    이메일 우선
+                    메일 우선
                   </button>
                   <button type="button" role="menuitem" onClick={() => { setWorkspaceStartupView('calendar'); setIsSettingsOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     일정 우선
@@ -265,9 +265,9 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           ))}
         </div>
 
-        {/* 오늘의 핵심 요약 */}
+        {/* 오늘의 핵심 맥락 종합 */}
         <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 className="text-lg font-bold">오늘의 핵심 요약</h2>
+          <h2 className="text-lg font-bold">오늘의 핵심 맥락 종합</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 divide-y divide-border md:grid-cols-3 md:gap-6 md:divide-x md:divide-y-0">
             <div className="flex gap-4">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-rose-100 text-rose-600"><Send className="size-5" /></div>
@@ -466,7 +466,7 @@ function StartupCalendar({ onOpenView }: { onOpenView: (view: WorkspaceStartupVi
             className="mt-5 inline-flex h-11 items-center gap-2 rounded-2xl bg-primary px-4 text-sm font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
             <Inbox className="size-4" aria-hidden="true" />
-            이메일 작업공간 열기
+            메일 작업공간 열기
           </button>
         </div>
         {status === 'loading' ? <div role="status" className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-semibold text-muted-foreground shadow-sm">일정 후보를 불러오는 중입니다.</div> : null}

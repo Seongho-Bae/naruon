@@ -53,7 +53,7 @@ const projectStatusClass = {
 } satisfies Record<ProjectSummary['status'], string>;
 
 const taskStatusLabel: Record<TaskStatus, string> = {
-  open: '할 일',
+  open: '실행 항목',
   in_progress: '진행 중',
   blocked: '검토 필요',
   done: '완료',
@@ -287,7 +287,7 @@ export function ProjectsLayout() {
                 </div>
                 <div className="grid gap-4 p-5 md:grid-cols-4">
                   {[
-                    { label: '할 일', count: openCount, status: 'open' as const },
+                    { label: '실행 항목', count: openCount, status: 'open' as const },
                     { label: '진행 중', count: inProgressCount, status: 'in_progress' as const },
                     { label: '검토 필요', count: blockedCount, status: 'blocked' as const },
                     { label: '완료', count: doneCount, status: 'done' as const },
