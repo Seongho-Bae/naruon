@@ -519,7 +519,7 @@ is_preexisting_report_dir() {
 
 is_github_models_model() {
 	case "$1" in
-	openai/openai/* | github_models/*)
+	openai/openai/* | github_models/* | openai/gpt-4.1)
 		return 0
 		;;
 	*)
@@ -531,7 +531,7 @@ is_github_models_model() {
 is_github_models_api_compatible_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
-	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+	openai/gpt-4.1 | openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
 		return 0
 		;;
 	*)
