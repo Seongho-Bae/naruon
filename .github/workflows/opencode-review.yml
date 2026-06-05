@@ -102,7 +102,7 @@ jobs:
             - shell tests cover the fallback behavior.
         run: |
           set -euo pipefail
-          opencode github run
+          timeout 240 opencode github run
 
       - name: Run OpenCode PR Review fallback (GPT-4.1)
         id: opencode_review_fallback
