@@ -174,7 +174,7 @@ export default function NetworkGraph() {
       </div>
       <div
         ref={containerRef}
-        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 네트워크 그래프`}
+        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 관계 맥락`}
         className="min-h-0 flex-1 w-full bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
       />
     </div>

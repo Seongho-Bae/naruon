@@ -275,7 +275,7 @@ const settingsDetailSurfaces: Partial<Record<SettingsTab, {
     items: [
       { title: '워크스페이스 quota', detail: '메일 본문 저장소가 아니라 metadata/index/action intent 중심으로 사용량을 계산합니다.', status: 'data sovereignty' },
       { title: 'Connector seat', detail: '사내망 connector는 조직 스코프별 등록 토큰과 운영 감사 대상으로 계산합니다.', status: 'B2B2C' },
-      { title: 'AI 사용량', detail: '프롬프트 실행, 평가, 요약, writeback 제안을 provider별 비용 항목으로 분리합니다.', status: 'BYOK' },
+      { title: 'AI 사용량', detail: '프롬프트 실행, 평가, 맥락 종합, writeback 제안을 provider별 비용 항목으로 분리합니다.', status: 'BYOK' },
     ],
   },
 };

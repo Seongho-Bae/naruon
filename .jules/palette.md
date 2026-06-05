@@ -7,7 +7,3 @@
 **Learning:** Browsers interpret standard `<button>` elements as submit buttons (`type="submit"`) by default when located inside a form context, which can cause unexpected page reloads or form submissions.
 
 **Action:** Always explicitly define `type="button"` on interactive buttons not meant for form submission across all React components to prevent this behavior.
-
-## 2026-06-04 - Settings UI Developer Tab Refactor
-**Learning:** The frontend SettingsLayout contains a hidden 'Developer' tab exposing sensitive internal telemetry (Grafana, Loki, Keycloak) which breaks standard end-user UI expectations.
-**Action:** When working on UI structures, immediately filter out internal testing, debugging, or admin panels that may have accidentally leaked into standard component layouts unless specifically authorized to show them. Also remember to stub or `it.skip` tests that rigidly assert on Developer tab structures.
