@@ -456,7 +456,9 @@ test('renders Security governance access audit sharing and policy with signed AP
   await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-scroll.png'), fullPage: false });
 
   await page.goto('/');
-  await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
+  const mobileMenuButton = page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).first();
+  await expect(mobileMenuButton).toBeVisible();
+  await mobileMenuButton.click();
   const menu = page.locator('#mobile-workspace-menu');
   await expect(menu.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
   await menu.evaluate((element) => {
@@ -944,7 +946,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
     await expect(page.getByText('OAuth 로그인')).toBeVisible();
     await expect(page.getByText('Source readiness')).toBeVisible();
     await expect(page.getByText('caldav-primary', { exact: true })).toBeVisible();
-    await expect(page.getByText('webdav_src_primary')).toBeVisible();
+    await expect(page.getByLabel('Provider source readiness').getByText('webdav_src_primary', { exact: true })).toBeVisible();
     await expect(page.getByText('저장된 secret 유지').first()).toBeVisible();
 
     if (viewport.name === 'desktop') {
@@ -1219,7 +1221,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
   }
   expect(desktopRequest.postDataJSON().candidates).toHaveLength(2);
   await expect(page.getByText('email.unique_thread_intent.created')).toBeVisible();
-  await expect(page.getByText('provider_write_executed=false')).toBeVisible();
+  await expect(page.getByLabel('unique email canonical thread').getByText('provider_write_executed=false')).toBeVisible();
   await expect(page.getByText(/fingerprint.*thread-q2-root/)).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
@@ -1469,7 +1471,7 @@ for (const section of [
 
     await page.goto('/ai-hub');
     await page
-      .getByRole('navigation', { name: 'AI hub execution checkpoints' })
+      .getByRole('navigation', { name: 'AI 허브 실행 체크포인트' })
       .getByRole('link', { name: section.linkName })
       .click();
 

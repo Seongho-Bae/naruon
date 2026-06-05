@@ -204,7 +204,7 @@ def _request_with_signed_session(
 def test_ai_hub_surface_uses_signed_source_evidence():
     session = MockSession()
     session.prompts = [
-        _prompt(1, "의사결정 로그 요약"),
+        _prompt(1, "의사결정 로그 맥락 종합"),
         _prompt(2, "공유 프롬프트", owner_id="other-user"),
     ]
     session.prompts[1].is_shared = True
@@ -216,7 +216,7 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert response.status_code == 200
     data = response.json()
     assert data["summary_cards"][0]["value_text"] == "1"
-    assert data["prompt_cards"][0]["prompt_title"] == "의사결정 로그 요약"
+    assert data["prompt_cards"][0]["prompt_title"] == "의사결정 로그 맥락 종합"
     assert all(card["owner_label"] == "alice" for card in data["prompt_cards"])
     assert data["prompt_cards"][0]["prompt_key"].startswith("prompt_")
     assert "id" not in data["prompt_cards"][0]

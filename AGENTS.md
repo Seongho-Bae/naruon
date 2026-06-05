@@ -13,14 +13,15 @@
   single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan uses GitHub Models by default through `github.token`,
-  `models: read`, `STRIX_LLM=openai/openai/gpt-4.1`, and
+- Strix Security Scan uses GitHub Models by default through
+  `STRIX_GITHUB_MODELS_TOKEN`, `STRIX_LLM=openai/gpt-5`, and
   `LLM_API_BASE_FILE` pointing at a trusted file containing
-  `https://models.github.ai/inference`. Keep the GitHub Models endpoint in a
-  trusted input file and pass the token only through the
-  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets must
-  not override PR, push, or scheduled Strix defaults. Vertex remains available
-  only for manual `workflow_dispatch` evidence when the `strix_llm` input
+  `https://models.github.ai/inference`; GitHub Models fallbacks use
+  `openai/gpt-5-mini` and `openai/gpt-5-nano`. Keep the GitHub Models endpoint
+  in a trusted input file and pass the token only through the provider-scoped
+  Strix child-process key path. Legacy `STRIX_LLM` secrets must not override PR,
+  push, or scheduled Strix defaults. Vertex remains available only for manual
+  `workflow_dispatch` evidence when the `strix_llm` input
   explicitly selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
   `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; expose Google/Vertex
   credentials only for Vertex provider mode. Direct OpenAI GPT-5.4-or-newer
