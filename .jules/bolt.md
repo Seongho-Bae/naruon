@@ -10,3 +10,7 @@
 ## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
 **Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
 **Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
+
+## 2024-06-04 - Caching Email Parsing Functions
+**Learning:** `email.utils.parseaddr` and `email.utils.getaddresses` are heavily utilized when checking email sender/recipient lists (e.g. `configured_email_addresses`, `message_sender_address`, `message_recipient_addresses`) and parsing identical email strings repetitively is a noticeable bottleneck, easily taking hundreds of milliseconds at scale without caching.
+**Action:** Used `@lru_cache(maxsize=2048)` to wrap these parsers. Always remember that outputs from a cached function should be immutable (like `frozenset` instead of `set`) to prevent callers from inadvertently modifying the cached object, maintaining performance without introducing state bugs.
