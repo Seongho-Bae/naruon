@@ -165,6 +165,11 @@ describe('AIHubPage', () => {
     }
     expect(container.textContent).toContain('AI 허브');
     expect(container.textContent).toContain('의사결정 로그 맥락 종합');
+    expect(container.querySelector('nav[aria-label="AI hub execution checkpoints"]')?.textContent).toContain('맥락 종합');
+    expect(container.querySelector('section[aria-labelledby="context-title"]')?.textContent).toContain('맥락 종합');
+    expect(container.querySelector('section[aria-labelledby="decisions-title"]')?.textContent).toContain('판단 포인트');
+    expect(container.querySelector('section[aria-labelledby="actions-title"]')?.textContent).toContain('실행 항목');
+    expect(container.textContent).not.toContain('설명 없음');
 
     clickButton(container, '워크플로우');
     expect(container.textContent).toContain('의사결정 로그 맥락 종합 실행 흐름');
@@ -199,7 +204,7 @@ describe('AIHubPage', () => {
       root?.render(<AIHubPage />);
     });
 
-    expect(container.textContent).toContain('AI Hub source evidence를 불러오는 중입니다.');
+    expect(container.textContent).toContain('AI 허브 source evidence를 불러오는 중입니다.');
 
     await act(async () => {
       resolveFetch(jsonResponse(aiHubSurface));
@@ -220,7 +225,7 @@ describe('AIHubPage', () => {
     await flushAsyncWork();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'AI Hub source evidence를 불러오지 못했습니다.',
+      'AI 허브 source evidence를 불러오지 못했습니다.',
     );
     expect(container.textContent).toContain('다시 시도');
     expect(consoleError).toHaveBeenCalled();

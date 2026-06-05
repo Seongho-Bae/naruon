@@ -528,6 +528,18 @@ is_github_models_model() {
 	esac
 }
 
+is_github_models_api_compatible_model() {
+	case "$1" in
+	openai/openai/* | github_models/* | \
+	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
 is_github_models_api_base() {
 	local api_base="$1"
 	case "$api_base" in
@@ -1899,7 +1911,7 @@ resolved_llm_api_base_for_model() {
 		echo "ERROR: LLM_API_BASE must be an https URL when configured." >&2
 		return 2
 	fi
-	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_model "$model"; then
+	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_api_compatible_model "$model"; then
 		echo "ERROR: LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix." >&2
 		return 2
 	fi

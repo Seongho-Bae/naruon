@@ -119,9 +119,9 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS:" "strix workflow must not expose total timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "strix workflow must not split Strix PR evidence into separate scanner runs"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash'" "strix workflow must not quarantine the approved Vertex preview model after organization secret visibility is fixed"
-	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/openai/gpt-4.1'" "strix workflow defaults PR Strix scans to GitHub Models"
+	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models GPT-5"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM ||" "strix workflow must not let the legacy STRIX_LLM secret override PR defaults"
-	assert_file_contains "$workflow_file" "STRIX_LLM must select GitHub Models openai/openai/*, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
+	assert_file_contains "$workflow_file" "STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
 	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)" "strix workflow accepts only exact approved organization Vertex AI models"
 	assert_file_contains "$workflow_file" 'STRIX_VERTEX_FALLBACK_MODELS: ""' "strix workflow disables silent Vertex fallbacks so timeout-class failures fail closed"
 	assert_file_contains "$workflow_file" 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' "strix workflow fails closed on timeout, fatal, warning, denied, or provider failure signals"
@@ -139,10 +139,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
 	assert_file_contains "$workflow_file" "provider_mode=github_models" "strix workflow supports GitHub Models provider mode"
-	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == '"'"'github_models'"'"' && github.token || steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow uses provider-scoped LLM key material"
-	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ steps.gate.outputs.provider_mode == '"'"'github_models'"'"' && github.token || steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow masks provider-scoped LLM key material"
+	assert_file_contains "$workflow_file" 'STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}' "strix workflow uses the organization GitHub Models token secret"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY_SECRET: ${{ steps.gate.outputs.provider_mode == '"'"'github_models'"'"' && secrets.STRIX_GITHUB_MODELS_TOKEN || steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow uses provider-scoped LLM key material"
+	assert_file_contains "$workflow_file" 'LLM_API_KEY: ${{ steps.gate.outputs.provider_mode == '"'"'github_models'"'"' && secrets.STRIX_GITHUB_MODELS_TOKEN || steps.gate.outputs.provider_mode == '"'"'openai_direct'"'"' && secrets.STRIX_OPENAI_API_KEY || '"'"''"'"' }}' "strix workflow masks provider-scoped LLM key material"
 	assert_file_not_contains "$workflow_file" "secrets.LLM_API_KEY" "strix workflow must not expose generic LLM_API_KEY for Vertex scans"
-	assert_file_contains "$workflow_file" "github.token is required for GitHub Models Strix scans" "strix workflow fails closed when GitHub Models credentials are absent"
+	assert_file_contains "$workflow_file" "STRIX_GITHUB_MODELS_TOKEN is required for GitHub Models Strix scans" "strix workflow fails closed when GitHub Models credentials are absent"
 	assert_file_contains "$workflow_file" "STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans" "strix workflow fails closed when direct credentials are absent"
 	assert_file_contains "$workflow_file" 'PROVIDER_MODE: ${{ steps.gate.outputs.provider_mode }}' "strix workflow passes provider mode through env"
 	assert_file_not_contains "$workflow_file" '[ "${{ steps.gate.outputs.provider_mode }}" = "openai_direct" ]' "strix workflow does not interpolate provider mode inside shell condition"
@@ -153,9 +154,9 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes GitHub Models scans to the inference endpoint"
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
-	assert_file_not_contains "$workflow_file" "openai/gpt-5 |" "strix workflow must not accept plain GPT-5 when GPT-5.4 is required"
+	assert_file_contains "$workflow_file" "openai/gpt-5-mini openai/gpt-5-nano" "strix workflow configures GitHub Models fallback models"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
-	assert_file_contains "$workflow_file" "openai/openai/*" "strix workflow accepts GitHub Models OpenAI model prefixes"
+	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to an unsupported GitHub Models alias"
 	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to Gemini API when GitHub Models is required"
 	assert_file_not_contains "$workflow_file" "if-no-files-found: warn" "strix workflow must not downgrade missing security artifacts to warnings"
@@ -168,9 +169,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gpt54_model_guard_semantics() {
 	local model="$1"
 	case "$model" in
-	openai/openai/* | \
+	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+	openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
+	github_models/* | \
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
-	openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+	openai-direct/gpt-5.[4-9]* | openai-direct/gpt-5.[1-9][0-9]* | openai-direct/gpt-[6-9]* | openai-direct/gpt-[1-9][0-9]* | \
 	vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
 		return 0
 		;;
@@ -181,8 +184,8 @@ assert_strix_gpt54_model_guard_semantics() {
 }
 
 assert_strix_gpt54_model_guard_cases() {
-	if assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
-		record_failure "strix GPT-5.4 guard must reject plain openai/gpt-5"
+	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
+		record_failure "strix guard must accept GitHub Models openai/gpt-5"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "gpt-5"; then
 		record_failure "strix GPT-5.4 guard must reject plain gpt-5"
@@ -190,8 +193,11 @@ assert_strix_gpt54_model_guard_cases() {
 	if ! assert_strix_gpt54_model_guard_semantics "gpt-5.4"; then
 		record_failure "strix GPT-5.4 guard must accept direct OpenAI gpt-5.4"
 	fi
+	if ! assert_strix_gpt54_model_guard_semantics "openai-direct/gpt-5.4"; then
+		record_failure "strix GPT-5.4 guard must accept direct OpenAI openai-direct/gpt-5.4"
+	fi
 	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5.4"; then
-		record_failure "strix GPT-5.4 guard must accept openai/gpt-5.4"
+		record_failure "strix guard must accept GitHub Models openai/gpt-5.4"
 	fi
 	if ! assert_strix_gpt54_model_guard_semantics "openai/openai/gpt-5"; then
 		record_failure "strix guard must accept GitHub Models openai/openai/gpt-5"
@@ -406,7 +412,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/openai/gpt-5.4)
+		openai/gpt-5|openai/gpt-5-mini|openai/openai/gpt-5.4)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -6832,7 +6838,7 @@ run_gate_case "github-models-model-prefix-requires-api-base" \
 	""
 
 run_gate_case "github-models-api-base-rejected-for-direct-openai" \
-	"openai/gpt-5.4" \
+	"openai/o4-mini" \
 	"" \
 	"2" \
 	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix" \
@@ -6843,12 +6849,12 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"https://models.github.ai/inference"
 
 run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
-	"openai/openai/gpt-5.4" \
+	"openai/gpt-5" \
 	"" \
 	"0" \
 	"scan ok" \
 	"1" \
-	"openai/openai/gpt-5.4" \
+	"openai/gpt-5" \
 	"https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference"
@@ -6866,11 +6872,11 @@ run_gate_case "github-models-fallback-requires-api-base" \
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
-	"openai/openai/gpt-5.4" \
+	"openai/gpt-5-mini" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/openai/gpt-5[.]4' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/openai/gpt-5.4" \
+	"vertex_ai/missing-primary|openai/gpt-5-mini" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
