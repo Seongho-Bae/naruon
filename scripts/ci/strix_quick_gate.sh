@@ -558,8 +558,8 @@ PRIMARY_MODEL="$(normalize_model "$STRIX_LLM")"
 if [ "$PRIMARY_MODEL" != "$STRIX_LLM" ]; then
 	echo "Normalized STRIX_LLM to provider-qualified model '$PRIMARY_MODEL'."
 fi
-if is_github_models_model "$PRIMARY_MODEL"; then
-	echo "ERROR: STRIX_LLM must not use GitHub Models model prefixes; use direct OpenAI Platform model names such as openai/gpt-5.4." >&2
+if is_github_models_model "$PRIMARY_MODEL" && [ -z "$LLM_API_BASE_FILE" ]; then
+	echo "ERROR: GitHub Models Strix scans require LLM_API_BASE_FILE to select the GitHub Models inference endpoint." >&2
 	exit 2
 fi
 
@@ -1872,6 +1872,10 @@ resolved_llm_api_base_for_model() {
 	fi
 
 	if [ -z "$LLM_API_BASE_FILE" ]; then
+		if is_github_models_model "$model"; then
+			echo "ERROR: GitHub Models Strix scans require LLM_API_BASE_FILE to select the GitHub Models inference endpoint." >&2
+			return 2
+		fi
 		return 0
 	fi
 	local resolved_llm_api_base_file
@@ -1895,8 +1899,8 @@ resolved_llm_api_base_for_model() {
 		echo "ERROR: LLM_API_BASE must be an https URL when configured." >&2
 		return 2
 	fi
-	if is_github_models_api_base "$llm_api_base_value"; then
-		echo "ERROR: LLM_API_BASE must not route Strix through GitHub Models; use direct OpenAI Platform routing." >&2
+	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_model "$model"; then
+		echo "ERROR: LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix." >&2
 		return 2
 	fi
 	printf '%s\n' "$llm_api_base_value"
@@ -2117,6 +2121,12 @@ is_llm_api_connection_error() {
 		return 0
 	fi
 
+	if grep -Eiq 'litellm(\.exceptions)?\.InternalServerError' "$STRIX_LOG" &&
+		grep -Eiq 'OpenAIException[[:space:]]*-[[:space:]]*Connection error' "$STRIX_LOG" &&
+		grep -Eiq '(openai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
+		return 0
+	fi
+
 	return 1
 }
 
@@ -2322,7 +2332,7 @@ is_midstream_fallback_error() {
 # (httpx, httpcore, requests). Used for generic transport failures where
 # library names alone are insufficient to prove the timeout/connection error
 # originated from an LLM provider rather than the target application.
-LLM_PROVIDER_ONLY_REGEX='(litellm|openai|anthropic|VertexAI|Vertex_ai|vertex\.ai|google\.cloud)'
+LLM_PROVIDER_ONLY_REGEX='(litellm|openai|anthropic|VertexAI|Vertex_ai|vertex\.ai|google\.cloud|GitHub Models|models\.github\.ai|github_models)'
 
 # Detect whether the strix log contains evidence of infrastructure-level
 # errors (timeout, rate-limit, transport failures) that indicate the scan
@@ -2398,6 +2408,7 @@ has_only_below_threshold_vulnerabilities() {
 
 	local found_any_vuln_file=0
 	local global_max_rank=-1
+	STRIX_MAX_SEVERITY_RANK=-1
 	local saw_any_severity=0
 
 	update_max_severity_from_stream() {
@@ -2420,6 +2431,7 @@ has_only_below_threshold_vulnerabilities() {
 			saw_any_severity=1
 			if [ "$rank" -gt "$global_max_rank" ]; then
 				global_max_rank="$rank"
+				STRIX_MAX_SEVERITY_RANK="$rank"
 			fi
 		done < <(grep -Ei 'severity[[:space:]]*:' "$source_path" || true)
 	}
@@ -2896,10 +2908,6 @@ run_current_target_scan() {
 	fallback_tried=0
 	for candidate_raw in "${FALLBACK_MODELS[@]}"; do
 		candidate="$(normalize_model "$candidate_raw")"
-		if is_github_models_model "$candidate"; then
-			echo "ERROR: Strix fallback models must not use GitHub Models model prefixes; use direct OpenAI Platform model names." >&2
-			return 2
-		fi
 		if [ -z "$candidate" ] || [ "$candidate" = "$PRIMARY_MODEL" ]; then
 			if [ -n "$candidate" ]; then
 				echo "Skipping fallback model '$candidate' — same as primary model." >&2
@@ -2914,13 +2922,16 @@ run_current_target_scan() {
 			echo "Primary model unavailable; retrying with fallback '$candidate'."
 		fi
 		local fallback_scan_rc=0
+		local fallback_start_epoch
+		fallback_start_epoch="$(date +%s)"
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
+		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
 			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
 				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
 				return 1
 			fi
-			echo "Strix quick scan succeeded with fallback model '$candidate'."
+			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
 		if [ "$fallback_scan_rc" -eq 2 ]; then
@@ -2969,6 +2980,13 @@ run_current_target_scan() {
 		else
 			echo "ERROR: All configured fallback models are the same as the primary model" >&2
 		fi
+		return 1
+	fi
+
+	local threshold_rank
+	threshold_rank="$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")"
+	if [ "${STRIX_MAX_SEVERITY_RANK:--1}" -ge "$threshold_rank" ]; then
+		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
 	fi
 

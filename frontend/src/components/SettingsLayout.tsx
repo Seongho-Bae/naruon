@@ -2,6 +2,7 @@
 
 import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
 
@@ -300,7 +301,10 @@ export function SettingsLayout() {
   const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
   const [sourceReadinessLoading, setSourceReadinessLoading] = useState(true);
   const [sourceReadinessError, setSourceReadinessError] = useState<string | null>(null);
+  const [oidcSessionClaims, setOidcSessionClaims] = useState(() => apiClient.getSessionClaims());
+  const [oidcActionError, setOidcActionError] = useState<string | null>(null);
   const startupView = useWorkspaceStartupView();
+  const oidcBrowserConfig = getOidcBrowserConfig();
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
   const connectorEvents = operationalSignals?.connector.recent_events ?? [];
@@ -345,6 +349,25 @@ export function SettingsLayout() {
   const updateAccountField = (field: keyof AccountFormState, value: string) => {
     setAccountForm((current) => ({ ...current, [field]: value }));
     setAccountStatus(null);
+  };
+
+  const handleOidcLogin = async () => {
+    setOidcActionError(null);
+    try {
+      await startOidcLogin({ returnTo: window.location.pathname });
+    } catch (error) {
+      setOidcActionError(error instanceof Error ? error.message : 'OIDC login failed');
+    }
+  };
+
+  const handleOidcLogout = () => {
+    setOidcActionError(null);
+    try {
+      clearOidcSession({ postLogoutRedirectUri: window.location.origin });
+      setOidcSessionClaims(apiClient.getSessionClaims());
+    } catch (error) {
+      setOidcActionError(error instanceof Error ? error.message : 'OIDC logout failed');
+    }
   };
 
   const handleAccountSave = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -481,7 +504,7 @@ export function SettingsLayout() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+              className={`min-h-10 shrink-0 rounded-xl px-4 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                 activeTab === tab.id
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'bg-background text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -498,7 +521,7 @@ export function SettingsLayout() {
         <aside className="w-64 shrink-0 border-r border-border bg-card overflow-y-auto hidden md:block">
           <div className="p-4 space-y-1">
             {settingsTabs.map((tab) => (
-              <button
+              <button type="button"
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-colors ${activeTab === tab.id ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'}`}
@@ -532,10 +555,10 @@ export function SettingsLayout() {
                         { label: '이메일', value: 'email', desc: '인박스 중심으로 확인' },
                         { label: '일정 관리', value: 'calendar', desc: '오늘의 회의와 스케줄 확인' }
                       ].map((view) => (
-                        <button
+                        <button type="button"
                           key={view.value}
                           onClick={() => setWorkspaceStartupView(view.value as 'dashboard' | 'email' | 'calendar')}
-                          className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 ${
+                          className={`flex flex-col items-start gap-1 rounded-xl border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                             startupView === view.value
                               ? 'border-primary bg-primary/5 shadow-sm'
                               : 'border-border hover:bg-secondary hover:border-primary/50'
@@ -971,6 +994,59 @@ export function SettingsLayout() {
                       </div>
                     </div>
                   ) : null}
+                </section>
+
+                <section aria-label="OIDC 인증 세션" className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <Shield className="size-5 text-blue-500" />
+                        <h3 className="font-bold text-lg">OIDC 인증 세션</h3>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                        Keycloak/Casdoor OIDC 토큰을 브라우저 bearer 세션으로 연결합니다.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleOidcLogin}
+                        disabled={!oidcBrowserConfig}
+                        className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        OIDC 로그인
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleOidcLogout}
+                        disabled={!oidcSessionClaims.userId}
+                        className="rounded-lg border border-border px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        로그아웃
+                      </button>
+                    </div>
+                  </div>
+                  {oidcActionError ? (
+                    <p role="alert" className="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">{oidcActionError}</p>
+                  ) : null}
+                  <dl className="mt-5 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-xl border border-border bg-background p-3">
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">issuer</dt>
+                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{oidcBrowserConfig?.issuerUrl ?? 'not_configured'}</dd>
+                    </div>
+                    <div className="rounded-xl border border-border bg-background p-3">
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">client_id</dt>
+                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{oidcBrowserConfig?.clientId ?? 'not_configured'}</dd>
+                    </div>
+                    <div className="rounded-xl border border-border bg-background p-3">
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">session</dt>
+                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
+                        {oidcSessionClaims.userId
+                          ? `${oidcSessionClaims.userId} / ${oidcSessionClaims.organizationId ?? 'personal'} / ${oidcSessionClaims.workspaceId ?? 'workspace_unknown'}`
+                          : 'signed_session_absent'}
+                      </dd>
+                    </div>
+                  </dl>
                 </section>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
