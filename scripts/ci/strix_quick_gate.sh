@@ -2256,6 +2256,15 @@ is_vertex_not_found_error() {
 	return 1
 }
 
+is_github_models_unavailable_model_error() {
+	if grep -Eiq 'Unavailable model:[[:space:]]*[^[:space:]]+' "$STRIX_LOG" &&
+		grep -Eiq '(litellm\.BadRequestError|OpenAIException|LLM CONNECTION FAILED|Could not establish connection to the language model|models\.github\.ai|GitHub Models|openai)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 is_rate_limit_error() {
 	if grep -Fq 'RateLimitError' "$STRIX_LOG"; then
 		return 0
@@ -2827,6 +2836,10 @@ is_model_retryable_error() {
 	local model="$1"
 
 	if is_vertex_model "$model" && is_vertex_not_found_error; then
+		return 0
+	fi
+
+	if is_github_models_api_compatible_model "$model" && is_github_models_unavailable_model_error; then
 		return 0
 	fi
 
