@@ -1876,6 +1876,28 @@ fallback_models_config_name_for_model() {
 	printf '%s\n' "STRIX_FALLBACK_MODELS"
 }
 
+has_distinct_fallback_model_for_model() {
+	local model="$1"
+	local fallback_models_raw
+	fallback_models_raw="$(fallback_models_raw_for_model "$model")"
+	fallback_models_raw="${fallback_models_raw//$'\r'/ }"
+	fallback_models_raw="${fallback_models_raw//$'\n'/ }"
+
+	local fallback_models=()
+	read -r -a fallback_models <<<"$fallback_models_raw"
+
+	local candidate_raw
+	local candidate
+	for candidate_raw in "${fallback_models[@]}"; do
+		candidate="$(normalize_model "$candidate_raw")"
+		if [ -n "$candidate" ] && [ "$candidate" != "$model" ]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -2898,9 +2920,14 @@ run_current_target_scan() {
 		return 2
 	fi
 
+	local strict_primary_provider_fallback=0
 	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-		echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-		return 1
+		if is_model_retryable_error "$PRIMARY_MODEL" && has_distinct_fallback_model_for_model "$PRIMARY_MODEL"; then
+			strict_primary_provider_fallback=1
+		else
+			echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
 	fi
 
 	if has_only_below_threshold_vulnerabilities; then
@@ -2908,7 +2935,9 @@ run_current_target_scan() {
 	fi
 
 	if evaluate_pull_request_findings; then
-		return 0
+		if [ "$strict_primary_provider_fallback" -eq 0 ]; then
+			return 0
+		fi
 	fi
 
 	case "$PR_FINDINGS_DECISION" in
@@ -2956,9 +2985,9 @@ run_current_target_scan() {
 			return 2
 		fi
 
+		local strict_fallback_provider_signal=0
 		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-			return 1
+			strict_fallback_provider_signal=1
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2966,7 +2995,9 @@ run_current_target_scan() {
 		fi
 
 		if evaluate_pull_request_findings; then
-			return 0
+			if [ "$strict_fallback_provider_signal" -eq 0 ]; then
+				return 0
+			fi
 		fi
 
 		case "$PR_FINDINGS_DECISION" in
@@ -2974,6 +3005,14 @@ run_current_target_scan() {
 			return 1
 			;;
 		esac
+
+		if [ "$strict_fallback_provider_signal" -eq 1 ]; then
+			if is_model_retryable_error "$candidate"; then
+				continue
+			fi
+			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
 
 		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2

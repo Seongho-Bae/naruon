@@ -737,6 +737,24 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	github-models-primary-ratelimit-fallback-success)
+		case "${STRIX_LLM:-}" in
+		openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Could not establish connection to the language model."
+			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service."
+			exit 1
+			;;
+		openai/gpt-5-mini)
+			echo "scan ok after GitHub Models rate-limit fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models rate-limit fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 38
+			;;
+		esac
+		;;
 	gemini-high-demand-retry-same-model-success)
 		case "${STRIX_LLM:-}" in
 		gemini/retry-high-demand-primary)
@@ -4940,6 +4958,36 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"https://models.github.ai/inference" \
 	"" \
 	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"1"
+
+run_gate_case "github-models-primary-ratelimit-fallback-success" \
+	"openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"4" \
+	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-5-mini" \
+	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"2" \
 	"CRITICAL" \
 	"0" \
 	"" \
