@@ -360,7 +360,7 @@ export function DashboardLayout({
             <span className="sr-only">맥락 검색</span>
             <input
               className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-              placeholder="맥락, 사람, 파일, 인사이트 검색..."
+              placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
               type="search"
             />
           </label>

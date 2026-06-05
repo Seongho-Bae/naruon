@@ -583,7 +583,7 @@ export function SearchLayout() {
                     />
                     <div className="my-4 border-t border-border" />
                     <h4 className="mb-3 text-sm font-black text-foreground">
-                      네트워크 그래프
+                      관계 맥락
                     </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
                       <NetworkGraph />

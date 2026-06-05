@@ -312,9 +312,6 @@ jobs:
         run: |
           budget_suffix="TIME""OUT"
           process_budget_seconds="3600"
-          if [ "$IS_PR_EVIDENCE_RUN" = "true" ]; then
-            process_budget_seconds="3600"
-          fi
           export "LLM_${budget_suffix}=120"
           export "STRIX_MEMORY_COMPRESSOR_${budget_suffix}=10"
           export "STRIX_PROCESS_${budget_suffix}_SECONDS=$process_budget_seconds"
