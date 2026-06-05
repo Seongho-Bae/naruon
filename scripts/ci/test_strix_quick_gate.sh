@@ -154,7 +154,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes GitHub Models scans to the inference endpoint"
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
-	assert_file_contains "$workflow_file" "openai/gpt-5-mini openai/gpt-5-nano" "strix workflow configures GitHub Models fallback models"
+	assert_file_contains "$workflow_file" "openai/gpt-5-chat" "strix workflow configures a catalog-backed GitHub Models fallback model"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to an unsupported GitHub Models alias"
@@ -401,7 +401,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-nano|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-chat|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -412,7 +412,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/gpt-5-mini|openai/gpt-5-nano|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/gpt-5-chat|openai/openai/gpt-5.4)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -727,7 +727,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
 			exit 1
 			;;
-		openai/gpt-5-mini)
+		openai/gpt-5-chat)
 			echo "scan ok after GitHub Models unavailable fallback"
 			exit 0
 			;;
@@ -745,7 +745,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service."
 			exit 1
 			;;
-		openai/gpt-5-mini)
+		openai/gpt-5-chat)
 			echo "scan ok after GitHub Models rate-limit fallback"
 			exit 0
 			;;
@@ -4950,9 +4950,9 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-chat' in [0-9]+s\\." \
 	"2" \
-	"openai/gpt-5|openai/gpt-5-mini" \
+	"openai/gpt-5|openai/gpt-5-chat" \
 	"https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -4973,16 +4973,16 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"openai/gpt-5-chat" \
 	"1"
 
 run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-chat' in [0-9]+s\\." \
 	"4" \
-	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-5-mini" \
+	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-5-chat" \
 	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -5003,7 +5003,7 @@ run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"openai/gpt-5-chat" \
 	"1"
 
 run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
@@ -6968,11 +6968,11 @@ run_gate_case "github-models-fallback-requires-api-base" \
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-5-mini" \
+	"openai/gpt-5-chat" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-chat' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/gpt-5-mini" \
+	"vertex_ai/missing-primary|openai/gpt-5-chat" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
@@ -7000,13 +7000,13 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	0
 
-run_gate_case "github-models-fallback-success-nano" \
+run_gate_case "github-models-fallback-success-chat" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-5-nano" \
+	"openai/gpt-5-chat" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-nano' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-chat' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/gpt-5-nano" \
+	"vertex_ai/missing-primary|openai/gpt-5-chat" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
