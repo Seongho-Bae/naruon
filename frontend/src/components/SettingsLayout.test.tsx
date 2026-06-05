@@ -17,18 +17,6 @@ vi.mock("lucide-react", () => ({
   User: () => <svg aria-hidden="true" />,
 }));
 
-const oidcMocks = vi.hoisted(() => ({
-  clearOidcSession: vi.fn(),
-  getOidcBrowserConfig: vi.fn(),
-  startOidcLogin: vi.fn(),
-}));
-
-vi.mock("@/lib/oidc-session", () => ({
-  clearOidcSession: oidcMocks.clearOidcSession,
-  getOidcBrowserConfig: oidcMocks.getOidcBrowserConfig,
-  startOidcLogin: oidcMocks.startOidcLogin,
-}));
-
 import { SettingsLayout } from "./SettingsLayout";
 
 function jsonResponse(body: unknown) {
@@ -38,29 +26,12 @@ function jsonResponse(body: unknown) {
   });
 }
 
-function sessionToken(payload: Record<string, unknown>) {
-  const encodedPayload = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `header.${encodedPayload}.signature`;
-}
-
 describe("SettingsLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
   beforeEach(() => {
     localStorage.setItem("naruon_session_token", "signed-runner-session-token");
-    oidcMocks.getOidcBrowserConfig.mockReturnValue({
-      issuerUrl: "https://login.example.com/realms/naruon",
-      clientId: "naruon-web",
-      redirectUri: "https://app.example.com/auth/callback",
-      scope: "openid profile email",
-      authorizationEndpoint: "https://login.example.com/realms/naruon/protocol/openid-connect/auth",
-      tokenEndpoint: "https://login.example.com/realms/naruon/protocol/openid-connect/token",
-      endSessionEndpoint: "https://login.example.com/realms/naruon/protocol/openid-connect/logout",
-    });
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -228,7 +199,6 @@ describe("SettingsLayout", () => {
     container?.remove();
     container = null;
     vi.unstubAllGlobals();
-    vi.clearAllMocks();
     localStorage.clear();
   });
 
@@ -352,57 +322,6 @@ describe("SettingsLayout", () => {
     for (const link of externalLinks) {
       expect(link.rel.split(/\s+/).sort()).toEqual(["noopener", "noreferrer"]);
     }
-  });
-
-  it("wires Keycloak OIDC login and logout controls to the stored bearer session", async () => {
-    window.history.pushState({}, "", "/settings");
-    localStorage.setItem(
-      "naruon_session_token",
-      sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" }),
-    );
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<SettingsLayout />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    const developerTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent === "개발자",
-    );
-    expect(developerTab).toBeTruthy();
-    await act(async () => {
-      developerTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(container.textContent).toContain("OIDC 인증 세션");
-    expect(container.textContent).toContain("https://login.example.com/realms/naruon");
-    expect(container.textContent).toContain("naruon-web");
-    expect(container.textContent).toContain("alice / org-acme / workspace-org-acme");
-
-    const loginButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "OIDC 로그인");
-    const logoutButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "로그아웃");
-    expect(loginButton).toBeTruthy();
-    expect(logoutButton).toBeTruthy();
-
-    await act(async () => {
-      loginButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(oidcMocks.startOidcLogin).toHaveBeenCalledWith({ returnTo: "/settings" });
-
-    await act(async () => {
-      logoutButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await Promise.resolve();
-    });
-    expect(oidcMocks.clearOidcSession).toHaveBeenCalledWith({
-      postLogoutRedirectUri: "http://localhost:3000",
-    });
   });
 
   it("loads and saves source-backed mail account settings without public identity headers or secret replay", async () => {

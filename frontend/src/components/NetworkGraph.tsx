@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network';
 
 interface Node {
@@ -131,13 +131,6 @@ export default function NetworkGraph() {
     }
   }, [nodes, edges]);
 
-  const nodeLabels = useMemo(() => {
-    return nodes
-      .map((node) => String(node.label ?? node.id))
-      .filter(Boolean)
-      .slice(0, 5);
-  }, [nodes]);
-
   if (loading) {
     return <div role="status" aria-live="polite" className="flex h-full min-h-[320px] w-full items-center justify-center text-sm text-muted-foreground sm:min-h-[420px]">관계 그래프를 불러오는 중입니다...</div>;
   }
@@ -157,6 +150,11 @@ export default function NetworkGraph() {
       </div>
     );
   }
+
+  const nodeLabels = nodes
+    .map((node) => String(node.label ?? node.id))
+    .filter(Boolean)
+    .slice(0, 5);
 
   return (
     <div className="flex h-full min-h-[320px] flex-col sm:min-h-[420px]">
