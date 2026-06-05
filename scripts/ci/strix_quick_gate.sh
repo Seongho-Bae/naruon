@@ -519,7 +519,7 @@ is_preexisting_report_dir() {
 
 is_github_models_model() {
 	case "$1" in
-	openai/openai/* | github_models/*)
+	openai/openai/* | github_models/* | openai/gpt-4.1)
 		return 0
 		;;
 	*)
@@ -531,7 +531,7 @@ is_github_models_model() {
 is_github_models_api_compatible_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
-	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+	openai/gpt-4.1 | openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
 		return 0
 		;;
 	*)
@@ -1876,6 +1876,28 @@ fallback_models_config_name_for_model() {
 	printf '%s\n' "STRIX_FALLBACK_MODELS"
 }
 
+has_distinct_fallback_model_for_model() {
+	local model="$1"
+	local fallback_models_raw
+	fallback_models_raw="$(fallback_models_raw_for_model "$model")"
+	fallback_models_raw="${fallback_models_raw//$'\r'/ }"
+	fallback_models_raw="${fallback_models_raw//$'\n'/ }"
+
+	local fallback_models=()
+	read -r -a fallback_models <<<"$fallback_models_raw"
+
+	local candidate_raw
+	local candidate
+	for candidate_raw in "${fallback_models[@]}"; do
+		candidate="$(normalize_model "$candidate_raw")"
+		if [ -n "$candidate" ] && [ "$candidate" != "$model" ]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -2250,6 +2272,15 @@ is_vertex_not_found_error() {
 	fi
 
 	if grep -Eq 'Publisher Model .*was not found' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
+is_github_models_unavailable_model_error() {
+	if grep -Eiq 'Unavailable model:[[:space:]]*[^[:space:]]+' "$STRIX_LOG" &&
+		grep -Eiq '(litellm\.BadRequestError|OpenAIException|LLM CONNECTION FAILED|Could not establish connection to the language model|models\.github\.ai|GitHub Models|openai)' "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2830,6 +2861,10 @@ is_model_retryable_error() {
 		return 0
 	fi
 
+	if is_github_models_api_compatible_model "$model" && is_github_models_unavailable_model_error; then
+		return 0
+	fi
+
 	if is_rate_limit_error; then
 		return 0
 	fi
@@ -2885,9 +2920,14 @@ run_current_target_scan() {
 		return 2
 	fi
 
+	local strict_primary_provider_fallback=0
 	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-		echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-		return 1
+		if is_model_retryable_error "$PRIMARY_MODEL" && has_distinct_fallback_model_for_model "$PRIMARY_MODEL"; then
+			strict_primary_provider_fallback=1
+		else
+			echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
 	fi
 
 	if has_only_below_threshold_vulnerabilities; then
@@ -2895,7 +2935,9 @@ run_current_target_scan() {
 	fi
 
 	if evaluate_pull_request_findings; then
-		return 0
+		if [ "$strict_primary_provider_fallback" -eq 0 ]; then
+			return 0
+		fi
 	fi
 
 	case "$PR_FINDINGS_DECISION" in
@@ -2943,9 +2985,9 @@ run_current_target_scan() {
 			return 2
 		fi
 
+		local strict_fallback_provider_signal=0
 		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-			return 1
+			strict_fallback_provider_signal=1
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2953,7 +2995,9 @@ run_current_target_scan() {
 		fi
 
 		if evaluate_pull_request_findings; then
-			return 0
+			if [ "$strict_fallback_provider_signal" -eq 0 ]; then
+				return 0
+			fi
 		fi
 
 		case "$PR_FINDINGS_DECISION" in
@@ -2961,6 +3005,14 @@ run_current_target_scan() {
 			return 1
 			;;
 		esac
+
+		if [ "$strict_fallback_provider_signal" -eq 1 ]; then
+			if is_model_retryable_error "$candidate"; then
+				continue
+			fi
+			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
 
 		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2
