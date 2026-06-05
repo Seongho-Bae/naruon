@@ -1471,7 +1471,7 @@ for (const section of [
 
     await page.goto('/ai-hub');
     await page
-      .getByRole('navigation', { name: 'AI hub execution checkpoints' })
+      .getByRole('navigation', { name: 'AI 허브 실행 체크포인트' })
       .getByRole('link', { name: section.linkName })
       .click();
 

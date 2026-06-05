@@ -412,7 +412,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/gpt-5-mini|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/gpt-5-mini|openai/gpt-5-nano|openai/openai/gpt-5.4)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -6884,6 +6884,36 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	"" \
 	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	0
+
+run_gate_case "github-models-fallback-success-nano" \
+	"vertex_ai/missing-primary" \
+	"openai/gpt-5-nano" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-nano' in [0-9]+s\\." \
+	"2" \
+	"vertex_ai/missing-primary|openai/gpt-5-nano" \
+	"<unset>|https://models.github.ai/inference" \
+	"vertex_ai" \
+	"https://models.github.ai/inference" \
 	"" \
 	"" \
 	"" \

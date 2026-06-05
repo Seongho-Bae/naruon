@@ -289,7 +289,7 @@ function RunHistoryPanel({ events }: { events: RunEvent[] }) {
 
 function ExecutionCheckpointNav() {
   return (
-    <nav aria-label="AI hub execution checkpoints" className="flex gap-2 overflow-x-auto pb-1">
+    <nav aria-label="AI 허브 실행 체크포인트" className="flex gap-2 overflow-x-auto pb-1">
       {[
         { href: '#context', label: '맥락 종합' },
         { href: '#decisions', label: '판단 포인트' },
@@ -414,22 +414,23 @@ function DecisionCheckpoint({ metrics, agents }: { metrics: EvaluationMetric[]; 
 }
 
 function ActionsCheckpoint({ workflows, events }: { workflows: WorkflowCard[]; events: RunEvent[] }) {
-  if (workflows.length === 0) {
-    return <EmptyState title="실행 항목 후보가 없습니다." detail="저장된 프롬프트와 활성 Provider가 연결되면 실행 흐름 후보가 생성됩니다." />;
-  }
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="grid gap-3 md:grid-cols-2">
-        {workflows.slice(0, 4).map((workflow) => (
-          <article key={workflow.workflow_key} className="rounded-lg border border-border bg-background p-4">
-            <div className="flex items-start justify-between gap-3">
-              <h3 className="text-sm font-black">{workflow.workflow_title}</h3>
-              <StatusBadge stateCode={workflow.state_code} />
-            </div>
-            <p className="mt-3 text-sm font-bold text-primary">{workflow.trigger_source}</p>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
-          </article>
-        ))}
+        {workflows.length === 0 ? (
+          <EmptyState title="실행 항목 후보가 없습니다." detail="저장된 프롬프트와 활성 Provider가 연결되면 실행 흐름 후보가 생성됩니다." />
+        ) : (
+          workflows.slice(0, 4).map((workflow) => (
+            <article key={workflow.workflow_key} className="rounded-lg border border-border bg-background p-4">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-black">{workflow.workflow_title}</h3>
+                <StatusBadge stateCode={workflow.state_code} />
+              </div>
+              <p className="mt-3 text-sm font-bold text-primary">{workflow.trigger_source}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
+            </article>
+          ))
+        )}
       </div>
       <aside className="rounded-lg border border-border bg-background p-4">
         <h3 className="text-sm font-black">최근 실행 근거</h3>
