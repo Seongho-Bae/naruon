@@ -14,6 +14,8 @@ jobs:
       github.event.pull_request.draft != true
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     permissions:
       id-token: write
       contents: write
@@ -46,11 +48,10 @@ jobs:
         timeout-minutes: 60
         continue-on-error: true
         env:
-          OPENAI_API_KEY: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
-          OPENAI_BASE_URL: https://models.github.ai/inference
+          STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          model: openai/gpt-5-chat
+          model: github-models/openai/gpt-5-chat
           use_github_token: true
           prompt: |
             Review this pull request using the trusted repository instructions in AGENTS.md.
