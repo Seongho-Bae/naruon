@@ -401,7 +401,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-nano|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
