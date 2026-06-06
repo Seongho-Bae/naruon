@@ -106,6 +106,9 @@ export function TasksLayout() {
   const [replySlaStatus, setReplySlaStatus] = useState<ReplySlaStatus>('idle');
   const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
 
+  // ⚡ Bolt: Memoize flat tasks array to prevent O(N) operations on every re-render
+  const flatTasks = useMemo(() => Object.values(tasks).flat(), [tasks]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -544,7 +547,7 @@ export function TasksLayout() {
         {viewMode === '내 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">내 작업 (My Tasks)</h2>
-            {Object.values(tasks).flat().filter(t => t.assignee === '김나루').map(task => (
+            {flatTasks.filter(t => t.assignee === '김나루').map(task => (
               <button type="button" key={task.id} className="w-full text-left flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className={`size-3 shrink-0 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
@@ -562,7 +565,7 @@ export function TasksLayout() {
         {viewMode === '위임한 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">위임한 작업 (Delegation)</h2>
-            {Object.values(tasks).flat().filter(t => t.assignee !== '김나루').map(task => (
+            {flatTasks.filter(t => t.assignee !== '김나루').map(task => (
               <button type="button" key={task.id} className="w-full text-left flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className="size-8 shrink-0 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
@@ -578,7 +581,7 @@ export function TasksLayout() {
         )}
 
         {viewMode === '작업 상세' && (() => {
-          const task = Object.values(tasks).flat().find(t => t.id === selectedTaskId);
+          const task = flatTasks.find(t => t.id === selectedTaskId);
           if (!task) return <div className="p-6 text-center text-muted-foreground">작업을 선택해주세요.</div>;
           
           const priorityText = task.priority === 'urgent' ? '긴급' : task.priority === 'high' ? '우선순위 높음' : task.priority === 'normal' ? '보통' : '낮음';
