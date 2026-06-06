@@ -288,10 +288,11 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
 	assert_file_contains "$workflow_file" "Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel." "opencode review prompt forbids reasoning text before the control sentinel"
 	assert_file_contains "$workflow_file" "OpenCode output did not include a valid control conclusion." "opencode review model steps fail when output lacks a parseable control conclusion"
-	assert_file_contains "$workflow_file" 'bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$OPENCODE_OUTPUT_FILE"' "opencode review model steps validate the control block before publishing"
-	assert_file_contains "$workflow_file" "normalize_opencode_output" "opencode review model steps normalize JSON-only control output"
-	assert_file_contains "$workflow_file" 'printf '"'"'<!-- opencode-review-control-v1\n'"'"'' "opencode review model steps wrap JSON-only control output in the sentinel comment contract"
-	assert_file_contains "$workflow_file" 'type == "object" and .head_sha == $head_sha and .run_id == $run_id and .run_attempt == $run_attempt' "opencode review model steps accept only current-run JSON-only control output"
+	assert_file_contains "$workflow_file" 'bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"' "opencode review model steps validate the control block before publishing"
+	assert_file_contains "$workflow_file" "normalize_opencode_output" "opencode review model steps normalize model control output"
+	assert_file_contains "$workflow_file" "opencode_review_normalize_output.py" "opencode review model steps normalize transcript-embedded JSON output"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" "decoder.raw_decode" "opencode review normalizer scans transcript text for JSON objects"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" "valid_control" "opencode review normalizer accepts only current-run control JSON"
 	assert_file_contains "$workflow_file" "opencode run" "opencode review workflow runs the bounded OpenCode agent path"
 	assert_file_contains "$workflow_file" 'opencode run "$(cat "$prompt_file")"' "opencode review passes the prompt as the positional message before file attachments"
 	assert_file_contains "$workflow_file" "--agent ci-review" "opencode review workflow forces the compact CI review agent"
@@ -337,6 +338,44 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_not_contains "$opencode_config" "gpt-4.1" "opencode config must not define GPT-4.1 fallback"
 	assert_file_not_contains "$opencode_config" "gpt-5-chat" "opencode config must not define unavailable GPT-5 chat fallback"
 	assert_file_not_contains "$opencode_config" "gpt-5-mini" "opencode config must not define unavailable GPT-5 mini fallback"
+}
+
+assert_opencode_review_normalizer_accepts_transcript_json() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found in the current bounded evidence.","summary":"Reviewed current head evidence and no blocking review findings were identified.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "opencode review normalizer accepts transcript-embedded current-run JSON"
+	assert_file_contains "$output_file" "<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->" "opencode review normalizer writes the gate sentinel"
+	assert_file_contains "$output_file" "<!-- opencode-review-control-v1" "opencode review normalizer writes the control block"
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "normalized OpenCode transcript passes approval gate"
+	assert_equals "APPROVE" "$gate_result" "normalized OpenCode transcript gate result"
+
+	rm -rf "$tmp_dir"
 }
 
 assert_internal_pr_scope_targets() {
@@ -4691,6 +4730,8 @@ assert_strix_llm_file_read_is_literal_data
 assert_strix_child_target_uses_constant_argument
 
 assert_opencode_review_uses_codegraph_and_gpt5_fallback
+
+assert_opencode_review_normalizer_accepts_transcript_json
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

@@ -313,27 +313,14 @@ jobs:
           fi
           normalize_opencode_output() {
             local output_file="$1"
-            local normalized_json_file="${output_file}.control.json"
-            local sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
 
-            if bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
+            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
               return 0
             fi
 
-            if jq -e \
-              --arg head_sha "$HEAD_SHA" \
-              --arg run_id "$RUN_ID" \
-              --arg run_attempt "$RUN_ATTEMPT" \
-              'type == "object" and .head_sha == $head_sha and .run_id == $run_id and .run_attempt == $run_attempt and (.result == "APPROVE" or .result == "REQUEST_CHANGES")' \
-              "$output_file" >/dev/null 2>&1; then
-              jq -c '{head_sha, run_id, run_attempt, result, reason, summary, findings}' "$output_file" >"$normalized_json_file"
-              {
-                printf '%s\n\n' "$sentinel"
-                printf '<!-- opencode-review-control-v1\n'
-                cat "$normalized_json_file"
-                printf '\n-->\n'
-              } >"$output_file"
-              bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
+            if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
+              "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
+              bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
               return $?
             fi
 
@@ -411,27 +398,14 @@ jobs:
           fi
           normalize_opencode_output() {
             local output_file="$1"
-            local normalized_json_file="${output_file}.control.json"
-            local sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
 
-            if bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
+            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
               return 0
             fi
 
-            if jq -e \
-              --arg head_sha "$HEAD_SHA" \
-              --arg run_id "$RUN_ID" \
-              --arg run_attempt "$RUN_ATTEMPT" \
-              'type == "object" and .head_sha == $head_sha and .run_id == $run_id and .run_attempt == $run_attempt and (.result == "APPROVE" or .result == "REQUEST_CHANGES")' \
-              "$output_file" >/dev/null 2>&1; then
-              jq -c '{head_sha, run_id, run_attempt, result, reason, summary, findings}' "$output_file" >"$normalized_json_file"
-              {
-                printf '%s\n\n' "$sentinel"
-                printf '<!-- opencode-review-control-v1\n'
-                cat "$normalized_json_file"
-                printf '\n-->\n'
-              } >"$output_file"
-              bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
+            if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
+              "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
+              bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
               return $?
             fi
 
@@ -509,27 +483,14 @@ jobs:
           fi
           normalize_opencode_output() {
             local output_file="$1"
-            local normalized_json_file="${output_file}.control.json"
-            local sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
 
-            if bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
+            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
               return 0
             fi
 
-            if jq -e \
-              --arg head_sha "$HEAD_SHA" \
-              --arg run_id "$RUN_ID" \
-              --arg run_attempt "$RUN_ATTEMPT" \
-              'type == "object" and .head_sha == $head_sha and .run_id == $run_id and .run_attempt == $run_attempt and (.result == "APPROVE" or .result == "REQUEST_CHANGES")' \
-              "$output_file" >/dev/null 2>&1; then
-              jq -c '{head_sha, run_id, run_attempt, result, reason, summary, findings}' "$output_file" >"$normalized_json_file"
-              {
-                printf '%s\n\n' "$sentinel"
-                printf '<!-- opencode-review-control-v1\n'
-                cat "$normalized_json_file"
-                printf '\n-->\n'
-              } >"$output_file"
-              bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
+            if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
+              "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
+              bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
               return $?
             fi
 
