@@ -253,12 +253,18 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	local opencode_config="$REPO_ROOT/opencode.jsonc"
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
+	assert_file_contains "$workflow_file" "Prepare bounded OpenCode review evidence" "opencode review workflow prepares bounded local evidence instead of oversized GitHub prompt data"
 	assert_file_contains "$workflow_file" "@colbymchenry/codegraph@0.9.9" "opencode review workflow pins the CodeGraph package"
 	assert_file_contains "$workflow_file" 'NPM_CONFIG_IGNORE_SCRIPTS: "true"' "opencode review workflow disables npm lifecycle scripts for CodeGraph npx"
 	assert_file_contains "$workflow_file" "init -i" "opencode review workflow builds the CodeGraph index"
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
+	assert_file_contains "$workflow_file" "opencode run" "opencode review workflow runs the bounded OpenCode agent path"
+	assert_file_not_contains "$workflow_file" "opencode github run" "opencode review workflow must not use the oversized GitHub agent prompt path"
+	assert_file_not_contains "$workflow_file" 'repos/${{ github.repository }}' "opencode review workflow must pass repository expressions through env before shell use"
 	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5" "opencode review tries GitHub Models GPT-5 first"
 	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5-mini" "opencode review falls back to a GPT-5-class model"
+	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5-nano" "opencode review has a second GPT-5-class fallback model"
+	assert_file_contains "$workflow_file" "Publish bounded OpenCode review comment" "opencode review workflow publishes the agent control comment for the approval gate"
 	assert_file_not_contains "$workflow_file" "MODEL: github-models/gpt-4.1" "opencode review must not fall back to GPT-4.1"
 
 	assert_file_contains "$opencode_config" '"mcp"' "opencode config declares MCP servers"
