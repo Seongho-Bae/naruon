@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import type { MailFolder } from '@/components/EmailList';
@@ -63,6 +63,20 @@ type TaskItem = {
   updated_at: string;
 };
 
+type CalendarWritebackSource = {
+  source_id: string;
+  provider?: string;
+  protocol?: string;
+  capabilities?: string[];
+  writeback_enabled?: boolean;
+};
+
+type ProjectFolder = {
+  folder_uid: string;
+  project_name?: string;
+  webdav_path?: string;
+};
+
 type ReplySlaEscalationResponse = {
   evaluated: number;
   created: number;
@@ -91,32 +105,70 @@ interface EmailItem {
   unread?: boolean;
 }
 
+function isWritableCalendarSource(source: CalendarWritebackSource) {
+  return Boolean(
+    source.writeback_enabled
+    && source.protocol !== 'local'
+    && (source.capabilities ?? []).includes('write'),
+  );
+}
+
+function buildCompletionRate(tasks: TaskItem[]) {
+  if (tasks.length === 0) return 0;
+  return Math.round((tasks.filter((task) => task.status === 'done').length / tasks.length) * 100);
+}
+
 function useDashboardData() {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [pendingReplies, setPendingReplies] = useState<EmailItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [calendarSources, setCalendarSources] = useState<CalendarWritebackSource[]>([]);
+  const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sourceEvidenceStatus, setSourceEvidenceStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     let cancelled = false;
+    let pendingRequests = 2;
+    const finishRequest = () => {
+      pendingRequests -= 1;
+      if (pendingRequests === 0 && !cancelled) {
+        setLoading(false);
+      }
+    };
+
     Promise.all([
       apiClient.get<{ emails: EmailItem[] }>('/api/emails').catch(() => ({ emails: [] })),
       apiClient.get<{ emails: EmailItem[] }>('/api/emails/pending-replies?limit=3').catch(() => ({ emails: [] })),
-      apiClient.get<TaskItem[]>('/api/tasks').catch(() => [])
+      apiClient.get<TaskItem[]>('/api/tasks').catch(() => []),
     ]).then(([emailRes, pendingReplyRes, tasksRes]) => {
       if (cancelled) return;
       setEmails(Array.isArray(emailRes.emails) ? emailRes.emails : []);
       setPendingReplies(Array.isArray(pendingReplyRes.emails) ? pendingReplyRes.emails : []);
       setTasks(Array.isArray(tasksRes) ? tasksRes : []);
-      setLoading(false);
-    });
+    }).finally(finishRequest);
+
+    Promise.all([
+      apiClient.get<CalendarWritebackSource[]>('/api/calendar/writeback-sources'),
+      apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
+    ]).then(([calendarSourceRows, projectFolderRows]) => {
+      if (cancelled) return;
+      setCalendarSources(Array.isArray(calendarSourceRows) ? calendarSourceRows : []);
+      setProjectFolders(Array.isArray(projectFolderRows) ? projectFolderRows : []);
+      setSourceEvidenceStatus('ready');
+    }).catch(() => {
+      if (cancelled) return;
+      setCalendarSources([]);
+      setProjectFolders([]);
+      setSourceEvidenceStatus('error');
+    }).finally(finishRequest);
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { emails, pendingReplies, tasks, loading };
+  return { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus };
 }
 
 function formatStartupDate(value: string) {
@@ -159,7 +211,8 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 }
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
-  const { emails, pendingReplies, tasks, loading } = useDashboardData();
+  const { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus } = useDashboardData();
+  const calendarCandidateEvidence = useStartupSearch('일정 충돌 일정 조율 회의 후보', 3);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -168,6 +221,33 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingReplyCount = pendingReplies.length;
   const pendingTasks = tasks.filter((t) => t.status !== 'done');
+  const completedTaskCount = tasks.filter((task) => task.status === 'done').length;
+  const writableCalendarSourceCount = calendarSources.filter(isWritableCalendarSource).length;
+  const taskCompletionRate = buildCompletionRate(tasks);
+  const sourceEvidenceLoading = sourceEvidenceStatus === 'loading';
+  const sourceEvidenceError = sourceEvidenceStatus === 'error';
+  const dashboardStats = useMemo(() => ([
+    { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
+    { title: '답변 대기', value: loading ? '-' : pendingReplyCount.toString(), diff: pendingReplyCount > 0 ? `${pendingReplyCount}건` : '-', diffText: '보낸 메일', icon: Send, color: 'text-rose-500' },
+    { title: '일정 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : calendarSources.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${writableCalendarSourceCount}개`, diffText: sourceEvidenceError ? 'source registry' : 'writeback 가능', icon: CalendarDays, color: sourceEvidenceError ? 'text-red-500' : 'text-blue-500' },
+    { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: 'source-linked', icon: CheckCircle2, color: 'text-green-500' },
+    { title: '프로젝트 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : projectFolders.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${projectFolders.length}개`, diffText: 'WebDAV 폴더', icon: Network, color: sourceEvidenceError ? 'text-red-500' : 'text-purple-500' },
+    { title: '작업 완료율', value: loading ? '-' : `${taskCompletionRate}%`, diff: loading ? '-' : `${completedTaskCount}/${tasks.length}`, diffText: '완료', icon: CheckCircle2, color: 'text-emerald-500' },
+  ]), [
+    calendarSources.length,
+    completedTaskCount,
+    emails.length,
+    loading,
+    pendingReplyCount,
+    pendingTasks.length,
+    projectFolders.length,
+    sourceEvidenceError,
+    sourceEvidenceLoading,
+    taskCompletionRate,
+    tasks.length,
+    unreadCount,
+    writableCalendarSourceCount,
+  ]);
 
   useEffect(() => {
     const updateTimestamp = () => setCurrentTimestamp(formatDashboardTimestamp(new Date()));
@@ -244,15 +324,8 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
         {/* KPI Cards */}
         <div aria-label="홈 지표" className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {[
-            { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
-            { title: '답변 대기', value: loading ? '-' : pendingReplyCount.toString(), diff: pendingReplyCount > 0 ? `${pendingReplyCount}건` : '-', diffText: '보낸 메일', icon: Send, color: 'text-rose-500' },
-            { title: '오늘 일정', value: '5', diff: '+1', diffText: '어제 대비', icon: CalendarDays, color: 'text-blue-500' },
-            { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: '변동 없음', icon: CheckCircle2, color: 'text-green-500' },
-            { title: '진행 중 프로젝트', value: '7', diff: '-', diffText: '변동 없음', icon: Network, color: 'text-purple-500' },
-            { title: '이번 주 목표 진행률', value: '68%', diff: '+6%', diffText: '지난주 대비', icon: CheckCircle2, color: 'text-emerald-500' },
-          ].map((stat, i) => (
-            <article key={i} aria-label={stat.title} className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm">
+          {dashboardStats.map((stat) => (
+            <article key={stat.title} aria-label={stat.title} className="min-w-0 rounded-2xl border border-border bg-card p-4 shadow-sm">
               <div className="flex min-w-0 items-start gap-2 text-sm font-semibold text-muted-foreground">
                 <stat.icon className={`mt-0.5 size-4 shrink-0 ${stat.color}`} />
                 <span className="min-w-0 break-keep leading-snug">{stat.title}</span>
@@ -296,8 +369,15 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-blue-100 text-blue-600"><CalendarDays className="size-5" /></div>
               <div>
-                <p className="break-keep font-bold">회의 2건 예정</p>
-                <p className="text-xs text-muted-foreground mt-1">오전 10:30, 오후 14:00</p>
+                <p className="break-keep font-bold">{sourceEvidenceError ? '일정 원본 확인 필요' : `일정 원본 ${sourceEvidenceLoading ? '-' : calendarSources.length}개`}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {sourceEvidenceError ? 'source registry 응답을 확인할 수 없습니다.' : sourceEvidenceLoading ? 'CalDAV source registry를 확인하는 중입니다.' : `${writableCalendarSourceCount}개 writeback 가능 · source registry`}
+                </p>
+                {!sourceEvidenceError && calendarSources[0] ? (
+                  <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">
+                    {toSafeReactText(calendarSources[0].source_id)}
+                  </p>
+                ) : null}
                 <button type="button" onClick={() => onOpenView('calendar')} className="mt-2 text-xs font-semibold text-primary hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 확인하기</button>
               </div>
             </div>
@@ -374,24 +454,60 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">일정 충돌 알림 <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700">3건</span></h2>
+              <h2 className="text-base font-bold">
+                일정 후보 근거{' '}
+                {calendarCandidateEvidence.status === 'success'
+                  ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">일정 조율 후보 {calendarCandidateEvidence.results.length}건</span>
+                  : !sourceEvidenceError && calendarSources.length > 0
+                    ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{calendarSources.length}개 source</span>
+                    : null}
+              </h2>
             </div>
             <div className="space-y-3">
-              {[
-                { time: '10:30', title: '출시 회의', location: '회의실 A', conflict: '충돌' },
-                { time: '14:00', title: '고객 미팅', location: '회의실 B', conflict: '중복' },
-              ].map((cal, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <div className="font-bold text-red-500 w-12">{cal.time}</div>
-                  <div className="flex-1">
-                    <div className="flex justify-between">
-                      <p className="text-sm font-bold">{cal.title}</p>
-                      <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-700">{cal.conflict}</span>
+              {calendarCandidateEvidence.status === 'loading' ? (
+                <div className="text-sm text-muted-foreground p-2">일정 조율 후보를 불러오는 중입니다.</div>
+              ) : calendarCandidateEvidence.status === 'error' ? (
+                <div className="text-sm text-muted-foreground p-2">일정 조율 후보를 불러오지 못했습니다.</div>
+              ) : calendarCandidateEvidence.status === 'success' ? (
+                calendarCandidateEvidence.results.slice(0, 3).map((candidate) => {
+                  const subject = toSafeReactText(candidate.subject?.trim() || null, '(제목 없음)');
+                  const sender = toSafeReactText(candidate.sender);
+                  const snippet = toSafeReactText(candidate.snippet);
+                  return (
+                    <article key={candidate.id} className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{subject}</p>
+                          <p className="mt-1 truncate text-[11px] font-semibold text-blue-700">{sender}</p>
+                        </div>
+                        <span suppressHydrationWarning className="shrink-0 text-xs text-muted-foreground">{formatStartupDate(candidate.date)}</span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{snippet}</p>
+                    </article>
+                  );
+                })
+              ) : sourceEvidenceError ? (
+                <div className="text-sm text-muted-foreground p-2">일정 source registry 확인에 실패했습니다.</div>
+              ) : sourceEvidenceLoading ? (
+                <div className="text-sm text-muted-foreground p-2">일정 source registry를 확인하는 중입니다.</div>
+              ) : calendarSources.length === 0 ? (
+                <div className="text-sm text-muted-foreground p-2">검색된 일정 조율 후보와 연결된 일정 원본이 없습니다.</div>
+              ) : calendarSources.slice(0, 3).map((source) => {
+                const writable = isWritableCalendarSource(source);
+                return (
+                  <div key={source.source_id} className="flex items-start gap-3">
+                    <div className={`mt-1 size-2.5 rounded-full ${writable ? 'bg-blue-500' : 'bg-slate-300'}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex justify-between gap-2">
+                        <p className="truncate text-sm font-bold">{toSafeReactText(source.provider || source.source_id)}</p>
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold ${writable ? 'bg-blue-100 text-blue-700' : 'bg-secondary text-muted-foreground'}`}>{writable ? 'writeback' : 'read only'}</span>
+                      </div>
+                      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{toSafeReactText(source.source_id)}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{source.protocol ?? 'source'} · {(source.capabilities ?? ['read']).join(', ')}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground">{cal.location}</p>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <a href="/calendar" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조정하기</a>
           </div>
