@@ -2332,7 +2332,7 @@ EOF
 		git config user.email 'strix-test@example.invalid'
 		echo 'seed' >README.md
 		mkdir -p docs
-		printf '%s\n' 'UNCHANGED_PR_HEAD_TREE_CONTENT_SHOULD_BE_SCANNED' >docs/full-scope-context.md
+		printf '%s\n' 'BASE_FULL_SCOPE_CONTEXT_SHOULD_NOT_BE_SCANNED' >docs/full-scope-context.md
 		if [ "$base_content" != "__ABSENT__" ]; then
 			mkdir -p "$(dirname -- "$changed_file")"
 			printf '%s\n' "$base_content" >"$changed_file"
@@ -2344,6 +2344,7 @@ EOF
 	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
 	(
 		cd "$repo_root_dir"
+		printf '%s\n' 'HEAD_FULL_SCOPE_CONTEXT_SHOULD_BE_SCANNED' >docs/full-scope-context.md
 		mkdir -p "$(dirname -- "$changed_file")"
 		printf '%s\n' "$head_content" >"$changed_file"
 		if [ "$make_head_executable" = "1" ]; then
@@ -2364,17 +2365,18 @@ EOF
 	set +e
 	(
 		cd "$repo_root_dir"
-		env -u GITHUB_EVENT_PATH -u STRIX_TEST_CHANGED_FILES_OVERRIDE \
+		env -u GITHUB_EVENT_PATH \
 			PATH="$bin_dir:$PATH" \
 			STRIX_INPUT_FILE_ROOT="$tmp_dir" \
 			GITHUB_EVENT_NAME="pull_request_target" \
 			PR_BASE_SHA="$base_sha" \
 			PR_HEAD_SHA="$head_sha" \
+			STRIX_TEST_CHANGED_FILES_OVERRIDE="$changed_file" \
 			FAKE_STRIX_EXPECTED_CHANGED_FILE="$changed_file" \
 			FAKE_STRIX_EXPECTED_HEAD_CONTENT="$head_content" \
 			FAKE_STRIX_UNEXPECTED_BASE_CONTENT="$unexpected_base_content" \
 			FAKE_STRIX_EXPECTED_UNCHANGED_FILE="docs/full-scope-context.md" \
-			FAKE_STRIX_EXPECTED_UNCHANGED_CONTENT="UNCHANGED_PR_HEAD_TREE_CONTENT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECTED_UNCHANGED_CONTENT="HEAD_FULL_SCOPE_CONTEXT_SHOULD_BE_SCANNED" \
 			STRIX_DISABLE_PR_SCOPING="$disable_pr_scoping" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -2527,7 +2529,7 @@ run_pull_request_target_full_head_context_scope_case() {
 	local strix_llm_file="$tmp_dir/strix_llm.txt"
 	local llm_api_key_file="$tmp_dir/llm_api_key.txt"
 	local changed_file="backend/api/emails.py"
-	local context_file="backend/core/config.py"
+	local context_file="backend/core/only_in_head.py"
 
 	cat >"$fake_strix" <<'EOF'
 #!/usr/bin/env bash
@@ -2570,9 +2572,8 @@ EOF
 		git init -q
 		git config user.name 'Strix Test'
 		git config user.email 'strix-test@example.invalid'
-		mkdir -p "$(dirname -- "$changed_file")" "$(dirname -- "$context_file")"
+		mkdir -p "$(dirname -- "$changed_file")"
 		printf '%s\n' 'BASE_CHANGED_CONTENT_SHOULD_NOT_BE_SCANNED' >"$changed_file"
-		printf '%s\n' 'TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED' >"$context_file"
 		git add .
 		git commit -qm 'base commit'
 	)
@@ -2580,6 +2581,7 @@ EOF
 	base_sha="$(git -C "$repo_root_dir" rev-parse HEAD)"
 	(
 		cd "$repo_root_dir"
+		mkdir -p "$(dirname -- "$context_file")"
 		printf '%s\n' 'HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
 		printf '%s\n' 'UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
 		git add .
@@ -2603,7 +2605,7 @@ EOF
 			FAKE_STRIX_EXPECTED_CONTEXT_FILE="$context_file" \
 			FAKE_STRIX_EXPECTED_HEAD_CONTENT="HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED" \
 			FAKE_STRIX_EXPECTED_HEAD_CONTEXT="UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED" \
-			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="TRUSTED_BASE_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_UNEXPECTED_BASE_CONTEXT="TRUSTED_BASE_CONTEXT_SHOULD_NOT_BE_SCANNED" \
 			STRIX_DISABLE_PR_SCOPING="0" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -3315,15 +3317,12 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local real_git
 	real_git="$(command -v git)"
 	local fake_git="$bin_dir/git"
-	cat >"$fake_git" <<'EOF'
+cat >"$fake_git" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-if [ "${1:-}" = "show" ]; then
+fake_git_fail_command="${FAKE_GIT_FAIL_COMMAND:-}"
+if [ -n "$fake_git_fail_command" ] && [ "${1:-}" = "$fake_git_fail_command" ]; then
 	printf 'PARTIAL_PR_HEAD_BLOB_SHOULD_BE_DISCARDED'
-	exit 1
-fi
-if [ "${1:-}" = "${FAKE_GIT_FAIL_COMMAND:-}" ]; then
-	printf 'FAILED_PR_HEAD_LOOKUP_SHOULD_FAIL_CLOSED'
 	exit 1
 fi
 exec "${REAL_GIT_PATH:?}" "$@"

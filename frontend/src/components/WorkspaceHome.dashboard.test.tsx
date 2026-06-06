@@ -343,6 +343,14 @@ describe("WorkspaceHome Today dashboard", () => {
       removeEventListener: vi.fn(),
     })));
     localStorage.setItem("naruon_session_token", "signed-source-backed-home");
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
     const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -460,9 +468,67 @@ describe("WorkspaceHome Today dashboard", () => {
       expect(sourceCall).toBeDefined();
       const headers = sourceCall?.init?.headers as Record<string, string>;
       expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
-      expect(headers["X-User-Id"]).toBeUndefined();
-      expect(headers["X-Organization-Id"]).toBeUndefined();
-      expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
+      for (const headerName of publicIdentityHeaders) {
+        expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+      }
     }
+  });
+
+  it("shows an explicit source evidence error instead of a false empty calendar state", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([]),
+        });
+      }
+      if (url.endsWith("/api/calendar/writeback-sources") || url.endsWith("/api/webdav/folders")) {
+        return Promise.reject(new Error("source registry unavailable"));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("일정 source registry 확인에 실패했습니다.") ?? false);
+
+    expect(container.textContent).toContain("일정 원본 확인 필요");
+    expect(container.textContent).toContain("오류");
+    expect(container.textContent).toContain("source registry 응답을 확인할 수 없습니다.");
+    expect(container.textContent).not.toContain("연결된 일정 원본이 없습니다.");
   });
 });

@@ -125,31 +125,50 @@ function useDashboardData() {
   const [calendarSources, setCalendarSources] = useState<CalendarWritebackSource[]>([]);
   const [projectFolders, setProjectFolders] = useState<ProjectFolder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sourceEvidenceStatus, setSourceEvidenceStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     let cancelled = false;
+    let pendingRequests = 2;
+    const finishRequest = () => {
+      pendingRequests -= 1;
+      if (pendingRequests === 0 && !cancelled) {
+        setLoading(false);
+      }
+    };
+
     Promise.all([
       apiClient.get<{ emails: EmailItem[] }>('/api/emails').catch(() => ({ emails: [] })),
       apiClient.get<{ emails: EmailItem[] }>('/api/emails/pending-replies?limit=3').catch(() => ({ emails: [] })),
       apiClient.get<TaskItem[]>('/api/tasks').catch(() => []),
-      apiClient.get<CalendarWritebackSource[]>('/api/calendar/writeback-sources').catch(() => []),
-      apiClient.get<ProjectFolder[]>('/api/webdav/folders').catch(() => []),
-    ]).then(([emailRes, pendingReplyRes, tasksRes, calendarSourceRows, projectFolderRows]) => {
+    ]).then(([emailRes, pendingReplyRes, tasksRes]) => {
       if (cancelled) return;
       setEmails(Array.isArray(emailRes.emails) ? emailRes.emails : []);
       setPendingReplies(Array.isArray(pendingReplyRes.emails) ? pendingReplyRes.emails : []);
       setTasks(Array.isArray(tasksRes) ? tasksRes : []);
+    }).finally(finishRequest);
+
+    Promise.all([
+      apiClient.get<CalendarWritebackSource[]>('/api/calendar/writeback-sources'),
+      apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
+    ]).then(([calendarSourceRows, projectFolderRows]) => {
+      if (cancelled) return;
       setCalendarSources(Array.isArray(calendarSourceRows) ? calendarSourceRows : []);
       setProjectFolders(Array.isArray(projectFolderRows) ? projectFolderRows : []);
-      setLoading(false);
-    });
+      setSourceEvidenceStatus('ready');
+    }).catch(() => {
+      if (cancelled) return;
+      setCalendarSources([]);
+      setProjectFolders([]);
+      setSourceEvidenceStatus('error');
+    }).finally(finishRequest);
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  return { emails, pendingReplies, tasks, calendarSources, projectFolders, loading };
+  return { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus };
 }
 
 function formatStartupDate(value: string) {
@@ -192,7 +211,7 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 }
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
-  const { emails, pendingReplies, tasks, calendarSources, projectFolders, loading } = useDashboardData();
+  const { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus } = useDashboardData();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -204,12 +223,14 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   const completedTaskCount = tasks.filter((task) => task.status === 'done').length;
   const writableCalendarSourceCount = calendarSources.filter(isWritableCalendarSource).length;
   const taskCompletionRate = buildCompletionRate(tasks);
+  const sourceEvidenceLoading = sourceEvidenceStatus === 'loading';
+  const sourceEvidenceError = sourceEvidenceStatus === 'error';
   const dashboardStats = useMemo(() => ([
     { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
     { title: '답변 대기', value: loading ? '-' : pendingReplyCount.toString(), diff: pendingReplyCount > 0 ? `${pendingReplyCount}건` : '-', diffText: '보낸 메일', icon: Send, color: 'text-rose-500' },
-    { title: '일정 원본', value: loading ? '-' : calendarSources.length.toString(), diff: loading ? '-' : `${writableCalendarSourceCount}개`, diffText: 'writeback 가능', icon: CalendarDays, color: 'text-blue-500' },
+    { title: '일정 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : calendarSources.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${writableCalendarSourceCount}개`, diffText: sourceEvidenceError ? 'source registry' : 'writeback 가능', icon: CalendarDays, color: sourceEvidenceError ? 'text-red-500' : 'text-blue-500' },
     { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: 'source-linked', icon: CheckCircle2, color: 'text-green-500' },
-    { title: '프로젝트 원본', value: loading ? '-' : projectFolders.length.toString(), diff: loading ? '-' : `${projectFolders.length}개`, diffText: 'WebDAV 폴더', icon: Network, color: 'text-purple-500' },
+    { title: '프로젝트 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : projectFolders.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${projectFolders.length}개`, diffText: 'WebDAV 폴더', icon: Network, color: sourceEvidenceError ? 'text-red-500' : 'text-purple-500' },
     { title: '작업 완료율', value: loading ? '-' : `${taskCompletionRate}%`, diff: loading ? '-' : `${completedTaskCount}/${tasks.length}`, diffText: '완료', icon: CheckCircle2, color: 'text-emerald-500' },
   ]), [
     calendarSources.length,
@@ -219,6 +240,8 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
     pendingReplyCount,
     pendingTasks.length,
     projectFolders.length,
+    sourceEvidenceError,
+    sourceEvidenceLoading,
     taskCompletionRate,
     tasks.length,
     unreadCount,
@@ -345,11 +368,11 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
             <div className="flex gap-4 pt-4 md:pl-6 md:pt-0">
               <div className="grid size-10 shrink-0 place-items-center rounded-full bg-blue-100 text-blue-600"><CalendarDays className="size-5" /></div>
               <div>
-                <p className="break-keep font-bold">일정 원본 {loading ? '-' : calendarSources.length}개</p>
+                <p className="break-keep font-bold">{sourceEvidenceError ? '일정 원본 확인 필요' : `일정 원본 ${sourceEvidenceLoading ? '-' : calendarSources.length}개`}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {loading ? 'CalDAV source registry를 확인하는 중입니다.' : `${writableCalendarSourceCount}개 writeback 가능 · source registry`}
+                  {sourceEvidenceError ? 'source registry 응답을 확인할 수 없습니다.' : sourceEvidenceLoading ? 'CalDAV source registry를 확인하는 중입니다.' : `${writableCalendarSourceCount}개 writeback 가능 · source registry`}
                 </p>
-                {calendarSources[0] ? (
+                {!sourceEvidenceError && calendarSources[0] ? (
                   <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">
                     {toSafeReactText(calendarSources[0].source_id)}
                   </p>
@@ -430,10 +453,12 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">일정 후보 근거 {calendarSources.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{calendarSources.length}개 source</span>}</h2>
+              <h2 className="text-base font-bold">일정 후보 근거 {!sourceEvidenceError && calendarSources.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{calendarSources.length}개 source</span>}</h2>
             </div>
             <div className="space-y-3">
-              {loading ? (
+              {sourceEvidenceError ? (
+                <div className="text-sm text-muted-foreground p-2">일정 source registry 확인에 실패했습니다.</div>
+              ) : sourceEvidenceLoading ? (
                 <div className="text-sm text-muted-foreground p-2">일정 source registry를 확인하는 중입니다.</div>
               ) : calendarSources.length === 0 ? (
                 <div className="text-sm text-muted-foreground p-2">연결된 일정 원본이 없습니다.</div>
