@@ -122,7 +122,9 @@ jobs:
         run: |
           strix_model="$(printf '%s' "$STRIX_MODEL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
           case "$strix_model" in
-            openai/openai/*)
+            openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+            openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
+            github_models/*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=github_models' >> "$GITHUB_OUTPUT"
               sanitized_github_models_token="$(printf '%s' "$GITHUB_MODELS_TOKEN" | tr -d '\r\n')"
@@ -132,8 +134,17 @@ jobs:
                 exit 1
               fi
               ;;
-            gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
-            openai/gpt-5.[4-9]* | openai/gpt-5.[1-9][0-9]* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
+            openai-direct/gpt-*)
+              echo 'enabled=true' >> "$GITHUB_OUTPUT"
+              echo 'provider_mode=openai_direct' >> "$GITHUB_OUTPUT"
+              sanitized_openai_key="$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')"
+              trimmed_openai_key="$(printf '%s' "$sanitized_openai_key" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+              if [ -z "$trimmed_openai_key" ]; then
+                echo '::error::STRIX_OPENAI_API_KEY is required for Strix OpenAI Platform scans.'
+                exit 1
+              fi
+              ;;
+            gpt-*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=openai_direct' >> "$GITHUB_OUTPUT"
               sanitized_openai_key="$(printf '%s' "$STRIX_OPENAI_API_KEY" | tr -d '\r\n')"
@@ -154,7 +165,7 @@ jobs:
               fi
               ;;
             *)
-              echo '::error::STRIX_LLM must select GitHub Models openai/openai/*, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model.'
+              echo '::error::STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model.'
               exit 1
               ;;
           esac
