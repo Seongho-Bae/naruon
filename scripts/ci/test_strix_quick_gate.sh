@@ -266,6 +266,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$opencode_config" '"small_model": "github-models/gpt-5-mini"' "opencode config uses a GPT-5-class small model"
 	assert_file_contains "$opencode_config" '"gpt-5-mini"' "opencode config defines GPT-5 mini"
 	assert_file_contains "$opencode_config" '"gpt-5-nano"' "opencode config defines GPT-5 nano"
+	assert_file_contains "$opencode_config" '"context": 400000' "opencode config uses the GPT-5 family 400k context window"
+	assert_file_contains "$opencode_config" '"output": 128000' "opencode config uses the GPT-5 family 128k output window"
 	assert_file_not_contains "$opencode_config" "gpt-4.1" "opencode config must not define GPT-4.1 fallback"
 }
 
