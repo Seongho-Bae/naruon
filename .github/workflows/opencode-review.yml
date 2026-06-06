@@ -481,13 +481,14 @@ jobs:
           if [ ! -s "$comment_body_file" ]; then
             echo "OpenCode output did not include the required sentinel."
             cat "$clean_output"
-            exit 1
+            exit 0
           fi
 
+          gate_status=0
           gate_result="$(
             bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file"
-          )"
-          printf 'OpenCode comment gate result: %s\n' "$gate_result"
+          )" || gate_status=$?
+          printf 'OpenCode comment gate result: %s (exit %s)\n' "$gate_result" "$gate_status"
 
           jq -n --rawfile body "$comment_body_file" '{body: $body}' |
             gh api -X POST "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null
@@ -606,6 +607,65 @@ jobs:
             create_pull_review "REQUEST_CHANGES" "$body"
           }
 
+          collect_failed_github_checks() {
+            local output_file="$1"
+            local owner="${GH_REPOSITORY%%/*}"
+            local name="${GH_REPOSITORY#*/}"
+            gh api graphql \
+              -f owner="$owner" \
+              -f name="$name" \
+              -F number="$PR_NUMBER" \
+              -f query='
+                query($owner:String!,$name:String!,$number:Int!) {
+                  repository(owner:$owner,name:$name) {
+                    pullRequest(number:$number) {
+                      statusCheckRollup {
+                        contexts(first: 100) {
+                          nodes {
+                            __typename
+                            ... on CheckRun {
+                              name
+                              status
+                              conclusion
+                              detailsUrl
+                              checkSuite {
+                                workflowRun {
+                                  workflow {
+                                    name
+                                  }
+                                }
+                              }
+                            }
+                            ... on StatusContext {
+                              context
+                              state
+                              targetUrl
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ' \
+              --jq '
+                (.data.repository.pullRequest.statusCheckRollup.contexts.nodes // [])
+                | map(
+                    if .__typename == "CheckRun" then
+                      select((.status // "") == "COMPLETED")
+                      | select((.conclusion // "" | ascii_upcase) as $c | ["FAILURE","TIMED_OUT","ACTION_REQUIRED","CANCELLED","STARTUP_FAILURE"] | index($c))
+                      | "- " + ((.checkSuite.workflowRun.workflow.name // "") + "/" + (.name // "check") | gsub("^/"; "")) + ": " + (.conclusion // "unknown") + (if (.detailsUrl // "") != "" then " (" + .detailsUrl + ")" else "" end)
+                    elif .__typename == "StatusContext" then
+                      select((.state // "" | ascii_upcase) as $s | ["FAILURE","ERROR"] | index($s))
+                      | "- " + (.context // "status") + ": " + (.state // "unknown") + (if (.targetUrl // "") != "" then " (" + .targetUrl + ")" else "" end)
+                    else
+                      empty
+                    end
+                  )
+                | .[]
+              ' >"$output_file"
+          }
+
           live_head_sha="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
@@ -643,7 +703,8 @@ jobs:
 
           tmp_body="$(mktemp)"
           control_json="$(mktemp)"
-          trap 'rm -f "$tmp_body" "$control_json"' EXIT
+          failed_checks_file=""
+          trap 'rm -f "$tmp_body" "$control_json" "$failed_checks_file"' EXIT
           printf '%s\n' "$comment_body" >"$tmp_body"
 
           gate_result="$(bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$tmp_body" "$control_json")" || true
@@ -651,6 +712,42 @@ jobs:
 
           case "$gate_result" in
             APPROVE)
+              failed_checks_file="$(mktemp)"
+              if ! collect_failed_github_checks "$failed_checks_file"; then
+                body="$(printf '%s\n' \
+                  "OpenCode Agent could not verify GitHub Checks before approval." \
+                  "" \
+                  "- Result: REQUEST_CHANGES" \
+                  "- Reason: GitHub Checks statusCheckRollup could not be read for current head \`${HEAD_SHA}\`." \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Workflow run: ${RUN_ID}" \
+                  "- Workflow attempt: ${RUN_ATTEMPT}")"
+                create_pull_review "REQUEST_CHANGES" "$body"
+                if [ -n "$comment_id" ]; then
+                  gh api -X DELETE "repos/${GH_REPOSITORY}/issues/comments/${comment_id}" >/dev/null || true
+                fi
+                echo "::endgroup::"
+                exit 0
+              fi
+              if [ -s "$failed_checks_file" ]; then
+                body="$(printf '%s\n' \
+                  "OpenCode Agent requested changes because GitHub Checks failed on the current head." \
+                  "" \
+                  "- Result: REQUEST_CHANGES" \
+                  "- Reason: one or more GitHub Checks failed on current head \`${HEAD_SHA}\`." \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Workflow run: ${RUN_ID}" \
+                  "- Workflow attempt: ${RUN_ATTEMPT}" \
+                  "" \
+                  "Failed checks:" \
+                  "$(cat "$failed_checks_file")")"
+                create_pull_review "REQUEST_CHANGES" "$body"
+                if [ -n "$comment_id" ]; then
+                  gh api -X DELETE "repos/${GH_REPOSITORY}/issues/comments/${comment_id}" >/dev/null || true
+                fi
+                echo "::endgroup::"
+                exit 0
+              fi
               summary="$(jq -r '.summary' "$control_json")"
               reason="$(jq -r '.reason' "$control_json")"
               body="$(printf '%s\n' \

@@ -68,6 +68,10 @@
 - Missing current-head CodeRabbit evidence is a wait state until bounded polling
   or authoritative skip/review evidence resolves it; do not post a hard blocker
   only because the current head has not been reviewed yet.
+- OpenCode Agent approvals must be gated on current-head GitHub Checks. If a
+  completed check run or status context failed, or the check rollup cannot be
+  verified, the OpenCode review must request changes or explain the verification
+  failure instead of approving.
 - Keep CodeRabbit `request_changes_workflow` enabled for robot approval, but
   keep CodeRabbit GitHub Checks integration disabled. GitHub Actions are already
   evaluated by required checks and PR Governance; letting CodeRabbit also gate
