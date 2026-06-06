@@ -180,11 +180,10 @@ jobs:
 
           Return only the review body, with no surrounding code fence.
           EOF
-          timeout 300 opencode run \
+          timeout 300 opencode run "$(cat "$prompt_file")" \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded review ${MODEL}" \
-            --file "$OPENCODE_EVIDENCE_FILE" \
-            "$(cat "$prompt_file")" >"$OPENCODE_OUTPUT_FILE"
+            --file "$OPENCODE_EVIDENCE_FILE" >"$OPENCODE_OUTPUT_FILE"
 
       - name: Run OpenCode PR Review fallback (GPT-5 mini)
         id: opencode_review_fallback
@@ -256,11 +255,10 @@ jobs:
 
           Return only the review body, with no surrounding code fence.
           EOF
-          timeout 300 opencode run \
+          timeout 300 opencode run "$(cat "$prompt_file")" \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" \
-            --file "$OPENCODE_EVIDENCE_FILE" \
-            "$(cat "$prompt_file")" >"$OPENCODE_OUTPUT_FILE"
+            --file "$OPENCODE_EVIDENCE_FILE" >"$OPENCODE_OUTPUT_FILE"
 
       - name: Run OpenCode PR Review fallback (GPT-5 nano)
         id: opencode_review_second_fallback
@@ -332,11 +330,10 @@ jobs:
 
           Return only the review body, with no surrounding code fence.
           EOF
-          timeout 300 opencode run \
+          timeout 300 opencode run "$(cat "$prompt_file")" \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" \
-            --file "$OPENCODE_EVIDENCE_FILE" \
-            "$(cat "$prompt_file")" >"$OPENCODE_OUTPUT_FILE"
+            --file "$OPENCODE_EVIDENCE_FILE" >"$OPENCODE_OUTPUT_FILE"
 
       - name: Publish bounded OpenCode review comment
         if: >-
