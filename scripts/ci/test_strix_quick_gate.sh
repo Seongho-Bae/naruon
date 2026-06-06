@@ -172,7 +172,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes GitHub Models scans to the inference endpoint"
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
-	assert_file_contains "$workflow_file" "openai/gpt-5-mini openai/gpt-5-nano" "strix workflow configures stronger GPT-5-class GitHub Models fallback models"
+	assert_file_contains "$workflow_file" "deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
@@ -278,33 +278,50 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_matches "$workflow_file" 'uses:[[:space:]]+actions/checkout@[0-9a-fA-F]{40}([[:space:]]|$)' "opencode review workflow pins checkout to a full commit SHA"
 	assert_workflow_uses_are_sha_pinned "$workflow_file" "opencode review workflow"
 	assert_file_contains "$workflow_file" "@colbymchenry/codegraph@0.9.9" "opencode review workflow pins the CodeGraph package"
+	assert_file_contains "$workflow_file" "https://mcp.deepwiki.com/mcp" "opencode review workflow configures the DeepWiki remote MCP server"
+	assert_file_contains "$workflow_file" "@upstash/context7-mcp@3.1.0" "opencode review workflow pins the Context7 MCP package"
+	assert_file_contains "$workflow_file" "@guhcostan/web-search-mcp@1.0.5" "opencode review workflow pins a web search MCP package"
+	assert_file_contains "$workflow_file" "NPM_CONFIG_LOGLEVEL" "opencode review workflow suppresses npm warning output for local MCP package fetches"
 	assert_file_contains "$workflow_file" 'NPM_CONFIG_IGNORE_SCRIPTS: "true"' "opencode review workflow disables npm lifecycle scripts for CodeGraph npx"
 	assert_file_contains "$workflow_file" "init -i" "opencode review workflow builds the CodeGraph index"
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
 	assert_file_contains "$workflow_file" "opencode run" "opencode review workflow runs the bounded OpenCode agent path"
 	assert_file_contains "$workflow_file" 'opencode run "$(cat "$prompt_file")"' "opencode review passes the prompt as the positional message before file attachments"
 	assert_file_contains "$workflow_file" "--agent ci-review" "opencode review workflow forces the compact CI review agent"
+	assert_file_contains "$workflow_file" "--pure" "opencode review workflow avoids external OpenCode plugins during CI"
+	assert_file_contains "$workflow_file" "--format json" "opencode review workflow captures the OpenCode session id as JSON"
+	assert_file_contains "$workflow_file" "opencode export" "opencode review workflow extracts assistant text from the completed OpenCode session"
 	assert_file_not_contains "$workflow_file" '--file "$OPENCODE_EVIDENCE_FILE"' "opencode review must not attach evidence content to GitHub Models requests"
 	assert_file_not_contains "$workflow_file" "opencode github run" "opencode review workflow must not use the oversized GitHub agent prompt path"
 	assert_file_not_contains "$workflow_file" 'repos/${{ github.repository }}' "opencode review workflow must pass repository expressions through env before shell use"
 	assert_file_contains "$workflow_file" "GH_REPOSITORY:" "opencode review workflow exports repository context through env"
 	assert_file_contains "$workflow_file" 'repos/${GH_REPOSITORY}' "opencode review workflow uses env-backed repository context in shell commands"
 	assert_file_contains "$workflow_file" "MODEL: github-models/openai/gpt-5" "opencode review tries GitHub Models GPT-5 first"
-	assert_file_contains "$workflow_file" "MODEL: github-models/openai/gpt-5-chat" "opencode review falls back to a GPT-5-class chat model"
-	assert_file_contains "$workflow_file" "MODEL: github-models/openai/gpt-5-mini" "opencode review has a second GPT-5-class fallback model"
+	assert_file_contains "$workflow_file" "MODEL: github-models/deepseek/deepseek-r1-0528" "opencode review falls back to a reachable DeepSeek R1 reasoning model"
+	assert_file_contains "$workflow_file" "MODEL: github-models/deepseek/deepseek-v3-0324" "opencode review has a second reachable DeepSeek V3 fallback model"
 	assert_file_contains "$workflow_file" "Publish bounded OpenCode review comment" "opencode review workflow publishes the agent control comment for the approval gate"
 	assert_file_not_contains "$workflow_file" "MODEL: github-models/gpt-4.1" "opencode review must not fall back to GPT-4.1"
+	assert_file_not_contains "$workflow_file" "MODEL: github-models/openai/gpt-5-chat" "opencode review must not use unavailable GitHub Models GPT-5 chat fallback"
+	assert_file_not_contains "$workflow_file" "MODEL: github-models/openai/gpt-5-mini" "opencode review must not use unavailable GitHub Models GPT-5 mini fallback"
 
 	assert_file_contains "$opencode_config" '"mcp"' "opencode config declares MCP servers"
 	assert_file_contains "$opencode_config" '"codegraph"' "opencode config declares the CodeGraph MCP server"
+	assert_file_contains "$opencode_config" '"deepwiki"' "opencode config declares the DeepWiki MCP server"
+	assert_file_contains "$opencode_config" '"context7"' "opencode config declares the Context7 MCP server"
+	assert_file_contains "$opencode_config" '"web_search"' "opencode config declares the web search MCP server"
+	assert_file_contains "$opencode_config" '"url": "https://mcp.deepwiki.com/mcp"' "opencode config points DeepWiki at the official remote MCP endpoint"
+	assert_file_contains "$opencode_config" '"@upstash/context7-mcp@3.1.0"' "opencode config pins the Context7 MCP package"
+	assert_file_contains "$opencode_config" '"@guhcostan/web-search-mcp@1.0.5"' "opencode config pins the web search MCP package"
 	assert_file_contains "$opencode_config" '"serve", "--mcp"' "opencode config launches CodeGraph in MCP mode"
-	assert_file_contains "$opencode_config" '"small_model": "github-models/openai/gpt-5-chat"' "opencode config uses a GPT-5-class small model"
+	assert_file_contains "$opencode_config" '"small_model": "github-models/deepseek/deepseek-v3-0324"' "opencode config uses a reachable DeepSeek V3 small model"
 	assert_file_contains "$opencode_config" '"openai/gpt-5"' "opencode config defines GitHub Models GPT-5 with full model id"
-	assert_file_contains "$opencode_config" '"openai/gpt-5-chat"' "opencode config defines GPT-5 chat fallback"
-	assert_file_contains "$opencode_config" '"openai/gpt-5-mini"' "opencode config defines GPT-5 mini fallback"
-	assert_file_contains "$opencode_config" '"context": 400000' "opencode config uses the GPT-5 family 400k context window"
-	assert_file_contains "$opencode_config" '"output": 128000' "opencode config uses the GPT-5 family 128k output window"
+	assert_file_contains "$opencode_config" '"deepseek/deepseek-r1-0528"' "opencode config defines DeepSeek R1 fallback"
+	assert_file_contains "$opencode_config" '"deepseek/deepseek-v3-0324"' "opencode config defines DeepSeek V3 fallback"
+	assert_file_contains "$opencode_config" '"context": 200000' "opencode config uses the GitHub Models GPT-5 200k context window"
+	assert_file_contains "$opencode_config" '"output": 100000' "opencode config uses the GitHub Models GPT-5 100k output window"
 	assert_file_not_contains "$opencode_config" "gpt-4.1" "opencode config must not define GPT-4.1 fallback"
+	assert_file_not_contains "$opencode_config" "gpt-5-chat" "opencode config must not define unavailable GPT-5 chat fallback"
+	assert_file_not_contains "$opencode_config" "gpt-5-mini" "opencode config must not define unavailable GPT-5 mini fallback"
 }
 
 assert_internal_pr_scope_targets() {
@@ -461,7 +478,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-gpt5-nano|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-deepseek-v3|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -476,17 +493,17 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
-		openai/gpt-5-mini)
-			if [ "${FAKE_STRIX_SCENARIO:?}" = "github-models-fallback-success-gpt5-nano" ]; then
+		deepseek/deepseek-r1-0528)
+			if [ "${FAKE_STRIX_SCENARIO:?}" = "github-models-fallback-success-deepseek-v3" ]; then
 				echo "LLM CONNECTION FAILED"
 				echo "Could not establish connection to the language model."
-				echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5-mini"
+				echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: deepseek-r1-0528"
 				exit 1
 			fi
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
-		openai/gpt-5-nano)
+		deepseek/deepseek-v3-0324)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -801,7 +818,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
 			exit 1
 			;;
-		openai/gpt-5-mini)
+		deepseek/deepseek-r1-0528)
 			echo "scan ok after GitHub Models unavailable fallback"
 			exit 0
 			;;
@@ -819,7 +836,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service."
 			exit 1
 			;;
-		openai/gpt-5-mini)
+		deepseek/deepseek-r1-0528)
 			echo "scan ok after GitHub Models rate-limit fallback"
 			exit 0
 			;;
@@ -5051,9 +5068,9 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
 	"2" \
-	"openai/gpt-5|openai/gpt-5-mini" \
+	"openai/gpt-5|deepseek/deepseek-r1-0528" \
 	"https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -5074,16 +5091,16 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
 	"1"
 
 run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
 	"4" \
-	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-5-mini" \
+	"openai/gpt-5|openai/gpt-5|openai/gpt-5|deepseek/deepseek-r1-0528" \
 	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -5104,7 +5121,7 @@ run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
 	"1"
 
 run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
@@ -7069,11 +7086,11 @@ run_gate_case "github-models-fallback-requires-api-base" \
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/gpt-5-mini" \
+	"vertex_ai/missing-primary|deepseek/deepseek-r1-0528" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
@@ -7101,13 +7118,13 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	0
 
-run_gate_case "github-models-fallback-success-gpt5-nano" \
+run_gate_case "github-models-fallback-success-deepseek-v3" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-5-mini openai/gpt-5-nano" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-nano' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-v3-0324' in [0-9]+s\\." \
 	"3" \
-	"vertex_ai/missing-primary|openai/gpt-5-mini|openai/gpt-5-nano" \
+	"vertex_ai/missing-primary|deepseek/deepseek-r1-0528|deepseek/deepseek-v3-0324" \
 	"<unset>|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
