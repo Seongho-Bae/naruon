@@ -19,12 +19,14 @@ from db.models import (
 )
 
 
-def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
+def _get_schema_statements(monkeypatch):
     monkeypatch.delenv("NARUON_IMPORT_USER_ID", raising=False)
     monkeypatch.delenv("NARUON_IMPORT_ORGANIZATION_ID", raising=False)
+    return [str(statement).lower() for statement in schema_backfill_sql()]
 
-    statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
+def test_schema_backfill_adds_email_columns(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table emails add column if not exists reply_to" in statement
         for statement in statements
@@ -46,6 +48,22 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        'alter table emails add column if not exists "references"' in statement
+        for statement in statements
+    )
+    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any(
+        "update emails set organization_id" in statement for statement in statements
+    )
+    assert any(
+        "existing emails require explicit non-default" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_adds_sender_relationship_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
         "alter table sender_relationships add column if not exists source_message_id"
         in statement
         for statement in statements
@@ -60,8 +78,7 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
-        "create index if not exists ix_sender_relationships_owner_source"
-        in statement
+        "create index if not exists ix_sender_relationships_owner_source" in statement
         for statement in statements
     )
     assert any(
@@ -69,10 +86,10 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         in statement
         for statement in statements
     )
-    assert any(
-        'alter table emails add column if not exists "references"' in statement
-        for statement in statements
-    )
+
+
+def test_schema_backfill_adds_email_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "create index if not exists ix_emails_user_id" in statement
         for statement in statements
@@ -94,18 +111,14 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "create unique index if not exists uq_emails_owner_message_id" in statement
         for statement in statements
     )
-    assert not any("update emails set user_id" in statement for statement in statements)
-    assert not any(
-        "update emails set organization_id" in statement for statement in statements
-    )
-    assert any(
-        "existing emails require explicit non-default" in statement
-        for statement in statements
-    )
     assert any(
         "create index if not exists ix_emails_thread_id" in statement
         for statement in statements
     )
+
+
+def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table llm_providers add column if not exists user_id" in statement
         for statement in statements
@@ -113,130 +126,6 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     assert any(
         "alter table llm_providers add column if not exists organization_id"
         in statement
-        for statement in statements
-    )
-    assert any(
-        "create table if not exists calendar_writeback_sources" in statement
-        for statement in statements
-    )
-    assert any(
-        "create table if not exists security_audit_events" in statement
-        for statement in statements
-    )
-    assert any("actor_user_id varchar not null" in statement for statement in statements)
-    assert any("event_action varchar not null" in statement for statement in statements)
-    assert any("resource_uid varchar" in statement for statement in statements)
-    assert any("source_uid varchar primary key" in statement for statement in statements)
-    assert any("workspace_id varchar not null" in statement for statement in statements)
-    assert any("provider_name varchar not null" in statement for statement in statements)
-    assert any("source_protocol varchar not null" in statement for statement in statements)
-    assert any("source_host varchar not null" in statement for statement in statements)
-    assert any(
-        "writeback_enabled boolean not null default false" in statement
-        for statement in statements
-    )
-    assert any("etag_value varchar" in statement for statement in statements)
-    assert any(
-        "create index if not exists ix_calendar_writeback_sources_scope"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts add column if not exists source_uid"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts add column if not exists organization_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts add column if not exists workspace_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts add column if not exists writeback_enabled"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts add column if not exists etag_value"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table project_folders add column if not exists folder_uid"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table project_folders add column if not exists organization_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "update webdav_accounts set source_uid" in statement
-        and "webdav_src_" in statement
-        and "md5" in statement
-        and "random()::text" in statement
-        and "clock_timestamp()::text" in statement
-        for statement in statements
-    )
-    assert not any("account_id::text" in statement for statement in statements)
-    assert any(
-        "update webdav_accounts set workspace_id" in statement
-        and "'workspace-' || organization_id" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts alter column source_uid set not null"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table webdav_accounts alter column workspace_id set not null"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "create unique index if not exists uq_webdav_accounts_source_uid"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "create index if not exists ix_webdav_accounts_organization_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "create index if not exists ix_webdav_accounts_workspace_scope"
-        in statement
-        and "user_id, organization_id, workspace_id" in statement
-        for statement in statements
-    )
-    assert any(
-        "update project_folders set folder_uid" in statement
-        and "webdav_folder_" in statement
-        and "md5" in statement
-        and "random()::text" in statement
-        and "clock_timestamp()::text" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table project_folders alter column folder_uid set not null"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "create unique index if not exists uq_project_folders_folder_uid"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "create index if not exists ix_project_folders_owner_scope" in statement
-        and "user_id, organization_id" in statement
         for statement in statements
     )
     assert any(
@@ -255,14 +144,153 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "drop index if exists ix_llm_providers_name" in statement
         for statement in statements
     )
+
+
+def test_schema_backfill_creates_calendar_writeback_sources_table(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
-        "alter table tenant_configs add column if not exists pop3_username"
+        "create table if not exists calendar_writeback_sources" in statement
+        for statement in statements
+    )
+    assert any(
+        "source_uid varchar primary key" in statement for statement in statements
+    )
+    assert any("workspace_id varchar not null" in statement for statement in statements)
+    assert any(
+        "provider_name varchar not null" in statement for statement in statements
+    )
+    assert any(
+        "source_protocol varchar not null" in statement for statement in statements
+    )
+    assert any("source_host varchar not null" in statement for statement in statements)
+    assert any(
+        "writeback_enabled boolean not null default false" in statement
+        for statement in statements
+    )
+    assert any("etag_value varchar" in statement for statement in statements)
+    assert any(
+        "create index if not exists ix_calendar_writeback_sources_scope" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_creates_security_audit_events_table(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "create table if not exists security_audit_events" in statement
+        for statement in statements
+    )
+    assert any(
+        "actor_user_id varchar not null" in statement for statement in statements
+    )
+    assert any("event_action varchar not null" in statement for statement in statements)
+    assert any("resource_uid varchar" in statement for statement in statements)
+
+
+def test_schema_backfill_adds_webdav_account_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "alter table webdav_accounts add column if not exists source_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts add column if not exists organization_id"
         in statement
         for statement in statements
     )
     assert any(
-        "alter table tenant_configs add column if not exists pop3_password"
+        "alter table webdav_accounts add column if not exists workspace_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts add column if not exists writeback_enabled"
         in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts add column if not exists etag_value" in statement
+        for statement in statements
+    )
+    assert any(
+        "update webdav_accounts set source_uid" in statement
+        and "webdav_src_" in statement
+        and "md5" in statement
+        and "random()::text" in statement
+        and "clock_timestamp()::text" in statement
+        for statement in statements
+    )
+    assert not any("account_id::text" in statement for statement in statements)
+    assert any(
+        "update webdav_accounts set workspace_id" in statement
+        and "'workspace-' || organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts alter column source_uid set not null" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table webdav_accounts alter column workspace_id set not null"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_webdav_accounts_source_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_webdav_accounts_organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_webdav_accounts_workspace_scope" in statement
+        and "user_id, organization_id, workspace_id" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_adds_project_folder_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "alter table project_folders add column if not exists folder_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table project_folders add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "update project_folders set folder_uid" in statement
+        and "webdav_folder_" in statement
+        and "md5" in statement
+        and "random()::text" in statement
+        and "clock_timestamp()::text" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table project_folders alter column folder_uid set not null" in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_project_folders_folder_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_project_folders_owner_scope" in statement
+        and "user_id, organization_id" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_adds_tenant_config_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_username" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table tenant_configs add column if not exists pop3_password" in statement
         for statement in statements
     )
     assert any(
@@ -285,8 +313,7 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
-        "create unique index if not exists uq_tenant_configs_owner_scope"
-        in statement
+        "create unique index if not exists uq_tenant_configs_owner_scope" in statement
         and "coalesce(organization_id, '')" in statement
         for statement in statements
     )
@@ -405,8 +432,7 @@ def test_ticket_task_reply_sla_unique_index_is_bootstrapped():
     assert indexes["uq_ticket_tasks_reply_sla_email"].unique is True
     assert dedupe_statement_index < unique_index_statement_index
     assert any(
-        "create unique index if not exists uq_ticket_tasks_reply_sla_email"
-        in statement
+        "create unique index if not exists uq_ticket_tasks_reply_sla_email" in statement
         and "where source_type = 'reply_sla'" in statement
         for statement in statements
     )
@@ -499,16 +525,13 @@ def test_schema_backfill_creates_connector_signal_events():
         for statement in statements
     )
     assert any(
-        "ix_connector_signal_events_scope_time" in statement
-        for statement in statements
+        "ix_connector_signal_events_scope_time" in statement for statement in statements
     )
     assert any(
-        "ix_security_audit_events_scope_time" in statement
-        for statement in statements
+        "ix_security_audit_events_scope_time" in statement for statement in statements
     )
     assert any(
-        "ix_security_audit_events_actor_scope" in statement
-        for statement in statements
+        "ix_security_audit_events_actor_scope" in statement for statement in statements
     )
 
 
@@ -537,8 +560,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                 {"user_id": smoke_user_id},
             )
             email_result = await conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO emails (
                         user_id, organization_id, message_id, sender, recipients,
                         subject, "date", body
@@ -548,8 +570,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                         :recipients, :subject, now(), :body
                     )
                     RETURNING id
-                    """
-                ),
+                    """),
                 {
                     "user_id": smoke_user_id,
                     "organization_id": smoke_organization_id,
@@ -562,8 +583,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
             )
             email_id = email_result.scalar_one()
             await conn.execute(
-                text(
-                    """
+                text("""
                     INSERT INTO ticket_tasks (
                         task_uid, user_id, organization_id, task_title,
                         status_code, priority_code, source_type, email_id,
@@ -582,8 +602,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                         :email_id, 'thread-bootstrap-smoke',
                         now() - interval '1 hour', now() - interval '1 hour'
                     )
-                    """
-                ),
+                    """),
                 {
                     "user_id": smoke_user_id,
                     "organization_id": smoke_organization_id,
@@ -592,19 +611,14 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
             )
             for statement in schema_backfill_sql():
                 await conn.execute(statement)
-            result = await conn.execute(
-                text(
-                    """
+            result = await conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'connector_signal_events'
-                    """
-                )
-            )
+                    """))
             column_names = {row[0] for row in result.fetchall()}
             duplicate_result = await conn.execute(
-                text(
-                    """
+                text("""
                     SELECT
                         count(*) OVER () AS task_count,
                         task_title
@@ -615,8 +629,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                         AND email_id = :email_id
                     ORDER BY updated_at DESC, task_id DESC
                     LIMIT 1
-                    """
-                ),
+                    """),
                 {
                     "user_id": smoke_user_id,
                     "organization_id": smoke_organization_id,
