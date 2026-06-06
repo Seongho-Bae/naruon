@@ -212,6 +212,7 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
   const { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus } = useDashboardData();
+  const calendarCandidateEvidence = useStartupSearch('일정 충돌 일정 조율 회의 후보', 3);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -453,15 +454,44 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">일정 후보 근거 {!sourceEvidenceError && calendarSources.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{calendarSources.length}개 source</span>}</h2>
+              <h2 className="text-base font-bold">
+                일정 후보 근거{' '}
+                {calendarCandidateEvidence.status === 'success'
+                  ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">일정 조율 후보 {calendarCandidateEvidence.results.length}건</span>
+                  : !sourceEvidenceError && calendarSources.length > 0
+                    ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{calendarSources.length}개 source</span>
+                    : null}
+              </h2>
             </div>
             <div className="space-y-3">
-              {sourceEvidenceError ? (
+              {calendarCandidateEvidence.status === 'loading' ? (
+                <div className="text-sm text-muted-foreground p-2">일정 조율 후보를 불러오는 중입니다.</div>
+              ) : calendarCandidateEvidence.status === 'error' ? (
+                <div className="text-sm text-muted-foreground p-2">일정 조율 후보를 불러오지 못했습니다.</div>
+              ) : calendarCandidateEvidence.status === 'success' ? (
+                calendarCandidateEvidence.results.slice(0, 3).map((candidate) => {
+                  const subject = toSafeReactText(candidate.subject?.trim() || null, '(제목 없음)');
+                  const sender = toSafeReactText(candidate.sender);
+                  const snippet = toSafeReactText(candidate.snippet);
+                  return (
+                    <article key={candidate.id} className="rounded-xl border border-blue-100 bg-blue-50/60 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{subject}</p>
+                          <p className="mt-1 truncate text-[11px] font-semibold text-blue-700">{sender}</p>
+                        </div>
+                        <span suppressHydrationWarning className="shrink-0 text-xs text-muted-foreground">{formatStartupDate(candidate.date)}</span>
+                      </div>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{snippet}</p>
+                    </article>
+                  );
+                })
+              ) : sourceEvidenceError ? (
                 <div className="text-sm text-muted-foreground p-2">일정 source registry 확인에 실패했습니다.</div>
               ) : sourceEvidenceLoading ? (
                 <div className="text-sm text-muted-foreground p-2">일정 source registry를 확인하는 중입니다.</div>
               ) : calendarSources.length === 0 ? (
-                <div className="text-sm text-muted-foreground p-2">연결된 일정 원본이 없습니다.</div>
+                <div className="text-sm text-muted-foreground p-2">검색된 일정 조율 후보와 연결된 일정 원본이 없습니다.</div>
               ) : calendarSources.slice(0, 3).map((source) => {
                 const writable = isWritableCalendarSource(source);
                 return (

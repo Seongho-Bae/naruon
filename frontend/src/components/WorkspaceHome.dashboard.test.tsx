@@ -67,6 +67,16 @@ function emptySourceEvidenceResponse(url: string) {
   return null;
 }
 
+function emptyCalendarCandidateSearchResponse(url: string) {
+  if (url.endsWith("/api/search")) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+  }
+  return null;
+}
+
 describe("WorkspaceHome Today dashboard", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -137,6 +147,8 @@ describe("WorkspaceHome Today dashboard", () => {
       }
       const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
       if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -221,6 +233,8 @@ describe("WorkspaceHome Today dashboard", () => {
       }
       const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
       if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -302,6 +316,8 @@ describe("WorkspaceHome Today dashboard", () => {
       }
       const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
       if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -434,6 +450,22 @@ describe("WorkspaceHome Today dashboard", () => {
           ]),
         });
       }
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            results: [
+              {
+                id: 601,
+                subject: "엔터프라이즈 데모 일정 조율",
+                sender: "sales@example.com",
+                date: "2026-05-18T11:00:00Z",
+                snippet: "고객 데모 후보 시간을 확정해야 합니다.",
+              },
+            ],
+          }),
+        });
+      }
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -454,6 +486,9 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(container.textContent).toContain("50%");
     expect(container.textContent).toContain("1/2 완료");
     expect(container.textContent).toContain("caldav-primary");
+    expect(container.textContent).toContain("일정 조율 후보 1건");
+    expect(container.textContent).toContain("엔터프라이즈 데모 일정 조율");
+    expect(container.textContent).toContain("고객 데모 후보 시간을 확정해야 합니다.");
     expect(container.textContent).not.toContain("오늘 일정");
     expect(container.textContent).not.toContain("진행 중 프로젝트");
     expect(container.textContent).not.toContain("이번 주 목표 진행률");
@@ -464,7 +499,13 @@ describe("WorkspaceHome Today dashboard", () => {
 
     const calendarSourceCall = fetchCalls.find((call) => call.url.endsWith("/api/calendar/writeback-sources"));
     const projectFolderCall = fetchCalls.find((call) => call.url.endsWith("/api/webdav/folders"));
-    for (const sourceCall of [calendarSourceCall, projectFolderCall]) {
+    const calendarCandidateCall = fetchCalls.find((call) => call.url.endsWith("/api/search"));
+    expect(calendarCandidateCall?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calendarCandidateCall?.init?.body))).toEqual({
+      query: "일정 충돌 일정 조율 회의 후보",
+      limit: 3,
+    });
+    for (const sourceCall of [calendarSourceCall, projectFolderCall, calendarCandidateCall]) {
       expect(sourceCall).toBeDefined();
       const headers = sourceCall?.init?.headers as Record<string, string>;
       expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
@@ -515,6 +556,8 @@ describe("WorkspaceHome Today dashboard", () => {
       if (url.endsWith("/api/calendar/writeback-sources") || url.endsWith("/api/webdav/folders")) {
         return Promise.reject(new Error("source registry unavailable"));
       }
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
