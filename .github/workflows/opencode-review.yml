@@ -61,6 +61,7 @@ jobs:
       - name: Initialize CodeGraph index for OpenCode
         env:
           CODEGRAPH_PACKAGE: "@colbymchenry/codegraph@0.9.9"
+          NPM_CONFIG_IGNORE_SCRIPTS: "true"
         run: |
           set -euo pipefail
           npx -y "$CODEGRAPH_PACKAGE" init -i

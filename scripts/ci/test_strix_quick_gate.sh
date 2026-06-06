@@ -254,6 +254,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
 	assert_file_contains "$workflow_file" "@colbymchenry/codegraph@0.9.9" "opencode review workflow pins the CodeGraph package"
+	assert_file_contains "$workflow_file" 'NPM_CONFIG_IGNORE_SCRIPTS: "true"' "opencode review workflow disables npm lifecycle scripts for CodeGraph npx"
 	assert_file_contains "$workflow_file" "init -i" "opencode review workflow builds the CodeGraph index"
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
 	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5" "opencode review tries GitHub Models GPT-5 first"
@@ -425,7 +426,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-gpt5-mini|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-gpt5-nano|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -436,7 +437,21 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/gpt-5-mini|openai/gpt-5-nano|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/openai/gpt-5.4)
+			echo "scan ok with GitHub Models fallback"
+			exit 0
+			;;
+		openai/gpt-5-mini)
+			if [ "${FAKE_STRIX_SCENARIO:?}" = "github-models-fallback-success-gpt5-nano" ]; then
+				echo "LLM CONNECTION FAILED"
+				echo "Could not establish connection to the language model."
+				echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5-mini"
+				exit 1
+			fi
+			echo "scan ok with GitHub Models fallback"
+			exit 0
+			;;
+		openai/gpt-5-nano)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -2580,10 +2595,14 @@ if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
 	cat -- "$context_file" >&2
 	exit 66
 fi
+if [ -x "$context_file" ]; then
+	echo "Error: full PR head backend context file must be copied as non-executable data" >&2
+	exit 67
+fi
 if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
 	echo "Error: full PR head context leaked trusted base content" >&2
 	cat -- "$context_file" >&2
-	exit 67
+	exit 68
 fi
 echo "scan ok with full PR head backend context"
 EOF
@@ -2608,6 +2627,7 @@ EOF
 		mkdir -p "$(dirname -- "$context_file")"
 		printf '%s\n' 'HEAD_CHANGED_CONTENT_SHOULD_BE_SCANNED' >"$changed_file"
 		printf '%s\n' 'UNTRUSTED_HEAD_CONTEXT_SHOULD_NOT_BE_SCANNED' >"$context_file"
+		chmod +x "$context_file"
 		git add .
 		git commit -qm 'head commit'
 	)
@@ -7046,14 +7066,14 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	0
 
-run_gate_case "github-models-fallback-success-gpt5-mini" \
+run_gate_case "github-models-fallback-success-gpt5-nano" \
 	"vertex_ai/missing-primary" \
 	"openai/gpt-5-mini openai/gpt-5-nano" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
-	"2" \
-	"vertex_ai/missing-primary|openai/gpt-5-mini" \
-	"<unset>|https://models.github.ai/inference" \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-nano' in [0-9]+s\\." \
+	"3" \
+	"vertex_ai/missing-primary|openai/gpt-5-mini|openai/gpt-5-nano" \
+	"<unset>|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
 	"" \
