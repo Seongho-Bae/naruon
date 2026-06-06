@@ -54,6 +54,19 @@ async function waitForCondition(condition: () => boolean) {
   throw new Error("waitForCondition timed out after 20 attempts");
 }
 
+function emptySourceEvidenceResponse(url: string) {
+  if (
+    url.endsWith("/api/calendar/writeback-sources") ||
+    url.endsWith("/api/webdav/folders")
+  ) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ([]),
+    });
+  }
+  return null;
+}
+
 describe("WorkspaceHome Today dashboard", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -122,6 +135,8 @@ describe("WorkspaceHome Today dashboard", () => {
           json: async () => ([]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -204,6 +219,8 @@ describe("WorkspaceHome Today dashboard", () => {
           json: async () => ([]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -283,6 +300,8 @@ describe("WorkspaceHome Today dashboard", () => {
           ]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -314,5 +333,136 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(linkHrefByText("AI 허브")).toBe("/ai-hub");
     expect(linkHrefByText("데이터 품질 점검")).toBe("/data");
     expect(linkHrefByText("보안 감사 로그")).toBe("/security");
+  });
+
+  it("backs Today dashboard operating metrics with source evidence instead of fixed fixture numbers", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_session_token", "signed-source-backed-home");
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      fetchCalls.push({ url, init });
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "task-source-open",
+              title: "계약 승인 확인",
+              status: "open",
+              priority: "high",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+            {
+              id: "task-source-done",
+              title: "첨부 근거 정리",
+              status: "done",
+              priority: "low",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+          ]),
+        });
+      }
+      if (url.endsWith("/api/calendar/writeback-sources")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              source_id: "caldav-primary",
+              provider: "Primary CalDAV",
+              protocol: "caldav",
+              capabilities: ["read", "write"],
+              writeback_enabled: true,
+            },
+            {
+              source_id: "calendar-readonly",
+              provider: "Read-only Calendar",
+              protocol: "local",
+              capabilities: ["read"],
+              writeback_enabled: false,
+            },
+          ]),
+        });
+      }
+      if (url.endsWith("/api/webdav/folders")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              folder_uid: "folder-roadmap",
+              project_name: "Naruon Roadmap",
+              webdav_path: "/Projects/Naruon_Roadmap",
+            },
+          ]),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("고객 계약 승인 대기") ?? false);
+
+    expect(container.textContent).toContain("일정 원본");
+    expect(container.textContent).toContain("2");
+    expect(container.textContent).toContain("1개 writeback 가능");
+    expect(container.textContent).toContain("프로젝트 원본");
+    expect(container.textContent).toContain("1개 WebDAV 폴더");
+    expect(container.textContent).toContain("작업 완료율");
+    expect(container.textContent).toContain("50%");
+    expect(container.textContent).toContain("1/2 완료");
+    expect(container.textContent).toContain("caldav-primary");
+    expect(container.textContent).not.toContain("오늘 일정");
+    expect(container.textContent).not.toContain("진행 중 프로젝트");
+    expect(container.textContent).not.toContain("이번 주 목표 진행률");
+    expect(container.textContent).not.toContain("회의 2건 예정");
+    expect(container.textContent).not.toContain("일정 충돌 알림");
+    expect(container.textContent).not.toContain("68%");
+    expect(container.textContent).not.toContain("어제 대비");
+
+    const calendarSourceCall = fetchCalls.find((call) => call.url.endsWith("/api/calendar/writeback-sources"));
+    const projectFolderCall = fetchCalls.find((call) => call.url.endsWith("/api/webdav/folders"));
+    for (const sourceCall of [calendarSourceCall, projectFolderCall]) {
+      expect(sourceCall).toBeDefined();
+      const headers = sourceCall?.init?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
+      expect(headers["X-User-Id"]).toBeUndefined();
+      expect(headers["X-Organization-Id"]).toBeUndefined();
+      expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
+    }
   });
 });

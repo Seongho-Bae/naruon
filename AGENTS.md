@@ -355,10 +355,10 @@
 
 ## Development environment and tooling defaults
 
-- If CodeGraph is not initialized for this repository, agents may ask the user
-  to approve initialization and then run `codegraph init -i`; keep the generated
-  `.codegraph/` index local unless a future repository policy explicitly says to
-  commit it.
+- If CodeGraph is not initialized for this repository, agents may run
+  `codegraph init -i` autonomously without asking first; keep generated
+  `.codegraph/` and `.cursor/rules/codegraph.mdc` artifacts local unless a
+  future repository policy explicitly says to commit them.
 - StepSecurity `harden-runner` will trigger false-positive `suspicious_file_access` lockouts on Next.js build and dev server executions (e.g., `router_init.js` checksum matches). Configure `disable-file-monitoring: true` in the `harden-runner` step rather than disabling the workflow or using `continue-on-error`.
 - Next.js 15+ Turbopack resolves workspace roots by scanning upward for `package-lock.json`. Do not create or leave a `package-lock.json` in the user's home directory (`~/`), as it will cause Turbopack to spawn infinite background worker node processes attempting to compile the entire home directory.
 - `pydantic-settings` strictly rejects unexpected environment variables by default. When sharing a common `.env` file between frontend and backend services, you must explicitly set `extra="ignore"` in the `SettingsConfigDict` to prevent fatal startup crashes.
