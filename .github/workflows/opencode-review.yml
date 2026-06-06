@@ -81,15 +81,17 @@ jobs:
             printf -- '- PR: #%s\n' "$PR_NUMBER"
             printf -- '- Base SHA: `%s`\n' "$PR_BASE_SHA"
             printf -- '- Head SHA: `%s`\n\n' "$PR_HEAD_SHA"
+            PR_MERGE_BASE="$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+            printf -- '- Merge base SHA: `%s`\n\n' "$PR_MERGE_BASE"
 
             printf '## CodeGraph evidence\n\n'
             printf 'The workflow initialized CodeGraph before this evidence file was built.\n'
             printf 'OpenCode must use the configured CodeGraph MCP tools for structural frontend review questions.\n\n'
 
             printf '## Changed files\n\n'
-            git diff --name-status "$PR_BASE_SHA" "$PR_HEAD_SHA"
+            git diff --name-status "$PR_MERGE_BASE" "$PR_HEAD_SHA"
             printf '\n## Diff stat\n\n'
-            git diff --stat --find-renames "$PR_BASE_SHA" "$PR_HEAD_SHA"
+            git diff --stat --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"
 
             printf '\n## Review inspection contract\n\n'
             printf 'Use the local checkout for exact source and diff inspection.\n'
@@ -246,6 +248,7 @@ jobs:
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
           timeout 300 opencode run "$(cat "$prompt_file")" \
+            --agent ci-review \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded review ${MODEL}" >"$OPENCODE_OUTPUT_FILE"
           sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
@@ -291,6 +294,7 @@ jobs:
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
           timeout 300 opencode run "$(cat "$prompt_file")" \
+            --agent ci-review \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$OPENCODE_OUTPUT_FILE"
           sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
@@ -336,6 +340,7 @@ jobs:
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
           timeout 300 opencode run "$(cat "$prompt_file")" \
+            --agent ci-review \
             --model "$MODEL" \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$OPENCODE_OUTPUT_FILE"
           sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
