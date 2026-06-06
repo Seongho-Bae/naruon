@@ -233,3 +233,10 @@ Test"""
         assert parsed["reply_to"] == "Reply Target <reply-target@test.com>"
     finally:
         os.unlink(temp_path)
+
+from unittest.mock import patch
+
+def test_parse_eml_mocked_oserror():
+    with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
+        with pytest.raises(EmailParseError, match="Failed to read file dummy.eml: Mocked OS Error"):
+            parse_eml("dummy.eml")
