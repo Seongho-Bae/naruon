@@ -58,6 +58,14 @@ jobs:
           "${install_dir}/opencode" --version
           echo "$install_dir" >>"$GITHUB_PATH"
 
+      - name: Initialize CodeGraph index for OpenCode
+        env:
+          CODEGRAPH_PACKAGE: "@colbymchenry/codegraph@0.9.9"
+        run: |
+          set -euo pipefail
+          npx -y "$CODEGRAPH_PACKAGE" init -i
+          npx -y "$CODEGRAPH_PACKAGE" status
+
       - name: Run OpenCode PR Review (GPT-5)
         id: opencode_review_primary
         timeout-minutes: 60
@@ -94,17 +102,23 @@ jobs:
             title, problem, root_cause, fix_direction, regression_test_direction,
             and suggested_diff.
 
+            Use the configured CodeGraph MCP tools before judging architecture,
+            impact, callers/callees, or symbol-level implementation details.
+            Cite concrete CodeGraph-derived evidence in the review summary or
+            findings when relevant, and fall back to file reads only after
+            CodeGraph cannot answer the structural question.
+
             This PR updates the Strix GitHub Models fallback path. Verify that:
             - full PR scope remains a single Strix invocation, not split scans;
             - provider failure output cannot be treated as clean evidence;
-            - GitHub Models primary failures advance to a distinct catalog-backed
-              GitHub Models fallback;
+            - GitHub Models primary failures advance to distinct catalog-backed
+              GPT-5-class GitHub Models fallbacks, not GPT-4.1;
             - shell tests cover the fallback behavior.
         run: |
           set -euo pipefail
           timeout 240 opencode github run
 
-      - name: Run OpenCode PR Review fallback (GPT-4.1)
+      - name: Run OpenCode PR Review fallback (GPT-5 mini)
         id: opencode_review_fallback
         if: steps.opencode_review_primary.outcome != 'success'
         timeout-minutes: 60
@@ -112,7 +126,7 @@ jobs:
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODEL: github-models/gpt-4.1
+          MODEL: github-models/gpt-5-mini
           USE_GITHUB_TOKEN: "true"
           SHARE: "false"
           PROMPT: |
@@ -141,12 +155,18 @@ jobs:
             title, problem, root_cause, fix_direction, regression_test_direction,
             and suggested_diff.
 
+            Use the configured CodeGraph MCP tools before judging architecture,
+            impact, callers/callees, or symbol-level implementation details.
+            Cite concrete CodeGraph-derived evidence in the review summary or
+            findings when relevant, and fall back to file reads only after
+            CodeGraph cannot answer the structural question.
+
             The GPT-5 GitHub Models route failed for this run, so this is the
-            configured OpenCode fallback review. Verify that:
+            configured GPT-5-mini OpenCode fallback review. Verify that:
             - full PR scope remains a single Strix invocation, not split scans;
             - provider failure output cannot be treated as clean evidence;
-            - GitHub Models primary failures advance to a distinct catalog-backed
-              GitHub Models fallback;
+            - GitHub Models primary failures advance to distinct catalog-backed
+              GPT-5-class GitHub Models fallbacks, not GPT-4.1;
             - shell tests cover the fallback behavior.
         run: |
           set -euo pipefail

@@ -154,7 +154,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes GitHub Models scans to the inference endpoint"
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
-	assert_file_contains "$workflow_file" "openai/gpt-4.1" "strix workflow configures a catalog-backed GitHub Models fallback model"
+	assert_file_contains "$workflow_file" "openai/gpt-5-mini openai/gpt-5-nano" "strix workflow configures stronger GPT-5-class GitHub Models fallback models"
+	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to an unsupported GitHub Models alias"
@@ -245,6 +246,27 @@ assert_strix_child_target_uses_constant_argument() {
 	assert_file_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", ".", "--scan-mode", scan_mode]' "strix gate passes a constant target argument to the child process"
 	assert_file_contains "$GATE_SCRIPT" 'cwd=str(target_cwd)' "strix gate runs the child process from the canonical target directory"
 	assert_file_not_contains "$GATE_SCRIPT" 'command = [resolved_strix_bin, "-n", "-t", target_path, "--scan-mode", scan_mode]' "strix gate must not forward raw target paths as child arguments"
+}
+
+assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
+	local workflow_file="$REPO_ROOT/.github/workflows/opencode-review.yml"
+	local opencode_config="$REPO_ROOT/opencode.jsonc"
+
+	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
+	assert_file_contains "$workflow_file" "@colbymchenry/codegraph@0.9.9" "opencode review workflow pins the CodeGraph package"
+	assert_file_contains "$workflow_file" "init -i" "opencode review workflow builds the CodeGraph index"
+	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
+	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5" "opencode review tries GitHub Models GPT-5 first"
+	assert_file_contains "$workflow_file" "MODEL: github-models/gpt-5-mini" "opencode review falls back to a GPT-5-class model"
+	assert_file_not_contains "$workflow_file" "MODEL: github-models/gpt-4.1" "opencode review must not fall back to GPT-4.1"
+
+	assert_file_contains "$opencode_config" '"mcp"' "opencode config declares MCP servers"
+	assert_file_contains "$opencode_config" '"codegraph"' "opencode config declares the CodeGraph MCP server"
+	assert_file_contains "$opencode_config" '"serve", "--mcp"' "opencode config launches CodeGraph in MCP mode"
+	assert_file_contains "$opencode_config" '"small_model": "github-models/gpt-5-mini"' "opencode config uses a GPT-5-class small model"
+	assert_file_contains "$opencode_config" '"gpt-5-mini"' "opencode config defines GPT-5 mini"
+	assert_file_contains "$opencode_config" '"gpt-5-nano"' "opencode config defines GPT-5 nano"
+	assert_file_not_contains "$opencode_config" "gpt-4.1" "opencode config must not define GPT-4.1 fallback"
 }
 
 assert_internal_pr_scope_targets() {
@@ -401,7 +423,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-gpt41|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-gpt5-mini|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -412,7 +434,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/gpt-4.1|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/gpt-5-mini|openai/gpt-5-nano|openai/openai/gpt-5.4)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -727,7 +749,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
 			exit 1
 			;;
-		openai/gpt-4.1)
+		openai/gpt-5-mini)
 			echo "scan ok after GitHub Models unavailable fallback"
 			exit 0
 			;;
@@ -745,7 +767,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service."
 			exit 1
 			;;
-		openai/gpt-4.1)
+		openai/gpt-5-mini)
 			echo "scan ok after GitHub Models rate-limit fallback"
 			exit 0
 			;;
@@ -3943,7 +3965,7 @@ echo "1" >> "${STRIX_CALL_COUNT_FILE:?}"
 exit 0
 EOF
 	chmod +x "$fake_strix"
-	printf 'openai/gpt-5.4 $(touch %s)' "$marker_file" >"$strix_llm_file"
+	printf 'openai-direct/gpt-5.4 $(touch %s)' "$marker_file" >"$strix_llm_file"
 	printf '%s' 'dummy-key' >"$llm_api_key_file"
 
 	set +e
@@ -4579,6 +4601,8 @@ assert_strix_llm_file_read_is_literal_data
 
 assert_strix_child_target_uses_constant_argument
 
+assert_opencode_review_uses_codegraph_and_gpt5_fallback
+
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
 	"src/app.py" \
@@ -4970,9 +4994,9 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-4.1' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
 	"2" \
-	"openai/gpt-5|openai/gpt-4.1" \
+	"openai/gpt-5|openai/gpt-5-mini" \
 	"https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -4993,16 +5017,16 @@ run_gate_case "github-models-primary-unavailable-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-4.1" \
+	"openai/gpt-5-mini openai/gpt-5-nano" \
 	"1"
 
 run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-4.1' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
 	"4" \
-	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-4.1" \
+	"openai/gpt-5|openai/gpt-5|openai/gpt-5|openai/gpt-5-mini" \
 	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
@@ -5023,7 +5047,7 @@ run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"" \
 	"" \
 	"__SAME_AS_FALLBACK_MODELS__" \
-	"openai/gpt-4.1" \
+	"openai/gpt-5-mini openai/gpt-5-nano" \
 	"1"
 
 run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
@@ -6988,11 +7012,11 @@ run_gate_case "github-models-fallback-requires-api-base" \
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-4.1" \
+	"openai/gpt-5-mini openai/gpt-5-nano" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-4.1' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/gpt-4.1" \
+	"vertex_ai/missing-primary|openai/gpt-5-mini" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
@@ -7020,13 +7044,13 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	0
 
-run_gate_case "github-models-fallback-success-gpt41" \
+run_gate_case "github-models-fallback-success-gpt5-mini" \
 	"vertex_ai/missing-primary" \
-	"openai/gpt-4.1" \
+	"openai/gpt-5-mini openai/gpt-5-nano" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-4.1' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'openai/gpt-5-mini' in [0-9]+s\\." \
 	"2" \
-	"vertex_ai/missing-primary|openai/gpt-4.1" \
+	"vertex_ai/missing-primary|openai/gpt-5-mini" \
 	"<unset>|https://models.github.ai/inference" \
 	"vertex_ai" \
 	"https://models.github.ai/inference" \
