@@ -231,6 +231,10 @@ export function TasksLayout() {
     { id: 'done', title: '완료', count: tasks.done.length, color: 'bg-green-100 text-green-700' },
   ];
 
+  const allTasks = useMemo(() => Object.values(tasks).flat(), [tasks]);
+  const myTasks = useMemo(() => allTasks.filter((task) => task.assignee === '김나루'), [allTasks]);
+  const delegatedTasks = useMemo(() => allTasks.filter((task) => task.assignee !== '김나루'), [allTasks]);
+
   const liveBoardCounts = useMemo(() => {
     return ticketTasks.reduce<Record<TicketTask['status'], number>>(
       (acc, task) => {
@@ -544,7 +548,7 @@ export function TasksLayout() {
         {viewMode === '내 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">내 작업 (My Tasks)</h2>
-            {Object.values(tasks).flat().filter(t => t.assignee === '김나루').map(task => (
+            {myTasks.map(task => (
               <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className={`size-3 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
@@ -562,7 +566,7 @@ export function TasksLayout() {
         {viewMode === '위임한 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">위임한 작업 (Delegation)</h2>
-            {Object.values(tasks).flat().filter(t => t.assignee !== '김나루').map(task => (
+            {delegatedTasks.map(task => (
               <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
                   <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
@@ -578,7 +582,7 @@ export function TasksLayout() {
         )}
 
         {viewMode === '작업 상세' && (() => {
-          const task = Object.values(tasks).flat().find(t => t.id === selectedTaskId);
+          const task = allTasks.find(t => t.id === selectedTaskId);
           if (!task) return <div className="p-6 text-center text-muted-foreground">작업을 선택해주세요.</div>;
           
           const priorityText = task.priority === 'urgent' ? '긴급' : task.priority === 'high' ? '우선순위 높음' : task.priority === 'normal' ? '보통' : '낮음';
