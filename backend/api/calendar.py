@@ -10,7 +10,6 @@ from api.auth import (
     AuthContext,
     get_auth_context,
     is_system_admin_role,
-    is_tenant_admin_role,
 )
 from db.models import CalendarWritebackSource
 from db.session import get_db
