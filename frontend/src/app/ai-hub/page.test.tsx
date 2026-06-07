@@ -82,7 +82,7 @@ const aiHubSurface = {
   evaluation_metrics: [
     {
       metric_key: 'provider_readiness',
-      metric_label: '모델 연결 준비도',
+      metric_label: 'Provider 준비도',
       score_value: 100,
       trend_text: '활성 모델 연결 1/1',
     },
@@ -194,7 +194,8 @@ describe('AIHubPage', () => {
     expect(container.textContent).toContain('모델 설정 열기');
 
     clickButton(container, '평가');
-    expect(container.textContent).toContain('모델 연결 준비도');
+    expect(container.textContent).toContain('연동 준비도');
+    expect(container.textContent).not.toContain('Provider 준비도');
     expect(container.textContent).toContain('활성 모델 연결 1/1');
     expect(container.textContent).toContain('평가 근거 보기');
     clickButton(container, '평가 근거 보기');

@@ -45,6 +45,7 @@
 - `CalendarLayout` now preserves customer-owned writeback source selection and signed `/api/calendar/writeback-intent` requests while hiding raw source ids, provider labels, raw ETags, audit event names, and writeback mode constants behind Korean calendar-governance labels.
 - `EmailDetail` now keeps the server-authoritative calendar writeback intent path and removes raw provider/source identifiers from the visible mail action status.
 - `EmailList` and `EmailDetail` now render untrusted email subject, sender, reply-to, snippet, and body display fields as plain text without preserving HTML-like tag markers or script block content in the UI.
+- Follow-up Korean-first polish now normalizes stale AI Hub `Provider`, `Credential`, and `source evidence` labels before rendering, changes Settings source-readiness accessibility text to Korean, and removes the remaining Calendar `source` empty-state copy.
 - `AGENTS.md` now records the CodeGraph autonomous init rule and the OpenCode review contract: general-purpose, meticulous reviews, relevant MCP use across CodeGraph/DeepWiki/Context7/web search, read-only focused source inspection, and durable Review Overview comments.
 - `.github/workflows/opencode-review.yml` now gives the OpenCode reviewer read-only file/hunk inspection permissions, removes stale subsystem-specific prompt focus, requires broader MCP-backed review coverage, and publishes `Review Overview` through an idempotent marker with PATCH updates instead of deleting the gate evidence after approval.
 
@@ -59,6 +60,12 @@
 - Real browser Home/Calendar/Mail verification passed with screenshots at `/tmp/naruon-home-uiux.png`, `/tmp/naruon-calendar-uiux.png`, and `/tmp/naruon-mail-uiux.png`.
 - Focused Mail display field tests: `npm run test -- src/components/EmailList.test.tsx src/components/EmailDetail.test.tsx`.
 - Focused Mail display lint: `npm run lint -- src/components/EmailList.tsx src/components/EmailList.test.tsx src/components/EmailDetail.tsx src/components/EmailDetail.test.tsx`.
+- Korean-first label unit tests: `npm run test -- src/app/ai-hub/page.test.tsx src/app/calendar/page.test.tsx src/app/settings/page.test.tsx`.
+- Korean-first label linting: `npm run lint -- src/components/AIHubLayout.tsx src/components/CalendarLayout.tsx src/components/SettingsLayout.tsx src/app/ai-hub/page.test.tsx`.
+- Typecheck validation after Korean-first label polish: `npm run typecheck`.
+- Clean browser AI Hub label verification: `env -u FORCE_COLOR -u NO_COLOR npm run test:e2e -- tests/e2e/ai-hub-source-surface.spec.ts --project=desktop`.
+- Clean browser Settings label verification: `env -u FORCE_COLOR -u NO_COLOR npm run test:e2e -- tests/e2e/dashboard-branding.spec.ts --project=desktop --grep "source-backed mail account settings"`.
+- Strix fallback gate follow-up: first strict provider/failure-signal fallback output now advances to the next configured fallback instead of stopping the loop; a focused harness verified the order `openai/gpt-5 -> deepseek/deepseek-r1-0528 -> deepseek/deepseek-v3-0324` with final clean success.
 - OpenCode workflow syntax: `actionlint .github/workflows/opencode-review.yml`.
 - OpenCode targeted contract assertions verified general-purpose MCP-backed prompts, read/grep read-only permissions, durable `<!-- opencode-review-overview -->` publication, PATCH update behavior, and absence of comment DELETE calls.
 - Full frontend validation after final changes: `npm run test`, `npm run lint`, `npm run typecheck`, and `POSTCSS_WORKERS=1 DISABLE_POSTCSS_WORKERS=true npm run build`.

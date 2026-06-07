@@ -294,7 +294,7 @@ export function CalendarLayout() {
               })}
               {sourceLoadStatus === 'ready' && writebackSources.length === 0 && (
                 <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-amber-700">
-                  연결된 CalDAV/CardDAV/WebDAV source가 없습니다.
+                  연결된 CalDAV/CardDAV/WebDAV 원본이 없습니다.
                 </p>
               )}
               {sourceLoadStatus === 'loading' && (

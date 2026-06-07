@@ -142,13 +142,20 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+function getKoreanFirstLabel(label: string) {
+  return label
+    .replace(/\bProvider\b/gi, '연동')
+    .replace(/\bCredential\b/gi, '인증 정보')
+    .replace(/\bsource evidence\b/gi, '원본 근거');
+}
+
 function SummaryGrid({ cards }: { cards: SummaryCard[] }) {
   return (
     <section aria-label="AI 허브 원본 기반 종합" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
         <article key={card.summary_key} className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-bold text-muted-foreground">{card.label_text}</p>
+            <p className="text-sm font-bold text-muted-foreground">{getKoreanFirstLabel(card.label_text)}</p>
             <StatusBadge stateCode={card.state_code} />
           </div>
           <p className="mt-4 text-3xl font-black text-foreground">{card.value_text}</p>
@@ -276,7 +283,7 @@ function EvaluationPanel({ metrics, onOpenRuns }: { metrics: EvaluationMetric[];
       {metrics.map((metric) => (
         <article key={metric.metric_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-base font-black">{metric.metric_label}</h2>
+            <h2 className="text-base font-black">{getKoreanFirstLabel(metric.metric_label)}</h2>
             <span className="text-2xl font-black text-primary">{metric.score_value}</span>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary">
@@ -422,7 +429,7 @@ function DecisionCheckpoint({ metrics, agents }: { metrics: EvaluationMetric[]; 
         {visibleMetrics.map((metric) => (
           <article key={metric.metric_key} className="rounded-lg border border-border bg-background p-4">
             <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-black">{metric.metric_label}</h3>
+              <h3 className="text-sm font-black">{getKoreanFirstLabel(metric.metric_label)}</h3>
               <span className="text-xl font-black text-primary">{metric.score_value}</span>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">

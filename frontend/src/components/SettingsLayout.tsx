@@ -715,7 +715,7 @@ export function SettingsLayout() {
                     ))}
                   </div>
 
-                  <section aria-label="Provider source readiness" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <section aria-label="연동 원본 준비도" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <h3 className="font-bold text-lg">원본 연결 준비 상태</h3>
