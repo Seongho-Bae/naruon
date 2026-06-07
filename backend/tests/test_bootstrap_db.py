@@ -25,6 +25,11 @@ def _get_schema_statements(monkeypatch):
     return [str(statement).lower() for statement in schema_backfill_sql()]
 
 
+def _execute_schema_backfill(sync_conn):
+    for statement in schema_backfill_sql():
+        sync_conn.execute(statement)
+
+
 def test_schema_backfill_adds_email_columns(monkeypatch):
     statements = _get_schema_statements(monkeypatch)
     assert any(
@@ -609,8 +614,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                     "email_id": email_id,
                 },
             )
-            for statement in schema_backfill_sql():
-                await conn.execute(statement)
+            await conn.run_sync(_execute_schema_backfill)
             result = await conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns
