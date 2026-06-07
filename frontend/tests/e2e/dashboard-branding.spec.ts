@@ -964,7 +964,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
     await expect(page.getByText('OAuth 로그인')).toBeVisible();
     await expect(page.getByText('원본 연결 준비 상태')).toBeVisible();
     await expect(page.getByText('Customer CalDAV 일정 원본 1')).toBeVisible();
-    await expect(page.getByLabel('Provider source readiness').getByText('WebDAV 저장소 1', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('연동 원본 준비도').getByText('WebDAV 저장소 1', { exact: true })).toBeVisible();
     await expect(page.getByText('webdav_src_primary')).toHaveCount(0);
     await expect(page.getByText('저장된 secret 유지').first()).toBeVisible();
 
