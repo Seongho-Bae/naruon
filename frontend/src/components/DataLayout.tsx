@@ -18,6 +18,13 @@ type WebdavWritebackIntentResponse = {
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'fetch_error' | 'conflict' | 'auth' | 'error';
 type WebdavAccountStatus = 'loading' | 'ready' | 'error';
 
+type WebdavAccount = {
+  source_id: string;
+  display_label: string;
+  writeback_enabled: boolean;
+  etag?: string | null;
+};
+
 type UniqueThreadIntentResponse = {
   status: string;
   candidates_checked: number;
@@ -189,6 +196,27 @@ function getSourceReadinessLabel(account: { writeback_enabled: boolean; etag?: s
   return account.etag ? '쓰기 가능 · 충돌 검사용 ETag 준비' : '쓰기 가능 · ETag 확인 필요';
 }
 
+function getWebdavAccountLabel(account: WebdavAccount, index: number) {
+  const label = account.display_label.trim();
+  if (!label || label.includes(account.source_id) || /^WebDAV source/i.test(label)) {
+    return `WebDAV 저장소 ${index + 1}`;
+  }
+  return label;
+}
+
+function getWritebackTargetLabel(result: WebdavWritebackIntentResponse, accounts: WebdavAccount[]) {
+  const accountIndex = result.source_id ? accounts.findIndex((account) => account.source_id === result.source_id) : -1;
+  if (accountIndex >= 0) {
+    return getWebdavAccountLabel(accounts[accountIndex], accountIndex);
+  }
+
+  const label = result.target_label?.trim();
+  if (!label || (result.source_id && label.includes(result.source_id)) || /^WebDAV source/i.test(label)) {
+    return '선택된 원본';
+  }
+  return label;
+}
+
 function getSurfaceStatusClass(status: SurfaceStatusCode | QualityStatusCode) {
   switch (status) {
     case 'ready':
@@ -208,13 +236,6 @@ function getSurfaceStatusClass(status: SurfaceStatusCode | QualityStatusCode) {
 
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
-  
-  interface WebdavAccount {
-    source_id: string;
-    display_label: string;
-    writeback_enabled: boolean;
-    etag?: string | null;
-  }
   
   interface ProjectFolder {
     folder_uid: string;
@@ -392,7 +413,7 @@ export function DataLayout() {
                     </div>
                   </div>
                   <div className="mt-3 grid gap-2">
-                    {webdavAccounts.map((account) => {
+                    {webdavAccounts.map((account, index) => {
                       const accountSelected = selectedWebdavAccount?.source_id === account.source_id;
                       return (
                         <button
@@ -407,7 +428,7 @@ export function DataLayout() {
                         >
                           <Server className="mt-0.5 size-4 shrink-0 text-primary" />
                           <span className="min-w-0">
-                            <span className="block break-all font-medium text-foreground">{account.display_label}</span>
+                            <span className="block break-all font-medium text-foreground">{getWebdavAccountLabel(account, index)}</span>
                             <span className="block break-all text-xs text-muted-foreground">
                               {getSourceReadinessLabel(account)}
                             </span>
@@ -609,7 +630,7 @@ export function DataLayout() {
                       </div>
                       <div>
                         <dt className="font-black text-muted-foreground">원본 선택</dt>
-                        <dd className="mt-1 break-words text-sm font-bold text-foreground">{writebackResult.target_label ?? '선택된 원본'}</dd>
+                        <dd className="mt-1 break-words text-sm font-bold text-foreground">{getWritebackTargetLabel(writebackResult, webdavAccounts)}</dd>
                       </div>
                       <div>
                         <dt className="font-black text-muted-foreground">충돌 조건</dt>

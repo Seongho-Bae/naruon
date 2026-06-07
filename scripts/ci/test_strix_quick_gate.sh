@@ -288,6 +288,12 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "general-purpose and meticulous" "opencode review prompt requires a general-purpose meticulous review"
 	assert_file_contains "$workflow_file" "use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups" "opencode review prompt directs the agent to use all configured MCP sources"
 	assert_file_contains "$workflow_file" "Inspect changed files and focused hunks directly when MCP evidence is insufficient." "opencode review allows focused direct source inspection when MCP evidence is insufficient"
+	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
+	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
+	assert_file_contains "$workflow_file" "always return a final control block instead of a progress summary" "opencode review prompt requires a gate conclusion instead of a progress summary"
+	assert_file_contains "$workflow_file" "timeout 540 opencode run" "opencode review primary model has a bounded extended timeout for larger workflow diffs"
+	assert_file_contains "$workflow_file" '"ci-review-fallback"' "opencode review workflow declares a dedicated fallback agent"
+	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
 	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
 	assert_file_contains "$workflow_file" '"grep": "allow"' "opencode review allows focused literal searches"
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
@@ -301,6 +307,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "opencode run" "opencode review workflow runs the bounded OpenCode agent path"
 	assert_file_contains "$workflow_file" 'opencode run "$(cat "$prompt_file")"' "opencode review passes the prompt as the positional message before file attachments"
 	assert_file_contains "$workflow_file" "--agent ci-review" "opencode review workflow forces the compact CI review agent"
+	assert_file_contains "$workflow_file" "--agent ci-review-fallback" "opencode review fallback runs with the expanded CI review agent"
 	assert_file_contains "$workflow_file" "--pure" "opencode review workflow avoids external OpenCode plugins during CI"
 	assert_file_contains "$workflow_file" "--format json" "opencode review workflow captures the OpenCode session id as JSON"
 	assert_file_contains "$workflow_file" "opencode export" "opencode review workflow extracts assistant text from the completed OpenCode session"
@@ -528,7 +535,7 @@ printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
 
 case "${FAKE_STRIX_SCENARIO:?}" in
-	success|runtime-env-forwarding|vertex-primary-success-timing-message)
+	success|runtime-env-forwarding|vertex-primary-success-timing-message|direct-openai-gpt-does-not-require-github-models-api-base)
 		echo "scan ok"
 		exit 0
 		;;
@@ -7126,6 +7133,17 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"" \
 	"openai" \
 	"https://models.github.ai/inference"
+
+run_gate_case "direct-openai-gpt-does-not-require-github-models-api-base" \
+	"openai/gpt-5.4" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/gpt-5.4" \
+	"<unset>" \
+	"openai" \
+	""
 
 run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"openai/gpt-5" \
