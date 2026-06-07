@@ -1,25 +1,30 @@
 import datetime
+from dataclasses import dataclass
 from typing import Optional
+
 from icalendar import Calendar, Todo
 
-def generate_ics_from_task(
-    task_uid: str,
-    title: str,
-    status: str,
-    created_at: datetime.datetime,
-    updated_at: datetime.datetime,
+
+@dataclass
+class CalendarTask:
+    task_uid: str
+    title: str
+    status: str
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
     due_date: Optional[datetime.datetime] = None
-) -> str:
+
+
+def generate_ics_from_task(task: CalendarTask) -> str:
     """
     Generates a basic CalDAV-compatible .ics (iCalendar) string for a TicketTask (VTODO).
     """
-
     ics_status = "NEEDS-ACTION"
-    if status == "in_progress":
+    if task.status == "in_progress":
         ics_status = "IN-PROCESS"
-    elif status == "done":
+    elif task.status == "done":
         ics_status = "COMPLETED"
-    elif status == "blocked":
+    elif task.status == "blocked":
         ics_status = "NEEDS-ACTION"
 
     cal = Calendar()
@@ -27,13 +32,13 @@ def generate_ics_from_task(
     cal.add('PRODID', '-//Naruon//AI Workspace//EN')
 
     todo = Todo()
-    todo.add('UID', task_uid)
-    todo.add('DTSTAMP', updated_at)
-    todo.add('SUMMARY', title)
+    todo.add('UID', task.task_uid)
+    todo.add('DTSTAMP', task.updated_at)
+    todo.add('SUMMARY', task.title)
     todo.add('STATUS', ics_status)
 
-    if due_date:
-        todo.add('DUE', due_date)
+    if task.due_date:
+        todo.add('DUE', task.due_date)
 
     cal.add_component(todo)
 

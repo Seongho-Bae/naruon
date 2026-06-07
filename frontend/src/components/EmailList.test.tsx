@@ -159,7 +159,7 @@ describe("EmailList", () => {
     expect(container.textContent).toContain("지식 정리");
   });
 
-  it("keeps untrusted email fields on the React text-node path", async () => {
+  it("renders untrusted email fields as plain display text without markup", async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(
         jsonResponse({
@@ -169,7 +169,7 @@ describe("EmailList", () => {
               sender: '<img src=x onerror=alert(1)>',
               subject: '<script>alert(1)</script>',
               date: '2026-05-11T09:30:00Z',
-              snippet: 'hello\u0000<script>alert(2)</script>',
+              snippet: 'hello\u0000<script>alert(2)</script >',
               unread: false,
               reply_count: 1,
             },
@@ -191,7 +191,12 @@ describe("EmailList", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
-    expect(container.textContent).toContain("<script>alert(1)</script>");
-    expect(container.textContent).toContain("hello�<script>alert(2)</script>");
+    expect(container.textContent).toContain("보낸 사람");
+    expect(container.textContent).toContain("(제목 없음)");
+    expect(container.textContent).toContain("hello�");
+    expect(container.textContent).not.toContain("<img");
+    expect(container.textContent).not.toContain("<script>");
+    expect(container.textContent).not.toContain("alert(1)");
+    expect(container.textContent).not.toContain("alert(2)");
   });
 });
