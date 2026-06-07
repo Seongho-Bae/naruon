@@ -400,7 +400,7 @@ describe("WorkspaceHome Today dashboard", () => {
           json: async () => ([
             {
               id: "task-source-open",
-              title: "계약 승인 확인",
+              title: "<script>계약 승인 확인</script>",
               status: "open",
               priority: "high",
               created_at: "2026-05-17T09:00:00Z",
@@ -427,6 +427,7 @@ describe("WorkspaceHome Today dashboard", () => {
               protocol: "caldav",
               capabilities: ["read", "write"],
               writeback_enabled: true,
+              etag: "etag-home-1",
             },
             {
               source_id: "calendar-readonly",
@@ -479,13 +480,15 @@ describe("WorkspaceHome Today dashboard", () => {
 
     expect(container.textContent).toContain("일정 원본");
     expect(container.textContent).toContain("2");
-    expect(container.textContent).toContain("1개 writeback 가능");
+    expect(container.textContent).toContain("1개 일정 반영 가능");
+    expect(container.textContent).toContain("일정 원본 1");
+    expect(container.textContent).toContain("충돌 토큰 있음");
     expect(container.textContent).toContain("프로젝트 원본");
     expect(container.textContent).toContain("1개 WebDAV 폴더");
     expect(container.textContent).toContain("작업 완료율");
     expect(container.textContent).toContain("50%");
     expect(container.textContent).toContain("1/2 완료");
-    expect(container.textContent).toContain("caldav-primary");
+    expect(container.textContent).toContain("계약 승인 확인");
     expect(container.textContent).toContain("일정 조율 후보 1건");
     expect(container.textContent).toContain("엔터프라이즈 데모 일정 조율");
     expect(container.textContent).toContain("고객 데모 후보 시간을 확정해야 합니다.");
@@ -496,6 +499,11 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(container.textContent).not.toContain("일정 충돌 알림");
     expect(container.textContent).not.toContain("68%");
     expect(container.textContent).not.toContain("어제 대비");
+    expect(container.textContent).not.toContain("<script>");
+    expect(container.textContent).not.toContain("caldav-primary");
+    expect(container.textContent).not.toContain("calendar-readonly");
+    expect(container.textContent).not.toContain("Primary CalDAV");
+    expect(container.textContent).not.toContain("Read-only Calendar");
 
     const calendarSourceCall = fetchCalls.find((call) => call.url.endsWith("/api/calendar/writeback-sources"));
     const projectFolderCall = fetchCalls.find((call) => call.url.endsWith("/api/webdav/folders"));
@@ -567,11 +575,11 @@ describe("WorkspaceHome Today dashboard", () => {
     await act(async () => {
       root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
     });
-    await waitForCondition(() => container?.textContent?.includes("일정 source registry 확인에 실패했습니다.") ?? false);
+    await waitForCondition(() => container?.textContent?.includes("일정 원본 목록 확인에 실패했습니다.") ?? false);
 
     expect(container.textContent).toContain("일정 원본 확인 필요");
     expect(container.textContent).toContain("오류");
-    expect(container.textContent).toContain("source registry 응답을 확인할 수 없습니다.");
+    expect(container.textContent).toContain("일정 원본 목록 응답을 확인할 수 없습니다.");
     expect(container.textContent).not.toContain("연결된 일정 원본이 없습니다.");
   });
 });
