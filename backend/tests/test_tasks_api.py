@@ -368,6 +368,20 @@ def test_create_ticket_tasks_accepts_signed_bearer_session():
     assert "organization_id" not in body["tasks"][0]
 
 
+def test_reply_sla_escalation_rejects_invalid_policy_payload(auth_client):
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 0, "limit": 51, "unexpected": True},
+    )
+
+    assert response.status_code == 422
+    error_locations = {tuple(error["loc"]) for error in response.json()["detail"]}
+    assert ("body", "overdue_hours") in error_locations
+    assert ("body", "limit") in error_locations
+    assert ("body", "unexpected") in error_locations
+    assert mock_session.tasks == []
+
+
 def test_reply_sla_escalation_accepts_signed_bearer_session():
     now = datetime.datetime.now(datetime.timezone.utc)
     mock_session.emails[21] = make_email(
