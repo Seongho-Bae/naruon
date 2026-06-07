@@ -111,3 +111,47 @@ def test_thread_reply_candidate_preserves_strict_later_reply_boundary():
     )
 
     assert candidate is sent_message
+
+
+def test_configured_email_addresses_handles_none():
+    from services.reply_tracking_service import configured_email_addresses
+    assert configured_email_addresses(None) == set()
+
+
+def test_thread_reply_candidate_returns_none_when_no_user_addresses():
+    sent_message = make_email(
+        "sent_needs_reply",
+        sender="me@example.com",
+        recipients="client@example.com",
+        minutes=0,
+    )
+    assert thread_reply_candidate([sent_message], set()) is None
+
+
+def test_thread_requires_reply_returns_true_when_candidate_exists():
+    from services.reply_tracking_service import thread_requires_reply
+    sent_message = make_email(
+        "sent_needs_reply",
+        sender="me@example.com",
+        recipients="client@example.com",
+        minutes=0,
+    )
+    assert thread_requires_reply([sent_message], USER_ADDRESSES) is True
+
+
+def test_thread_requires_reply_returns_false_when_no_candidate():
+    from services.reply_tracking_service import thread_requires_reply
+    sent_message = make_email(
+        "sent_needs_reply",
+        sender="me@example.com",
+        recipients="client@example.com",
+        minutes=0,
+    )
+    later_external_reply = make_email(
+        "external_later",
+        sender="client@example.com",
+        recipients="me@example.com",
+        minutes=1,
+        body="I will handle it.",
+    )
+    assert thread_requires_reply([sent_message, later_external_reply], USER_ADDRESSES) is False
