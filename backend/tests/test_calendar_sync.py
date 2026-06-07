@@ -19,6 +19,8 @@ def test_generate_ics_from_task():
     )
 
     assert "BEGIN:VCALENDAR" in ics_content
+    assert "VERSION:2.0" in ics_content
+    assert "PRODID:-//Naruon//AI Workspace//EN" in ics_content
     assert "BEGIN:VTODO" in ics_content
     assert "UID:abc-123" in ics_content
     assert "SUMMARY:Review Q2 Marketing Report" in ics_content
