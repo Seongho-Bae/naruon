@@ -6,6 +6,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("lucide-react", () => ({
   Search: () => <svg aria-hidden="true" />,
   Mail: () => <svg aria-hidden="true" />,
+  CalendarDays: () => <svg aria-hidden="true" />,
+  FileText: () => <svg aria-hidden="true" />,
+  Sparkles: () => <svg aria-hidden="true" />,
   UserRound: () => <svg aria-hidden="true" />,
   Network: () => <svg aria-hidden="true" />,
   Clock: () => <svg aria-hidden="true" />,
@@ -59,6 +62,16 @@ function lowerCaseHeaders(headers: HeadersInit | undefined) {
   return Object.fromEntries(
     Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
   );
+}
+
+function clickButton(container: HTMLElement, label: string) {
+  const button = Array.from(container.querySelectorAll("button")).find((node) =>
+    node.textContent?.includes(label),
+  );
+  expect(button).not.toBeUndefined();
+  act(() => {
+    button?.click();
+  });
 }
 
 describe("SearchPage", () => {
@@ -150,10 +163,25 @@ describe("SearchPage", () => {
     expect(container.textContent).toContain("Q2 출시 계획 및 우선순위 조정");
     expect(container.textContent).toContain("thread-q2");
     expect(container.textContent).toContain("답장 3건");
+    expect(container.textContent).toContain("신뢰도 87%");
+    expect(container.textContent).toContain("증거 바인딩");
+    expect(container.textContent).toContain("맥락 정보");
+    expect(container.textContent).toContain("메일 열기");
     expect(container.textContent).toContain("관계 그래프와 타임라인");
     expect(container.textContent).toContain("발신자 DAG");
     expect(container.textContent).toContain("track_reply_and_tasks");
     expect(container.textContent).toContain("source=<q2@example.com>");
+    expect(container.querySelector("#search-detail-tab-context")?.getAttribute("aria-controls")).toBe("search-detail-panel-context");
+    expect(container.querySelector("#search-detail-panel-context")?.getAttribute("role")).toBe("tabpanel");
+
+    clickButton(container, "관계 원본");
+    expect(container.querySelector("#search-detail-panel-source")?.getAttribute("aria-labelledby")).toBe("search-detail-tab-source");
+    expect(container.textContent).toContain("관계 상태");
+    expect(container.textContent).toContain("1개 관계 연결");
+
+    clickButton(container, "판단 보조");
+    expect(container.querySelector("#search-detail-panel-assist")?.getAttribute("aria-labelledby")).toBe("search-detail-tab-assist");
+    expect(container.textContent).toContain("외부 실행은 사용자가 메일, 일정, 관계 캡처 액션을 명시적으로 선택할 때만 진행됩니다.");
 
     const searchCall = fetchMock.mock.calls.find(([input]) =>
       String(input).endsWith("/api/search"),

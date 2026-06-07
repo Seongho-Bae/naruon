@@ -13,10 +13,10 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await expect(page.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
   await expect(page.getByText('2개 실행 항목')).toBeVisible();
   await expect(page.getByText('2개 메시지').nth(1)).toBeVisible();
-  await expect(page.getByText('1개 노드와 1개 관계')).toBeVisible();
+  await expect(page.getByText('2개 노드와 1개 관계')).toBeVisible();
 
   await page.getByRole('button', { name: '일정 반영' }).last().click();
-  await expect(page.getByText('2개 일정 writeback intent를 Customer CalDAV 원본에 요청했습니다.')).toBeVisible();
+  await expect(page.getByText('2개 일정 반영 의도를 선택한 원본 계정에 요청했습니다.')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI 답장 초안' }).last().click();
   await expect(page.getByLabel('답장 초안')).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
@@ -32,7 +32,7 @@ test('submits branded inbox search against the search API', async ({ page }, tes
   await page.goto('/');
   await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
-  await desktopWorkspace.getByLabel('Search emails').fill('출시');
+  await desktopWorkspace.getByLabel('메일 검색').fill('출시');
   await desktopWorkspace.getByRole('button', { name: '검색' }).click();
 
   await expect(desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
