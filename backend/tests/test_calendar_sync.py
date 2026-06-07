@@ -22,9 +22,25 @@ def test_generate_ics_from_task():
     ics_content = generate_ics_from_task(task)
 
     assert "BEGIN:VCALENDAR" in ics_content
+    assert "VERSION:2.0" in ics_content
+    assert "PRODID:-//Naruon//AI Workspace//EN" in ics_content
     assert "BEGIN:VTODO" in ics_content
     assert "UID:abc-123" in ics_content
     assert "SUMMARY:Review Q2 Marketing Report" in ics_content
     assert "STATUS:IN-PROCESS" in ics_content
     assert "DUE:20260525T150000Z" in ics_content
     assert "END:VTODO" in ics_content
+
+
+def test_generate_ics_from_task_escapes_summary_text():
+    task = CalendarTask(
+        task_uid="escape-1",
+        title="Review, Q2; follow\\up\nnotes",
+        status="in_progress",
+        created_at=datetime.datetime(2026, 5, 23, 10, 0, tzinfo=datetime.timezone.utc),
+        updated_at=datetime.datetime(2026, 5, 23, 11, 0, tzinfo=datetime.timezone.utc),
+    )
+
+    ics_content = generate_ics_from_task(task)
+
+    assert "SUMMARY:Review\\, Q2\\; follow\\\\up\\nnotes" in ics_content
