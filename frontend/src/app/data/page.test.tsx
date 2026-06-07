@@ -497,6 +497,63 @@ describe("DataPage", () => {
     expect(container.textContent).not.toContain("demo_user");
   });
 
+  it("sanitizes WebDAV source labels that contain opaque source ids", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-source-label-session");
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path === "/api/data/quality-surface") return jsonResponse(dataQualitySurface);
+      if (path === "/api/webdav/accounts") {
+        void init;
+        return jsonResponse([
+          {
+            source_id: "webdav_src_primary",
+            display_label: "WebDAV source webdav_src_primary",
+            writeback_enabled: true,
+            etag: "etag-webdav-primary",
+          },
+        ]);
+      }
+      if (path === "/api/webdav/folders") return jsonResponse([]);
+      if (path === "/api/webdav/writeback-intent") {
+        return jsonResponse({
+          intent: "writeback",
+          source_id: "webdav_src_primary",
+          target_label: "WebDAV source webdav_src_primary",
+          requires_if_match: true,
+          if_match: "etag-webdav-primary",
+          provenance: "server-authoritative",
+        });
+      }
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    expect(container.textContent).toContain("WebDAV 저장소 1");
+    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("webdav_src_primary");
+
+    const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("WebDAV 반영 의도 점검"),
+    );
+    expect(button).toBeDefined();
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("서버 확인");
+    expect(container.textContent).toContain("WebDAV 저장소 1");
+    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("webdav_src_primary");
+  });
+
   it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
     localStorage.setItem("naruon_session_token", "signed-webdav-conflict-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
