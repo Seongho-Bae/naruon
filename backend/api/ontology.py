@@ -37,7 +37,7 @@ class RelationshipCreate(BaseModel):
 
 
 class RelationshipCaptureRequest(BaseModel):
-    source_message_id: str = Field(min_length=1, max_length=512)
+    source_message_id: str = Field(min_length=1, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$")
 
 
 def _email_owner_filters(auth_ctx: AuthContext):
@@ -74,8 +74,8 @@ def _relationship_user_email(auth_ctx: AuthContext) -> str:
 
 @router.get("/relationships", response_model=List[RelationshipResponse])
 async def get_relationships(
-    source_message_id: str | None = Query(default=None),
-    source_thread_id: str | None = Query(default=None),
+    source_message_id: str | None = Query(default=None, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$"),
+    source_thread_id: str | None = Query(default=None, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$"),
     auth_ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):

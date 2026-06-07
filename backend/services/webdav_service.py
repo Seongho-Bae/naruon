@@ -22,12 +22,23 @@ async def sync_webdav_folders(session, user_id: str):
     """
     from db.models import WebdavAccount
     from sqlalchemy import select
+    from core.url_validation import _reject_unsafe_ip_literal
+    from urllib.parse import urlsplit
     
     logger.info(f"Syncing WebDAV folders for user {user_id}")
     stmt = select(WebdavAccount).where(WebdavAccount.user_id == user_id)
     res = await session.execute(stmt)
     accounts = res.scalars().all()
     for account in accounts:
+        try:
+            if account.server_url:
+                parsed = urlsplit(account.server_url)
+                if parsed.hostname:
+                    _reject_unsafe_ip_literal("WebDAV server_url", parsed.hostname)
+        except ValueError as exc:
+            logger.warning(f"Invalid WebDAV server URL for source {account.source_uid}: {exc}")
+            continue
+
         logger.info(
             "Fetched folder structures for WebDAV source %s",
             account.source_uid or "unknown",
