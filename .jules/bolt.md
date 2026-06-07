@@ -13,3 +13,6 @@
 ## 2024-05-18 - Optimized N+1 queries in IntegrityError fallback
 **Learning:** We had an N+1 query vulnerability when iterating inside a db `except IntegrityError:` loop where `TicketTask` lookups were happening one by one.
 **Action:** When performing bulk fallback or conflict resolution, batch the lookup queries by using `.in_` to retrieve existing items into an in-memory dictionary.
+## 2026-06-06 - Refactoring repetitive assert any loops
+**Learning:** Repetitive single-statement `assert any(...)` calls can be cleanly refactored into an `expected_substrings` list that loops over assertions. When extracting strings to build the list, it's very helpful to use `re.sub()` to simultaneously capture strings via a replacer function while replacing the matches with placeholders, and then substitute the newly generated list block into the code.
+**Action:** Always prefer lists and loops over repeated code structures when possible, maintaining test readability.

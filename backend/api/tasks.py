@@ -240,6 +240,7 @@ async def create_reply_sla_escalations(
         created_count = 0
         escalated_tasks.clear()
 
+        # Re-fetch the existing tasks to find the newly inserted ones
         fallback_existing_result = await db.execute(
             select(TicketTask)
             .where(
@@ -266,7 +267,7 @@ async def create_reply_sla_escalations(
                     task.updated_at = now
                     await db.commit()
                     await db.refresh(task)
-                escalated_tasks.append((task, email.message_id))
+
             else:
                 task = TicketTask(
                     user_id=auth_context.user_id,
@@ -314,7 +315,7 @@ async def create_reply_sla_escalations(
                         task.updated_at = now
                         await db.commit()
                         await db.refresh(task)
-                escalated_tasks.append((task, email.message_id))
+            escalated_tasks.append((task, email.message_id))
 
     return ReplySlaEscalationResponse(
         evaluated=len(pending_replies),
