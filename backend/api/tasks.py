@@ -265,8 +265,6 @@ async def create_reply_sla_escalations(
                     task.priority = "urgent"
                     task.related_thread_id = canonical_thread_key(email)
                     task.updated_at = now
-                    await db.commit()
-                    await db.refresh(task)
             else:
                 task = TicketTask(
                     user_id=auth_context.user_id,
@@ -279,12 +277,11 @@ async def create_reply_sla_escalations(
                     related_thread_id=canonical_thread_key(email),
                 )
                 try:
-                    db.add(task)
-                    await db.commit()
-                    await db.refresh(task)
+                    async with db.begin_nested():
+                        db.add(task)
+                        await db.flush()
                     created_count += 1
                 except IntegrityError:
-                    await db.rollback()
                     existing_result = await db.execute(
                         select(TicketTask)
                         .where(
@@ -312,9 +309,34 @@ async def create_reply_sla_escalations(
                         task.priority = "urgent"
                         task.related_thread_id = canonical_thread_key(email)
                         task.updated_at = now
-                        await db.commit()
-                        await db.refresh(task)
             escalated_tasks.append((task, email.message_id))
+
+        if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):
+            await db.commit()
+
+            # Refetch updated values efficiently
+            refreshed_result = await db.execute(
+                select(TicketTask)
+                .where(
+                    TicketTask.user_id == auth_context.user_id,
+                    TicketTask.organization_id == auth_context.organization_id,
+                    TicketTask.related_email_id.in_(email_ids),
+                    TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+                )
+                .order_by(TicketTask.updated_at.desc())
+            )
+            refreshed_tasks_by_email = {
+                t.related_email_id: t for t in refreshed_result.scalars().all()
+            }
+
+            # Replace un-refreshed tasks to avoid validation errors.
+            for i in range(len(escalated_tasks)):
+                task, message_id = escalated_tasks[i]
+                if task.related_email_id in refreshed_tasks_by_email:
+                    escalated_tasks[i] = (
+                        refreshed_tasks_by_email[task.related_email_id],
+                        message_id,
+                    )
 
     return ReplySlaEscalationResponse(
         evaluated=len(pending_replies),
