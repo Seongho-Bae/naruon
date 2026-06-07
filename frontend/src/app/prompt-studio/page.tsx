@@ -12,11 +12,11 @@ export default function PromptStudioPage() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    content: '핵심 맥락을 종합해주세요: {{email}}',
+    content: '요약해주세요: {{email}}',
     is_shared: false
   });
   
-  const [testVariable, setTestVariable] = useState('메일 내용 예시입니다.');
+  const [testVariable, setTestVariable] = useState('이메일 내용 예시입니다.');
   const [testResult, setTestResult] = useState('');
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);

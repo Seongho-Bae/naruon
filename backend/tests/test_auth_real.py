@@ -104,7 +104,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "member",
+        "role": "tenant_admin",
         "org": "org-acme",
         "groups": ["group-1", "group-2"],
         "workspace": "workspace-org-acme",
@@ -145,7 +145,7 @@ def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
 
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            return client.get("/api/runtime-config", headers=headers)
+            return client.get("/api/runner-config", headers=headers)
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -238,7 +238,7 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 
     assert context == AuthContext(
         user_id="alice",
-        role="member",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
@@ -540,7 +540,7 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             response = client.get(
-                "/api/runtime-config",
+                "/api/runner-config",
                 headers={
                     "Authorization": f"Bearer {token}",
                     "X-User-Id": "attacker",
@@ -554,8 +554,8 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
         app.dependency_overrides.update(original_overrides)
 
     assert response.status_code == 200
-    assert response.json()["product_name"] == "Naruon"
-
+    assert response.json()["workspace_id"] == "workspace-org-acme"
+    assert response.json()["configured"] is False
 
 
 def test_auth_dependency_overrides_are_opt_in_by_default():
@@ -714,7 +714,7 @@ def test_admin_user_id_is_rejected_without_verified_identity_provider():
 def test_ensure_organization_access_rejects_cross_scope_resource():
     context = AuthContext(
         user_id="alice",
-        role="member",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1",),
         workspace_id="workspace-org-acme",
@@ -818,7 +818,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
             "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "alice",
-            "role": "member",
+            "role": "tenant_admin",
             "org": "org-acme",
             "groups": ["group-1", "group-2"],
             "workspace": "workspace-org-acme",
@@ -839,7 +839,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
         settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
     assert context.user_id == "alice"
-    assert context.role == "member"
+    assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
     assert context.session_verifier == "oidc"
 

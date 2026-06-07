@@ -231,10 +231,6 @@ export function TasksLayout() {
     { id: 'done', title: '완료', count: tasks.done.length, color: 'bg-green-100 text-green-700' },
   ];
 
-  const allTasks = useMemo(() => Object.values(tasks).flat(), [tasks]);
-  const myTasks = useMemo(() => allTasks.filter((task) => task.assignee === '김나루'), [allTasks]);
-  const delegatedTasks = useMemo(() => allTasks.filter((task) => task.assignee !== '김나루'), [allTasks]);
-
   const liveBoardCounts = useMemo(() => {
     return ticketTasks.reduce<Record<TicketTask['status'], number>>(
       (acc, task) => {
@@ -255,7 +251,7 @@ export function TasksLayout() {
       {/* Top Header */}
       <header className="flex shrink-0 flex-col gap-3 border-b border-border bg-card px-4 py-3 lg:h-16 lg:flex-row lg:items-center lg:justify-between lg:px-6 lg:py-0">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center lg:gap-6">
-          <h1 className="text-xl font-bold">실행 항목 추적</h1>
+          <h1 className="text-xl font-bold">할 일 추적</h1>
           <p className="sr-only">리소스 배정 검토 회의</p>
           <div className="flex max-w-full overflow-x-auto rounded-md border border-border">
             {['내 작업', '위임한 작업', '칸반', '작업 상세'].map((mode) => (
@@ -502,7 +498,7 @@ export function TasksLayout() {
                     <h2 className="font-bold text-sm">{col.title}</h2>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${col.color}`}>{col.count}</span>
                   </div>
-                  <button type="button" aria-label="더보기" className="text-muted-foreground hover:text-foreground"><MoreHorizontal className="size-4" /></button>
+                  <button type="button" aria-label={`${col.title} 더보기`} className="rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><MoreHorizontal className="size-4" /></button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-3">
                   {tasks[col.id as keyof typeof MOCK_TASKS].map((task) => (
@@ -524,10 +520,10 @@ export function TasksLayout() {
                             <CalendarDays className="size-3.5" />
                             <span className={task.due.includes('오늘') ? 'text-red-500' : ''}>{task.due}</span>
                           </div>
-                          <div className="flex items-center gap-1" title="작업 출처">
+                          <button type="button" className="flex items-center gap-1 hover:text-primary transition-colors cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" aria-label={`이메일 출처 바로가기: ${task.source}`}>
                             {col.id === 'blocked' ? <AlertCircle className="size-3.5" /> : <Inbox className="size-3.5" />}
-                            <span>{task.source}</span>
-                          </div>
+                            <span className="underline decoration-muted-foreground/30 underline-offset-2">{task.source}</span>
+                          </button>
                         </div>
                         <div className="flex items-center justify-center size-6 rounded-full bg-primary/10 text-primary" title={task.assignee}>
                           <User className="size-3.5" />
@@ -548,17 +544,17 @@ export function TasksLayout() {
         {viewMode === '내 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">내 작업 (My Tasks)</h2>
-            {myTasks.map(task => (
-              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
+            {Object.values(tasks).flat().filter(t => t.assignee === '김나루').map(task => (
+              <button type="button" key={task.id} className="w-full text-left flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
-                  <div className={`size-3 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
-                  <div>
-                    <h3 className="font-bold text-sm">{task.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">마감: {task.due} | 출처: {task.source}</p>
+                  <div className={`size-3 shrink-0 rounded-full ${task.priority === 'urgent' ? 'bg-red-500' : task.priority === 'high' ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm truncate">{task.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">마감: {task.due} | 출처: {task.source}</p>
                   </div>
                 </div>
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${task.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-secondary text-secondary-foreground'}`}>{task.status}</span>
-              </div>
+                <span className={`shrink-0 ml-4 px-2 py-1 rounded-full text-xs font-bold ${task.status === 'done' ? 'bg-green-100 text-green-700' : 'bg-secondary text-secondary-foreground'}`}>{task.status}</span>
+              </button>
             ))}
           </div>
         )}
@@ -566,23 +562,23 @@ export function TasksLayout() {
         {viewMode === '위임한 작업' && (
           <div className="space-y-4 max-w-4xl mx-auto">
             <h2 className="font-bold text-lg mb-4">위임한 작업 (Delegation)</h2>
-            {delegatedTasks.map(task => (
-              <div key={task.id} className="flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
+            {Object.values(tasks).flat().filter(t => t.assignee !== '김나루').map(task => (
+              <button type="button" key={task.id} className="w-full text-left flex items-center justify-between p-4 rounded-xl border border-border bg-card shadow-sm hover:border-primary/50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" onClick={() => { setSelectedTaskId(task.id); setViewMode('작업 상세'); }}>
                 <div className="flex items-center gap-4">
-                  <div className="size-8 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
-                  <div>
-                    <h3 className="font-bold text-sm">{task.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">담당자: {task.assignee} | 마감: {task.due}</p>
+                  <div className="size-8 shrink-0 rounded-full bg-primary/10 text-primary grid place-items-center text-xs font-bold">{task.assignee.charAt(0)}</div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm truncate">{task.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">담당자: {task.assignee} | 마감: {task.due}</p>
                   </div>
                 </div>
-                <span className="px-2 py-1 rounded-full text-xs font-bold bg-secondary text-secondary-foreground">{task.status}</span>
-              </div>
+                <span className="shrink-0 ml-4 px-2 py-1 rounded-full text-xs font-bold bg-secondary text-secondary-foreground">{task.status}</span>
+              </button>
             ))}
           </div>
         )}
 
         {viewMode === '작업 상세' && (() => {
-          const task = allTasks.find(t => t.id === selectedTaskId);
+          const task = Object.values(tasks).flat().find(t => t.id === selectedTaskId);
           if (!task) return <div className="p-6 text-center text-muted-foreground">작업을 선택해주세요.</div>;
           
           const priorityText = task.priority === 'urgent' ? '긴급' : task.priority === 'high' ? '우선순위 높음' : task.priority === 'normal' ? '보통' : '낮음';
@@ -617,7 +613,7 @@ export function TasksLayout() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-semibold mb-1">출처</p>
-                <div className="flex items-center gap-2 text-sm font-bold">
+                <div className="flex items-center gap-2 text-sm font-bold hover:text-primary cursor-pointer underline underline-offset-2 decoration-muted-foreground/30">
                   <Inbox className="size-4" /> {task.source}
                 </div>
               </div>

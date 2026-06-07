@@ -277,7 +277,7 @@ describe("SettingsLayout", () => {
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     expect(container.textContent).toContain("Self-hosted connector manifest");
-    expect(container.textContent).toContain("Naruon은 메일 서버가 아닙니다");
+    expect(container.textContent).toContain("Naruon은 이메일 서버가 아닙니다");
     expect(container.textContent).toContain("self-hosted_connector");
     expect(container.textContent).toContain("outbound_only");
     expect(container.textContent).toContain("naruon.net");

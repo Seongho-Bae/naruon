@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   Clock,
   CornerDownRight,
-  Loader2,
   Mail,
   Network,
   Search,
@@ -147,11 +146,8 @@ function SenderDagPanel({
               type="button"
               onClick={onCapture}
               disabled={captureStatus === "loading"}
-              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto inline-flex items-center justify-center"
+              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
             >
-              {captureStatus === "loading" && (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              )}
               {captureStatus === "loading" ? "캡처 중" : "발신자 관계 캡처"}
             </button>
           </div>
@@ -454,6 +450,7 @@ export function SearchLayout() {
             />
             <input
               type="search"
+              aria-label="맥락 검색어 입력"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..."
@@ -462,9 +459,10 @@ export function SearchLayout() {
           </div>
           <button
             type="submit"
-            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+            disabled={loading}
+            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            검색
+            {loading ? "검색 중..." : "검색"}
           </button>
         </form>
       </header>
@@ -583,7 +581,7 @@ export function SearchLayout() {
                     />
                     <div className="my-4 border-t border-border" />
                     <h4 className="mb-3 text-sm font-black text-foreground">
-                      관계 맥락
+                      네트워크 그래프
                     </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
                       <NetworkGraph />

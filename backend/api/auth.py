@@ -132,7 +132,7 @@ RoleName = Literal[
     "group_admin",
     "member",
 ]
-SessionVerifier = Literal["hmac", "oidc", "override", "server"]
+SessionVerifier = Literal["hmac", "oidc", "override"]
 ALLOWED_ROLES: set[str] = {
     "system_admin",
     "tenant_admin",
@@ -319,8 +319,6 @@ def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None
     # externally supplied HMAC or enterprise OIDC session claims.
     if role_claim in SYSTEM_ADMIN_ROLES:
         raise _authentication_error()
-    if role_claim in TENANT_ADMIN_ROLES:
-        raise _authentication_error()
 
 
 def _required_string_claim(payload: dict[str, Any], name: str) -> str:
@@ -379,8 +377,6 @@ def _auth_context_from_session_payload(
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
     role = cast(RoleName, role_value)
-    if role in TENANT_ADMIN_ROLES and session_verifier not in ("server", "override"):
-        raise _authentication_error()
     organization_id = _optional_string_claim(payload, "org")
     if not is_system_admin_role(role) and organization_id is None:
         raise _authentication_error()

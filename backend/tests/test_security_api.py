@@ -148,7 +148,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "admin",
-        "role": "member",
+        "role": "tenant_admin",
         "org": "org-acme",
         "groups": ["group-security"],
         "workspace": "workspace-org-acme",

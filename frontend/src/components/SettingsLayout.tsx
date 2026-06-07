@@ -262,7 +262,7 @@ const settingsDetailSurfaces: Partial<Record<SettingsTab, {
   },
   자동화: {
     heading: '자동화 규칙',
-    copy: '메일, 일정, 실행 항목, 프로젝트 상태를 source-linked rule로 연결하되 provider write는 명시적 intent로 남깁니다.',
+    copy: '메일, 일정, 할 일, 프로젝트 상태를 source-linked rule로 연결하되 provider write는 명시적 intent로 남깁니다.',
     items: [
       { title: '메일에서 작업 생성', detail: '실행 항목을 ticket task로 만들고 원본 message/thread provenance를 유지합니다.', status: 'source-linked' },
       { title: '캘린더 writeback', detail: 'AI가 정리한 일정은 source capability와 owner policy를 확인한 뒤 원천 계정에 반영합니다.', status: 'intent-first' },
@@ -275,7 +275,7 @@ const settingsDetailSurfaces: Partial<Record<SettingsTab, {
     items: [
       { title: '워크스페이스 quota', detail: '메일 본문 저장소가 아니라 metadata/index/action intent 중심으로 사용량을 계산합니다.', status: 'data sovereignty' },
       { title: 'Connector seat', detail: '사내망 connector는 조직 스코프별 등록 토큰과 운영 감사 대상으로 계산합니다.', status: 'B2B2C' },
-      { title: 'AI 사용량', detail: '프롬프트 실행, 평가, 맥락 종합, writeback 제안을 provider별 비용 항목으로 분리합니다.', status: 'BYOK' },
+      { title: 'AI 사용량', detail: '프롬프트 실행, 평가, 요약, writeback 제안을 provider별 비용 항목으로 분리합니다.', status: 'BYOK' },
     ],
   },
 };
@@ -551,8 +551,8 @@ export function SettingsLayout() {
                     <p className="text-sm text-muted-foreground mb-4">로그인 시 처음 보여질 메인 화면을 선택하세요.</p>
                     <div className="grid grid-cols-3 gap-4">
                       {[
-                        { label: '홈', value: 'dashboard', desc: '오늘의 맥락 종합과 실행 항목' },
-                        { label: '메일', value: 'email', desc: '인박스 중심으로 확인' },
+                        { label: '대시보드', value: 'dashboard', desc: '오늘의 요약과 실행 항목' },
+                        { label: '이메일', value: 'email', desc: '인박스 중심으로 확인' },
                         { label: '일정 관리', value: 'calendar', desc: '오늘의 회의와 스케줄 확인' }
                       ].map((view) => (
                         <button type="button"
@@ -580,7 +580,7 @@ export function SettingsLayout() {
               <div className="space-y-6">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <h2 className="font-bold text-xl">메일 및 캘린더 커넥터</h2>
+                    <h2 className="font-bold text-xl">이메일 및 캘린더 커넥터</h2>
                     <p className="text-sm text-muted-foreground mt-1">
                       회원이 지정한 SMTP/IMAP/POP3/OAuth provider를 사용합니다. Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다.
                     </p>
@@ -807,7 +807,7 @@ export function SettingsLayout() {
                     <div>
                       <h3 className="font-bold text-lg">Self-hosted connector manifest</h3>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        Naruon은 메일 서버가 아닙니다. 고객망의 self-hosted connector가 outbound-only로 naruon.net control plane에 연결해 IMAP/SMTP/CalDAV/WebDAV 접근을 중계합니다.
+                        Naruon은 이메일 서버가 아닙니다. 고객망의 self-hosted connector가 outbound-only로 naruon.net control plane에 연결해 IMAP/SMTP/CalDAV/WebDAV 접근을 중계합니다.
                       </p>
                     </div>
                     {connectorManifest ? (

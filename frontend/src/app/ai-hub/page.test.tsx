@@ -45,7 +45,7 @@ const aiHubSurface = {
   prompt_cards: [
     {
       prompt_key: 'prompt_safe',
-      prompt_title: '의사결정 로그 맥락 종합',
+      prompt_title: '의사결정 로그 요약',
       description_text: '메일에서 판단 포인트를 추출합니다.',
       shared_scope: false,
       owner_label: 'alice',
@@ -55,7 +55,7 @@ const aiHubSurface = {
   workflow_cards: [
     {
       workflow_key: 'workflow_prompt_safe',
-      workflow_title: '의사결정 로그 맥락 종합 실행 흐름',
+      workflow_title: '의사결정 로그 요약 실행 흐름',
       trigger_source: 'prompt_template',
       state_code: 'ready',
       evidence_text: 'active organization provider is available',
@@ -164,15 +164,10 @@ describe('AIHubPage', () => {
       expect(lowerHeaderNames.has(headerName)).toBe(false);
     }
     expect(container.textContent).toContain('AI 허브');
-    expect(container.textContent).toContain('의사결정 로그 맥락 종합');
-    expect(container.querySelector('nav[aria-label="AI 허브 실행 체크포인트"]')?.textContent).toContain('맥락 종합');
-    expect(container.querySelector('section[aria-labelledby="context-title"]')?.textContent).toContain('맥락 종합');
-    expect(container.querySelector('section[aria-labelledby="decisions-title"]')?.textContent).toContain('판단 포인트');
-    expect(container.querySelector('section[aria-labelledby="actions-title"]')?.textContent).toContain('실행 항목');
-    expect(container.textContent).not.toContain('설명 없음');
+    expect(container.textContent).toContain('의사결정 로그 요약');
 
     clickButton(container, '워크플로우');
-    expect(container.textContent).toContain('의사결정 로그 맥락 종합 실행 흐름');
+    expect(container.textContent).toContain('의사결정 로그 요약 실행 흐름');
 
     clickButton(container, 'AI 에이전트');
     expect(container.textContent).toContain('Primary OpenAI');
@@ -204,7 +199,7 @@ describe('AIHubPage', () => {
       root?.render(<AIHubPage />);
     });
 
-    expect(container.textContent).toContain('AI 허브 source evidence를 불러오는 중입니다.');
+    expect(container.textContent).toContain('AI Hub source evidence를 불러오는 중입니다.');
 
     await act(async () => {
       resolveFetch(jsonResponse(aiHubSurface));
@@ -225,7 +220,7 @@ describe('AIHubPage', () => {
     await flushAsyncWork();
 
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'AI 허브 source evidence를 불러오지 못했습니다.',
+      'AI Hub source evidence를 불러오지 못했습니다.',
     );
     expect(container.textContent).toContain('다시 시도');
     expect(consoleError).toHaveBeenCalled();

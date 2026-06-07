@@ -166,7 +166,7 @@ export default function NetworkGraph() {
           {nodes.length}개 노드와 {edges.length}개 관계가 이 스레드 맥락에 연결되어 있습니다.
         </p>
         <div className="mt-3 rounded-xl border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground">텍스트 관계 맥락 종합</p>
+          <p className="font-semibold text-foreground">텍스트 관계 요약</p>
           <p className="mt-1">
             관련 노드: {nodeLabels.join(', ')}
           </p>
@@ -174,7 +174,7 @@ export default function NetworkGraph() {
       </div>
       <div
         ref={containerRef}
-        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 관계 맥락`}
+        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 네트워크 그래프`}
         className="min-h-0 flex-1 w-full bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
       />
     </div>
