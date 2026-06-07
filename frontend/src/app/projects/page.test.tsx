@@ -125,9 +125,18 @@ describe("ProjectsPage", () => {
     expect(container.textContent).toContain("Naruon Roadmap 2026");
     expect(container.textContent).not.toContain("Rival Project");
     expect(container.textContent).not.toContain("webdav_folder_roadmap");
-    expect(container.textContent).toContain("provider_write_executed=false");
+    expect(container.textContent).not.toContain("/Projects/Naruon_Roadmap_2026");
+    expect(container.textContent).toContain("외부 저장소 쓰기는 별도 승인 전까지 실행하지 않습니다");
+    expect(container.textContent).toContain("WebDAV 폴더 근거");
     expect(container.textContent).toContain("리소스 배정 검토 회의");
-    expect(container.textContent).toContain("순차 DB id는 화면에 노출하지 않습니다");
+    expect(container.textContent).toContain("스레드 근거 연결됨");
+    expect(container.textContent).not.toContain("thread-q2");
+    expect(container.textContent).not.toContain("<q2@example.com>");
+    expect(container.textContent).toContain("프로젝트 액션");
+    expect(container.textContent).toContain("새 프로젝트");
+    expect(container.textContent).toContain("마일스톤 추가");
+    expect(container.textContent).toContain("의사결정 추가");
+    expect(container.textContent).toContain("관련 문서/메일 연결");
     expect(container.textContent).not.toContain("Naruon 2.0 런칭");
   });
 
@@ -144,10 +153,10 @@ describe("ProjectsPage", () => {
     });
     await flushAsyncWork();
 
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("/api/webdav/folders");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("프로젝트 근거를 불러오지 못했습니다");
     expect(
-      Array.from(container.querySelectorAll('a[href="/data"]')).some((link) => link.textContent?.includes("Data evidence")),
+      Array.from(container.querySelectorAll('a[href="/data"]')).some((link) => link.textContent?.includes("원본 연결") || link.textContent?.includes("새 프로젝트")),
     ).toBe(true);
-    expect(container.textContent).toContain("Source-linked 작업 Backlog");
+    expect(container.textContent).toContain("원본 연결 작업 대기열");
   });
 });
