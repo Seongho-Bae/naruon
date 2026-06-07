@@ -10,3 +10,6 @@
 ## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
 **Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
 **Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
+## 2024-05-18 - Optimized N+1 queries in IntegrityError fallback
+**Learning:** We had an N+1 query vulnerability when iterating inside a db `except IntegrityError:` loop where `TicketTask` lookups were happening one by one.
+**Action:** When performing bulk fallback or conflict resolution, batch the lookup queries by using `.in_` to retrieve existing items into an in-memory dictionary.
