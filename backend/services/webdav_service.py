@@ -36,7 +36,7 @@ async def sync_webdav_folders(session, user_id: str):
                 if parsed.hostname:
                     _reject_unsafe_ip_literal("WebDAV server_url", parsed.hostname)
         except ValueError as exc:
-            logger.warning(f"Invalid WebDAV server URL for source {account.source_uid}: {exc}")
+            logger.warning(f"Invalid WebDAV server URL for source {account.source_uid or 'unknown'}: {exc}")
             continue
 
         logger.info(

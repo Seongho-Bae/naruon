@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
+import DOMPurify from "dompurify";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -435,7 +436,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.body || "") }}></div>
                 </div>
               ))}
             </div>
