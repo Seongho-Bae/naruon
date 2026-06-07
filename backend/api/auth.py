@@ -161,8 +161,6 @@ class AuthContext:
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
-    if is_system_admin_role(auth_context.role):
-        return
     if auth_context.organization_id != organization_id:
         raise HTTPException(
             status_code=403, detail="Resource belongs to a different organization"
@@ -245,11 +243,14 @@ def _session_secret_bytes() -> bytes:
     configured = settings.AUTH_SESSION_HMAC_SECRET
     if configured is None:
         raise _authentication_error()
-    secret = configured.get_secret_value().encode("utf-8")
+    secret_value = configured.get_secret_value()
+    if not secret_value or len(secret_value) < MIN_SESSION_SECRET_BYTES:
+        raise _authentication_error()
+    secret = secret_value.encode("utf-8")
     if len(secret) < MIN_SESSION_SECRET_BYTES:
         raise _authentication_error()
     try:
-        validate_auth_session_hmac_secret_value(configured.get_secret_value())
+        validate_auth_session_hmac_secret_value(secret_value)
     except ValueError:
         raise _authentication_error() from None
     return secret
@@ -382,7 +383,7 @@ def _auth_context_from_session_payload(
     if role in TENANT_ADMIN_ROLES and session_verifier not in ("server", "override"):
         raise _authentication_error()
     organization_id = _optional_string_claim(payload, "org")
-    if not is_system_admin_role(role) and organization_id is None:
+    if organization_id is None:
         raise _authentication_error()
     return AuthContext(
         user_id=_required_string_claim(payload, "sub"),
