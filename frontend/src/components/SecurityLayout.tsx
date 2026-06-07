@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertOctagon,
   CheckCircle2,
@@ -161,7 +161,7 @@ function SummaryCard({
   title: string;
   value: string;
   detail: string;
-  icon: ReactNode;
+  icon: React.ReactNode;
 }) {
   return (
     <article className="rounded-lg border border-border bg-card p-4 shadow-sm">
