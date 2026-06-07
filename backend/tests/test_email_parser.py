@@ -1,6 +1,8 @@
 import tempfile
 import os
 import datetime
+from unittest.mock import patch
+
 import pytest
 from services.email_parser import parse_eml, _sanitize_nul
 from services.exceptions import EmailParseError
@@ -233,6 +235,14 @@ Test"""
         assert parsed["reply_to"] == "Reply Target <reply-target@test.com>"
     finally:
         os.unlink(temp_path)
+
+def test_parse_eml_mocked_oserror():
+    with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
+        with pytest.raises(
+            EmailParseError,
+            match=r"Failed to read file dummy\.eml: Mocked OS Error",
+        ):
+            parse_eml("dummy.eml")
 
 
 def test_sanitize_nul():

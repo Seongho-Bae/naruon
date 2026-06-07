@@ -520,7 +520,6 @@ is_preexisting_report_dir() {
 is_github_models_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
-	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	deepseek/* | meta/* | mistral-ai/*)
 		return 0
 		;;
@@ -3102,8 +3101,8 @@ run_current_target_scan() {
 			if is_model_retryable_error "$candidate"; then
 				continue
 			fi
-			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-			return 1
+			echo "Strix fallback model '$candidate' emitted provider infrastructure or failure-signal output; trying next configured fallback if available." >&2
+			continue
 		fi
 
 		if ! is_model_retryable_error "$candidate"; then

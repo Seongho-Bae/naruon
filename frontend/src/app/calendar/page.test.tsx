@@ -86,7 +86,7 @@ describe("CalendarPage", () => {
     });
 
     expect(container.textContent).toContain("새 일정");
-    expect(container.textContent).toContain("CalDAV/CardDAV/WebDAV writeback intent");
+    expect(container.textContent).toContain("고객 원본 일정 반영 의도");
     expect(container.textContent).not.toContain("뷰는 아직 구현 중입니다");
     expect(container.querySelector('button[aria-label="이전 달"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="다음 달"]')).not.toBeNull();
@@ -152,8 +152,11 @@ describe("CalendarPage", () => {
       root?.render(<CalendarPage />);
     });
     await flushAsyncWork();
-    expect(container.textContent).toContain("Customer CalDAV");
-    expect(container.textContent).toContain("etag=etag-caldav-1");
+    expect(container.textContent).toContain("일정 원본 1");
+    expect(container.textContent).toContain("충돌 토큰 있음");
+    expect(container.textContent).not.toContain("Customer CalDAV");
+    expect(container.textContent).not.toContain("etag=etag-caldav-1");
+    expect(container.textContent).not.toContain("caldav-primary");
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     expect(button).toBeTruthy();
@@ -162,10 +165,14 @@ describe("CalendarPage", () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("customer_owned");
-    expect(container.textContent).toContain("caldav");
-    expect(container.textContent).toContain("caldav-primary");
-    expect(container.textContent).toContain("calendar.writeback_intent.created");
+    expect(container.textContent).toContain("고객 원본 계정 반영");
+    expect(container.textContent).toContain("CalDAV 원본 선택됨");
+    expect(container.textContent).toContain("선택한 일정 원본");
+    expect(container.textContent).toContain("감사 근거");
+    expect(container.textContent).toContain("기록됨");
+    expect(container.textContent).not.toContain("customer_owned");
+    expect(container.textContent).not.toContain("caldav-primary");
+    expect(container.textContent).not.toContain("calendar.writeback_intent.created");
   });
 
   it("lets the user choose a specific customer-owned calendar source before intent creation", async () => {
@@ -213,7 +220,9 @@ describe("CalendarPage", () => {
     });
     await flushAsyncWork();
 
-    const teamSourceButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("Team CalDAV"));
+    const teamSourceButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="일정 원본 2 일정 반영 가능 선택"]',
+    );
     expect(teamSourceButton).toBeTruthy();
     await act(async () => {
       teamSourceButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -226,8 +235,10 @@ describe("CalendarPage", () => {
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("caldav-team");
-    expect(container.textContent).toContain("Team CalDAV");
+    expect(container.textContent).toContain("일정 원본 2");
+    expect(container.textContent).toContain("선택한 일정 원본");
+    expect(container.textContent).not.toContain("caldav-team");
+    expect(container.textContent).not.toContain("Team CalDAV");
   });
 
   it("does not post writeback intent before source registry readiness", async () => {
@@ -251,7 +262,7 @@ describe("CalendarPage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe("/api/calendar/writeback-sources");
-    expect(container.textContent).toContain("CalDAV source registry 확인 중입니다.");
+    expect(container.textContent).toContain("일정 원본 목록을 확인하는 중입니다.");
   });
 
   it("shows a loading state while writeback intent is pending", async () => {
@@ -278,7 +289,7 @@ describe("CalendarPage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(String(fetchMock.mock.calls[1]?.[0])).toBe("/api/calendar/writeback-intent");
-    expect(container.textContent).toContain("writeback intent 요청 중입니다.");
+    expect(container.textContent).toContain("일정 반영 의도 요청 중입니다.");
   });
 
   it("distinguishes no-source and ETag conflict writeback errors", async () => {

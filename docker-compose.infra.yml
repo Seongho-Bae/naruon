@@ -3,8 +3,6 @@ version: '3.8'
 services:
   traefik:
     image: traefik:v2.10
-    security_opt:
-      - no-new-privileges:true
     command:
       - "--api.insecure=true"
       - "--providers.docker=true"
