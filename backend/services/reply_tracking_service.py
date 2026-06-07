@@ -7,24 +7,8 @@ from services.email_service import detect_reply_tracking
 from services.threading_service import normalize_message_id
 import datetime
 import email.utils as email_utils
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
-
-
-@lru_cache(maxsize=2048)
-def _parse_single_address(raw_address: str) -> str:
-    _, parsed_address = email_utils.parseaddr(raw_address or "")
-    return parsed_address.strip().lower()
-
-
-@lru_cache(maxsize=2048)
-def _parse_multiple_addresses(raw_addresses: str) -> frozenset[str]:
-    return frozenset(
-        parsed_address.strip().lower()
-        for _, parsed_address in email_utils.getaddresses([raw_addresses or ""])
-        if parsed_address.strip()
-    )
 
 
 def configured_email_addresses(tenant_config: TenantConfig | None) -> set[str]:
@@ -35,19 +19,26 @@ def configured_email_addresses(tenant_config: TenantConfig | None) -> set[str]:
         getattr(tenant_config, "smtp_username", None),
         getattr(tenant_config, "imap_username", None),
     ):
-        if raw_address:
-            normalized_address = _parse_single_address(raw_address)
-            if normalized_address:
-                addresses.add(normalized_address)
+        _, parsed_address = email_utils.parseaddr(raw_address or "")
+        normalized_address = parsed_address.strip().lower()
+        if normalized_address:
+            addresses.add(normalized_address)
     return addresses
 
 
 def message_sender_address(email_message: Email) -> str:
-    return _parse_single_address(email_message.sender or "")
+    _, parsed_address = email_utils.parseaddr(email_message.sender or "")
+    return parsed_address.strip().lower()
 
 
 def message_recipient_addresses(email_message: Email) -> set[str]:
-    return set(_parse_multiple_addresses(email_message.recipients or ""))
+    return {
+        parsed_address.strip().lower()
+        for _, parsed_address in email_utils.getaddresses(
+            [email_message.recipients or ""]
+        )
+        if parsed_address.strip()
+    }
 
 
 def message_is_from_user(email_message: Email, user_addresses: set[str]) -> bool:

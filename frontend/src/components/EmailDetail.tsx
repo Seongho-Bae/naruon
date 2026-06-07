@@ -17,6 +17,7 @@ import {
   getConversationMessages,
   type ThreadEmailData,
 } from "@/lib/email-threading";
+import { toMailBodyText, toMailDisplayText } from "@/lib/mail-text";
 
 type EmailData = ThreadEmailData & {
   requires_reply?: boolean;
@@ -146,7 +147,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           setLlmData(llmJson);
         } catch (llmErr) {
           console.error("Error generating LLM summary:", llmErr);
-          if (isMounted) setLlmError("요약을 생성하지 못했습니다.");
+          if (isMounted) setLlmError("맥락 종합을 생성하지 못했습니다.");
         }
       } catch (err) {
         console.error("Error fetching email details:", err);
@@ -190,7 +191,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       setSendStatus({
         type: 'success',
         message: data.simulated
-          ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 이메일은 전송되지 않았습니다.'
+          ? '개발 모드에서 답장을 시뮬레이션했습니다. 실제 메일은 전송되지 않았습니다.'
           : '답장을 전송했습니다.',
       });
       setDraft('');
@@ -222,11 +223,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         ),
       );
       if (!isCurrentEmail()) return;
-      const targetSource = intents[0]?.provenance.source_provider || intents[0]?.target_source_id || '원본 캘린더';
-      setSyncStatus({ type: 'success', message: `${intents.length}개 일정 writeback intent를 ${targetSource} 원본에 요청했습니다.` });
+      setSyncStatus({ type: 'success', message: `${intents.length}개 일정 반영 의도를 선택한 원본 계정에 요청했습니다.` });
     } catch {
       if (!isCurrentEmail()) return;
-      setSyncStatus({ type: 'error', message: '캘린더 writeback intent 요청에 실패했습니다.' });
+      setSyncStatus({ type: 'error', message: '일정 반영 의도 요청에 실패했습니다.' });
     } finally {
       if (isCurrentEmail()) setIsSyncing(false);
     }
@@ -250,10 +250,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         items: llmData.todos,
       });
       if (!isCurrentEmail()) return;
-      setTaskStatus(`${data.created}개 실행 항목을 티켓형 할 일로 추적합니다.`);
+      setTaskStatus(`${data.created}개 실행 항목을 티켓형 실행 항목으로 추적합니다.`);
     } catch {
       if (!isCurrentEmail()) return;
-      setTaskStatus('티켓형 할 일 생성에 실패했습니다.');
+      setTaskStatus('티켓형 실행 항목 생성에 실패했습니다.');
     } finally {
       if (isCurrentEmail()) setIsCreatingTask(false);
     }
@@ -290,7 +290,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         <div className="max-w-md rounded-3xl border border-primary/15 bg-card p-8 shadow-[0_24px_70px_rgba(15,23,42,0.08)]">
           <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">✦</div>
           <h2 className="text-xl font-black tracking-tight text-foreground">메일을 선택하세요</h2>
-          <p className="mt-2 text-sm leading-6">왼쪽 받은편지함에서 메일을 선택하면 Naruon이 요약, 판단 포인트, 실행 항목을 연결합니다.</p>
+          <p className="mt-2 text-sm leading-6">왼쪽 받은편지함에서 메일을 선택하면 Naruon이 맥락 종합, 판단 포인트, 실행 항목을 연결합니다.</p>
         </div>
       </div>
     );
@@ -305,21 +305,24 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   }
 
   const conversationMessages = getConversationMessages(email, threadEmails);
+  const safeEmailSender = toMailDisplayText(email.sender, '보낸 사람');
+  const safeEmailSubject = toMailDisplayText(email.subject, '(제목 없음)');
+  const safeReplyTo = toMailDisplayText(email.reply_to || email.sender, '답장 주소 없음');
 
   return (
     <div className="flex h-full flex-col bg-card">
       <div className="flex items-start bg-gradient-to-br from-card via-card to-primary/5 p-6">
         <div className="flex w-full items-start gap-4 text-sm">
           <Avatar className="h-11 w-11 border border-primary/10 bg-primary/10 text-primary shadow-sm">
-            <AvatarFallback>{email.sender ? email.sender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+            <AvatarFallback>{safeEmailSender ? safeEmailSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
-            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{email.subject || '(제목 없음)'}</div>
+            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{safeEmailSubject}</div>
             <div className="line-clamp-1 text-xs">
-              <span className="text-muted-foreground">{email.sender}</span>
+              <span className="text-muted-foreground">{safeEmailSender}</span>
             </div>
             <div className="line-clamp-1 text-xs text-muted-foreground">
-              답장 주소: {email.reply_to || email.sender}
+              답장 주소: {safeReplyTo}
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -367,7 +370,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "동기화 중" : "캘린더 반영"}
+                    {isSyncing ? "동기화 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
@@ -379,7 +382,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
                   >
                     {isCreatingTask && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isCreatingTask ? "추적 중" : "할 일 만들기"}
+                    {isCreatingTask ? "추적 중" : "실행 항목 생성"}
                   </Button>
                 )}
                 {syncStatus && (
@@ -431,11 +434,11 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               {conversationMessages.map((msg) => (
                 <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-sm">{msg.sender}</span>
+                    <span className="font-medium text-sm">{toMailDisplayText(msg.sender, '보낸 사람')}</span>
                     <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{msg.body}</div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
                 </div>
               ))}
             </div>

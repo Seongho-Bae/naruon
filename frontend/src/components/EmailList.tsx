@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
-import { toSafeReactText } from "@/lib/safe-text";
+import { toMailDisplayText } from "@/lib/mail-text";
 
 interface EmailItem {
   id: number;
@@ -143,12 +143,12 @@ export function EmailList({
           }}
           className="flex gap-2"
         >
-          <label htmlFor="email-search" className="sr-only">이메일 검색</label>
+          <label htmlFor="email-search" className="sr-only">메일 검색</label>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               id="email-search"
-              aria-label="이메일 검색"
+              aria-label="메일 검색"
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
@@ -174,10 +174,10 @@ export function EmailList({
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
-              const safeSender = toSafeReactText(email.sender);
+              const safeSender = toMailDisplayText(email.sender, '보낸 사람');
               const subject = email.subject?.trim() === '' ? undefined : email.subject;
-              const safeSubject = toSafeReactText(subject, '(제목 없음)');
-              const safeSnippet = toSafeReactText(email.snippet);
+              const safeSubject = toMailDisplayText(subject, '(제목 없음)');
+              const safeSnippet = toMailDisplayText(email.snippet);
 
               return (
               <button type="button"

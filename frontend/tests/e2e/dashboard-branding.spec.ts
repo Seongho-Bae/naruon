@@ -33,15 +33,15 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(header.getByRole('link', { name: '알림 보기' })).toHaveAttribute('href', '/security');
   await expect(header.getByRole('link', { name: '도움말 보기' })).toHaveAttribute('href', '/settings#help');
   await expect(header.getByRole('link', { name: '프로필 메뉴' })).toHaveAttribute('href', '/settings#profile');
-  await expect(header.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
+  await expect(header.getByRole('button', { name: '일정 반영' })).toBeVisible();
   await expect(header.getByRole('button', { name: '답장 초안' })).toBeVisible();
-  await expect(header.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(header.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
   await header.getByRole('button', { name: '답장 초안' }).click();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
   await expect(header.getByText('메일 상세 패널에서 답장 초안을 생성합니다.')).toBeVisible();
 
-  await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+  await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
   const homeQuickActions = page.getByLabel('홈 빠른 실행');
   await expect(homeQuickActions.getByRole('link', { name: '메일함 열기' })).toHaveAttribute('href', '/mail');
   await expect(homeQuickActions.getByRole('link', { name: '보낸 메일 답변 추적' })).toHaveAttribute('href', '/mail?folder=sent');
@@ -56,8 +56,8 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
 
   const desktopStartup = page.getByRole('region', { name: 'Desktop startup preference' });
   await expect(desktopStartup).toBeVisible();
-  await expect(desktopStartup.getByRole('button', { name: '대시보드' })).toBeVisible();
-  await expect(desktopStartup.getByRole('button', { name: '이메일' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '홈' })).toBeVisible();
+  await expect(desktopStartup.getByRole('button', { name: '메일' })).toBeVisible();
   await expect(desktopStartup.getByRole('button', { name: '일정' })).toBeVisible();
 
   expect(
@@ -97,7 +97,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
 
-  const desktopDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  const desktopDashboard = page.locator('section[aria-label="홈 개요"]:visible').first();
   await expect(desktopDashboard).toBeVisible();
   await expect(page.getByRole('article', { name: '답변 대기' }).first()).toBeVisible();
   await expect(desktopDashboard.getByText('답변 대기 메일')).toBeVisible();
@@ -125,7 +125,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   });
   await page.goto('/');
   expect((await mobilePendingRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
-  const mobileDashboard = page.locator('section[aria-label="홈 개요 대시보드"]:visible').first();
+  const mobileDashboard = page.locator('section[aria-label="홈 개요"]:visible').first();
   await expect(mobileDashboard).toBeVisible();
   await mobileDashboard.getByText('답변 대기 메일').scrollIntoViewIfNeeded();
   await expect(mobileDashboard.getByText('답변 대기 메일')).toBeVisible();
@@ -168,7 +168,7 @@ test('keeps the short mobile AI quick action menu inside the viewport with scrol
 
   const menu = page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' });
   await expect(menu).toBeVisible();
-  await expect(menu.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
   const bounds = await menu.evaluate((element) => {
     const rect = element.getBoundingClientRect();
     const style = window.getComputedStyle(element);
@@ -209,7 +209,7 @@ test('renders compact mobile navigation without hover-only controls', async ({ p
 
   await page.getByRole('link', { name: '일정' }).click();
   await expect(page.getByRole('region', { name: '모바일 일정 연결' })).toBeVisible();
-  await expect(page.getByText('캘린더 반영 대기')).toBeVisible();
+  await expect(page.getByText('일정 반영 대기')).toBeVisible();
 });
 
 const responsiveViewports = [
@@ -230,7 +230,7 @@ for (const viewport of responsiveViewports) {
 
     await expect(page.locator('main#main-content')).toBeVisible();
     await expect(page.locator('header[aria-label="Naruon workspace header"]')).toBeVisible();
-    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
     if (viewport.width <= 390) {
       const metricLabel = page
         .getByRole('article', { name: '받은 메일' })
@@ -261,9 +261,9 @@ for (const viewport of responsiveViewports) {
       await expect(page.getByRole('region', { name: '태블릿 메일 작업공간' })).toBeVisible();
       await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeHidden();
       await expect(page.getByText('태블릿 맥락 패널')).toBeVisible();
-      await expect(page.getByRole('button', { name: '캘린더 반영' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '일정 반영' })).toBeVisible();
       await expect(page.getByRole('button', { name: '답장 초안' })).toBeVisible();
-      await expect(page.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+      await expect(page.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
     } else {
       await expect(page.getByRole('navigation', { name: 'Primary workspace navigation' })).toBeVisible();
       await expect(page.getByRole('region', { name: '데스크톱 메일 작업공간' })).toBeVisible();
@@ -273,14 +273,14 @@ for (const viewport of responsiveViewports) {
 
 for (const destination of [
   { path: '/mail', heading: '메일을 선택하세요', marker: { name: '받은편지함' } },
-  { path: '/calendar', heading: '일정 관리', marker: { text: 'CalDAV/CardDAV/WebDAV writeback intent' } },
-  { path: '/tasks', heading: '할 일 추적', marker: { name: '리소스 배정 검토 회의' } },
-  { path: '/data', heading: '데이터와 파일', marker: { text: '중복 반입과 thread 정리' } },
+  { path: '/calendar', heading: '일정 관리', marker: { text: '고객 원본 일정 반영 의도' } },
+  { path: '/tasks', heading: '실행 항목 추적', marker: { name: '리소스 배정 검토 회의' } },
+  { path: '/data', heading: '데이터와 파일', marker: { text: '중복 메일 스레드 정리 의도' } },
   { path: '/search', heading: '맥락 검색', marker: { name: '관계 그래프와 타임라인' } },
-  { path: '/security', heading: '보안과 관리자', marker: { text: '관리자 경계' } },
+  { path: '/security', heading: '보안과 관리자', marker: { text: '원본 연결 RBAC / ABAC' } },
   { path: '/projects', heading: '프로젝트 워크스페이스', marker: { name: '의사결정 로그' } },
   { path: '/ai-hub', heading: 'AI 허브', marker: { name: '실행 항목' } },
-  { path: '/settings', heading: '설정 (Settings)', marker: { text: 'Self-hosted Runner' } },
+  { path: '/settings', heading: '설정', marker: { name: '워크스페이스 설정' } },
 ] as const) {
   test(`renders the ${destination.path} workspace destination without horizontal overflow`, async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1024 });
@@ -288,7 +288,7 @@ for (const destination of [
 
     await page.goto(destination.path);
 
-    await expect(page.getByRole('heading', { name: destination.heading })).toBeVisible();
+    await expect(page.getByRole('heading', { name: destination.heading, exact: true })).toBeVisible();
     if ('name' in destination.marker) {
       await expect(page.getByRole('heading', { name: destination.marker.name }).first()).toBeVisible();
     } else {
@@ -336,9 +336,10 @@ test('renders source-backed Projects workspace with signed API headers and mobil
   await expect(page.getByRole('heading', { name: '프로젝트 워크스페이스' })).toBeVisible();
   await expect(page.getByText('Naruon Roadmap 2026').first()).toBeVisible();
   await expect(page.getByText('webdav_folder_roadmap')).toHaveCount(0);
-  await expect(page.getByText('provider_write_executed=false').first()).toBeVisible();
+  await expect(page.getByText('provider_write_executed=false')).toHaveCount(0);
+  await expect(page.getByText('상태: 연결 준비').first()).toBeVisible();
   await expect(page.getByText('리소스 배정 검토 회의').first()).toBeVisible();
-  await expect(page.getByText('순차 DB id는 화면에 노출하지 않습니다').first()).toBeVisible();
+  await expect(page.getByText('외부 저장소 쓰기는 별도 승인 전까지 실행하지 않습니다.').first()).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('projects-source-backed-desktop.png'), fullPage: false });
@@ -403,41 +404,47 @@ test('renders Security governance access audit sharing and policy with signed AP
   }
 
   await expect(page.getByRole('heading', { name: '보안과 관리자' })).toBeVisible();
-  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
-  await expect(page.getByRole('row', { name: /webdav_src_primary/ })).toBeVisible();
+  await expect(page.getByText('원본 연결 RBAC / ABAC')).toBeVisible();
+  await expect(page.getByRole('row', { name: /WebDAV 저장소 1/ })).toBeVisible();
+  await expect(page.getByText('webdav_src_primary')).toHaveCount(0);
   await expect(page.getByText('곧 제공됩니다')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-access.png'), fullPage: false });
 
   await page.getByRole('button', { name: '감사 로그' }).click();
-  await expect(page.getByText('audit_evt_provider_update')).toBeVisible();
-  await expect(page.getByText('llm_provider:provider_primary')).toBeVisible();
-  await expect(page.getByText('connector_evt_heartbeat')).toBeVisible();
+  await expect(page.getByText('서버 감사 로그')).toBeVisible();
+  await expect(page.getByText('보안 설정 변경이 서버 감사 근거로 기록되었습니다.')).toBeVisible();
+  await expect(page.getByText('서버 관측 이벤트')).toBeVisible();
+  await expect(page.getByText('audit_evt_provider_update')).toHaveCount(0);
+  await expect(page.getByText('llm_provider:provider_primary')).toHaveCount(0);
+  await expect(page.getByText('connector_evt_heartbeat')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-audit.png'), fullPage: false });
 
   await page.getByRole('button', { name: '외부 공유' }).click();
-  await expect(page.getByText('WebDAV repository writeback boundary')).toBeVisible();
+  await expect(page.getByText('WebDAV 저장소 쓰기 경계')).toBeVisible();
+  await expect(page.getByText('외부 쓰기 실행 안 함').first()).toBeVisible();
   await page.getByRole('button', { name: '정책' }).click();
-  await expect(page.getByText('Deny-first policy order')).toBeVisible();
-  await expect(page.getByText('Cross-organization provider secret')).toBeVisible();
+  await expect(page.getByText('차단 우선 정책 순서')).toBeVisible();
+  await expect(page.getByText('교차 조직 제공자 secret')).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('security-governance-desktop-policy.png'), fullPage: false });
 
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto('/security');
-  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
+  await expect(page.getByText('원본 연결 RBAC / ABAC')).toBeVisible();
   await page.getByRole('button', { name: '정책' }).click();
-  await expect(page.getByText('RBAC allow after ABAC denies')).toBeVisible();
+  await expect(page.getByText('ABAC 차단 후 RBAC 허용')).toBeVisible();
   const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(tabletOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('security-governance-tablet-policy.png'), fullPage: false });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/security');
-  await expect(page.getByText('Source-linked RBAC / ABAC')).toBeVisible();
-  const mobileWebdavSource = page.locator('article', { hasText: 'webdav_src_primary' }).first();
+  await expect(page.getByText('원본 연결 RBAC / ABAC')).toBeVisible();
+  const mobileWebdavSource = page.locator('article', { hasText: 'WebDAV 저장소 1' }).first();
   await mobileWebdavSource.scrollIntoViewIfNeeded();
   await expect(mobileWebdavSource).toBeVisible();
+  await expect(page.getByText('webdav_src_primary')).toHaveCount(0);
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-access.png'), fullPage: false });
@@ -456,7 +463,9 @@ test('renders Security governance access audit sharing and policy with signed AP
   await page.screenshot({ path: testInfo.outputPath('security-governance-mobile-scroll.png'), fullPage: false });
 
   await page.goto('/');
-  await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
+  const mobileMenuButton = page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).first();
+  await expect(mobileMenuButton).toBeVisible();
+  await mobileMenuButton.click();
   const menu = page.locator('#mobile-workspace-menu');
   await expect(menu.getByRole('link', { name: '보안', exact: true })).toHaveAttribute('href', '/security');
   await menu.evaluate((element) => {
@@ -494,23 +503,26 @@ test('renders Data quality surface across viewports with signed API headers', as
   }
 
   await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
-  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
   await expect(page.getByText('최근 파일/첨부 자산')).toBeVisible();
   const assetList = page.getByLabel('문서 저장소 파일 자산');
   await expect(assetList.getByRole('button', { name: /roadmap\.pdf/ })).toBeVisible();
   const assetDetail = page.getByLabel('선택한 파일 자산 상세');
   await expect(assetDetail.getByRole('heading', { name: 'roadmap.pdf' })).toBeVisible();
-  await expect(assetDetail.getByText('asset_repository_ready')).toBeVisible();
-  await expect(assetDetail.getByText('thread_repository_ready')).toBeVisible();
+  await expect(assetDetail.getByText('원본 메일/스레드 근거 연결')).toBeVisible();
+  await expect(assetDetail.getByText('asset_repository_ready')).toHaveCount(0);
+  await expect(assetDetail.getByText('thread_repository_ready')).toHaveCount(0);
   await assetList.getByRole('button', { name: /blank-notes\.md/ }).click();
   await expect(assetDetail.getByRole('heading', { name: 'blank-notes.md' })).toBeVisible();
-  await expect(assetDetail.getByText('thread_missing')).toBeVisible();
+  await expect(assetDetail.getByText('본문 추출 대기')).toBeVisible();
+  await expect(assetDetail.getByText('thread_missing')).toHaveCount(0);
   await expect(assetDetail.getByText('content extraction pending, canonical thread pending')).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-repository-assets.png'), fullPage: false });
-  await expect(page.getByText('connector_evt_data_quality')).toBeVisible();
+  await expect(page.getByText('outbound connector heartbeat received')).toBeVisible();
+  await expect(page.getByText('connector_evt_data_quality')).toHaveCount(0);
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('4 emails and 3 attachments')).toBeVisible();
-  await expect(page.getByText('emails.embedding, attachments.embedding')).toBeVisible();
+  await expect(page.getByText('원본 근거 연결됨').first()).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-pipeline.png'), fullPage: false });
 
   await page.getByRole('button', { name: '임베딩' }).click();
@@ -530,7 +542,8 @@ test('renders Data quality surface across viewports with signed API headers', as
 
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto('/data');
-  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
+  await expect(page.getByText('data.quality_surface.viewed')).toHaveCount(0);
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('Connector observability')).toBeVisible();
   const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -539,7 +552,8 @@ test('renders Data quality surface across viewports with signed API headers', as
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/data');
-  await expect(page.getByText('data.quality_surface.viewed')).toBeVisible();
+  await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
+  await expect(page.getByText('data.quality_surface.viewed')).toHaveCount(0);
   await page.getByRole('button', { name: '품질 점검' }).click();
   const mobileQualityCard = page.locator('article', { hasText: 'Dedupe fingerprint' }).first();
   await mobileQualityCard.scrollIntoViewIfNeeded();
@@ -654,8 +668,8 @@ test('updates source-linked task ticket status with signed API headers', async (
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '원본 연결 티켓 상태 보드' })).toBeVisible();
   await page.getByRole('button', { name: '리소스 배정 검토 회의 상태를 완료로 변경' }).click();
   const requestHeaders = (await patchRequest).headers();
   expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -671,8 +685,8 @@ test('updates source-linked task ticket status with signed API headers', async (
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'source-linked ticket status board' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '원본 연결 티켓 상태 보드' })).toBeVisible();
   await expect(page.getByText('실제 티켓 큐')).toBeVisible();
   await expect(page.getByText('5개 티켓 연결')).toBeVisible();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -715,7 +729,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const desktopRequest = await desktopEscalationRequest;
   const desktopHeaders = desktopRequest.headers();
@@ -726,8 +740,9 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   expect(desktopRequest.postDataJSON()).toEqual({ overdue_hours: 48 });
 
   await expect(page.getByText('1개 답변 SLA 티켓을 생성했습니다. 2개 대기 메일을 48시간 기준으로 확인했습니다.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
-  const escalatedDesktopTask = page.getByRole('article').filter({ hasText: '답변 SLA 확인: 벤더 계약 답변 요청' });
+  const desktopTicketList = page.getByLabel('원본 연결 티켓 목록');
+  await expect(desktopTicketList.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
+  const escalatedDesktopTask = desktopTicketList.getByRole('article').filter({ hasText: '답변 SLA 확인: 벤더 계약 답변 요청' });
   await expect(escalatedDesktopTask.getByText('차단 · 긴급')).toBeVisible();
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
@@ -739,15 +754,16 @@ test('creates pending reply SLA task escalation with signed API headers', async 
     return url.pathname === '/api/tasks/reply-sla-escalations' && request.method() === 'POST';
   });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const mobileRequestHeaders = (await mobileEscalationRequest).headers();
   expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(mobileRequestHeaders[headerName]).toBeUndefined();
   }
-  await expect(page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
-  await page.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' }).scrollIntoViewIfNeeded();
+  const mobileTicketList = page.getByLabel('원본 연결 티켓 목록');
+  await expect(mobileTicketList.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' })).toBeVisible();
+  await mobileTicketList.getByRole('heading', { name: '답변 SLA 확인: 벤더 계약 답변 요청' }).scrollIntoViewIfNeeded();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('reply-sla-escalation-mobile.png'), fullPage: false });
@@ -788,9 +804,9 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   });
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'self-sent knowledge WebDAV materialization' })).toBeVisible();
-  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '나에게 보낸 지식 메일 WebDAV 의도' })).toBeVisible();
+  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 의도 생성' }).click();
   const request = await desktopIntentRequest;
   const requestHeaders = request.headers();
   expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -799,9 +815,11 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   }
   expect(request.postDataJSON()).toEqual({ source_task_id: 'task-self-knowledge' });
 
-  await expect(page.getByText('/Naruon/Notes/task-self-knowledge.md')).toBeVisible();
-  await expect(page.getByText('provider_write_executed=false')).toBeVisible();
-  await expect(page.getByText('webdav.self_sent_knowledge_intent.created')).toBeVisible();
+  await expect(page.getByText('WebDAV/Notes 의도 준비')).toBeVisible();
+  await expect(page.getByText('의도만 기록')).toBeVisible();
+  await expect(page.getByText('provider_write_executed=false')).toHaveCount(0);
+  await expect(page.getByText('기록됨')).toBeVisible();
+  await expect(page.getByText('webdav.self_sent_knowledge_intent.created')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('self-sent-knowledge-webdav-intent-desktop.png'), fullPage: false });
@@ -812,12 +830,13 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
     return url.pathname === '/api/webdav/knowledge-materialization-intent' && mobileRequest.method() === 'POST';
   });
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: '할 일 추적' })).toBeVisible();
-  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 intent 생성' }).click();
+  await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
+  await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 의도 생성' }).click();
   const mobileRequest = await mobileIntentRequest;
   expect(mobileRequest.headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
-  await expect(page.getByText('/Naruon/Notes/task-self-knowledge.md')).toBeVisible();
-  await page.getByText('webdav.self_sent_knowledge_intent.created').scrollIntoViewIfNeeded();
+  await expect(page.getByText('WebDAV/Notes 의도 준비')).toBeVisible();
+  await page.getByText('WebDAV/Notes 의도 준비').scrollIntoViewIfNeeded();
+  await expect(page.getByText('webdav.self_sent_knowledge_intent.created')).toHaveCount(0);
   await page.locator('main').nth(1).evaluate((scroller) => {
     scroller.scrollTop += 96;
   });
@@ -846,21 +865,22 @@ test('renders the settings self-hosted connector manifest with mobile scrolling'
   await page.goto('/settings');
   await page.getByRole('button', { name: '개발자' }).first().click();
 
-  await expect(page.getByText('Self-hosted connector manifest')).toBeVisible();
-  await expect(page.getByText('Naruon은 이메일 서버가 아닙니다')).toBeVisible();
-  await expect(page.getByText('naruon.net', { exact: true })).toBeVisible();
-  await expect(page.getByText('ci_smoke_only')).toBeVisible();
-  await expect(page.getByText('smtp_server')).toBeVisible();
-  await expect(page.getByText('Connector health & APM signals')).toBeVisible();
-  await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
-  await expect(page.getByText('otel-collector:4317')).toBeVisible();
-  await expect(page.getByText('Recent connector signals')).toBeVisible();
-  await expect(page.getByText('outbound runner heartbeat received')).toBeVisible();
-  await expect(page.getByText('instrumentation_pending')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Self-hosted connector manifest' })).toBeVisible();
+  await expect(page.getByText('Self-hosted connector 등록 상태')).toBeVisible();
+  await expect(page.getByText('Naruon은 메일 서버가 아닙니다')).toBeVisible();
+  await expect(page.getByText('naruon.net')).toBeVisible();
+  await expect(page.getByText('검증용 연결')).toBeVisible();
+  await expect(page.getByText('SMTP 서버 역할 금지')).toBeVisible();
+  await expect(page.getByText('Connector 상태와 APM 신호')).toBeVisible();
+  await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
+  await expect(page.getByText('OTel endpoint')).toBeVisible();
+  await expect(page.getByText('최근 connector 신호')).toBeVisible();
+  await expect(page.getByText('서버가 runner 하트비트를 관측했습니다.')).toBeVisible();
+  await expect(page.getByText('계측 준비')).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile.png'), fullPage: false });
-  await page.getByText('Recent connector signals').scrollIntoViewIfNeeded();
+  await page.getByText('최근 connector 신호').scrollIntoViewIfNeeded();
   await page.screenshot({ path: testInfo.outputPath('settings-connector-apm-mobile-history.png'), fullPage: false });
 
   const scrollMetrics = await page.evaluate(() => {
@@ -895,14 +915,14 @@ test('renders settings connector APM signals across desktop and tablet', async (
     await page.goto('/settings');
     await page.getByRole('button', { name: '개발자' }).first().click();
 
-    await expect(page.getByText('Connector health & APM signals')).toBeVisible();
-    await expect(page.getByText('observability.operational_signals.viewed')).toBeVisible();
-    await expect(page.getByText('otel-collector:4317')).toBeVisible();
-    await expect(page.getByText('Recent connector signals')).toBeVisible();
+    await expect(page.getByText('Connector 상태와 APM 신호')).toBeVisible();
+    await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
+    await expect(page.getByText('OTel endpoint')).toBeVisible();
+    await expect(page.getByText('최근 connector 신호')).toBeVisible();
     await expect(page.getByText('Connector heartbeat')).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
-    await page.getByText('outbound runner heartbeat received').scrollIntoViewIfNeeded();
+    await page.getByText('서버가 runner 하트비트를 관측했습니다.').scrollIntoViewIfNeeded();
     await page.screenshot({ path: testInfo.outputPath(`settings-connector-apm-${viewport.name}.png`), fullPage: false });
   }
 });
@@ -936,15 +956,16 @@ test('renders source-backed mail account settings across desktop tablet and mobi
     await page.goto('/settings');
     await page.getByRole('button', { name: '연결 계정' }).first().click();
 
-    await expect(page.getByText('고객 지정 Provider')).toBeVisible();
+    await expect(page.getByText('고객 지정 연결')).toBeVisible();
     await expect(page.getByText('Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다')).toBeVisible();
     await expect(page.getByText('smtp.example.com:587')).toBeVisible();
     await expect(page.getByText('imap.example.com:993')).toBeVisible();
     await expect(page.getByText('pop3.example.com:995')).toBeVisible();
     await expect(page.getByText('OAuth 로그인')).toBeVisible();
-    await expect(page.getByText('Source readiness')).toBeVisible();
-    await expect(page.getByText('caldav-primary', { exact: true })).toBeVisible();
-    await expect(page.getByText('webdav_src_primary')).toBeVisible();
+    await expect(page.getByText('원본 연결 준비 상태')).toBeVisible();
+    await expect(page.getByText('Customer CalDAV 일정 원본 1')).toBeVisible();
+    await expect(page.getByLabel('연동 원본 준비도').getByText('WebDAV 저장소 1', { exact: true })).toBeVisible();
+    await expect(page.getByText('webdav_src_primary')).toHaveCount(0);
     await expect(page.getByText('저장된 secret 유지').first()).toBeVisible();
 
     if (viewport.name === 'desktop') {
@@ -1026,8 +1047,10 @@ test('renders calendar writeback intent status without direct provider writes', 
   }, expectedNaruonToken);
 
   await page.goto('/calendar');
-  await expect(page.getByText('Customer CalDAV').first()).toBeVisible();
-  await expect(page.getByText('etag=etag-caldav-primary')).toBeVisible();
+  await expect(page.getByText('일정 원본 1').first()).toBeVisible();
+  await expect(page.getByText('CalDAV 원본').first()).toBeVisible();
+  await expect(page.getByText('충돌 토큰 있음')).toBeVisible();
+  await expect(page.getByText('etag=etag-caldav-primary')).toHaveCount(0);
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
@@ -1045,10 +1068,12 @@ test('renders calendar writeback intent status without direct provider writes', 
     expect(desktopRequestHeaders[headerName]).toBeUndefined();
   }
 
-  await expect(page.getByText('customer_owned')).toBeVisible();
-  await expect(page.getByText('caldav', { exact: true })).toBeVisible();
-  await expect(page.getByRole('status').getByText('caldav-primary')).toBeVisible();
-  await expect(page.getByText('calendar.writeback_intent.created')).toBeVisible();
+  await expect(page.getByText('고객 원본 계정 반영')).toBeVisible();
+  await expect(page.getByText('CalDAV 원본 선택됨')).toBeVisible();
+  await expect(page.getByRole('status').getByText('선택한 일정 원본')).toBeVisible();
+  await expect(page.getByRole('status').getByText('기록됨')).toBeVisible();
+  await expect(page.getByText('calendar.writeback_intent.created')).toHaveCount(0);
+  await expect(page.getByText('caldav-primary')).toHaveCount(0);
   await expect(page.getByText('동기화 완료')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
@@ -1057,7 +1082,7 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/calendar');
   await expect(page.getByRole('heading', { name: '일정 관리' })).toBeVisible();
-  await expect(page.getByText('caldav-primary').first()).toBeVisible();
+  await expect(page.getByText('일정 원본 1').first()).toBeVisible();
   const mobileWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/calendar/writeback-intent' && request.method() === 'POST';
@@ -1074,7 +1099,8 @@ test('renders calendar writeback intent status without direct provider writes', 
   for (const headerName of publicIdentityHeaders) {
     expect(mobileRequestHeaders[headerName]).toBeUndefined();
   }
-  await expect(page.getByText('customer_owned')).toBeVisible();
+  await expect(page.getByText('고객 원본 계정 반영')).toBeVisible();
+  await expect(page.getByText('caldav-primary')).toHaveCount(0);
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile.png'), fullPage: false });
@@ -1125,12 +1151,12 @@ test('renders data WebDAV writeback intent status without direct provider writes
   for (const headerName of publicIdentityHeaders) {
     expect(desktopAccountsHeaders[headerName]).toBeUndefined();
   }
-  await expect(page.getByText('etag=etag-webdav-primary')).toBeVisible();
+  await expect(page.getByText('쓰기 가능 · 충돌 검사용 ETag 준비')).toBeVisible();
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
   });
-  await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
+  await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const desktopWritebackCall = await desktopWritebackRequest;
   const desktopHeaders = desktopWritebackCall.headers();
   expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -1139,11 +1165,12 @@ test('renders data WebDAV writeback intent status without direct provider writes
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
 
-  await expect(page.getByText('writeback', { exact: true })).toBeVisible();
-  await expect(page.getByText('server-authoritative')).toBeVisible();
-  await expect(page.getByText('WebDAV source webdav_src_primary').first()).toBeVisible();
+  await expect(page.getByText('원본 반영 의도')).toBeVisible();
+  await expect(page.getByText('서버 확인')).toBeVisible();
+  await expect(page.getByText('WebDAV 저장소 1').first()).toBeVisible();
+  await expect(page.getByText('WebDAV source webdav_src_primary')).toHaveCount(0);
   await expect(page.getByText('https://webdav.naruon.net')).toHaveCount(0);
-  await expect(page.getByText('etag-webdav-primary').first()).toBeVisible();
+  await expect(page.getByText('etag-webdav-primary')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-desktop.png'), fullPage: false });
@@ -1155,7 +1182,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
   });
-  await page.getByRole('button', { name: 'WebDAV intent 승인 점검' }).click();
+  await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const mobileWritebackCall = await mobileWritebackRequest;
   const mobileHeaders = mobileWritebackCall.headers();
   expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -1163,8 +1190,8 @@ test('renders data WebDAV writeback intent status without direct provider writes
   for (const headerName of publicIdentityHeaders) {
     expect(mobileHeaders[headerName]).toBeUndefined();
   }
-  await expect(page.getByText('server-authoritative')).toBeVisible();
-  await page.getByText('server-authoritative').scrollIntoViewIfNeeded();
+  await expect(page.getByText('서버 확인')).toBeVisible();
+  await page.getByText('서버 확인').scrollIntoViewIfNeeded();
   await page.mouse.wheel(0, 140);
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
@@ -1210,7 +1237,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
     const url = new URL(request.url());
     return url.pathname === '/api/emails/unique-thread-intent' && request.method() === 'POST';
   });
-  await page.getByRole('button', { name: '중복 메일 thread intent 점검' }).click();
+  await page.getByRole('button', { name: '중복 메일 스레드 의도 점검' }).click();
   const desktopRequest = await desktopIntentRequest;
   const desktopHeaders = desktopRequest.headers();
   expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
@@ -1218,9 +1245,13 @@ test('renders unique email canonical thread intent with signed API headers', asy
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
   expect(desktopRequest.postDataJSON().candidates).toHaveLength(2);
-  await expect(page.getByText('email.unique_thread_intent.created')).toBeVisible();
-  await expect(page.getByText('provider_write_executed=false')).toBeVisible();
-  await expect(page.getByText(/fingerprint.*thread-q2-root/)).toBeVisible();
+  const desktopUniqueThreadSection = page.getByLabel('중복 메일 canonical 스레드 의도');
+  await expect(desktopUniqueThreadSection.getByText('기록됨')).toBeVisible();
+  await expect(desktopUniqueThreadSection.getByText('의도만 기록')).toBeVisible();
+  await expect(page.getByText('email.unique_thread_intent.created')).toHaveCount(0);
+  await expect(page.getByText('provider_write_executed=false')).toHaveCount(0);
+  await expect(page.getByText('본문 fingerprint 근거')).toBeVisible();
+  await expect(page.getByText('thread-q2-root')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-unique-thread-intent-desktop.png'), fullPage: false });
@@ -1232,14 +1263,16 @@ test('renders unique email canonical thread intent with signed API headers', asy
     const url = new URL(request.url());
     return url.pathname === '/api/emails/unique-thread-intent' && request.method() === 'POST';
   });
-  await page.getByRole('button', { name: '중복 메일 thread intent 점검' }).click();
+  await page.getByRole('button', { name: '중복 메일 스레드 의도 점검' }).click();
   const mobileHeaders = (await mobileIntentRequest).headers();
   expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(mobileHeaders[headerName]).toBeUndefined();
   }
-  await expect(page.getByText('thread-q2-root').first()).toBeVisible();
-  await page.getByText('email.unique_thread_intent.created').scrollIntoViewIfNeeded();
+  const mobileUniqueThreadSection = page.getByLabel('중복 메일 canonical 스레드 의도');
+  await expect(mobileUniqueThreadSection.getByText('본문 fingerprint 근거')).toBeVisible();
+  await expect(page.getByText('thread-q2-root')).toHaveCount(0);
+  await mobileUniqueThreadSection.getByText('기록됨').scrollIntoViewIfNeeded();
   const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(mobileOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-unique-thread-intent-mobile.png'), fullPage: false });
@@ -1370,7 +1403,7 @@ test('captures responsive startup evidence for desktop tablet mobile and the mob
   ] as const) {
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.goto('/');
-    await expect(page.getByRole('region', { name: '홈 개요 대시보드' }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: '홈 개요' }).first()).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath(`startup-${viewport.name}.png`), fullPage: true });
     if (viewport.name === 'mobile') {
       await page.getByRole('button', { name: '워크스페이스 메뉴 열기' }).click();
@@ -1391,8 +1424,8 @@ test('validates mobile hamburger composition and startup preference controls', a
   const menuWidth = await menu.evaluate((element) => element.getBoundingClientRect().width);
   expect(menuWidth).toBeGreaterThanOrEqual(340);
   await expect(menu.getByText('시작 화면', { exact: true })).toBeVisible();
-  await expect(menu.getByRole('button', { name: '대시보드' })).toBeVisible();
-  await expect(menu.getByRole('button', { name: '이메일' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '홈' })).toBeVisible();
+  await expect(menu.getByRole('button', { name: '메일' })).toBeVisible();
   await expect(menu.getByRole('button', { name: '일정' })).toBeVisible();
   await expect(menu.getByRole('link', { name: '홈', exact: true })).toHaveAttribute('href', '/');
   await expect(menu.getByRole('link', { name: '메일', exact: true })).toHaveAttribute('href', '/mail');
@@ -1469,7 +1502,7 @@ for (const section of [
 
     await page.goto('/ai-hub');
     await page
-      .getByRole('navigation', { name: 'AI hub execution checkpoints' })
+      .getByRole('navigation', { name: 'AI 허브 실행 체크포인트' })
       .getByRole('link', { name: section.linkName })
       .click();
 
@@ -1521,7 +1554,7 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   await expect(detailRegion).toBeVisible();
   await expect(detailRegion.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
   await expect(detailRegion.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
-  await expect(detailRegion.getByRole('button', { name: '할 일 만들기' })).toBeVisible();
+  await expect(detailRegion.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
 
   const replyButton = detailRegion.getByRole('button', { name: '답장 보내기' });
   await replyButton.scrollIntoViewIfNeeded();
@@ -1533,6 +1566,6 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   expect(bottomGap).toBeGreaterThanOrEqual(0);
 
   await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
-  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '할 일 만들기' }).click();
-  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 할 일로 추적합니다.')).toBeVisible();
+  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
+  await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목으로 추적합니다.')).toBeVisible();
 });

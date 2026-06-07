@@ -99,7 +99,7 @@ export default function NetworkGraph() {
       })
       .catch((err) => {
         console.error('Failed to load network graph:', err);
-        setError('Failed to load network relationships');
+        setError('관계 맥락을 불러오지 못했습니다.');
         setLoading(false);
       });
   }, []);
@@ -143,7 +143,14 @@ export default function NetworkGraph() {
   }
 
   if (error) {
-    return <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center text-sm text-red-500 sm:min-h-[420px]">관계 그래프를 불러오지 못했습니다.</div>;
+    return (
+      <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
+        <div className="max-w-xs rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+          <h4 className="font-bold">관계 맥락을 불러오지 못했습니다</h4>
+          <p className="mt-2 text-sm leading-6">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   if (nodes.length === 0) {
@@ -166,7 +173,7 @@ export default function NetworkGraph() {
           {nodes.length}개 노드와 {edges.length}개 관계가 이 스레드 맥락에 연결되어 있습니다.
         </p>
         <div className="mt-3 rounded-xl border border-primary/10 bg-primary/5 p-3 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground">텍스트 관계 요약</p>
+          <p className="font-semibold text-foreground">텍스트 관계 맥락 종합</p>
           <p className="mt-1">
             관련 노드: {nodeLabels.join(', ')}
           </p>
@@ -174,7 +181,7 @@ export default function NetworkGraph() {
       </div>
       <div
         ref={containerRef}
-        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 네트워크 그래프`}
+        aria-label={`${nodes.length}개 노드와 ${edges.length}개 관계가 있는 관계 맥락`}
         className="min-h-0 flex-1 w-full bg-[radial-gradient(circle_at_center,rgb(37_99_255_/_0.08),transparent_32rem)]"
       />
     </div>

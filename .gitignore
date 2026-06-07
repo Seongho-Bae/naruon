@@ -73,4 +73,8 @@ frontend/playwright-report/
 frontend/playwright/.cache/
 frontend/trace_output/
 
+# Local CodeGraph artifacts
+.codegraph/
+.cursor/rules/codegraph.mdc
+
 .worktrees/

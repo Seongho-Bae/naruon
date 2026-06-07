@@ -276,27 +276,38 @@ describe("SettingsLayout", () => {
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
     expect(operationalCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
-    expect(container.textContent).toContain("Self-hosted connector manifest");
-    expect(container.textContent).toContain("Naruon은 이메일 서버가 아닙니다");
-    expect(container.textContent).toContain("self-hosted_connector");
-    expect(container.textContent).toContain("outbound_only");
-    expect(container.textContent).toContain("naruon.net");
-    expect(container.textContent).toContain("ci_smoke_only");
-    expect(container.textContent).toContain("caldav");
-    expect(container.textContent).toContain("webdav");
-    expect(container.textContent).toContain("smtp_server");
-    expect(container.textContent).toContain("imap_server");
-    expect(container.textContent).toContain("mx_host");
-    expect(container.textContent).toContain("Connector health & APM signals");
-    expect(container.textContent).toContain("observability.operational_signals.viewed");
-    expect(container.textContent).toContain("connected");
-    expect(container.textContent).toContain("otel-collector:4317");
-    expect(container.textContent).toContain("Recent connector signals");
-    expect(container.textContent).toContain("connector_evt_heartbeat");
-    expect(container.textContent).toContain("outbound runner heartbeat received");
+    expect(container.textContent).toContain("Self-hosted connector 등록 상태");
+    expect(container.textContent).toContain("Naruon은 메일 서버가 아닙니다");
+    expect(container.textContent).toContain("Self-hosted connector");
+    expect(container.textContent).toContain("Outbound only");
+    expect(container.textContent).toContain("제어 평면");
+    expect(container.textContent).toContain("검증용 연결");
+    expect(container.textContent).toContain("CALDAV");
+    expect(container.textContent).toContain("WEBDAV");
+    expect(container.textContent).toContain("SMTP 서버 역할 금지");
+    expect(container.textContent).toContain("IMAP 서버 역할 금지");
+    expect(container.textContent).toContain("MX 호스트 역할 금지");
+    expect(container.textContent).toContain("Connector 상태와 APM 신호");
+    expect(container.textContent).toContain("감사 근거 기록됨");
+    expect(container.textContent).toContain("연결됨");
+    expect(container.textContent).toContain("OTel endpoint");
+    expect(container.textContent).toContain("최근 connector 신호");
+    expect(container.textContent).toContain("하트비트 수신");
+    expect(container.textContent).toContain("서버가 runner 하트비트를 관측했습니다");
+    expect(container.textContent).not.toContain("self-hosted_connector");
+    expect(container.textContent).not.toContain("outbound_only");
+    expect(container.textContent).not.toContain("ci_smoke_only");
+    expect(container.textContent).not.toContain("smtp_server");
+    expect(container.textContent).not.toContain("imap_server");
+    expect(container.textContent).not.toContain("mx_host");
+    expect(container.textContent).not.toContain("observability.operational_signals.viewed");
+    expect(container.textContent).not.toContain("connector_evt_heartbeat");
+    expect(container.textContent).not.toContain("outbound runner heartbeat received");
+    expect(container.textContent).not.toContain("Provider sync lag will be emitted");
+    expect(container.textContent).not.toContain("otel-collector:4317");
     expect(container.textContent).not.toContain("nrn_registered-token");
     expect(container.textContent).toContain("Connector heartbeat");
-    expect(container.textContent).toContain("instrumentation_pending");
+    expect(container.textContent).toContain("계측 준비");
 
     const rotateButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("등록 토큰 회전"));
     expect(rotateButton).toBeTruthy();
@@ -313,8 +324,9 @@ describe("SettingsLayout", () => {
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
-    expect(container.textContent).toContain("One-time connector registration token");
-    expect(container.textContent).toContain("nrn_one_time_connector_token");
+    expect(container.textContent).toContain("등록 토큰이 생성되었습니다");
+    expect(container.textContent).toContain("원문 토큰은 화면에 보관하지 않습니다");
+    expect(container.textContent).not.toContain("nrn_one_time_connector_token");
   });
 
   it("marks external operational console links with explicit noopener", async () => {
@@ -381,9 +393,14 @@ describe("SettingsLayout", () => {
     });
 
     expect(container.textContent).toContain("OIDC 인증 세션");
-    expect(container.textContent).toContain("https://login.example.com/realms/naruon");
-    expect(container.textContent).toContain("naruon-web");
-    expect(container.textContent).toContain("alice / org-acme / workspace-org-acme");
+    expect(container.textContent).toContain("Issuer");
+    expect(container.textContent).toContain("Client");
+    expect(container.textContent).toContain("설정됨");
+    expect(container.textContent).toContain("등록됨");
+    expect(container.textContent).toContain("서명된 세션 연결됨 · 조직 스코프");
+    expect(container.textContent).not.toContain("https://login.example.com/realms/naruon");
+    expect(container.textContent).not.toContain("naruon-web");
+    expect(container.textContent).not.toContain("alice / org-acme / workspace-org-acme");
 
     const loginButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "OIDC 로그인");
     const logoutButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "로그아웃");
@@ -457,19 +474,23 @@ describe("SettingsLayout", () => {
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     }
 
-    expect(container.textContent).toContain("고객 지정 Provider");
+    expect(container.textContent).toContain("고객 지정 연결");
     expect(container.textContent).toContain("smtp.example.com:587");
     expect(container.textContent).toContain("imap.example.com:993");
     expect(container.textContent).toContain("pop3.example.com:995");
     expect(container.textContent).toContain("OAuth 로그인");
     expect(container.textContent).toContain("앱 설정 완료, 사용자 consent 대기");
-    expect(container.textContent).toContain("Source readiness");
-    expect(container.textContent).toContain("caldav_src_fastmail_primary");
-    expect(container.textContent).toContain("webdav_src_primary");
-    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).toContain("원본 연결 준비 상태");
+    expect(container.textContent).toContain("Fastmail 일정 원본 1");
+    expect(container.textContent).toContain("WebDAV 저장소 1");
+    expect(container.textContent).not.toContain("caldav_src_fastmail_primary");
+    expect(container.textContent).not.toContain("webdav_src_primary");
+    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
     expect(container.textContent).not.toContain("https://files.example.com/dav");
     expect(container.textContent).not.toContain("files@example.com");
-    expect(container.textContent).toContain("writeback intent enabled");
+    expect(container.textContent).toContain("쓰기 의도 가능");
+    expect(container.textContent).toContain("충돌 검사용 ETag 준비");
+    expect(container.textContent).not.toContain("etag-caldav-primary");
     expect(container.textContent).toContain("저장된 secret 유지");
     expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");
 

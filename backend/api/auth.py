@@ -1,4 +1,4 @@
-import http.client
+from http.client import HTTPSConnection
 import json
 import logging
 import math
@@ -25,7 +25,7 @@ OIDC_JWKS_TIMEOUT_SECONDS = 5
 OIDC_JWKS_MAX_RESPONSE_BYTES = 1024 * 1024
 
 
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+class _PinnedHTTPSConnection(HTTPSConnection):
     def __init__(
         self,
         address: str,
@@ -132,7 +132,7 @@ RoleName = Literal[
     "group_admin",
     "member",
 ]
-SessionVerifier = Literal["hmac", "oidc", "override"]
+SessionVerifier = Literal["hmac", "oidc", "override", "server"]
 ALLOWED_ROLES: set[str] = {
     "system_admin",
     "tenant_admin",
@@ -319,6 +319,8 @@ def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None
     # externally supplied HMAC or enterprise OIDC session claims.
     if role_claim in SYSTEM_ADMIN_ROLES:
         raise _authentication_error()
+    if role_claim in TENANT_ADMIN_ROLES:
+        raise _authentication_error()
 
 
 def _required_string_claim(payload: dict[str, Any], name: str) -> str:
@@ -377,6 +379,8 @@ def _auth_context_from_session_payload(
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
     role = cast(RoleName, role_value)
+    if role in TENANT_ADMIN_ROLES and session_verifier not in ("server", "override"):
+        raise _authentication_error()
     organization_id = _optional_string_claim(payload, "org")
     if not is_system_admin_role(role) and organization_id is None:
         raise _authentication_error()

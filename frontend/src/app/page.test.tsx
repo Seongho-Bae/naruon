@@ -363,7 +363,7 @@ describe("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
-    expect(container.textContent).toContain("캘린더 반영 대기");
+    expect(container.textContent).toContain("일정 반영 대기");
     expect(window.location.hash).toBe("");
   });
 
@@ -401,7 +401,7 @@ describe("Home workspace action bridge", () => {
           ok: true,
           json: async () => ({
             emails: [
-              { id: 102, subject: "출시 리뷰 일정 조율", sender: "pm@example.com", date: "2026-05-17T10:00:00Z", snippet: "캘린더 반영 후보" },
+              { id: 102, subject: "출시 리뷰 일정 조율", sender: "pm@example.com", date: "2026-05-17T10:00:00Z", snippet: "일정 반영 후보" },
             ],
           }),
         });
@@ -547,8 +547,8 @@ describe("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
-    expect(container.textContent).toContain("캘린더 반영 대기");
-    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+    expect(container.textContent).toContain("일정 반영 대기");
+    expect(container.textContent).not.toContain("오늘의 실행 홈");
   });
 
   it("lets hashless mobile workspace events override a saved dashboard startup view", async () => {
@@ -577,8 +577,8 @@ describe("Home workspace action bridge", () => {
 
     expect(window.location.hash).toBe("");
     expect(container.querySelector('#mobile-calendar')?.className).toContain("flex");
-    expect(container.textContent).toContain("캘린더 반영 대기");
-    expect(container.textContent).not.toContain("오늘의 실행 대시보드");
+    expect(container.textContent).toContain("일정 반영 대기");
+    expect(container.textContent).not.toContain("오늘의 실행 홈");
   });
 
   it("ignores malformed hashless mobile workspace events for dashboard overrides", async () => {
@@ -682,7 +682,7 @@ describe("Home workspace action bridge", () => {
       root?.render(<Home />);
     });
     await flushAsyncWork();
-    expect(container.textContent).toContain("캘린더 반영 대기");
+    expect(container.textContent).toContain("일정 반영 대기");
 
     await act(async () => {
       window.history.replaceState(null, "", "/");
@@ -691,7 +691,7 @@ describe("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("김나루님");
-    expect(container.textContent).not.toContain("캘린더 반영 대기");
+    expect(container.textContent).not.toContain("일정 반영 대기");
   });
 
   it("renders an API-backed loading state for the mobile search panel instead of placeholders", async () => {

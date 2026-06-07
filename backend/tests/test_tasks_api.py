@@ -6,6 +6,7 @@ import json
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -51,7 +52,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "tenant_admin",
+        "role": "member",
         "org": "org-acme",
         "groups": [],
         "workspace": "workspace-org-acme",
@@ -243,6 +244,13 @@ class MockTaskSession:
         pass
 
     async def refresh(self, obj):
+        pass
+
+    @asynccontextmanager
+    async def begin_nested(self):
+        yield
+
+    async def flush(self):
         pass
 
 
