@@ -72,6 +72,17 @@
   completed check run or status context failed, or the check rollup cannot be
   verified, the OpenCode review must request changes or explain the verification
   failure instead of approving.
+- OpenCode Agent PR reviews must be general-purpose and meticulous rather than
+  narrowly scenario-specific. Configure the review prompt to use all relevant
+  MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,
+  Context7 for current library/API behavior, and web search only for bounded
+  external lookups. The agent may directly read changed files and focused hunks
+  in read-only mode when MCP evidence is insufficient, but must not edit files
+  or execute project code during the review.
+- OpenCode `Review Overview` comments are durable gate evidence. Publish them
+  through an idempotent marker such as `<!-- opencode-review-overview -->` and
+  update the existing comment instead of deleting it after approval, failed
+  checks, or check-rollup lookup failures.
 - Keep CodeRabbit `request_changes_workflow` enabled for robot approval, but
   keep CodeRabbit GitHub Checks integration disabled. GitHub Actions are already
   evaluated by required checks and PR Governance; letting CodeRabbit also gate

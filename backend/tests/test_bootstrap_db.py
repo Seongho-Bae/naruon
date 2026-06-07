@@ -19,12 +19,19 @@ from db.models import (
 )
 
 
-def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch):
+def _get_schema_statements(monkeypatch):
     monkeypatch.delenv("NARUON_IMPORT_USER_ID", raising=False)
     monkeypatch.delenv("NARUON_IMPORT_ORGANIZATION_ID", raising=False)
+    return [str(statement).lower() for statement in schema_backfill_sql()]
 
-    statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
+def _execute_schema_backfill(sync_conn):
+    for statement in schema_backfill_sql():
+        sync_conn.execute(statement)
+
+
+def test_schema_backfill_adds_email_columns(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table emails add column if not exists reply_to" in statement
         for statement in statements
@@ -45,6 +52,22 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "alter table emails add column if not exists in_reply_to" in statement
         for statement in statements
     )
+    assert any(
+        'alter table emails add column if not exists "references"' in statement
+        for statement in statements
+    )
+    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any(
+        "update emails set organization_id" in statement for statement in statements
+    )
+    assert any(
+        "existing emails require explicit non-default" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_adds_sender_relationship_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table sender_relationships add column if not exists source_message_id"
         in statement
@@ -68,10 +91,10 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         in statement
         for statement in statements
     )
-    assert any(
-        'alter table emails add column if not exists "references"' in statement
-        for statement in statements
-    )
+
+
+def test_schema_backfill_adds_email_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "create index if not exists ix_emails_user_id" in statement
         for statement in statements
@@ -93,18 +116,14 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "create unique index if not exists uq_emails_owner_message_id" in statement
         for statement in statements
     )
-    assert not any("update emails set user_id" in statement for statement in statements)
-    assert not any(
-        "update emails set organization_id" in statement for statement in statements
-    )
-    assert any(
-        "existing emails require explicit non-default" in statement
-        for statement in statements
-    )
     assert any(
         "create index if not exists ix_emails_thread_id" in statement
         for statement in statements
     )
+
+
+def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table llm_providers add column if not exists user_id" in statement
         for statement in statements
@@ -115,18 +134,29 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "create index if not exists ix_llm_providers_organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "existing llm providers require explicit non-default" in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_llm_providers_org_name" in statement
+        for statement in statements
+    )
+    assert any(
+        "drop index if exists ix_llm_providers_name" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_creates_calendar_writeback_sources_table(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
         "create table if not exists calendar_writeback_sources" in statement
         for statement in statements
     )
-    assert any(
-        "create table if not exists security_audit_events" in statement
-        for statement in statements
-    )
-    assert any(
-        "actor_user_id varchar not null" in statement for statement in statements
-    )
-    assert any("event_action varchar not null" in statement for statement in statements)
-    assert any("resource_uid varchar" in statement for statement in statements)
     assert any(
         "source_uid varchar primary key" in statement for statement in statements
     )
@@ -147,6 +177,23 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         "create index if not exists ix_calendar_writeback_sources_scope" in statement
         for statement in statements
     )
+
+
+def test_schema_backfill_creates_security_audit_events_table(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "create table if not exists security_audit_events" in statement
+        for statement in statements
+    )
+    assert any(
+        "actor_user_id varchar not null" in statement for statement in statements
+    )
+    assert any("event_action varchar not null" in statement for statement in statements)
+    assert any("resource_uid varchar" in statement for statement in statements)
+
+
+def test_schema_backfill_adds_webdav_account_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table webdav_accounts add column if not exists source_uid" in statement
         for statement in statements
@@ -167,15 +214,6 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
     )
     assert any(
         "alter table webdav_accounts add column if not exists etag_value" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table project_folders add column if not exists folder_uid" in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table project_folders add column if not exists organization_id"
-        in statement
         for statement in statements
     )
     assert any(
@@ -214,6 +252,19 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         and "user_id, organization_id, workspace_id" in statement
         for statement in statements
     )
+
+
+def test_schema_backfill_adds_project_folder_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "alter table project_folders add column if not exists folder_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table project_folders add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
     assert any(
         "update project_folders set folder_uid" in statement
         and "webdav_folder_" in statement
@@ -235,22 +286,10 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         and "user_id, organization_id" in statement
         for statement in statements
     )
-    assert any(
-        "create index if not exists ix_llm_providers_organization_id" in statement
-        for statement in statements
-    )
-    assert any(
-        "existing llm providers require explicit non-default" in statement
-        for statement in statements
-    )
-    assert any(
-        "create unique index if not exists uq_llm_providers_org_name" in statement
-        for statement in statements
-    )
-    assert any(
-        "drop index if exists ix_llm_providers_name" in statement
-        for statement in statements
-    )
+
+
+def test_schema_backfill_adds_tenant_config_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
     assert any(
         "alter table tenant_configs add column if not exists pop3_username" in statement
         for statement in statements
@@ -575,8 +614,7 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                     "email_id": email_id,
                 },
             )
-            combined_sql = ";\n".join(str(stmt.text) for stmt in schema_backfill_sql())
-            await conn.execute(text(combined_sql))
+            await conn.run_sync(_execute_schema_backfill)
             result = await conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns

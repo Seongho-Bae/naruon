@@ -1,5 +1,6 @@
 import datetime
 from typing import Optional
+from icalendar import Calendar, Todo
 
 def generate_ics_from_task(
     task_uid: str,
@@ -12,9 +13,6 @@ def generate_ics_from_task(
     """
     Generates a basic CalDAV-compatible .ics (iCalendar) string for a TicketTask (VTODO).
     """
-    dtstamp = updated_at.strftime("%Y%m%dT%H%M%SZ")
-    
-    # Map status
     ics_status = "NEEDS-ACTION"
     if status == "in_progress":
         ics_status = "IN-PROCESS"
@@ -23,23 +21,19 @@ def generate_ics_from_task(
     elif status == "blocked":
         ics_status = "NEEDS-ACTION"
 
-    lines = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//Naruon//AI Workspace//EN",
-        "BEGIN:VTODO",
-        f"UID:{task_uid}",
-        f"DTSTAMP:{dtstamp}",
-        f"SUMMARY:{title}",
-        f"STATUS:{ics_status}"
-    ]
+    cal = Calendar()
+    cal.add('VERSION', '2.0')
+    cal.add('PRODID', '-//Naruon//AI Workspace//EN')
+
+    todo = Todo()
+    todo.add('UID', task_uid)
+    todo.add('DTSTAMP', updated_at)
+    todo.add('SUMMARY', title)
+    todo.add('STATUS', ics_status)
 
     if due_date:
-        lines.append(f"DUE:{due_date.strftime('%Y%m%dT%H%M%SZ')}")
+        todo.add('DUE', due_date)
 
-    lines.extend([
-        "END:VTODO",
-        "END:VCALENDAR"
-    ])
+    cal.add_component(todo)
 
-    return "\r\n".join(lines) + "\r\n"
+    return cal.to_ical().decode("utf-8")
