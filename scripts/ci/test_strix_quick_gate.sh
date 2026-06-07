@@ -7127,6 +7127,17 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"openai" \
 	"https://models.github.ai/inference"
 
+run_gate_case "direct-openai-gpt-does-not-require-github-models-api-base" \
+	"openai/gpt-5.4" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/gpt-5.4" \
+	"<unset>" \
+	"openai" \
+	""
+
 run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"openai/gpt-5" \
 	"" \
