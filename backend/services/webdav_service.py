@@ -42,8 +42,9 @@ async def sync_webdav_folders(
                 parsed = urlsplit(account.server_url)
                 if parsed.scheme != "https":
                     raise ValueError("WebDAV server_url must use HTTPS")
-                if parsed.hostname:
-                    _reject_unsafe_ip_literal("WebDAV server_url", parsed.hostname)
+                if not parsed.hostname:
+                    raise ValueError("WebDAV server_url must include a hostname")
+                _reject_unsafe_ip_literal("WebDAV server_url", parsed.hostname)
         except ValueError as exc:
             logger.warning(
                 "Invalid WebDAV server URL for source %s: %s",
