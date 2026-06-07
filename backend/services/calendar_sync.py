@@ -1,7 +1,9 @@
 import datetime
-from typing import Optional
-from icalendar import Calendar, Todo
 from dataclasses import dataclass
+from typing import Optional
+
+from icalendar import Calendar, Todo
+
 
 @dataclass
 class CalendarTask:
@@ -11,6 +13,7 @@ class CalendarTask:
     created_at: datetime.datetime
     updated_at: datetime.datetime
     due_date: Optional[datetime.datetime] = None
+
 
 def generate_ics_from_task(task: CalendarTask) -> str:
     """
