@@ -16,27 +16,40 @@ def safe_webdav_source_label(source_id: str | None) -> str:
     return f"WebDAV source {source_id}"
 
 
-async def sync_webdav_folders(session, user_id: str):
+async def sync_webdav_folders(
+    session, user_id: str, organization_id: str | None
+):
     """
     Fetch folder structures for all WebDAV accounts of the user.
     """
-    from db.models import WebdavAccount
-    from sqlalchemy import select
     from core.url_validation import _reject_unsafe_ip_literal
     from urllib.parse import urlsplit
     
     logger.info(f"Syncing WebDAV folders for user {user_id}")
-    stmt = select(WebdavAccount).where(WebdavAccount.user_id == user_id)
+    organization_filter = (
+        WebdavAccount.organization_id == organization_id
+        if organization_id is not None
+        else WebdavAccount.organization_id.is_(None)
+    )
+    stmt = select(WebdavAccount).where(
+        WebdavAccount.user_id == user_id, organization_filter
+    )
     res = await session.execute(stmt)
     accounts = res.scalars().all()
     for account in accounts:
         try:
             if account.server_url:
                 parsed = urlsplit(account.server_url)
+                if parsed.scheme != "https":
+                    raise ValueError("WebDAV server_url must use HTTPS")
                 if parsed.hostname:
                     _reject_unsafe_ip_literal("WebDAV server_url", parsed.hostname)
         except ValueError as exc:
-            logger.warning(f"Invalid WebDAV server URL for source {account.source_uid or 'unknown'}: {exc}")
+            logger.warning(
+                "Invalid WebDAV server URL for source %s: %s",
+                account.source_uid or "unknown",
+                exc,
+            )
             continue
 
         logger.info(

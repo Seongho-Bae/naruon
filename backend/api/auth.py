@@ -244,7 +244,7 @@ def _session_secret_bytes() -> bytes:
     if configured is None:
         raise _authentication_error()
     secret_value = configured.get_secret_value()
-    if not secret_value or len(secret_value) < MIN_SESSION_SECRET_BYTES:
+    if not secret_value:
         raise _authentication_error()
     secret = secret_value.encode("utf-8")
     if len(secret) < MIN_SESSION_SECRET_BYTES:

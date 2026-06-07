@@ -285,6 +285,17 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'NPM_CONFIG_IGNORE_SCRIPTS: "true"' "opencode review workflow disables npm lifecycle scripts for CodeGraph npx"
 	assert_file_contains "$workflow_file" "init -i" "opencode review workflow builds the CodeGraph index"
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
+	assert_file_contains "$workflow_file" "general-purpose and meticulous" "opencode review prompt requires a general-purpose meticulous review"
+	assert_file_contains "$workflow_file" "use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups" "opencode review prompt directs the agent to use all configured MCP sources"
+	assert_file_contains "$workflow_file" "Inspect changed files and focused hunks directly when MCP evidence is insufficient." "opencode review allows focused direct source inspection when MCP evidence is insufficient"
+	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
+	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
+	assert_file_contains "$workflow_file" "always return a final control block instead of a progress summary" "opencode review prompt requires a gate conclusion instead of a progress summary"
+	assert_file_contains "$workflow_file" "timeout 540 opencode run" "opencode review primary model has a bounded extended timeout for larger workflow diffs"
+	assert_file_contains "$workflow_file" '"ci-review-fallback"' "opencode review workflow declares a dedicated fallback agent"
+	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
+	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
+	assert_file_contains "$workflow_file" '"grep": "allow"' "opencode review allows focused literal searches"
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
 	assert_file_contains "$workflow_file" "Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel." "opencode review prompt forbids reasoning text before the control sentinel"
 	assert_file_contains "$workflow_file" "OpenCode output did not include a valid control conclusion." "opencode review model steps fail when output lacks a parseable control conclusion"
@@ -296,12 +307,17 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "opencode run" "opencode review workflow runs the bounded OpenCode agent path"
 	assert_file_contains "$workflow_file" 'opencode run "$(cat "$prompt_file")"' "opencode review passes the prompt as the positional message before file attachments"
 	assert_file_contains "$workflow_file" "--agent ci-review" "opencode review workflow forces the compact CI review agent"
+	assert_file_contains "$workflow_file" "--agent ci-review-fallback" "opencode review fallback runs with the expanded CI review agent"
 	assert_file_contains "$workflow_file" "--pure" "opencode review workflow avoids external OpenCode plugins during CI"
 	assert_file_contains "$workflow_file" "--format json" "opencode review workflow captures the OpenCode session id as JSON"
 	assert_file_contains "$workflow_file" "opencode export" "opencode review workflow extracts assistant text from the completed OpenCode session"
 	assert_file_contains "$workflow_file" 'gate_status=0' "opencode review publish step tracks invalid control output without failing the check"
 	assert_file_contains "$workflow_file" 'gate_status=$?' "opencode review publish step lets approval gate explain invalid control output"
 	assert_file_contains "$workflow_file" "OpenCode comment gate result: %s (exit %s)" "opencode review publish step logs invalid control output status"
+	assert_file_contains "$workflow_file" "<!-- opencode-review-overview -->" "opencode review publishes a durable Review Overview marker"
+	assert_file_contains "$workflow_file" "## OpenCode Review Overview" "opencode review publishes a visible Review Overview heading"
+	assert_file_contains "$workflow_file" 'gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}"' "opencode review updates an existing Review Overview comment instead of duplicating it"
+	assert_file_not_contains "$workflow_file" 'gh api -X DELETE "repos/${GH_REPOSITORY}/issues/comments/${comment_id}"' "opencode review must not delete Review Overview gate evidence"
 	assert_file_not_contains "$workflow_file" '--file "$OPENCODE_EVIDENCE_FILE"' "opencode review must not attach evidence content to GitHub Models requests"
 	assert_file_not_contains "$workflow_file" "opencode github run" "opencode review workflow must not use the oversized GitHub agent prompt path"
 	assert_file_not_contains "$workflow_file" 'repos/${{ github.repository }}' "opencode review workflow must pass repository expressions through env before shell use"
@@ -519,7 +535,7 @@ printf '%s\n' "$target_path" >> "${FAKE_STRIX_TARGET_LOG:?}"
 STRIX_REPORTS_DIR="${STRIX_REPORTS_DIR:-strix_runs}"
 
 case "${FAKE_STRIX_SCENARIO:?}" in
-	success|runtime-env-forwarding|vertex-primary-success-timing-message)
+	success|runtime-env-forwarding|vertex-primary-success-timing-message|direct-openai-gpt-does-not-require-github-models-api-base)
 		echo "scan ok"
 		exit 0
 		;;
@@ -896,6 +912,34 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		*)
 			echo "Error: GitHub Models rate-limit fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 38
+			;;
+		esac
+		;;
+	github-models-fallback-provider-signal-tries-next)
+		case "${STRIX_LLM:-}" in
+		openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Could not establish connection to the language model."
+			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			exit 1
+			;;
+		deepseek/deepseek-r1-0528)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities/vuln-0001.md" <<'EOS'
+Severity: CRITICAL
+Location 1:
+sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java:5
+EOS
+			echo "Warning: fallback model emitted provider failure-signal output"
+			exit 2
+			;;
+		deepseek/deepseek-v3-0324)
+			echo "scan ok after second GitHub Models fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models provider-signal fallback path unexpected (${STRIX_LLM:-})" >&2
 			exit 38
 			;;
 		esac
@@ -5180,6 +5224,36 @@ run_gate_case "github-models-primary-ratelimit-fallback-success" \
 	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
 	"1"
 
+run_gate_case "github-models-fallback-provider-signal-tries-next" \
+	"openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-v3-0324' in [0-9]+s\\." \
+	"3" \
+	"openai/gpt-5|deepseek/deepseek-r1-0528|deepseek/deepseek-v3-0324" \
+	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
+	"1"
+
 run_gate_case_allow_provider_signal "gemini-high-demand-retry-same-model-success" \
 	"gemini/retry-high-demand-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
@@ -7117,6 +7191,17 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"" \
 	"openai" \
 	"https://models.github.ai/inference"
+
+run_gate_case "direct-openai-gpt-does-not-require-github-models-api-base" \
+	"openai/gpt-5.4" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/gpt-5.4" \
+	"<unset>" \
+	"openai" \
+	""
 
 run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"openai/gpt-5" \

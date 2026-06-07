@@ -14,6 +14,7 @@ from services.text_safety import strip_html_markup
 from services.threading_service import normalize_message_id
 
 router = APIRouter(prefix="/api/ontology", tags=["ontology"])
+SOURCE_IDENTIFIER_PATTERN = r"^[\w\.\-\+@_<>]+$"
 
 
 class RelationshipResponse(BaseModel):
@@ -30,14 +31,20 @@ class RelationshipResponse(BaseModel):
 class RelationshipCreate(BaseModel):
     sender_email: str
     parent_sender_email: str | None = None
-    source_message_id: str | None = None
-    source_thread_id: str | None = None
+    source_message_id: str | None = Field(
+        default=None, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
+    )
+    source_thread_id: str | None = Field(
+        default=None, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
+    )
     relationship_type: str
     confidence_score: float = 1.0
 
 
 class RelationshipCaptureRequest(BaseModel):
-    source_message_id: str = Field(min_length=1, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$")
+    source_message_id: str = Field(
+        min_length=1, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
+    )
 
 
 def _email_owner_filters(auth_ctx: AuthContext):
@@ -74,8 +81,12 @@ def _relationship_user_email(auth_ctx: AuthContext) -> str:
 
 @router.get("/relationships", response_model=List[RelationshipResponse])
 async def get_relationships(
-    source_message_id: str | None = Query(default=None, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$"),
-    source_thread_id: str | None = Query(default=None, max_length=512, pattern=r"^[\w\.\-\+@_<>]+$"),
+    source_message_id: str | None = Query(
+        default=None, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
+    ),
+    source_thread_id: str | None = Query(
+        default=None, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
+    ),
     auth_ctx: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
