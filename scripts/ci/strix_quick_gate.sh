@@ -3101,8 +3101,8 @@ run_current_target_scan() {
 			if is_model_retryable_error "$candidate"; then
 				continue
 			fi
-			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-			return 1
+			echo "Strix fallback model '$candidate' emitted provider infrastructure or failure-signal output; trying next configured fallback if available." >&2
+			continue
 		fi
 
 		if ! is_model_retryable_error "$candidate"; then

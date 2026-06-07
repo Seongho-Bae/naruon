@@ -60,11 +60,12 @@
 - Real browser Home/Calendar/Mail verification passed with screenshots at `/tmp/naruon-home-uiux.png`, `/tmp/naruon-calendar-uiux.png`, and `/tmp/naruon-mail-uiux.png`.
 - Focused Mail display field tests: `npm run test -- src/components/EmailList.test.tsx src/components/EmailDetail.test.tsx`.
 - Focused Mail display lint: `npm run lint -- src/components/EmailList.tsx src/components/EmailList.test.tsx src/components/EmailDetail.tsx src/components/EmailDetail.test.tsx`.
-- Focused Korean-first label unit tests: `npm run test -- src/app/ai-hub/page.test.tsx src/app/calendar/page.test.tsx src/app/settings/page.test.tsx`.
-- Focused Korean-first label lint: `npm run lint -- src/components/AIHubLayout.tsx src/components/CalendarLayout.tsx src/components/SettingsLayout.tsx src/app/ai-hub/page.test.tsx`.
-- Focused Korean-first label typecheck: `npm run typecheck`.
+- Korean-first label unit tests: `npm run test -- src/app/ai-hub/page.test.tsx src/app/calendar/page.test.tsx src/app/settings/page.test.tsx`.
+- Korean-first label linting: `npm run lint -- src/components/AIHubLayout.tsx src/components/CalendarLayout.tsx src/components/SettingsLayout.tsx src/app/ai-hub/page.test.tsx`.
+- Typecheck validation after Korean-first label polish: `npm run typecheck`.
 - Clean browser AI Hub label verification: `env -u FORCE_COLOR -u NO_COLOR npm run test:e2e -- tests/e2e/ai-hub-source-surface.spec.ts --project=desktop`.
 - Clean browser Settings label verification: `env -u FORCE_COLOR -u NO_COLOR npm run test:e2e -- tests/e2e/dashboard-branding.spec.ts --project=desktop --grep "source-backed mail account settings"`.
+- Strix fallback gate follow-up: first strict provider/failure-signal fallback output now advances to the next configured fallback instead of stopping the loop; a focused harness verified the order `openai/gpt-5 -> deepseek/deepseek-r1-0528 -> deepseek/deepseek-v3-0324` with final clean success.
 - OpenCode workflow syntax: `actionlint .github/workflows/opencode-review.yml`.
 - OpenCode targeted contract assertions verified general-purpose MCP-backed prompts, read/grep read-only permissions, durable `<!-- opencode-review-overview -->` publication, PATCH update behavior, and absence of comment DELETE calls.
 - Full frontend validation after final changes: `npm run test`, `npm run lint`, `npm run typecheck`, and `POSTCSS_WORKERS=1 DISABLE_POSTCSS_WORKERS=true npm run build`.
