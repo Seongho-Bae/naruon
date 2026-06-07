@@ -345,7 +345,7 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
       <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
         <h2 className="text-base font-bold">Durable audit evidence</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          organization_id와 workspace_id가 있는 새 감사 이벤트만 표시하고 legacy AuditLog는 직접 노출하지 않습니다.
+          조직 및 워크스페이스 경계 내에서 발생한 API 요청 및 데이터 액세스 이벤트의 영구적인(Durable) 감사 로그 기록입니다.
         </p>
         <div className="mt-4 rounded-lg border border-border bg-background p-3">
           <p className="text-xs font-bold text-muted-foreground">API audit event</p>
