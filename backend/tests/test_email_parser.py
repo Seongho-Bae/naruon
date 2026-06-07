@@ -2,7 +2,7 @@ import tempfile
 import os
 import datetime
 import pytest
-from services.email_parser import parse_eml
+from services.email_parser import parse_eml, _sanitize_nul
 from services.exceptions import EmailParseError
 
 
@@ -233,3 +233,26 @@ Test"""
         assert parsed["reply_to"] == "Reply Target <reply-target@test.com>"
     finally:
         os.unlink(temp_path)
+
+
+def test_sanitize_nul():
+    # Normal string
+    assert _sanitize_nul("hello world") == "hello world"
+
+    # Strings with NUL characters
+    assert _sanitize_nul("hello\x00world") == "helloworld"
+    assert _sanitize_nul("\x00hello world") == "hello world"
+    assert _sanitize_nul("hello world\x00") == "hello world"
+    assert _sanitize_nul("hello\x00\x00world") == "helloworld"
+    assert _sanitize_nul("\x00") == ""
+
+    # Empty string
+    assert _sanitize_nul("") == ""
+
+    # None value
+    assert _sanitize_nul(None) == ""
+
+    # Non-string types (should be cast to string representations without NUL)
+    assert _sanitize_nul(123) == "123"
+    assert _sanitize_nul(12.3) == "12.3"
+    assert _sanitize_nul(True) == "True"
