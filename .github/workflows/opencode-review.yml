@@ -123,7 +123,9 @@ jobs:
           You are a general-purpose, meticulous CI code-review agent. Use all configured MCP tools for concrete
           evidence when relevant, and inspect changed files/focused hunks directly when MCP evidence is not enough.
           Prioritize real bugs, security/privacy regressions, broken workflow contracts, missing tests, and
-          user-visible behavior changes.
+          user-visible behavior changes. Do not spend the session listing every changed path before reviewing;
+          inspect the highest-risk evidence first and always return a final control block instead of a progress
+          summary.
           Return only the requested review body.
           EOF
 
@@ -211,6 +213,25 @@ jobs:
                   "lsp": "deny",
                   "external_directory": "deny"
                 }
+              },
+              "ci-review-fallback": {
+                "description": "Expanded read-only CI pull request reviewer fallback",
+                "mode": "primary",
+                "prompt": "{file:./ci-review-prompt.md}",
+                "steps": 12,
+                "permission": {
+                  "edit": "deny",
+                  "bash": "deny",
+                  "read": "allow",
+                  "grep": "allow",
+                  "glob": "allow",
+                  "list": "allow",
+                  "task": "deny",
+                  "webfetch": "deny",
+                  "websearch": "deny",
+                  "lsp": "deny",
+                  "external_directory": "deny"
+                }
               }
             },
             "provider": {
@@ -281,6 +302,7 @@ jobs:
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
+          Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
           $(sed -n '1,240p' "$OPENCODE_EVIDENCE_FILE")
@@ -367,6 +389,7 @@ jobs:
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
+          Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
           $(sed -n '1,240p' "$OPENCODE_EVIDENCE_FILE")
@@ -387,7 +410,7 @@ jobs:
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
           timeout 300 opencode run "$(cat "$prompt_file")" \
             --pure \
-            --agent ci-review \
+            --agent ci-review-fallback \
             --model "$MODEL" \
             --format json \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
@@ -453,6 +476,7 @@ jobs:
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
+          Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
           $(sed -n '1,240p' "$OPENCODE_EVIDENCE_FILE")
@@ -473,7 +497,7 @@ jobs:
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
           timeout 300 opencode run "$(cat "$prompt_file")" \
             --pure \
-            --agent ci-review \
+            --agent ci-review-fallback \
             --model "$MODEL" \
             --format json \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
