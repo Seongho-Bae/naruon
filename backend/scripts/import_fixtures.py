@@ -30,6 +30,8 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
         logger.info(f"Extracting {zip_path}...")
         extracted_files = await extract_backup_async(zip_path, temp_dir)
 
+
+        batch_values = []
         for file_path in extracted_files:
             if not str(file_path).endswith(".eml"):
                 continue
@@ -73,7 +75,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 organization_id=IMPORT_ORGANIZATION_ID,
             )
 
-            stmt = insert(Email).values(
+            batch_values.append(dict(
                 user_id=IMPORT_USER_ID,
                 organization_id=IMPORT_ORGANIZATION_ID,
                 message_id=email_data["message_id"],
@@ -87,7 +89,10 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                 date=email_data["date"],
                 body=email_data["body"],
                 embedding=embedding,
-            )
+            ))
+
+        if batch_values:
+            stmt = insert(Email)
             stmt = stmt.on_conflict_do_update(
                 index_elements=["user_id", "organization_id", "message_id"],
                 set_=dict(
@@ -105,8 +110,7 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     embedding=stmt.excluded.embedding,
                 ),
             )
-            await session.execute(stmt)
-
+            await session.execute(stmt, batch_values)
         await session.commit()
         logger.info(f"Finished processing {zip_path}")
 
