@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import logging
 from pathlib import Path
 
 from db.session import AsyncSessionLocal
@@ -14,6 +15,9 @@ EMBEDDING_DIMENSION = 1536
 IMPORT_USER_ID = os.environ.get("NARUON_IMPORT_USER_ID", "default")
 IMPORT_ORGANIZATION_ID = os.environ.get("NARUON_IMPORT_ORGANIZATION_ID", "default")
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 async def generate_fixture_embedding(text: str) -> list[float]:
     openai_api_key = os.environ.get("OPENAI_API_KEY", "")
@@ -27,7 +31,7 @@ async def import_eml_file(session, eml_file: Path) -> bool:
     try:
         parsed = parse_eml(eml_file)
     except Exception as e:
-        print(f"Failed to parse {eml_file}: {e}")
+        logger.error(f"Failed to parse {eml_file}: {e}")
         return False
 
     existing = await session.execute(
@@ -38,14 +42,14 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         )
     )
     if existing.scalar_one_or_none():
-        print(f"Email {parsed['message_id']} already exists, skipping.")
+        logger.info(f"Email {parsed['message_id']} already exists, skipping.")
         return False
 
     body_text = parsed["body"] if parsed["body"].strip() else "Empty body"
     try:
         body_emb = await generate_fixture_embedding(body_text)
     except Exception as e:
-        print(f"Failed to generate embedding for {eml_file}: {e}")
+        logger.error(f"Failed to generate embedding for {eml_file}: {e}")
         return False
 
     thread_id = await assign_thread_id(
@@ -83,16 +87,16 @@ async def import_eml_file(session, eml_file: Path) -> bool:
                 )
             )
         except Exception as e:
-            print(f"Failed to generate embedding for attachment {att['filename']}: {e}")
+            logger.error(f"Failed to generate embedding for attachment {att['filename']}: {e}")
 
     session.add(email_obj)
     try:
         await session.commit()
     except Exception as e:
         await session.rollback()
-        print(f"Failed to commit {eml_file}: {e}")
+        logger.error(f"Failed to commit {eml_file}: {e}")
         return False
-    print(
+    logger.info(
         f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
     )
     return True
@@ -101,12 +105,12 @@ async def import_eml_file(session, eml_file: Path) -> bool:
 async def main():
     fixtures_dir = Path(__file__).parent / "tests" / "fixtures"
     if not fixtures_dir.exists():
-        print(f"Fixtures directory {fixtures_dir} does not exist.")
+        logger.error(f"Fixtures directory {fixtures_dir} does not exist.")
         sys.exit(1)
 
     eml_files = list(fixtures_dir.glob("*.eml"))
     if not eml_files:
-        print(f"No .eml files found in {fixtures_dir}.")
+        logger.warning(f"No .eml files found in {fixtures_dir}.")
         return
 
     async with AsyncSessionLocal() as session:

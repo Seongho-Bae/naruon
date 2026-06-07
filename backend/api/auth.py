@@ -1,4 +1,4 @@
-import http.client
+from http.client import HTTPSConnection
 import json
 import logging
 import math
@@ -25,7 +25,7 @@ OIDC_JWKS_TIMEOUT_SECONDS = 5
 OIDC_JWKS_MAX_RESPONSE_BYTES = 1024 * 1024
 
 
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+class _PinnedHTTPSConnection(HTTPSConnection):
     def __init__(
         self,
         address: str,

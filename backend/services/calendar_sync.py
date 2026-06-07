@@ -13,7 +13,7 @@ def generate_ics_from_task(
     """
     Generates a basic CalDAV-compatible .ics (iCalendar) string for a TicketTask (VTODO).
     """
-    # Map status
+
     ics_status = "NEEDS-ACTION"
     if status == "in_progress":
         ics_status = "IN-PROCESS"
@@ -23,17 +23,17 @@ def generate_ics_from_task(
         ics_status = "NEEDS-ACTION"
 
     cal = Calendar()
-    cal.add('prodid', '-//Naruon//AI Workspace//EN')
-    cal.add('version', '2.0')
+    cal.add('VERSION', '2.0')
+    cal.add('PRODID', '-//Naruon//AI Workspace//EN')
 
     todo = Todo()
-    todo.add('uid', task_uid)
-    todo.add('dtstamp', updated_at)
-    todo.add('summary', title)
-    todo.add('status', ics_status)
+    todo.add('UID', task_uid)
+    todo.add('DTSTAMP', updated_at)
+    todo.add('SUMMARY', title)
+    todo.add('STATUS', ics_status)
 
     if due_date:
-        todo.add('due', due_date)
+        todo.add('DUE', due_date)
 
     cal.add_component(todo)
 
