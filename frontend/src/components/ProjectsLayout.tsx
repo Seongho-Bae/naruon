@@ -210,7 +210,7 @@ export function ProjectsLayout() {
               key={project.id}
               type="button"
               onClick={() => setSelectedProjectId(project.id)}
-              className={`w-full rounded-lg border px-3 py-3 text-left transition-colors ${activeProject.id === project.id ? 'border-primary/30 bg-secondary' : 'border-transparent hover:bg-secondary/50'}`}
+              className={`w-full rounded-lg border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${activeProject.id === project.id ? 'border-primary/30 bg-secondary' : 'border-transparent hover:bg-secondary/50'}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-xs font-bold text-muted-foreground">{project.category}</span>
@@ -246,7 +246,7 @@ export function ProjectsLayout() {
                   key={project.id}
                   type="button"
                   onClick={() => setSelectedProjectId(project.id)}
-                  className={`min-h-10 shrink-0 rounded-xl px-3 text-xs font-bold ${activeProject.id === project.id ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
+                  className={`min-h-10 shrink-0 rounded-xl px-3 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${activeProject.id === project.id ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
                 >
                   {project.title}
                 </button>
@@ -258,7 +258,7 @@ export function ProjectsLayout() {
                   key={mode}
                   type="button"
                   onClick={() => setViewMode(mode)}
-                  className={`min-h-9 shrink-0 px-3 text-xs font-semibold transition-colors sm:px-4 sm:text-sm ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                  className={`min-h-9 shrink-0 px-3 text-xs font-semibold transition-colors sm:px-4 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
                 </button>
