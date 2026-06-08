@@ -146,7 +146,7 @@ function SenderDagPanel({
               type="button"
               onClick={onCapture}
               disabled={captureStatus === "loading"}
-              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+              className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
             >
               {captureStatus === "loading" ? "캡처 중" : "발신자 관계 캡처"}
             </button>
@@ -391,7 +391,7 @@ export function SearchLayout() {
               type="button"
               onClick={() => setActiveResultId(result.id)}
               aria-current={isActive ? "true" : undefined}
-              className={`w-full border-l-4 p-4 text-left transition-colors ${
+              className={`w-full border-l-4 p-4 text-left transition-colors focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
                 isActive
                   ? "border-primary bg-secondary/50"
                   : "border-transparent hover:bg-secondary/20"
@@ -460,7 +460,7 @@ export function SearchLayout() {
           <button
             type="submit"
             disabled={loading}
-            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? "검색 중..." : "검색"}
           </button>
@@ -481,7 +481,7 @@ export function SearchLayout() {
                 key={filter.key}
                 type="button"
                 onClick={() => setActiveFilter(filter.key)}
-                className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${
+                className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${
                   activeFilter === filter.key
                     ? "bg-primary text-primary-foreground"
                     : "bg-secondary text-muted-foreground hover:bg-secondary/80"
