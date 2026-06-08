@@ -10,7 +10,6 @@ from api.auth import (
     AuthContext,
     get_auth_context,
     is_system_admin_role,
-    is_tenant_admin_role,
 )
 from db.models import CalendarWritebackSource
 from db.session import get_db
@@ -90,8 +89,6 @@ def _registry_scope_statement(auth_context: AuthContext):
             CalendarWritebackSource.source_uid.asc(),
         )
     )
-    if is_system_admin_role(auth_context.role):
-        return statement
 
     organization_filter = (
         CalendarWritebackSource.organization_id == auth_context.organization_id
@@ -178,8 +175,6 @@ def _find_writeback_source_by_id(
 def _can_target_writeback_source(
     target_source: WritebackSource, auth_context: AuthContext
 ) -> bool:
-    if is_system_admin_role(auth_context.role):
-        return True
     if target_source.organization_id != auth_context.organization_id:
         return False
     return target_source.owner_id == auth_context.user_id

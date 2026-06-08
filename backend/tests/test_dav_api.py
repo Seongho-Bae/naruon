@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+from urllib.parse import unquote
 
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -94,3 +95,45 @@ def test_dav_put(dev_auth_dependency_overrides):
         assert response.status_code == 501
         assert "Provider-backed DAV writeback is not implemented" in response.text
         assert "etag" not in {header.lower() for header in response.headers}
+
+
+def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
+    import asyncio
+    import logging
+
+    from fastapi import Request
+
+    from api.auth import AuthContext
+    from api.dav import dav_handler
+
+    caplog.set_level(logging.INFO, logger="api.dav")
+    malicious_path = "user123/projects/test%1B%5B31minjected%0A%0D"
+    scope = {"type": "http", "method": "PROPFIND", "headers": []}
+
+    async def run_handler():
+        req = Request(scope)
+        auth_context = AuthContext(
+            user_id="user123",
+            organization_id="org-acme",
+            role="organization_admin",
+            group_ids=[],
+            workspace_id="workspace-org-acme",
+        )
+        await dav_handler(
+            request=req,
+            path=unquote(malicious_path),
+            auth_context=auth_context,
+        )
+
+    asyncio.run(run_handler())
+
+    dav_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if "DAV Request" in record.getMessage()
+    ]
+
+    assert dav_messages
+    assert all("\x1b[31m" not in message for message in dav_messages)
+    assert all("\n" not in message for message in dav_messages)
+    assert any("\\x1b[31minjected\\n\\r" in message for message in dav_messages)
