@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
+import { Button } from "@/components/ui/button";
 
 import { apiClient } from '@/lib/api-client';
 
@@ -164,9 +165,9 @@ export function CalendarLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground">
       {/* Left Sidebar - Calendar List */}
       <aside className="w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4 hidden lg:flex">
-        <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
+        <Button type="button" className="w-full h-10">
           <Plus className="size-4" />새 일정
-        </button>
+        </Button>
 
         <div className="mt-8">
           <div className="mb-4 flex items-center justify-between">
@@ -187,9 +188,9 @@ export function CalendarLayout() {
               </li>
             ))}
           </ul>
-          <button type="button" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary">
+          <Button variant="ghost" className="mt-4 w-full justify-start text-primary hover:text-primary">
             <Plus className="size-4" /> 캘린더 추가
-          </button>
+          </Button>
         </div>
       </aside>
 
@@ -197,10 +198,10 @@ export function CalendarLayout() {
       <main className="flex min-w-0 flex-1 flex-col bg-background">
         <header className="flex h-auto min-h-16 shrink-0 flex-col items-start gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
-            <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
+            <Button variant="outline" size="sm" className="h-8 rounded-md text-xs font-semibold">오늘</Button>
             <div className="flex items-center gap-1">
-              <button type="button" aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronLeft className="size-5" /></button>
-              <button type="button" aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronRight className="size-5" /></button>
+              <Button variant="ghost" size="icon-sm" aria-label="이전 달" className="rounded-md"><ChevronLeft className="size-5" /></Button>
+              <Button variant="ghost" size="icon-sm" aria-label="다음 달" className="rounded-md"><ChevronRight className="size-5" /></Button>
             </div>
             <h1 className="text-xl font-bold">일정 관리</h1>
             <h2 className="text-sm font-bold text-muted-foreground lg:ml-2">2026년 5월</h2>
@@ -217,9 +218,9 @@ export function CalendarLayout() {
                 </button>
               ))}
             </div>
-            <button type="button" aria-label="설정" className="grid size-9 shrink-0 place-items-center rounded-md border border-border bg-background hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <Button variant="outline" size="icon-sm" className="size-9 rounded-md" aria-label="설정">
               <Settings className="size-5" />
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -472,7 +473,7 @@ export function CalendarLayout() {
             <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
           </div>
           <div className="flex items-center gap-2">
-            <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
+            <Button variant="ghost" size="icon-sm" aria-label="닫기" className="rounded-md"><X className="size-4" /></Button>
           </div>
         </div>
         
