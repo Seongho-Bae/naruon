@@ -22,6 +22,11 @@
 ## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
 **Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
 **Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
+
+## 2025-02-12 - Prevent Blocking UI on Slow LLM Endpoints
+**Learning:** In React components fetching both fast core data and slow AI-generated data concurrently inside `useEffect` (like `EmailDetail.tsx` waiting for LLM summarization), awaiting the slow request blocks the component from setting its fast core data state. This results in the user waiting artificially long for content that's already arrived.
+**Action:** Always fetch the primary/fast core data first, set the core data state, and disable the top-level loading indicator immediately. Then, fire secondary/slow (LLM) promises without awaiting them in the primary render path, allowing them to independently update their own state placeholders when they complete.
+
 ## 2026-06-06 - Refactoring repetitive assert any loops
 **Learning:** Repetitive single-statement `assert any(...)` calls can be cleanly refactored into an `expected_substrings` list that loops over assertions. When extracting strings to build the list, it's very helpful to use `re.sub()` to simultaneously capture strings via a replacer function while replacing the matches with placeholders, and then substitute the newly generated list block into the code.
 **Action:** Always prefer lists and loops over repeated code structures when possible, maintaining test readability.
