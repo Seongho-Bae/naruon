@@ -35,48 +35,6 @@ function isCustomerOwnedWritableSource(source: CalendarWritebackSource) {
     && source.capabilities.includes('write');
 }
 
-function getCalendarSourceLabel(index: number) {
-  return `일정 원본 ${index + 1}`;
-}
-
-function getProtocolLabel(protocol: string) {
-  switch (protocol) {
-    case 'caldav':
-      return 'CalDAV 원본';
-    case 'carddav':
-      return 'CardDAV 원본';
-    case 'webdav':
-      return 'WebDAV 원본';
-    default:
-      return '원본 계정';
-  }
-}
-
-function getCapabilityLabel(capability: string) {
-  switch (capability) {
-    case 'read':
-      return '읽기';
-    case 'write':
-      return '일정 반영';
-    case 'etag':
-      return '충돌 검사';
-    default:
-      return '원본 기능';
-  }
-}
-
-function getEtagLabel(value: string | null) {
-  return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
-}
-
-function getIntentProtocolLabel(protocol: string) {
-  return `${getProtocolLabel(protocol)} 선택됨`;
-}
-
-function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_mode']) {
-  return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
-}
-
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
   if (typeof shapedError?.status === 'number') return shapedError.status;
@@ -224,15 +182,15 @@ export function CalendarLayout() {
         </header>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:p-6 lg:pb-6">
-          <p className="sr-only">원본 계정 일정 반영 흐름</p>
-          <section aria-label="일정 반영 의도 점검" className="rounded-2xl border border-border bg-card p-4 shadow-sm md:p-5">
+          <p className="sr-only">원본 계정 writeback 흐름</p>
+          <section aria-label="CalDAV writeback intent 점검" className="rounded-2xl border border-border bg-card p-4 shadow-sm md:p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0">
-                <p className="text-xs font-black text-primary">고객 원본 일정</p>
-                <h2 className="mt-1 text-lg font-black text-foreground">고객 원본 일정 반영 의도</h2>
+                <p className="text-xs font-black uppercase text-primary">Customer-owned calendar intent</p>
+                <h2 className="mt-1 text-lg font-black text-foreground">CalDAV/CardDAV/WebDAV writeback intent</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                   Naruon은 캘린더 서버가 아니라 고객 원본 계정에 반영할 의도를 기록합니다.
-                  실제 외부 쓰기는 원본 기능, 출처 근거, 충돌 토큰, 감사 기록을 통과해야 합니다.
+                  실제 provider write는 source capability, provenance, ETag/If-Match, 감사 이벤트를 통과해야 합니다.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -256,15 +214,13 @@ export function CalendarLayout() {
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {writebackSources.map((source, index) => {
+              {writebackSources.map((source) => {
                 const sourceWritable = isCustomerOwnedWritableSource(source);
                 const sourceSelected = selectedWritebackSource?.source_id === source.source_id;
-                const sourceLabel = getCalendarSourceLabel(index);
                 return (
                   <button
                     key={source.source_id}
                     type="button"
-                    aria-label={`${sourceLabel} ${sourceWritable ? '일정 반영 가능' : '읽기 전용'} 선택`}
                     disabled={!sourceWritable}
                     aria-pressed={sourceSelected}
                     onClick={() => setSelectedSourceId(source.source_id)}
@@ -276,77 +232,77 @@ export function CalendarLayout() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-primary">{sourceLabel}</p>
-                        <p className="mt-1 break-words text-sm font-bold">{getProtocolLabel(source.protocol)}</p>
+                        <p className="font-mono text-xs font-bold text-primary">{source.source_id}</p>
+                        <p className="mt-1 break-words text-sm font-bold">{source.provider}</p>
                       </div>
                       <span className={`rounded-full px-2 py-1 text-xs font-black ${sourceWritable ? 'bg-green-100 text-green-700' : 'bg-secondary text-muted-foreground'}`}>
-                        {sourceSelected ? '선택됨' : sourceWritable ? '반영 가능' : '읽기 전용'}
+                        {sourceSelected ? 'selected' : sourceWritable ? 'write' : 'read_only'}
                       </span>
                     </div>
                     <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                      {source.capabilities.map(getCapabilityLabel).join(' · ')}
+                      {source.protocol} · {source.capabilities.join(', ')}
                     </p>
-                    <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                      {getEtagLabel(source.etag)} · {sourceWritable ? '외부 쓰기 전 의도 점검 가능' : '외부 쓰기 차단'}
+                    <p className="mt-2 break-all font-mono text-[11px] font-semibold text-muted-foreground">
+                      etag={source.etag ?? 'missing'} · writeback={sourceWritable ? 'eligible' : 'blocked'}
                     </p>
                   </button>
                 );
               })}
               {sourceLoadStatus === 'ready' && writebackSources.length === 0 && (
                 <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-amber-700">
-                  연결된 CalDAV/CardDAV/WebDAV 원본이 없습니다.
+                  연결된 CalDAV/CardDAV/WebDAV source가 없습니다.
                 </p>
               )}
               {sourceLoadStatus === 'loading' && (
                 <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-primary">
-                  일정 원본 목록을 확인하는 중입니다.
+                  CalDAV source registry 확인 중입니다.
                 </p>
               )}
               {sourceLoadStatus === 'error' && (
                 <p className="rounded-xl border border-border bg-background/70 p-3 text-sm font-bold text-amber-700">
-                  서명 세션으로 일정 원본 목록을 확인할 수 없습니다.
+                  signed session으로 CalDAV source registry를 확인할 수 없습니다.
                 </p>
               )}
             </div>
 
             <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
               {writebackStatus === 'idle' && (
-                <p className="text-muted-foreground">아직 외부 일정 쓰기는 실행하지 않았습니다. 반영 의도 점검으로 원본 계정과 충돌 조건만 확인합니다.</p>
+                <p className="text-muted-foreground">아직 provider write는 실행하지 않았습니다. intent 점검으로 원본 source와 충돌 조건만 확인합니다.</p>
               )}
-              {writebackStatus === 'loading' && <p className="font-bold text-primary">일정 반영 의도 요청 중입니다.</p>}
+              {writebackStatus === 'loading' && <p className="font-bold text-primary">writeback intent 요청 중입니다.</p>}
               {writebackStatus === 'no_source' && (
-                <p className="font-bold text-amber-700">원본 CalDAV/CardDAV/WebDAV 계정이 없어 일정 반영 의도를 만들 수 없습니다.</p>
+                <p className="font-bold text-amber-700">원본 CalDAV/CardDAV/WebDAV 계정이 없어 writeback intent를 만들 수 없습니다.</p>
               )}
               {writebackStatus === 'conflict' && (
                 <p className="font-bold text-red-700">ETag/If-Match 충돌이 감지되어 원본 일정을 덮어쓰지 않았습니다.</p>
               )}
               {writebackStatus === 'auth' && (
-                <p className="font-bold text-red-700">서명 세션이 필요합니다. 공개 헤더로는 일정 반영 의도를 만들 수 없습니다.</p>
+                <p className="font-bold text-red-700">signed session이 필요합니다. 공개 헤더로는 writeback intent를 만들 수 없습니다.</p>
               )}
               {writebackStatus === 'error' && (
-                <p className="font-bold text-red-700">일정 반영 의도 점검에 실패했습니다.</p>
+                <p className="font-bold text-red-700">writeback intent 점검에 실패했습니다.</p>
               )}
               {writebackStatus === 'success' && writebackResult && (
                 <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
                   <div>
-                    <dt className="font-black text-muted-foreground">반영 방식</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
+                    <dt className="font-black text-muted-foreground">WRITEBACK_MODE</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.writeback_mode}</dd>
                   </div>
                   <div>
-                    <dt className="font-black text-muted-foreground">원본 종류</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
+                    <dt className="font-black text-muted-foreground">PROTOCOL</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.protocol}</dd>
                   </div>
                   <div>
-                    <dt className="font-black text-muted-foreground">대상 원본</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
+                    <dt className="font-black text-muted-foreground">TARGET_SOURCE</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.target_source_id}</dd>
                   </div>
                   <div>
-                    <dt className="font-black text-muted-foreground">충돌 검사</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
+                    <dt className="font-black text-muted-foreground">IF_MATCH</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.if_match ?? 'not_required'}</dd>
                   </div>
                   <div>
-                    <dt className="font-black text-muted-foreground">감사 근거</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
+                    <dt className="font-black text-muted-foreground">AUDIT_EVENT</dt>
+                    <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.audit_event}</dd>
                   </div>
                 </dl>
               )}
@@ -383,16 +339,16 @@ export function CalendarLayout() {
               <h3 className="text-lg font-bold">주간 캘린더</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-5">
                 {[
-                  ['월', '제품 리뷰', '고객 일정 원본'],
-                  ['화', '파트너 미팅 후보', '영업 일정 원본'],
-                  ['수', '리소스 배정 검토', '팀 일정 원본'],
-                  ['목', '출시 회의', '고객 일정 원본'],
-                  ['금', '마케팅 캠페인 오프', '마케팅 일정 원본'],
+                  ['월', '제품 리뷰', 'caldav-primary'],
+                  ['화', '파트너 미팅 후보', 'caldav-sales'],
+                  ['수', '리소스 배정 검토', 'caldav-team'],
+                  ['목', '출시 회의', 'caldav-primary'],
+                  ['금', '마케팅 캠페인 오프', 'caldav-marketing'],
                 ].map(([day, title, source]) => (
                   <article key={day} className="rounded-xl border border-border bg-background p-4">
                     <p className="text-xs font-black text-primary">{day}</p>
                     <h4 className="mt-2 text-sm font-bold">{title}</h4>
-                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{source}</p>
+                    <p className="mt-2 font-mono text-xs text-muted-foreground">{source}</p>
                   </article>
                 ))}
               </div>
@@ -404,7 +360,7 @@ export function CalendarLayout() {
               <dl className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
-                  <dd className="mt-2 text-sm font-bold">고객 일정 원본 · 충돌 토큰 확인</dd>
+                  <dd className="mt-2 text-sm font-bold">Customer CalDAV · caldav-primary</dd>
                 </div>
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">충돌 제어</dt>
@@ -416,7 +372,7 @@ export function CalendarLayout() {
           {viewMode === '회의 조율' && (
             <div className="flex h-full flex-col gap-4">
               <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-                <h3 className="text-lg font-bold mb-4">회의 조율</h3>
+                <h3 className="text-lg font-bold mb-4">회의 조율 (Coordination)</h3>
                 <p className="text-sm text-muted-foreground mb-4">참석자들의 캘린더(CalDAV)를 종합 분석하여 최적의 시간을 제안합니다.</p>
                 <div className="grid gap-3 max-w-lg">
                   <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
@@ -448,9 +404,9 @@ export function CalendarLayout() {
               <h3 className="text-lg font-bold">일정 후보</h3>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {[
-                  ['파트너 미팅 일정 확정', '고객 일정 원본', '새 일정 반영 의도'],
-                  ['출시 회의 시간 변경', '팀 일정 원본', '충돌 검사 후 변경 의도'],
-                  ['개인 메일에서 발견된 회사 일정', '회사 일정 원본', '원본 재지정 검토'],
+                  ['파트너 미팅 일정 확정', 'Customer CalDAV', 'create intent'],
+                  ['출시 회의 시간 변경', 'Team CalDAV', 'update intent + If-Match'],
+                  ['개인 메일에서 발견된 회사 일정', 'Company CalDAV', 'source reassignment'],
                 ].map(([title, source, mode]) => (
                   <article key={title} className="rounded-xl border border-border bg-background p-4">
                     <h4 className="text-sm font-bold">{title}</h4>

@@ -1,7 +1,7 @@
 import hashlib
 import logging
 from typing import Dict, Any
-from email.utils import parseaddr, getaddresses
+import email.utils
 
 logger = logging.getLogger(__name__)
 
@@ -35,12 +35,12 @@ def process_self_to_self(email_data: Dict[str, Any], user_email: str) -> bool:
     recipient_inputs = recipients_raw if isinstance(recipients_raw, list) else [recipients_raw]
     recipient_inputs = [str(v) for v in recipient_inputs]
     
-    _, sender_addr = parseaddr(sender_raw)
+    _, sender_addr = email.utils.parseaddr(sender_raw)
     normalized_user = user_email.strip().lower()
     normalized_sender = sender_addr.strip().lower()
     parsed_recipients = {
         addr.strip().lower()
-        for _, addr in getaddresses(recipient_inputs)
+        for _, addr in email.utils.getaddresses(recipient_inputs)
         if addr
     }
     

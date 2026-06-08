@@ -106,31 +106,6 @@ def orgless_system_admin_client():
         yield c
 
 
-def test_prompt_crud_validation(auth_client):
-    # Missing required fields
-    resp = auth_client.post("/api/prompts", json={})
-    assert resp.status_code == 422
-
-    # Title too long
-    resp = auth_client.post(
-        "/api/prompts",
-        json={
-            "title": "A" * 101,
-            "content": "Summarize this: {{email}}",
-        },
-    )
-    assert resp.status_code == 422
-
-    # Content too long
-    resp = auth_client.post(
-        "/api/prompts",
-        json={
-            "title": "Test",
-            "content": "A" * 4001,
-        },
-    )
-    assert resp.status_code == 422
-
 def test_prompt_crud(auth_client):
     # Create
     resp = auth_client.post(

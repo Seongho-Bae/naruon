@@ -18,13 +18,6 @@ type WebdavWritebackIntentResponse = {
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'fetch_error' | 'conflict' | 'auth' | 'error';
 type WebdavAccountStatus = 'loading' | 'ready' | 'error';
 
-type WebdavAccount = {
-  source_id: string;
-  display_label: string;
-  writeback_enabled: boolean;
-  etag?: string | null;
-};
-
 type UniqueThreadIntentResponse = {
   status: string;
   candidates_checked: number;
@@ -152,18 +145,6 @@ function formatCount(value: number) {
   return new Intl.NumberFormat('ko-KR').format(value);
 }
 
-function formatDataTimestamp(value: string | null | undefined) {
-  if (!value) return '기록 없음';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '기록 없음';
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(parsed);
-}
-
 function getSurfaceStatusLabel(status: SurfaceStatusCode | QualityStatusCode) {
   switch (status) {
     case 'ready':
@@ -180,41 +161,6 @@ function getSurfaceStatusLabel(status: SurfaceStatusCode | QualityStatusCode) {
     default:
       return '대기';
   }
-}
-
-function getWriteBoundaryLabel(providerWriteExecuted: boolean) {
-  return providerWriteExecuted ? '외부 쓰기 실행됨' : '의도만 기록';
-}
-
-function getAssetEvidenceLabel(asset: DataQualitySurfaceResponse['repository_assets'][number]) {
-  if (asset.content_chars === 0) return '본문 추출 대기';
-  return '원본 메일/스레드 근거 연결';
-}
-
-function getSourceReadinessLabel(account: { writeback_enabled: boolean; etag?: string | null }) {
-  if (!account.writeback_enabled) return '읽기 전용';
-  return account.etag ? '쓰기 가능 · 충돌 검사용 ETag 준비' : '쓰기 가능 · ETag 확인 필요';
-}
-
-function getWebdavAccountLabel(account: WebdavAccount, index: number) {
-  const label = account.display_label.trim();
-  if (!label || label.includes(account.source_id) || /^WebDAV source/i.test(label)) {
-    return `WebDAV 저장소 ${index + 1}`;
-  }
-  return label;
-}
-
-function getWritebackTargetLabel(result: WebdavWritebackIntentResponse, accounts: WebdavAccount[]) {
-  const accountIndex = result.source_id ? accounts.findIndex((account) => account.source_id === result.source_id) : -1;
-  if (accountIndex >= 0) {
-    return getWebdavAccountLabel(accounts[accountIndex], accountIndex);
-  }
-
-  const label = result.target_label?.trim();
-  if (!label || (result.source_id && label.includes(result.source_id)) || /^WebDAV source/i.test(label)) {
-    return '선택된 원본';
-  }
-  return label;
 }
 
 function getSurfaceStatusClass(status: SurfaceStatusCode | QualityStatusCode) {
@@ -237,6 +183,13 @@ function getSurfaceStatusClass(status: SurfaceStatusCode | QualityStatusCode) {
 export function DataLayout() {
   const [activeTab, setActiveTab] = useState<'문서 저장소' | '수집 파이프라인' | '임베딩' | '품질 점검'>('문서 저장소');
   
+  interface WebdavAccount {
+    source_id: string;
+    display_label: string;
+    writeback_enabled: boolean;
+    etag?: string | null;
+  }
+
   interface ProjectFolder {
     folder_uid: string;
     project_name: string;
@@ -363,7 +316,7 @@ export function DataLayout() {
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
           <Database className="size-6 text-primary" /> <span className="sr-only sm:not-sr-only sm:inline">데이터와 파일</span>
         </h1>
-        <p className="sr-only">중복 반입과 스레드 정리</p>
+        <p className="sr-only">중복 반입과 thread 정리</p>
         <div className="ml-4 md:ml-8 flex flex-1 min-w-0 gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {['문서 저장소', '수집 파이프라인', '임베딩', '품질 점검'].map((tab) => (
             <button type="button"
@@ -391,7 +344,7 @@ export function DataLayout() {
                       <p className="text-xl font-bold">
                         {dataSurfaceStatus === 'loading' ? '확인 중' : `${formatCount(emailRepository?.object_count ?? 0)} / ${formatCount(attachmentRepository?.object_count ?? 0)}`}
                       </p>
-                      <p className="mt-1 text-xs font-semibold text-muted-foreground">메일 / 첨부</p>
+                      <p className="mt-1 text-xs font-semibold text-muted-foreground">emails / attachments</p>
                     </div>
                   </div>
                   <div className="h-2 w-full rounded-full bg-border overflow-hidden">
@@ -413,7 +366,7 @@ export function DataLayout() {
                     </div>
                   </div>
                   <div className="mt-3 grid gap-2">
-                    {webdavAccounts.map((account, index) => {
+                    {webdavAccounts.map((account) => {
                       const accountSelected = selectedWebdavAccount?.source_id === account.source_id;
                       return (
                         <button
@@ -428,9 +381,9 @@ export function DataLayout() {
                         >
                           <Server className="mt-0.5 size-4 shrink-0 text-primary" />
                           <span className="min-w-0">
-                            <span className="block break-all font-medium text-foreground">{getWebdavAccountLabel(account, index)}</span>
+                            <span className="block break-all font-medium text-foreground">{account.display_label}</span>
                             <span className="block break-all text-xs text-muted-foreground">
-                              {getSourceReadinessLabel(account)}
+                              {account.source_id} · {account.writeback_enabled ? 'writeback eligible' : 'read only'} · etag={account.etag ?? 'missing'}
                             </span>
                           </span>
                         </button>
@@ -447,11 +400,11 @@ export function DataLayout() {
                       {embeddingStage ? getSurfaceStatusLabel(embeddingStage.status_code) : dataSurfaceStatus === 'error' ? '확인 실패' : '확인 중'}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {dataQualitySurface ? '감사 근거 기록됨' : '감사 근거 확인 중'}
+                      {dataQualitySurface?.audit_event ?? 'data.quality_surface.viewed'}
                     </p>
                   </div>
                   <span className="rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold shadow-sm">
-                    {getWriteBoundaryLabel(dataQualitySurface?.provider_write_executed ?? false)}
+                    provider_write_executed={String(dataQualitySurface?.provider_write_executed ?? false)}
                   </span>
                 </div>
 	              </div>
@@ -460,10 +413,10 @@ export function DataLayout() {
                 <div className="flex flex-col gap-3 border-b border-border bg-secondary/30 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="font-bold text-lg flex items-center gap-2"><FileText className="size-5" /> 최근 파일/첨부 자산</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">메일 첨부에서 파생된 문서 자산을 원본 메일/스레드 근거와 함께 추적합니다.</p>
+                    <p className="mt-1 text-sm text-muted-foreground">메일 첨부에서 파생된 문서 자산을 원본 메일/thread 근거와 함께 추적합니다.</p>
                   </div>
                   <span className="w-fit rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold">
-                    {formatCount(repositoryAssets.length)}개 자산
+                    {formatCount(repositoryAssets.length)} assets
                   </span>
                 </div>
                 <div className="grid gap-3 p-4">
@@ -474,7 +427,7 @@ export function DataLayout() {
                     <p className="text-sm font-bold text-red-700">문서 자산 근거를 불러오지 못했습니다.</p>
                   )}
                   {dataSurfaceStatus === 'ready' && repositoryAssets.length === 0 && (
-                    <p className="text-sm text-muted-foreground">이 워크스페이스에 원본 연결 첨부 자산이 아직 없습니다.</p>
+                    <p className="text-sm text-muted-foreground">이 워크스페이스에 source-linked 첨부 자산이 아직 없습니다.</p>
                   )}
                   {repositoryAssets.map((asset) => {
                     const assetSelected = selectedRepositoryAsset?.asset_key === asset.asset_key;
@@ -509,26 +462,30 @@ export function DataLayout() {
                           {asset.state_code === 'ready' ? '정상' : '점검 필요'}
                         </span>
                       </div>
-                      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-5">
                         <div>
-                          <dt className="font-black text-muted-foreground">근거 상태</dt>
-                          <dd className="mt-1 text-sm font-bold">{getAssetEvidenceLabel(asset)}</dd>
+                          <dt className="font-black text-muted-foreground">ASSET_KEY</dt>
+                          <dd className="mt-1 break-all font-mono text-[11px] font-semibold text-foreground">{asset.asset_key}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">본문 길이</dt>
-                          <dd className="mt-1 text-sm font-bold">{formatCount(asset.content_chars)}자</dd>
+                          <dt className="font-black text-muted-foreground">THREAD</dt>
+                          <dd className="mt-1 break-all font-mono text-[11px] font-semibold text-foreground">{asset.thread_key}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">수집 시간</dt>
-                          <dd className="mt-1 break-all text-sm font-bold">{formatDataTimestamp(asset.captured_at)}</dd>
+                          <dt className="font-black text-muted-foreground">CONTENT</dt>
+                          <dd className="mt-1 text-sm font-bold">{formatCount(asset.content_chars)} chars</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">쓰기 경계</dt>
-                          <dd className="mt-1 text-sm font-bold">{getWriteBoundaryLabel(asset.provider_write_executed)}</dd>
+                          <dt className="font-black text-muted-foreground">CAPTURED</dt>
+                          <dd className="mt-1 break-all text-sm font-bold">{asset.captured_at}</dd>
                         </div>
-                        <div className="min-w-0 sm:col-span-2 lg:col-span-4">
-                          <dt className="font-black text-muted-foreground">원본 근거</dt>
-                          <dd className="mt-1 break-words text-sm font-semibold text-muted-foreground">{asset.detail_text}</dd>
+                        <div>
+                          <dt className="font-black text-muted-foreground">PROVIDER_WRITE</dt>
+                          <dd className="mt-1 text-sm font-bold">{String(asset.provider_write_executed)}</dd>
+                        </div>
+                        <div className="min-w-0 sm:col-span-2 lg:col-span-5">
+                          <dt className="font-black text-muted-foreground">EVIDENCE</dt>
+                          <dd className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{asset.evidence_source} · {asset.detail_text}</dd>
                         </div>
                       </dl>
                     </article>
@@ -541,7 +498,7 @@ export function DataLayout() {
                 <section aria-label="선택한 파일 자산 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="text-xs font-black text-primary">선택한 원본 자산</p>
+                      <p className="text-xs font-black uppercase text-primary">Selected source asset</p>
                       <h2 className="mt-1 break-all text-lg font-black">{selectedRepositoryAsset.display_name}</h2>
                       <p className="mt-1 break-all text-sm text-muted-foreground">{selectedRepositoryAsset.source_label}</p>
                     </div>
@@ -553,39 +510,45 @@ export function DataLayout() {
                   </div>
                   <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                      <dt className="font-black text-muted-foreground">근거 상태</dt>
-                      <dd className="mt-1 text-sm font-bold">{getAssetEvidenceLabel(selectedRepositoryAsset)}</dd>
+                      <dt className="font-black text-muted-foreground">ASSET_KEY</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold">{selectedRepositoryAsset.asset_key}</dd>
                     </div>
                     <div>
-                      <dt className="font-black text-muted-foreground">수집 시간</dt>
-                      <dd className="mt-1 break-all text-sm font-bold">{formatDataTimestamp(selectedRepositoryAsset.captured_at)}</dd>
+                      <dt className="font-black text-muted-foreground">THREAD</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold">{selectedRepositoryAsset.thread_key}</dd>
                     </div>
                     <div>
-                      <dt className="font-black text-muted-foreground">본문 길이</dt>
-                      <dd className="mt-1 text-sm font-bold">{formatCount(selectedRepositoryAsset.content_chars)}자</dd>
+                      <dt className="font-black text-muted-foreground">CAPTURED</dt>
+                      <dd className="mt-1 break-all text-sm font-bold">{selectedRepositoryAsset.captured_at}</dd>
                     </div>
                     <div>
-                      <dt className="font-black text-muted-foreground">쓰기 경계</dt>
-                      <dd className="mt-1 text-sm font-bold">{getWriteBoundaryLabel(selectedRepositoryAsset.provider_write_executed)}</dd>
+                      <dt className="font-black text-muted-foreground">CONTENT</dt>
+                      <dd className="mt-1 text-sm font-bold">{formatCount(selectedRepositoryAsset.content_chars)} chars</dd>
                     </div>
                     <div className="sm:col-span-2 lg:col-span-4">
-                      <dt className="font-black text-muted-foreground">원본 근거</dt>
-                      <dd className="mt-1 break-words text-sm font-semibold text-muted-foreground">
-                        {selectedRepositoryAsset.detail_text}
+                      <dt className="font-black text-muted-foreground">EVIDENCE</dt>
+                      <dd className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">
+                        {selectedRepositoryAsset.evidence_source} · {selectedRepositoryAsset.detail_text}
+                      </dd>
+                    </div>
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <dt className="font-black text-muted-foreground">WRITEBACK_BOUNDARY</dt>
+                      <dd className="mt-1 text-sm font-bold">
+                        provider_write_executed={String(selectedRepositoryAsset.provider_write_executed)}
                       </dd>
                     </div>
                   </dl>
                 </section>
               )}
 
-              <section aria-label="WebDAV 반영 의도 승인" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <section aria-label="WebDAV writeback intent 승인" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-primary">고객 원본 파일 반영</p>
-                    <h2 className="mt-1 text-lg font-black">WebDAV 반영 의도 승인</h2>
+                    <p className="text-xs font-black uppercase text-primary">Customer-owned file intent</p>
+                    <h2 className="mt-1 text-lg font-black">WebDAV writeback intent 승인</h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                      첨부파일과 AI가 구조화한 산출물은 고객 WebDAV 원본에 반영할 의도로만 점검합니다.
-                      실제 외부 쓰기는 원본 계정, If-Match 충돌 조건, 근거 확인을 통과한 뒤 별도 실행됩니다.
+                      첨부파일과 AI가 구조화한 산출물은 Naruon 저장소에만 남기지 않고 고객 WebDAV 원본에 반영할 intent로 점검합니다.
+                      실제 provider write는 원본 계정, If-Match 충돌 조건, provenance를 통과한 뒤 별도 실행됩니다.
                     </p>
                   </div>
                   <button
@@ -595,63 +558,67 @@ export function DataLayout() {
                     aria-busy={isWebdavSourceLoading || isWritebackLoading}
                     className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
-                    WebDAV 반영 의도 점검
+                    WebDAV intent 승인 점검
                   </button>
                 </div>
 
                 <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
                   {writebackStatus === 'idle' && (
-                    <p className="text-muted-foreground">아직 WebDAV 외부 쓰기는 실행하지 않았습니다. 원본 선택과 충돌 조건만 확인합니다.</p>
+                    <p className="text-muted-foreground">아직 WebDAV provider write는 실행하지 않았습니다. 원본 source와 충돌 조건만 확인합니다.</p>
                   )}
-                  {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV 반영 의도를 요청 중입니다.</p>}
+                  {writebackStatus === 'loading' && <p className="font-bold text-primary">WebDAV writeback intent 요청 중입니다.</p>}
                   {writebackStatus === 'idle' && webdavAccountStatus === 'error' && (
                     <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못했습니다.</p>
                   )}
                   {writebackStatus === 'no_source' && (
-                    <p className="font-bold text-amber-700">쓰기 가능한 고객 WebDAV 원본 계정이 없어 반영 의도를 만들 수 없습니다.</p>
+                    <p className="font-bold text-amber-700">writeback 가능한 고객 WebDAV 원본 계정이 없어 intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'fetch_error' && (
-                    <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못해 반영 의도를 만들 수 없습니다.</p>
+                    <p className="font-bold text-red-700">WebDAV 원본 계정 목록을 확인하지 못해 intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'conflict' && (
                     <p className="font-bold text-red-700">If-Match/ETag 충돌이 감지되어 고객 WebDAV 원본 파일을 덮어쓰지 않았습니다.</p>
                   )}
                   {writebackStatus === 'auth' && (
-                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV 반영 의도를 만들 수 없습니다.</p>
+                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 WebDAV intent를 만들 수 없습니다.</p>
                   )}
                   {writebackStatus === 'error' && (
-                    <p className="font-bold text-red-700">WebDAV 반영 의도 점검에 실패했습니다.</p>
+                    <p className="font-bold text-red-700">WebDAV writeback intent 점검에 실패했습니다.</p>
                   )}
                   {writebackStatus === 'success' && writebackResult && (
                     <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                       <div>
-                        <dt className="font-black text-muted-foreground">반영 방식</dt>
-                        <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.intent === 'writeback' ? '원본 반영 의도' : '의도 확인'}</dd>
+                        <dt className="font-black text-muted-foreground">INTENT</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.intent}</dd>
                       </div>
                       <div>
-                        <dt className="font-black text-muted-foreground">원본 선택</dt>
-                        <dd className="mt-1 break-words text-sm font-bold text-foreground">{getWritebackTargetLabel(writebackResult, webdavAccounts)}</dd>
+                        <dt className="font-black text-muted-foreground">SOURCE_ID</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.source_id ?? 'none'}</dd>
                       </div>
                       <div>
-                        <dt className="font-black text-muted-foreground">충돌 조건</dt>
-                        <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.requires_if_match ? 'If-Match 필요' : '충돌 조건 없음'}</dd>
+                        <dt className="font-black text-muted-foreground">IF_MATCH</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.if_match ?? (writebackResult.requires_if_match ? 'required' : 'not_required')}</dd>
                       </div>
                       <div>
-                        <dt className="font-black text-muted-foreground">근거</dt>
-                        <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.provenance === 'server-authoritative' ? '서버 확인' : '근거 확인'}</dd>
+                        <dt className="font-black text-muted-foreground">PROVENANCE</dt>
+                        <dd className="mt-1 font-mono text-sm text-foreground">{writebackResult.provenance}</dd>
+                      </div>
+                      <div className="min-w-0 sm:col-span-2 lg:col-span-4">
+                        <dt className="font-black text-muted-foreground">TARGET_LABEL</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{writebackResult.target_label ?? 'none'}</dd>
                       </div>
                     </dl>
                   )}
                 </div>
               </section>
 
-              <section aria-label="중복 메일 canonical 스레드 의도" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <section aria-label="unique email canonical thread intent" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs font-black text-primary">정확한 메일 중복 정리</p>
-                    <h2 className="mt-1 text-lg font-black">중복 메일 스레드 정리 의도</h2>
+                    <p className="text-xs font-black uppercase text-primary">Canonical email thread</p>
+                    <h2 className="mt-1 text-lg font-black">중복 메일 thread 정리 intent</h2>
                     <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                      ZIP 반입과 계정 간 포워딩으로 같은 메일이 다시 들어오면 Message-ID와 강한 본문 fingerprint로 기존 canonical 스레드에 연결할 의도를 만듭니다.
+                      ZIP 반입과 계정 간 포워딩으로 같은 메일이 다시 들어오면 Message-ID와 강한 body fingerprint로 기존 canonical thread에 연결할 intent를 만듭니다.
                       subject만 비슷한 메일은 자동 병합하지 않습니다.
                     </p>
                   </div>
@@ -661,47 +628,47 @@ export function DataLayout() {
                     disabled={isUniqueThreadLoading}
                     className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                   >
-                    중복 메일 스레드 의도 점검
+                    중복 메일 thread intent 점검
                   </button>
                 </div>
 
                 <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-border bg-background/70 p-4 text-sm">
                   {uniqueThreadStatus === 'idle' && (
-                    <p className="text-muted-foreground">외부 쓰기나 DB 병합을 실행하지 않고 canonical 스레드 후보만 검증합니다.</p>
+                    <p className="text-muted-foreground">provider write나 DB 병합을 실행하지 않고 canonical thread 후보만 검증합니다.</p>
                   )}
-                  {uniqueThreadStatus === 'loading' && <p className="font-bold text-primary">중복 메일 스레드 의도를 요청 중입니다.</p>}
+                  {uniqueThreadStatus === 'loading' && <p className="font-bold text-primary">중복 메일 thread intent 요청 중입니다.</p>}
                   {uniqueThreadStatus === 'auth' && (
-                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 중복 메일 의도를 만들 수 없습니다.</p>
+                    <p className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 중복 메일 intent를 만들 수 없습니다.</p>
                   )}
                   {uniqueThreadStatus === 'error' && (
-                    <p className="font-bold text-red-700">중복 메일 스레드 의도 점검에 실패했습니다.</p>
+                    <p className="font-bold text-red-700">중복 메일 thread intent 점검에 실패했습니다.</p>
                   )}
                   {uniqueThreadStatus === 'success' && uniqueThreadResult && (
                     <div className="space-y-3">
                       <dl className="grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                         <div>
-                          <dt className="font-black text-muted-foreground">검토 후보</dt>
+                          <dt className="font-black text-muted-foreground">CHECKED</dt>
                           <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.candidates_checked}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">중복 후보</dt>
+                          <dt className="font-black text-muted-foreground">DUPLICATES</dt>
                           <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.duplicates_found}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">쓰기 경계</dt>
-                          <dd className="mt-1 text-sm font-bold text-foreground">{getWriteBoundaryLabel(uniqueThreadResult.provider_write_executed)}</dd>
+                          <dt className="font-black text-muted-foreground">PROVIDER_WRITE</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">provider_write_executed={String(uniqueThreadResult.provider_write_executed)}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">감사 근거</dt>
-                          <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
+                          <dt className="font-black text-muted-foreground">AUDIT</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{uniqueThreadResult.audit_event}</dd>
                         </div>
                       </dl>
                       <div className="grid gap-2">
                         {uniqueThreadResult.thread_updates.map((update) => (
                           <div key={update.candidate_key} className="rounded-xl border border-border bg-card p-3 text-xs">
-                            <p className="font-black text-foreground">{update.match_reason === 'message_id' ? 'Message-ID 근거' : '본문 fingerprint 근거'}</p>
-                            <p className="mt-1 text-muted-foreground">
-                              기존 canonical 스레드에 연결할 후보입니다.
+                            <p className="font-black text-foreground">{update.candidate_key}</p>
+                            <p className="mt-1 break-all text-muted-foreground">
+                              {update.match_reason} → {update.canonical_thread_id} ({update.dedupe_key})
                             </p>
                           </div>
                         ))}
@@ -722,8 +689,8 @@ export function DataLayout() {
                         <FolderOpen className="size-5 text-primary" />
                         <span className="font-bold truncate">{folder.project_name}</span>
                       </div>
-                      <p className="mb-2 text-xs font-semibold text-primary">원본 폴더 연결됨</p>
-                      <p className="text-xs text-muted-foreground">고객 WebDAV 경로 기준으로 연결된 프로젝트 폴더입니다.</p>
+                      <p className="mb-2 break-all font-mono text-[11px] font-semibold text-primary">{folder.folder_uid}</p>
+                      <p className="text-xs text-muted-foreground break-all">{folder.webdav_path}</p>
                     </div>
                   )) : (
                     <p className="text-sm text-muted-foreground col-span-full">AI가 구조화한 프로젝트 폴더가 없습니다.</p>
@@ -737,20 +704,20 @@ export function DataLayout() {
                 </div>
                 <div className="divide-y divide-border">
                   {dataSurfaceStatus === 'loading' && (
-                    <div className="p-4 text-sm font-semibold text-muted-foreground">signed 데이터 품질 근거를 확인하는 중입니다.</div>
+                    <div className="p-4 text-sm font-semibold text-muted-foreground">signed data quality surface를 확인하는 중입니다.</div>
                   )}
                   {dataSurfaceStatus === 'error' && (
                     <div className="p-4 text-sm font-bold text-red-700">데이터 품질 표면을 확인하지 못했습니다.</div>
                   )}
                   {dataSurfaceStatus === 'ready' && connectorEvents.length === 0 && (
-                    <div className="p-4 text-sm text-muted-foreground">이 워크스페이스에 기록된 커넥터 근거가 아직 없습니다.</div>
+                    <div className="p-4 text-sm text-muted-foreground">이 워크스페이스에 기록된 connector evidence가 아직 없습니다.</div>
                   )}
                   {connectorEvents.map((event) => (
                     <div key={event.event_uid} className="p-4 flex flex-col gap-3 hover:bg-secondary/10 transition-colors sm:flex-row sm:items-center sm:justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                       <div className="flex min-w-0 items-center gap-4">
                         <div className="p-2 rounded-lg bg-blue-100 text-blue-700"><RefreshCw className="size-4" /></div>
                         <div>
-                          <p className="break-all font-bold text-sm">{event.signal_key}</p>
+                          <p className="break-all font-bold text-sm">{event.event_uid}</p>
                           <p className="text-xs text-muted-foreground mt-0.5">{event.detail_text ?? event.signal_key}</p>
                         </div>
                       </div>
@@ -782,7 +749,7 @@ export function DataLayout() {
                         <div className="min-w-0">
                           <span className="text-sm font-bold">{index + 1}. {stage.display_name}</span>
                           <p className="mt-1 text-xs text-muted-foreground">{stage.detail_text}</p>
-                          <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
+                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{stage.evidence_source}</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(stage.status_code)}`}>
                           {getSurfaceStatusLabel(stage.status_code)} · {stage.progress_percent}%
@@ -811,7 +778,7 @@ export function DataLayout() {
                   </p>
                 </div>
                 <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-                  <p className="text-xs font-bold text-muted-foreground mb-1">벡터 차원</p>
+                  <p className="text-xs font-bold text-muted-foreground mb-1">벡터 차원 (Dimensions)</p>
                   <p className="text-lg font-bold">
                     {dataQualitySurface?.embedding_collections[0]?.vector_dimensions ? formatCount(dataQualitySurface.embedding_collections[0].vector_dimensions) : '-'}
                   </p>
@@ -844,7 +811,7 @@ export function DataLayout() {
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
                           <h3 className="break-all text-sm font-black">{collection.display_name}</h3>
-                          <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
+                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{collection.evidence_source}</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(collection.status_code)}`}>
                           {getSurfaceStatusLabel(collection.status_code)}
@@ -852,19 +819,19 @@ export function DataLayout() {
                       </div>
                       <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-4">
                         <div>
-                          <dt className="font-black text-muted-foreground">대상 객체</dt>
+                          <dt className="font-black text-muted-foreground">OBJECTS</dt>
                           <dd className="mt-1 text-sm font-bold">{formatCount(collection.object_count)}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">벡터 보유</dt>
+                          <dt className="font-black text-muted-foreground">VECTORS</dt>
                           <dd className="mt-1 text-sm font-bold">{formatCount(collection.embedded_count)}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">모델</dt>
+                          <dt className="font-black text-muted-foreground">MODEL</dt>
                           <dd className="mt-1 break-all text-sm font-bold">{collection.embedding_model}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">차원</dt>
+                          <dt className="font-black text-muted-foreground">DIMENSIONS</dt>
                           <dd className="mt-1 text-sm font-bold">{formatCount(collection.vector_dimensions)}</dd>
                         </div>
                       </dl>
@@ -911,7 +878,7 @@ export function DataLayout() {
                         <div className="min-w-0">
                           <h3 className="text-sm font-black">{check.display_name}</h3>
                           <p className="mt-1 text-sm leading-6 text-muted-foreground">{check.detail_text}</p>
-                          <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
+                          <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{check.evidence_source}</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
                           {getSurfaceStatusLabel(check.status_code)}
@@ -919,16 +886,16 @@ export function DataLayout() {
                       </div>
                       <dl className="mt-3 grid gap-3 text-xs sm:grid-cols-3">
                         <div>
-                          <dt className="font-black text-muted-foreground">이슈</dt>
+                          <dt className="font-black text-muted-foreground">ISSUES</dt>
                           <dd className="mt-1 text-sm font-bold">{formatCount(check.issue_count)}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">대상</dt>
+                          <dt className="font-black text-muted-foreground">TOTAL</dt>
                           <dd className="mt-1 text-sm font-bold">{formatCount(check.total_count)}</dd>
                         </div>
                         <div>
-                          <dt className="font-black text-muted-foreground">쓰기 경계</dt>
-                          <dd className="mt-1 text-sm font-bold">{getWriteBoundaryLabel(check.provider_write_executed)}</dd>
+                          <dt className="font-black text-muted-foreground">PROVIDER_WRITE</dt>
+                          <dd className="mt-1 text-sm font-bold">provider_write_executed={String(check.provider_write_executed)}</dd>
                         </div>
                       </dl>
                     </article>

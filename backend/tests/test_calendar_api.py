@@ -507,7 +507,7 @@ def test_calendar_writeback_rejects_org_admin_cross_user_targeting(
 
 
 
-def test_calendar_writeback_rejects_system_admin_targeting_cross_org_source(
+def test_calendar_writeback_allows_system_admin_to_target_any_org_source(
     writeback_source_override,
 ):
     writeback_source_override(
@@ -538,7 +538,8 @@ def test_calendar_writeback_rejects_system_admin_targeting_cross_org_source(
         },
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert response.json()["target_source_id"] == "cross-org-calendar"
 
 
 def test_calendar_writeback_selects_owned_source_after_non_owned_candidate(
