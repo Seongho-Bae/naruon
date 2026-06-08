@@ -21,3 +21,7 @@
 ## 2026-06-06 - Refactoring repetitive assert any loops
 **Learning:** Repetitive single-statement `assert any(...)` calls can be cleanly refactored into an `expected_substrings` list that loops over assertions. When extracting strings to build the list, it's very helpful to use `re.sub()` to simultaneously capture strings via a replacer function while replacing the matches with placeholders, and then substitute the newly generated list block into the code.
 **Action:** Always prefer lists and loops over repeated code structures when possible, maintaining test readability.
+
+## 2026-06-07 - Redundant SHA256 Hashing during UniqueThread Deduplication
+**Learning:** `create_unique_thread_intent` iterates over candidates twice to first extract lookups and fingerprint sets, and then iterates over them a second time inside `_find_matches_for_candidates` to match those lookups. This caused `candidate_strong_fingerprint(candidate)` (which performs a SHA256 encoding) to be redundantly executed twice per candidate.
+**Action:** Extract expensive lookups (`candidate_strong_fingerprint` and regex normalizations) into dictionaries mapped by `candidate_key` during the first iteration to prevent redundant processing.

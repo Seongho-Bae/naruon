@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -125,7 +125,7 @@ function getServerSearch() {
 
 function useCurrentSearchParams() {
   const search = useSyncExternalStore(subscribeToLocationChanges, getCurrentSearch, getServerSearch);
-  return useMemo(() => new URLSearchParams(search), [search]);
+  return new URLSearchParams(search);
 }
 
 function splitHref(href: string) {
