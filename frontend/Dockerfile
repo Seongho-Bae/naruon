@@ -3,13 +3,14 @@ FROM node:22-slim
 WORKDIR /app
 
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+RUN corepack enable pnpm
 
-COPY frontend/package*.json ./
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
 ARG TARGETARCH
-RUN npm ci --fetch-timeout=600000 --fetch-retries=5 \
+RUN pnpm install --frozen-lockfile \
     && if [ "$TARGETARCH" = "arm64" ] \
       && [ ! -f node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node ]; then \
-      npm install --fetch-timeout=600000 --fetch-retries=5 --no-save --package-lock=false lightningcss-linux-arm64-gnu@1.32.0; \
+      pnpm install lightningcss-linux-arm64-gnu@1.32.0; \
     fi
 
 COPY frontend ./
@@ -24,8 +25,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-RUN npm run build
+RUN pnpm run build
 
 EXPOSE 3000
 
-CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]
+CMD ["pnpm", "run", "start", "--", "--hostname", "0.0.0.0"]
