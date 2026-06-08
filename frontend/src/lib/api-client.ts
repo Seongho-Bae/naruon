@@ -17,25 +17,12 @@ const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
 export class ApiClient {
   private baseUrl: string;
 
-  private validateBaseUrl(url: string): string {
-    if (!url) return url;
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-        throw new Error('Invalid protocol');
-      }
-      return url;
-    } catch {
-      throw new Error('Invalid URL');
-    }
-  }
-
   constructor(baseUrl?: string) {
-    this.baseUrl = this.validateBaseUrl(baseUrl || (typeof window !== 'undefined' ? '' : 'http://localhost:8000'));
+    this.baseUrl = baseUrl || (typeof window !== 'undefined' ? '' : 'http://localhost:8000');
   }
 
   setBaseUrl(url: string) {
-    this.baseUrl = this.validateBaseUrl(url);
+    this.baseUrl = url;
   }
 
   getBaseUrl() {
