@@ -259,6 +259,10 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-xss-snippet-session",
+    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -275,6 +279,13 @@ describe("SearchPage", () => {
       (window as Window & { __naruonSearchXss?: boolean })
         .__naruonSearchXss,
     ).toBeUndefined();
+
+    const searchCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith("/api/search"),
+    );
+    expect(searchCall).toBeDefined();
+    const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
+    expect(headers.authorization).toBe("Bearer signed-xss-snippet-session");
   });
 
   it("captures a source-backed sender DAG relationship through signed headers", async () => {
