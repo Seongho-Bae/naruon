@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { backendApiBaseUrl } from "@/lib/backend-url";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -134,7 +136,16 @@ async function proxyApiRequest(
     init.body = await request.arrayBuffer();
   }
 
-  const response = await fetch(target, init);
+
+  let response: Response;
+  try {
+    response = await fetch(target, init);
+  } catch (error) {
+    // If the backend isn't available (e.g. during build), return a 503 instead of throwing
+    console.error("Proxy fetch failed:", error);
+    return new NextResponse(null, { status: 503, statusText: "Service Unavailable" });
+  }
+
   return new NextResponse(response.body, {
     status: response.status,
     statusText: response.statusText,
