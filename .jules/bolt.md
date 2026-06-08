@@ -1,3 +1,7 @@
+## 2024-05-18 - Optimized SQL Commit in Python Loop
+**Learning:** Extracting an `await db.commit()` and `await db.refresh(task)` loop-bound statements out of iterative logic significantly drops transaction overhead and improves processing time, especially on retry workflows with `IntegrityError`.
+**Action:** Always inspect the operations surrounding the `except IntegrityError:` loop handling during bulk creation when debugging Python SQLAlchemy database bottlenecks.
+
 ## 2026-06-07 - AsyncDBAPI Batch Execution Overhead
 **Learning:** When executing multiple SQLAlchemy text statements sequentially (like a database bootstrap schema backfill) over an async connection, awaiting `conn.execute()` iteratively incurs Python async event loop context switching overhead for each query.
 **Action:** Extract the loop into a synchronous helper function and pass it to `await conn.run_sync()`. This executes the iterative batch within the async context's worker thread via a single blocking DBAPI call, significantly reducing execution overhead (measured ~30% faster locally).

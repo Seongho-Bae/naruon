@@ -487,11 +487,13 @@ export function SearchLayout() {
           className="mx-auto flex w-full max-w-4xl gap-2"
         >
           <div className="relative min-w-0 flex-1">
+            <label htmlFor="search-input" className="sr-only">맥락 검색</label>
             <Search
               className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-primary"
               aria-hidden="true"
             />
             <input
+              id="search-input"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

@@ -355,10 +355,11 @@ export function DashboardLayout({
               <PrimaryNavLink key={item.href} {...item} />
             ))}
           </nav>
-          <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
+          <label htmlFor="global-search-input" className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
             <span className="sr-only">맥락 검색</span>
             <input
+              id="global-search-input"
               className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
               placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
               type="search"
