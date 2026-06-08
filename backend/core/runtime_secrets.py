@@ -6,6 +6,10 @@ _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS = frozenset(
 
 
 def validate_auth_session_hmac_secret_value(secret: str) -> None:
+    if not secret:
+        raise ValueError(
+            "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"
+        )
     secret_bytes = secret.encode("utf-8")
     if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
         raise ValueError(

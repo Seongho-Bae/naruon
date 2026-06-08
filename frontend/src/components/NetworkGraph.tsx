@@ -99,7 +99,7 @@ export default function NetworkGraph() {
       })
       .catch((err) => {
         console.error('Failed to load network graph:', err);
-        setError('Failed to load network relationships');
+        setError('관계 맥락을 불러오지 못했습니다.');
         setLoading(false);
       });
   }, []);
@@ -143,7 +143,14 @@ export default function NetworkGraph() {
   }
 
   if (error) {
-    return <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center text-sm text-red-500 sm:min-h-[420px]">관계 그래프를 불러오지 못했습니다.</div>;
+    return (
+      <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
+        <div className="max-w-xs rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
+          <h4 className="font-bold">관계 맥락을 불러오지 못했습니다</h4>
+          <p className="mt-2 text-sm leading-6">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   if (nodes.length === 0) {
