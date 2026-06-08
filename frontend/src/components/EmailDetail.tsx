@@ -138,22 +138,30 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
         
         if (!isMounted) return;
         setEmail(emailJson);
+        setLoading(false); // Stop loading immediately so the user can read the email
 
-        await fetchThread(emailJson);
+        // Fetch thread in the background
+        fetchThread(emailJson).catch((err) => {
+          console.error("Unhandled error fetching thread:", err);
+        });
 
-        try {
-          const llmJson = await apiClient.post<LlmData>('/api/llm/summarize', { email_body: emailJson.body });
-          if (!isMounted) return;
-          setLlmData(llmJson);
-        } catch (llmErr) {
-          console.error("Error generating LLM summary:", llmErr);
-          if (isMounted) setLlmError("맥락 종합을 생성하지 못했습니다.");
-        }
+        // Fetch LLM summary in the background
+        apiClient.post<LlmData>('/api/llm/summarize', { email_body: emailJson.body })
+          .then((llmJson) => {
+            if (!isMounted) return;
+            setLlmData(llmJson);
+          })
+          .catch((llmErr) => {
+            console.error("Error generating LLM summary:", llmErr);
+            if (isMounted) setLlmError("맥락 종합을 생성하지 못했습니다.");
+          });
+
       } catch (err) {
         console.error("Error fetching email details:", err);
-        if (isMounted) setDetailError("메일 내용을 불러오지 못했습니다.");
-      } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setDetailError("메일 내용을 불러오지 못했습니다.");
+          setLoading(false);
+        }
       }
     };
 

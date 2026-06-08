@@ -1,3 +1,7 @@
+## 2024-05-18 - Optimized SQL Commit in Python Loop
+**Learning:** Extracting an `await db.commit()` and `await db.refresh(task)` loop-bound statements out of iterative logic significantly drops transaction overhead and improves processing time, especially on retry workflows with `IntegrityError`.
+**Action:** Always inspect the operations surrounding the `except IntegrityError:` loop handling during bulk creation when debugging Python SQLAlchemy database bottlenecks.
+
 ## 2026-06-07 - AsyncDBAPI Batch Execution Overhead
 **Learning:** When executing multiple SQLAlchemy text statements sequentially (like a database bootstrap schema backfill) over an async connection, awaiting `conn.execute()` iteratively incurs Python async event loop context switching overhead for each query.
 **Action:** Extract the loop into a synchronous helper function and pass it to `await conn.run_sync()`. This executes the iterative batch within the async context's worker thread via a single blocking DBAPI call, significantly reducing execution overhead (measured ~30% faster locally).
@@ -18,6 +22,11 @@
 ## 2025-05-30 - O(N^2) optimization in emails api and useMemo in frontend graph
 **Learning:** `thread_matches_folder` in `get_emails` iterated through a thread's messages over and over again for `visible_groups` checking `if folder == "sent"`. Memoizing this lookup conditionally improved this behavior to O(N). Also, repeated maps and filters on render in the frontend can quickly become problematic, which is solved cleanly via `useMemo`.
 **Action:** When filtering objects mapped iteratively, identify overlapping inner iterators (like checking for matching inner properties across items) and build them in a lookup dictionary ahead of time. In React, safely memoize constant properties built sequentially.
+
+## 2025-02-12 - Prevent Blocking UI on Slow LLM Endpoints
+**Learning:** In React components fetching both fast core data and slow AI-generated data concurrently inside `useEffect` (like `EmailDetail.tsx` waiting for LLM summarization), awaiting the slow request blocks the component from setting its fast core data state. This results in the user waiting artificially long for content that's already arrived.
+**Action:** Always fetch the primary/fast core data first, set the core data state, and disable the top-level loading indicator immediately. Then, fire secondary/slow (LLM) promises without awaiting them in the primary render path, allowing them to independently update their own state placeholders when they complete.
+
 ## 2026-06-06 - Refactoring repetitive assert any loops
 **Learning:** Repetitive single-statement `assert any(...)` calls can be cleanly refactored into an `expected_substrings` list that loops over assertions. When extracting strings to build the list, it's very helpful to use `re.sub()` to simultaneously capture strings via a replacer function while replacing the matches with placeholders, and then substitute the newly generated list block into the code.
 **Action:** Always prefer lists and loops over repeated code structures when possible, maintaining test readability.
