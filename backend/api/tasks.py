@@ -157,8 +157,6 @@ async def create_reply_sla_escalations(
 
     email_ids = [email.id for email in overdue_replies]
 
-
-
     existing_result = await db.execute(
         select(TicketTask)
         .where(
@@ -174,8 +172,6 @@ async def create_reply_sla_escalations(
     for task in existing_result.scalars().all():
         if task.related_email_id not in existing_tasks_by_email:
             existing_tasks_by_email[task.related_email_id] = task
-
-
 
     created_count = 0
     escalated_tasks: list[tuple[TicketTask, str | None]] = []
@@ -239,6 +235,7 @@ async def create_reply_sla_escalations(
         await db.rollback()
         created_count = 0
         escalated_tasks.clear()
+        tasks_to_update = []
 
         for email in overdue_replies:
             task = TicketTask(
@@ -285,9 +282,13 @@ async def create_reply_sla_escalations(
                     task.priority = "urgent"
                     task.related_thread_id = canonical_thread_key(email)
                     task.updated_at = now
-                    await db.commit()
-                    await db.refresh(task)
+                    tasks_to_update.append(task)
             escalated_tasks.append((task, email.message_id))
+
+        if tasks_to_update:
+            await db.commit()
+            for t in tasks_to_update:
+                await db.refresh(t)
 
     return ReplySlaEscalationResponse(
         evaluated=len(pending_replies),
