@@ -360,11 +360,9 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         </CardContent>
       </Card>
 
-      <td>
-        Creates a calendar event (VTODO) for each execution item securely parsed
-        by the LLM. Rejects unsafe execution text using allowlists before
-        attempting creation.
-      </td>
+      {/* Creates a calendar event (VTODO) for each execution item securely
+          parsed by the LLM. Rejects unsafe execution text using allowlists
+          before attempting creation. */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Extracted TODOs</CardTitle>
