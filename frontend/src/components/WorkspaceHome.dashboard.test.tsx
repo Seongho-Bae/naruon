@@ -54,6 +54,29 @@ async function waitForCondition(condition: () => boolean) {
   throw new Error("waitForCondition timed out after 20 attempts");
 }
 
+function emptySourceEvidenceResponse(url: string) {
+  if (
+    url.endsWith("/api/calendar/writeback-sources") ||
+    url.endsWith("/api/webdav/folders")
+  ) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ([]),
+    });
+  }
+  return null;
+}
+
+function emptyCalendarCandidateSearchResponse(url: string) {
+  if (url.endsWith("/api/search")) {
+    return Promise.resolve({
+      ok: true,
+      json: async () => ({ results: [] }),
+    });
+  }
+  return null;
+}
+
 describe("WorkspaceHome Today dashboard", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -122,6 +145,10 @@ describe("WorkspaceHome Today dashboard", () => {
           json: async () => ([]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -204,6 +231,10 @@ describe("WorkspaceHome Today dashboard", () => {
           json: async () => ([]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -283,6 +314,10 @@ describe("WorkspaceHome Today dashboard", () => {
           ]),
         });
       }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
       throw new Error(`Unexpected fetch: ${url}`);
     }));
     container = document.createElement("div");
@@ -314,5 +349,237 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(linkHrefByText("AI 허브")).toBe("/ai-hub");
     expect(linkHrefByText("데이터 품질 점검")).toBe("/data");
     expect(linkHrefByText("보안 감사 로그")).toBe("/security");
+  });
+
+  it("backs Today dashboard operating metrics with source evidence instead of fixed fixture numbers", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_session_token", "signed-source-backed-home");
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      fetchCalls.push({ url, init });
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "task-source-open",
+              title: "<script>계약 승인 확인</script>",
+              status: "open",
+              priority: "high",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+            {
+              id: "task-source-done",
+              title: "첨부 근거 정리",
+              status: "done",
+              priority: "low",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+          ]),
+        });
+      }
+      if (url.endsWith("/api/calendar/writeback-sources")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              source_id: "caldav-primary",
+              provider: "Primary CalDAV",
+              protocol: "caldav",
+              capabilities: ["read", "write"],
+              writeback_enabled: true,
+              etag: "etag-home-1",
+            },
+            {
+              source_id: "calendar-readonly",
+              provider: "Read-only Calendar",
+              protocol: "local",
+              capabilities: ["read"],
+              writeback_enabled: false,
+            },
+          ]),
+        });
+      }
+      if (url.endsWith("/api/webdav/folders")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              folder_uid: "folder-roadmap",
+              project_name: "Naruon Roadmap",
+              webdav_path: "/Projects/Naruon_Roadmap",
+            },
+          ]),
+        });
+      }
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            results: [
+              {
+                id: 601,
+                subject: "엔터프라이즈 데모 일정 조율",
+                sender: "sales@example.com",
+                date: "2026-05-18T11:00:00Z",
+                snippet: "고객 데모 후보 시간을 확정해야 합니다.",
+              },
+            ],
+          }),
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("고객 계약 승인 대기") ?? false);
+
+    expect(container.textContent).toContain("일정 원본");
+    expect(container.textContent).toContain("2");
+    expect(container.textContent).toContain("1개 일정 반영 가능");
+    expect(container.textContent).toContain("일정 원본 1");
+    expect(container.textContent).toContain("충돌 토큰 있음");
+    expect(container.textContent).toContain("프로젝트 원본");
+    expect(container.textContent).toContain("1개 WebDAV 폴더");
+    expect(container.textContent).toContain("작업 완료율");
+    expect(container.textContent).toContain("50%");
+    expect(container.textContent).toContain("1/2 완료");
+    expect(container.textContent).toContain("계약 승인 확인");
+    expect(container.textContent).toContain("일정 조율 후보 1건");
+    expect(container.textContent).toContain("엔터프라이즈 데모 일정 조율");
+    expect(container.textContent).toContain("고객 데모 후보 시간을 확정해야 합니다.");
+    expect(container.textContent).not.toContain("오늘 일정");
+    expect(container.textContent).not.toContain("진행 중 프로젝트");
+    expect(container.textContent).not.toContain("이번 주 목표 진행률");
+    expect(container.textContent).not.toContain("회의 2건 예정");
+    expect(container.textContent).not.toContain("일정 충돌 알림");
+    expect(container.textContent).not.toContain("68%");
+    expect(container.textContent).not.toContain("어제 대비");
+    expect(container.textContent).not.toContain("<script>");
+    expect(container.textContent).not.toContain("caldav-primary");
+    expect(container.textContent).not.toContain("calendar-readonly");
+    expect(container.textContent).not.toContain("Primary CalDAV");
+    expect(container.textContent).not.toContain("Read-only Calendar");
+
+    const calendarSourceCall = fetchCalls.find((call) => call.url.endsWith("/api/calendar/writeback-sources"));
+    const projectFolderCall = fetchCalls.find((call) => call.url.endsWith("/api/webdav/folders"));
+    const calendarCandidateCall = fetchCalls.find((call) => call.url.endsWith("/api/search"));
+    expect(calendarCandidateCall?.init?.method).toBe("POST");
+    expect(JSON.parse(String(calendarCandidateCall?.init?.body))).toEqual({
+      query: "일정 충돌 일정 조율 회의 후보",
+      limit: 3,
+    });
+    for (const sourceCall of [calendarSourceCall, projectFolderCall, calendarCandidateCall]) {
+      expect(sourceCall).toBeDefined();
+      const headers = sourceCall?.init?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
+      for (const headerName of publicIdentityHeaders) {
+        expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+      }
+    }
+  });
+
+  it("shows an explicit source evidence error instead of a false empty calendar state", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            emails: [
+              {
+                id: 101,
+                subject: "고객 계약 승인 대기",
+                sender: "legal@example.com",
+                date: "2026-05-17T09:00:00Z",
+                snippet: "오늘 승인해야 하는 계약 검토 요청",
+                unread: true,
+              },
+            ],
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([]),
+        });
+      }
+      if (url.endsWith("/api/calendar/writeback-sources") || url.endsWith("/api/webdav/folders")) {
+        return Promise.reject(new Error("source registry unavailable"));
+      }
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("일정 원본 목록 확인에 실패했습니다.") ?? false);
+
+    expect(container.textContent).toContain("일정 원본 확인 필요");
+    expect(container.textContent).toContain("오류");
+    expect(container.textContent).toContain("일정 원본 목록 응답을 확인할 수 없습니다.");
+    expect(container.textContent).not.toContain("연결된 일정 원본이 없습니다.");
   });
 });
