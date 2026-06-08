@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Integrate the backend API into the frontend Email Dashboard UI to fetch real email data, removing hardcoded dummy data.
+**Goal:** Integrate signed backend APIs into the Naruon email workspace UI to fetch real email data, removing hardcoded dummy data.
 
-**Architecture:** Create new `emails` endpoints in the FastAPI backend. Then update `EmailList` to fetch recent emails, and `EmailDetail` to fetch email details along with LLM-generated summaries and TODOs from the backend.
+**Architecture:** Create signed `emails` endpoints in the FastAPI backend. Then update `EmailList` to fetch recent emails through the shared browser API client, and update `EmailDetail` to fetch email details plus server-produced `맥락 종합` and `실행 항목` evidence. Browser code must not call backend hosts directly, must not send public identity headers, and must not submit raw email bodies to LLM endpoints.
 
 **Tech Stack:** FastAPI, React, Next.js, Tailwind CSS, shadcn/ui
 
@@ -137,10 +137,11 @@ git commit -m "feat: add emails API endpoints for dashboard"
 
 **Step 1: Write the minimal implementation**
 
-Modify `frontend/src/components/EmailList.tsx` to fetch `/api/emails`:
+Modify `frontend/src/components/EmailList.tsx` to fetch `/api/emails` through the shared signed-session API client:
 
 ```tsx
 import React, { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import {
   Card,
   CardHeader,
@@ -150,7 +151,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface EmailItem {
-  id: number;
+  email_id: string;
   subject: string | null;
   sender: string;
   date: string;
@@ -160,20 +161,19 @@ interface EmailItem {
 export function EmailList({
   onSelectEmail,
 }: {
-  onSelectEmail: (id: number) => void;
+  onSelectEmail: (id: string) => void;
 }) {
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/emails")
-      .then((res) => res.json())
+    apiClient
+      .get<{ emails: EmailItem[] }>("/api/emails")
       .then((data) => {
         setEmails(data.emails || []);
         setLoading(false);
       })
-      .catch((err) => {
-        console.error("Error fetching emails:", err);
+      .catch(() => {
         setLoading(false);
       });
   }, []);
@@ -192,9 +192,9 @@ export function EmailList({
         )}
         {emails.map((email) => (
           <Card
-            key={email.id}
+            key={email.email_id}
             className="cursor-pointer hover:bg-accent transition-colors"
-            onClick={() => onSelectEmail(email.id)}
+            onClick={() => onSelectEmail(email.email_id)}
           >
             <CardHeader className="p-4">
               <CardTitle className="text-sm font-medium">
@@ -219,7 +219,7 @@ export function EmailList({
 
 ```bash
 git add frontend/src/components/EmailList.tsx
-git commit -m "feat: integrate actual backend data into EmailList"
+git commit -m "feat: integrate signed email API into EmailList"
 ```
 
 ### Task 3: Integrate Email Detail View
@@ -230,29 +230,31 @@ git commit -m "feat: integrate actual backend data into EmailList"
 
 **Step 1: Write the minimal implementation**
 
-Modify `frontend/src/components/EmailDetail.tsx` to fetch `/api/emails/{id}` and `/api/llm/summarize`:
+Modify `frontend/src/components/EmailDetail.tsx` to fetch `/api/emails/{id}` and server-generated evidence for `맥락 종합` / `실행 항목`. The browser must request source-scoped insight data by opaque email id; it must not send raw `email.body` to a generic LLM endpoint.
 
 ```tsx
 import React, { useEffect, useState } from "react";
+import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 interface EmailData {
-  id: number;
+  email_id: string;
   subject: string | null;
   sender: string;
   body: string;
   date: string;
 }
 
-interface LlmData {
-  summary: string;
-  todos: string[];
+interface InsightData {
+  context_synthesis: string;
+  action_items: string[];
+  provenance: string;
 }
 
-export function EmailDetail({ emailId }: { emailId: number | null }) {
+export function EmailDetail({ emailId }: { emailId: string | null }) {
   const [email, setEmail] = useState<EmailData | null>(null);
-  const [llmData, setLlmData] = useState<LlmData | null>(null);
+  const [insightData, setInsightData] = useState<InsightData | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -261,29 +263,23 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
     let isMounted = true;
     setLoading(true);
     setEmail(null);
-    setLlmData(null);
+    setInsightData(null);
 
     const fetchData = async () => {
       try {
-        const emailRes = await fetch(
-          `http://localhost:8000/api/emails/${emailId}`,
-        );
-        const emailJson = await emailRes.json();
+        const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
 
         if (!isMounted) return;
         setEmail(emailJson);
 
-        const llmRes = await fetch(`http://localhost:8000/api/llm/summarize`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email_body: emailJson.body }),
-        });
-        const llmJson = await llmRes.json();
+        const insightJson = await apiClient.post<InsightData>(
+          "/api/ai-hub/email-insight",
+          { source_email_id: emailJson.email_id },
+        );
 
         if (!isMounted) return;
-        setLlmData(llmJson);
-      } catch (err) {
-        console.error("Error fetching email details:", err);
+        setInsightData(insightJson);
+      } catch {
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -344,43 +340,42 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
         </CardContent>
       </Card>
 
-      {/* AI Summary */}
+      {/* 맥락 종합 */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">AI Summary</CardTitle>
+          <CardTitle className="text-lg">맥락 종합</CardTitle>
         </CardHeader>
         <CardContent>
-          {llmData ? (
-            <p className="text-sm">{llmData.summary}</p>
+          {insightData ? (
+            <p className="text-sm">{insightData.context_synthesis}</p>
           ) : (
             <p className="text-sm text-muted-foreground italic">
-              Generating summary...
+              맥락 종합을 불러오는 중입니다...
             </p>
           )}
         </CardContent>
       </Card>
 
-      {/* Creates a calendar event (VTODO) for each execution item securely
-          parsed by the LLM. Rejects unsafe execution text using allowlists
-          before attempting creation. */}
+      {/* 일정 반영은 서버가 source_email_id와 실행 항목 allowlist를 재검증한 뒤
+          VTODO intent만 반환합니다. 브라우저는 provider write 성공을 표시하지 않습니다. */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Extracted TODOs</CardTitle>
+          <CardTitle className="text-lg">실행 항목</CardTitle>
         </CardHeader>
         <CardContent>
-          {llmData ? (
-            llmData.todos.length > 0 ? (
+          {insightData ? (
+            insightData.action_items.length > 0 ? (
               <ul className="list-disc pl-5 text-sm space-y-1">
-                {llmData.todos.map((todo, idx) => (
-                  <li key={idx}>{todo}</li>
+                {insightData.action_items.map((actionItem) => (
+                  <li key={actionItem}>{actionItem}</li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No TODOs found.</p>
+              <p className="text-sm text-muted-foreground">실행 항목이 없습니다.</p>
             )
           ) : (
             <p className="text-sm text-muted-foreground italic">
-              Extracting TODOs...
+              실행 항목을 확인하는 중입니다...
             </p>
           )}
         </CardContent>
@@ -394,5 +389,5 @@ export function EmailDetail({ emailId }: { emailId: number | null }) {
 
 ```bash
 git add frontend/src/components/EmailDetail.tsx
-git commit -m "feat: integrate EmailDetail with actual backend API and LLM summarization"
+git commit -m "feat: integrate signed email detail evidence"
 ```
