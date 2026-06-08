@@ -6,7 +6,12 @@ from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
 from typing import Literal
-from services.email_client import EmailMessageParams, SmtpConfig, send_email, validate_smtp_destination
+from services.email_client import (
+    EmailMessageParams,
+    SmtpConfig,
+    send_email,
+    validate_smtp_destination,
+)
 from services.reply_tracking_service import (
     check_missing_replies,
     configured_email_addresses,
@@ -183,9 +188,7 @@ class UniqueThreadCandidateRequest(BaseModel):
 
 
 class UniqueThreadIntentRequest(BaseModel):
-    candidates: list[UniqueThreadCandidateRequest] = Field(
-        min_length=1, max_length=20
-    )
+    candidates: list[UniqueThreadCandidateRequest] = Field(min_length=1, max_length=20)
 
 
 class UniqueThreadUpdate(BaseModel):
@@ -296,16 +299,33 @@ async def get_pending_replies(
     return {"emails": items}
 
 
-
-def _extract_candidate_lookups(candidates: list[EmailDedupeCandidate]) -> tuple[set[str], set[str]]:
+def _extract_candidate_lookups(
+    candidates: list[EmailDedupeCandidate],
+) -> tuple[set[str], set[str], dict[str, set[str]], dict[str, str | None]]:
     message_lookup_values: set[str] = set()
     fingerprint_values: set[str] = set()
+
+    # ⚡ Bolt: Cache expensive lookup generation and SHA-256 fingerprinting
+    # Mapping by candidate_key to prevent redundant processing in downstream dedupe logic
+    candidate_lookups: dict[str, set[str]] = {}
+    candidate_fingerprints: dict[str, str | None] = {}
+
     for candidate in candidates:
-        message_lookup_values.update(candidate_message_lookup_values(candidate))
+        lookups = candidate_message_lookup_values(candidate)
+        candidate_lookups[candidate.candidate_key] = lookups
+        message_lookup_values.update(lookups)
+
         candidate_fingerprint = candidate_strong_fingerprint(candidate)
+        candidate_fingerprints[candidate.candidate_key] = candidate_fingerprint
         if candidate_fingerprint:
             fingerprint_values.add(candidate_fingerprint)
-    return message_lookup_values, fingerprint_values
+
+    return (
+        message_lookup_values,
+        fingerprint_values,
+        candidate_lookups,
+        candidate_fingerprints,
+    )
 
 
 async def _fetch_existing_emails_for_candidates(
@@ -352,6 +372,8 @@ def _find_matches_for_candidates(
     candidates: list[EmailDedupeCandidate],
     by_message_id: dict[str, Email],
     by_fingerprint: dict[str, Email],
+    candidate_lookups: dict[str, set[str]],
+    candidate_fingerprints: dict[str, str | None],
 ) -> list[UniqueThreadUpdate]:
     updates: list[UniqueThreadUpdate] = []
     for candidate in candidates:
@@ -359,7 +381,7 @@ def _find_matches_for_candidates(
         match_reason: Literal["message_id", "fingerprint"] | None = None
         dedupe_key: str | None = None
 
-        for lookup_value in candidate_message_lookup_values(candidate):
+        for lookup_value in candidate_lookups.get(candidate.candidate_key, set()):
             if lookup_value in by_message_id:
                 matched_email = by_message_id[lookup_value]
                 match_reason = "message_id"
@@ -367,7 +389,7 @@ def _find_matches_for_candidates(
                 break
 
         if matched_email is None:
-            candidate_fingerprint = candidate_strong_fingerprint(candidate)
+            candidate_fingerprint = candidate_fingerprints.get(candidate.candidate_key)
             if candidate_fingerprint and candidate_fingerprint in by_fingerprint:
                 matched_email = by_fingerprint[candidate_fingerprint]
                 match_reason = "fingerprint"
@@ -396,12 +418,23 @@ async def create_unique_thread_intent(
     auth_context: AuthContext = Depends(get_auth_context),
 ):
     candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
-    message_lookup_values, fingerprint_values = _extract_candidate_lookups(candidates)
+    (
+        message_lookup_values,
+        fingerprint_values,
+        candidate_lookups,
+        candidate_fingerprints,
+    ) = _extract_candidate_lookups(candidates)
     existing_emails = await _fetch_existing_emails_for_candidates(
         db, auth_context, message_lookup_values, fingerprint_values
     )
     by_message_id, by_fingerprint = _build_email_lookup_dicts(existing_emails)
-    updates = _find_matches_for_candidates(candidates, by_message_id, by_fingerprint)
+    updates = _find_matches_for_candidates(
+        candidates,
+        by_message_id,
+        by_fingerprint,
+        candidate_lookups,
+        candidate_fingerprints,
+    )
 
     return UniqueThreadIntentResponse(
         status="intent_ready",
