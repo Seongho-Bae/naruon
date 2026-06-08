@@ -519,8 +519,7 @@ is_preexisting_report_dir() {
 
 is_github_models_model() {
 	case "$1" in
-	openai/openai/* | github_models/* | \
-	deepseek/* | meta/* | mistral-ai/*)
+	openai/openai/* | github_models/* | openai/gpt-4.1)
 		return 0
 		;;
 	*)
@@ -532,8 +531,7 @@ is_github_models_model() {
 is_github_models_api_compatible_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
-	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
-	deepseek/* | meta/* | mistral-ai/*)
+	openai/gpt-4.1 | openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]*)
 		return 0
 		;;
 	*)
@@ -1400,87 +1398,6 @@ PY
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
-build_pull_request_head_tree_scope_dir() {
-	local scope_dir
-	scope_dir="$(mktemp -d "${TMPDIR:-/tmp}/strix-pr-scope.XXXXXX")"
-	scope_dir="$({ CDPATH='' && cd -P -- "$scope_dir" && pwd -P; })"
-	PULL_REQUEST_SCOPE_DIRS+=("$scope_dir")
-
-	local head_sha
-	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
-	if [ -z "$head_sha" ] || ! is_valid_git_commit_sha "$head_sha"; then
-		echo "ERROR: pull request head commit SHA is invalid; failing closed." >&2
-		return 2
-	fi
-	if ! git rev-parse --verify --quiet "$head_sha^{commit}" >/dev/null; then
-		echo "ERROR: pull request head commit could not be read; failing closed: $head_sha" >&2
-		return 2
-	fi
-
-	local tree_output
-	if ! tree_output="$(git ls-tree -r --full-tree "$head_sha")"; then
-		echo "ERROR: pull request head tree could not be read; failing closed." >&2
-		return 2
-	fi
-
-	local copied_file_count=0
-	local metadata relative_path mode object_type object_hash dst_path tmp_dst
-	while IFS=$'\t' read -r metadata relative_path; do
-		[ -n "$metadata" ] || continue
-		# shellcheck disable=SC2086 # metadata is exactly git ls-tree's mode/type/object tuple.
-		read -r mode object_type object_hash <<<"$metadata"
-		if [ "$object_type" != "blob" ]; then
-			echo "ERROR: pull request head tree entry is not a blob; failing closed: $relative_path" >&2
-			return 2
-		fi
-		case "$mode" in
-		100644 | 100755)
-			;;
-		*)
-			echo "ERROR: pull request head tree entry has unsupported mode $mode; failing closed: $relative_path" >&2
-			return 2
-			;;
-		esac
-		relative_path="$(normalize_changed_file_path "$relative_path")" || {
-			echo "ERROR: pull request head tree path is unsafe: $relative_path" >&2
-			return 2
-		}
-		dst_path="$(
-			python3 - "$scope_dir" "$relative_path" <<'PY'
-from pathlib import Path
-import sys
-
-scope_root = Path(sys.argv[1]).resolve(strict=True)
-relative_path = Path(sys.argv[2])
-dst_path = scope_root / relative_path
-print(dst_path)
-PY
-		)"
-		mkdir -p -- "$(dirname -- "$dst_path")"
-		tmp_dst="$(mktemp "$(dirname -- "$dst_path")/.pr-head.XXXXXX")" || return 2
-		if ! git cat-file blob "$object_hash" >"$tmp_dst"; then
-			rm -f -- "$tmp_dst"
-			echo "ERROR: pull request head blob could not be copied; failing closed: $relative_path" >&2
-			return 2
-		fi
-		if ! mv -- "$tmp_dst" "$dst_path"; then
-			rm -f -- "$tmp_dst"
-			return 2
-		fi
-		# PR-head files are scanner input data in privileged workflows. Preserve
-		# blob content only; never preserve executable bits from untrusted heads.
-		chmod 644 "$dst_path" || return 2
-		copied_file_count=$((copied_file_count + 1))
-	done <<<"$tree_output"
-
-	if [ "$copied_file_count" -eq 0 ]; then
-		echo "ERROR: pull request head tree contains no regular files to scan; failing closed." >&2
-		return 2
-	fi
-
-	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
-}
-
 prepare_pull_request_scan_scope() {
 	if ! is_pull_request_event; then
 		return 0
@@ -1559,11 +1476,11 @@ PY
 	if [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
 		if pull_request_head_blob_required; then
 			local build_scope_rc=0
-			build_pull_request_head_tree_scope_dir || build_scope_rc=$?
+			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
 			if [ "$build_scope_rc" -eq 0 ]; then
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-				printf "Using full PR-head blob scope for pull request_target Strix scan; %s scannable changed file(s) retained for findings attribution.\n" "$total_files" >&2
+				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
 				return 0
 			fi
 			return 2
@@ -1589,22 +1506,14 @@ PY
 		return 0
 	fi
 	local build_scope_rc=0
-	if pull_request_head_blob_required; then
-		build_pull_request_head_tree_scope_dir || build_scope_rc=$?
-	else
-		build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
-	fi
+	build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
 	if [ "$build_scope_rc" -ne 0 ]; then
 		return 2
 	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-	if pull_request_head_blob_required; then
-		printf "Materialized full PR-head scope for Strix scan; %s scannable changed file(s) retained for findings attribution.\n" "$total_files" >&2
-	else
-		printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
-		printf ".\n" >&2
-	fi
+	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
+	printf ".\n" >&2
 	return 0
 }
 
@@ -3101,8 +3010,8 @@ run_current_target_scan() {
 			if is_model_retryable_error "$candidate"; then
 				continue
 			fi
-			echo "Strix fallback model '$candidate' emitted provider infrastructure or failure-signal output; trying next configured fallback if available." >&2
-			continue
+			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
 		fi
 
 		if ! is_model_retryable_error "$candidate"; then

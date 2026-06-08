@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, FolderOpen, ListChecks, Search, User } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -95,65 +95,6 @@ function buildProjectStatus(tasks: TicketTask[]): ProjectSummary['status'] {
   return '대기 중';
 }
 
-function getProjectEvidenceLabel(evidence: string) {
-  if (evidence === 'project_folders') return 'WebDAV 폴더 근거';
-  if (evidence === 'ticket_tasks') return '작업 근거';
-  return '원본 근거';
-}
-
-function getProjectBoundaryLabel(project: ProjectSummary) {
-  return project.sourcePath ? '저장소 경계 확인됨' : '작업 대기열 기준';
-}
-
-function getTaskSourceLabel(sourceType: string) {
-  switch (sourceType) {
-    case 'email':
-      return '메일 근거';
-    case 'webdav':
-      return '문서 근거';
-    case 'reply_sla':
-      return '답장 대기';
-    case 'self_sent_knowledge':
-      return '자기참조 메일';
-    default:
-      return '원본 근거';
-  }
-}
-
-function getTaskEvidenceLabel(task: TicketTask) {
-  if (task.related_thread_id) return '스레드 근거 연결됨';
-  if (task.source_email_id) return '메일 근거 연결됨';
-  return '원본 연결 대기';
-}
-
-function getWorkspaceScopeLabel(scope: ProjectAccessScope) {
-  return scope.organizationId ? '서명된 조직 워크스페이스' : '서명된 개인 워크스페이스';
-}
-
-function getProjectScopeSnapshot() {
-  const claims = apiClient.getSessionClaims();
-  return `${claims.userId ?? ''}|${claims.organizationId ?? ''}`;
-}
-
-function getProjectScopeServerSnapshot() {
-  return '|';
-}
-
-function subscribeProjectScope(onStoreChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === 'naruon_session_token') onStoreChange();
-  };
-  const refreshHandle = window.setTimeout(onStoreChange, 0);
-  window.addEventListener('storage', handleStorage);
-
-  return () => {
-    window.clearTimeout(refreshHandle);
-    window.removeEventListener('storage', handleStorage);
-  };
-}
-
 function isAuthorizedToViewProject(folder: ProjectFolder, scope: ProjectAccessScope) {
   const ownerUserId = safeText(folder.owner_user_id);
   if (!ownerUserId || !scope.userId || ownerUserId !== scope.userId) return false;
@@ -178,10 +119,10 @@ function buildProjects(folders: ProjectFolder[], tasks: TicketTask[]): ProjectSu
   return [
     {
       id: 'workspace_task_backlog',
-      title: '원본 연결 작업 대기열',
+      title: 'Source-linked 작업 Backlog',
       status,
       progress,
-      category: '작업 대기열',
+      category: 'Ticket tasks',
       evidence: 'ticket_tasks',
       sourcePath: null,
     },
@@ -199,15 +140,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
-  const projectScopeSnapshot = useSyncExternalStore(
-    subscribeProjectScope,
-    getProjectScopeSnapshot,
-    getProjectScopeServerSnapshot,
-  );
-  const projectScope = useMemo<ProjectAccessScope>(() => {
-    const [userId, organizationId] = projectScopeSnapshot.split('|');
-    return { userId: userId || null, organizationId: organizationId || null };
-  }, [projectScopeSnapshot]);
+  const projectScope = useMemo(() => {
+    const claims = apiClient.getSessionClaims();
+    return { userId: claims.userId, organizationId: claims.organizationId };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,7 +162,7 @@ export function ProjectsLayout() {
         if (cancelled) return;
         setFolders([]);
         setTasks([]);
-        setError(fetchError.message ? '프로젝트 근거를 불러오지 못했습니다. 데이터 연결 상태를 확인해 주세요.' : '프로젝트 근거를 불러오지 못했습니다.');
+        setError(fetchError.message || '프로젝트 source evidence를 불러오지 못했습니다.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -249,28 +185,25 @@ export function ProjectsLayout() {
   const blockedCount = countByStatus(projectTasks, 'blocked');
   const doneCount = countByStatus(projectTasks, 'done');
   const sourceTypeCount = new Set(projectTasks.map((task) => task.source_type)).size;
-  const projectEvidenceLabel = getProjectEvidenceLabel(activeProject.evidence);
-  const projectBoundaryLabel = getProjectBoundaryLabel(activeProject);
-  const workspaceScopeLabel = getWorkspaceScopeLabel(projectScope);
 
   return (
     <div className="flex h-full min-h-0 min-w-0 overflow-x-hidden bg-background text-foreground">
       <aside className="hidden w-72 shrink-0 flex-col overflow-y-auto border-r border-border bg-card lg:flex">
         <div className="border-b border-border p-4">
           <a href="/data" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
-            <FolderOpen className="size-4" /> 새 프로젝트
+            <FolderOpen className="size-4" /> Source 등록
           </a>
           <div className="relative mt-4">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <a href="/search" aria-label="프로젝트 관련 문서와 메일 연결" className="flex h-9 w-full items-center rounded-md border border-border bg-background pl-9 pr-4 text-sm font-semibold text-muted-foreground hover:bg-secondary">
-              관련 문서/메일 연결
-            </a>
+            <p aria-label="프로젝트 source 검색 상태" className="flex h-9 w-full items-center rounded-md border border-border bg-background pl-9 pr-4 text-sm text-muted-foreground">
+              source evidence
+            </p>
           </div>
         </div>
 
         <div className="flex-1 space-y-1 p-3">
           {loading ? (
-            <div role="status" className="rounded-lg border border-border bg-background p-3 text-sm font-semibold text-muted-foreground">프로젝트 근거를 불러오는 중입니다.</div>
+            <div role="status" className="rounded-lg border border-border bg-background p-3 text-sm font-semibold text-muted-foreground">프로젝트 evidence를 불러오는 중입니다.</div>
           ) : null}
           {projects.map((project) => (
             <button
@@ -302,7 +235,7 @@ export function ProjectsLayout() {
             <div className="mb-1 flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground">
               <span>{activeProject.category}</span>
               <span>/</span>
-              <span>{projectEvidenceLabel}</span>
+              <span className="font-mono">{activeProject.evidence}</span>
             </div>
             <h2 className="break-keep text-xl font-bold leading-tight lg:text-2xl">{activeProject.title}</h2>
           </div>
@@ -333,7 +266,7 @@ export function ProjectsLayout() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a href="/tasks" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">작업 보드</a>
-              <a href="/data" className="rounded-md bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">원본 연결</a>
+              <a href="/data" className="rounded-md bg-primary px-4 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">Data evidence</a>
             </div>
           </div>
         </header>
@@ -350,7 +283,7 @@ export function ProjectsLayout() {
               <section aria-label="프로젝트 마일스톤" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border p-5">
                   <h2 className="font-bold text-lg">마일스톤</h2>
-                  <a href="/tasks" className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90">마일스톤 추가</a>
+                  <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">ticket_tasks</span>
                 </div>
                 <div className="grid gap-4 p-5 md:grid-cols-4">
                   {[
@@ -362,7 +295,7 @@ export function ProjectsLayout() {
                     <article key={milestone.status} className="rounded-xl border border-border bg-background p-4">
                       <div className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${taskStatusClass[milestone.status]}`}>{milestone.label}</div>
                       <p className="mt-4 text-2xl font-black">{milestone.count}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">원본 연결 작업</p>
+                      <p className="mt-1 text-sm text-muted-foreground">source-linked ticket</p>
                     </article>
                   ))}
                 </div>
@@ -373,38 +306,28 @@ export function ProjectsLayout() {
               <section aria-label="프로젝트 의사결정 로그" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border bg-primary/5 p-5">
                   <h2 className="font-bold text-lg text-primary">의사결정 로그</h2>
-                  <button type="button" onClick={() => setViewMode('의사결정 로그')} className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90">의사결정 추가</button>
+                  <span className="rounded-full bg-background px-2.5 py-1 font-mono text-xs font-semibold text-foreground">provider_write_executed=false</span>
                 </div>
                 <div className="divide-y divide-border">
                   <article className="p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="flex items-center gap-2 font-bold text-base"><CheckCircle2 className="size-4 text-emerald-500" /> 원본 저장소 연결</h3>
-                      <span className="text-xs text-muted-foreground">{authorizedFolders.length}개 폴더</span>
+                      <h3 className="flex items-center gap-2 font-bold text-base"><CheckCircle2 className="size-4 text-emerald-500" /> Source registry 연결</h3>
+                      <span className="text-xs text-muted-foreground">{authorizedFolders.length} folders</span>
                     </div>
                     <p className="mt-2 rounded-lg border border-border bg-background p-3 text-sm leading-6 text-foreground">
-                      WebDAV 프로젝트 폴더를 작업 경계로 사용합니다. 외부 저장소 쓰기는 별도 승인 전까지 실행하지 않습니다.
+                      WebDAV project folder를 프로젝트 경계로 사용합니다. 원천 provider에 쓰는 작업은 Data/WebDAV intent에서 별도로 승인합니다.
                     </p>
-                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><User className="size-3.5" /> 근거: WebDAV 폴더</p>
+                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><User className="size-3.5" /> evidence: project_folders</p>
                   </article>
                   <article className="p-5">
                     <div className="flex items-start justify-between gap-3">
-                      <h3 className="flex items-center gap-2 font-bold text-base"><ListChecks className="size-4 text-primary" /> 작업 흐름 반영</h3>
-                      <span className="text-xs text-muted-foreground">{projectTasks.length}개 작업</span>
+                      <h3 className="flex items-center gap-2 font-bold text-base"><ListChecks className="size-4 text-primary" /> Ticket workflow 반영</h3>
+                      <span className="text-xs text-muted-foreground">{projectTasks.length} tasks</span>
                     </div>
                     <p className="mt-2 rounded-lg border border-border bg-background p-3 text-sm leading-6 text-foreground">
-                      메일과 스레드 근거가 연결된 실행 항목을 기준으로 상태와 완료 흐름을 집계합니다.
+                      작업 상태는 `/api/tasks`의 공개 task id와 source email/thread evidence를 기준으로 집계합니다. 순차 DB id는 화면에 노출하지 않습니다.
                     </p>
-                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><User className="size-3.5" /> 근거: 실행 항목</p>
-                  </article>
-                  <article className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <h3 className="flex items-center gap-2 font-bold text-base"><Search className="size-4 text-primary" /> 관련 문서/메일 연결</h3>
-                      <a href="/search" className="rounded-md border border-border bg-background px-2.5 py-1 text-xs font-bold hover:bg-secondary">맥락 검색</a>
-                    </div>
-                    <p className="mt-2 rounded-lg border border-border bg-background p-3 text-sm leading-6 text-foreground">
-                      프로젝트 판단 근거는 맥락 검색에서 메일, 스레드, 문서 근거를 확인한 뒤 연결합니다.
-                    </p>
-                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><User className="size-3.5" /> 상태: 연결 준비</p>
+                    <p className="mt-3 flex items-center gap-2 text-xs font-semibold text-muted-foreground"><User className="size-3.5" /> evidence: ticket_tasks</p>
                   </article>
                 </div>
               </section>
@@ -423,10 +346,10 @@ export function ProjectsLayout() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${taskStatusClass[task.status]}`}>{taskStatusLabel[task.status]}</span>
                           <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-bold text-muted-foreground">{priorityLabel[task.priority]}</span>
-                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{getTaskSourceLabel(task.source_type)}</span>
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">{safeText(task.source_type, 'source')}</span>
                         </div>
                         <h3 className="mt-2 break-keep font-bold text-sm">{safeText(task.title, '제목 없는 작업')}</h3>
-                        <p className="mt-1 text-xs font-semibold text-muted-foreground">{getTaskEvidenceLabel(task)}</p>
+                        <p className="mt-1 break-all font-mono text-xs text-muted-foreground">{task.related_thread_id ?? task.source_email_id ?? task.id}</p>
                       </div>
                       <time className="flex items-center gap-1 text-xs text-muted-foreground sm:justify-end"><Clock className="size-3" />{formatDate(task.updated_at)}</time>
                     </li>
@@ -434,30 +357,19 @@ export function ProjectsLayout() {
                 </ol>
               ) : (
                 <div className="p-5">
-                  <p className="rounded-xl border border-dashed border-border p-4 text-sm font-semibold text-muted-foreground">연결된 실행 항목이 아직 없습니다.</p>
+                  <p className="rounded-xl border border-dashed border-border p-4 text-sm font-semibold text-muted-foreground">연결된 ticket task가 아직 없습니다.</p>
                 </div>
               )}
             </section>
           </div>
 
           <aside className="space-y-6">
-            <section aria-label="프로젝트 액션" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h2 className="mb-4 font-bold text-base">프로젝트 액션</h2>
-              <div className="grid gap-2 text-sm">
-                <a href="/data" className="flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 font-bold text-primary-foreground hover:bg-primary/90"><FolderOpen className="size-4" /> 새 프로젝트</a>
-                <button type="button" onClick={() => setViewMode('프로젝트 상세')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 프로젝트 열기</button>
-                <a href="/tasks" className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><ListChecks className="size-4 text-primary" /> 마일스톤 추가</a>
-                <button type="button" onClick={() => setViewMode('의사결정 로그')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 의사결정 추가</button>
-                <a href="/search" className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><Search className="size-4 text-primary" /> 관련 문서/메일 연결</a>
-              </div>
-            </section>
-
             <section aria-label="프로젝트 개요" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <h2 className="mb-4 font-bold text-base">프로젝트 개요</h2>
               <dl className="space-y-4 text-sm">
                 <div>
                   <dt className="mb-1 font-semibold text-muted-foreground">책임 경계</dt>
-                  <dd className="flex items-center gap-2 font-bold"><User className="size-4 text-primary" /> {workspaceScopeLabel}</dd>
+                  <dd className="flex items-center gap-2 font-bold"><User className="size-4 text-primary" /> signed workspace scope</dd>
                 </div>
                 <div>
                   <dt className="mb-1 font-semibold text-muted-foreground">상태</dt>
@@ -473,9 +385,9 @@ export function ProjectsLayout() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="mb-1 font-semibold text-muted-foreground">원본 근거</dt>
-                  <dd className="text-sm font-bold">{projectEvidenceLabel}</dd>
-                  <dd className="mt-1 text-xs font-semibold text-muted-foreground">{projectBoundaryLabel}</dd>
+                  <dt className="mb-1 font-semibold text-muted-foreground">Source evidence</dt>
+                  <dd className="break-all font-mono text-xs">{activeProject.evidence}</dd>
+                  {activeProject.sourcePath ? <dd className="mt-1 break-all font-mono text-xs text-muted-foreground">{activeProject.sourcePath}</dd> : null}
                 </div>
               </dl>
             </section>
@@ -488,11 +400,11 @@ export function ProjectsLayout() {
                   <span className="font-mono text-xs text-muted-foreground">{authorizedFolders.length}</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 font-semibold"><ListChecks className="size-4 text-primary" /> 실행 항목</span>
+                  <span className="flex items-center gap-2 font-semibold"><ListChecks className="size-4 text-primary" /> Ticket tasks</span>
                   <span className="font-mono text-xs text-muted-foreground">{projectTasks.length}</span>
                 </li>
                 <li className="flex items-center justify-between gap-3">
-                  <span className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4 text-primary" /> 원본 종류</span>
+                  <span className="flex items-center gap-2 font-semibold"><CalendarDays className="size-4 text-primary" /> Source types</span>
                   <span className="font-mono text-xs text-muted-foreground">{sourceTypeCount}</span>
                 </li>
               </ul>

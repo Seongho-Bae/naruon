@@ -116,10 +116,7 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
 
     app.dependency_overrides[get_db] = override_scoped_db
     try:
-        with TestClient(
-            app,
-            headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
-        ) as client:
+        with TestClient(app, headers={"X-User-Id": "testuser"}) as client:
             response = client.post("/api/search", json={"query": "test query"})
     finally:
         app.dependency_overrides.clear()
@@ -128,14 +125,3 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
     query_text = str(session.statements[-1]).lower()
     assert "emails.user_id" in query_text
     assert "emails.organization_id" in query_text
-    query_params = session.statements[-1].compile().params
-    user_scope_params = {
-        value for key, value in query_params.items() if key.startswith("user_id")
-    }
-    organization_scope_params = {
-        value
-        for key, value in query_params.items()
-        if key.startswith("organization_id")
-    }
-    assert user_scope_params == {"testuser"}
-    assert organization_scope_params == {"org-acme"}

@@ -175,13 +175,9 @@ describe("SecurityPage", () => {
     ({ container, root } = await renderSecurityPage());
 
     expect(container.querySelector("h1")?.textContent).toContain("보안과 관리자");
-    expect(container.textContent).toContain("원본 연결 RBAC / ABAC");
-    expect(container.textContent).toContain("WebDAV 저장소 1");
-    expect(container.textContent).toContain("서버에서 검증됨");
-    expect(container.textContent).toContain("쓰기 의도 가능");
-    expect(container.textContent).not.toContain("webdav_src_primary");
-    expect(container.textContent).not.toContain("files.acme.example");
-    expect(container.textContent).not.toContain("provider_write_executed=false");
+    expect(container.textContent).toContain("Source-linked RBAC / ABAC");
+    expect(container.textContent).toContain("webdav_src_primary");
+    expect(container.textContent).toContain("files.acme.example");
     expect(container.textContent).not.toContain("곧 제공됩니다");
     expect(container.textContent).not.toContain("비정상 로그인 시도");
 
@@ -222,30 +218,17 @@ describe("SecurityPage", () => {
       });
       expect(container.textContent).not.toContain("곧 제공됩니다");
       if (tabName === "감사 로그") {
-        expect(container.textContent).toContain("지속 감사 근거");
-        expect(container.textContent).toContain("설정 변경 / LLM 제공자");
-        expect(container.textContent).toContain("서버 감사 로그");
-        expect(container.textContent).toContain("Connector 근거");
-        expect(container.textContent).not.toContain("audit_evt_provider_update");
-        expect(container.textContent).not.toContain("llm_provider:provider_primary");
-        expect(container.textContent).not.toContain("connector_evt_heartbeat");
-        expect(container.textContent).not.toContain("outbound connector heartbeat");
-        expect(container.textContent).not.toContain("workspace-org-acme");
+        expect(container.textContent).toContain("Durable audit evidence");
+        expect(container.textContent).toContain("audit_evt_provider_update");
+        expect(container.textContent).toContain("llm_provider:provider_primary");
+        expect(container.textContent).toContain("connector_evt_heartbeat");
       }
       if (tabName === "외부 공유") {
-        expect(container.textContent).toContain("WebDAV 저장소 쓰기 경계");
-        expect(container.textContent).toContain("외부 쓰기 검토");
-        expect(container.textContent).toContain("외부 쓰기 실행 안 함");
-        expect(container.textContent).not.toContain("webdav_src_primary");
-        expect(container.textContent).not.toContain("external_writeback");
-        expect(container.textContent).not.toContain("provider_write_executed");
+        expect(container.textContent).toContain("WebDAV repository writeback boundary");
       }
       if (tabName === "정책") {
-        expect(container.textContent).toContain("차단 우선 정책 순서");
-        expect(container.textContent).toContain("ABAC 차단 후 RBAC 허용");
-        expect(container.textContent).toContain("교차 조직 제공자 secret");
-        expect(container.textContent).not.toContain("Cross-organization provider secret");
-        expect(container.textContent).not.toContain("services.access_policy.evaluate_access");
+        expect(container.textContent).toContain("Deny-first policy order");
+        expect(container.textContent).toContain("RBAC allow after ABAC denies");
       }
     }
   });

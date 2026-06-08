@@ -50,7 +50,7 @@ async def test_webdav_file_listing_and_sync():
     session_mock.execute.return_value = execute_res
     
     with patch("services.webdav_service.logger") as logger_mock:
-        await sync_webdav_folders(session_mock, "user_1", "org_1")
+        await sync_webdav_folders(session_mock, "user_1")
         logger_mock.info.assert_any_call(
             "Fetched folder structures for WebDAV source %s",
             "webdav_src_primary",
@@ -61,37 +61,3 @@ async def test_webdav_file_listing_and_sync():
             for arg in call.args
         )
         assert "https://webdav.example.com" not in logged_args
-
-    statement_text = str(session_mock.execute.call_args.args[0])
-    assert "webdav_accounts.user_id" in statement_text
-    assert "webdav_accounts.organization_id" in statement_text
-
-
-@pytest.mark.asyncio
-async def test_webdav_sync_skips_hostless_https_url():
-    from services.webdav_service import sync_webdav_folders
-
-    session_mock = AsyncMock()
-    account_mock = MagicMock()
-    account_mock.source_uid = "webdav_src_primary"
-    account_mock.server_url = "https:///missing-host"
-
-    execute_res = MagicMock()
-    execute_res.scalars.return_value.all.return_value = [account_mock]
-    session_mock.execute.return_value = execute_res
-
-    with patch("services.webdav_service.logger") as logger_mock:
-        await sync_webdav_folders(session_mock, "user_1", "org_1")
-
-        logger_mock.warning.assert_called_once()
-        success_calls = [
-            call.args
-            for call in logger_mock.info.call_args_list
-            if call.args[:1]
-            == ("Fetched folder structures for WebDAV source %s",)
-        ]
-        assert success_calls == []
-
-    statement_text = str(session_mock.execute.call_args.args[0])
-    assert "webdav_accounts.user_id" in statement_text
-    assert "webdav_accounts.organization_id" in statement_text

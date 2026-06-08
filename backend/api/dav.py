@@ -48,7 +48,7 @@ async def dav_handler(
     Naruon's Tasks and Events into DAV compliant responses.
     """
     _ensure_dav_owner_scope(path, auth_context)
-    safe_path = repr(path)[1:-1]
+    safe_path = path.replace("\n", "").replace("\r", "")
     logger.info("DAV Request: %s /%s", request.method, safe_path)
 
     if request.method == "OPTIONS":
@@ -87,7 +87,7 @@ async def dav_handler(
 
     if request.method == "PUT":
         body = await request.body()
-        safe_path = repr(path)[1:-1]
+        safe_path = path.replace("\n", "").replace("\r", "")
         logger.info("DAV PUT received %s bytes at /%s", len(body), safe_path)
         return Response(
             content=(

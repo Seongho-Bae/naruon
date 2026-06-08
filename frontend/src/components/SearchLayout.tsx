@@ -4,19 +4,15 @@ import type { FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
-  CalendarDays,
   CheckCircle2,
   Clock,
   CornerDownRight,
-  FileText,
   Loader2,
   Mail,
   Network,
   Search,
-  Sparkles,
 } from "lucide-react";
 import dynamic from "next/dynamic";
-import Link from "next/link";
 
 import { apiClient } from "@/lib/api-client";
 
@@ -61,18 +57,11 @@ type RelationshipState = {
 
 type ResultFilter = "all" | "thread" | "single";
 type CaptureStatus = "idle" | "loading" | "success" | "error";
-type DetailTab = "context" | "source" | "assist";
 
 const resultFilters: { key: ResultFilter; label: string }[] = [
   { key: "all", label: "전체" },
   { key: "thread", label: "스레드" },
   { key: "single", label: "단건" },
-];
-
-const detailTabs: { key: DetailTab; label: string }[] = [
-  { key: "context", label: "맥락 정보" },
-  { key: "source", label: "관계 원본" },
-  { key: "assist", label: "판단 보조" },
 ];
 
 function formatResultDate(value: string) {
@@ -89,24 +78,6 @@ function formatResultDate(value: string) {
 
 function resultTitle(result: SearchResultItem) {
   return result.subject?.trim() || "(제목 없음)";
-}
-
-function confidencePercent(score: number | undefined) {
-  if (typeof score !== "number" || !Number.isFinite(score)) return null;
-  const normalized = score <= 1 ? score * 100 : score;
-  return Math.max(0, Math.min(100, Math.round(normalized)));
-}
-
-function confidenceTone(percent: number | null) {
-  if (percent === null) return "border-slate-200 bg-slate-50 text-slate-600";
-  if (percent >= 90) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (percent >= 75) return "border-blue-200 bg-blue-50 text-blue-700";
-  if (percent >= 60) return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-red-200 bg-red-50 text-red-700";
-}
-
-function confidenceLabel(percent: number | null) {
-  return percent === null ? "신뢰도 미제공" : `신뢰도 ${percent}%`;
 }
 
 function ontologySourceKey(result: SearchResultItem | null) {
@@ -257,8 +228,6 @@ export function SearchLayout() {
     sourceKey: string | null;
     status: CaptureStatus;
   }>({ sourceKey: null, status: "idle" });
-  const [activeDetailTab, setActiveDetailTab] =
-    useState<DetailTab>("context");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -327,7 +296,6 @@ export function SearchLayout() {
     !relationshipError &&
     relationships.length === 0,
   );
-  const activeConfidence = confidencePercent(activeResult?.score);
 
   useEffect(() => {
     if (!activeOntologyUrl || !activeOntologySourceKey) return;
@@ -420,7 +388,6 @@ export function SearchLayout() {
       ) : (
         filteredResults.map((result) => {
           const isActive = activeResult?.id === result.id;
-          const confidence = confidencePercent(result.score);
 
           return (
             <button
@@ -449,8 +416,7 @@ export function SearchLayout() {
                     {result.snippet}
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                      <FileText className="size-3" aria-hidden="true" />
+                    <span className="rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
                       {result.thread_id ? "메일 스레드" : "메일"}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
@@ -462,11 +428,6 @@ export function SearchLayout() {
                     </span>
                     <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
                       답장 {result.reply_count ?? 1}건
-                    </span>
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${confidenceTone(confidence)}`}
-                    >
-                      {confidenceLabel(confidence)}
                     </span>
                   </div>
                 </div>
@@ -487,13 +448,11 @@ export function SearchLayout() {
           className="mx-auto flex w-full max-w-4xl gap-2"
         >
           <div className="relative min-w-0 flex-1">
-            <label htmlFor="search-input" className="sr-only">맥락 검색</label>
             <Search
               className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-primary"
               aria-hidden="true"
             />
             <input
-              id="search-input"
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -574,10 +533,10 @@ export function SearchLayout() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-center text-xs font-bold text-muted-foreground">
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
-                        <p className="text-foreground">
-                          {activeResult.thread_id ? "연결됨" : "없음"}
+                        <p className="break-all text-foreground">
+                          {activeResult.thread_id ?? "thread 없음"}
                         </p>
-                        <p className="mt-1">스레드 근거</p>
+                        <p className="mt-1">THREAD_ID</p>
                       </div>
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
                         <p className="text-foreground">
@@ -587,143 +546,14 @@ export function SearchLayout() {
                       </div>
                       <div className="rounded-lg border border-border bg-background px-3 py-2">
                         <p className="text-foreground">
-                          {activeConfidence === null ? "미제공" : `${activeConfidence}%`}
+                          {(activeResult.score ?? 0).toFixed(2)}
                         </p>
-                        <p className="mt-1">신뢰도</p>
+                        <p className="mt-1">점수</p>
                       </div>
                     </div>
                   </div>
-                  <div className="mb-5 flex flex-wrap gap-2">
-                    <Link
-                      href="/mail"
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                    >
-                      <Mail className="size-4" aria-hidden="true" />
-                      메일 열기
-                    </Link>
-                    <Link
-                      href="/calendar"
-                      className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                    >
-                      <CalendarDays className="size-4" aria-hidden="true" />
-                      일정 후보 보기
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={captureSenderRelationship}
-                      disabled={!canCaptureRelationship || captureStatus === "loading"}
-                      className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                    >
-                      {captureStatus === "loading" ? (
-                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                      ) : (
-                        <Network className="size-4" aria-hidden="true" />
-                      )}
-                      {captureStatus === "loading" ? "관계 캡처 중" : "관계 캡처"}
-                    </button>
-                  </div>
-
-                  <div className="rounded-2xl border border-border bg-background/80 p-2">
-                    <div
-                      role="tablist"
-                      aria-label="검색 결과 증거 상세"
-                      className="grid gap-1 rounded-xl bg-secondary/50 p-1 sm:grid-cols-3"
-                    >
-                      {detailTabs.map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          role="tab"
-                          id={`search-detail-tab-${tab.key}`}
-                          aria-controls={`search-detail-panel-${tab.key}`}
-                          aria-selected={activeDetailTab === tab.key}
-                          tabIndex={activeDetailTab === tab.key ? 0 : -1}
-                          onClick={() => setActiveDetailTab(tab.key)}
-                          className={`rounded-lg px-3 py-2 text-xs font-black transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                            activeDetailTab === tab.key
-                              ? "bg-card text-primary shadow-sm"
-                              : "text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div
-                      role="tabpanel"
-                      id={`search-detail-panel-${activeDetailTab}`}
-                      aria-labelledby={`search-detail-tab-${activeDetailTab}`}
-                      className="p-4"
-                    >
-                      {activeDetailTab === "context" ? (
-                        <div className="space-y-4">
-                          <div className="rounded-xl border border-border bg-card p-4 text-sm leading-7 text-foreground">
-                            {activeResult.snippet}
-                          </div>
-                          <p className="text-xs font-black text-primary">증거 바인딩</p>
-                          <div className="flex flex-wrap gap-2 text-xs font-bold">
-                            <span className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
-                              <FileText className="size-3.5" aria-hidden="true" />
-                              메일 원본
-                            </span>
-                            <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-indigo-700">
-                              <CornerDownRight className="size-3.5" aria-hidden="true" />
-                              {activeResult.thread_id ? "스레드 근거 연결" : "단일 메일"}
-                            </span>
-                            <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 ${confidenceTone(activeConfidence)}`}>
-                              <CheckCircle2 className="size-3.5" aria-hidden="true" />
-                              {confidenceLabel(activeConfidence)}
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {activeDetailTab === "source" ? (
-                        <div className="grid gap-3 text-sm md:grid-cols-2">
-                          <div className="rounded-xl border border-border bg-card p-4">
-                            <p className="text-xs font-black text-primary">증거 바인딩</p>
-                            <p className="mt-2 font-semibold text-foreground">
-                              {activeResult.source_message_id ? "원본 메시지 필터로 관계 API를 조회합니다." : "원본 메시지 필터가 없는 결과입니다."}
-                            </p>
-                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                              관계 조회는 선택된 검색 결과의 source/thread 범위 안에서만 수행됩니다.
-                            </p>
-                          </div>
-                          <div className="rounded-xl border border-border bg-card p-4">
-                            <p className="text-xs font-black text-primary">관계 상태</p>
-                            <p className="mt-2 font-semibold text-foreground">
-                              {relationshipsLoading
-                                ? "관계 원본 확인 중"
-                                : relationshipError
-                                  ? "관계 원본 오류"
-                                  : relationships.length > 0
-                                    ? `${relationships.length}개 관계 연결`
-                                    : "관계 원본 없음"}
-                            </p>
-                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                              관계가 없으면 원본 메시지 기준 캡처를 실행해 판단 근거를 생성합니다.
-                            </p>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {activeDetailTab === "assist" ? (
-                        <div className="rounded-xl border border-purple-200 bg-purple-50/70 p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="grid size-9 shrink-0 place-items-center rounded-xl bg-purple-600 text-white">
-                              <Sparkles className="size-4" aria-hidden="true" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-black text-purple-900">판단 보조</p>
-                              <p className="mt-2 text-sm leading-6 text-purple-900/80">
-                                이 화면의 AI/관계 정보는 검색 점수, 원본 메시지, 스레드 범위를 함께 보여주는 보조 근거입니다. 외부 실행은 사용자가 메일, 일정, 관계 캡처 액션을 명시적으로 선택할 때만 진행됩니다.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : null}
-                    </div>
+                  <div className="rounded-lg border border-border bg-secondary/30 p-4 text-sm leading-7 text-foreground">
+                    {activeResult.snippet}
                   </div>
                 </section>
 

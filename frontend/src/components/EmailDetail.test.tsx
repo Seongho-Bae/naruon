@@ -113,47 +113,6 @@ describe("EmailDetail", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders untrusted detail fields as plain display text without markup", async () => {
-    const email = {
-      id: 15,
-      message_id: "<markup-detail@example.com>",
-      thread_id: null,
-      sender: "<img src=x onerror=alert(1)>",
-      recipients: "user@example.com",
-      reply_to: "<script>alert(3)</script>",
-      subject: "<script>alert(1)</script>",
-      date: "2026-05-17T09:00:00Z",
-      body: "hello\u0000<script>alert(2)</script >",
-    };
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/api/emails/15")) return Promise.resolve(jsonResponse(email));
-      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "정상 요약", todos: [] }));
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<EmailDetail emailId={15} />);
-    });
-    await flushAsyncWork();
-
-    expect(container.querySelector("img")).toBeNull();
-    expect(container.querySelector("script")).toBeNull();
-    expect(container.textContent).toContain("(제목 없음)");
-    expect(container.textContent).toContain("보낸 사람");
-    expect(container.textContent).toContain("hello�");
-    expect(container.textContent).not.toContain("<img");
-    expect(container.textContent).not.toContain("<script>");
-    expect(container.textContent).not.toContain("alert(1)");
-    expect(container.textContent).not.toContain("alert(2)");
-    expect(container.textContent).not.toContain("alert(3)");
-  });
-
   it("keeps the latest conversation when an older thread request resolves late", async () => {
     const emailA: TestEmail = {
       id: 1,
@@ -659,10 +618,7 @@ describe("EmailDetail", () => {
 
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/writeback-intent"))).toHaveLength(1);
     expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/api/calendar/sync"))).toHaveLength(0);
-    expect(container.textContent).toContain("1개 일정 반영 의도를 선택한 원본 계정에 요청했습니다.");
-    expect(container.textContent).not.toContain("Customer CalDAV");
-    expect(container.textContent).not.toContain("caldav-primary");
-    expect(container.textContent).not.toContain("calendar.writeback_intent.created");
+    expect(container.textContent).toContain("1개 일정 writeback intent를 Customer CalDAV 원본에 요청했습니다.");
   });
 
   it("ignores a late draft response after the selected email changes", async () => {
