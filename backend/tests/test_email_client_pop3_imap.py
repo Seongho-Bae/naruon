@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import Mock
 from services import email_client
 from services.email_client import (
     IMAP_HOST_NOT_ALLOWED,
@@ -14,7 +13,6 @@ from services.email_client import (
     validate_pop3_destination
 )
 import socket
-import ssl
 
 def test_validate_imap_host(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_IMAP_HOSTS", "imap.example.com")
@@ -247,7 +245,8 @@ async def test_pinned_implicit_tls_smtp_connect_timeout(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         raise email_client.asyncio.TimeoutError()
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -270,7 +269,8 @@ async def test_pinned_implicit_tls_smtp_connect_oserror(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         raise OSError("network down")
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -293,7 +293,8 @@ async def test_pinned_implicit_tls_smtp_read_response_disconnected(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         return ("transport", "protocol")
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -327,7 +328,8 @@ async def test_pinned_implicit_tls_smtp_read_response_timeout(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         return ("transport", "protocol")
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -362,7 +364,8 @@ async def test_pinned_implicit_tls_smtp_read_response_not_ready(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         return ("transport", "protocol")
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -397,7 +400,8 @@ async def test_pinned_implicit_tls_smtp_read_response_success(monkeypatch):
         try:
             await coro
         except TypeError:
-            pass
+            # The monkeypatched connection path intentionally passes None.
+            del coro
         return ("transport", "protocol")
     monkeypatch.setattr(email_client.asyncio, "wait_for", mock_wait_for)
     monkeypatch.setattr(client, "_get_tls_context", lambda: None)
@@ -469,9 +473,6 @@ async def test_send_email_value_error_re_raised(monkeypatch):
     )
     with pytest.raises(ValueError, match="SMTP_HOST_NOT_ALLOWED"):
         await email_client.send_email(params, smtp_config)
-
-def test_fetch_imap_pop3():
-    pass
 
 @pytest.mark.asyncio
 async def test_send_email_value_error_re_raised_correctly(monkeypatch):
