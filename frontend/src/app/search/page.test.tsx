@@ -226,6 +226,68 @@ describe("SearchPage", () => {
     }
   });
 
+  it("renders search snippets as escaped text instead of executable HTML", async () => {
+    const maliciousSnippet =
+      '검토 필요 <img src=x onerror="window.__naruonSearchXss = true"><script>window.__naruonSearchXss = true</script>';
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return Promise.resolve(
+          jsonResponse({
+            results: [
+              {
+                id: 17,
+                source_message_id: "<xss@example.com>",
+                subject: "HTML snippet boundary",
+                sender: "보안 검토",
+                date: "2026-05-11T09:30:00Z",
+                snippet: maliciousSnippet,
+                thread_id: "thread-xss",
+                reply_count: 1,
+                score: 0.91,
+              },
+            ],
+          }),
+        );
+      }
+      if (url.includes("/api/ontology/relationships")) {
+        return Promise.resolve(jsonResponse([]));
+      }
+      if (url.endsWith("/api/network/graph")) {
+        return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
+      }
+      return Promise.resolve(jsonResponse({}, false, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-xss-snippet-session",
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SearchPage />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain(maliciousSnippet);
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+    expect(
+      (window as Window & { __naruonSearchXss?: boolean })
+        .__naruonSearchXss,
+    ).toBeUndefined();
+
+    const searchCall = fetchMock.mock.calls.find(([input]) =>
+      String(input).endsWith("/api/search"),
+    );
+    expect(searchCall).toBeDefined();
+    const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
+    expect(headers.authorization).toBe("Bearer signed-xss-snippet-session");
+  });
+
   it("captures a source-backed sender DAG relationship through signed headers", async () => {
     const fetchMock = vi.fn((...args: [RequestInfo | URL, RequestInit?]) => {
       const [input] = args;

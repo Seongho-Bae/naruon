@@ -503,9 +503,11 @@ export function SearchLayout() {
           </div>
           <button
             type="submit"
-            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+            disabled={loading}
+            className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 inline-flex items-center justify-center"
           >
-            검색
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {loading ? "검색 중" : "검색"}
           </button>
         </form>
       </header>
