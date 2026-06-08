@@ -1,5 +1,6 @@
 import datetime
-from services.calendar_sync import generate_ics_from_task
+from services.calendar_sync import generate_ics_from_task, CalendarTask
+
 
 def test_generate_ics_from_task():
     task_uid = "abc-123"
@@ -9,19 +10,37 @@ def test_generate_ics_from_task():
     updated_at = datetime.datetime(2026, 5, 23, 11, 0, tzinfo=datetime.timezone.utc)
     due_date = datetime.datetime(2026, 5, 25, 15, 0, tzinfo=datetime.timezone.utc)
 
-    ics_content = generate_ics_from_task(
+    task = CalendarTask(
         task_uid=task_uid,
         title=title,
         status=status,
         created_at=created_at,
         updated_at=updated_at,
-        due_date=due_date
+        due_date=due_date,
     )
 
+    ics_content = generate_ics_from_task(task)
+
     assert "BEGIN:VCALENDAR" in ics_content
+    assert "VERSION:2.0" in ics_content
+    assert "PRODID:-//Naruon//AI Workspace//EN" in ics_content
     assert "BEGIN:VTODO" in ics_content
     assert "UID:abc-123" in ics_content
     assert "SUMMARY:Review Q2 Marketing Report" in ics_content
     assert "STATUS:IN-PROCESS" in ics_content
     assert "DUE:20260525T150000Z" in ics_content
     assert "END:VTODO" in ics_content
+
+
+def test_generate_ics_from_task_escapes_summary_text():
+    task = CalendarTask(
+        task_uid="escape-1",
+        title="Review, Q2; follow\\up\nnotes",
+        status="in_progress",
+        created_at=datetime.datetime(2026, 5, 23, 10, 0, tzinfo=datetime.timezone.utc),
+        updated_at=datetime.datetime(2026, 5, 23, 11, 0, tzinfo=datetime.timezone.utc),
+    )
+
+    ics_content = generate_ics_from_task(task)
+
+    assert "SUMMARY:Review\\, Q2\\; follow\\\\up\\nnotes" in ics_content
