@@ -14,3 +14,6 @@
 ## 2024-06-04 - Caching Email Parsing Functions
 **Learning:** `email.utils.parseaddr` and `email.utils.getaddresses` are heavily utilized when checking email sender/recipient lists (e.g. `configured_email_addresses`, `message_sender_address`, `message_recipient_addresses`) and parsing identical email strings repetitively is a noticeable bottleneck, easily taking hundreds of milliseconds at scale without caching.
 **Action:** Used `@lru_cache(maxsize=2048)` to wrap these parsers. Always remember that outputs from a cached function should be immutable (like `frozenset` instead of `set`) to prevent callers from inadvertently modifying the cached object, maintaining performance without introducing state bugs.
+## 2024-05-18 - Pre-compile Regex in High-Frequency Path
+**Learning:** Extracting references using inline `re.findall(r"<([^>]+)>", str(value))` in the threading service incurs measurable compilation overhead. Pre-compiling the regex object avoids re-evaluating the pattern during multiple inner loop calls.
+**Action:** When extracting multiple entities or working with loops/frequent service paths in the Python backend, use a module-level pre-compiled regex with `re.compile()` to boost regex match speed.
