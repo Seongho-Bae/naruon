@@ -8,6 +8,7 @@ from services.email_parser import EmailData
 
 import hashlib
 
+
 def generate_email_fingerprint(
     subject: str | None,
     date_str: str | None,
