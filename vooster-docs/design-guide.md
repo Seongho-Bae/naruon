@@ -22,7 +22,7 @@ Core principles:
 2. AI does not just state conclusions. It presents evidence and confidence.
 3. Judgments must lead to execution.
 
-Home must include today's decision points, pending tasks, calendar coordination/conflict evidence, and recent email. These surfaces must be source-backed. Avoid fixed fixture metrics or static operational claims such as fake calendar counts, fake project counts, fake progress percentages, or hardcoded conflict rows. When a source integration is not available, show a designed empty/loading/pending state rather than pretending data exists.
+Home must include today's decision points, pending tasks, calendar coordination/conflict evidence, and recent email. These surfaces must be source-backed. Avoid fixed fixture metrics or static operational claims such as fake calendar counts, fake project counts, fake progress percentages, or hardcoded conflict rows. When a source integration is not available, show a designed empty/loading/pending/error state rather than pretending data exists.
 
 ## Brand Tokens
 Recommended palette:
@@ -57,15 +57,15 @@ Recommended palette:
 Desktop workspace target:
 - Left navigation/sidebar: 220-260px
 - Email/search list: 320-380px
-- Main thread detail: flexible center
+- Main thread/detail surface: flexible center
 - Right insight/context panel: 300-360px
 - 8px spacing grid, with 16/24/32px primary rhythm
-- Cards use 12-16px radius, 1px border, soft shadow
+- Repeated cards and panels should use the repository design-system radius and focus-ring tokens consistently.
 
 Responsive:
-- Desktop `>=1024px`: 3-pane workspace
-- Tablet `768-1024px`: collapse right panel or use drawer
-- Phone `<768px`: mobile app bar, bottom navigation, stacked email list/detail
+- Desktop `>=1024px`: multi-pane workspace where useful.
+- Tablet `768-1024px`: collapse secondary panels or use drawer patterns.
+- Phone `<768px`: mobile app bar, bottom navigation, scrollable drawer, stacked list/detail surfaces.
 
 ## Navigation And Terminology
 The application is organized into 10 main GNB areas: 홈, 메일, 일정, 작업, 프로젝트, 맥락 검색, 데이터, AI 허브, 보안, 설정.
@@ -81,6 +81,8 @@ Use Korean-first terminology from `docs/ui-ux/naruon-ui-ux-mapping.md`:
 - Calendar Sync -> 일정 반영
 - AI Assistant -> 판단 보조
 
+Do not reintroduce stale labels such as generic `요약`, `작업 만들기`, or `캘린더 반영` when the user-facing action is specifically `맥락 종합`, `실행 항목 생성`, or `일정 반영`.
+
 ## Components
 ### Email Row
 Must support selected, unread, thread count, sender avatar, subject, snippet, tags, attachment indicator, and date. Selected state should use blue border/background and clear ARIA state.
@@ -89,7 +91,7 @@ Must support selected, unread, thread count, sender avatar, subject, snippet, ta
 Show subject, sender, recipients, date, thread history, body, attachments, reply actions, and AI insight cards. Empty, loading, and error states must feel designed, not default text blocks.
 
 ### AI Insight Card
-Use blue/purple accents with an `AI` or `AI Generated` chip. Must include source/provenance when available, confidence/limitation copy when needed, and explicit actions such as `작업 만들기`, `캘린더 반영`, `답장 초안`, `다시 생성`.
+Use blue/purple accents with a clear AI/source chip. Must include source/provenance when available, confidence/limitation copy when needed, and explicit actions such as `실행 항목 생성`, `일정 반영`, `답장 초안`, or `다시 생성`.
 
 ### Provider Settings
 Admin-only. Secret fields never echo saved values. Use `연결됨`, `마지막 업데이트`, and fingerprint/status metadata instead of masked fake secrets as primary contract.
@@ -100,10 +102,11 @@ Use Naruon colors, clear empty/error/loading states, and a text fallback summary
 ## Accessibility
 - WCAG AA contrast for text and controls.
 - Visible Naruon blue focus ring.
-- Icon-only buttons require accessible labels.
+- Icon-only buttons require localized accessible labels.
 - Minimum mobile touch target 44px.
+- Mobile drawers must lock background scroll while keeping the drawer itself scrollable.
 - Resizable panels need keyboard-friendly fallback or usable collapsed layout.
 - AI output must be distinguishable from verified facts.
 
 ## Copy Tone
-Korean-first enterprise tone: concise, calm, and action-oriented. Avoid overclaiming AI certainty. Use labels like `요약`, `실행 항목`, `답장 초안`, `관계 맥락`, `모델 설정`, `연결 상태`, `다시 시도`.
+Korean-first enterprise tone: concise, calm, and action-oriented. Avoid overclaiming AI certainty. Prefer labels such as `맥락 종합`, `핵심 맥락`, `판단 포인트`, `실행 항목`, `답장 초안`, `관계 맥락`, `일정 반영`, `판단 보조`, `모델 설정`, `연결 상태`, and `다시 시도`.
