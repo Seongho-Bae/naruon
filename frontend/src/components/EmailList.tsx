@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
-import { toSafeReactText } from "@/lib/safe-text";
+import { toMailDisplayText } from "@/lib/mail-text";
 
 interface EmailItem {
   id: number;
@@ -174,10 +174,10 @@ export function EmailList({
           ) : (
             emails.map((email: EmailItem) => {
               const selected = selectedEmailId === email.id;
-              const safeSender = toSafeReactText(email.sender);
+              const safeSender = toMailDisplayText(email.sender, '보낸 사람');
               const subject = email.subject?.trim() === '' ? undefined : email.subject;
-              const safeSubject = toSafeReactText(subject, '(제목 없음)');
-              const safeSnippet = toSafeReactText(email.snippet);
+              const safeSubject = toMailDisplayText(subject, '(제목 없음)');
+              const safeSnippet = toMailDisplayText(email.snippet);
 
               return (
               <button type="button"

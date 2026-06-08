@@ -192,3 +192,13 @@ async def test_requires_reply_in_email_response():
     )
     assert item.requires_reply is True
     assert item.schedule_conflict is False
+
+
+@pytest.mark.asyncio
+async def test_missing_reply_tracking_returns_empty_when_no_user_addresses():
+    from services.reply_tracking_service import check_missing_replies
+
+    session = ReplyTrackingSession(None, [])
+    flagged_emails = await check_missing_replies(session, "user_1", "org_1")
+
+    assert flagged_emails == []
