@@ -237,6 +237,98 @@ const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
   { id: '개발자', icon: Smartphone },
 ];
 
+function getWritebackReadinessLabel(writebackEnabled: boolean) {
+  return writebackEnabled ? '쓰기 의도 가능' : '읽기 전용';
+}
+
+function getEtagReadinessLabel(etag: string | null | undefined) {
+  return etag ? '충돌 검사용 ETag 준비' : 'ETag 확인 필요';
+}
+
+function getCapabilityLabel(capability: string) {
+  switch (capability) {
+    case 'read':
+      return '읽기';
+    case 'write':
+      return '쓰기';
+    case 'etag':
+      return '충돌 검사';
+    default:
+      return '원본 기능';
+  }
+}
+
+function getWebdavAccountLabel(account: WebdavAccount, index: number) {
+  const label = account.display_label.trim();
+  if (!label || label.includes(account.source_id) || /^WebDAV source/i.test(label)) {
+    return `WebDAV 저장소 ${index + 1}`;
+  }
+  return label;
+}
+
+function getConnectorStateLabel(state: string) {
+  switch (state) {
+    case 'connected':
+      return '연결됨';
+    case 'not_connected':
+      return '미연결';
+    case 'enabled':
+      return '활성';
+    case 'instrumentation_pending':
+      return '계측 준비';
+    case 'not_configured':
+      return '미설정';
+    case 'heartbeat':
+      return '하트비트 수신';
+    default:
+      return '상태 확인';
+  }
+}
+
+function getRegistrationLabel(configured: boolean | undefined) {
+  return configured ? '등록됨' : '미등록';
+}
+
+function getOperationalEvidenceLabel(evidenceSource: string) {
+  if (/runner/i.test(evidenceSource)) return '서버 관측 runner 신호';
+  if (/provider|adapter/i.test(evidenceSource)) return '연결 어댑터 근거';
+  return '운영 신호 근거';
+}
+
+function getNetworkModeLabel(networkMode: string) {
+  return networkMode === 'outbound_only' ? 'Outbound only' : '제한된 연결';
+}
+
+function getRunnerUsageLabel(runnerUsage: string) {
+  return runnerUsage === 'ci_smoke_only' ? '검증용 연결' : '운영 연결';
+}
+
+function getProhibitedRoleLabel(role: string) {
+  switch (role) {
+    case 'smtp_server':
+      return 'SMTP 서버 역할 금지';
+    case 'imap_server':
+      return 'IMAP 서버 역할 금지';
+    case 'mx_host':
+      return 'MX 호스트 역할 금지';
+    default:
+      return '금지 역할';
+  }
+}
+
+function getConnectorEventDetail(event: ConnectorSignalEvent) {
+  if (event.state_code === 'heartbeat') return '서버가 runner 하트비트를 관측했습니다.';
+  if (event.state_code === 'connected') return '서버가 outbound runner 연결을 관측했습니다.';
+  if (event.state_code === 'disconnected') return '서버가 runner 연결 종료를 관측했습니다.';
+  return event.detail_text ? '서버 관측 이벤트가 기록되었습니다.' : '이벤트 상세가 아직 기록되지 않았습니다.';
+}
+
+function getOperationalSignalDetail(signal: OperationalSignal) {
+  if (signal.signal_key === 'connector_heartbeat') return '서버가 활성 outbound runner 상태를 확인합니다.';
+  if (signal.signal_key === 'sync_lag') return '원본 connector 작업이 동기화 지연 신호를 기록하면 표시합니다.';
+  return signal.detail ? '운영 신호 상태를 확인합니다.' : '상세 근거가 아직 기록되지 않았습니다.';
+}
+
 const settingsDetailSurfaces: Partial<Record<SettingsTab, {
   heading: string;
   copy: string;
@@ -287,7 +379,7 @@ export function SettingsLayout() {
   const [runnerLoading, setRunnerLoading] = useState(true);
   const [runnerRotating, setRunnerRotating] = useState(false);
   const [runnerRotateError, setRunnerRotateError] = useState<string | null>(null);
-  const [oneTimeRunnerToken, setOneTimeRunnerToken] = useState<string | null>(null);
+  const [runnerTokenIssued, setRunnerTokenIssued] = useState(false);
   const [operationalSignals, setOperationalSignals] = useState<OperationalSignalsResponse | null>(null);
   const [operationalError, setOperationalError] = useState<string | null>(null);
   const [operationalLoading, setOperationalLoading] = useState(true);
@@ -393,11 +485,10 @@ export function SettingsLayout() {
   const handleRunnerTokenRotate = async () => {
     setRunnerRotating(true);
     setRunnerRotateError(null);
-    setOneTimeRunnerToken(null);
+    setRunnerTokenIssued(false);
 
     try {
       const rotated = await apiClient.post<RunnerRotateResponse>('/api/runner-config/rotate', {});
-      setOneTimeRunnerToken(rotated.registration_token);
       setRunnerConfig({
         workspace_id: rotated.workspace_id,
         configured: true,
@@ -405,6 +496,7 @@ export function SettingsLayout() {
         updated_at: null,
         connector_manifest: rotated.connector_manifest,
       });
+      setRunnerTokenIssued(true);
       setRunnerError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : '등록 토큰을 회전할 수 없습니다.';
@@ -492,7 +584,7 @@ export function SettingsLayout() {
         <h1 className="text-xl md:text-2xl font-bold flex shrink-0 items-center gap-3">
           <Settings className="size-6 text-primary" />
           <span className="sm:hidden">설정</span>
-          <span className="hidden sm:inline">설정 (Settings)</span>
+          <span className="hidden sm:inline">설정</span>
         </h1>
         <p className="sr-only">Self-hosted Runner</p>
       </header>
@@ -586,7 +678,7 @@ export function SettingsLayout() {
                     </p>
                   </div>
                   <span className="rounded-full border border-border bg-card px-3 py-1 font-mono text-xs font-bold text-foreground">
-                    고객 지정 Provider
+                    고객 지정 연결
                   </span>
                 </div>
 
@@ -623,12 +715,12 @@ export function SettingsLayout() {
                     ))}
                   </div>
 
-                  <section aria-label="Provider source readiness" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <section aria-label="연동 원본 준비도" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-bold text-lg">Source readiness</h3>
+                        <h3 className="font-bold text-lg">원본 연결 준비 상태</h3>
                         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                          CalDAV/CardDAV/WebDAV source registry와 writeback intent 상태를 확인합니다. 이 화면은 provider write를 실행하지 않습니다.
+                          CalDAV/CardDAV/WebDAV 원본 등록과 쓰기 의도 상태를 확인합니다. 이 화면은 외부 저장소 쓰기를 실행하지 않습니다.
                         </p>
                       </div>
                       <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
@@ -637,7 +729,7 @@ export function SettingsLayout() {
                     </div>
 
                     {sourceReadinessLoading ? (
-                      <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">source readiness를 불러오는 중입니다.</p>
+                      <p className="mt-4 rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">원본 연결 준비 상태를 불러오는 중입니다.</p>
                     ) : null}
                     {sourceReadinessError ? (
                       <p className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{sourceReadinessError}</p>
@@ -647,51 +739,51 @@ export function SettingsLayout() {
                       <div className="mt-5 grid gap-4 lg:grid-cols-2">
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
-                            <h4 className="text-sm font-bold">CalDAV/CardDAV sources</h4>
-                            <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{calendarSources.length} sources</span>
+                            <h4 className="text-sm font-bold">CalDAV/CardDAV 원본</h4>
+                            <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">{calendarSources.length}개</span>
                           </div>
                           {calendarSources.length > 0 ? (
                             <ul className="divide-y divide-border rounded-xl border border-border bg-background">
-                              {calendarSources.map((source) => (
+                              {calendarSources.map((source, index) => (
                                 <li key={source.source_id} className="p-3">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <p className="font-mono text-xs font-bold text-foreground">{source.source_id}</p>
+                                    <p className="text-sm font-bold text-foreground">{`${source.provider} 일정 원본 ${index + 1}`}</p>
                                     <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${source.writeback_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
-                                      {source.writeback_enabled ? 'writeback intent enabled' : 'read-only intent'}
+                                      {getWritebackReadinessLabel(source.writeback_enabled)}
                                     </span>
                                   </div>
-                                  <p className="mt-2 break-all text-sm text-foreground">{source.provider} / {source.protocol}</p>
-                                  <p className="mt-1 break-all text-xs text-muted-foreground">{source.capabilities.join(', ')}</p>
-                                  <p className="mt-1 break-all font-mono text-xs text-muted-foreground">etag {source.etag ?? 'none'}</p>
+                                  <p className="mt-2 text-sm text-foreground">{source.protocol.toUpperCase()} 연결</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">{source.capabilities.map(getCapabilityLabel).join(' · ')}</p>
+                                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{getEtagReadinessLabel(source.etag)}</p>
                                 </li>
                               ))}
                             </ul>
                           ) : (
-                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 CalDAV/CardDAV source가 없습니다.</p>
+                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 CalDAV/CardDAV 원본이 없습니다.</p>
                           )}
                         </div>
 
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
-                            <h4 className="text-sm font-bold">WebDAV repositories</h4>
-                            <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{webdavAccounts.length} sources</span>
+                            <h4 className="text-sm font-bold">WebDAV 저장소</h4>
+                            <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">{webdavAccounts.length}개</span>
                           </div>
                           {webdavAccounts.length > 0 ? (
                             <ul className="divide-y divide-border rounded-xl border border-border bg-background">
-                              {webdavAccounts.map((account) => (
+                              {webdavAccounts.map((account, index) => (
                                 <li key={account.source_id} className="p-3">
                                   <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <p className="font-mono text-xs font-bold text-foreground">{account.source_id}</p>
+                                    <p className="text-sm font-bold text-foreground">{getWebdavAccountLabel(account, index)}</p>
                                     <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${account.writeback_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
-                                      {account.writeback_enabled ? 'writeback intent enabled' : 'read-only intent'}
+                                      {getWritebackReadinessLabel(account.writeback_enabled)}
                                     </span>
                                   </div>
-                                  <p className="mt-2 break-all text-sm text-foreground">{account.display_label}</p>
+                                  <p className="mt-2 text-xs font-semibold text-muted-foreground">계정 식별자는 서버 스코프에서만 사용합니다.</p>
                                 </li>
                               ))}
                             </ul>
                           ) : (
-                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 WebDAV repository가 없습니다.</p>
+                            <p className="rounded-xl border border-dashed border-border p-3 text-sm font-semibold text-muted-foreground">등록된 WebDAV 저장소가 없습니다.</p>
                           )}
                         </div>
                       </div>
@@ -703,7 +795,7 @@ export function SettingsLayout() {
                     <div>
                       <h3 className="font-bold text-lg">Source-backed 계정 설정</h3>
                       <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                        빈 secret 입력은 기존 저장값을 유지합니다. 실제 연결과 provider write는 서버 검증과 self-hosted connector 정책을 통과한 뒤 별도 실행됩니다.
+                        빈 secret 입력은 기존 저장값을 유지합니다. 실제 연결과 외부 쓰기는 서버 검증과 self-hosted connector 정책을 통과한 뒤 별도 실행됩니다.
                       </p>
                     </div>
                     <button
@@ -805,14 +897,14 @@ export function SettingsLayout() {
                 <section aria-label="Self-hosted connector manifest" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-bold text-lg">Self-hosted connector manifest</h3>
+                      <h3 className="font-bold text-lg">Self-hosted connector 등록 상태</h3>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         Naruon은 메일 서버가 아닙니다. 고객망의 self-hosted connector가 outbound-only로 naruon.net control plane에 연결해 IMAP/SMTP/CalDAV/WebDAV 접근을 중계합니다.
                       </p>
                     </div>
                     {connectorManifest ? (
                       <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
-                        {connectorManifest.role}
+                        Self-hosted connector
                       </span>
                     ) : null}
                   </div>
@@ -826,16 +918,16 @@ export function SettingsLayout() {
                   <div className="mt-5 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <dl className="grid gap-3 sm:grid-cols-3">
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">workspace_id</dt>
-                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{runnerConfig?.workspace_id ?? 'none'}</dd>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">워크스페이스 등록</dt>
+                        <dd className="mt-1 text-sm font-bold text-foreground">{runnerConfig?.workspace_id ? '서버 스코프 확인됨' : '미확인'}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">registration</dt>
-                        <dd className="mt-1 font-mono text-sm text-foreground">{runnerConfig?.configured ? 'configured' : 'not_configured'}</dd>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">등록 상태</dt>
+                        <dd className="mt-1 text-sm font-bold text-foreground">{getRegistrationLabel(runnerConfig?.configured)}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">fingerprint</dt>
-                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{runnerConfig?.fingerprint ?? 'none'}</dd>
+                        <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">등록 지문</dt>
+                        <dd className="mt-1 break-all font-mono text-sm text-foreground">{runnerConfig?.fingerprint ?? '기록 없음'}</dd>
                       </div>
                     </dl>
                     <button
@@ -852,43 +944,43 @@ export function SettingsLayout() {
                   {runnerRotateError ? (
                     <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{runnerRotateError}</p>
                   ) : null}
-                  {oneTimeRunnerToken ? (
+                  {runnerTokenIssued ? (
                     <div className="mt-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3">
-                      <p className="text-sm font-bold text-emerald-900">One-time connector registration token</p>
-                      <p className="mt-2 break-all font-mono text-xs text-emerald-950">{oneTimeRunnerToken}</p>
+                      <p className="text-sm font-bold text-emerald-900">등록 토큰이 생성되었습니다.</p>
+                      <p className="mt-2 text-sm leading-6 text-emerald-950">원문 토큰은 화면에 보관하지 않습니다. 운영자가 승인된 보안 채널에서만 수령해야 합니다.</p>
                     </div>
                   ) : null}
                   {connectorManifest ? (
                     <div className="mt-5 space-y-4">
                       <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">network_mode</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.network_mode}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">네트워크 방식</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{getNetworkModeLabel(connectorManifest.network_mode)}</dd>
                         </div>
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">control_plane_domain</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.control_plane_domain}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">제어 평면</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{connectorManifest.control_plane_domain ? '등록됨' : '미설정'}</dd>
                         </div>
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">runner_usage</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{connectorManifest.runner_usage}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">사용 범위</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{getRunnerUsageLabel(connectorManifest.runner_usage)}</dd>
                         </div>
                       </dl>
 
                       <div className="grid gap-4 border-t border-border pt-4 md:grid-cols-2">
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">local_protocols</p>
+                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">로컬 프로토콜</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {connectorManifest.local_protocols.map((protocol) => (
-                              <span key={protocol} className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{protocol}</span>
+                              <span key={protocol} className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">{protocol.toUpperCase()}</span>
                             ))}
                           </div>
                         </div>
                         <div>
-                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">prohibited_roles</p>
+                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">금지 역할</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {connectorManifest.prohibited_roles.map((role) => (
-                              <span key={role} className="rounded-full bg-red-50 px-2.5 py-1 font-mono text-xs font-semibold text-red-700">{role}</span>
+                              <span key={role} className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">{getProhibitedRoleLabel(role)}</span>
                             ))}
                           </div>
                         </div>
@@ -902,15 +994,15 @@ export function SettingsLayout() {
                     <div>
                       <h3 className="flex items-center gap-2 font-bold text-lg">
                         <Activity className="size-5 text-teal-600" />
-                        Connector health & APM signals
+                        Connector 상태와 APM 신호
                       </h3>
                       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        서버가 확인한 self-hosted connector 연결, OpenTelemetry, Prometheus 상태만 표시합니다. Provider write 실행은 여기서 수행하지 않습니다.
+                        서버가 확인한 self-hosted connector 연결, OpenTelemetry, Prometheus 상태만 표시합니다. 외부 쓰기 실행은 여기서 수행하지 않습니다.
                       </p>
                     </div>
                     {operationalSignals ? (
                       <span className="rounded-full border border-border bg-background px-3 py-1 font-mono text-xs font-bold text-foreground">
-                        {operationalSignals.audit_event}
+                        감사 근거 기록됨
                       </span>
                     ) : null}
                   </div>
@@ -925,58 +1017,58 @@ export function SettingsLayout() {
                     <div className="mt-5 space-y-5">
                       <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                         <div className="rounded-xl border border-border bg-background p-3">
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">connection_state</dt>
-                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.connector.connection_state}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">연결 상태</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{getConnectorStateLabel(operationalSignals.connector.connection_state)}</dd>
                         </div>
                         <div className="rounded-xl border border-border bg-background p-3">
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">active_connections</dt>
-                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.connector.active_connection_count}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">활성 연결</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.connector.active_connection_count}개</dd>
                         </div>
                         <div className="rounded-xl border border-border bg-background p-3">
                           <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">prometheus</dt>
-                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.telemetry.prometheus_metrics_enabled ? 'enabled' : 'not_configured'}</dd>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.telemetry.prometheus_metrics_enabled ? '활성' : '미설정'}</dd>
                         </div>
                         <div className="rounded-xl border border-border bg-background p-3">
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">otel_traces</dt>
-                          <dd className="mt-1 font-mono text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_traces_enabled ? 'enabled' : 'not_configured'}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">OTel traces</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_traces_enabled ? '활성' : '미설정'}</dd>
                         </div>
                       </dl>
 
                       <dl className="grid gap-3 border-t border-border pt-4 sm:grid-cols-3">
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">last_heartbeat_at</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_heartbeat_at ?? 'none'}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">최근 하트비트</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_heartbeat_at ?? '기록 없음'}</dd>
                         </div>
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">last_disconnect_at</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_disconnect_at ?? 'none'}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">최근 연결 종료</dt>
+                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.connector.last_disconnect_at ?? '기록 없음'}</dd>
                         </div>
                         <div>
-                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">otel_endpoint_host</dt>
-                          <dd className="mt-1 font-mono text-sm text-foreground">{operationalSignals.telemetry.otel_endpoint_host ?? 'none'}</dd>
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">OTel endpoint</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_endpoint_host ? '설정됨' : '미설정'}</dd>
                         </div>
                       </dl>
 
                       <div aria-labelledby="recent-connector-signals-heading" className="border-t border-border pt-4">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <h4 id="recent-connector-signals-heading" className="font-bold text-sm">Recent connector signals</h4>
-                          <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{connectorEvents.length} events</span>
+                          <h4 id="recent-connector-signals-heading" className="font-bold text-sm">최근 connector 신호</h4>
+                          <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">{connectorEvents.length}건</span>
                         </div>
                         {connectorEvents.length > 0 ? (
                           <ol className="mt-3 divide-y divide-border">
                             {connectorEvents.map((event) => (
                               <li key={event.event_uid} className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto]">
                                 <div className="min-w-0">
-                                  <p className="font-mono text-xs font-bold text-foreground">{event.state_code}</p>
-                                  <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{event.detail_text ?? event.signal_key}</p>
-                                  <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{event.event_uid}</p>
+                                  <p className="text-sm font-bold text-foreground">{getConnectorStateLabel(event.state_code)}</p>
+                                  <p className="mt-1 break-words text-sm leading-6 text-muted-foreground">{getConnectorEventDetail(event)}</p>
+                                  <p className="mt-1 text-xs font-semibold text-muted-foreground">근거: 서버 관측 이벤트</p>
                                 </div>
                                 <time className="break-all font-mono text-xs text-muted-foreground sm:text-right">{event.observed_at}</time>
                               </li>
                             ))}
                           </ol>
                         ) : (
-                          <p className="mt-3 text-sm leading-6 text-muted-foreground">Durable connector history has not recorded a runner event yet.</p>
+                          <p className="mt-3 text-sm leading-6 text-muted-foreground">아직 저장된 runner 이벤트가 없습니다.</p>
                         )}
                       </div>
 
@@ -985,10 +1077,10 @@ export function SettingsLayout() {
                           <article key={signal.signal_key} className="rounded-xl border border-border bg-background p-4">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <h4 className="font-bold text-sm">{signal.display_name}</h4>
-                              <span className="rounded-full bg-secondary px-2.5 py-1 font-mono text-xs font-semibold text-foreground">{signal.state}</span>
+                              <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">{getConnectorStateLabel(signal.state)}</span>
                             </div>
-                            <p className="mt-2 text-sm leading-6 text-muted-foreground">{signal.detail}</p>
-                            <p className="mt-3 break-all font-mono text-xs text-muted-foreground">{signal.evidence_source}</p>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">{getOperationalSignalDetail(signal)}</p>
+                            <p className="mt-3 text-xs font-semibold text-muted-foreground">근거: {getOperationalEvidenceLabel(signal.evidence_source)}</p>
                           </article>
                         ))}
                       </div>
@@ -1031,19 +1123,19 @@ export function SettingsLayout() {
                   ) : null}
                   <dl className="mt-5 grid gap-3 md:grid-cols-3">
                     <div className="rounded-xl border border-border bg-background p-3">
-                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">issuer</dt>
-                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{oidcBrowserConfig?.issuerUrl ?? 'not_configured'}</dd>
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Issuer</dt>
+                      <dd className="mt-1 text-sm font-semibold text-foreground">{oidcBrowserConfig?.issuerUrl ? '설정됨' : '미설정'}</dd>
                     </div>
                     <div className="rounded-xl border border-border bg-background p-3">
-                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">client_id</dt>
-                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">{oidcBrowserConfig?.clientId ?? 'not_configured'}</dd>
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Client</dt>
+                      <dd className="mt-1 text-sm font-semibold text-foreground">{oidcBrowserConfig?.clientId ? '등록됨' : '미설정'}</dd>
                     </div>
                     <div className="rounded-xl border border-border bg-background p-3">
-                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">session</dt>
-                      <dd className="mt-1 break-all font-mono text-sm font-semibold text-foreground">
+                      <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">세션</dt>
+                      <dd className="mt-1 text-sm font-semibold text-foreground">
                         {oidcSessionClaims.userId
-                          ? `${oidcSessionClaims.userId} / ${oidcSessionClaims.organizationId ?? 'personal'} / ${oidcSessionClaims.workspaceId ?? 'workspace_unknown'}`
-                          : 'signed_session_absent'}
+                          ? `서명된 세션 연결됨 · ${oidcSessionClaims.organizationId ? '조직 스코프' : '개인 스코프'}`
+                          : '서명된 세션 없음'}
                       </dd>
                     </div>
                   </dl>
