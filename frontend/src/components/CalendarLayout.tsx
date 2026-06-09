@@ -431,7 +431,7 @@ export function CalendarLayout() {
             <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
           </div>
         </div>
-        
+
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className="size-4 rounded-full bg-orange-500"></div>
