@@ -42,6 +42,9 @@ COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
 # Create a startup script
 RUN echo '#!/bin/bash\n\
+if [ -z "$AUTH_SESSION_HMAC_SECRET" ]; then\n\
+  export AUTH_SESSION_HMAC_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")\n\
+fi\n\
 echo "Starting Naruon Backend and Frontend..."\n\
 python scripts/bootstrap_db.py\n\
 python scripts/start_backend.py --host 0.0.0.0 --port 8000 &\n\
@@ -58,7 +61,6 @@ USER appuser
 
 # Environment variables for Backend and Frontend
 ENV DATABASE_URL=sqlite+aiosqlite:///./naruon_standalone.db
-ENV AUTH_SESSION_HMAC_SECRET=local-dev-dummy-key-of-32-bytes-min-length-1234
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8000
 ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
