@@ -162,6 +162,8 @@ const emptyAccountForm: AccountFormState = {
   oauthRedirectUri: '',
 };
 
+// Note: Passwords and secrets are intentionally cleared here and never stored in plain text client-side.
+// We only collect them from the user temporarily when updating credentials, sending them directly via HTTPS.
 function toAccountForm(config: AccountConfig): AccountFormState {
   return {
     smtpServer: config.smtp_server ?? '',
@@ -721,7 +723,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-muted-foreground">모델 식별자</label>
-                        <input type="text" placeholder="llama3:8b" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input type="text" placeholder="gemma4 또는 llama3:8b" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <button type="button" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary transition-colors">
                         로컬 모델 등록
@@ -738,7 +740,7 @@ export function SettingsLayout() {
                       <p className="text-sm text-muted-foreground mt-1">벡터 스토어 및 RAG 구축을 위한 기본 임베딩 모델을 선택합니다.</p>
                     </div>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <label className="flex cursor-pointer items-center justify-between rounded-xl border border-border p-4 hover:border-primary/50 transition-colors [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
                       <div>
                         <p className="font-bold">text-embedding-3-small</p>
@@ -757,6 +759,13 @@ export function SettingsLayout() {
                       <div>
                         <p className="font-bold">nomic-embed-text</p>
                         <p className="text-xs text-muted-foreground mt-1">로컬 Ollama</p>
+                      </div>
+                      <input type="radio" name="embedding_model" className="size-4" />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-between rounded-xl border border-border p-4 hover:border-primary/50 transition-colors [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
+                      <div>
+                        <p className="font-bold">embeddinggemma</p>
+                        <p className="text-xs text-muted-foreground mt-1">Gemma 임베딩 · 로컬 Ollama</p>
                       </div>
                       <input type="radio" name="embedding_model" className="size-4" />
                     </label>

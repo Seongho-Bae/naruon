@@ -172,7 +172,9 @@ class ImapSyncWorker:
             imap_port,
             config.user_id,
         )
-        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
+        import ssl
+        ssl_context = ssl.create_default_context()
+        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port, ssl_context=ssl_context)
 
         try:
             await imap_client.wait_hello_from_server()
