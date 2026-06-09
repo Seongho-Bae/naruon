@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import type { MailFolder } from '@/components/EmailList';
@@ -676,7 +676,7 @@ export function WorkspaceHome({
       setMobileWorkspaceView('calendar', { updateHash: false });
     }
   };
-  const handleSelectEmail = useCallback((emailId: number) => {
+  const handleSelectEmail = (emailId: number) => {
     setStartupViewOverride('email');
     setSelectedEmail(emailId);
     setWorkspaceActionNotice(null);
@@ -685,7 +685,7 @@ export function WorkspaceHome({
     if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1023px)').matches) {
       setMobileWorkspaceView('detail');
     }
-  }, [setStartupViewOverride, setSelectedEmail, setWorkspaceActionNotice, setDesktopDetailActionCommand, setMobileDetailActionCommand]);
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.('(max-width: 1023px)');

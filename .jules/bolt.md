@@ -35,6 +35,6 @@
 **Learning:** `create_unique_thread_intent` iterates over candidates twice to first extract lookups and fingerprint sets, and then iterates over them a second time inside `_find_matches_for_candidates` to match those lookups. This caused `candidate_strong_fingerprint(candidate)` (which performs a SHA256 encoding) to be redundantly executed twice per candidate.
 **Action:** Extract expensive lookups (`candidate_strong_fingerprint` and regex normalizations) into dictionaries mapped by `candidate_key` during the first iteration to prevent redundant processing.
 
-## 2026-06-09 - [Extract and Memoize List Items to Prevent Unnecessary Re-renders]
+## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
 **Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
 **Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
