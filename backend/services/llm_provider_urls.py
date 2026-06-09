@@ -54,16 +54,17 @@ def _validate_global_address(address: str) -> str:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
-    if (
-        ip_address.is_private
-        or ip_address.is_loopback
-        or ip_address.is_link_local
-        or ip_address.is_reserved
-        or ip_address.is_unspecified
-        or ip_address.is_multicast
-        or not ip_address.is_global
-    ):
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    if not settings.DEBUG:
+        if (
+            ip_address.is_private
+            or ip_address.is_loopback
+            or ip_address.is_link_local
+            or ip_address.is_reserved
+            or ip_address.is_unspecified
+            or ip_address.is_multicast
+            or not ip_address.is_global
+        ):
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
     return str(ip_address)
 
 
@@ -110,28 +111,36 @@ def _normalize_llm_provider_base_url(value: str | None):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
     hostname = (parsed.hostname or "").lower().rstrip(".")
+    is_localhost = hostname in {"localhost", "localhost.localdomain", "127.0.0.1", "ollama"}
+    
+    # Allow http for local development or if explicitly allowed
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+        
+    if parsed.scheme.lower() == "http" and not is_localhost and not settings.DEBUG:
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
     if (
-        parsed.scheme.lower() != "https"
-        or not hostname
+        not hostname
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
         or parsed.fragment
-        or port != 443
-        or hostname in {"localhost", "localhost.localdomain"}
     ):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
     allowed_hosts = _parse_allowed_hosts()
-    if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
-    if hostname not in allowed_hosts:
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
-    if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    # If not localhost, must be in allowed hosts
+    if not is_localhost:
+        if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+        if hostname not in allowed_hosts:
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+        if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
     netloc = hostname if parsed.port is None else f"{hostname}:{port}"
-    return urlunsplit(("https", netloc, parsed.path or "", "", "")), hostname, port
+    return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", "", "")), hostname, port
 
 
 def validate_llm_provider_base_url_details(

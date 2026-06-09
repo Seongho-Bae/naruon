@@ -15,20 +15,45 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+
+  init-ollama:
+    image: curlimages/curl:latest
+    depends_on:
+      - ollama
+    command: >
+      sh -c "
+      echo 'Waiting for ollama...';
+      while ! curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done;
+      echo 'Ollama is up. Pulling gemma4...';
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\": \"gemma4\"}';
+      echo 'Pulling embeddinggemma...';
+      curl -s -X POST http://ollama:11434/api/pull -d '{\"name\": \"embeddinggemma\"}';
+      echo 'Done!';
+      "
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
-      DEBUG: "false"
+      DEBUG: "true"
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-ollama}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://ollama:11434/v1}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-embeddinggemma}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gemma4}
     depends_on:
       db:
         condition: service_healthy
+      init-ollama:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     command: ["sh", "-c", "python scripts/bootstrap_db.py && python scripts/start_backend.py --host 0.0.0.0 --port 8000"]
@@ -53,3 +78,4 @@ services:
 
 volumes:
   postgres-data:
+  ollama-data:
