@@ -356,8 +356,18 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             loading={!llmData && !llmError}
             error={llmError}
             provenance="AI 생성"
+            {/* TODO: API 연동 시 실제 llmData.confidence 값으로 대체 */}
           >
-            {llmData ? <p className="text-sm">{llmData.summary}</p> : null}
+            {llmData ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm">{llmData.summary}</p>
+                <div className="flex justify-end">
+                  <a href={`#msg-${email.id}`} className="text-[10px] text-primary hover:underline flex items-center gap-1 bg-primary/5 px-2 py-1 rounded">
+                    근거 원본 보기
+                  </a>
+                </div>
+              </div>
+            ) : null}
           </InsightCard>
 
           <InsightCard
@@ -368,6 +378,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             empty={Boolean(llmData && llmData.todos.length === 0)}
             emptyMessage="실행 항목이 없습니다."
             provenance={`${llmData?.todos.length || 0}개 실행 항목`}
+            {/* TODO: API 연동 시 실제 llmData.confidence 값으로 대체 */}
             footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
               <>
                 {llmData.todos.length > 0 && (
@@ -423,12 +434,19 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           <Separator />
           
           <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-black text-foreground">대화 흐름</h3>
-              <Badge variant="secondary" className="text-[10px] flex items-center gap-1 border border-primary/10 bg-primary/10 text-primary">
-                <MessagesSquare className="w-3 h-3" />
-                {conversationMessages.length}개 메시지
-              </Badge>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold flex items-center gap-2">
+                  <MessagesSquare className="w-4 h-4 text-primary" /> 스레드 전체
+                </h3>
+                <Badge variant="secondary" className="text-[10px] flex items-center gap-1 border border-primary/10 bg-primary/10 text-primary">
+                  <MessagesSquare className="w-3 h-3" />
+                  {conversationMessages.length}개 메시지
+                </Badge>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 text-xs bg-white text-muted-foreground hover:text-foreground">
+                다른 스레드 병합
+              </Button>
             </div>
             <p className="text-xs text-muted-foreground">오래된 메시지부터 최신 메시지 순서로 보여줍니다. 답장은 선택된 메시지를 기준으로 작성됩니다.</p>
             {threadLoading && <p role="status" aria-live="polite" className="text-sm text-muted-foreground">대화 흐름을 불러오는 중입니다...</p>}
@@ -440,10 +458,17 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             )}
             <div className="space-y-4">
               {conversationMessages.map((msg) => (
-                <div key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
+                <div id={`msg-${msg.id}`} key={msg.id} className={`rounded-2xl border p-4 text-card-foreground ${msg.id === email.id ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border bg-background/60'}`} aria-current={msg.id === email.id ? "true" : undefined}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium text-sm">{toMailDisplayText(msg.sender, '보낸 사람')}</span>
-                    <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground">{formatEmailDate(msg.date)}</span>
+                      {msg.id !== conversationMessages[0]?.id && (
+                        <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-muted-foreground hover:text-red-600 hover:bg-red-50">
+                          스레드 분리
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
                   <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
@@ -454,7 +479,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
           <Separator />
 
-          <InsightCard title="답장 실행" provenance="사용자 확인 필요">
+          <InsightCard title="답장 초안" provenance="사용자 확인 필요">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
                 <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>

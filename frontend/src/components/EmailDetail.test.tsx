@@ -296,12 +296,12 @@ describe("EmailDetail", () => {
 
     const cards = Array.from(container.querySelectorAll<HTMLElement>('article[data-insight-card="true"]'));
     expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual(
-      expect.arrayContaining(["맥락 종합", "실행 항목", "답장 실행"]),
+      expect.arrayContaining(["맥락 종합", "실행 항목", "답장 초안"]),
     );
-    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 실행")?.querySelector('[role="heading"][aria-level="3"]')?.textContent).toContain("답장 실행");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('[role="heading"][aria-level="3"]')?.textContent).toContain("답장 초안");
     expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("출시 메시지의 핵심 맥락입니다.");
     expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("캘린더에 출시 리뷰 일정을 반영");
-    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 실행")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
+    expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
   });
 
   it("lets users create tasks from visible execution items in the email detail", async () => {

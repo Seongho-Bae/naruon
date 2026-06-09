@@ -7,7 +7,7 @@ import type { MailFolder } from '@/components/EmailList';
 import { EmailDetail } from '@/components/EmailDetail';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import dynamic from 'next/dynamic';
-import { CalendarDays, CheckCircle2, Inbox, Network, Send, Settings } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Inbox, Network, Send, Settings, Sparkles } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { toSafeReactText } from '@/lib/safe-text';
@@ -90,9 +90,9 @@ const dashboardQuickActions = [
   { label: '메일함 열기', href: '/mail', icon: Inbox, color: 'text-blue-500' },
   { label: '보낸 메일 답변 추적', href: '/mail?folder=sent', icon: Send, color: 'text-rose-500' },
   { label: '일정 후보 검토', href: '/calendar', icon: CalendarDays, color: 'text-blue-500' },
-  { label: '작업 보드', href: '/tasks', icon: CheckCircle2, color: 'text-green-500' },
+  { label: '실행 항목 보드', href: '/tasks', icon: CheckCircle2, color: 'text-green-500' },
   { label: '프로젝트 의사결정', href: '/projects', icon: Network, color: 'text-purple-500' },
-  { label: 'AI 허브', href: '/ai-hub', icon: Network, color: 'text-purple-500' },
+  { label: 'AI 허브', href: '/ai-hub', icon: Sparkles, color: 'text-purple-500' },
   { label: '데이터 품질 점검', href: '/data', icon: Network, color: 'text-blue-500' },
   { label: '보안 감사 로그', href: '/security', icon: CheckCircle2, color: 'text-emerald-500' },
 ];
@@ -821,7 +821,7 @@ export function WorkspaceHome({
                     <Network className="size-4" aria-hidden="true" />
                   </span>
                   <div>
-                    <h3 className="font-bold text-sm text-foreground">맥락 그래프</h3>
+                    <h3 className="font-bold text-sm text-foreground">관계 맥락</h3>
                     <p className="text-xs text-muted-foreground">메일과 관계의 흐름을 시각화합니다.</p>
                   </div>
                 </div>
