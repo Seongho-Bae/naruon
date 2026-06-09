@@ -391,7 +391,7 @@ export function SearchLayout() {
               type="button"
               onClick={() => setActiveResultId(result.id)}
               aria-current={isActive ? "true" : undefined}
-              className={`w-full border-l-4 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/40 ${
+              className={`w-full border-l-4 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                 isActive
                   ? "border-primary bg-secondary/50"
                   : "border-transparent hover:bg-secondary/20"
