@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -58,22 +58,22 @@ const primaryNavItems = [
 ];
 
 const startupViewItems = [
-  { label: '대시보드', view: 'dashboard' as const, description: '오늘의 실행 요약' },
-  { label: '이메일', view: 'email' as const, description: '받은편지함 작업공간' },
+  { label: '홈', view: 'dashboard' as const, description: '오늘의 실행 맥락 종합' },
+  { label: '메일', view: 'email' as const, description: '받은편지함 작업공간' },
   { label: '일정', view: 'calendar' as const, description: '캘린더 연결 먼저 보기' },
 ];
 
 const mobileWorkspaceMenuItems = [
   { label: '받은편지함', description: '메일 스레드', icon: Inbox, href: '#mobile-inbox', view: 'inbox' as const },
   { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
-  { label: '일정 연결', description: '캘린더 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
+  { label: '일정 연결', description: '일정 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
   { label: 'AI 실행', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
 ];
 
 const headerActions = [
-  { label: '캘린더 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
+  { label: '일정 반영', action: 'calendar-sync', message: '메일 상세 패널에서 실행 항목을 캘린더에 반영합니다.', icon: CalendarDays },
   { label: '답장 초안', action: 'reply-draft', message: '메일 상세 패널에서 답장 초안을 생성합니다.', icon: PenLine },
-  { label: '할 일 만들기', action: 'create-task', message: '메일 상세 패널에서 실행 항목을 할 일로 정리합니다.', icon: CheckCircle2 },
+  { label: '실행 항목 생성', action: 'create-task', message: '메일 상세 패널에서 메일 후속 작업을 실행 항목으로 정리합니다.', icon: CheckCircle2 },
 ];
 
 
@@ -125,7 +125,7 @@ function getServerSearch() {
 
 function useCurrentSearchParams() {
   const search = useSyncExternalStore(subscribeToLocationChanges, getCurrentSearch, getServerSearch);
-  return useMemo(() => new URLSearchParams(search), [search]);
+  return new URLSearchParams(search);
 }
 
 function splitHref(href: string) {
@@ -355,12 +355,13 @@ export function DashboardLayout({
               <PrimaryNavLink key={item.href} {...item} />
             ))}
           </nav>
-          <label className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
+          <label htmlFor="global-search-input" className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
             <span className="sr-only">맥락 검색</span>
             <input
+              id="global-search-input"
               className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-              placeholder="맥락, 사람, 파일, 인사이트 검색..."
+              placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
               type="search"
             />
           </label>
@@ -449,7 +450,7 @@ export function DashboardLayout({
         <div className="mb-3 flex items-center justify-between">
           <div>
             <p className="text-sm font-black text-foreground">워크스페이스 메뉴</p>
-            <p className="mt-1 text-xs text-muted-foreground">메일, 일정, 할 일, 데이터와 보안 메뉴로 이동합니다.</p>
+            <p className="mt-1 text-xs text-muted-foreground">메일, 일정, 실행 항목, 데이터와 보안 메뉴로 이동합니다.</p>
           </div>
           <button
             type="button"

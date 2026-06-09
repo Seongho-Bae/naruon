@@ -22,7 +22,7 @@ test.describe('Scrolling behavior', () => {
     const heading = page.locator('h1', { hasText: '안녕하세요' });
     await expect(heading).toBeVisible();
     
-    const scrollContainer = page.locator('[role="region"][aria-label="홈 개요 대시보드"]');
+    const scrollContainer = page.locator('[role="region"][aria-label="홈 개요"]');
     const scrollState = await scrollContainer.evaluate((node) => {
       const element = node as HTMLElement;
       const previousTop = element.scrollTop;

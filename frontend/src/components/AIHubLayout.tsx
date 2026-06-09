@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import Link from 'next/link';
 import {
   Activity,
   Bot,
@@ -107,7 +108,7 @@ function stateLabel(stateCode: string) {
     configured: '구성됨',
     empty: '없음',
     needs_key: '키 필요',
-    needs_provider: 'Provider 필요',
+    needs_provider: '모델 연결 필요',
     ready: '준비됨',
     recorded: '기록됨',
   };
@@ -141,13 +142,20 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
   );
 }
 
+function getKoreanFirstLabel(label: string) {
+  return label
+    .replace(/\bProvider\b/gi, '연동')
+    .replace(/\bCredential\b/gi, '인증 정보')
+    .replace(/\bsource evidence\b/gi, '원본 근거');
+}
+
 function SummaryGrid({ cards }: { cards: SummaryCard[] }) {
   return (
-    <section aria-label="AI Hub source-backed summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <section aria-label="AI 허브 원본 기반 종합" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {cards.map((card) => (
         <article key={card.summary_key} className="rounded-lg border border-border bg-card p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-sm font-bold text-muted-foreground">{card.label_text}</p>
+            <p className="text-sm font-bold text-muted-foreground">{getKoreanFirstLabel(card.label_text)}</p>
             <StatusBadge stateCode={card.state_code} />
           </div>
           <p className="mt-4 text-3xl font-black text-foreground">{card.value_text}</p>
@@ -169,7 +177,7 @@ function PromptPanel({ prompts }: { prompts: PromptCard[] }) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="truncate text-base font-black">{prompt.prompt_title}</h2>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt.description_text ?? '설명 없음'}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</p>
             </div>
             <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
           </div>
@@ -183,15 +191,29 @@ function PromptPanel({ prompts }: { prompts: PromptCard[] }) {
               <dd className="mt-1 font-semibold">{formatDateTime(prompt.updated_at)}</dd>
             </div>
           </dl>
+          <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-border pt-4">
+            <Link
+              href="/prompt-studio"
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              프롬프트 열기
+            </Link>
+            <Link
+              href="/ai-hub#actions"
+              className="inline-flex h-9 items-center rounded-lg bg-primary px-3 text-xs font-black text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              실행 항목 보기
+            </Link>
+          </div>
         </article>
       ))}
     </div>
   );
 }
 
-function WorkflowPanel({ workflows }: { workflows: WorkflowCard[] }) {
+function WorkflowPanel({ workflows, onOpenRuns }: { workflows: WorkflowCard[]; onOpenRuns: () => void }) {
   if (workflows.length === 0) {
-    return <EmptyState title="실행 흐름으로 만들 프롬프트가 없습니다." detail="저장된 프롬프트와 활성 Provider가 연결되면 실행 후보가 생성됩니다." />;
+    return <EmptyState title="실행 흐름으로 만들 프롬프트가 없습니다." detail="저장된 프롬프트와 활성 모델 연결이 준비되면 실행 후보가 생성됩니다." />;
   }
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -203,6 +225,15 @@ function WorkflowPanel({ workflows }: { workflows: WorkflowCard[] }) {
           </div>
           <p className="mt-4 text-sm font-bold text-primary">{workflow.trigger_source}</p>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
+          <div className="mt-5 flex justify-end border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onOpenRuns}
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              실행 이력 보기
+            </button>
+          </div>
         </article>
       ))}
     </div>
@@ -211,7 +242,7 @@ function WorkflowPanel({ workflows }: { workflows: WorkflowCard[] }) {
 
 function AgentsPanel({ agents }: { agents: AgentCard[] }) {
   if (agents.length === 0) {
-    return <EmptyState title="조직 Provider가 없습니다." detail="설정의 LLM Provider registry가 구성되면 AI 에이전트 실행 후보로 표시됩니다." />;
+    return <EmptyState title="조직 모델 연결이 없습니다." detail="설정의 LLM 모델 연결이 구성되면 AI 에이전트 실행 후보로 표시됩니다." />;
   }
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -223,34 +254,51 @@ function AgentsPanel({ agents }: { agents: AgentCard[] }) {
           </div>
           <dl className="mt-5 space-y-3 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <dt className="font-bold text-muted-foreground">Provider</dt>
+              <dt className="font-bold text-muted-foreground">모델</dt>
               <dd className="font-semibold">{agent.model_label}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <dt className="font-bold text-muted-foreground">Credential</dt>
-              <dd className="font-semibold">{agent.configured ? 'configured' : 'missing'}</dd>
+              <dt className="font-bold text-muted-foreground">연결 상태</dt>
+              <dd className="font-semibold">{agent.configured ? '연결됨' : '연결 필요'}</dd>
             </div>
           </dl>
           <p className="mt-4 text-xs leading-5 text-muted-foreground">{agent.governance_text}</p>
+          <div className="mt-5 flex justify-end border-t border-border pt-4">
+            <Link
+              href="/settings"
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              모델 설정 열기
+            </Link>
+          </div>
         </article>
       ))}
     </div>
   );
 }
 
-function EvaluationPanel({ metrics }: { metrics: EvaluationMetric[] }) {
+function EvaluationPanel({ metrics, onOpenRuns }: { metrics: EvaluationMetric[]; onOpenRuns: () => void }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       {metrics.map((metric) => (
         <article key={metric.metric_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="text-base font-black">{metric.metric_label}</h2>
+            <h2 className="text-base font-black">{getKoreanFirstLabel(metric.metric_label)}</h2>
             <span className="text-2xl font-black text-primary">{metric.score_value}</span>
           </div>
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary">
             <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
           </div>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
+          <div className="mt-5 flex justify-end border-t border-border pt-4">
+            <button
+              type="button"
+              onClick={onOpenRuns}
+              className="inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-xs font-black text-foreground hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            >
+              평가 근거 보기
+            </button>
+          </div>
         </article>
       ))}
     </div>
@@ -259,7 +307,7 @@ function EvaluationPanel({ metrics }: { metrics: EvaluationMetric[] }) {
 
 function RunHistoryPanel({ events }: { events: RunEvent[] }) {
   if (events.length === 0) {
-    return <EmptyState title="기록된 실행 증거가 없습니다." detail="프롬프트 변경 또는 Provider 감사 이벤트가 생기면 실행 이력으로 정렬됩니다." />;
+    return <EmptyState title="기록된 실행 증거가 없습니다." detail="프롬프트 변경 또는 모델 연결 감사 이벤트가 생기면 실행 이력으로 정렬됩니다." />;
   }
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
@@ -283,6 +331,171 @@ function RunHistoryPanel({ events }: { events: RunEvent[] }) {
           </article>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ExecutionCheckpointNav() {
+  return (
+    <nav aria-label="AI 허브 실행 체크포인트" className="flex gap-2 overflow-x-auto pb-1">
+      {[
+        { href: '#context', label: '맥락 종합' },
+        { href: '#decisions', label: '판단 포인트' },
+        { href: '#actions', label: '실행 항목' },
+      ].map((item) => (
+        <a
+          key={item.href}
+          href={item.href}
+          className="inline-flex h-10 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-sm font-black text-foreground shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+        >
+          {item.label}
+        </a>
+      ))}
+    </nav>
+  );
+}
+
+function CheckpointSection({
+  id,
+  title,
+  detail,
+  children,
+}: {
+  id: string;
+  title: string;
+  detail: string;
+  children: ReactNode;
+}) {
+  const titleId = `${id}-title`;
+  return (
+    <section
+      id={id}
+      aria-labelledby={titleId}
+      className="scroll-mt-24 rounded-lg border border-border bg-card p-5 shadow-sm"
+    >
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-black text-primary">연결 근거</p>
+          <h2 id={titleId} className="mt-1 text-xl font-black">
+            {title}
+          </h2>
+        </div>
+        <p className="max-w-2xl text-sm leading-6 text-muted-foreground">{detail}</p>
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function ContextCheckpoint({ prompts }: { prompts: PromptCard[] }) {
+  if (prompts.length === 0) {
+    return <EmptyState title="맥락 종합할 프롬프트가 없습니다." detail="프롬프트 스튜디오에 원본 근거 기반 템플릿이 저장되면 이 영역에 표시됩니다." />;
+  }
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {prompts.slice(0, 4).map((prompt) => (
+        <article key={prompt.prompt_key} className="rounded-lg border border-border bg-background p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className="text-base font-black">{prompt.prompt_title}</h3>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{prompt.description_text ?? '프롬프트 설명이 등록되지 않았습니다.'}</p>
+            </div>
+            <StatusBadge stateCode={prompt.shared_scope ? 'ready' : 'configured'} />
+          </div>
+          <dl className="mt-4 flex flex-wrap gap-3 text-xs font-bold text-muted-foreground">
+            <div>
+              <dt className="sr-only">소유자</dt>
+              <dd>{prompt.owner_label}</dd>
+            </div>
+            <div>
+              <dt className="sr-only">업데이트</dt>
+              <dd>{formatDateTime(prompt.updated_at)}</dd>
+            </div>
+          </dl>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function DecisionCheckpoint({ metrics, agents }: { metrics: EvaluationMetric[]; agents: AgentCard[] }) {
+  const visibleMetrics = metrics.slice(0, 4);
+  if (visibleMetrics.length === 0 && agents.length === 0) {
+    return <EmptyState title="판단 포인트 근거가 없습니다." detail="모델 연결, 프롬프트, 감사 근거가 연결되면 운영 판단 근거가 표시됩니다." />;
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid gap-3 md:grid-cols-2">
+        {visibleMetrics.map((metric) => (
+          <article key={metric.metric_key} className="rounded-lg border border-border bg-background p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black">{getKoreanFirstLabel(metric.metric_label)}</h3>
+              <span className="text-xl font-black text-primary">{metric.score_value}</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
+          </article>
+        ))}
+      </div>
+      <aside className="rounded-lg border border-border bg-background p-4">
+        <h3 className="text-sm font-black">모델 판단 보조</h3>
+        {agents.length === 0 ? (
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">조직 모델 연결이 없으면 실행 판단은 대기 상태로 표시됩니다.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {agents.slice(0, 3).map((agent) => (
+              <li key={agent.agent_key} className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black">{agent.agent_title}</p>
+                  <p className="text-xs font-semibold text-muted-foreground">{agent.model_label}</p>
+                </div>
+                <StatusBadge stateCode={agent.state_code} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function ActionsCheckpoint({ workflows, events }: { workflows: WorkflowCard[]; events: RunEvent[] }) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid gap-3 md:grid-cols-2">
+        {workflows.length === 0 ? (
+          <EmptyState title="실행 항목 후보가 없습니다." detail="저장된 프롬프트와 활성 모델 연결이 준비되면 실행 흐름 후보가 생성됩니다." />
+        ) : (
+          workflows.slice(0, 4).map((workflow) => (
+            <article key={workflow.workflow_key} className="rounded-lg border border-border bg-background p-4">
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-sm font-black">{workflow.workflow_title}</h3>
+                <StatusBadge stateCode={workflow.state_code} />
+              </div>
+              <p className="mt-3 text-sm font-bold text-primary">{workflow.trigger_source}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{workflow.evidence_text}</p>
+            </article>
+          ))
+        )}
+      </div>
+      <aside className="rounded-lg border border-border bg-background p-4">
+        <h3 className="text-sm font-black">최근 실행 근거</h3>
+        {events.length === 0 ? (
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">기록된 실행 근거가 없습니다.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {events.slice(0, 3).map((event) => (
+              <li key={event.event_key} className="text-sm">
+                <p className="font-black">{event.event_title}</p>
+                <p className="mt-1 font-semibold text-primary">{event.evidence_source}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{formatDateTime(event.observed_at)}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </aside>
     </div>
   );
 }
@@ -313,7 +526,7 @@ export function AIHubLayout() {
         if (cancelled) return;
         console.error('AI Hub surface fetch error', getSafeErrorSummary(error));
         setSurface(null);
-        setErrorText('AI Hub source evidence를 불러오지 못했습니다.');
+        setErrorText('AI 허브 원본 근거를 불러오지 못했습니다.');
         setSurfaceStatus('error');
       });
     return () => {
@@ -365,8 +578,8 @@ export function AIHubLayout() {
       <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 pb-[calc(6rem+env(safe-area-inset-bottom))] md:p-8">
         <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
           {surfaceStatus === 'loading' && (
-            <div role="status" className="rounded-lg border border-border bg-card p-6 font-bold text-primary">
-              AI Hub source evidence를 불러오는 중입니다.
+            <div role="status" aria-live="polite" className="rounded-lg border border-border bg-card p-6 font-bold text-primary">
+              AI 허브 원본 근거를 불러오는 중입니다.
             </div>
           )}
 
@@ -386,11 +599,33 @@ export function AIHubLayout() {
           {surfaceStatus === 'ready' && surface && (
             <>
               <SummaryGrid cards={surface.summary_cards} />
+              <ExecutionCheckpointNav />
+              <CheckpointSection
+                id="context"
+                title="맥락 종합"
+                detail="저장된 프롬프트와 원본 근거 기반 설명을 함께 묶어 현재 판단에 필요한 핵심 맥락을 보여줍니다."
+              >
+                <ContextCheckpoint prompts={surface.prompt_cards} />
+              </CheckpointSection>
+              <CheckpointSection
+                id="decisions"
+                title="판단 포인트"
+                detail="모델 연결 준비도, 프롬프트 커버리지, 감사 근거를 기준으로 실행 전 확인할 운영 판단 근거를 정리합니다."
+              >
+                <DecisionCheckpoint metrics={surface.evaluation_metrics} agents={surface.agent_cards} />
+              </CheckpointSection>
+              <CheckpointSection
+                id="actions"
+                title="실행 항목"
+                detail="프롬프트에서 파생된 실행 흐름과 최근 실행 근거를 연결하되 외부 제공자 쓰기는 직접 수행하지 않습니다."
+              >
+                <ActionsCheckpoint workflows={surface.workflow_cards} events={surface.run_events} />
+              </CheckpointSection>
               <section aria-label={activeTabLabel} className="min-h-[24rem]">
                 {activeTab === 'prompts' && <PromptPanel prompts={surface.prompt_cards} />}
-                {activeTab === 'workflows' && <WorkflowPanel workflows={surface.workflow_cards} />}
+                {activeTab === 'workflows' && <WorkflowPanel workflows={surface.workflow_cards} onOpenRuns={() => setActiveTab('runs')} />}
                 {activeTab === 'agents' && <AgentsPanel agents={surface.agent_cards} />}
-                {activeTab === 'evaluation' && <EvaluationPanel metrics={surface.evaluation_metrics} />}
+                {activeTab === 'evaluation' && <EvaluationPanel metrics={surface.evaluation_metrics} onOpenRuns={() => setActiveTab('runs')} />}
                 {activeTab === 'runs' && <RunHistoryPanel events={surface.run_events} />}
               </section>
             </>

@@ -6,13 +6,14 @@
 
 Keep the required Strix security gate on, but make the provider contract
 unambiguous. The active default route is GitHub Models selected through
-`STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+`STRIX_LLM=openai/gpt-5`, `STRIX_GITHUB_MODELS_TOKEN`, and
 `LLM_API_BASE_FILE` pointing at a trusted file containing
-`https://models.github.ai/inference`. Legacy `STRIX_LLM` secrets must not
-override PR, push, or scheduled Strix defaults. Vertex AI remains available only
-for manual `workflow_dispatch` evidence when `strix_llm`
-explicitly selects an approved Vertex model with `GCP_SA_KEY`, and direct OpenAI
-GPT-5.4-or-newer remains allowed only for manual `strix_llm` selections with
+`https://models.github.ai/inference`; GitHub Models fallbacks use
+`openai/gpt-5-mini` and `openai/gpt-5-nano`. Legacy `STRIX_LLM` secrets must
+not override PR, push, or scheduled Strix defaults. Vertex AI remains available
+only for manual `workflow_dispatch` evidence when `strix_llm` explicitly selects
+an approved Vertex model with `GCP_SA_KEY`, and direct OpenAI GPT-5.4-or-newer
+remains allowed only for manual `strix_llm` selections with
 `STRIX_OPENAI_API_KEY`. Strix must not route through a generic `LLM_API_KEY` or
 silently fall back across providers.
 
@@ -30,8 +31,8 @@ silently fall back across providers.
 ## Implementation
 
 - Keep GitHub Models credential handling inside `provider_mode=github_models`
-  with `github.token` passed through the trusted child-process key file and
-  `LLM_API_BASE_FILE` pointing at a trusted temp file.
+  with `STRIX_GITHUB_MODELS_TOKEN` passed through the trusted child-process key
+  file and `LLM_API_BASE_FILE` pointing at a trusted temp file.
 - Keep GCP credential gating, Google Cloud authentication, and credential export
   only inside manual `provider_mode=vertex_ai`, and only for approved Vertex
   model names.

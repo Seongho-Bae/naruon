@@ -6,6 +6,7 @@ import json
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 
 import pytest
 from fastapi.testclient import TestClient
@@ -51,7 +52,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "tenant_admin",
+        "role": "member",
         "org": "org-acme",
         "groups": [],
         "workspace": "workspace-org-acme",
@@ -245,6 +246,13 @@ class MockTaskSession:
     async def refresh(self, obj):
         pass
 
+    @asynccontextmanager
+    async def begin_nested(self):
+        yield
+
+    async def flush(self):
+        pass
+
 
 mock_session = MockTaskSession()
 
@@ -358,6 +366,20 @@ def test_create_ticket_tasks_accepts_signed_bearer_session():
     assert body["tasks"][0]["source_email_id"] == "<message-14@example.com>"
     assert "user_id" not in body["tasks"][0]
     assert "organization_id" not in body["tasks"][0]
+
+
+def test_reply_sla_escalation_rejects_invalid_policy_payload(auth_client):
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 0, "limit": 51, "unexpected": True},
+    )
+
+    assert response.status_code == 422
+    error_locations = {tuple(error["loc"]) for error in response.json()["detail"]}
+    assert ("body", "overdue_hours") in error_locations
+    assert ("body", "limit") in error_locations
+    assert ("body", "unexpected") in error_locations
+    assert mock_session.tasks == []
 
 
 def test_reply_sla_escalation_accepts_signed_bearer_session():
@@ -572,6 +594,100 @@ def test_reply_sla_escalation_conflict_returns_machine_readable_detail(auth_clie
             "message": "Reply SLA task conflict",
         }
     }
+
+
+def test_reply_sla_escalation_bulk_fetches_nested_conflicts(auth_client):
+    class RacingTaskSession(MockTaskSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commit_attempts = 0
+            self.in_fallback = False
+            self.ticket_task_statement_texts: list[str] = []
+
+        async def execute(self, stmt):
+            descriptions = getattr(stmt, "column_descriptions", [])
+            if descriptions and descriptions[0].get("entity") is TicketTask:
+                self.ticket_task_statement_texts.append(str(stmt).lower())
+            return await super().execute(stmt)
+
+        def add(self, obj):
+            if (
+                self.in_fallback
+                and isinstance(obj, TicketTask)
+                and obj.source_type == "reply_sla"
+            ):
+                self._insert_raced_task(obj)
+                raise IntegrityError("duplicate reply_sla task", {}, None)
+            super().add(obj)
+
+        def _insert_raced_task(self, obj: TicketTask) -> None:
+            if any(
+                task.user_id == obj.user_id
+                and task.organization_id == obj.organization_id
+                and task.source_type == obj.source_type
+                and task.related_email_id == obj.related_email_id
+                for task in self.tasks
+            ):
+                return
+            now = datetime.datetime.now(datetime.timezone.utc)
+            self.tasks.append(
+                TicketTask(
+                    id=len(self.tasks) + 1,
+                    task_uid=f"raced-reply-sla-{obj.related_email_id}",
+                    user_id=obj.user_id,
+                    organization_id=obj.organization_id,
+                    title="raced reply SLA",
+                    status="open",
+                    priority="normal",
+                    source_type=obj.source_type,
+                    related_email_id=obj.related_email_id,
+                    related_thread_id=obj.related_thread_id,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+        async def commit(self):
+            self.commit_attempts += 1
+            if self.commit_attempts == 1:
+                raise IntegrityError("batch reply_sla conflict", {}, None)
+
+        async def rollback(self):
+            self.in_fallback = True
+            self.tasks.clear()
+
+    racing_session = RacingTaskSession()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for email_id in (51, 52):
+        racing_session.emails[email_id] = make_email(
+            email_id=email_id,
+            message_id=f"<raced-sla-{email_id}@example.com>",
+            thread_id=f"<thread-raced-sla-{email_id}>",
+            sender="alice@example.com",
+            recipients="vendor@example.com",
+            subject=f"Raced SLA follow-up {email_id}",
+            body="Please reply by tomorrow.",
+            date=now - datetime.timedelta(days=4),
+        )
+    app.dependency_overrides[get_db] = lambda: racing_session
+
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 48},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 0
+    assert {task["source_email_id"] for task in body["tasks"]} == {
+        "<raced-sla-51@example.com>",
+        "<raced-sla-52@example.com>",
+    }
+    assert all(task.status == "blocked" for task in racing_session.tasks)
+    assert not any(
+        "ticket_tasks.email_id =" in statement
+        for statement in racing_session.ticket_task_statement_texts
+    )
 
 
 @pytest.mark.postgres

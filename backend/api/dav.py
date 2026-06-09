@@ -48,7 +48,6 @@ async def dav_handler(
     Naruon's Tasks and Events into DAV compliant responses.
     """
     _ensure_dav_owner_scope(path, auth_context)
-    # Use repr to safely escape control characters and prevent log injection (CWE-117)
     safe_path = repr(path)[1:-1]
     logger.info("DAV Request: %s /%s", request.method, safe_path)
 

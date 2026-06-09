@@ -13,6 +13,7 @@ export interface InsightCardProps {
   emptyMessage?: string;
   onRetry?: () => void;
   provenance?: string;
+  confidence?: number;
   children: ReactNode;
   footerActions?: ReactNode;
 }
@@ -27,6 +28,7 @@ export function InsightCard({
   emptyMessage = "데이터가 없습니다.",
   onRetry,
   provenance,
+  confidence,
   children,
   footerActions,
 }: InsightCardProps) {
@@ -38,13 +40,28 @@ export function InsightCard({
             {icon && <span className="text-primary">{icon}</span>}
             {title}
           </CardTitle>
-          {provenance && (
-            <div className="flex items-center text-[10px] text-muted-foreground bg-white/60 px-2 py-1 rounded-full border border-primary/10 shadow-sm" title="출처/사용된 모델">
-              <Info className="w-3 h-3 mr-1 text-primary/70" />
-              {provenance}
+            <div className="flex items-center gap-2">
+              {confidence !== undefined && (
+                <div 
+                  className={`flex items-center text-[10px] font-medium px-2 py-1 rounded-full shadow-sm border ${
+                    confidence >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 
+                    confidence >= 50 ? 'bg-amber-50 text-amber-700 border-amber-200' : 
+                    'bg-red-50 text-red-700 border-red-200'
+                  }`}
+                  title="AI 판단 확신도"
+                >
+                  <span className="mr-1">신뢰도</span>
+                  {confidence}%
+                </div>
+              )}
+              {provenance && (
+                <div className="flex items-center text-[10px] text-muted-foreground bg-white/60 px-2 py-1 rounded-full border border-primary/10 shadow-sm" title="출처/사용된 모델">
+                  <Info className="w-3 h-3 mr-1 text-primary/70" />
+                  {provenance}
+                </div>
+              )}
             </div>
-          )}
-        </CardHeader>
+          </CardHeader>
 
         <CardContent className="flex-1 p-4 overflow-auto">
           {loading ? (

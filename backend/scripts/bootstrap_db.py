@@ -342,12 +342,16 @@ def schema_backfill_sql():
     return statements
 
 
+def _execute_statements(conn, statements) -> None:
+    for statement in statements:
+        conn.execute(statement)
+
+
 async def bootstrap_db() -> None:
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
-        for statement in schema_backfill_sql():
-            await conn.execute(statement)
+        await conn.run_sync(_execute_statements, schema_backfill_sql())
 
 
 if __name__ == "__main__":
