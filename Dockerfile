@@ -2,7 +2,7 @@
 FROM node:22-slim AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci --fetch-timeout=600000 --fetch-retries=5
+RUN npm install
 COPY frontend ./
 # Pass dummy URL for build if needed
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -56,7 +56,9 @@ exit $?\n\
 RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Environment variables for Frontend
+# Environment variables for Backend and Frontend
+ENV DATABASE_URL=sqlite+aiosqlite:///./naruon_standalone.db
+ENV AUTH_SESSION_HMAC_SECRET=local-dev-dummy-key-of-32-bytes-min-length-1234
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8000
 ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
