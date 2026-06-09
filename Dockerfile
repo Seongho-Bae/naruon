@@ -2,7 +2,7 @@
 FROM node:22-slim AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci --fetch-timeout=600000 --fetch-retries=5
+RUN npm install
 COPY frontend ./
 # Pass dummy URL for build if needed
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
@@ -42,6 +42,9 @@ COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
 # Create a startup script
 RUN echo '#!/bin/bash\n\
+if [ -z "$AUTH_SESSION_HMAC_SECRET" ]; then\n\
+  export AUTH_SESSION_HMAC_SECRET=$(python -c "import secrets; print(secrets.token_hex(32))")\n\
+fi\n\
 echo "Starting Naruon Backend and Frontend..."\n\
 python scripts/bootstrap_db.py\n\
 python scripts/start_backend.py --host 0.0.0.0 --port 8000 &\n\
@@ -56,7 +59,8 @@ exit $?\n\
 RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Environment variables for Frontend
+# Environment variables for Backend and Frontend
+ENV DATABASE_URL=sqlite+aiosqlite:///./naruon_standalone.db
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8000
 ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
