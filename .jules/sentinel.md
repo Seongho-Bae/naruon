@@ -6,3 +6,7 @@
 **Vulnerability:** Log Injection / Terminal Escape Sequence Injection (CWE-117)
 **Learning:** Custom logic like `path.replace("\n", "").replace("\r", "")` is insufficient to prevent log injection and terminal escape sequence injection, as it leaves characters like ANSI color codes intact.
 **Prevention:** Use standard mechanisms like `repr()` or proper unicode escaping instead of custom string replacements.
+## 2026-05-28 - Overly Permissive CORS Configuration
+**Vulnerability:** The CORS policy in `backend/main.py` hardcoded multiple localhost and 127.0.0.1 development ports directly in the list of allowed origins. This permissive setting would be deployed to production, increasing the risk of CSRF or CORS-based attacks if a malicious or compromised application were hosted on the user's localhost.
+**Learning:** Hardcoding development origins directly in the production CORS configuration undermines environment separation and exposes production deployments to localized attacks. Settings should dynamically parse allowed origins based on environment variables.
+**Prevention:** Introduce an environment-configurable setting (like `ALLOWED_CORS_ORIGINS`) and parse its values to construct the `allow_origins` array, thereby ensuring strict boundary control in production.
