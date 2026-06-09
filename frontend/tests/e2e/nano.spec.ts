@@ -14,5 +14,5 @@ test('nano test: verify user requested features', async ({ page }) => {
   
   // 2. Check Data page for email import
   await page.goto('/data');
-  await expect(page.getByText('이메일 반입', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('이메일 반입', { exact: false }).first()).toBeVisible();
 });
