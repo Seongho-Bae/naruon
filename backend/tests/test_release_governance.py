@@ -153,11 +153,11 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     dockerfile = read_repo_text("frontend/Dockerfile")
 
     assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
-        "RUN npm run build"
+        "RUN pnpm run build"
     )
-    assert "npm run build" in dockerfile
-    assert 'CMD ["npm", "run", "start"' in dockerfile or "npm run start" in dockerfile
-    assert "npm run dev" not in dockerfile
+    assert "pnpm run build" in dockerfile
+    assert 'CMD ["pnpm", "run", "start"' in dockerfile or "pnpm run start" in dockerfile
+    assert "pnpm run dev" not in dockerfile
 
 
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
@@ -167,7 +167,7 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
-    assert '"scripts/start_backend.py"' in dockerfile
+    assert '"/app/start.sh"' in dockerfile
     assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
 
 

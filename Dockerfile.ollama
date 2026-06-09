@@ -1,0 +1,14 @@
+FROM ollama/ollama:latest
+
+# Pull model weights at build time so the container is ready without network
+# access at runtime.  We start the server in the background, wait for it to be
+# ready with a readiness poll, pull the models, then stop the server.  A
+# fixed sleep is fragile on slow/constrained runners, so we use a loop instead.
+RUN nohup bash -c "ollama serve &" && \
+    until curl -sf http://localhost:11434/api/tags > /dev/null 2>&1; do sleep 1; done && \
+    ollama pull gemma4 && \
+    ollama pull embeddinggemma
+
+# Run as non-root for security (DS-0002).
+# The ollama base image ships with an 'ollama' user.
+USER ollama
