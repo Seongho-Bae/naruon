@@ -49,14 +49,28 @@ def _looks_like_ip_literal(candidate: str) -> bool:
     )
 
 
-def _validate_global_address(address: str) -> str:
+def _validate_global_address(address: str, *, hostname: str | None = None) -> str:
+    """Validate that an IP address is globally routable, or explicitly allowed.
+
+    When ``ALLOW_LOCAL_LLM_PROVIDERS`` is enabled the address is accepted if:
+    - the IP is a loopback address, **or**
+    - the *original* hostname (before DNS resolution) is present in
+      ``ALLOWED_LLM_BASE_URL_HOSTS``.
+
+    This second condition is necessary because Docker container names (e.g.
+    ``ollama``) resolve to RFC-1918 private IPs that would otherwise be
+    rejected by the global-address check.
+    """
     try:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
+
     is_allowed_local = False
     if settings.ALLOW_LOCAL_LLM_PROVIDERS:
-        if ip_address.is_loopback or address in _parse_allowed_hosts():
+        if ip_address.is_loopback:
+            is_allowed_local = True
+        elif hostname and hostname.lower().rstrip(".") in _parse_allowed_hosts():
             is_allowed_local = True
 
     if not is_allowed_local:
@@ -84,7 +98,9 @@ def _resolve_all_global_addresses(hostname: str, port: int) -> tuple[str, ...]:
     addresses: list[str] = []
     seen_addresses: set[str] = set()
     for address_info in address_infos:
-        address = _validate_global_address(str(address_info[4][0]))
+        # Pass the original hostname so that Docker container names listed in
+        # ALLOWED_LLM_BASE_URL_HOSTS are matched before checking the resolved IP.
+        address = _validate_global_address(str(address_info[4][0]), hostname=hostname)
         if address not in seen_addresses:
             seen_addresses.add(address)
             addresses.append(address)
@@ -191,8 +207,10 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
         self._hostname = hostname
         self._port = port
+        # Re-validate each address; pass the hostname so Docker-container names
+        # in ALLOWED_LLM_BASE_URL_HOSTS are accepted.
         self._addresses = tuple(
-            _validate_global_address(address) for address in addresses
+            _validate_global_address(address, hostname=hostname) for address in addresses
         )
         self._backend = AutoBackend()
 
@@ -204,7 +222,7 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None,
         socket_options,
     ):
-        pinned_address = _validate_global_address(address)
+        pinned_address = _validate_global_address(address, hostname=self._hostname)
         return await self._backend.connect_tcp(
             pinned_address,
             port,
