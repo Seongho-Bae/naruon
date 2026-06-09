@@ -407,6 +407,12 @@ export function DataLayout() {
                     <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
                       문서 업로드
                     </button>
+                    <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                      재파싱
+                    </button>
+                    <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                      임베딩 재생성
+                    </button>
                     <button type="button" className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20">
                       HWP 변환
                     </button>
