@@ -162,6 +162,8 @@ const emptyAccountForm: AccountFormState = {
   oauthRedirectUri: '',
 };
 
+// Note: Passwords and secrets are intentionally cleared here and never stored in plain text client-side.
+// We only collect them from the user temporarily when updating credentials, sending them directly via HTTPS.
 function toAccountForm(config: AccountConfig): AccountFormState {
   return {
     smtpServer: config.smtp_server ?? '',
