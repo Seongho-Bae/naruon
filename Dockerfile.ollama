@@ -1,0 +1,8 @@
+FROM ollama/ollama:latest
+
+# We pull the models during build time.
+# To ensure the server is up to receive the pull requests, we start it in the background.
+RUN nohup bash -c "ollama serve &" && \
+    sleep 5 && \
+    ollama pull gemma4 && \
+    ollama pull embeddinggemma
