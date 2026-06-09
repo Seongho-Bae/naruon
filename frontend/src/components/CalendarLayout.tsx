@@ -122,7 +122,7 @@ export function CalendarLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground">
       {/* Left Sidebar - Calendar List */}
       <aside className="w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4 hidden lg:flex">
-        <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
+        <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
           <Plus className="size-4" />새 일정
         </button>
 
@@ -145,7 +145,7 @@ export function CalendarLayout() {
               </li>
             ))}
           </ul>
-          <button type="button" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary">
+          <button type="button" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
             <Plus className="size-4" /> 캘린더 추가
           </button>
         </div>
@@ -155,7 +155,7 @@ export function CalendarLayout() {
       <main className="flex min-w-0 flex-1 flex-col bg-background">
         <header className="flex h-auto min-h-16 shrink-0 flex-col items-start gap-3 border-b border-border bg-card px-4 py-3 lg:px-6">
           <div className="flex min-w-0 flex-wrap items-center gap-3 lg:gap-4">
-            <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold">오늘</button>
+            <button type="button" className="rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">오늘</button>
             <div className="flex items-center gap-1">
               <button type="button" aria-label="이전 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronLeft className="size-5" /></button>
               <button type="button" aria-label="다음 달" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><ChevronRight className="size-5" /></button>
@@ -169,7 +169,7 @@ export function CalendarLayout() {
                 <button type="button"
                   key={mode}
                   onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
-                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
                 </button>
@@ -198,7 +198,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
                   disabled={isWritebackActionDisabled}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   새 일정 intent 점검
                 </button>
@@ -375,7 +375,7 @@ export function CalendarLayout() {
                 <h3 className="text-lg font-bold mb-4">회의 조율 (Coordination)</h3>
                 <p className="text-sm text-muted-foreground mb-4">참석자들의 캘린더(CalDAV)를 종합 분석하여 최적의 시간을 제안합니다.</p>
                 <div className="grid gap-3 max-w-lg">
-                  <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
+                  <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     <div className="flex items-center gap-3">
                       <span className="grid size-8 place-items-center rounded-lg bg-primary/20 text-primary font-bold">1안</span>
                       <div className="text-left">
@@ -493,7 +493,7 @@ export function CalendarLayout() {
         <div className="mt-8 flex gap-3">
           <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
           <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
-          <button type="button" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
+          <button type="button" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">수정</button>
         </div>
       </aside>
     </div>

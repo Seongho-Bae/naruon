@@ -258,7 +258,7 @@ export function TasksLayout() {
               <button type="button"
                 key={mode}
                 onClick={() => setViewMode(mode as '내 작업' | '위임한 작업' | '칸반' | '작업 상세')}
-                className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
               >
                 {mode}
               </button>
@@ -273,7 +273,7 @@ export function TasksLayout() {
           <button type="button" className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
             <Filter className="size-4" /> 필터
           </button>
-          <button type="button" className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90">
+          <button type="button" className="flex items-center gap-2 rounded-md bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
             <Plus className="size-4" /> 새 작업
           </button>
         </div>
@@ -320,7 +320,7 @@ export function TasksLayout() {
                 aria-label="보낸 메일 답변 SLA 티켓 생성"
                 disabled={replySlaStatus === 'loading'}
                 onClick={() => void handleReplySlaEscalation()}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
                 <Plus className="size-3.5" />
                 {replySlaStatus === 'loading' ? '확인 중' : 'SLA 티켓 생성'}
@@ -370,7 +370,7 @@ export function TasksLayout() {
                         aria-label={`${task.title} 상태를 ${taskStatusChangeLabels[status]} 변경`}
                         aria-pressed={task.status === status}
                         onClick={() => void handleTicketStatusChange(task.id, status)}
-                        className={`rounded-md border px-2.5 py-1 text-xs font-bold transition-colors ${
+                        className={`rounded-md border px-2.5 py-1 text-xs font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                           task.status === status
                             ? 'border-primary bg-primary text-primary-foreground'
                             : 'border-border bg-card text-foreground hover:border-primary/60 hover:bg-secondary'
@@ -417,7 +417,7 @@ export function TasksLayout() {
                           aria-label={`${task.title} WebDAV 지식 노트 intent 생성`}
                           disabled={currentKnowledgeIntent.state === 'loading'}
                           onClick={() => void handleKnowledgeIntentCreate(task.id)}
-                          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+                          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                         >
                           <Plus className="size-3.5" />
                           {currentKnowledgeIntent.state === 'loading' ? '생성 중' : 'intent 생성'}
@@ -594,7 +594,7 @@ export function TasksLayout() {
                 </div>
                 <h2 className="text-2xl font-bold">{task.title}</h2>
               </div>
-              <button type="button" className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90">상태 변경</button>
+              <button type="button" className="px-4 py-2 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">상태 변경</button>
             </div>
             
             <div className="grid grid-cols-3 gap-6 mb-6">
