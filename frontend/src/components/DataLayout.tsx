@@ -400,6 +400,14 @@ export function DataLayout() {
                       style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
                     ></div>
                   </div>
+                  <div className="mt-4 flex gap-2 justify-end">
+                    <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                      문서 업로드
+                    </button>
+                    <button type="button" className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20">
+                      HWP 변환
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -794,6 +802,12 @@ export function DataLayout() {
                           style={{ width: `${stage.progress_percent}%` }}
                         ></div>
                       </div>
+                      <div className="mt-3 flex justify-end">
+                        <button type="button" className="rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground hover:bg-secondary/80 flex items-center gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          {stage.stage_key.includes('parse') ? '재파싱' : '재실행'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -868,6 +882,12 @@ export function DataLayout() {
                           <dd className="mt-1 text-sm font-bold">{formatCount(collection.vector_dimensions)}</dd>
                         </div>
                       </dl>
+                      <div className="mt-4 flex justify-end border-t border-border pt-3">
+                        <button type="button" className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 flex items-center gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          임베딩 재생성
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -887,6 +907,14 @@ export function DataLayout() {
                     <span className={`mt-3 inline-flex rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
                       {getSurfaceStatusLabel(check.status_code)}
                     </span>
+                    <div className="mt-4 flex gap-2 justify-end border-t border-border pt-3">
+                      <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                        품질 점검
+                      </button>
+                      <button type="button" className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 border border-red-200">
+                        격리
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {dataSurfaceStatus === 'loading' && (

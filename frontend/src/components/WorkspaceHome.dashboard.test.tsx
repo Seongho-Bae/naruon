@@ -35,6 +35,7 @@ vi.mock("lucide-react", () => ({
   Network: () => <svg aria-hidden="true" />,
   Send: () => <svg aria-hidden="true" />,
   Settings: () => <svg aria-hidden="true" />,
+  Sparkles: () => <svg aria-hidden="true" />,
 }));
 
 import { WorkspaceHome } from "./WorkspaceHome";
@@ -344,7 +345,7 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(linkHrefByText("메일함 열기")).toBe("/mail");
     expect(linkHrefByText("보낸 메일 답변 추적")).toBe("/mail?folder=sent");
     expect(linkHrefByText("일정 후보 검토")).toBe("/calendar");
-    expect(linkHrefByText("작업 보드")).toBe("/tasks");
+    expect(linkHrefByText("실행 항목 보드")).toBe("/tasks");
     expect(linkHrefByText("프로젝트 의사결정")).toBe("/projects");
     expect(linkHrefByText("AI 허브")).toBe("/ai-hub");
     expect(linkHrefByText("데이터 품질 점검")).toBe("/data");

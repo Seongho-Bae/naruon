@@ -1,26 +1,58 @@
-FROM python:3.11-slim
+# Stage 1: Build Frontend
+FROM node:22-slim AS frontend-builder
+WORKDIR /app
+COPY frontend/package*.json ./
+RUN npm ci --fetch-timeout=600000 --fetch-retries=5
+COPY frontend ./
+# Pass dummy URL for build if needed
+ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
 
+# Stage 2: Final Image (Python + Node.js)
+FROM python:3.11-slim
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Install system dependencies if any are needed for pgvector/psycopg2
+# Install system dependencies & Node.js
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && apt-get install -y --no-install-recommends gcc libpq-dev curl \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Backend dependencies
 COPY backend/requirements.txt /app/requirements.txt
 RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
     pip install --no-cache-dir -r requirements.txt
 
+# Copy Backend
 COPY backend /app/
 
-# Create a non-root user
-RUN adduser --disabled-password --gecos "" appuser
-USER appuser
+# Copy Frontend
+COPY --from=frontend-builder /app /app/frontend
 
-EXPOSE 8000
+# Create a startup script
+RUN echo '#!/bin/bash\n\
+echo "Starting Naruon Backend and Frontend..."\n\
+python scripts/bootstrap_db.py\n\
+python scripts/start_backend.py --host 0.0.0.0 --port 8000 &\n\
+BACKEND_PID=$!\n\
+cd frontend && npm run start -- --hostname 0.0.0.0 --port 3000 &\n\
+FRONTEND_PID=$!\n\
+wait -n\n\
+exit $?\n\
+' > /app/start.sh && chmod +x /app/start.sh
 
-CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
+# Environment variables for Frontend
+ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8000
+ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
+
+EXPOSE 3000 8000
+
+CMD ["/app/start.sh"]
