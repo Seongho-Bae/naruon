@@ -803,9 +803,9 @@ export function DataLayout() {
                         ></div>
                       </div>
                       <div className="mt-3 flex justify-end">
-                        <button type="button" className="rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground hover:bg-secondary/80 flex items-center gap-1">
+                        <button type="button" disabled className="rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed flex items-center gap-1">
                           <RefreshCw className="h-3 w-3" />
-                          {stage.stage_key.includes('parse') ? '재파싱' : '재실행'}
+                          {stage.stage_key.includes('parse') ? '재파싱 (준비 중)' : '재실행 (준비 중)'}
                         </button>
                       </div>
                     </div>
@@ -883,9 +883,9 @@ export function DataLayout() {
                         </div>
                       </dl>
                       <div className="mt-4 flex justify-end border-t border-border pt-3">
-                        <button type="button" className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 flex items-center gap-1">
+                        <button type="button" disabled className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary opacity-50 cursor-not-allowed flex items-center gap-1">
                           <RefreshCw className="h-3 w-3" />
-                          임베딩 재생성
+                          임베딩 재생성 (준비 중)
                         </button>
                       </div>
                     </article>

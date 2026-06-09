@@ -33,8 +33,12 @@ RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # Copy Backend
 COPY backend /app/
 
-# Copy Frontend
-COPY --from=frontend-builder /app /app/frontend
+# Copy Frontend runtime artifacts
+COPY --from=frontend-builder /app/.next /app/frontend/.next
+COPY --from=frontend-builder /app/public /app/frontend/public
+COPY --from=frontend-builder /app/node_modules /app/frontend/node_modules
+COPY --from=frontend-builder /app/package.json /app/frontend/package.json
+COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
 # Create a startup script
 RUN echo '#!/bin/bash\n\
@@ -47,6 +51,10 @@ FRONTEND_PID=$!\n\
 wait -n\n\
 exit $?\n\
 ' > /app/start.sh && chmod +x /app/start.sh
+
+# Create non-root user
+RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
+USER appuser
 
 # Environment variables for Frontend
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000
