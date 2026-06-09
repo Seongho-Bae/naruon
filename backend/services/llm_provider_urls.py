@@ -54,7 +54,12 @@ def _validate_global_address(address: str) -> str:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
-    if not settings.DEBUG:
+    is_allowed_local = False
+    if settings.ALLOW_LOCAL_LLM_PROVIDERS:
+        if ip_address.is_loopback or address in _parse_allowed_hosts():
+            is_allowed_local = True
+
+    if not is_allowed_local:
         if (
             ip_address.is_private
             or ip_address.is_loopback
@@ -106,19 +111,22 @@ def _normalize_llm_provider_base_url(value: str | None):
 
     try:
         parsed = urlsplit(candidate)
-        port = parsed.port or 443
+        default_port = 443 if parsed.scheme.lower() == "https" else 80
+        port = parsed.port or default_port
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
     hostname = (parsed.hostname or "").lower().rstrip(".")
-    is_localhost = hostname in {"localhost", "localhost.localdomain", "127.0.0.1", "ollama"}
+    # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
+    is_local_dev_host = hostname in {"localhost", "localhost.localdomain", "127.0.0.1"}
     
     # Allow http for local development or if explicitly allowed
     if parsed.scheme.lower() not in {"http", "https"}:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
         
-    if parsed.scheme.lower() == "http" and not is_localhost and not settings.DEBUG:
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    if parsed.scheme.lower() == "http" and not is_local_dev_host:
+        if not (settings.ALLOW_LOCAL_LLM_PROVIDERS and hostname in _parse_allowed_hosts()):
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
     if (
         not hostname
@@ -131,7 +139,7 @@ def _normalize_llm_provider_base_url(value: str | None):
 
     allowed_hosts = _parse_allowed_hosts()
     # If not localhost, must be in allowed hosts
-    if not is_localhost:
+    if not is_local_dev_host:
         if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
         if hostname not in allowed_hosts:
