@@ -400,7 +400,10 @@ export function DataLayout() {
                       style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
                     ></div>
                   </div>
-                  <div className="mt-4 flex gap-2 justify-end">
+                  <div className="mt-4 flex flex-wrap gap-2 justify-end">
+                    <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                      이메일 반입 (MBOX/EML)
+                    </button>
                     <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
                       문서 업로드
                     </button>

@@ -1,12 +1,12 @@
 "use client";
 
-import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
 
-type SettingsTab = '워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
+type SettingsTab = '워크스페이스' | '멤버' | 'AI 모델' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
 
 interface RunnerConfig {
   workspace_id: string;
@@ -230,6 +230,7 @@ function formatEndpoint(host: string | null | undefined, port: number | null | u
 const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
   { id: '워크스페이스', icon: Monitor },
   { id: '멤버', icon: User },
+  { id: 'AI 모델', icon: Bot },
   { id: '연결 계정', icon: Mail },
   { id: '알림', icon: Bell },
   { id: '자동화', icon: Settings },
@@ -663,6 +664,102 @@ export function SettingsLayout() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'AI 모델' && (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-bold text-xl">AI 모델 설정</h2>
+                    <p className="text-sm text-muted-foreground mt-1">대규모 언어 모델(LLM), 로컬 모델, 임베딩 모델을 등록하고 관리합니다.</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                      <div className="rounded-xl bg-blue-100 p-2.5"><Bot className="size-5 text-blue-700" /></div>
+                      <div>
+                        <h3 className="font-bold text-lg">상용 API 모델 등록</h3>
+                        <p className="text-xs text-muted-foreground">OpenAI, Anthropic 등의 API 연동</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-muted-foreground">제공자 (Provider)</label>
+                        <select className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                          <option>OpenAI</option>
+                          <option>Anthropic</option>
+                          <option>Google Gemini</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-muted-foreground">API Key</label>
+                        <input type="password" placeholder="sk-..." className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <button type="button" className="w-full rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background hover:bg-foreground/90 transition-colors">
+                        모델 추가
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                      <div className="rounded-xl bg-emerald-100 p-2.5"><Cpu className="size-5 text-emerald-700" /></div>
+                      <div>
+                        <h3 className="font-bold text-lg">로컬 모델 등록</h3>
+                        <p className="text-xs text-muted-foreground">Ollama, vLLM 등의 자체 호스팅 모델 연동</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-muted-foreground">서버 엔드포인트 URL</label>
+                        <input type="url" placeholder="http://localhost:11434/v1" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-muted-foreground">모델 식별자</label>
+                        <input type="text" placeholder="llama3:8b" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <button type="button" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground hover:bg-secondary transition-colors">
+                        로컬 모델 등록
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3 border-b border-border pb-4">
+                    <div className="rounded-xl bg-purple-100 p-2.5"><Network className="size-5 text-purple-700" /></div>
+                    <div>
+                      <h3 className="font-bold text-lg">임베딩 모델 지정</h3>
+                      <p className="text-sm text-muted-foreground mt-1">벡터 스토어 및 RAG 구축을 위한 기본 임베딩 모델을 선택합니다.</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <label className="flex cursor-pointer items-center justify-between rounded-xl border border-border p-4 hover:border-primary/50 transition-colors [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
+                      <div>
+                        <p className="font-bold">text-embedding-3-small</p>
+                        <p className="text-xs text-muted-foreground mt-1">OpenAI (1536차원)</p>
+                      </div>
+                      <input type="radio" name="embedding_model" className="size-4" defaultChecked />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-between rounded-xl border border-border p-4 hover:border-primary/50 transition-colors [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
+                      <div>
+                        <p className="font-bold">text-embedding-3-large</p>
+                        <p className="text-xs text-muted-foreground mt-1">OpenAI (3072차원)</p>
+                      </div>
+                      <input type="radio" name="embedding_model" className="size-4" />
+                    </label>
+                    <label className="flex cursor-pointer items-center justify-between rounded-xl border border-border p-4 hover:border-primary/50 transition-colors [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
+                      <div>
+                        <p className="font-bold">nomic-embed-text</p>
+                        <p className="text-xs text-muted-foreground mt-1">로컬 Ollama</p>
+                      </div>
+                      <input type="radio" name="embedding_model" className="size-4" />
+                    </label>
                   </div>
                 </div>
               </div>
