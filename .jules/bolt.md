@@ -38,6 +38,15 @@
 ## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
 **Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
 **Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
+
 ## 2026-06-10 - Resolve N+1 Iteration Outside AsyncSession
 **Learning:** Iterating over `configs.scalars()` outside of the `async with AsyncSessionLocal() as session:` block defers ORM object materialization, causing slow performance due to lazy evaluation or N+1 issues when the result iterator evaluates elements without an active session context.
 **Action:** Always eagerly evaluate and materialize query results by calling `.all()` inside the async session context block (e.g. `result.scalars().all()`) before iterating over them.
+
+## 2024-06-04 - Caching Email Parsing Functions
+**Learning:** `email.utils.parseaddr` and `email.utils.getaddresses` are heavily utilized when checking email sender/recipient lists (e.g. `configured_email_addresses`, `message_sender_address`, `message_recipient_addresses`) and parsing identical email strings repetitively is a noticeable bottleneck, easily taking hundreds of milliseconds at scale without caching.
+**Action:** Used `@lru_cache(maxsize=2048)` to wrap these parsers. Always remember that outputs from a cached function should be immutable (like `frozenset` instead of `set`) to prevent callers from inadvertently modifying the cached object, maintaining performance without introducing state bugs.
+
+## 2025-06-03 - Pre-compile Regex in extract_reference_ids
+**Learning:** `extract_reference_ids` in `threading_service.py` is called repeatedly during email parsing and compiled the reference ID regex (`re.findall(r"<([^>]+)>")`) inline on every call.
+**Action:** Pre-compile the regex pattern at the module level using `re.compile()` to avoid the overhead of continuous recompilation, significantly speeding up the match operation for a very frequently called function.

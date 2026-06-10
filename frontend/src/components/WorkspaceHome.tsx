@@ -299,7 +299,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
     const intervalId = window.setInterval(updateTimestamp, 60_000);
     return () => window.clearInterval(intervalId);
   }, []);
-  
+
   const mapPriorityToKorean = (p: string) => {
     switch(p) {
       case 'urgent': return '긴급';
@@ -329,7 +329,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   return (
     <section role="region" aria-label="홈 개요" className="h-full overflow-y-auto bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        
+
         {/* Header Section */}
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
