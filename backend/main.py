@@ -81,8 +81,18 @@ app.add_middleware(
         if origin.strip()
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "PROPFIND",
+        "REPORT",
+        "MKCOL",
+    ],
+    allow_headers=["Accept", "Content-Type", "Authorization"],
 )
 
 app.include_router(search_router, dependencies=PRIVATE_API_DEPENDENCIES)
