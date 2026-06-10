@@ -38,3 +38,7 @@
 ## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
 **Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
 **Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
+
+## 2024-06-10 - Resolve N+1 Query in threading_service.py
+**Learning:** Checking message_id references sequentially using a loop (`await _find_existing_thread_id`) creates an N+1 query issue, leading to poor I/O bound performance during DB transactions, particularly for emails with many references.
+**Action:** Use a single bulk query with `.in_()` clause instead. In SQLAlchemy, gather all parameters into a list, execute a single query to retrieve a result set, build a mapping dictionary, and then iterate the map to maintain required logical ordering, resolving the bottleneck effectively.

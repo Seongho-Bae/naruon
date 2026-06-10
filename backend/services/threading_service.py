@@ -63,23 +63,6 @@ def email_owner_filters(user_id: str, organization_id: str | None):
     return (Email.user_id == user_id, organization_filter)
 
 
-async def _find_existing_thread_id(
-    session: AsyncSession,
-    message_id: str,
-    *,
-    user_id: str,
-    organization_id: str | None,
-) -> str | None:
-    bracketed = f"<{message_id}>"
-    result = await session.execute(
-        select(Email.thread_id).where(
-            *email_owner_filters(user_id, organization_id),
-            or_(Email.message_id == message_id, Email.message_id == bracketed),
-        )
-    )
-    return result.scalar_one_or_none()
-
-
 async def assign_thread_id(
     session: AsyncSession,
     email_data: EmailData,
@@ -105,15 +88,25 @@ async def assign_thread_id(
             seen.add(ref)
             existing_candidates.append(ref)
 
-    for candidate in existing_candidates:
-        thread_id = await _find_existing_thread_id(
-            session,
-            candidate,
-            user_id=user_id,
-            organization_id=organization_id,
+    if existing_candidates:
+        search_ids = []
+        for c in existing_candidates:
+            search_ids.append(c)
+            search_ids.append(f"<{c}>")
+
+        result = await session.execute(
+            select(Email.message_id, Email.thread_id).where(
+                *email_owner_filters(user_id, organization_id),
+                Email.message_id.in_(search_ids),
+            )
         )
-        if thread_id:
-            return normalize_message_id(thread_id) or thread_id
+
+        found_threads = {row.message_id: row.thread_id for row in result.all()}
+
+        for candidate in existing_candidates:
+            thread_id = found_threads.get(candidate) or found_threads.get(f"<{candidate}>")
+            if thread_id:
+                return normalize_message_id(thread_id) or thread_id
 
     # If the parent/root has not been imported yet, use the oldest known ancestor
     # as the deterministic thread root so later imports converge on one thread.
