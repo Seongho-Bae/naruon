@@ -267,8 +267,8 @@ export function TasksLayout() {
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:gap-3">
           <div className="relative min-w-[180px] flex-1 sm:flex-none">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <input type="text" placeholder="작업 검색..." className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" aria-hidden="true" />
+            <input aria-label="작업 검색" type="text" placeholder="작업 검색..." className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-4 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64" />
           </div>
           <button type="button" className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-sm font-semibold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
             <Filter className="size-4" /> 필터
