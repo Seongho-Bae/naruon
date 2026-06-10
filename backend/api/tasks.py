@@ -127,6 +127,127 @@ def _task_response(task: TicketTask, source_email_id: str | None) -> TicketTaskR
     )
 
 
+
+async def _get_existing_tasks(
+    db: AsyncSession,
+    user_id: str,
+    organization_id: str | None,
+    email_ids: list[int],
+) -> dict[int, TicketTask]:
+    result = await db.execute(
+        select(TicketTask)
+        .where(
+            TicketTask.user_id == user_id,
+            TicketTask.organization_id == organization_id,
+            TicketTask.related_email_id.in_(email_ids),
+            TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+        )
+        .order_by(TicketTask.updated_at.desc())
+    )
+    existing_tasks_by_email = {}
+    for task in result.scalars().all():
+        if task.related_email_id not in existing_tasks_by_email:
+            existing_tasks_by_email[task.related_email_id] = task
+    return existing_tasks_by_email
+
+
+async def _handle_fallback(
+    db: AsyncSession,
+    auth_context: AuthContext,
+    overdue_replies: list[Email],
+    email_ids: list[int],
+    now: datetime.datetime,
+) -> tuple[list[tuple[TicketTask, str | None]], int]:
+    await db.rollback()
+
+    existing_tasks_by_email_fallback = await _get_existing_tasks(
+        db, auth_context.user_id, auth_context.organization_id, email_ids
+    )
+
+    fallback_entries: list[tuple[Email, TicketTask | None]] = []
+    conflicted_email_ids: list[int] = []
+    created_count = 0
+
+    for email in overdue_replies:
+        if email.id in existing_tasks_by_email_fallback:
+            task = existing_tasks_by_email_fallback[email.id]
+            if task.status != "done":
+                task.title = _reply_sla_task_title(email)
+                task.status = "blocked"
+                task.priority = "urgent"
+                task.related_thread_id = canonical_thread_key(email)
+                task.updated_at = now
+        else:
+            task = TicketTask(
+                user_id=auth_context.user_id,
+                organization_id=auth_context.organization_id,
+                title=_reply_sla_task_title(email),
+                status="blocked",
+                priority="urgent",
+                source_type=REPLY_SLA_SOURCE_TYPE,
+                related_email_id=email.id,
+                related_thread_id=canonical_thread_key(email),
+            )
+            try:
+                async with db.begin_nested():
+                    db.add(task)
+                    await db.flush()
+                created_count += 1
+            except IntegrityError:
+                conflicted_email_ids.append(email.id)
+                task = None
+        fallback_entries.append((email, task))
+
+    if conflicted_email_ids:
+        conflicted_tasks_by_email = await _get_existing_tasks(
+            db, auth_context.user_id, auth_context.organization_id, conflicted_email_ids
+        )
+
+        for index, (email, task) in enumerate(fallback_entries):
+            if task is not None or email.id not in conflicted_email_ids:
+                continue
+            task = conflicted_tasks_by_email.get(email.id)
+            if task is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error_code": "reply_sla_task_conflict",
+                        "message": "Reply SLA task conflict",
+                    },
+                ) from None
+
+            if task.status != "done":
+                task.title = _reply_sla_task_title(email)
+                task.status = "blocked"
+                task.priority = "urgent"
+                task.related_thread_id = canonical_thread_key(email)
+                task.updated_at = now
+            fallback_entries[index] = (email, task)
+
+    escalated_tasks = [
+        (task, email.message_id)
+        for email, task in fallback_entries
+        if task is not None
+    ]
+
+    if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):
+        await db.commit()
+
+        refreshed_tasks_by_email = await _get_existing_tasks(
+            db, auth_context.user_id, auth_context.organization_id, email_ids
+        )
+
+        for i in range(len(escalated_tasks)):
+            task, message_id = escalated_tasks[i]
+            if task.related_email_id in refreshed_tasks_by_email:
+                escalated_tasks[i] = (
+                    refreshed_tasks_by_email[task.related_email_id],
+                    message_id,
+                )
+
+    return escalated_tasks, created_count
+
+
 @router.post("/reply-sla-escalations", response_model=ReplySlaEscalationResponse)
 async def create_reply_sla_escalations(
     request: ReplySlaEscalationRequest,
@@ -157,21 +278,9 @@ async def create_reply_sla_escalations(
 
     email_ids = [email.id for email in overdue_replies]
 
-    existing_result = await db.execute(
-        select(TicketTask)
-        .where(
-            TicketTask.user_id == auth_context.user_id,
-            TicketTask.organization_id == auth_context.organization_id,
-            TicketTask.related_email_id.in_(email_ids),
-            TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-        )
-        .order_by(TicketTask.updated_at.desc())
+    existing_tasks_by_email = await _get_existing_tasks(
+        db, auth_context.user_id, auth_context.organization_id, email_ids
     )
-
-    existing_tasks_by_email = {}
-    for task in existing_result.scalars().all():
-        if task.related_email_id not in existing_tasks_by_email:
-            existing_tasks_by_email[task.related_email_id] = task
 
     created_count = 0
     escalated_tasks: list[tuple[TicketTask, str | None]] = []
@@ -207,23 +316,11 @@ async def create_reply_sla_escalations(
         ):
             await db.commit()
 
-            # Fetch updated values efficiently instead of looping db.refresh.
             if created_count > 0:
-                refreshed_result = await db.execute(
-                    select(TicketTask)
-                    .where(
-                        TicketTask.user_id == auth_context.user_id,
-                        TicketTask.organization_id == auth_context.organization_id,
-                        TicketTask.related_email_id.in_(email_ids),
-                        TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-                    )
-                    .order_by(TicketTask.updated_at.desc())
+                refreshed_tasks_by_email = await _get_existing_tasks(
+                    db, auth_context.user_id, auth_context.organization_id, email_ids
                 )
-                refreshed_tasks_by_email = {
-                    t.related_email_id: t for t in refreshed_result.scalars().all()
-                }
 
-                # Replace un-refreshed tasks to avoid validation errors.
                 for i in range(len(escalated_tasks)):
                     task, message_id = escalated_tasks[i]
                     if task.related_email_id in refreshed_tasks_by_email:
@@ -232,127 +329,9 @@ async def create_reply_sla_escalations(
                             message_id,
                         )
     except IntegrityError:
-        await db.rollback()
-        created_count = 0
-        escalated_tasks.clear()
-
-        # Re-fetch the existing tasks to find the newly inserted ones
-        existing_result = await db.execute(
-            select(TicketTask)
-            .where(
-                TicketTask.user_id == auth_context.user_id,
-                TicketTask.organization_id == auth_context.organization_id,
-                TicketTask.related_email_id.in_(email_ids),
-                TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-            )
-            .order_by(TicketTask.updated_at.desc())
+        escalated_tasks, created_count = await _handle_fallback(
+            db, auth_context, overdue_replies, email_ids, now
         )
-        existing_tasks_by_email_fallback = {}
-        for t in existing_result.scalars().all():
-            if t.related_email_id not in existing_tasks_by_email_fallback:
-                existing_tasks_by_email_fallback[t.related_email_id] = t
-
-        fallback_entries: list[tuple[Email, TicketTask | None]] = []
-        conflicted_email_ids: list[int] = []
-        for email in overdue_replies:
-            if email.id in existing_tasks_by_email_fallback:
-                task = existing_tasks_by_email_fallback[email.id]
-                if task.status != "done":
-                    task.title = _reply_sla_task_title(email)
-                    task.status = "blocked"
-                    task.priority = "urgent"
-                    task.related_thread_id = canonical_thread_key(email)
-                    task.updated_at = now
-            else:
-                task = TicketTask(
-                    user_id=auth_context.user_id,
-                    organization_id=auth_context.organization_id,
-                    title=_reply_sla_task_title(email),
-                    status="blocked",
-                    priority="urgent",
-                    source_type=REPLY_SLA_SOURCE_TYPE,
-                    related_email_id=email.id,
-                    related_thread_id=canonical_thread_key(email),
-                )
-                try:
-                    async with db.begin_nested():
-                        db.add(task)
-                        await db.flush()
-                    created_count += 1
-                except IntegrityError:
-                    conflicted_email_ids.append(email.id)
-                    task = None
-            fallback_entries.append((email, task))
-
-        if conflicted_email_ids:
-            conflicted_result = await db.execute(
-                select(TicketTask)
-                .where(
-                    TicketTask.user_id == auth_context.user_id,
-                    TicketTask.organization_id == auth_context.organization_id,
-                    TicketTask.related_email_id.in_(conflicted_email_ids),
-                    TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-                )
-                .order_by(TicketTask.updated_at.desc())
-            )
-            conflicted_tasks_by_email = {}
-            for task in conflicted_result.scalars().all():
-                if task.related_email_id not in conflicted_tasks_by_email:
-                    conflicted_tasks_by_email[task.related_email_id] = task
-
-            for index, (email, task) in enumerate(fallback_entries):
-                if task is not None or email.id not in conflicted_email_ids:
-                    continue
-                task = conflicted_tasks_by_email.get(email.id)
-                if task is None:
-                    raise HTTPException(
-                        status_code=409,
-                        detail={
-                            "error_code": "reply_sla_task_conflict",
-                            "message": "Reply SLA task conflict",
-                        },
-                    ) from None
-
-                if task.status != "done":
-                    task.title = _reply_sla_task_title(email)
-                    task.status = "blocked"
-                    task.priority = "urgent"
-                    task.related_thread_id = canonical_thread_key(email)
-                    task.updated_at = now
-                fallback_entries[index] = (email, task)
-
-        escalated_tasks.extend(
-            (task, email.message_id)
-            for email, task in fallback_entries
-            if task is not None
-        )
-
-        if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):
-            await db.commit()
-
-            # Refetch updated values efficiently
-            refreshed_result = await db.execute(
-                select(TicketTask)
-                .where(
-                    TicketTask.user_id == auth_context.user_id,
-                    TicketTask.organization_id == auth_context.organization_id,
-                    TicketTask.related_email_id.in_(email_ids),
-                    TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-                )
-                .order_by(TicketTask.updated_at.desc())
-            )
-            refreshed_tasks_by_email = {
-                t.related_email_id: t for t in refreshed_result.scalars().all()
-            }
-
-            # Replace un-refreshed tasks to avoid validation errors.
-            for i in range(len(escalated_tasks)):
-                task, message_id = escalated_tasks[i]
-                if task.related_email_id in refreshed_tasks_by_email:
-                    escalated_tasks[i] = (
-                        refreshed_tasks_by_email[task.related_email_id],
-                        message_id,
-                    )
 
     return ReplySlaEscalationResponse(
         evaluated=len(pending_replies),
@@ -363,6 +342,7 @@ async def create_reply_sla_escalations(
             for task, source_email_id in escalated_tasks
         ],
     )
+
 
 
 @router.get("", response_model=list[TicketTaskResponse])
