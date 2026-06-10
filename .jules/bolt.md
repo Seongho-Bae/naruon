@@ -38,3 +38,6 @@
 ## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
 **Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
 **Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
+## 2026-06-10 - Resolve N+1 Iteration Outside AsyncSession
+**Learning:** Iterating over `configs.scalars()` outside of the `async with AsyncSessionLocal() as session:` block defers ORM object materialization, causing slow performance due to lazy evaluation or N+1 issues when the result iterator evaluates elements without an active session context.
+**Action:** Always eagerly evaluate and materialize query results by calling `.all()` inside the async session context block (e.g. `result.scalars().all()`) before iterating over them.
