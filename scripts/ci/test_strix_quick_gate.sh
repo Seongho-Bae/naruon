@@ -6832,7 +6832,7 @@ run_gate_case "github-models-model-prefix-requires-api-base" \
 	""
 
 run_gate_case "github-models-api-base-rejected-for-direct-openai" \
-	"openai/gpt-5.4" \
+	"gpt-5.4" \
 	"" \
 	"2" \
 	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix" \
