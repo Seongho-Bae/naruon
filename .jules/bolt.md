@@ -38,3 +38,6 @@
 ## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
 **Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
 **Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
+## 2024-06-10 - Resolve N+1 Lazy Loading Iteration Overhead in Worker Scripts
+ **Learning:** In SQLAlchemy async sessions, if we execute `select()` and only grab the result scalars `configs = await session.execute(...); configs.scalars()` without calling `.all()`, and then we loop over that generator outside the `async with AsyncSession()` block, it evaluates lazily. For instances mapped with database relations or configurations this can lead to detached instance errors, or sequential individual I/O reads (N+1 equivalent overhead when the context isn't fully exhausted or mapped properly).
+ **Action:** Always ensure the returned object list is fully materialized using `.scalars().all()` *inside* the `async with AsyncSessionLocal() as session:` block before passing it down or iterating over it.
