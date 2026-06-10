@@ -44,7 +44,7 @@ async def test_imap_worker_sync_tenant_raises_when_connection_fails(monkeypatch)
     )
     monkeypatch.setattr(
         "services.imap_worker.aioimaplib.IMAP4_SSL",
-        lambda host, port: FailingImapClient(),
+        lambda host, port, **kwargs: FailingImapClient(),
     )
 
     with pytest.raises(Exception, match="IMAP Sync failed for user testuser"):
