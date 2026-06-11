@@ -1,12 +1,15 @@
 import uuid
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from db.models import Email
 from services.email_parser import EmailData
 
 
 import hashlib
+
+_REF_PATTERN = re.compile(r"<([^>]+)>")
+
 
 def generate_email_fingerprint(
     subject: str | None,
@@ -39,7 +42,7 @@ def extract_reference_ids(value: str | None) -> list[str]:
     if not value:
         return []
 
-    refs = re.findall(r"<([^>]+)>", str(value))
+    refs = _REF_PATTERN.findall(str(value))
     if not refs:
         refs = str(value).split()
 
@@ -63,21 +66,41 @@ def email_owner_filters(user_id: str, organization_id: str | None):
     return (Email.user_id == user_id, organization_filter)
 
 
-async def _find_existing_thread_id(
+async def _find_existing_thread_ids(
     session: AsyncSession,
-    message_id: str,
+    message_ids: list[str],
     *,
     user_id: str,
     organization_id: str | None,
-) -> str | None:
-    bracketed = f"<{message_id}>"
+) -> dict[str, str]:
+    if not message_ids:
+        return {}
+
+    target_ids: list[str] = []
+    seen_target_ids: set[str] = set()
+    for message_id in message_ids:
+        for target_id in (message_id, f"<{message_id}>"):
+            if target_id not in seen_target_ids:
+                seen_target_ids.add(target_id)
+                target_ids.append(target_id)
+
     result = await session.execute(
-        select(Email.thread_id).where(
+        select(Email.message_id, Email.thread_id).where(
             *email_owner_filters(user_id, organization_id),
-            or_(Email.message_id == message_id, Email.message_id == bracketed),
+            Email.message_id.in_(target_ids),
         )
     )
-    return result.scalar_one_or_none()
+
+    thread_ids_by_message_id: dict[str, str] = {}
+    for message_id, thread_id in result.all():
+        if not thread_id:
+            continue
+        normalized_message_id = normalize_message_id(message_id)
+        if normalized_message_id:
+            thread_ids_by_message_id[normalized_message_id] = (
+                normalize_message_id(thread_id) or thread_id
+            )
+    return thread_ids_by_message_id
 
 
 async def assign_thread_id(
@@ -105,15 +128,17 @@ async def assign_thread_id(
             seen.add(ref)
             existing_candidates.append(ref)
 
-    for candidate in existing_candidates:
-        thread_id = await _find_existing_thread_id(
+    if existing_candidates:
+        thread_ids_by_message_id = await _find_existing_thread_ids(
             session,
-            candidate,
+            existing_candidates,
             user_id=user_id,
             organization_id=organization_id,
         )
-        if thread_id:
-            return normalize_message_id(thread_id) or thread_id
+        for candidate in existing_candidates:
+            thread_id = thread_ids_by_message_id.get(candidate)
+            if thread_id:
+                return thread_id
 
     # If the parent/root has not been imported yet, use the oldest known ancestor
     # as the deterministic thread root so later imports converge on one thread.
