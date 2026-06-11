@@ -472,8 +472,6 @@ async def create_tasks_from_email(
         db.add(task)
 
     await db.commit()
-    for task in tasks:
-        await db.refresh(task)
 
     return CreateTasksFromEmailResponse(
         created=len(tasks),
