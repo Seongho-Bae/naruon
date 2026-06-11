@@ -151,7 +151,7 @@ async def _resolve_all_global_addresses_async(hostname: str, port: int) -> tuple
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
 
-def _normalize_llm_provider_base_url(value: str | None):
+def _parse_and_validate_candidate_url(value: str | None):
     if value is None:
         return None, None, None
 
@@ -166,13 +166,12 @@ def _normalize_llm_provider_base_url(value: str | None):
         parsed = urlsplit(candidate)
         default_port = 443 if parsed.scheme.lower() == "https" else 80
         port = parsed.port or default_port
+        return parsed, port
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
-    hostname = (parsed.hostname or "").lower().rstrip(".")
-    # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
-    is_local_dev_host = _is_local_dev_host(hostname)
 
+def _validate_url_components(parsed, hostname: str, is_local_dev_host: bool) -> None:
     if parsed.scheme.lower() not in {"http", "https"}:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
@@ -192,15 +191,32 @@ def _normalize_llm_provider_base_url(value: str | None):
     ):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
+
+def _validate_remote_host_is_allowed(hostname: str) -> None:
     allowed_hosts = _parse_allowed_hosts()
+    if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    if hostname not in allowed_hosts:
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
+
+def _normalize_llm_provider_base_url(value: str | None):
+    result = _parse_and_validate_candidate_url(value)
+    if result == (None, None, None):
+        return None, None, None
+    parsed, port = result
+
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
+    is_local_dev_host = _is_local_dev_host(hostname)
+
+    _validate_url_components(parsed, hostname, is_local_dev_host)
+
     # If not localhost, must be in allowed hosts
     if not is_local_dev_host:
-        if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
-            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
-        if hostname not in allowed_hosts:
-            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
-        if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
-            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+        _validate_remote_host_is_allowed(hostname)
 
     netloc = _format_normalized_netloc(
         hostname, port, explicit_port=parsed.port is not None
