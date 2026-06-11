@@ -48,7 +48,7 @@ def test_llm_endpoints_exist(mock_draft, mock_extract, client):
     from services.llm_service import ExtractionResult
 
     mock_extract.return_value = ExtractionResult(
-        summary="Test summary", todos=["Task 1"]
+        summary="Test summary", todos=["Task 1"], provenance="OpenAI", confidence=90
     )
     mock_draft.return_value = "This is a draft reply."
 
@@ -66,7 +66,7 @@ def test_summarize_endpoint(mock_extract, client):
     from services.llm_service import ExtractionResult
 
     mock_extract.return_value = ExtractionResult(
-        summary="Test summary", todos=["Task 1"]
+        summary="Test summary", todos=["Task 1"], provenance="OpenAI", confidence=90
     )
 
     resp = client.post("/api/llm/summarize", json={"email_body": "test email"})
@@ -74,7 +74,8 @@ def test_summarize_endpoint(mock_extract, client):
     assert resp.json() == {
         "summary": "Test summary",
         "todos": ["Task 1"],
-        "provenance": None,
+        "provenance": "OpenAI",
+        "confidence": 90,
     }
 
 

@@ -26,6 +26,25 @@ def mock_openai():
 # Removed reset_client fixture
 
 
+def test_extraction_result_confidence_is_optional_and_bounded():
+    omitted = ExtractionResult(summary="Test summary", todos=[])
+    assert omitted.confidence is None
+
+    assert ExtractionResult(
+        summary="Test summary",
+        todos=[],
+        confidence=0,
+    ).confidence == 0
+    assert ExtractionResult(
+        summary="Test summary",
+        todos=[],
+        confidence=100,
+    ).confidence == 100
+
+    with pytest.raises(ValueError):
+        ExtractionResult(summary="Test summary", todos=[], confidence=101)
+
+
 @pytest.mark.asyncio
 async def test_llm_provider_pinned_backend_uses_validated_ip_address():
     calls = []
@@ -176,7 +195,7 @@ async def test_extract_todos_and_summary_success(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_message = MagicMock()
-    mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"])
+    mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
     mock_choice = MagicMock()
     mock_choice.message = mock_message
     mock_response.choices = [mock_choice]
@@ -225,7 +244,7 @@ async def test_extract_todos_and_summary_disables_redirect_following_for_custom_
         mock_client.close = AsyncMock()
         mock_response = MagicMock()
         mock_message = MagicMock()
-        mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"])
+        mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
         mock_choice = MagicMock()
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]

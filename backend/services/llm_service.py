@@ -3,7 +3,7 @@ import logging
 from openai import AsyncOpenAI
 from core.config import settings
 from core.exceptions import LLMServiceError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services.llm_provider_urls import build_llm_provider_http_client
 
 logger = logging.getLogger(__name__)
@@ -13,6 +13,12 @@ class ExtractionResult(BaseModel):
     summary: str
     todos: list[str]
     provenance: str | None = None
+    confidence: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Optional confidence score from 0 to 100",
+    )
 
 
 async def extract_todos_and_summary(
@@ -36,7 +42,11 @@ async def extract_todos_and_summary(
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Summarize the email and extract action items.",
+                    "content": (
+                        "You are a helpful assistant. Summarize the email, "
+                        "extract action items, and include a confidence score "
+                        "from 0 to 100 when enough evidence is available."
+                    ),
                 },
                 {"role": "user", "content": email_body},
             ],
