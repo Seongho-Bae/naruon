@@ -153,6 +153,37 @@ async def test_extract_todos_and_summary_disables_redirect_following_for_custom_
     mock_client.close.assert_awaited_once()
 
 
+def test_validate_llm_provider_base_url_accepts_allowlisted_local_provider(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "ALLOWED_LLM_BASE_URL_HOSTS", "ollama")
+    monkeypatch.setattr(settings, "ALLOW_LOCAL_LLM_PROVIDERS", True)
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "ollama"
+        assert port == 11434
+        return [(2, 1, 6, "", ("172.20.0.10", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    assert (
+        provider_urls.validate_llm_provider_base_url("http://ollama:11434/v1")
+        == "http://ollama:11434/v1"
+    )
+
+
+def test_validate_llm_provider_base_url_rejects_local_provider_without_local_mode(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "ALLOWED_LLM_BASE_URL_HOSTS", "ollama")
+    monkeypatch.setattr(settings, "ALLOW_LOCAL_LLM_PROVIDERS", False)
+
+    with pytest.raises(ValueError, match=provider_urls.LLM_BASE_URL_NOT_ALLOWED):
+        provider_urls.validate_llm_provider_base_url("http://ollama:11434/v1")
+
+
 @pytest.mark.asyncio
 async def test_draft_reply_success(mock_openai):
     # Setup mock response

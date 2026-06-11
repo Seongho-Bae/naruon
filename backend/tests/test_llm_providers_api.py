@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,10 @@ from core.config import settings
 from db.models import AuditLog, LLMProvider, SecurityAuditEvent
 from db.session import get_db
 from main import app
+from services.llm_provider_readiness import (
+    is_llm_provider_configured,
+    llm_provider_model_label,
+)
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -323,6 +328,86 @@ def test_llm_provider_accepts_configured_local_gemma_without_fake_secret(
     assert data["model_identifier"] == "gemma4"
     assert data["embedding_model"] == "embeddinggemma"
     assert mock_session.providers[0].api_key is None
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [
+        (
+            SimpleNamespace(
+                api_key="sk-live",
+                provider_type="openai",
+                base_url=None,
+                model_identifier=None,
+            ),
+            True,
+        ),
+        (
+            SimpleNamespace(
+                api_key=None,
+                provider_type="openai",
+                base_url="https://api.openai.com/v1",
+                model_identifier="gpt-5.4",
+            ),
+            False,
+        ),
+        (
+            SimpleNamespace(
+                api_key=None,
+                provider_type="ollama",
+                base_url="http://ollama:11434/v1",
+                model_identifier="gemma4",
+            ),
+            True,
+        ),
+        (
+            SimpleNamespace(
+                api_key=None,
+                provider_type="vllm",
+                base_url="http://vllm:8000/v1",
+                model_identifier="local-rag",
+            ),
+            True,
+        ),
+        (
+            SimpleNamespace(
+                api_key=None,
+                provider_type="ollama",
+                base_url="http://ollama:11434/v1",
+                model_identifier=" ",
+            ),
+            False,
+        ),
+        (
+            SimpleNamespace(
+                api_key=None,
+                provider_type="ollama",
+                base_url=" ",
+                model_identifier="gemma4",
+            ),
+            False,
+        ),
+    ],
+)
+def test_llm_provider_readiness_requires_secret_or_complete_local_model(
+    provider, expected
+):
+    assert is_llm_provider_configured(provider) is expected
+
+
+def test_llm_provider_model_label_prefers_configured_model_identifier():
+    assert (
+        llm_provider_model_label(
+            SimpleNamespace(provider_type="ollama", model_identifier=" gemma4 ")
+        )
+        == "gemma4"
+    )
+    assert (
+        llm_provider_model_label(
+            SimpleNamespace(provider_type="openai", model_identifier=None)
+        )
+        == "openai"
+    )
 
 
 def test_llm_provider_member_rejected(member_client):
