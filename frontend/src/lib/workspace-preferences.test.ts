@@ -70,17 +70,23 @@ describe("workspace startup preferences", () => {
     expect(listener).toHaveBeenCalledTimes(1);
 
     // Test unrelated storage event
-    window.dispatchEvent(new StorageEvent("storage", { key: "some_other_key" }));
+    const unrelatedStorageEvent = new Event("storage") as StorageEvent;
+    Object.defineProperty(unrelatedStorageEvent, "key", { value: "some_other_key", configurable: true });
+    window.dispatchEvent(unrelatedStorageEvent);
     expect(listener).toHaveBeenCalledTimes(1);
 
     // Test related storage event
-    window.dispatchEvent(new StorageEvent("storage", { key: "naruon_startup_view" }));
+    const relatedStorageEvent = new Event("storage") as StorageEvent;
+    Object.defineProperty(relatedStorageEvent, "key", { value: "naruon_startup_view", configurable: true });
+    window.dispatchEvent(relatedStorageEvent);
     expect(listener).toHaveBeenCalledTimes(2);
 
     // Test unsubscribe
     unsubscribe();
     window.dispatchEvent(new CustomEvent("naruon:startup-view-change", { detail: { view: "calendar" } }));
-    window.dispatchEvent(new StorageEvent("storage", { key: "naruon_startup_view" }));
+    const unsubscribedStorageEvent = new Event("storage") as StorageEvent;
+    Object.defineProperty(unsubscribedStorageEvent, "key", { value: "naruon_startup_view", configurable: true });
+    window.dispatchEvent(unsubscribedStorageEvent);
     expect(listener).toHaveBeenCalledTimes(2); // Should not increase
   });
 });
