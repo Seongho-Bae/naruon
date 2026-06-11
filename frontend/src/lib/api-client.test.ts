@@ -160,4 +160,32 @@ describe("ApiClient", () => {
     });
     expect((requestInit as RequestInit).headers).not.toHaveProperty("authorization");
   });
+
+  it("sends multipart form data with bearer auth and without caller identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.form.token");
+    const fetchMock = mockFetchResponse({ ok: true });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient();
+    const formData = new FormData();
+    formData.append("files", new File(["raw email"], "source.eml", { type: "message/rfc822" }));
+
+    await client.postForm("/api/emails/import-files", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+        "X-User-Id": "forged-user",
+        "X-Trace-Id": "trace-456",
+      },
+    });
+
+    const [, requestInit] = fetchMock.mock.calls[0];
+    expect(requestInit?.method).toBe("POST");
+    expect(requestInit?.body).toBe(formData);
+    expect((requestInit as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer signed.form.token",
+      "X-Trace-Id": "trace-456",
+    });
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Content-Type");
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("X-User-Id");
+  });
 });

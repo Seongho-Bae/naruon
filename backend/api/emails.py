@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
 from db.session import get_db
@@ -25,6 +25,13 @@ from services.email_dedupe_service import (
     candidate_message_lookup_values,
     candidate_strong_fingerprint,
     email_strong_fingerprint,
+)
+from services.email_import_service import (
+    MAX_IMPORT_UPLOAD_BYTES,
+    MAX_IMPORT_UPLOADS,
+    EmailImportItemStatus,
+    EmailImportUpload,
+    import_email_uploads,
 )
 from services.text_safety import strip_html_markup
 import logging
@@ -207,6 +214,25 @@ class UniqueThreadIntentResponse(BaseModel):
     provenance: Literal["server-authoritative"]
     provider_write_executed: bool
     audit_event: Literal["email.unique_thread_intent.created"]
+
+
+class EmailFileImportItem(BaseModel):
+    filename: str
+    status: EmailImportItemStatus
+    reason_code: str | None = None
+    attachment_count: int = 0
+
+
+class EmailFileImportResponse(BaseModel):
+    status: Literal["completed"]
+    imported_count: int
+    skipped_count: int
+    failed_count: int
+    attachment_count: int
+    items: list[EmailFileImportItem]
+    provenance: Literal["server-authoritative"]
+    provider_write_executed: bool
+    audit_event: Literal["email.file_import.completed"]
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -449,6 +475,56 @@ async def create_unique_thread_intent(
         provenance="server-authoritative",
         provider_write_executed=False,
         audit_event="email.unique_thread_intent.created",
+    )
+
+
+@router.post("/import-files", response_model=EmailFileImportResponse)
+async def import_email_files(
+    files: list[UploadFile] = File(...),
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    if auth_context.organization_id is None:
+        raise HTTPException(status_code=403, detail="organization_required")
+    if len(files) > MAX_IMPORT_UPLOADS:
+        raise HTTPException(status_code=422, detail="too_many_files")
+
+    uploads: list[EmailImportUpload] = []
+    for upload in files:
+        content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+        if len(content) > MAX_IMPORT_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="file_too_large")
+        uploads.append(
+            EmailImportUpload(
+                filename=upload.filename or "upload",
+                content=content,
+            )
+        )
+
+    import_result = await import_email_uploads(
+        db,
+        uploads=uploads,
+        user_id=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+    )
+    return EmailFileImportResponse(
+        status="completed",
+        imported_count=import_result.imported_count,
+        skipped_count=import_result.skipped_count,
+        failed_count=import_result.failed_count,
+        attachment_count=import_result.attachment_count,
+        items=[
+            EmailFileImportItem(
+                filename=item.filename,
+                status=item.status,
+                reason_code=item.reason_code,
+                attachment_count=item.attachment_count,
+            )
+            for item in import_result.items
+        ],
+        provenance="server-authoritative",
+        provider_write_executed=False,
+        audit_event="email.file_import.completed",
     )
 
 

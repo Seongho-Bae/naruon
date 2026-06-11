@@ -19,6 +19,7 @@ vi.mock("lucide-react", () => ({
   FileText: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
   Server: () => <svg aria-hidden="true" />,
+  Upload: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
@@ -256,6 +257,27 @@ function mockWebdavFetch() {
             dedupe_key: "sha256:duplicate",
             match_reason: "fingerprint",
             existing_message_id: "q2-root@example.com",
+          },
+        ],
+      });
+    }
+    if (path === "/api/emails/import-files") {
+      void init;
+      return jsonResponse({
+        status: "completed",
+        imported_count: 1,
+        skipped_count: 0,
+        failed_count: 0,
+        attachment_count: 1,
+        provider_write_executed: false,
+        provenance: "server-authoritative",
+        audit_event: "email.file_import.completed",
+        items: [
+          {
+            filename: "customer-source.eml",
+            status: "imported",
+            reason_code: null,
+            attachment_count: 1,
           },
         ],
       });
@@ -706,5 +728,70 @@ describe("DataPage", () => {
     expect(container.textContent).not.toContain("email.unique_thread_intent.created");
     expect(container.textContent).not.toContain("thread-q2-root");
     expect(container.textContent).not.toContain("provider_write_executed=false");
+  });
+
+  it("imports email source files through signed multipart upload without public identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed-email-import-session");
+    const fetchMock = mockWebdavFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).toBeDefined();
+    const emailFile = new File(["raw email"], "customer-source.eml", { type: "message/rfc822" });
+    Object.defineProperty(input, "files", {
+      configurable: true,
+      value: [emailFile],
+    });
+    await act(async () => {
+      input?.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("선택 파일 반입"),
+    );
+    expect(importButton).toBeDefined();
+    await act(async () => {
+      importButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const importCall = fetchMock.mock.calls.find(([inputUrl]) => String(inputUrl) === "/api/emails/import-files");
+    expect(importCall).toBeDefined();
+    const [, init] = importCall ?? [];
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBeInstanceOf(FormData);
+    const headerEntries =
+      init?.headers instanceof Headers
+        ? Array.from(init.headers.entries())
+        : Object.entries((init?.headers as Record<string, string>) ?? {});
+    const requestHeaders = Object.fromEntries(
+      headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
+    );
+    expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-email-import-session",
+    }));
+    expect(requestHeaders["content-type"]).toBeUndefined();
+    for (const publicHeader of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(requestHeaders[publicHeader]).toBeUndefined();
+    }
+    expect(container.textContent).toContain("1개 반입");
+    expect(container.textContent).toContain("중복 0개");
+    expect(container.textContent).toContain("첨부 1개");
+    expect(container.textContent).toContain("의도만 기록");
+    expect(container.textContent).not.toContain("email.file_import.completed");
+    expect(container.textContent).not.toContain("imported@example.com");
   });
 });
