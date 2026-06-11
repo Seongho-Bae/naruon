@@ -363,6 +363,7 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "ON llm_providers (organization_id, name)"
         ),
         text("CREATE INDEX IF NOT EXISTS ix_emails_thread_id " "ON emails (thread_id)"),
+        text("CREATE INDEX IF NOT EXISTS ix_emails_date ON emails (date)"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS "
             "uq_sender_relationships_scope_source "
