@@ -3,12 +3,25 @@ import pytest
 from services.threading_service import assign_thread_id
 
 
+class _Row:
+    def __init__(self, message_id, thread_id):
+        self.message_id = message_id
+        self.thread_id = thread_id
+
 class _ScalarResult:
     def __init__(self, value):
         self._value = value
 
     def scalar_one_or_none(self):
         return self._value
+
+    def all(self):
+        if self._value is None:
+            return []
+        if isinstance(self._value, list):
+            return self._value
+        # If it's a single value returned directly, format it as a row matching the first reference
+        return [_Row("root@example.com", self._value), _Row("parent@example.com", self._value)]
 
 
 class _SequentialSession:

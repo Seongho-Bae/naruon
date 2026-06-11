@@ -108,15 +108,34 @@ async def assign_thread_id(
             seen.add(ref)
             existing_candidates.append(ref)
 
-    for candidate in existing_candidates:
-        thread_id = await _find_existing_thread_id(
-            session,
-            candidate,
-            user_id=user_id,
-            organization_id=organization_id,
+    if existing_candidates:
+        search_candidates = []
+        for c in existing_candidates:
+            search_candidates.append(c)
+            search_candidates.append(f"<{c}>")
+
+        # Optimization: Fetch all potential matching thread IDs in a single batched query
+        # using the in_() operator instead of sequentially querying the database for each candidate
+        # to eliminate N+1 query performance bottleneck.
+        result = await session.execute(
+            select(Email.message_id, Email.thread_id).where(
+                *email_owner_filters(user_id, organization_id),
+                Email.message_id.in_(search_candidates),
+            )
         )
-        if thread_id:
-            return normalize_message_id(thread_id) or thread_id
+
+        found_threads = {}
+        for row in result.all():
+            msg_id = row.message_id
+            thread_id = row.thread_id
+            norm_msg_id = normalize_message_id(msg_id)
+            if norm_msg_id and thread_id:
+                found_threads[norm_msg_id] = thread_id
+
+        for candidate in existing_candidates:
+            thread_id = found_threads.get(candidate)
+            if thread_id:
+                return normalize_message_id(thread_id) or thread_id
 
     # If the parent/root has not been imported yet, use the oldest known ancestor
     # as the deterministic thread root so later imports converge on one thread.
