@@ -18,6 +18,10 @@ _LOCAL_DEV_HOSTNAMES = {"localhost", "localhost.localdomain"}
 _LOCAL_DEV_IP_LITERALS = {"127.0.0.1", "::1"}
 
 
+def _has_url_control_character(value: str) -> bool:
+    return any(ord(character) < 32 or ord(character) == 127 for character in value)
+
+
 @dataclass(frozen=True)
 class ValidatedLLMProviderBaseURL:
     normalized_url: str
@@ -59,6 +63,17 @@ def _is_local_dev_host(hostname: str) -> bool:
     )
 
 
+def _is_allowlisted_local_provider_host(hostname: str) -> bool:
+    normalized_hostname = hostname.lower().rstrip(".")
+    return (
+        settings.ALLOW_LOCAL_LLM_PROVIDERS
+        and normalized_hostname in _parse_allowed_hosts()
+        and "." not in normalized_hostname
+        and not _is_ip_literal(normalized_hostname)
+        and not _looks_like_ip_literal(normalized_hostname)
+    )
+
+
 def _format_normalized_netloc(
     hostname: str, port: int, *, explicit_port: bool
 ) -> str:
@@ -89,7 +104,7 @@ def _validate_global_address(address: str, *, hostname: str | None = None) -> st
     if settings.ALLOW_LOCAL_LLM_PROVIDERS:
         if ip_address.is_loopback:
             is_allowed_local = True
-        elif hostname and hostname.lower().rstrip(".") in _parse_allowed_hosts():
+        elif hostname and _is_allowlisted_local_provider_host(hostname):
             is_allowed_local = True
 
     if not is_allowed_local:
@@ -144,6 +159,9 @@ def _normalize_llm_provider_base_url(value: str | None):
     if not candidate:
         return None, None, None
 
+    if "\\" in candidate or _has_url_control_character(candidate):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
     try:
         parsed = urlsplit(candidate)
         default_port = 443 if parsed.scheme.lower() == "https" else 80
@@ -155,13 +173,15 @@ def _normalize_llm_provider_base_url(value: str | None):
     # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
     is_local_dev_host = _is_local_dev_host(hostname)
 
-    # Allow http for local development or if explicitly allowed
     if parsed.scheme.lower() not in {"http", "https"}:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
-    if parsed.scheme.lower() == "http" and not is_local_dev_host:
-        if not (settings.ALLOW_LOCAL_LLM_PROVIDERS and hostname in _parse_allowed_hosts()):
-            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+    if (
+        parsed.scheme.lower() == "http"
+        and not is_local_dev_host
+        and not _is_allowlisted_local_provider_host(hostname)
+    ):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
     if (
         not hostname
@@ -265,18 +285,51 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
         if normalized_host != self._hostname or int(port) != self._port:
             raise OSError("LLM provider base URL host changed after validation")
 
-        last_error: Exception | None = None
-        for address in self._addresses:
-            try:
-                return await self._connect_validated_ip_address(
+        tasks = {
+            asyncio.create_task(
+                self._connect_validated_ip_address(
                     address,
                     port,
                     timeout=timeout,
                     local_address=local_address,
                     socket_options=socket_options,
                 )
-            except Exception as exc:  # pragma: no cover - backend-specific
-                last_error = exc
+            )
+            for address in self._addresses
+        }
+        last_error: Exception | None = None
+        successful_stream = None
+        try:
+            while tasks:
+                done, tasks = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    try:
+                        stream = task.result()
+                    except Exception as exc:  # pragma: no cover - backend-specific
+                        last_error = exc
+                        continue
+
+                    if successful_stream is None:
+                        successful_stream = stream
+                    else:
+                        await stream.aclose()
+
+                if successful_stream is not None:
+                    pending_tasks = tasks
+                    tasks = set()
+                    for pending_task in pending_tasks:
+                        pending_task.cancel()
+                    if pending_tasks:
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
+                    return successful_stream
+        finally:
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
         if last_error is not None:
             raise last_error
         raise OSError(LLM_BASE_URL_NOT_ALLOWED)
