@@ -1,7 +1,11 @@
 import pytest
 
 from core.config import settings
-from services.llm_provider_urls import _validate_global_address, LLM_BASE_URL_NOT_ALLOWED
+from services.llm_provider_urls import (
+    LLM_BASE_URL_NOT_ALLOWED,
+    _is_ip_literal,
+    _validate_global_address,
+)
 
 
 def test_validate_global_address_valid_ipv4():
@@ -77,3 +81,32 @@ def test_validate_global_address_private_rejected_without_hostname(monkeypatch):
 
     with pytest.raises(ValueError, match=LLM_BASE_URL_NOT_ALLOWED):
         _validate_global_address("192.168.1.5")
+
+
+@pytest.mark.parametrize(
+    "candidate, expected",
+    [
+        ("192.168.1.1", True),
+        ("0.0.0.0", True),
+        ("255.255.255.255", True),
+        ("127.0.0.1", True),
+        ("::1", True),
+        ("2001:0db8:85a3:0000:0000:8a2e:0370:7334", True),
+        ("2001:db8:85a3::8a2e:370:7334", True),
+        ("fe80::1ff:fe23:4567:890a", True),
+        ("256.256.256.256", False),
+        ("192.168.1", False),
+        ("1.2.3.4.5", False),
+        ("2001:db8::85a3::8a2e:370:7334", False),
+        ("localhost", False),
+        ("example.com", False),
+        ("api.openai.com", False),
+        ("", False),
+        (" ", False),
+        ("invalid", False),
+        ("12345", False),
+        ("192.168.1.1.com", False),
+    ],
+)
+def test_is_ip_literal(candidate, expected):
+    assert _is_ip_literal(candidate) is expected
