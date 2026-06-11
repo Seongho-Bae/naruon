@@ -27,3 +27,29 @@ def test_root_response_has_security_headers():
         "frame-ancestors 'none'"
     )
     assert "x-xss-protection" not in response.headers
+
+
+def test_cors_policy_is_restrictive():
+    response = client.options(
+        "/",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+    allowed_methods = response.headers["access-control-allow-methods"]
+    assert "GET" in allowed_methods
+    assert "POST" in allowed_methods
+    assert "PROPFIND" in allowed_methods
+    assert "DELETE" in allowed_methods
+    assert "OPTIONS" in allowed_methods
+    assert "*" not in allowed_methods
+
+    allowed_headers = response.headers["access-control-allow-headers"]
+    assert "Accept" in allowed_headers
+    assert "Content-Type" in allowed_headers
+    assert "Authorization" in allowed_headers
+    assert "*" not in allowed_headers
