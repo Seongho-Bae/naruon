@@ -389,7 +389,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             error={llmError ? '실행 항목을 추출하지 못했습니다.' : null}
             empty={Boolean(llmData && llmData.todos.length === 0)}
             emptyMessage="실행 항목이 없습니다."
-            provenance={`${llmData?.todos.length || 0}개 실행 항목`}
+            provenance={
+              confidencePercent !== undefined ? `신뢰도 ${confidencePercent}%` : undefined
+            }
             confidence={confidencePercent}
             footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
               <>

@@ -472,7 +472,13 @@ describe("EmailDetail", () => {
       const url = String(input);
       if (url.endsWith("/api/emails/5")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) {
-        return Promise.resolve(jsonResponse({ summary: "출시 계획 검토", todos: ["일정 확인"] }));
+        return Promise.resolve(
+          jsonResponse({
+            summary: "출시 계획 검토",
+            todos: ["일정 확인"],
+            confidence: 0.91,
+          }),
+        );
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -490,7 +496,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("맥락 종합");
     expect(container.textContent).toContain("AI 생성");
     expect(container.textContent).toContain("실행 항목");
-    expect(container.textContent).toContain("1개 실행 항목");
+    expect(container.textContent).toContain("신뢰도 91%");
     expect(container.textContent).not.toContain("AI Generated");
     expect(container.textContent).not.toContain("Tasks");
   });

@@ -106,13 +106,17 @@ def test_kubernetes_postgres_password_comes_from_secret():
     assert "POSTGRES_PASSWORD" in manifest
 
 
-def test_env_example_documents_required_postgres_password():
+def test_env_example_does_not_ship_runtime_secret_defaults():
     env_example = (REPO_ROOT / ".env.example").read_text()
 
-    assert "POSTGRES_PASSWORD=change-me-local-only" in env_example
-    assert "AUTH_SESSION_HMAC_SECRET=" in env_example
+    assert "POSTGRES_DB=" not in env_example
+    assert "POSTGRES_USER=" not in env_example
+    assert "POSTGRES_PASSWORD=" not in env_example
+    assert "DATABASE_URL=" not in env_example
+    assert "AUTH_SESSION_HMAC_SECRET=" not in env_example
+    assert "ENCRYPTION_KEY=" not in env_example
     assert "postgres:postgres@" not in env_example
-    assert "postgres:change-me-local-only@" in env_example
+    assert "change-me-local-only" not in env_example
 
 
 def test_readme_uses_cross_platform_browser_command():
