@@ -176,7 +176,7 @@ async def test_extract_todos_and_summary_success(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_message = MagicMock()
-    mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"])
+    mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
     mock_choice = MagicMock()
     mock_choice.message = mock_message
     mock_response.choices = [mock_choice]
@@ -225,7 +225,7 @@ async def test_extract_todos_and_summary_disables_redirect_following_for_custom_
         mock_client.close = AsyncMock()
         mock_response = MagicMock()
         mock_message = MagicMock()
-        mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"])
+        mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
         mock_choice = MagicMock()
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]

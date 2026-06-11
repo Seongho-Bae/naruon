@@ -3,7 +3,7 @@ import logging
 from openai import AsyncOpenAI
 from core.config import settings
 from core.exceptions import LLMServiceError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services.llm_provider_urls import build_llm_provider_http_client
 
 logger = logging.getLogger(__name__)
@@ -13,6 +13,7 @@ class ExtractionResult(BaseModel):
     summary: str
     todos: list[str]
     provenance: str | None = None
+    confidence: int = Field(description="Confidence score from 0 to 100")
 
 
 async def extract_todos_and_summary(

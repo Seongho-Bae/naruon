@@ -26,6 +26,8 @@ type EmailData = ThreadEmailData & {
 interface LlmData {
   summary: string;
   todos: string[];
+  provenance?: string;
+  confidence?: number;
 }
 
 interface CreateTasksFromEmailResponse {
@@ -355,8 +357,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             icon={<span aria-hidden="true">✦</span>}
             loading={!llmData && !llmError}
             error={llmError}
-            provenance="AI 생성"
-            // TODO: API 연동 시 실제 llmData.confidence 값으로 대체
+            provenance={llmData?.provenance || "AI 생성"}
+            confidence={llmData?.confidence}
           >
             {llmData ? (
               <div className="flex flex-col gap-2">
@@ -378,7 +380,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             empty={Boolean(llmData && llmData.todos.length === 0)}
             emptyMessage="실행 항목이 없습니다."
             provenance={`${llmData?.todos.length || 0}개 실행 항목`}
-            // TODO: API 연동 시 실제 llmData.confidence 값으로 대체
+            confidence={llmData?.confidence}
             footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
               <>
                 {llmData.todos.length > 0 && (
