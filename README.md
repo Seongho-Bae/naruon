@@ -119,6 +119,8 @@ mail/calendar/file systems.
 cp .env.example .env
 python3 - <<'PY'
 from pathlib import Path
+import base64
+import os
 import secrets
 
 env_path = Path(".env")
@@ -126,6 +128,10 @@ env_text = env_path.read_text()
 env_text = env_text.replace(
     "AUTH_SESSION_HMAC_SECRET=\n",
     f"AUTH_SESSION_HMAC_SECRET={secrets.token_urlsafe(48)}\n",
+)
+env_text = env_text.replace(
+    "ENCRYPTION_KEY=\n",
+    f"ENCRYPTION_KEY={base64.urlsafe_b64encode(os.urandom(32)).decode()}\n",
 )
 env_path.write_text(env_text)
 PY
@@ -146,8 +152,8 @@ set. With the default empty key it writes local zero-vector embeddings so the
 threading proof path works offline.
 
 Backend settings read environment variables first, then `.env`, `../.env`, and
-`~/.env`. `DATABASE_URL` and `AUTH_SESSION_HMAC_SECRET` still have no code
-defaults; Compose and Kubernetes must inject them explicitly. For Compose,
+`~/.env`. `DATABASE_URL`, `AUTH_SESSION_HMAC_SECRET`, and `ENCRYPTION_KEY` still
+have no code defaults; Compose and Kubernetes must inject them explicitly. For Compose,
 `./scripts/naruon_compose.sh` reads `${NARUON_ENV_FILE}` when set, otherwise
 uses `~/.env` if present, and falls back to the project `.env`. It passes that
 file to Docker Compose only as an interpolation source so the backend service
