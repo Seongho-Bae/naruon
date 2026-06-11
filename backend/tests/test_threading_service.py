@@ -3,12 +3,12 @@ import pytest
 from services.threading_service import assign_thread_id
 
 
-class _ScalarResult:
-    def __init__(self, value):
-        self._value = value
+class _Result:
+    def __init__(self, rows):
+        self._rows = rows
 
-    def scalar_one_or_none(self):
-        return self._value
+    def all(self):
+        return self._rows
 
 
 class _SequentialSession:
@@ -18,8 +18,8 @@ class _SequentialSession:
 
     async def execute(self, _query):
         self.execute_count += 1
-        value = self._values.pop(0) if self._values else None
-        return _ScalarResult(value)
+        rows = self._values.pop(0) if self._values else []
+        return _Result(rows)
 
 
 class _QueryCapturingSession(_SequentialSession):
@@ -34,7 +34,7 @@ class _QueryCapturingSession(_SequentialSession):
 
 @pytest.mark.asyncio
 async def test_reply_before_root_uses_first_reference_as_deterministic_thread_id():
-    session = _SequentialSession([None, None, None])
+    session = _SequentialSession([[]])
 
     thread_id = await assign_thread_id(
         session,
@@ -52,7 +52,7 @@ async def test_reply_before_root_uses_first_reference_as_deterministic_thread_id
 
 @pytest.mark.asyncio
 async def test_reply_without_references_uses_in_reply_to_as_deterministic_thread_id():
-    session = _SequentialSession([None, None])
+    session = _SequentialSession([[]])
 
     thread_id = await assign_thread_id(
         session,
@@ -70,7 +70,7 @@ async def test_reply_without_references_uses_in_reply_to_as_deterministic_thread
 
 @pytest.mark.asyncio
 async def test_existing_parent_thread_id_wins_over_deterministic_fallback():
-    session = _SequentialSession(["thread-123"])
+    session = _SequentialSession([[("<parent@example.com>", "thread-123")]])
 
     thread_id = await assign_thread_id(
         session,
@@ -88,7 +88,7 @@ async def test_existing_parent_thread_id_wins_over_deterministic_fallback():
 
 @pytest.mark.asyncio
 async def test_existing_legacy_bracketed_thread_id_is_normalized():
-    session = _SequentialSession(["<root@example.com>"])
+    session = _SequentialSession([[("<root@example.com>", "<root@example.com>")]])
 
     thread_id = await assign_thread_id(
         session,
@@ -106,7 +106,7 @@ async def test_existing_legacy_bracketed_thread_id_is_normalized():
 
 @pytest.mark.asyncio
 async def test_forwarded_subject_alone_does_not_merge_unrelated_thread():
-    session = _SequentialSession(["unrelated-thread"])
+    session = _SequentialSession([[("unrelated@example.com", "unrelated-thread")]])
 
     thread_id = await assign_thread_id(
         session,
@@ -126,7 +126,7 @@ async def test_forwarded_subject_alone_does_not_merge_unrelated_thread():
 
 @pytest.mark.asyncio
 async def test_existing_thread_lookup_is_scoped_to_owner_and_organization():
-    session = _QueryCapturingSession(["thread-123"])
+    session = _QueryCapturingSession([[("<parent@example.com>", "thread-123")]])
 
     thread_id = await assign_thread_id(
         session,
