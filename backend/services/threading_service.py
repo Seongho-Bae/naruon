@@ -8,6 +8,7 @@ from services.email_parser import EmailData
 
 import hashlib
 
+
 def generate_email_fingerprint(
     subject: str | None,
     date_str: str | None,
@@ -70,6 +71,12 @@ async def _find_existing_thread_ids(
     user_id: str,
     organization_id: str | None,
 ) -> dict[str, str]:
+    """
+    Batched query to look up existing thread IDs for a list of message candidates.
+    This uses a single IN clause to eliminate the N+1 query pattern that would
+    otherwise occur if iterating sequentially over parent message references.
+    Returns a mapping of normalized message_id to its resolved thread_id.
+    """
     if not message_ids:
         return {}
 
@@ -110,6 +117,8 @@ async def assign_thread_id(
     """
     Determine the thread_id for a new email based on in_reply_to and references.
     If no existing match is found, generate a new thread_id.
+
+    Performs a single batched look up for all references to prevent an N+1 query pattern.
     """
     in_reply_to = normalize_message_id(email_data.get("in_reply_to"))
     references = extract_reference_ids(email_data.get("references"))
