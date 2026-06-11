@@ -174,6 +174,77 @@ def test_validate_llm_provider_base_url_accepts_allowlisted_local_provider(
     )
 
 
+def test_normalize_llm_provider_base_url_handles_local_development_hosts():
+    assert provider_urls._normalize_llm_provider_base_url(
+        "HTTP://LOCALHOST:11434/v1"
+    ) == ("http://localhost:11434/v1", "localhost", 11434)
+    assert provider_urls._normalize_llm_provider_base_url(
+        "http://[::1]:11434/v1"
+    ) == ("http://[::1]:11434/v1", "::1", 11434)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "ftp://localhost:11434/v1",
+        "http://user:pass@localhost:11434/v1",
+        "http://localhost:11434/v1?token=secret",
+        "http://localhost:11434/v1#fragment",
+        "http://0x7f000001:11434/v1",
+    ],
+)
+def test_normalize_llm_provider_base_url_rejects_unsafe_shapes(url):
+    with pytest.raises(ValueError, match=provider_urls.LLM_BASE_URL_NOT_ALLOWED):
+        provider_urls._normalize_llm_provider_base_url(url)
+
+
+def test_validate_llm_provider_base_url_details_accepts_localhost_only_in_local_mode(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "ALLOWED_LLM_BASE_URL_HOSTS", "")
+    monkeypatch.setattr(settings, "ALLOW_LOCAL_LLM_PROVIDERS", True)
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "localhost"
+        assert port == 11434
+        return [(2, 1, 6, "", ("127.0.0.1", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    details = provider_urls.validate_llm_provider_base_url_details(
+        "http://localhost:11434/v1"
+    )
+
+    assert details is not None
+    assert details.normalized_url == "http://localhost:11434/v1"
+    assert details.hostname == "localhost"
+    assert details.port == 11434
+    assert details.addresses == ("127.0.0.1",)
+
+
+def test_validate_llm_provider_base_url_details_rejects_localhost_without_local_mode(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings, "ALLOWED_LLM_BASE_URL_HOSTS", "")
+    monkeypatch.setattr(settings, "ALLOW_LOCAL_LLM_PROVIDERS", False)
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "localhost"
+        assert port == 11434
+        return [(2, 1, 6, "", ("127.0.0.1", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    with pytest.raises(ValueError, match=provider_urls.LLM_BASE_URL_NOT_ALLOWED):
+        provider_urls.validate_llm_provider_base_url_details(
+            "http://localhost:11434/v1"
+        )
+
+
 def test_validate_llm_provider_base_url_rejects_local_provider_without_local_mode(
     monkeypatch,
 ):
