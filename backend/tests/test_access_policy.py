@@ -1,4 +1,28 @@
-from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
+import pytest
+
+from services.access_policy import (
+    AccessRequest,
+    ResourcePolicy,
+    _is_system_admin_role,
+    evaluate_access,
+)
+
+
+@pytest.mark.parametrize(
+    "role,expected",
+    [
+        ("system_admin", True),
+        ("platform_admin", True),
+        ("tenant_admin", False),
+        ("organization_admin", False),
+        ("group_admin", False),
+        ("member", False),
+        ("unknown_role", False),
+        ("", False),
+    ],
+)
+def test_is_system_admin_role(role: str, expected: bool):
+    assert _is_system_admin_role(role) is expected
 
 
 def test_abac_organization_denial_precedes_role_and_group_allow():
