@@ -321,7 +321,7 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
-          timeout 540 opencode run "$(cat "$prompt_file")" \
+          timeout 1200 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review \
             --model "$MODEL" \
