@@ -287,7 +287,7 @@ class Email(Base):
     subject: Mapped[str | None] = mapped_column(String, nullable=True)
     in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     references: Mapped[str | None] = mapped_column(String, nullable=True)
-    date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
+    date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
     body: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
     attachments: Mapped[list["Attachment"]] = relationship(
