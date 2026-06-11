@@ -95,6 +95,16 @@ ALLOWLIST: tuple[AllowedLogPattern, ...] = (
             re.IGNORECASE,
         ),
     ),
+    AllowedLogPattern(
+        component="ollama",
+        version="ollama/ollama local runner",
+        rationale="Ollama's bundled llama.cpp runner emits an informational UI flag migration hint.",
+        pattern=re.compile(
+            r"srv\s+init:\s+Use --ui/--no-ui "
+            r"\(or deprecated --webui/--no-webui\) to enable/disable",
+            re.IGNORECASE,
+        ),
+    ),
 )
 
 

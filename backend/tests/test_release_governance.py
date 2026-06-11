@@ -156,17 +156,25 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
         "RUN pnpm run build"
     )
     assert "pnpm run build" in dockerfile
-    assert 'CMD ["pnpm", "run", "start"' in dockerfile or "pnpm run start" in dockerfile
+    assert "ENV POSTCSS_WORKERS=1" in dockerfile
+    assert "ENV DISABLE_POSTCSS_WORKERS=true" in dockerfile
+    assert (
+        'CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]'
+        in dockerfile
+    )
+    assert "pnpm run start" not in dockerfile
     assert "pnpm run dev" not in dockerfile
 
 
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
+    assert "FROM python:3.11-slim AS backend-runtime" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile
     assert "pnpm run build" in dockerfile
+    assert "FROM backend-runtime" in dockerfile
     assert "COPY --from=frontend-builder /usr/local/bin/node" in dockerfile
     assert "nodejs" not in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
@@ -181,6 +189,10 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     compose = read_repo_text("docker-compose.yml")
     live_e2e_compose = read_repo_text("docker-compose.live-e2e.yml")
 
+    backend_block = compose.split("  backend:", 1)[1].split("  frontend:", 1)[0]
+    assert "target: backend-runtime" in backend_block
+    assert 'DEBUG: "false"' in backend_block
+    assert 'DEBUG: "true"' not in backend_block
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
 
@@ -191,6 +203,8 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "warning|warn|deprecated|notice|fatal|denied|unable" in scanner
     assert "allowed_count" in scanner
     assert "unexpected_count" in scanner
+    assert "Use --ui/--no-ui" in scanner
+    assert "or deprecated --webui/--no-webui" in scanner
 
 
 def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> (

@@ -1,4 +1,31 @@
-# Stage 1: Build Frontend
+# Stage 1: Backend runtime for local Compose and backend-only deployments
+FROM python:3.11-slim AS backend-runtime
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+
+# Install system dependencies.
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      gcc \
+      libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Backend dependencies
+COPY backend/requirements.txt /app/requirements.txt
+RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy Backend
+COPY backend /app/
+
+EXPOSE 8000
+
+CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
+
+# Stage 2: Build Frontend
 FROM node:22-slim AS frontend-builder
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
@@ -14,31 +41,12 @@ ENV POSTCSS_WORKERS=1
 ENV DISABLE_POSTCSS_WORKERS=true
 RUN pnpm run build
 
-# Stage 2: Final Image (Python + Node.js)
-FROM python:3.11-slim
-WORKDIR /app
+# Stage 3: Combined image (Python + Node.js)
+FROM backend-runtime
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-
-# Install system dependencies. Runtime Node is copied from the frontend builder
-# so apt does not install a distro Node package with noisy alternatives output.
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      gcc \
-      libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# Runtime Node is copied from the frontend builder so apt does not install a
+# distro Node package with noisy alternatives output.
 COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
-
-# Install Backend dependencies
-COPY backend/requirements.txt /app/requirements.txt
-RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copy Backend
-COPY backend /app/
 
 # Copy Frontend runtime artifacts
 COPY --from=frontend-builder /app/.next /app/frontend/.next

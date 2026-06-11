@@ -139,3 +139,29 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
     }
     assert user_scope_params == {"testuser"}
     assert organization_scope_params == {"org-acme"}
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
+    mock_generate_embeddings,
+):
+    mock_generate_embeddings.return_value = [[0.1] * 768]
+    session = CapturingMockSession()
+
+    async def override_scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_scoped_db
+    try:
+        with TestClient(
+            app,
+            headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+        ) as client:
+            response = client.post("/api/search", json={"query": "test query"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    query_text = str(session.statements[-1]).lower()
+    assert "ts_rank_cd" in query_text
+    assert "<=>" not in query_text

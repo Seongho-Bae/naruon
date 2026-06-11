@@ -2,16 +2,70 @@
 
 from __future__ import annotations
 
-import json
+import base64
+import hashlib
+import hmac
 import http.client
+import json
+import os
 import time
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 
-def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
+def _encode_json(value: dict[str, Any]) -> str:
+    raw = json.dumps(value, separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _signed_live_session_token() -> str:
+    secret = os.environ.get("LIVE_E2E_SESSION_SECRET")
+    if not secret:
+        raise AssertionError("LIVE_E2E_SESSION_SECRET is required for live API smoke")
+
+    header = _encode_json({"alg": "HS256", "typ": "JWT"})
+    payload = _encode_json(
+        {
+            "ver": 1,
+            "iss": "naruon-control-plane",
+            "aud": "naruon-api",
+            "sub": "testuser",
+            "role": "member",
+            "org": "org-acme",
+            "groups": ["group-1", "group-2"],
+            "workspace": "workspace-org-acme",
+            "exp": int(time.time()) + 300,
+        }
+    )
+    signing_input = f"{header}.{payload}".encode("ascii")
+    signature = (
+        base64.urlsafe_b64encode(
+            hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
+        )
+        .decode("ascii")
+        .rstrip("=")
+    )
+    return f"{header}.{payload}.{signature}"
+
+
+def _live_base_url() -> str:
+    live_base_url = os.environ.get("LIVE_BASE_URL")
+    if not live_base_url:
+        raise AssertionError("LIVE_BASE_URL is required for live API smoke")
+    return live_base_url.rstrip("/")
+
+
+def read_json(
+    url: str,
+    token: str,
+    *,
+    method: str = "GET",
+    body: dict[str, Any] | None = None,
+    attempts: int = 12,
+) -> dict[str, Any]:
     last_error: Exception | None = None
+    request_body = json.dumps(body).encode("utf-8") if body is not None else None
     for _ in range(attempts):
         try:
             parsed_url = urlsplit(url)
@@ -31,7 +85,15 @@ def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
                 timeout=5,
             )
             try:
-                connection.request("GET", request_path)
+                headers = {"Authorization": f"Bearer {token}"}
+                if request_body is not None:
+                    headers["Content-Type"] = "application/json"
+                connection.request(
+                    method,
+                    request_path,
+                    body=request_body,
+                    headers=headers,
+                )
                 response = connection.getresponse()
                 if response.status != 200:
                     raise http.client.HTTPException(
@@ -46,14 +108,31 @@ def read_json(url: str, *, attempts: int = 12) -> dict[str, Any]:
     raise AssertionError(f"live endpoint unavailable: {url}") from last_error
 
 
-def test_live_api_sequence_uses_real_http(live_base_url: str) -> None:
+def test_live_api_sequence_uses_real_http() -> None:
+    live_base_url = _live_base_url()
+    token = _signed_live_session_token()
     for _ in range(12):
-        inbox = read_json(f"{live_base_url}/api/emails")
+        inbox = read_json(f"{live_base_url}/api/emails", token)
         subjects = {item.get("subject") for item in inbox["emails"]}
         if "Live E2E Release" in subjects:
             return
         time.sleep(1)
     raise AssertionError("seeded live email was not observed in time")
+
+
+def test_live_search_handles_local_embedding_dimension() -> None:
+    live_base_url = _live_base_url()
+    token = _signed_live_session_token()
+    search_results = read_json(
+        f"{live_base_url}/api/search",
+        token,
+        method="POST",
+        body={"query": "Live E2E Release", "limit": 3},
+        attempts=3,
+    )
+
+    subjects = {item.get("subject") for item in search_results["results"]}
+    assert "Live E2E Release" in subjects
 
 
 def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
