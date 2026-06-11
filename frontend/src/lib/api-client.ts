@@ -44,6 +44,23 @@ export class ApiClient {
     return headers;
   }
 
+  private getFormHeaders(init?: RequestInit): HeadersInit {
+    const sessionToken = this.getSessionToken();
+    const headers: Record<string, string> = this.getSafeCallerHeaders(init?.headers);
+    Object.keys(headers).forEach((name) => {
+      if (name.toLowerCase() === 'content-type') {
+        delete headers[name];
+      }
+    });
+    if (sessionToken) {
+      return {
+        ...headers,
+        Authorization: `Bearer ${sessionToken}`,
+      };
+    }
+    return headers;
+  }
+
   private getSafeCallerHeaders(headers?: HeadersInit): Record<string, string> {
     const safeHeaders: Record<string, string> = {};
     const includeHeader = (name: string, value: string) => {
@@ -126,6 +143,21 @@ export class ApiClient {
       method: 'POST',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
+    }
+    return response.json();
+  }
+
+  async postForm<T>(endpoint: string, body: FormData, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...init,
+      method: 'POST',
+      headers: this.getFormHeaders(init),
+      body,
     });
     if (!response.ok) {
       const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
