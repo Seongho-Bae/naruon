@@ -27,3 +27,4 @@ setuptools==78.1.1
 websockets==14.1
 PyJWT==2.13.0
 icalendar==7.1.2
+ruff==0.15.16

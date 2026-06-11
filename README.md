@@ -1,8 +1,20 @@
 # Naruon AI Email Workspace
 
+[![Application CI](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml)
+[![Bandit Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml)
+[![Strix Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml)
+
 Full-stack AI workspace with a FastAPI backend, Next.js frontend, vector search,
 AI summaries, hardened email threading, and relay/proxy contracts for external
 mail/calendar/file systems.
+
+
+## Quick Links
+- [Installation & Setup](#five-minute-local-path)
+- [Architecture](docs/architecture/)
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Security Policy](SECURITY.md)
 
 ## North-star scope contract
 
