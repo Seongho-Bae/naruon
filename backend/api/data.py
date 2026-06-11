@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+
 from datetime import datetime, timezone
 import hashlib
 from typing import Literal
@@ -312,9 +312,7 @@ def _repository_assets(rows) -> list[DataRepositoryAsset]:
             DataRepositoryAsset(
                 asset_key=_opaque_asset_key(email, attachment),
                 asset_type="email_attachment",
-                display_name=_safe_display_text(
-                    attachment.filename, "email attachment"
-                ),
+                display_name=_safe_display_text(attachment.filename, "email attachment"),
                 source_label=_safe_display_text(email.subject, "untitled email"),
                 state_code=state_code,
                 detail_text=", ".join(detail_parts),
@@ -518,24 +516,11 @@ def _quality_checks(
     ]
 
 
-@dataclass
-class QualitySurfaceData:
-    webdav_accounts: list[WebdavAccount]
-    project_folders: list[ProjectFolder]
-    email_count: int
-    attachment_count: int
-    missing_thread_count: int
-    missing_fingerprint_count: int
-    blank_attachment_count: int
-    embedded_email_count: int
-    embedded_attachment_count: int
-    connector_events: list[ConnectorSignalEvent]
-    attachment_asset_rows: list[tuple[Attachment, Email]]
-
-
-async def _fetch_quality_surface_data(
-    db: AsyncSession, auth_context: AuthContext
-) -> QualitySurfaceData:
+@router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
+async def get_data_quality_surface(
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataQualitySurfaceResponse:
     webdav_accounts = await _scoped_rows(
         db,
         _owner_scope_statement(WebdavAccount, auth_context).order_by(
@@ -575,9 +560,7 @@ async def _fetch_quality_surface_data(
     )
     blank_attachment_count = await _count_scalar(
         db,
-        select(func.count(Attachment.id))
-        .join(Email)
-        .where(
+        select(func.count(Attachment.id)).join(Email).where(
             *email_scope,
             or_(
                 Attachment.content.is_(None),
@@ -591,9 +574,7 @@ async def _fetch_quality_surface_data(
     )
     embedded_attachment_count = await _count_scalar(
         db,
-        select(func.count(Attachment.id))
-        .join(Email)
-        .where(
+        select(func.count(Attachment.id)).join(Email).where(
             *email_scope,
             Attachment.embedding.is_not(None),
         ),
@@ -611,67 +592,44 @@ async def _fetch_quality_surface_data(
     )
     attachment_asset_rows = list(attachment_asset_result.all())
 
-    return QualitySurfaceData(
-        webdav_accounts=webdav_accounts,
-        project_folders=project_folders,
-        email_count=email_count,
-        attachment_count=attachment_count,
-        missing_thread_count=missing_thread_count,
-        missing_fingerprint_count=missing_fingerprint_count,
-        blank_attachment_count=blank_attachment_count,
-        embedded_email_count=embedded_email_count,
-        embedded_attachment_count=embedded_attachment_count,
-        connector_events=connector_events,
-        attachment_asset_rows=attachment_asset_rows,
-    )
-
-
-@router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
-async def get_data_quality_surface(
-    auth_context: AuthContext = Depends(get_auth_context),
-    db: AsyncSession = Depends(get_db),
-) -> DataQualitySurfaceResponse:
-    data = await _fetch_quality_surface_data(db, auth_context)
-
-    source_count = len(data.webdav_accounts) + len(data.project_folders)
-    embedded_total = data.embedded_email_count + data.embedded_attachment_count
-    object_total = data.email_count + data.attachment_count
-
+    source_count = len(webdav_accounts) + len(project_folders)
+    embedded_total = embedded_email_count + embedded_attachment_count
+    object_total = email_count + attachment_count
     return DataQualitySurfaceResponse(
         workspace_id=auth_context.workspace_id,
         organization_id=auth_context.organization_id,
         audit_event="data.quality_surface.viewed",
         provider_write_executed=False,
         repositories=_repository_summaries(
-            data.webdav_accounts,
-            data.project_folders,
-            data.email_count,
-            data.attachment_count,
+            webdav_accounts,
+            project_folders,
+            email_count,
+            attachment_count,
         ),
-        repository_assets=_repository_assets(data.attachment_asset_rows),
+        repository_assets=_repository_assets(attachment_asset_rows),
         pipeline_stages=_pipeline_stages(
             source_count=source_count,
-            email_count=data.email_count,
-            attachment_count=data.attachment_count,
-            missing_thread_count=data.missing_thread_count,
+            email_count=email_count,
+            attachment_count=attachment_count,
+            missing_thread_count=missing_thread_count,
             embedded_total=embedded_total,
             object_total=object_total,
-            connector_event_count=len(data.connector_events),
+            connector_event_count=len(connector_events),
         ),
         embedding_collections=_embedding_collections(
-            email_count=data.email_count,
-            embedded_email_count=data.embedded_email_count,
-            attachment_count=data.attachment_count,
-            embedded_attachment_count=data.embedded_attachment_count,
+            email_count=email_count,
+            embedded_email_count=embedded_email_count,
+            attachment_count=attachment_count,
+            embedded_attachment_count=embedded_attachment_count,
         ),
         quality_checks=_quality_checks(
-            email_count=data.email_count,
-            attachment_count=data.attachment_count,
-            missing_thread_count=data.missing_thread_count,
-            missing_fingerprint_count=data.missing_fingerprint_count,
-            blank_attachment_count=data.blank_attachment_count,
+            email_count=email_count,
+            attachment_count=attachment_count,
+            missing_thread_count=missing_thread_count,
+            missing_fingerprint_count=missing_fingerprint_count,
+            blank_attachment_count=blank_attachment_count,
             source_count=source_count,
-            connector_event_count=len(data.connector_events),
+            connector_event_count=len(connector_events),
         ),
         connector_events=[
             DataConnectorEvent(
@@ -681,6 +639,6 @@ async def get_data_quality_surface(
                 detail_text=event.detail_text,
                 observed_at=_datetime_to_utc_iso(event.observed_at),
             )
-            for event in data.connector_events
+            for event in connector_events
         ],
     )
