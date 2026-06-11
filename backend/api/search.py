@@ -12,6 +12,7 @@ from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
+SEARCH_VECTOR_DIMENSIONS = 1536
 
 
 class SearchRequest(BaseModel):
@@ -67,13 +68,24 @@ def build_reply_counts_subquery(
     return statement.group_by(group_key).subquery("thread_counts")
 
 
-def build_email_search_stmt(query: str, query_embedding, owner_filters, reply_counts):
+def _search_score(text_column, embedding_column, query: str, query_embedding):
     fts_score = func.ts_rank_cd(
-        func.to_tsvector("english", Email.body),
+        func.to_tsvector("english", text_column),
         func.plainto_tsquery("english", query),
     )
-    vector_distance = Email.embedding.cosine_distance(query_embedding)
-    hybrid_score = fts_score - vector_distance
+    if query_embedding is None:
+        return fts_score
+    vector_distance = embedding_column.cosine_distance(query_embedding)
+    return fts_score - vector_distance
+
+
+def build_email_search_stmt(query: str, query_embedding, owner_filters, reply_counts):
+    search_score = _search_score(
+        Email.body,
+        Email.embedding,
+        query,
+        query_embedding,
+    )
 
     return (
         select(
@@ -85,7 +97,7 @@ def build_email_search_stmt(query: str, query_embedding, owner_filters, reply_co
             thread_group_key().label("thread_id"),
             reply_counts.c.reply_count,
             Email.body.label("content"),
-            hybrid_score.label("score"),
+            search_score.label("score"),
         )
         .select_from(Email)
         .join(reply_counts, reply_counts.c.thread_key == thread_group_key())
@@ -96,12 +108,12 @@ def build_email_search_stmt(query: str, query_embedding, owner_filters, reply_co
 def build_attachment_search_stmt(
     query: str, query_embedding, owner_filters, reply_counts
 ):
-    fts_score = func.ts_rank_cd(
-        func.to_tsvector("english", Attachment.content),
-        func.plainto_tsquery("english", query),
+    search_score = _search_score(
+        Attachment.content,
+        Attachment.embedding,
+        query,
+        query_embedding,
     )
-    vector_distance = Attachment.embedding.cosine_distance(query_embedding)
-    hybrid_score = fts_score - vector_distance
 
     return (
         select(
@@ -113,7 +125,7 @@ def build_attachment_search_stmt(
             thread_group_key().label("thread_id"),
             reply_counts.c.reply_count,
             Attachment.content.label("content"),
-            hybrid_score.label("score"),
+            search_score.label("score"),
         )
         .select_from(Attachment)
         .join(Email, Attachment.email_id == Email.id)
@@ -184,7 +196,12 @@ async def hybrid_search(
         openai_api_key = tenant_config.openai_api_key
 
         embeddings = await generate_embeddings([request.query], openai_api_key)
-        query_embedding = embeddings[0]
+        query_embedding = embeddings[0] if embeddings else None
+        if (
+            query_embedding is not None
+            and len(query_embedding) != SEARCH_VECTOR_DIMENSIONS
+        ):
+            query_embedding = None
 
         owner_filters = email_owner_filters(
             target_user_id, auth_context.organization_id

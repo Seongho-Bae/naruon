@@ -25,6 +25,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_API_URL=http://localhost:8000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
+ENV POSTCSS_WORKERS=1
+ENV DISABLE_POSTCSS_WORKERS=true
+
 RUN pnpm run build
 
 RUN chown -R node:node /app
@@ -32,4 +35,4 @@ USER node
 
 EXPOSE 3000
 
-CMD ["pnpm", "run", "start", "--", "--hostname", "0.0.0.0"]
+CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]

@@ -27,6 +27,31 @@ def test_frontend_dockerfile_runs_as_non_root_user():
     assert dockerfile.rfind("USER node") > dockerfile.rfind("RUN pnpm run build")
 
 
+def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
+    dockerfile = (REPO_ROOT / "Dockerfile.ollama").read_text()
+
+    assert "ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models" in dockerfile
+    assert "useradd --system --create-home --home-dir /home/ollama" in dockerfile
+    assert "curl " not in dockerfile
+    assert "for attempt in $(seq 1 60)" in dockerfile
+    assert "if ollama list > /dev/null 2>&1" in dockerfile
+    assert "cat /tmp/ollama-build.log; exit 1" in dockerfile
+    assert "ollama pull gemma4" in dockerfile
+    assert "ollama pull embeddinggemma" in dockerfile
+    assert dockerfile.count("RUN set -eux;") >= 2
+    assert dockerfile.find("ollama pull gemma4") < dockerfile.find(
+        "ollama pull embeddinggemma"
+    )
+    assert "ollama list | grep -E '^gemma4(:|[[:space:]])'" in dockerfile
+    assert (
+        "ollama list | grep -E '^embeddinggemma(:|[[:space:]])'" in dockerfile
+    )
+    assert "chown -R ollama:ollama /usr/share/ollama/.ollama" in dockerfile
+    assert dockerfile.rfind("USER ollama") > dockerfile.rfind(
+        "chown -R ollama:ollama /usr/share/ollama/.ollama"
+    )
+
+
 def test_backend_requirements_do_not_pin_yanked_email_validator():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 

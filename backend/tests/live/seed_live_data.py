@@ -6,8 +6,9 @@ import asyncio
 import datetime as dt
 
 from sqlalchemy import delete
+from sqlalchemy import select
 
-from db.models import Email
+from db.models import Email, TenantConfig
 from db.session import AsyncSessionLocal
 
 
@@ -18,11 +19,26 @@ MESSAGE_IDS = [
     "<live-e2e-root@example.test>",
     "<live-e2e-reply@example.test>",
 ]
+LIVE_E2E_OPENAI_API_KEY = "ollama"
 
 
 async def seed_live_data() -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(Email).where(Email.message_id.in_(MESSAGE_IDS)))
+        result = await session.execute(
+            select(TenantConfig).where(
+                TenantConfig.user_id == LIVE_E2E_USER_ID,
+                TenantConfig.organization_id == LIVE_E2E_ORGANIZATION_ID,
+            )
+        )
+        tenant_config = result.scalar_one_or_none()
+        if tenant_config is None:
+            tenant_config = TenantConfig(
+                user_id=LIVE_E2E_USER_ID,
+                organization_id=LIVE_E2E_ORGANIZATION_ID,
+            )
+            session.add(tenant_config)
+        tenant_config.openai_api_key = LIVE_E2E_OPENAI_API_KEY
         session.add_all(
             [
                 Email(
