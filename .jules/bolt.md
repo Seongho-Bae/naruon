@@ -43,3 +43,7 @@
 ## 2026-06-10 - Optimize redundant dictionary lookups in tight loops
  **Learning:** Using `dict.setdefault` and multiple `dict.get` or `key in dict` checks inside tight loops significantly impacts performance due to repeated dictionary lookups and unnecessary list allocations. Caching dictionary lookups (e.g., using a single `dict.get(key)`) and conditionally handling the logic based on the result is much more performant.
  **Action:** When aggregating or grouping items in a loop, avoid `setdefault`. Instead, check if the key exists using a single `.get()`, and perform initialization/updates conditionally. Additionally, hoist loop-invariant checks (e.g., `folder == "sent"`) outside the loop to avoid redundant evaluations.
+
+## 2025-02-12 - Handle UI Rendering with Optional Number Values
+**Learning:** When displaying numerical data in React where `0` is a valid number, using truthiness checks like `{value && (<div>{value}%</div>)}` will skip rendering when `value === 0` because `0` is falsy in JavaScript.
+**Action:** When handling optional numerical data (e.g., confidence scores, indices, percentages), always explicitly check for `!== undefined` or `!== null` (e.g., `{confidence !== undefined && (...)}`) instead of relying on generic truthiness to ensure valid `0` values render properly and safely.
