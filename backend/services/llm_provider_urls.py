@@ -2,7 +2,7 @@ import asyncio
 import ipaddress
 from dataclasses import dataclass
 import socket
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import httpcore
 import httpx
@@ -151,13 +151,15 @@ async def _resolve_all_global_addresses_async(hostname: str, port: int) -> tuple
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
 
-def _parse_and_validate_candidate_url(value: str | None):
+def _parse_and_validate_candidate_url(
+    value: str | None,
+) -> tuple[SplitResult | None, int | None]:
     if value is None:
-        return None, None, None
+        return None, None
 
     candidate = value.strip()
     if not candidate:
-        return None, None, None
+        return None, None
 
     if "\\" in candidate or _has_url_control_character(candidate):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
@@ -203,10 +205,9 @@ def _validate_remote_host_is_allowed(hostname: str) -> None:
 
 
 def _normalize_llm_provider_base_url(value: str | None):
-    result = _parse_and_validate_candidate_url(value)
-    if result == (None, None, None):
+    parsed, port = _parse_and_validate_candidate_url(value)
+    if parsed is None or port is None:
         return None, None, None
-    parsed, port = result
 
     hostname = (parsed.hostname or "").lower().rstrip(".")
     # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
