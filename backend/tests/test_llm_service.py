@@ -26,6 +26,25 @@ def mock_openai():
 # Removed reset_client fixture
 
 
+def test_extraction_result_confidence_is_optional_and_bounded():
+    omitted = ExtractionResult(summary="Test summary", todos=[])
+    assert omitted.confidence is None
+
+    assert ExtractionResult(
+        summary="Test summary",
+        todos=[],
+        confidence=0,
+    ).confidence == 0
+    assert ExtractionResult(
+        summary="Test summary",
+        todos=[],
+        confidence=100,
+    ).confidence == 100
+
+    with pytest.raises(ValueError):
+        ExtractionResult(summary="Test summary", todos=[], confidence=101)
+
+
 @pytest.mark.asyncio
 async def test_llm_provider_pinned_backend_uses_validated_ip_address():
     calls = []
