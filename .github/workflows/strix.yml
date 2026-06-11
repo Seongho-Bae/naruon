@@ -304,7 +304,7 @@ jobs:
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 3
           STRIX_FALLBACK_MODELS: ${{ steps.gate.outputs.provider_mode == 'github_models' && 'deepseek/deepseek-chat' || steps.gate.outputs.provider_mode == 'openai_direct' && 'openai/gpt-4o' || '' }}
           STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"
-          STRIX_VERTEX_FALLBACK_MODELS: ""
+          STRIX_VERTEX_FALLBACK_MODELS: ${{ steps.gate.outputs.provider_mode == 'vertex_ai' && 'vertex_ai/gemini-2.0-flash' || '' }}
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           PNPM_CONFIG_IGNORE_SCRIPTS: "true"
           YARN_ENABLE_SCRIPTS: "false"
