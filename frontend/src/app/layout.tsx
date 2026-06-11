@@ -17,6 +17,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased">
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `sessionStorage.removeItem("debug"); sessionStorage.removeItem("DEBUG");` }} />
+      </head>
       <body className="min-h-full flex flex-col">
         <DashboardLayout>{children}</DashboardLayout>
       </body>

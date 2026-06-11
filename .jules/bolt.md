@@ -47,3 +47,7 @@
 ## 2025-02-12 - Handle UI Rendering with Optional Number Values
 **Learning:** When displaying numerical data in React where `0` is a valid number, using truthiness checks like `{value && (<div>{value}%</div>)}` will skip rendering when `value === 0` because `0` is falsy in JavaScript.
 **Action:** When handling optional numerical data (e.g., confidence scores, indices, percentages), always explicitly check for `!== undefined` or `!== null` (e.g., `{confidence !== undefined && (...)}`) instead of relying on generic truthiness to ensure valid `0` values render properly and safely.
+
+## 2026-06-11 - Mitigating Auth Token XSS Risks with HttpOnly Cookies
+**Learning:** Storing authentication tokens in `localStorage` exposes them to Cross-Site Scripting (XSS) attacks. Security scanners (like Strix) will flag this as a critical vulnerability.
+**Action:** When a security scan requires removing tokens from `localStorage`, proxy the requests through an internal frontend server (like Next.js API routes). Set an `HttpOnly`, `Secure`, and `SameSite` cookie containing the token via a dedicated API endpoint (e.g., `/api/auth/session`), and then inject this token into the `Authorization` header within the proxy route before forwarding it to the backend.

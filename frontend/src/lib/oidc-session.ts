@@ -169,6 +169,7 @@ export async function completeOidcRedirect(search = window.location.search) {
   }
 
   window.localStorage.setItem(SESSION_TOKEN_KEY, accessToken);
+  await fetch("/api/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: accessToken }) });
   const returnTo = window.sessionStorage.getItem(OIDC_RETURN_TO_KEY) || '/';
   clearOidcTransientState();
   return { returnTo };
@@ -185,6 +186,7 @@ export function clearOidcSession(options: OidcLogoutOptions = {}) {
   requireBrowserStorage();
   const config = getOidcBrowserConfig();
   window.localStorage.removeItem(SESSION_TOKEN_KEY);
+  if (typeof window !== "undefined") { fetch("/api/auth/session", { method: "DELETE" }).catch(() => {}); }
   clearOidcTransientState();
 
   if (!config) return;

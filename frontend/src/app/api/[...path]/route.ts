@@ -57,6 +57,15 @@ function filteredRequestHeaders(request: NextRequest): Headers {
     if (CLIENT_AUTHORITY_HEADERS.has(lowerName)) return;
     headers.set(name, value);
   });
+
+  // Inject session token from HttpOnly cookie into Authorization header if missing
+  if (!headers.has("authorization")) {
+    const sessionCookie = request.cookies.get("naruon_session_token");
+    if (sessionCookie?.value) {
+      headers.set("authorization", `Bearer ${sessionCookie.value}`);
+    }
+  }
+
   return headers;
 }
 
