@@ -1,5 +1,6 @@
 import os
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from fastapi import Depends, FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -76,9 +77,9 @@ async def add_security_headers(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        origin.strip()
+        f"{parsed.scheme}://{parsed.netloc}"
         for origin in settings.ALLOWED_CORS_ORIGINS.split(",")
-        if origin.strip()
+        if origin.strip() and (parsed := urlparse(origin.strip())).scheme and parsed.netloc and origin.strip() != "*"
     ],
     allow_credentials=True,
     allow_methods=[
