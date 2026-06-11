@@ -272,6 +272,49 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             socket_options=socket_options,
         )
 
+    async def _cancel_tasks(self, tasks: set[asyncio.Task]) -> None:
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _handle_done_tasks(
+        self,
+        done: set[asyncio.Task],
+        successful_stream: httpcore.AsyncNetworkStream | None,
+        last_error: Exception | None,
+    ) -> tuple[httpcore.AsyncNetworkStream | None, Exception | None]:
+        for task in done:
+            try:
+                stream = task.result()
+            except Exception as exc:  # pragma: no cover - backend-specific
+                last_error = exc
+                continue
+
+            if successful_stream is None:
+                successful_stream = stream
+            else:
+                await stream.aclose()
+        return successful_stream, last_error
+
+    async def _wait_for_first_stream(
+        self, tasks: set[asyncio.Task]
+    ) -> tuple[
+        httpcore.AsyncNetworkStream | None, set[asyncio.Task], Exception | None
+    ]:
+        last_error: Exception | None = None
+        successful_stream = None
+        while tasks:
+            done, tasks = await asyncio.wait(
+                tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            successful_stream, last_error = await self._handle_done_tasks(
+                done, successful_stream, last_error
+            )
+            if successful_stream is not None:
+                return successful_stream, tasks, None
+        return None, tasks, last_error
+
     async def connect_tcp(
         self,
         host: str,
@@ -297,38 +340,16 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             )
             for address in self._addresses
         }
-        last_error: Exception | None = None
-        successful_stream = None
+
         try:
-            while tasks:
-                done, tasks = await asyncio.wait(
-                    tasks, return_when=asyncio.FIRST_COMPLETED
-                )
-                for task in done:
-                    try:
-                        stream = task.result()
-                    except Exception as exc:  # pragma: no cover - backend-specific
-                        last_error = exc
-                        continue
-
-                    if successful_stream is None:
-                        successful_stream = stream
-                    else:
-                        await stream.aclose()
-
-                if successful_stream is not None:
-                    pending_tasks = tasks
-                    tasks = set()
-                    for pending_task in pending_tasks:
-                        pending_task.cancel()
-                    if pending_tasks:
-                        await asyncio.gather(*pending_tasks, return_exceptions=True)
-                    return successful_stream
+            successful_stream, tasks, last_error = await self._wait_for_first_stream(tasks)
+            if successful_stream is not None:
+                pending_tasks = tasks
+                tasks = set()
+                await self._cancel_tasks(pending_tasks)
+                return successful_stream
         finally:
-            for task in tasks:
-                task.cancel()
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            await self._cancel_tasks(tasks)
 
         if last_error is not None:
             raise last_error
