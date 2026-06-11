@@ -280,6 +280,7 @@ describe("EmailDetail", () => {
         return Promise.resolve(jsonResponse({
           summary: "출시 메시지의 핵심 맥락입니다.",
           todos: ["캘린더에 출시 리뷰 일정을 반영", "답장 초안 준비"],
+          confidence: 0.82,
         }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
@@ -300,7 +301,9 @@ describe("EmailDetail", () => {
     );
     expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('[role="heading"][aria-level="3"]')?.textContent).toContain("답장 초안");
     expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("출시 메시지의 핵심 맥락입니다.");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("82%");
     expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("캘린더에 출시 리뷰 일정을 반영");
+    expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("82%");
     expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
   });
 
