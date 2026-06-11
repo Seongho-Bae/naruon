@@ -10,7 +10,7 @@ mail/calendar/file systems.
 
 
 ## Quick Links
-- [Installation & Setup](#setup)
+- [Installation & Setup](#five-minute-local-path)
 - [Architecture](docs/architecture/)
 - [Contributing](CONTRIBUTING.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)

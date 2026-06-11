@@ -21,6 +21,13 @@ sequenceDiagram
     Image Processing Module-->>Backend API: Return detection results
     Backend API-->>Frontend: Return annotated image / status
     Frontend-->>User: Display results
+
+    Frontend-->>Backend API: Invalid image, unsupported URL, or oversize payload
+    Backend API-->>Frontend: 400 validation error
+    Image Processing Module-->>Backend API: Sanitization or resize failure
+    Backend API-->>Frontend: 422 image processing failed
+    Content Detection Model-->>Image Processing Module: Timeout or model error
+    Backend API-->>Frontend: 503 detection temporarily unavailable
 ```
 
 ## Processing Steps
@@ -31,6 +38,13 @@ sequenceDiagram
 4. **Detection:** The image is sent to an open-source detection model.
 5. **Classification:** The model returns labels (e.g., categories, text OCR) and safety scores.
 6. **Action:** Based on the results, the content is either indexed for search, flagged for review, or rejected.
+
+## Failure Modes and Recovery
+
+* **POST /api/images validation:** Reject unsupported MIME types, unsafe URLs, and oversized payloads before storage or model work, then return a deterministic 400 response.
+* **Image Processing Module:** Treat sanitization, decoding, and resize failures as non-retryable user-input errors. Log the failure with request provenance, but do not persist unsafe transformed images.
+* **Content Detection Model:** Apply bounded retries for transient model timeouts and return a 503 response when the detector is unavailable. Keep the original source item queued for later analysis instead of claiming a completed detection result.
+* **Monitoring:** Emit structured processing, retry, and failure counters so operators can distinguish invalid input from detector capacity or model health issues.
 
 ## Open-Source Image Detection Model Choices & Limitations
 

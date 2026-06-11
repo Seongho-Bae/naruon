@@ -42,3 +42,27 @@ Community leaders are responsible for clarifying and enforcing our standards of
 acceptable behavior and will take appropriate and fair corrective action in
 response to any behavior that they deem inappropriate, threatening, offensive,
 or harmful.
+
+## Enforcement
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be
+reported to the project maintainers at [INSERT CONTACT METHOD]. All complaints
+will be reviewed and investigated promptly, fairly, and with respect for the
+reporter's privacy and security.
+
+Community leaders may remove, edit, or reject comments, commits, code, wiki
+edits, issues, and other contributions that do not align with this Code of
+Conduct. Corrective action may include a private warning, temporary interaction
+limits, removal from project spaces, or a permanent ban from participation.
+
+## Scope
+
+This Code of Conduct applies within all project spaces, including issues, pull
+requests, discussions, community events, and private communications made in the
+context of Naruon project work. It also applies when an individual officially
+represents the project in public spaces.
+
+## Attribution
+
+This Code of Conduct is adapted from the Contributor Covenant, version 2.1,
+available at https://www.contributor-covenant.org/version/2/1/code_of_conduct/.

@@ -27,6 +27,9 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 RUN pnpm run build
 
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3000
 
 CMD ["pnpm", "run", "start", "--", "--hostname", "0.0.0.0"]

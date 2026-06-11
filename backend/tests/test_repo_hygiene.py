@@ -19,11 +19,40 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
+def test_frontend_dockerfile_runs_as_non_root_user():
+    dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text()
+
+    assert "RUN chown -R node:node /app" in dockerfile
+    assert "USER node" in dockerfile
+    assert dockerfile.rfind("USER node") > dockerfile.rfind("RUN pnpm run build")
+
+
 def test_backend_requirements_do_not_pin_yanked_email_validator():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 
     assert "email-validator==2.1.0" not in requirements
     assert "email-validator==2.3.0" in requirements
+
+
+def test_backend_requirements_pin_ruff_for_deterministic_ci():
+    requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
+
+    assert "\nruff\n" not in f"\n{requirements}\n"
+    assert "ruff==0.15.16" in requirements
+
+
+def test_traefik_compose_services_disable_privilege_escalation():
+    expected_next_service = {
+        "docker-compose.infra.yml": "  prometheus:",
+        "docker-compose.gateway.yml": "  keycloak:",
+    }
+
+    for compose_name, next_service in expected_next_service.items():
+        compose = (REPO_ROOT / compose_name).read_text()
+        traefik_block = compose.split("  traefik:", 1)[1].split(next_service, 1)[0]
+
+        assert "security_opt:" in traefik_block
+        assert "- no-new-privileges:true" in traefik_block
 
 
 def test_compose_externalizes_postgres_credentials():
