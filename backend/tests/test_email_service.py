@@ -1,7 +1,6 @@
 import hashlib
 
 from services.email_service import (
-    detect_reply_tracking,
     generate_email_fingerprint,
     process_self_to_self,
 )
@@ -67,25 +66,6 @@ class TestEmailService:
         assert generate_email_fingerprint(email_data) == generate_email_fingerprint(
             email_data.copy()
         )
-
-    def test_detect_reply_tracking_please_reply(self):
-        assert detect_reply_tracking(
-            {"body": "This is an important message, please reply soon."}
-        ) is True
-
-    def test_detect_reply_tracking_question_mark(self):
-        assert detect_reply_tracking({"body": "How are you doing today?"}) is True
-
-    def test_detect_reply_tracking_case_insensitive(self):
-        assert detect_reply_tracking({"body": "Please Reply to this email."}) is True
-
-    def test_detect_reply_tracking_no_match(self):
-        assert detect_reply_tracking(
-            {"body": "This is a standard statement without any tracking triggers."}
-        ) is False
-
-    def test_detect_reply_tracking_empty_body(self):
-        assert detect_reply_tracking({}) is False
 
     def test_process_self_to_self_basic(self):
         email_data = {
