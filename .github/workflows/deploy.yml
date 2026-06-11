@@ -29,11 +29,21 @@ jobs:
 
       - name: Read VERSION
         id: read_version
+        env:
+          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
         run: |
           set -euo pipefail
-          version="$(tr -d '[:space:]' < VERSION)"
+          version="$(cat VERSION)"
+          if [[ "$version" =~ [[:space:]] ]]; then
+            printf 'VERSION must be a single token without embedded whitespace.\n' >&2
+            exit 1
+          fi
           if [[ ! "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+(-[0-9A-Za-z][0-9A-Za-z._-]*)?$ ]]; then
             printf 'Invalid VERSION format: %s\n' "$version" >&2
+            exit 1
+          fi
+          if [ "$TAG_NAME" != "v$version" ]; then
+            printf 'Tag %s does not match VERSION %s\n' "$TAG_NAME" "$version" >&2
             exit 1
           fi
           printf 'VERSION=%s\n' "$version" >> "$GITHUB_OUTPUT"
@@ -49,7 +59,11 @@ jobs:
             printf 'Invalid repository owner for image path: %s\n' "$REPO_OWNER" >&2
             exit 1
           fi
-          sed -E -i "s#image: ghcr.io/[^[:space:]]*/ai_email_client-backend:[^[:space:]]+#image: ghcr.io/${repo_owner}/ai_email_client-backend:${VERSION}#" k8s/backend-deployment.yaml
+          sed -E -i "s#image: ghcr.io/[^[:space:]]*/ai_email_client-backend:REPLACE_ME_VERSION#image: ghcr.io/${repo_owner}/ai_email_client-backend:${VERSION}#" k8s/backend-deployment.yaml
+          if ! grep -q "image: ghcr.io/${repo_owner}/ai_email_client-backend:${VERSION}" k8s/backend-deployment.yaml; then
+            printf 'Backend image placeholder was not replaced.\n' >&2
+            exit 1
+          fi
 
       - name: Apply to AKS
         env:
