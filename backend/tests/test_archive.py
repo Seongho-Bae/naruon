@@ -142,3 +142,26 @@ def test_extract_backup_async(tmp_path):
     assert len(extracted_files) == 1
     assert extracted_files[0].name == "test.eml"
     assert extracted_files[0].exists()
+
+
+@pytest.mark.asyncio
+async def test_extract_backup_async_calls_to_thread(tmp_path, monkeypatch):
+    called = False
+    passed_args = ()
+
+    async def mock_to_thread(func, *args, **kwargs):
+        nonlocal called, passed_args
+        called = True
+        passed_args = (func, *args)
+        return [tmp_path / "dummy.txt"]
+
+    monkeypatch.setattr(asyncio, "to_thread", mock_to_thread)
+
+    zip_path = tmp_path / "test.zip"
+    out_dir = tmp_path / "output"
+
+    result = await extract_backup_async(zip_path, out_dir)
+
+    assert called is True
+    assert passed_args == (extract_backup, zip_path, out_dir)
+    assert result == [tmp_path / "dummy.txt"]

@@ -165,8 +165,14 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
 
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
+    assert "pnpm install --frozen-lockfile" in dockerfile
+    assert "pnpm run build" in dockerfile
+    assert "COPY --from=frontend-builder /usr/local/bin/node" in dockerfile
+    assert "nodejs" not in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
+    assert "secrets.token_hex" not in dockerfile
+    assert "ENV DATABASE_URL=" not in dockerfile
     assert '"/app/start.sh"' in dockerfile
     assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
 

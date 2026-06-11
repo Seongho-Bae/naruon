@@ -134,6 +134,16 @@ def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
         for statement in statements
     )
     assert any(
+        "alter table llm_providers add column if not exists model_identifier"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table llm_providers add column if not exists embedding_model"
+        in statement
+        for statement in statements
+    )
+    assert any(
         "create index if not exists ix_llm_providers_organization_id" in statement
         for statement in statements
     )

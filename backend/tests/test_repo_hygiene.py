@@ -36,6 +36,8 @@ def test_compose_externalizes_postgres_credentials():
     assert "${POSTGRES_PASSWORD" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
     assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
+    assert "ENCRYPTION_KEY" in compose
+    assert "${ENCRYPTION_KEY:?" in compose
 
 
 def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():

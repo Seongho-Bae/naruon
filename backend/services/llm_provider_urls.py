@@ -14,6 +14,8 @@ from core.config import settings
 
 LLM_BASE_URL_NOT_ALLOWED = "LLM provider base URL is not allowed"
 _DNS_RESOLUTION_TIMEOUT_SECONDS = 5.0
+_LOCAL_DEV_HOSTNAMES = {"localhost", "localhost.localdomain"}
+_LOCAL_DEV_IP_LITERALS = {"127.0.0.1", "::1"}
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,23 @@ def _looks_like_ip_literal(candidate: str) -> bool:
         or compact_candidate.isdigit()
         or compact_candidate.startswith("0x")
     )
+
+
+def _is_local_dev_host(hostname: str) -> bool:
+    normalized_hostname = hostname.lower().rstrip(".")
+    return (
+        normalized_hostname in _LOCAL_DEV_HOSTNAMES
+        or normalized_hostname in _LOCAL_DEV_IP_LITERALS
+    )
+
+
+def _format_normalized_netloc(
+    hostname: str, port: int, *, explicit_port: bool
+) -> str:
+    host_part = f"[{hostname}]" if ":" in hostname else hostname
+    if not explicit_port:
+        return host_part
+    return f"{host_part}:{port}"
 
 
 def _validate_global_address(address: str, *, hostname: str | None = None) -> str:
@@ -134,12 +153,12 @@ def _normalize_llm_provider_base_url(value: str | None):
 
     hostname = (parsed.hostname or "").lower().rstrip(".")
     # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
-    is_local_dev_host = hostname in {"localhost", "localhost.localdomain", "127.0.0.1"}
-    
+    is_local_dev_host = _is_local_dev_host(hostname)
+
     # Allow http for local development or if explicitly allowed
     if parsed.scheme.lower() not in {"http", "https"}:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
-        
+
     if parsed.scheme.lower() == "http" and not is_local_dev_host:
         if not (settings.ALLOW_LOCAL_LLM_PROVIDERS and hostname in _parse_allowed_hosts()):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
@@ -163,7 +182,9 @@ def _normalize_llm_provider_base_url(value: str | None):
         if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
-    netloc = hostname if parsed.port is None else f"{hostname}:{port}"
+    netloc = _format_normalized_netloc(
+        hostname, port, explicit_port=parsed.port is not None
+    )
     return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", "", "")), hostname, port
 
 

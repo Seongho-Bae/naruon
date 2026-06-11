@@ -32,6 +32,7 @@ services:
       ALLOW_LOCAL_LLM_PROVIDERS: "true"
       ALLOWED_LLM_BASE_URL_HOSTS: "ollama"
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-ollama}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://ollama:11434/v1}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-embeddinggemma}
