@@ -137,12 +137,16 @@ def test_llm_provider_crud_admin(admin_client):
         json={
             "name": "Primary OpenAI",
             "provider_type": "openai",
+            "model_identifier": "gpt-5.4",
+            "embedding_model": "text-embedding-3-small",
             "api_key": "sk-12345",
         },
     )
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["name"] == "Primary OpenAI"
+    assert data["model_identifier"] == "gpt-5.4"
+    assert data["embedding_model"] == "text-embedding-3-small"
     assert data["configured"] is True
     assert data["fingerprint"] is not None
     assert "api_key" not in data
@@ -154,6 +158,7 @@ def test_llm_provider_crud_admin(admin_client):
     response = admin_client.get("/api/llm-providers")
     assert response.status_code == 200
     assert len(response.json()) == 1
+    assert response.json()[0]["model_identifier"] == "gpt-5.4"
 
     response = admin_client.put(
         f"/api/llm-providers/{provider_id}", json={"is_active": True}
@@ -278,6 +283,48 @@ def test_llm_provider_accepts_allowlisted_external_https_base_url(
     assert response.json()["base_url"] == "https://llm-gateway.example.com/v1"
 
 
+def test_llm_provider_accepts_configured_local_gemma_without_fake_secret(
+    admin_client, monkeypatch
+):
+    previous_allowed_hosts = settings.ALLOWED_LLM_BASE_URL_HOSTS
+    previous_allow_local = settings.ALLOW_LOCAL_LLM_PROVIDERS
+    settings.ALLOWED_LLM_BASE_URL_HOSTS = "ollama"
+    settings.ALLOW_LOCAL_LLM_PROVIDERS = True
+
+    def fake_getaddrinfo(host, port, type=0):
+        assert host == "ollama"
+        assert port == 11434
+        return [(2, 1, 6, "", ("172.20.0.10", port))]
+
+    monkeypatch.setattr(
+        "services.llm_provider_urls.socket.getaddrinfo", fake_getaddrinfo
+    )
+
+    try:
+        response = admin_client.post(
+            "/api/llm-providers",
+            json={
+                "name": "Local Gemma4",
+                "provider_type": "ollama",
+                "base_url": "http://ollama:11434/v1",
+                "model_identifier": "gemma4",
+                "embedding_model": "embeddinggemma",
+                "is_active": True,
+            },
+        )
+    finally:
+        settings.ALLOWED_LLM_BASE_URL_HOSTS = previous_allowed_hosts
+        settings.ALLOW_LOCAL_LLM_PROVIDERS = previous_allow_local
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["configured"] is True
+    assert data["fingerprint"] is None
+    assert data["model_identifier"] == "gemma4"
+    assert data["embedding_model"] == "embeddinggemma"
+    assert mock_session.providers[0].api_key is None
+
+
 def test_llm_provider_member_rejected(member_client):
     response = member_client.get("/api/llm-providers")
     assert response.status_code == 403
@@ -292,7 +339,12 @@ def test_llm_provider_member_rejected(member_client):
 def test_llm_provider_model_declares_owner_scope_columns():
     column_names = {column.name for column in LLMProvider.__table__.columns}
 
-    assert {"user_id", "organization_id"}.issubset(column_names)
+    assert {
+        "user_id",
+        "organization_id",
+        "model_identifier",
+        "embedding_model",
+    }.issubset(column_names)
     assert any(
         constraint.name == "uq_llm_providers_org_name"
         for constraint in LLMProvider.__table__.constraints

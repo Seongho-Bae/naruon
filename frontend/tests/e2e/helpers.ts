@@ -678,6 +678,33 @@ const accountConfig = {
   has_oauth_client_secret: true,
 };
 
+const llmProviders = [
+  {
+    id: 1,
+    name: 'Primary OpenAI',
+    provider_type: 'openai',
+    base_url: 'https://api.openai.com/v1',
+    model_identifier: 'gpt-5.4',
+    embedding_model: 'text-embedding-3-small',
+    is_active: true,
+    configured: true,
+    fingerprint: '***1234',
+    updated_at: '2026-06-11T04:00:00Z',
+  },
+  {
+    id: 2,
+    name: 'Local Gemma4',
+    provider_type: 'ollama',
+    base_url: 'http://ollama:11434/v1',
+    model_identifier: 'gemma4',
+    embedding_model: 'embeddinggemma',
+    is_active: true,
+    configured: true,
+    fingerprint: null,
+    updated_at: '2026-06-11T05:00:00Z',
+  },
+];
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -781,6 +808,40 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
         pop3_username: body.pop3_username,
         oauth_client_id: body.oauth_client_id,
         oauth_redirect_uri: body.oauth_redirect_uri,
+      });
+      return;
+    }
+
+    if (path === '/api/llm-providers' && request.method() === 'GET') {
+      await fulfillJson(route, llmProviders);
+      return;
+    }
+
+    if (path === '/api/llm-providers' && request.method() === 'POST') {
+      const body = JSON.parse(request.postData() || '{}') as Record<string, unknown>;
+      await fulfillJson(route, {
+        id: 3,
+        name: body.name,
+        provider_type: body.provider_type,
+        base_url: body.base_url ?? null,
+        model_identifier: body.model_identifier ?? null,
+        embedding_model: body.embedding_model ?? null,
+        is_active: body.is_active ?? true,
+        configured: true,
+        fingerprint: body.api_key ? '***1234' : null,
+        updated_at: '2026-06-11T06:00:00Z',
+      });
+      return;
+    }
+
+    if (path.startsWith('/api/llm-providers/') && request.method() === 'PUT') {
+      const body = JSON.parse(request.postData() || '{}') as Record<string, unknown>;
+      const providerId = Number(path.split('/').at(-1));
+      const provider = llmProviders.find((candidate) => candidate.id === providerId) ?? llmProviders[0];
+      await fulfillJson(route, {
+        ...provider,
+        ...body,
+        updated_at: '2026-06-11T06:30:00Z',
       });
       return;
     }

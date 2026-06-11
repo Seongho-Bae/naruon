@@ -136,6 +136,8 @@ class LLMProvider(Base):
         String
     )  # e.g. openai, anthropic, gemini, ollama
     base_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
     api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime.datetime] = mapped_column(

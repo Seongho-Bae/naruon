@@ -36,6 +36,14 @@ def _get_add_columns_statements() -> list[Executable]:
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
         text(
+            "ALTER TABLE llm_providers "
+            "ADD COLUMN IF NOT EXISTS model_identifier varchar"
+        ),
+        text(
+            "ALTER TABLE llm_providers "
+            "ADD COLUMN IF NOT EXISTS embedding_model varchar"
+        ),
+        text(
             "ALTER TABLE webdav_accounts " "ADD COLUMN IF NOT EXISTS source_uid varchar"
         ),
         text(

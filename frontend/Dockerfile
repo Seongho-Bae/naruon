@@ -5,7 +5,7 @@ WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN corepack enable pnpm
 
-COPY frontend/package.json frontend/pnpm-lock.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.pnpmfile.cjs ./
 ARG TARGETARCH
 RUN pnpm install --frozen-lockfile \
     && if [ "$TARGETARCH" = "arm64" ] \
