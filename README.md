@@ -132,20 +132,39 @@ cp .env.example .env
 python3 - <<'PY'
 from pathlib import Path
 import base64
-import os
 import secrets
 
 env_path = Path(".env")
-env_text = env_path.read_text()
-env_text = env_text.replace(
-    "AUTH_SESSION_HMAC_SECRET=\n",
-    f"AUTH_SESSION_HMAC_SECRET={secrets.token_urlsafe(48)}\n",
+env_values = {}
+for line in env_path.read_text().splitlines():
+    if "=" not in line or line.lstrip().startswith("#"):
+        continue
+    key, value = line.split("=", 1)
+    env_values[key] = value
+
+db_password = secrets.token_urlsafe(32)
+env_values.update(
+    {
+        "POSTGRES_DB": "ai_email",
+        "POSTGRES_USER": "naruon_local",
+        "POSTGRES_PASSWORD": db_password,
+        "DATABASE_URL": (
+            "postgresql+asyncpg://naruon_local:"
+            f"{db_password}@localhost:5432/ai_email"
+        ),
+        "AUTH_SESSION_HMAC_SECRET": secrets.token_urlsafe(48),
+        "ENCRYPTION_KEY": base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
+    }
 )
-env_text = env_text.replace(
-    "ENCRYPTION_KEY=\n",
-    f"ENCRYPTION_KEY={base64.urlsafe_b64encode(os.urandom(32)).decode()}\n",
-)
-env_path.write_text(env_text)
+
+existing_lines = env_path.read_text().splitlines()
+existing_keys = {
+    line.split("=", 1)[0]
+    for line in existing_lines
+    if "=" in line and not line.lstrip().startswith("#")
+}
+required_lines = [f"{key}={value}" for key, value in env_values.items() if key not in existing_keys]
+env_path.write_text("\n".join(existing_lines + required_lines) + "\n")
 PY
 ./scripts/naruon_compose.sh up -d --build
 ./scripts/naruon_compose.sh exec backend python import_fixtures.py
