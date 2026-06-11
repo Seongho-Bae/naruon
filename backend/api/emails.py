@@ -236,21 +236,26 @@ async def get_emails(
     reply_counts = {}
     thread_messages = {}
     has_sent_message = {}
+
+    is_sent_folder = (folder == "sent")
+
     for email in emails:
         group_key = canonical_thread_key(email)
-        thread_messages.setdefault(group_key, []).append(email)
 
-        if folder == "sent" and not has_sent_message.get(group_key, False):
-            if message_is_from_user(email, user_addresses):
-                has_sent_message[group_key] = True
-
-        if group_key not in grouped:
-            grouped[group_key] = email
-            reply_counts[group_key] = 1
-        else:
+        thread_list = thread_messages.get(group_key)
+        if thread_list is not None:
+            thread_list.append(email)
             reply_counts[group_key] += 1
             if email.date > grouped[group_key].date:
                 grouped[group_key] = email
+        else:
+            thread_messages[group_key] = [email]
+            grouped[group_key] = email
+            reply_counts[group_key] = 1
+
+        if is_sent_folder and group_key not in has_sent_message:
+            if message_is_from_user(email, user_addresses):
+                has_sent_message[group_key] = True
 
     visible_groups = [
         email
