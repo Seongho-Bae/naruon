@@ -9,6 +9,10 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import urlsplit
 
+import os
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET environment variable must be set")
 import jwt
 from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException
