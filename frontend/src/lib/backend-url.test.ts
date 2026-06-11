@@ -52,6 +52,48 @@ describe("backend URL guard", () => {
     );
   });
 
+  it("rejects invalid URL strings", () => {
+    expect(() => parseBackendInternalUrl("not-a-valid-url")).toThrow(
+      "BACKEND_INTERNAL_URL is not a valid URL",
+    );
+  });
+
+  it("rejects non-HTTPS URLs in normal mode", () => {
+    expect(() => parseBackendInternalUrl("http://api.naruon.net")).toThrow(
+      "must use https:// in split deployments",
+    );
+  });
+
+  it("rejects URLs without a hostname", () => {
+    // A mock URL object with protocol "https:" but empty hostname
+    // since Node.js newer URL parser rejects `https:///` and similar.
+    const originalURL = global.URL;
+    try {
+      global.URL = class extends URL {
+        constructor(input: string | URL, base?: string | URL) {
+          super(input, base);
+          if (input === "https:///empty") {
+            Object.defineProperty(this, "hostname", { get: () => "" });
+          }
+        }
+      } as any;
+      expect(() => parseBackendInternalUrl("https:///empty")).toThrow(
+        "BACKEND_INTERNAL_URL must include a hostname",
+      );
+    } finally {
+      global.URL = originalURL;
+    }
+  });
+
+  it("uses the environment variable when provided", () => {
+    vi.stubEnv("BACKEND_INTERNAL_URL", "https://backend.example.com");
+    expect(backendApiBaseUrl().origin).toBe("https://backend.example.com");
+  });
+
+  it("falls back to local backend in development", () => {
+    expect(backendApiBaseUrl().origin).toBe("http://127.0.0.1:8000");
+  });
+
   it("requires a runtime backend origin in production", () => {
     vi.stubEnv("NODE_ENV", "production");
     expect(() => backendApiBaseUrl()).toThrow("production runtime");
