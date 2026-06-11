@@ -1,4 +1,3 @@
-import pytest
 from core.rbac import check_tenant_access
 
 def test_check_tenant_access_hierarchy():
