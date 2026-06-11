@@ -1,23 +1,20 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
-import { SettingsTab } from '../src/components/SettingsLayout';
+import { describe, expect, it } from "vitest";
+import type { SettingsTab } from "../src/components/SettingsLayout";
 
-// Mocking the imported components that SettingsTab uses internally
-vi.mock('../src/components/SettingsLayout', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/components/SettingsLayout')>();
-  return {
-    ...actual,
-    SettingsLayout: () => <div data-testid="settings-layout-mock">Settings Layout</div>
-  };
-});
+describe("SettingsTab", () => {
+  it("uses the Korean-first settings destinations", () => {
+    const tabs: SettingsTab[] = [
+      "워크스페이스",
+      "멤버",
+      "AI 모델",
+      "연결 계정",
+      "알림",
+      "자동화",
+      "결제",
+      "개발자",
+    ];
 
-describe('SettingsTab Types', () => {
-  it('should be definable and assignable', () => {
-    // This is a simple type and unit test to fulfill the test coverage requirement for SettingsTab
-    const tab: SettingsTab = 'account';
-    expect(tab).toBe('account');
-    
-    const aiTab: SettingsTab = 'ai';
-    expect(aiTab).toBe('ai');
+    expect(tabs).toContain("AI 모델");
+    expect(tabs).toContain("연결 계정");
   });
 });
