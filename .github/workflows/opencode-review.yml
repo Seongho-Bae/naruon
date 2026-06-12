@@ -1154,12 +1154,62 @@ jobs:
             format_request_changes_body "$control_json" "$body_file"
           }
 
+          collect_current_head_strix_workflow_runs() {
+            local output_file="$1"
+            local mode="$2"
+            local runs_json
+
+            runs_json="$(mktemp)"
+            if ! gh api -X GET "repos/${GH_REPOSITORY}/actions/workflows/strix.yml/runs?event=pull_request_target&per_page=30" >"$runs_json"; then
+              rm -f "$runs_json"
+              return 1
+            fi
+
+            case "$mode" in
+              failed)
+                jq -r --arg head_sha "$HEAD_SHA" '
+                  (.workflow_runs // [])
+                  | map(
+                      select((.head_sha // "") == $head_sha)
+                      | select((.event // "") == "pull_request_target")
+                      | select((.status // "") == "completed")
+                      | select((.conclusion // "" | ascii_upcase) as $c | ["FAILURE","TIMED_OUT","ACTION_REQUIRED","CANCELLED","STARTUP_FAILURE"] | index($c))
+                      | "- Strix Security Scan/strix workflow run: " + (.conclusion // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
+                    )
+                  | .[]
+                ' "$runs_json" >"$output_file"
+                ;;
+              pending)
+                jq -r --arg head_sha "$HEAD_SHA" '
+                  (.workflow_runs // [])
+                  | map(
+                      select((.head_sha // "") == $head_sha)
+                      | select((.event // "") == "pull_request_target")
+                      | select((.status // "") != "completed")
+                      | "- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
+                    )
+                  | .[]
+                ' "$runs_json" >"$output_file"
+                ;;
+              *)
+                rm -f "$runs_json"
+                return 1
+                ;;
+            esac
+
+            rm -f "$runs_json"
+          }
+
           collect_failed_github_checks() {
             local output_file="$1"
             local owner="${GH_REPOSITORY%%/*}"
             local name="${GH_REPOSITORY#*/}"
+            local rollup_file
+            local strix_runs_file
+            rollup_file="$(mktemp)"
+            strix_runs_file="$(mktemp)"
             # shellcheck disable=SC2016
-            gh api graphql \
+            if ! gh api graphql \
               -f owner="$owner" \
               -f name="$name" \
               -F number="$PR_NUMBER" \
@@ -1211,7 +1261,17 @@ jobs:
                     end
                   )
                 | .[]
-              ' >"$output_file"
+              ' >"$rollup_file"; then
+              rm -f "$rollup_file" "$strix_runs_file"
+              return 1
+            fi
+
+            if ! collect_current_head_strix_workflow_runs "$strix_runs_file" failed; then
+              rm -f "$rollup_file" "$strix_runs_file"
+              return 1
+            fi
+            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            rm -f "$rollup_file" "$strix_runs_file"
 
           }
 
@@ -1219,8 +1279,12 @@ jobs:
             local output_file="$1"
             local owner="${GH_REPOSITORY%%/*}"
             local name="${GH_REPOSITORY#*/}"
+            local rollup_file
+            local strix_runs_file
+            rollup_file="$(mktemp)"
+            strix_runs_file="$(mktemp)"
             # shellcheck disable=SC2016
-            gh api graphql \
+            if ! gh api graphql \
               -f owner="$owner" \
               -f name="$name" \
               -F number="$PR_NUMBER" \
@@ -1273,7 +1337,17 @@ jobs:
                     end
                   )
                 | .[]
-              ' >"$output_file"
+              ' >"$rollup_file"; then
+              rm -f "$rollup_file" "$strix_runs_file"
+              return 1
+            fi
+
+            if ! collect_current_head_strix_workflow_runs "$strix_runs_file" pending; then
+              rm -f "$rollup_file" "$strix_runs_file"
+              return 1
+            fi
+            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            rm -f "$rollup_file" "$strix_runs_file"
 
           }
 
