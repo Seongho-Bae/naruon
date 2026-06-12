@@ -1,4 +1,5 @@
 import http.client
+import datetime
 import hashlib
 import json
 import logging
@@ -11,6 +12,7 @@ from typing import Annotated, Any, Literal, cast
 from urllib.parse import urlsplit
 
 import jwt
+from asyncpg import Connection, connect as asyncpg_connect
 from jwt import PyJWKClient
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
@@ -151,7 +153,6 @@ SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
 OIDC_SIGNING_ALGORITHM = "RS256"
 MIN_SESSION_SECRET_BYTES = 32
-_revoked_session_tokens: dict[str, float] = {}
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -194,7 +195,7 @@ def is_admin_role(role: str) -> bool:
 async def get_auth_context(
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> AuthContext:
-    return build_auth_context(authorization=authorization)
+    return await build_persistent_auth_context(authorization)
 
 
 def build_auth_context(authorization: str | None = None) -> AuthContext:
@@ -208,6 +209,15 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
     use explicit FastAPI dependency overrides.
     """
     payload, session_verifier = _verify_signed_session_payload(authorization)
+    return _auth_context_from_session_payload(payload, session_verifier)
+
+
+async def build_persistent_auth_context(
+    authorization: str | None,
+) -> AuthContext:
+    token = _extract_bearer_token(authorization)
+    payload, session_verifier = _verify_signed_session_token(token)
+    await _reject_persistently_revoked_session_token(token)
     return _auth_context_from_session_payload(payload, session_verifier)
 
 
@@ -280,28 +290,108 @@ def _session_token_fingerprint(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _prune_revoked_session_tokens(now: float | None = None) -> None:
-    current_time = time.time() if now is None else now
-    expired_fingerprints = [
-        fingerprint
-        for fingerprint, expires_at in _revoked_session_tokens.items()
-        if expires_at <= current_time
-    ]
-    for fingerprint in expired_fingerprints:
-        _revoked_session_tokens.pop(fingerprint, None)
+def _utc_now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.timezone.utc)
 
 
-def revoke_session_token(token: str, expires_at: float) -> None:
-    _prune_revoked_session_tokens()
-    if expires_at <= time.time():
+def _as_aware_utc(value: datetime.datetime) -> datetime.datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=datetime.timezone.utc)
+    return value.astimezone(datetime.timezone.utc)
+
+
+def _session_expiration_datetime(payload: dict[str, Any]) -> datetime.datetime:
+    return datetime.datetime.fromtimestamp(
+        _session_expires_at(payload), datetime.timezone.utc
+    )
+
+
+def _revocation_database_url() -> str:
+    database_url = str(settings.DATABASE_URL)
+    if database_url.startswith("postgresql+asyncpg://"):
+        return "postgresql://" + database_url[len("postgresql+asyncpg://") :]
+    if database_url.startswith("postgres+asyncpg://"):
+        return "postgres://" + database_url[len("postgres+asyncpg://") :]
+    return database_url
+
+
+async def revoke_session_token(
+    token: str,
+    expires_at: datetime.datetime,
+    *,
+    user_id: str,
+    organization_id: str | None,
+    workspace_id: str,
+) -> None:
+    now = _utc_now()
+    normalized_expires_at = _as_aware_utc(expires_at)
+    if normalized_expires_at <= now:
         return
-    _revoked_session_tokens[_session_token_fingerprint(token)] = expires_at
+    fingerprint = _session_token_fingerprint(token)
+
+    connection: Connection | None = None
+    try:
+        connection = await asyncpg_connect(_revocation_database_url(), timeout=5)
+        await connection.execute(
+            "DELETE FROM revoked_session_tokens WHERE expires_at <= $1",
+            now,
+        )
+        await connection.execute(
+            """
+            INSERT INTO revoked_session_tokens (
+                token_fingerprint,
+                user_id,
+                organization_id,
+                workspace_id,
+                expires_at,
+                revoked_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (token_fingerprint) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                organization_id = EXCLUDED.organization_id,
+                workspace_id = EXCLUDED.workspace_id,
+                expires_at = EXCLUDED.expires_at,
+                revoked_at = EXCLUDED.revoked_at
+            """,
+            fingerprint,
+            user_id,
+            organization_id,
+            workspace_id,
+            normalized_expires_at,
+            now,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise _authentication_error() from None
+    finally:
+        if connection is not None:
+            await connection.close()
 
 
-def _reject_revoked_session_token(token: str) -> None:
-    _prune_revoked_session_tokens()
-    expires_at = _revoked_session_tokens.get(_session_token_fingerprint(token))
-    if expires_at is not None and expires_at > time.time():
+async def _reject_persistently_revoked_session_token(token: str) -> None:
+    connection: Connection | None = None
+    try:
+        connection = await asyncpg_connect(_revocation_database_url(), timeout=5)
+        is_revoked = await connection.fetchval(
+            """
+            SELECT TRUE
+            FROM revoked_session_tokens
+            WHERE token_fingerprint = $1 AND expires_at > $2
+            LIMIT 1
+            """,
+            _session_token_fingerprint(token),
+            _utc_now(),
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise _authentication_error() from None
+    finally:
+        if connection is not None:
+            await connection.close()
+    if is_revoked:
         raise _authentication_error()
 
 
@@ -309,7 +399,10 @@ def _verify_signed_session_payload(
     authorization: str | None,
 ) -> tuple[dict[str, Any], SessionVerifier]:
     token = _extract_bearer_token(authorization)
+    return _verify_signed_session_token(token)
 
+
+def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
     # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
@@ -323,7 +416,6 @@ def _verify_signed_session_payload(
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL,
             )
-            _reject_revoked_session_token(token)
             _reject_signed_session_system_admin_payload(payload)
             return payload, "oidc"
         except Exception:
@@ -349,7 +441,6 @@ def _verify_signed_session_payload(
         raise _authentication_error()
     if not isinstance(payload, dict):
         raise _authentication_error()
-    _reject_revoked_session_token(token)
     _reject_signed_session_system_admin_payload(payload)
     return payload, "hmac"
 
@@ -403,15 +494,18 @@ def _session_expires_at(payload: dict[str, Any]) -> float:
     return float(expires_at)
 
 
-def _validate_session_metadata(payload: dict[str, Any]) -> None:
-    # If OIDC is configured, the issuer/audience might be verified by jwt.decode
-    if not settings.OIDC_ISSUER_URL:
+def _validate_session_metadata(
+    payload: dict[str, Any], session_verifier: SessionVerifier
+) -> None:
+    if session_verifier == "hmac":
         if payload.get("ver") != 1:
             raise _authentication_error()
         if payload.get("iss") != SESSION_ISSUER:
             raise _authentication_error()
         if payload.get("aud") != SESSION_AUDIENCE:
             raise _authentication_error()
+    elif session_verifier != "oidc":
+        raise _authentication_error()
     if _session_expires_at(payload) <= time.time():
         raise _authentication_error()
 
@@ -419,7 +513,7 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
 def _auth_context_from_session_payload(
     payload: dict[str, Any], session_verifier: SessionVerifier
 ) -> AuthContext:
-    _validate_session_metadata(payload)
+    _validate_session_metadata(payload, session_verifier)
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
@@ -460,7 +554,13 @@ async def logout_current_session(
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> LogoutResponse:
     token = _extract_bearer_token(authorization)
-    payload, _session_verifier = _verify_signed_session_payload(authorization)
-    _validate_session_metadata(payload)
-    revoke_session_token(token, _session_expires_at(payload))
+    payload, session_verifier = _verify_signed_session_token(token)
+    auth_context = _auth_context_from_session_payload(payload, session_verifier)
+    await revoke_session_token(
+        token,
+        _session_expiration_datetime(payload),
+        user_id=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
+    )
     return LogoutResponse(revoked=True)

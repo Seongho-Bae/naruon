@@ -1,4 +1,5 @@
 import base64
+import datetime
 import hashlib
 import hmac
 import inspect
@@ -119,24 +120,56 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
+    previous_oidc_issuer_url = settings.OIDC_ISSUER_URL
+    previous_oidc_client_id = settings.OIDC_CLIENT_ID
     auth_module = sys.modules["api.auth"]
     previous_oidc_signing_keys = auth_module._cached_oidc_signing_keys
-    previous_revoked_session_tokens = dict(auth_module._revoked_session_tokens)
-    auth_module._revoked_session_tokens.clear()
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
+    settings.OIDC_ISSUER_URL = previous_oidc_issuer_url
+    settings.OIDC_CLIENT_ID = previous_oidc_client_id
     auth_module._cached_oidc_signing_keys = previous_oidc_signing_keys
-    auth_module._revoked_session_tokens.clear()
-    auth_module._revoked_session_tokens.update(previous_revoked_session_tokens)
 
 
 def _set_runtime_environment(value: str) -> None:
     if hasattr(settings, "RUNTIME_ENVIRONMENT"):
         setattr(settings, "RUNTIME_ENVIRONMENT", value)
+
+
+def _install_fake_revocation_store(monkeypatch):
+    from api import auth as auth_module
+
+    revoked_fingerprints: set[str] = set()
+
+    class _FakeRevocationConnection:
+        async def execute(self, query, *args):
+            if "INSERT INTO revoked_session_tokens" not in query:
+                return None
+            fingerprint, user_id, organization_id, workspace_id, expires_at, _now = args
+            assert user_id == "alice"
+            assert organization_id == "org-acme"
+            assert workspace_id == "workspace-org-acme"
+            assert expires_at > datetime.datetime.now(datetime.timezone.utc)
+            revoked_fingerprints.add(fingerprint)
+            return None
+
+        async def fetchval(self, query, fingerprint, _now):
+            if fingerprint in revoked_fingerprints:
+                return True
+            return None
+
+        async def close(self):
+            return None
+
+    async def connect_with_revocation_store(*args, **kwargs):
+        return _FakeRevocationConnection()
+
+    monkeypatch.setattr(auth_module, "asyncpg_connect", connect_with_revocation_store)
+    return revoked_fingerprints
 
 
 def _enable_local_dev_headers() -> None:
@@ -252,14 +285,22 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 
 
 @pytest.mark.asyncio
-async def test_get_auth_context_rejects_revoked_signed_bearer_session():
+async def test_get_auth_context_rejects_revoked_signed_bearer_session(monkeypatch):
     from api import auth as auth_module
 
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     payload = _valid_session_payload()
     token = _signed_session_token(payload)
+    revoked_fingerprints = _install_fake_revocation_store(monkeypatch)
 
-    auth_module.revoke_session_token(token, float(payload["exp"]))
+    await auth_module.revoke_session_token(
+        token,
+        datetime.datetime.fromtimestamp(float(payload["exp"]), datetime.timezone.utc),
+        user_id="alice",
+        organization_id="org-acme",
+        workspace_id="workspace-org-acme",
+    )
+    assert auth_module._session_token_fingerprint(token) in revoked_fingerprints
 
     with pytest.raises(HTTPException) as exc:
         await get_auth_context(authorization=f"Bearer {token}")
@@ -267,13 +308,18 @@ async def test_get_auth_context_rejects_revoked_signed_bearer_session():
     assert exc.value.status_code == 401
 
 
-def test_logout_endpoint_revokes_signed_bearer_session():
+def test_logout_endpoint_revokes_signed_bearer_session(monkeypatch):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload())
+    revoked_fingerprints = _install_fake_revocation_store(monkeypatch)
+
+    async def override_get_db():
+        yield _EmptyRunnerConfigSession()
 
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides[get_db] = override_get_db
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             logout_response = client.post(
@@ -290,8 +336,26 @@ def test_logout_endpoint_revokes_signed_bearer_session():
 
     assert logout_response.status_code == 200
     assert logout_response.json() == {"revoked": True}
+    from api import auth as auth_module
+
+    assert auth_module._session_token_fingerprint(token) in revoked_fingerprints
     assert revoked_response.status_code == 401
     assert revoked_response.json() == {"detail": "Authentication required"}
+
+
+def test_hmac_session_metadata_requires_control_plane_claims_when_oidc_configured():
+    from api import auth as auth_module
+
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+
+    with pytest.raises(HTTPException) as exc:
+        auth_module._auth_context_from_session_payload(
+            _valid_session_payload(iss="arbitrary-issuer", aud="arbitrary-audience"),
+            "hmac",
+        )
+
+    assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio

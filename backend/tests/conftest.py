@@ -15,6 +15,7 @@ from fastapi import Header, HTTPException
 from typing import cast
 
 from api.auth import AuthContext, RoleName, get_auth_context, get_current_user
+from api import auth as auth_module
 from main import app
 
 TEST_SCOPED_ROLES = {
@@ -25,6 +26,26 @@ TEST_SCOPED_ROLES = {
     "group_admin",
     "member",
 }
+
+
+class _NoRevocationConnection:
+    async def fetchval(self, query, *args):
+        return None
+
+    async def close(self):
+        return None
+
+
+@pytest.fixture(autouse=True)
+def no_revoked_signed_sessions(monkeypatch):
+    async def connect_without_revoked_tokens(*args, **kwargs):
+        return _NoRevocationConnection()
+
+    monkeypatch.setattr(
+        auth_module,
+        "asyncpg_connect",
+        connect_without_revoked_tokens,
+    )
 
 
 def _normalize_header_value(value: str | None) -> str | None:
