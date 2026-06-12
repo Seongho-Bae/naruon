@@ -27,6 +27,7 @@ from services.email_dedupe_service import (
     email_strong_fingerprint,
 )
 from services.email_import_service import (
+    EmailImportQuotaExceeded,
     MAX_IMPORT_UPLOAD_BYTES,
     MAX_IMPORT_UPLOADS,
     EmailImportItemStatus,
@@ -501,12 +502,17 @@ async def import_email_files(
             )
         )
 
-    import_result = await import_email_uploads(
-        db,
-        uploads=uploads,
-        user_id=auth_context.user_id,
-        organization_id=auth_context.organization_id,
-    )
+    try:
+        import_result = await import_email_uploads(
+            db,
+            uploads=uploads,
+            user_id=auth_context.user_id,
+            organization_id=auth_context.organization_id,
+        )
+    except EmailImportQuotaExceeded as exc:
+        raise HTTPException(
+            status_code=429, detail="email_import_quota_exceeded"
+        ) from exc
     return EmailFileImportResponse(
         status="completed",
         imported_count=import_result.imported_count,

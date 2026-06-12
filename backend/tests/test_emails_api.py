@@ -113,6 +113,9 @@ class MockSession:
         return MockResult(self.items)
 
     async def scalar(self, query):
+        query_text = compiled_query_text(query)
+        if "count(" in query_text and "emails" in query_text:
+            return len(self.items)
         return self.tenant_config
 
 
@@ -899,6 +902,107 @@ async def test_import_email_files_duplicate_query_is_owner_scoped(
     assert response.status_code == 200
     assert session.queries
     assert_query_is_owner_scoped(session.queries[0])
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
+    client: AsyncClient, monkeypatch
+):
+    from db.session import get_db
+
+    monkeypatch.setattr(
+        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
+    )
+    existing_email = Email(
+        id=90,
+        user_id="testuser",
+        organization_id="org-acme",
+        message_id="<existing@example.com>",
+        thread_id="existing-thread",
+        sender="partner@example.com",
+        recipients="user@example.com",
+        subject="Existing",
+        date=datetime.datetime(2026, 6, 11, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Existing body",
+        embedding=[0.0] * 1536,
+    )
+    session = ImportRecordingSession([existing_email])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "quota-source.eml",
+                        _sample_eml_bytes(message_id="<quota@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "email_import_quota_exceeded"
+    assert session.added == []
+    assert session.commit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_rejects_oversized_archive_before_partial_commit(
+    client: AsyncClient, monkeypatch
+):
+    from db.session import get_db
+
+    monkeypatch.setattr(
+        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
+    )
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr(
+            "first.eml",
+            _sample_eml_bytes(message_id="<quota-first@example.com>"),
+        )
+        bundle.writestr(
+            "second.eml",
+            _sample_eml_bytes(message_id="<quota-second@example.com>"),
+        )
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "quota-archive.zip",
+                        archive.getvalue(),
+                        "application/zip",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "email_import_quota_exceeded"
+    assert session.added == []
+    assert session.commit_count == 0
 
 
 @pytest.mark.asyncio

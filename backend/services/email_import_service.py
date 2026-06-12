@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Attachment, Email
@@ -24,8 +24,13 @@ EMBEDDING_DIMENSION = 1536
 MAX_IMPORT_UPLOADS = 10
 MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_IMPORT_EML_FILES = 100
+MAX_IMPORT_EMAILS_PER_OWNER = 1000
 
 EmailImportItemStatus = Literal["imported", "skipped_duplicate", "failed"]
+
+
+class EmailImportQuotaExceeded(Exception):
+    pass
 
 
 @dataclass(frozen=True)
@@ -126,6 +131,17 @@ async def _find_existing_email(
         )
     )
     return result.scalar_one_or_none()
+
+
+async def _owner_email_import_count(
+    session: AsyncSession, *, user_id: str, organization_id: str
+) -> int:
+    count = await session.scalar(
+        select(func.count(Email.id)).where(
+            *email_owner_filters(user_id, organization_id)
+        )
+    )
+    return int(count or 0)
 
 
 async def _import_single_eml(
@@ -258,9 +274,16 @@ async def import_email_uploads(
     organization_id: str,
 ) -> EmailImportResult:
     result = EmailImportResult()
+    existing_email_count = await _owner_email_import_count(
+        session, user_id=user_id, organization_id=organization_id
+    )
+    remaining_quota = MAX_IMPORT_EMAILS_PER_OWNER - existing_email_count
+    if remaining_quota <= 0:
+        raise EmailImportQuotaExceeded()
 
     with TemporaryDirectory(prefix="naruon-email-import-") as temp_dir_name:
         temp_dir = Path(temp_dir_name)
+        planned_imports: list[tuple[str, Path]] = []
         for index, upload in enumerate(uploads):
             upload_name = _safe_upload_filename(upload.filename)
             upload_dir = temp_dir / f"upload_{index}"
@@ -279,15 +302,26 @@ async def import_email_uploads(
                 )
                 continue
 
-            for eml_path in eml_paths:
-                result.add_item(
-                    await _import_single_eml(
-                        session,
-                        eml_path=eml_path,
-                        display_filename=_safe_item_filename(upload_name, eml_path),
-                        user_id=user_id,
-                        organization_id=organization_id,
-                    )
+            planned_imports.extend(
+                (
+                    _safe_item_filename(upload_name, eml_path),
+                    eml_path,
                 )
+                for eml_path in eml_paths
+            )
+
+        if len(planned_imports) > remaining_quota:
+            raise EmailImportQuotaExceeded()
+
+        for display_filename, eml_path in planned_imports:
+            result.add_item(
+                await _import_single_eml(
+                    session,
+                    eml_path=eml_path,
+                    display_filename=display_filename,
+                    user_id=user_id,
+                    organization_id=organization_id,
+                )
+            )
 
     return result
