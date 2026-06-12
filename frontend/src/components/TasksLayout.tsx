@@ -304,6 +304,7 @@ export function TasksLayout() {
             <input
               id="task-search-input"
               type="text"
+              aria-label="작업 검색"
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="작업 검색..."
