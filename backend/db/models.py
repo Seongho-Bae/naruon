@@ -118,6 +118,31 @@ class SecurityAuditEvent(Base):
     )
 
 
+class RevokedSessionToken(Base):
+    __tablename__ = "revoked_session_tokens"
+
+    token_fingerprint: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    organization_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), index=True, nullable=False
+    )
+    revoked_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    __table_args__ = (
+        Index(
+            "ix_revoked_session_tokens_scope_expiry",
+            "organization_id",
+            "workspace_id",
+            "expires_at",
+        ),
+    )
+
+
 class LLMProvider(Base):
     __tablename__ = "llm_providers"
     __table_args__ = (

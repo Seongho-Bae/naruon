@@ -15,7 +15,7 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from api.auth import AuthContext, build_auth_context
+from api.auth import AuthContext, build_persistent_auth_context
 from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import AsyncSessionLocal
 
@@ -155,9 +155,11 @@ def _policy_violation() -> WebSocketException:
     return WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
 
 
-def _auth_context_from_websocket(websocket: WebSocket) -> AuthContext:
+async def _auth_context_from_websocket(websocket: WebSocket) -> AuthContext:
     try:
-        return build_auth_context(websocket.headers.get("authorization"))
+        return await build_persistent_auth_context(
+            websocket.headers.get("authorization")
+        )
     except HTTPException as exc:
         raise _policy_violation() from exc
 
@@ -227,7 +229,7 @@ async def _runner_connection_key(token: str, auth_context: AuthContext) -> str:
 
 @router.websocket("/ws/runner/{token}")
 async def runner_endpoint(websocket: WebSocket, token: str):
-    auth_context = _auth_context_from_websocket(websocket)
+    auth_context = await _auth_context_from_websocket(websocket)
     connection_key = await _runner_connection_key(token, auth_context)
     await manager.connect(websocket, connection_key, auth_context)
     try:
