@@ -76,7 +76,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
-          FAILED_CHECK_EVIDENCE_ATTEMPTS: "19"
+          FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"
           FAILED_CHECK_EVIDENCE_SLEEP_SECONDS: "10"
         run: |
           set -euo pipefail
@@ -352,8 +352,8 @@ jobs:
                     "name": "OpenAI GPT-5",
                     "tool_call": true,
                     "limit": {
-                      "context": 128000,
-                      "output": 4096
+                      "context": 200000,
+                      "output": 100000
                     }
                   },
                   "deepseek/deepseek-r1-0528": {
@@ -426,7 +426,7 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
-          timeout 600 opencode run "$(cat "$prompt_file")" \
+          timeout 1200 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review \
             --model "$MODEL" \
@@ -886,6 +886,72 @@ jobs:
             } >"$body_file"
           }
 
+          emit_line_specific_fallback_findings() {
+            local evidence_file="$1"
+            local finding_index=0
+            local repo_root="${GITHUB_WORKSPACE:-$PWD}"
+
+            emit_known_missing_string_finding() {
+              local needle="$1"
+              local title="$2"
+              local preferred_path
+              local match=""
+              local path=""
+              local line=""
+
+              if ! grep -Fq -- "$needle" "$evidence_file"; then
+                return 0
+              fi
+
+              shift 2
+              for preferred_path in "$@"; do
+                if [ -f "${repo_root%/}/$preferred_path" ]; then
+                  match="$(grep -nF -- "$needle" "${repo_root%/}/$preferred_path" | head -n 1 || true)"
+                  if [ -n "$match" ]; then
+                    path="$preferred_path"
+                    line="${match%%:*}"
+                    break
+                  fi
+                fi
+              done
+
+              finding_index=$((finding_index + 1))
+              if [ -n "$path" ] && [ -n "$line" ]; then
+                printf '### %s. HIGH %s:%s - %s\n' "$finding_index" "$path" "$line" "$title"
+                printf -- '- Problem: Strix failed because the trusted self-test log reported missing "%s".\n' "$needle"
+                printf -- '- Root cause: The failed check is executing trusted-base workflow material, so this exact line must exist in the trusted workflow/test contract before the check can pass.\n'
+                printf -- '- Fix: Keep or add the current-head line at "%s:%s" so trusted-base Strix/OpenCode evidence contains "%s".\n' "$path" "$line" "$needle"
+                printf -- '- Regression test: Keep scripts/ci/test_strix_quick_gate.sh assertions covering this exact string.\n\n'
+              else
+                printf '### %s. HIGH unknown:1 - %s\n' "$finding_index" "$title"
+                printf -- '- Problem: Strix failed because the trusted self-test log reported missing "%s".\n' "$needle"
+                printf -- '- Root cause: No current-head line containing this exact string was found in the expected workflow/test files.\n'
+                printf -- '- Fix: Add the exact string "%s" to the relevant workflow or test contract line.\n' "$needle"
+                printf -- '- Regression test: Add a static assertion for this exact string.\n\n'
+              fi
+            }
+
+            emit_known_missing_string_finding \
+              "github.event.inputs.strix_llm || 'openai/gpt-5'" \
+              "Strix PR scans must default to GitHub Models GPT-5" \
+              ".github/workflows/strix.yml" \
+              "scripts/ci/test_strix_quick_gate.sh"
+            emit_known_missing_string_finding \
+              "STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" \
+              "Strix unsupported-model errors must name the allowed providers" \
+              ".github/workflows/strix.yml" \
+              "scripts/ci/test_strix_quick_gate.sh"
+            emit_known_missing_string_finding \
+              "MODEL: github-models/openai/gpt-5" \
+              "OpenCode review must try GitHub Models GPT-5 first" \
+              ".github/workflows/opencode-review.yml" \
+              "scripts/ci/test_strix_quick_gate.sh"
+
+            if [ "$finding_index" -eq 0 ]; then
+              printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'
+            fi
+          }
+
           build_failed_check_fallback_body() {
             local failed_checks_file="$1"
             local evidence_file="$2"
@@ -900,7 +966,9 @@ jobs:
               printf -- '- Workflow attempt: %s\n\n' "$RUN_ATTEMPT"
               printf 'Failed checks:\n'
               cat "$failed_checks_file"
-              printf '\n\nFailed check evidence for line-specific fixes:\n\n'
+              printf '\n\nLine-specific fallback findings:\n\n'
+              emit_line_specific_fallback_findings "$evidence_file"
+              printf 'Failed check evidence for line-specific fixes:\n\n'
               if [ -s "$evidence_file" ]; then
                 sed -n '1,900p' "$evidence_file"
               else

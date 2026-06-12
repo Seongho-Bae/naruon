@@ -92,7 +92,7 @@ if grep -Fq "Strix vulnerability report window" "$FAILED_CHECK_EVIDENCE_FILE"; t
       exit 4
     fi
   done < <(
-    perl -ne 'while (m{(?:openai|deepseek|vertex_ai|github_models)/[A-Za-z0-9._/-]+}g) { print "$&\n" }' \
+    perl -ne 'while (m{(?:openai|deepseek|vertex_ai|github(?:_|-)models)/[A-Za-z0-9._/-]+}g) { print "$&\n" }' \
       "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
   )
 fi
