@@ -1001,7 +1001,7 @@ jobs:
             }
 
             emit_known_missing_string_finding \
-              "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" \
+              "github.event.inputs.strix_llm || 'openai/gpt-5'" \
               "Strix PR scans must default to GitHub Models GPT-5" \
               ".github/workflows/strix.yml" \
               "scripts/ci/test_strix_quick_gate.sh"
@@ -1015,6 +1015,32 @@ jobs:
               "OpenCode review must try GitHub Models GPT-5 first" \
               ".github/workflows/opencode-review.yml" \
               "scripts/ci/test_strix_quick_gate.sh"
+
+            emit_strix_provider_failure_finding() {
+              local match=""
+              local path=".github/workflows/strix.yml"
+              local line="1"
+
+              if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure" "$evidence_file"; then
+                return 0
+              fi
+
+              if [ -f "${repo_root%/}/$path" ]; then
+                match="$(grep -nF -- "STRIX_FALLBACK_MODELS: deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" "${repo_root%/}/$path" | head -n 1 || true)"
+                if [ -n "$match" ]; then
+                  line="${match%%:*}"
+                fi
+              fi
+
+              finding_index=$((finding_index + 1))
+              printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
+              printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, budget-limit output for the DeepSeek fallbacks, and Configured model and fallback models were unavailable.\n'
+              printf -- '- Root cause: The configured GitHub Models primary/fallback provider capacity or budget was exhausted for this run; no Strix Vulnerability Report window was produced, so there is no application source line to patch from this evidence.\n'
+              printf -- '- Fix: Do not approve from this failed scan. Re-run Strix after GitHub Models quota recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep the configured fallback line at %s:%s aligned with the approved model list.\n' "$path" "$line"
+              printf -- '- Regression test: Keep the failed-check evidence collector preserving RateLimitError, budget-limit, provider infrastructure, and unavailable-model lines so OpenCode reviews can distinguish external provider blockers from code vulnerabilities.\n\n'
+            }
+
+            emit_strix_provider_failure_finding
 
             if [ "$finding_index" -eq 0 ]; then
               printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'
@@ -1272,7 +1298,11 @@ jobs:
               rm -f "$rollup_file" "$strix_runs_file"
               return 1
             fi
-            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            if grep -Fq -- "Strix Security Scan/strix:" "$rollup_file"; then
+              cat "$rollup_file" >"$output_file"
+            else
+              cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            fi
             rm -f "$rollup_file" "$strix_runs_file"
 
           }
@@ -1348,7 +1378,11 @@ jobs:
               rm -f "$rollup_file" "$strix_runs_file"
               return 1
             fi
-            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            if grep -Fq -- "Strix Security Scan/strix:" "$rollup_file"; then
+              cat "$rollup_file" >"$output_file"
+            else
+              cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            fi
             rm -f "$rollup_file" "$strix_runs_file"
 
           }

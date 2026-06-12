@@ -49,6 +49,12 @@ emit_failure_signal_summary() {
 		/::error::/ ||
 		/##\[error\]/ ||
 		/Process completed with exit code/ ||
+		/LLM CONNECTION FAILED/ ||
+		/RateLimitError/ ||
+		/Too many requests/ ||
+		/budget limit/ ||
+		/Configured model and fallback models were unavailable/ ||
+		/provider infrastructure/ ||
 		/[Ff]atal/ ||
 		/[Dd]enied/ ||
 		/[Tt]imeout/ ||
@@ -87,6 +93,11 @@ emit_strix_vulnerability_evidence() {
 		/Strix run failed for model/ ||
 		/Primary model unavailable; retrying with fallback/ ||
 		/Strix fallback model/ ||
+		/LLM CONNECTION FAILED/ ||
+		/RateLimitError/ ||
+		/Too many requests/ ||
+		/budget limit/ ||
+		/Configured model and fallback models were unavailable/ ||
 		/Below-threshold findings detected/ ||
 		/Unable to map Strix findings/ ||
 		/Model [[:alnum:]_.\/-]+/ ||
@@ -164,7 +175,8 @@ emit_strix_vulnerability_evidence() {
 owner="${GH_REPOSITORY%%/*}"
 repo="${GH_REPOSITORY#*/}"
 failed_contexts="$(mktemp)"
-tmp_files=("$failed_contexts")
+workflow_run_contexts="$(mktemp)"
+tmp_files=("$failed_contexts" "$workflow_run_contexts")
 cleanup() {
 	rm -f "${tmp_files[@]}"
 }
@@ -242,26 +254,36 @@ gh api graphql \
 		| @tsv
 		' >"$failed_contexts"
 
-	gh run list \
-		--repo "$GH_REPOSITORY" \
-		--commit "$HEAD_SHA" \
-		--limit 100 \
-		--json databaseId,workflowName,status,conclusion,url \
-		--jq '
-			.[]
-			| select((.workflowName // "") != "OpenCode Review")
-			| select((.status // "") == "completed")
-			| select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
-			| [
-				"workflow_run",
-				(if (.workflowName // "") != "" then .workflowName else "workflow run" end),
-				(.conclusion // "unknown"),
-				(.url // ""),
-				((.databaseId // "") | tostring),
-				""
-			]
-			| @tsv
-		' >>"$failed_contexts"
+gh run list \
+	--repo "$GH_REPOSITORY" \
+	--commit "$HEAD_SHA" \
+	--limit 100 \
+	--json databaseId,workflowName,status,conclusion,url \
+	--jq '
+		.[]
+		| select((.workflowName // "") != "OpenCode Review")
+		| select((.status // "") == "completed")
+		| select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
+		| [
+			"workflow_run",
+			(if (.workflowName // "") != "" then .workflowName else "workflow run" end),
+			(.conclusion // "unknown"),
+			(.url // ""),
+			((.databaseId // "") | tostring),
+			""
+		]
+		| @tsv
+	' >"$workflow_run_contexts"
+
+while IFS=$'\t' read -r kind label conclusion details_url run_id check_run_id; do
+	if [ -z "$run_id" ]; then
+		continue
+	fi
+	if awk -F '\t' -v run_id="$run_id" '$5 == run_id { found = 1 } END { exit found ? 0 : 1 }' "$failed_contexts"; then
+		continue
+	fi
+	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$kind" "$label" "$conclusion" "$details_url" "$run_id" "$check_run_id" >>"$failed_contexts"
+done <"$workflow_run_contexts"
 
 {
 	printf '# Failed GitHub Check Evidence\n\n'
