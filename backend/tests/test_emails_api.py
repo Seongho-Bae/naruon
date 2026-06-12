@@ -193,6 +193,19 @@ class ImportRecordingSession(MockSession):
         self.rollback_count += 1
 
 
+class _PostgresDialect:
+    name = "postgresql"
+
+
+class _PostgresBind:
+    dialect = _PostgresDialect()
+
+
+class PostgresImportRecordingSession(ImportRecordingSession):
+    def get_bind(self):
+        return _PostgresBind()
+
+
 def compiled_query_text(query) -> str:
     return str(query).lower()
 
@@ -209,6 +222,14 @@ def assert_query_is_owner_scoped(query) -> None:
     assert "emails.organization_id = :organization_id_1" in query_text
     assert query_params["user_id_1"] == "testuser"
     assert query_params["organization_id_1"] == "org-acme"
+
+
+def advisory_query_texts(session: ImportRecordingSession) -> list[str]:
+    return [
+        compiled_query_text(query)
+        for query in session.queries
+        if "pg_advisory" in compiled_query_text(query)
+    ]
 
 
 def _sample_eml_bytes(
@@ -905,6 +926,42 @@ async def test_import_email_files_duplicate_query_is_owner_scoped(
 
 
 @pytest.mark.asyncio
+async def test_import_email_files_serializes_quota_with_postgres_owner_lock(
+    client: AsyncClient,
+):
+    from db.session import get_db
+
+    session = PostgresImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "locked-source.eml",
+                        _sample_eml_bytes(message_id="<locked@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    advisory_queries = advisory_query_texts(session)
+    assert "pg_advisory_lock" in advisory_queries[0]
+    assert "pg_advisory_unlock" in advisory_queries[-1]
+
+
+@pytest.mark.asyncio
 async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
     client: AsyncClient, monkeypatch
 ):
@@ -926,7 +983,7 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
         body="Existing body",
         embedding=[0.0] * 1536,
     )
-    session = ImportRecordingSession([existing_email])
+    session = PostgresImportRecordingSession([existing_email])
     previous_db_override = app.dependency_overrides.get(get_db)
     app.dependency_overrides[get_db] = lambda: session
     try:
@@ -954,6 +1011,9 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
     assert response.json()["detail"] == "email_import_quota_exceeded"
     assert session.added == []
     assert session.commit_count == 0
+    advisory_queries = advisory_query_texts(session)
+    assert "pg_advisory_lock" in advisory_queries[0]
+    assert "pg_advisory_unlock" in advisory_queries[-1]
 
 
 @pytest.mark.asyncio
