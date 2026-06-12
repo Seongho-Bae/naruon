@@ -675,9 +675,10 @@ jobs:
 
           clean_output="$(mktemp)"
           comment_body_file="$(mktemp)"
+          normalized_comment_json="$(mktemp)"
           overview_body_file="$(mktemp)"
           cleanup_publish_files() {
-            rm -f "$clean_output" "$comment_body_file" "$overview_body_file"
+            rm -f "$clean_output" "$comment_body_file" "$normalized_comment_json" "$overview_body_file"
           }
           trap cleanup_publish_files EXIT
 
@@ -696,9 +697,17 @@ jobs:
 
           gate_status=0
           gate_result="$(
-            bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file"
+            bash scripts/ci/opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file" "$normalized_comment_json"
           )" || gate_status=$?
           printf 'OpenCode comment gate result: %s (exit %s)\n' "$gate_result" "$gate_status"
+          if [ "$gate_status" -eq 0 ]; then
+            {
+              printf '%s\n\n' "$sentinel"
+              printf '<!-- opencode-review-control-v1\n'
+              cat "$normalized_comment_json"
+              printf -- '-->\n'
+            } >"$comment_body_file"
+          fi
 
           {
             printf '<!-- opencode-review-overview -->\n'

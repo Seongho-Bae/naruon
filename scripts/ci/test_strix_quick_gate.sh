@@ -341,6 +341,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'gate_status=0' "opencode review publish step tracks invalid control output without failing the check"
 	assert_file_contains "$workflow_file" 'gate_status=$?' "opencode review publish step lets approval gate explain invalid control output"
 	assert_file_contains "$workflow_file" "OpenCode comment gate result: %s (exit %s)" "opencode review publish step logs invalid control output status"
+	assert_file_contains "$workflow_file" 'normalized_comment_json="$(mktemp)"' "opencode review publish step creates a normalized control payload file"
+	assert_file_contains "$workflow_file" 'opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file" "$normalized_comment_json"' "opencode review publish step extracts normalized control JSON"
+	assert_file_contains "$workflow_file" 'cat "$normalized_comment_json"' "opencode review publish step rebuilds the overview from normalized control JSON"
 	assert_file_contains "$workflow_file" "<!-- opencode-review-overview -->" "opencode review publishes a durable Review Overview marker"
 	assert_file_contains "$workflow_file" "## OpenCode Review Overview" "opencode review publishes a visible Review Overview heading"
 	assert_file_contains "$workflow_file" 'gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}"' "opencode review updates an existing Review Overview comment instead of duplicating it"
@@ -456,6 +459,57 @@ EOF
 
 	assert_equals "0" "$rc" "normalized OpenCode transcript passes approval gate"
 	assert_equals "APPROVE" "$gate_result" "normalized OpenCode transcript gate result"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_publish_body_discards_trailing_model_prose() {
+	local tmp_dir
+	local output_file
+	local normalized_json
+	local comment_body_file
+	local gate_result
+	local rc
+	local sentinel
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+	normalized_json="$tmp_dir/control.json"
+	comment_body_file="$tmp_dir/comment-body.md"
+	sentinel="<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found in the current bounded evidence.","summary":"Reviewed current head evidence and no blocking review findings were identified.","findings":[]}
+-->
+
+But that is not meticulous.
+
+We should request changes.
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file" "$normalized_json"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "opencode publish sanitizer accepts the first valid control block"
+	assert_equals "APPROVE" "$gate_result" "opencode publish sanitizer preserves the valid gate result"
+
+	{
+		printf '%s\n\n' "$sentinel"
+		printf '<!-- opencode-review-control-v1\n'
+		cat "$normalized_json"
+		printf -- '-->\n'
+	} >"$comment_body_file"
+
+	assert_file_contains "$comment_body_file" '"result":"APPROVE"' "opencode publish sanitizer keeps normalized approval JSON"
+	assert_file_not_contains "$comment_body_file" "But that is not meticulous." "opencode publish sanitizer drops trailing model prose"
+	assert_file_not_contains "$comment_body_file" "We should request changes." "opencode publish sanitizer drops contradictory trailing model prose"
 
 	rm -rf "$tmp_dir"
 }
@@ -4937,6 +4991,8 @@ assert_strix_child_target_uses_constant_argument
 assert_opencode_review_uses_codegraph_and_gpt5_fallback
 
 assert_opencode_review_normalizer_accepts_transcript_json
+
+assert_opencode_review_publish_body_discards_trailing_model_prose
 
 assert_opencode_review_gate_rejects_line_zero_findings
 
