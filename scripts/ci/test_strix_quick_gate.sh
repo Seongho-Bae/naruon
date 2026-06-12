@@ -187,6 +187,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
 	assert_file_contains "$workflow_file" "deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
+	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix before passing model names to LiteLLM"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
