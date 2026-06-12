@@ -419,7 +419,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "include every model-reported vulnerability as a separate evidence-backed finding" "opencode review prompt requires all Strix model findings"
 	assert_file_contains "$workflow_file" "Multiple Strix model reports must not be collapsed" "opencode review prompt prevents collapsing multiple Strix model reports"
 	assert_file_contains "$workflow_file" "model name, report title, severity, endpoint, and Code Locations/path:line evidence" "opencode review prompt preserves exact Strix report fields"
-	assert_file_contains "$workflow_file" 'sed -n '"'"'1,900p'"'"' "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"' "opencode review includes enough failed-check evidence for multiple Strix model reports"
+	assert_file_contains "$workflow_file" "Full failed-check evidence, when collected, is available as failed-check-evidence.md" "opencode review exposes full failed-check evidence for multiple Strix model reports without oversizing the prompt"
 	assert_file_contains "$workflow_file" "Do not request changes with only a check URL, workflow name, or generic failure summary." "opencode review prompt forbids generic failed-check reviews"
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
 	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
