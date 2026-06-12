@@ -116,15 +116,21 @@ export default function NetworkGraph() {
         network.fit({ animation: false });
       };
 
+      // Debounce the fitGraph call to prevent main thread blocking on rapid resize events
+      let resizeTimer: number | ReturnType<typeof setTimeout>;
       const resizeObserver = typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
-            fitGraph();
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+              fitGraph();
+            }, 50);
           });
 
       resizeObserver?.observe(container);
 
       return () => {
+        clearTimeout(resizeTimer);
         resizeObserver?.disconnect();
         network.destroy();
       };
