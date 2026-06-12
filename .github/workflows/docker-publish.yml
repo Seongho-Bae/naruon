@@ -138,12 +138,19 @@ jobs:
           sbom: true
 
       - name: Record image digest
+        env:
+          IMAGE_COMPONENT: ${{ matrix.component }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_NAME: ${{ matrix.image }}
+          IMAGE_REGISTRY: ${{ env.REGISTRY }}
+          IMAGE_VERSION: ${{ steps.version.outputs.version }}
+          REPO_OWNER: ${{ github.repository_owner }}
         run: |
           {
-            printf '### %s image\n' '${{ matrix.component }}'
-            printf -- '- Image: `%s/%s/%s`\n' '${{ env.REGISTRY }}' '${{ github.repository_owner }}' '${{ matrix.image }}'
-            printf -- '- Version: `%s`\n' '${{ steps.version.outputs.version }}'
-            printf -- '- Digest: `%s`\n' '${{ steps.build.outputs.digest }}'
+            printf '### %s image\n' "$IMAGE_COMPONENT"
+            printf -- '- Image: %s/%s/%s\n' "$IMAGE_REGISTRY" "$REPO_OWNER" "$IMAGE_NAME"
+            printf -- '- Version: %s\n' "$IMAGE_VERSION"
+            printf -- '- Digest: %s\n' "$IMAGE_DIGEST"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy_to_aks:
