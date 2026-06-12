@@ -7,3 +7,7 @@
 **Learning:** Browsers interpret standard `<button>` elements as submit buttons (`type="submit"`) by default when located inside a form context, which can cause unexpected page reloads or form submissions.
 
 **Action:** Always explicitly define `type="button"` on interactive buttons not meant for form submission across all React components to prevent this behavior.
+
+## 2025-06-12 - Wrap Checkboxes with Labels
+**Learning:** Found isolated checkboxes in WorkspaceHome and CalendarLayout that were difficult to click. Users had to aim perfectly for the small square. The clickable area of the elements must be increased.
+**Action:** Wrapped the checkboxes and associated text with semantic `<label>` elements, adding `cursor-pointer`, hover styling, and explicit `aria-label` definitions for better keyboard and screen-reader accessibility.

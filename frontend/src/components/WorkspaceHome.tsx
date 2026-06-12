@@ -358,10 +358,10 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 const pClass = pKor === '긴급' || pKor === '높음' ? 'text-red-500' : pKor === '보통' ? 'text-green-500' : 'text-muted-foreground';
                 return (
                   <div key={task.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="size-4 rounded border-border text-primary" />
-                      <span className="text-sm font-medium">{task.title}</span>
-                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer group">
+                      <input type="checkbox" className="size-4 rounded border-border text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" aria-label={`${task.title} 작업 선택`} />
+                      <span className="text-sm font-medium group-hover:text-primary transition-colors">{task.title}</span>
+                    </label>
                     <div className="flex items-center gap-2 text-xs">
                       <span className={`font-semibold ${pClass}`}>{pKor}</span>
                     </div>

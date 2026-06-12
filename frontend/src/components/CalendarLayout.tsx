@@ -139,9 +139,11 @@ export function CalendarLayout() {
               { name: '회사 공용', color: 'bg-indigo-500' },
               { name: '공휴일', color: 'bg-slate-400' },
             ].map((cal) => (
-              <li key={cal.name} className="flex items-center gap-3 text-sm">
-                <input type="checkbox" defaultChecked className={`size-4 rounded border-border text-primary focus:ring-primary`} style={{ accentColor: cal.color }} />
-                <span className="font-medium text-foreground">{cal.name}</span>
+              <li key={cal.name} className="text-sm">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input type="checkbox" defaultChecked className={`size-4 rounded border-border text-primary cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40`} style={{ accentColor: cal.color }} aria-label={`${cal.name} 캘린더 표시 토글`} />
+                  <span className="font-medium text-foreground group-hover:text-primary transition-colors">{cal.name}</span>
+                </label>
               </li>
             ))}
           </ul>
