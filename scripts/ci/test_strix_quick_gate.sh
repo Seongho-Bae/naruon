@@ -1521,7 +1521,7 @@ EOS
 			echo "│  Penetration test in progress                                                │"
 			echo "│  Vulnerabilities 0                                                           │"
 			echo "╰──────────────────────────────────────────────────────────────────────────────╯"
-			sleep 2
+			sleep 4
 			exit 0
 			;;
 		*)
@@ -1537,11 +1537,11 @@ EOS
 			echo "│  Penetration test in progress                                                │"
 			echo "│  Vulnerabilities 0                                                           │"
 			echo "╰──────────────────────────────────────────────────────────────────────────────╯"
-			sleep 2
+			sleep 4
 			exit 0
 			;;
 		vertex_ai/fallback-one)
-			sleep 2
+			sleep 4
 			exit 0
 			;;
 		*)
@@ -1561,11 +1561,11 @@ EOS
 			echo "│  Penetration test in progress                                                │"
 			echo "│  Vulnerabilities 0                                                           │"
 			echo "╰──────────────────────────────────────────────────────────────────────────────╯"
-			sleep 2
+			sleep 4
 			exit 0
 			;;
 		vertex_ai/fallback-one)
-			sleep 2
+			sleep 4
 			exit 0
 			;;
 		*)
@@ -5597,7 +5597,7 @@ run_gate_case_allow_provider_signal "zero-findings-timeout-all-models" \
 	"0" \
 	"" \
 	"" \
-	"1" \
+	"2" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
@@ -5618,7 +5618,7 @@ run_gate_case_allow_provider_signal "zero-findings-timeout-all-models" \
 	"0" \
 	"" \
 	"" \
-	"1" \
+	"2" \
 	"0" \
 	"push"
 
@@ -5638,7 +5638,7 @@ run_gate_case_allow_provider_signal "zero-findings-sticky-across-fallback" \
 	"0" \
 	"" \
 	"" \
-	"1" \
+	"2" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
@@ -5659,7 +5659,7 @@ run_gate_case_allow_provider_signal "zero-findings-with-low-report-timeout" \
 	"0" \
 	"" \
 	"" \
-	"1" \
+	"2" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
@@ -5680,7 +5680,7 @@ run_gate_case "strict-zero-findings-timeout-fails-pr" \
 	"0" \
 	"" \
 	"" \
-	"1" \
+	"2" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" \
