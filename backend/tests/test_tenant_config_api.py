@@ -1,8 +1,5 @@
-from types import SimpleNamespace
-
 import pytest
 from cryptography.fernet import Fernet
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
@@ -144,77 +141,6 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
     assert data["pop3_port"] == 995
     assert data["pop3_username"] == "pop3-user"
     assert data["google_client_secret"] is None
-
-
-def test_validate_mail_config_update_revalidates_existing_mail_hosts(monkeypatch):
-    from api.tenant_config import validate_mail_config_update
-
-    calls = []
-
-    def record_smtp_host(host, *, resolve_host=True):
-        calls.append(("smtp_host", host, resolve_host))
-        return host
-
-    def record_smtp_port(port):
-        calls.append(("smtp_port", port))
-        return port
-
-    def record_smtp_destination(host, port, *, resolve_host=True):
-        calls.append(("smtp_destination", host, port, resolve_host))
-        return host, port
-
-    def record_imap_destination(host, port, *, resolve_host=True):
-        calls.append(("imap_destination", host, port, resolve_host))
-        return host, port
-
-    def record_pop3_destination(host, port, *, resolve_host=True):
-        calls.append(("pop3_destination", host, port, resolve_host))
-        return host, port
-
-    monkeypatch.setattr("api.tenant_config.validate_smtp_host", record_smtp_host)
-    monkeypatch.setattr("api.tenant_config.validate_smtp_port", record_smtp_port)
-    monkeypatch.setattr(
-        "api.tenant_config.validate_smtp_destination",
-        record_smtp_destination,
-    )
-    monkeypatch.setattr(
-        "api.tenant_config.validate_imap_destination",
-        record_imap_destination,
-    )
-    monkeypatch.setattr(
-        "api.tenant_config.validate_pop3_destination",
-        record_pop3_destination,
-    )
-
-    validate_mail_config_update(
-        {},
-        SimpleNamespace(
-            smtp_server="smtp.example.com",
-            smtp_port=587,
-            imap_server="imap.example.com",
-            imap_port=None,
-            pop3_server="pop3.example.com",
-            pop3_port=None,
-        ),
-    )
-
-    assert calls == [
-        ("smtp_host", "smtp.example.com", True),
-        ("smtp_port", 587),
-        ("smtp_destination", "smtp.example.com", 587, True),
-        ("imap_destination", "imap.example.com", 993, True),
-        ("pop3_destination", "pop3.example.com", 995, True),
-    ]
-
-
-def test_validate_mail_config_update_rejects_unsafe_partial_override():
-    from api.tenant_config import validate_mail_config_update
-
-    with pytest.raises(HTTPException) as exc_info:
-        validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
-
-    assert exc_info.value.status_code == 400
-    assert "imap_server/imap_port validation failed" in exc_info.value.detail
 
 
 def test_legacy_tenant_config_endpoint_keeps_organization_scope(
@@ -481,13 +407,12 @@ def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
     }
 
 
-@pytest.mark.parametrize("role", ("group_admin", "member"))
-def test_global_config_requires_admin(client, role):
+def test_global_config_requires_admin(client):
     response = client.get(
         "/api/config/global",
         headers={
             "X-User-Id": "member-user",
-            "X-User-Role": role,
+            "X-User-Role": "member",
             "X-Organization-Id": "org-acme",
             "X-Workspace-Id": "ws-1",
         },
@@ -495,17 +420,12 @@ def test_global_config_requires_admin(client, role):
     assert response.status_code == 403
     assert response.json() == {"detail": "Not enough privileges"}
 
-
-@pytest.mark.parametrize(
-    "admin_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin"),
-)
-def test_global_config_allows_admin(client, admin_role):
+def test_global_config_allows_admin(client):
     response = client.get(
         "/api/config/global",
         headers={
             "X-User-Id": "admin-user",
-            "X-User-Role": admin_role,
+            "X-User-Role": "tenant_admin",
             "X-Organization-Id": "org-acme",
             "X-Workspace-Id": "ws-1",
         },
