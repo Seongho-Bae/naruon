@@ -74,6 +74,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
           FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"

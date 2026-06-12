@@ -385,6 +385,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "statusCheckRollup" "opencode review workflow reads current-head GitHub Checks before approval"
 	assert_file_contains "$workflow_file" "OPENCODE_FAILED_CHECK_EVIDENCE_FILE" "opencode review workflow persists failed-check evidence across review and approval steps"
 	assert_file_contains "$workflow_file" "collect_failed_check_evidence.sh" "opencode review workflow collects failed check logs and annotations"
+	assert_file_contains "$workflow_file" 'HEAD_SHA: ${{ github.event.pull_request.head.sha }}' "opencode evidence step passes HEAD_SHA to failed-check evidence collection"
 	assert_file_contains "$workflow_file" "FAILED_CHECK_EVIDENCE_ATTEMPTS" "opencode review workflow bounds waiting for peer check failures before model review"
 	assert_file_contains "$workflow_file" 'FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"' "opencode review workflow waits long enough for slow Strix self-test failures"
 	assert_file_contains "$workflow_file" "collect_failed_check_evidence_with_wait" "opencode review workflow waits briefly for failed checks before building model evidence"
