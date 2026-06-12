@@ -1,12 +1,12 @@
 "use client";
 
-import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network, Plus, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
 
-type SettingsTab = '워크스페이스' | '멤버' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
+export type SettingsTab = '워크스페이스' | '멤버' | 'AI 모델' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
 
 interface RunnerConfig {
   workspace_id: string;
@@ -126,6 +126,19 @@ interface WebdavAccount {
   writeback_enabled: boolean;
 }
 
+interface LLMProviderConfig {
+  id: number;
+  name: string;
+  provider_type: string;
+  base_url: string | null;
+  model_identifier: string | null;
+  embedding_model: string | null;
+  is_active: boolean;
+  configured: boolean;
+  fingerprint: string | null;
+  updated_at: string;
+}
+
 interface AccountFormState {
   smtpServer: string;
   smtpPort: string;
@@ -142,6 +155,16 @@ interface AccountFormState {
   oauthClientId: string;
   oauthClientSecret: string;
   oauthRedirectUri: string;
+}
+
+interface ModelProviderFormState {
+  name: string;
+  providerType: string;
+  baseUrl: string;
+  modelIdentifier: string;
+  embeddingModel: string;
+  apiKey: string;
+  isActive: boolean;
 }
 
 const emptyAccountForm: AccountFormState = {
@@ -162,6 +185,35 @@ const emptyAccountForm: AccountFormState = {
   oauthRedirectUri: '',
 };
 
+const commercialModelFormDefaults: ModelProviderFormState = {
+  name: '상용 API 기본 모델',
+  providerType: 'openai',
+  baseUrl: 'https://api.openai.com/v1',
+  modelIdentifier: 'gpt-5.4',
+  embeddingModel: 'text-embedding-3-small',
+  apiKey: '',
+  isActive: true,
+};
+
+const localModelFormDefaults: ModelProviderFormState = {
+  name: 'Local Gemma4',
+  providerType: 'ollama',
+  baseUrl: 'http://ollama:11434/v1',
+  modelIdentifier: 'gemma4',
+  embeddingModel: 'embeddinggemma',
+  apiKey: '',
+  isActive: true,
+};
+
+const embeddingModelOptions = [
+  { value: 'text-embedding-3-small', label: 'text-embedding-3-small', detail: 'OpenAI (1536차원)' },
+  { value: 'text-embedding-3-large', label: 'text-embedding-3-large', detail: 'OpenAI (3072차원)' },
+  { value: 'nomic-embed-text', label: 'nomic-embed-text', detail: '로컬 Ollama' },
+  { value: 'embeddinggemma', label: 'embeddinggemma', detail: 'Gemma 임베딩 · 로컬 Ollama' },
+];
+
+// Note: Passwords and secrets are intentionally cleared here and never stored in plain text client-side.
+// We only collect them from the user temporarily when updating credentials, sending them directly via HTTPS.
 function toAccountForm(config: AccountConfig): AccountFormState {
   return {
     smtpServer: config.smtp_server ?? '',
@@ -222,6 +274,29 @@ function buildAccountUpdate(form: AccountFormState): AccountConfigUpdate {
   return update;
 }
 
+function buildProviderCreate(form: ModelProviderFormState) {
+  const payload: {
+    name: string;
+    provider_type: string;
+    base_url: string | null;
+    model_identifier: string | null;
+    embedding_model: string | null;
+    api_key?: string;
+    is_active: boolean;
+  } = {
+    name: optionalText(form.name) ?? form.modelIdentifier,
+    provider_type: optionalText(form.providerType) ?? 'openai',
+    base_url: optionalText(form.baseUrl),
+    model_identifier: optionalText(form.modelIdentifier),
+    embedding_model: optionalText(form.embeddingModel),
+    is_active: form.isActive,
+  };
+
+  const apiKey = optionalText(form.apiKey);
+  if (apiKey) payload.api_key = apiKey;
+  return payload;
+}
+
 function formatEndpoint(host: string | null | undefined, port: number | null | undefined) {
   if (!host) return '미설정';
   return port ? `${host}:${port}` : host;
@@ -230,6 +305,7 @@ function formatEndpoint(host: string | null | undefined, port: number | null | u
 const settingsTabs: { id: SettingsTab; icon: typeof Monitor }[] = [
   { id: '워크스페이스', icon: Monitor },
   { id: '멤버', icon: User },
+  { id: 'AI 모델', icon: Bot },
   { id: '연결 계정', icon: Mail },
   { id: '알림', icon: Bell },
   { id: '자동화', icon: Settings },
@@ -329,6 +405,28 @@ function getOperationalSignalDetail(signal: OperationalSignal) {
   return signal.detail ? '운영 신호 상태를 확인합니다.' : '상세 근거가 아직 기록되지 않았습니다.';
 }
 
+function getProviderTypeLabel(providerType: string) {
+  switch (providerType.toLowerCase()) {
+    case 'openai':
+      return 'OpenAI 호환';
+    case 'anthropic':
+      return 'Anthropic';
+    case 'gemini':
+      return 'Google Gemini';
+    case 'ollama':
+      return '로컬 Ollama';
+    case 'vllm':
+      return '로컬 vLLM';
+    default:
+      return 'OpenAI-compatible';
+  }
+}
+
+function getProviderEndpointLabel(provider: LLMProviderConfig) {
+  if (provider.base_url) return provider.base_url;
+  return provider.provider_type === 'openai' ? '기본 OpenAI API endpoint' : 'Provider 기본 endpoint';
+}
+
 const settingsDetailSurfaces: Partial<Record<SettingsTab, {
   heading: string;
   copy: string;
@@ -393,6 +491,17 @@ export function SettingsLayout() {
   const [webdavAccounts, setWebdavAccounts] = useState<WebdavAccount[]>([]);
   const [sourceReadinessLoading, setSourceReadinessLoading] = useState(true);
   const [sourceReadinessError, setSourceReadinessError] = useState<string | null>(null);
+  const [modelProviders, setModelProviders] = useState<LLMProviderConfig[]>([]);
+  const [modelProvidersLoading, setModelProvidersLoading] = useState(true);
+  const [modelProvidersError, setModelProvidersError] = useState<string | null>(null);
+  const [modelProviderStatus, setModelProviderStatus] = useState<string | null>(null);
+  const [commercialModelForm, setCommercialModelForm] = useState<ModelProviderFormState>(commercialModelFormDefaults);
+  const [localModelForm, setLocalModelForm] = useState<ModelProviderFormState>(localModelFormDefaults);
+  const [commercialModelSaving, setCommercialModelSaving] = useState(false);
+  const [localModelSaving, setLocalModelSaving] = useState(false);
+  const [selectedEmbeddingProviderId, setSelectedEmbeddingProviderId] = useState<number | null>(null);
+  const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('embeddinggemma');
+  const [embeddingSaving, setEmbeddingSaving] = useState(false);
   const [oidcSessionClaims, setOidcSessionClaims] = useState(() => apiClient.getSessionClaims());
   const [oidcActionError, setOidcActionError] = useState<string | null>(null);
   const startupView = useWorkspaceStartupView();
@@ -400,6 +509,8 @@ export function SettingsLayout() {
   const connectorManifest = runnerConfig?.connector_manifest;
   const detailSurface = settingsDetailSurfaces[activeTab];
   const connectorEvents = operationalSignals?.connector.recent_events ?? [];
+  const activeModelProvider = modelProviders.find((provider) => provider.is_active) ?? modelProviders[0] ?? null;
+  const selectedEmbeddingProvider = modelProviders.find((provider) => provider.id === selectedEmbeddingProviderId) ?? activeModelProvider;
   const accountReady = !accountLoading && !accountError && accountConfig !== null;
   const oauthAppConfigured = Boolean(
     accountConfig?.oauth_client_id
@@ -479,6 +590,67 @@ export function SettingsLayout() {
       setAccountError(message);
     } finally {
       setAccountSaving(false);
+    }
+  };
+
+  const updateCommercialModelField = (field: keyof ModelProviderFormState, value: string | boolean) => {
+    setCommercialModelForm((current) => ({ ...current, [field]: value }));
+    setModelProviderStatus(null);
+  };
+
+  const updateLocalModelField = (field: keyof ModelProviderFormState, value: string | boolean) => {
+    setLocalModelForm((current) => ({ ...current, [field]: value }));
+    setModelProviderStatus(null);
+  };
+
+  const createModelProvider = async (
+    event: React.FormEvent<HTMLFormElement>,
+    form: ModelProviderFormState,
+    options: {
+      setSaving: (saving: boolean) => void;
+      resetApiKey: () => void;
+      successMessage: string;
+    },
+  ) => {
+    event.preventDefault();
+    options.setSaving(true);
+    setModelProvidersError(null);
+    setModelProviderStatus(null);
+
+    try {
+      const created = await apiClient.post<LLMProviderConfig>('/api/llm-providers', buildProviderCreate(form));
+      setModelProviders((current) => [created, ...current.filter((provider) => provider.id !== created.id)]);
+      setSelectedEmbeddingProviderId(created.id);
+      setSelectedEmbeddingModel(created.embedding_model ?? form.embeddingModel);
+      options.resetApiKey();
+      setModelProviderStatus(options.successMessage);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'AI 모델 설정을 저장할 수 없습니다.';
+      setModelProvidersError(message);
+    } finally {
+      options.setSaving(false);
+    }
+  };
+
+  const handleEmbeddingModelSave = async () => {
+    const providerId = selectedEmbeddingProvider?.id;
+    if (!providerId) return;
+
+    setEmbeddingSaving(true);
+    setModelProvidersError(null);
+    setModelProviderStatus(null);
+
+    try {
+      const updated = await apiClient.put<LLMProviderConfig>(`/api/llm-providers/${providerId}`, {
+        embedding_model: selectedEmbeddingModel,
+      });
+      setModelProviders((current) => current.map((provider) => (provider.id === updated.id ? updated : provider)));
+      setModelProviderStatus('임베딩 모델 지정을 저장했습니다.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '임베딩 모델 지정을 저장할 수 없습니다.';
+      setModelProvidersError(message);
+    } finally {
+      setEmbeddingSaving(false);
     }
   };
 
@@ -573,6 +745,24 @@ export function SettingsLayout() {
         if (!cancelled) setSourceReadinessLoading(false);
       });
 
+    void apiClient
+      .get<LLMProviderConfig[]>('/api/llm-providers')
+      .then((providers) => {
+        if (cancelled) return;
+        setModelProviders(providers);
+        const activeProvider = providers.find((provider) => provider.is_active) ?? providers[0] ?? null;
+        setSelectedEmbeddingProviderId(activeProvider?.id ?? null);
+        setSelectedEmbeddingModel(activeProvider?.embedding_model ?? 'embeddinggemma');
+        setModelProvidersError(null);
+      })
+      .catch((error: Error) => {
+        if (cancelled) return;
+        setModelProvidersError(error.message || 'AI 모델 설정을 불러오지 못했습니다.');
+      })
+      .finally(() => {
+        if (!cancelled) setModelProvidersLoading(false);
+      });
+
     return () => {
       cancelled = true;
     };
@@ -663,6 +853,266 @@ export function SettingsLayout() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'AI 모델' && (
+              <div className="space-y-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="font-bold text-xl">AI 모델 설정</h2>
+                    <p className="text-sm text-muted-foreground mt-1">대규모 언어 모델(LLM), 로컬 모델, 임베딩 모델을 signed provider registry에 등록하고 관리합니다.</p>
+                  </div>
+                  <span className="rounded-full border border-border bg-card px-3 py-1 font-mono text-xs font-bold text-foreground">
+                    /api/llm-providers
+                  </span>
+                </div>
+
+                {modelProvidersLoading ? (
+                  <p className="rounded-xl bg-secondary/60 p-3 text-sm font-semibold text-muted-foreground">AI 모델 설정을 불러오는 중입니다.</p>
+                ) : null}
+                {modelProvidersError ? (
+                  <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-900">{modelProvidersError}</p>
+                ) : null}
+                {modelProviderStatus ? (
+                  <p className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm font-semibold text-emerald-900">{modelProviderStatus}</p>
+                ) : null}
+
+                <section aria-label="등록된 AI 모델" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-bold text-lg">등록된 모델 레지스트리</h3>
+                      <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                        조직 스코프에 저장된 provider만 표시합니다. API key 원문은 응답에 포함되지 않습니다.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold text-foreground">
+                      {modelProviders.length}개
+                    </span>
+                  </div>
+
+                  {modelProviders.length > 0 ? (
+                    <div className="mt-5 grid gap-3">
+                      {modelProviders.map((provider) => (
+                        <article key={provider.id} className="rounded-xl border border-border bg-background p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="font-bold text-base">{provider.name}</h4>
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${provider.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-secondary text-muted-foreground'}`}>
+                                  {provider.is_active ? '활성 모델' : '대기 모델'}
+                                </span>
+                                <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${provider.configured ? 'bg-blue-100 text-blue-800' : 'bg-amber-100 text-amber-900'}`}>
+                                  {provider.configured ? '연결됨' : '설정 필요'}
+                                </span>
+                              </div>
+                              <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+                                <div>
+                                  <dt className="text-xs font-bold text-muted-foreground">Provider</dt>
+                                  <dd className="mt-1 break-all font-semibold">{getProviderTypeLabel(provider.provider_type)}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs font-bold text-muted-foreground">Endpoint</dt>
+                                  <dd className="mt-1 break-all font-semibold">{getProviderEndpointLabel(provider)}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs font-bold text-muted-foreground">모델</dt>
+                                  <dd className="mt-1 break-all font-semibold">{provider.model_identifier ?? '모델 지정 필요'}</dd>
+                                </div>
+                                <div>
+                                  <dt className="text-xs font-bold text-muted-foreground">임베딩</dt>
+                                  <dd className="mt-1 break-all font-semibold">{provider.embedding_model ?? '임베딩 지정 필요'}</dd>
+                                </div>
+                              </dl>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2 rounded-full border border-border px-3 py-1 text-xs font-bold text-muted-foreground">
+                              <CheckCircle2 className="size-3.5 text-primary" />
+                              {provider.fingerprint ? `Key ${provider.fingerprint}` : '로컬 credential 없음'}
+                            </div>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-5 rounded-xl border border-dashed border-border p-4 text-sm font-semibold text-muted-foreground">
+                      등록된 AI 모델이 없습니다. Gemma4 로컬 모델 또는 상용 API 모델을 등록하세요.
+                    </p>
+                  )}
+                </section>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  <form
+                    onSubmit={(event) => createModelProvider(event, commercialModelForm, {
+                      setSaving: setCommercialModelSaving,
+                      resetApiKey: () => setCommercialModelForm((current) => ({ ...current, apiKey: '' })),
+                      successMessage: '상용 API 모델을 등록했습니다.',
+                    })}
+                    className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4"
+                  >
+                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                      <div className="rounded-xl bg-blue-100 p-2.5"><Bot className="size-5 text-blue-700" /></div>
+                      <div>
+                        <h3 className="font-bold text-lg">상용 API 모델 등록</h3>
+                        <p className="text-xs text-muted-foreground">OpenAI, Anthropic 등의 API 연동</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="commercial-provider-name" className="text-sm font-bold text-muted-foreground">등록 이름</label>
+                        <input id="commercial-provider-name" value={commercialModelForm.name} onChange={(event) => updateCommercialModelField('name', event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="commercial-provider-type" className="text-sm font-bold text-muted-foreground">제공자</label>
+                        <select id="commercial-provider-type" value={commercialModelForm.providerType} onChange={(event) => updateCommercialModelField('providerType', event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                          <option value="openai">OpenAI 호환</option>
+                          <option value="anthropic">Anthropic</option>
+                          <option value="gemini">Google Gemini</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="commercial-base-url" className="text-sm font-bold text-muted-foreground">API endpoint</label>
+                        <input id="commercial-base-url" type="url" value={commercialModelForm.baseUrl} onChange={(event) => updateCommercialModelField('baseUrl', event.target.value)} placeholder="https://api.openai.com/v1" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label htmlFor="commercial-model-id" className="text-sm font-bold text-muted-foreground">모델 식별자</label>
+                          <input id="commercial-model-id" value={commercialModelForm.modelIdentifier} onChange={(event) => updateCommercialModelField('modelIdentifier', event.target.value)} placeholder="gpt-5.4" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="commercial-embedding-model" className="text-sm font-bold text-muted-foreground">임베딩 모델</label>
+                          <select id="commercial-embedding-model" value={commercialModelForm.embeddingModel} onChange={(event) => updateCommercialModelField('embeddingModel', event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                            {embeddingModelOptions.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="commercial-api-key" className="text-sm font-bold text-muted-foreground">API Key</label>
+                        <input id="commercial-api-key" type="password" value={commercialModelForm.apiKey} onChange={(event) => updateCommercialModelField('apiKey', event.target.value)} placeholder="저장 시에만 전송" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <button type="submit" disabled={commercialModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60">
+                        <Plus className="size-4" />
+                        {commercialModelSaving ? '등록 중' : '상용 모델 추가'}
+                      </button>
+                    </div>
+                  </form>
+
+                  <form
+                    onSubmit={(event) => createModelProvider(event, localModelForm, {
+                      setSaving: setLocalModelSaving,
+                      resetApiKey: () => setLocalModelForm((current) => ({ ...current, apiKey: '' })),
+                      successMessage: 'Gemma4 로컬 모델을 등록했습니다.',
+                    })}
+                    className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4"
+                  >
+                    <div className="flex items-center gap-3 border-b border-border pb-4">
+                      <div className="rounded-xl bg-emerald-100 p-2.5"><Cpu className="size-5 text-emerald-700" /></div>
+                      <div>
+                        <h3 className="font-bold text-lg">로컬 모델 등록</h3>
+                        <p className="text-xs text-muted-foreground">Ollama, vLLM 등의 자체 호스팅 모델 연동</p>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label htmlFor="local-provider-name" className="text-sm font-bold text-muted-foreground">등록 이름</label>
+                        <input id="local-provider-name" value={localModelForm.name} onChange={(event) => updateLocalModelField('name', event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="local-base-url" className="text-sm font-bold text-muted-foreground">서버 엔드포인트 URL</label>
+                        <input id="local-base-url" type="url" value={localModelForm.baseUrl} onChange={(event) => updateLocalModelField('baseUrl', event.target.value)} placeholder="http://ollama:11434/v1" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label htmlFor="local-model-id" className="text-sm font-bold text-muted-foreground">모델 식별자</label>
+                          <input id="local-model-id" value={localModelForm.modelIdentifier} onChange={(event) => updateLocalModelField('modelIdentifier', event.target.value)} placeholder="gemma4" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        </div>
+                        <div className="space-y-2">
+                          <label htmlFor="local-embedding-model" className="text-sm font-bold text-muted-foreground">임베딩 모델</label>
+                          <select id="local-embedding-model" value={localModelForm.embeddingModel} onChange={(event) => updateLocalModelField('embeddingModel', event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+                            {embeddingModelOptions.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label htmlFor="local-api-key" className="text-sm font-bold text-muted-foreground">Local API key override</label>
+                        <input id="local-api-key" type="password" value={localModelForm.apiKey} onChange={(event) => updateLocalModelField('apiKey', event.target.value)} placeholder="필요한 경우에만 입력" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <button type="submit" disabled={localModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60">
+                        <Cpu className="size-4" />
+                        {localModelSaving ? '등록 중' : 'Gemma4 로컬 모델 등록'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+                  <div className="flex items-center gap-3 border-b border-border pb-4">
+                    <div className="rounded-xl bg-purple-100 p-2.5"><Network className="size-5 text-purple-700" /></div>
+                    <div>
+                      <h3 className="font-bold text-lg">임베딩 모델 지정</h3>
+                      <p className="text-sm text-muted-foreground mt-1">벡터 스토어 및 RAG 구축을 위한 기본 임베딩 모델을 선택합니다.</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <label htmlFor="embedding-provider" className="text-sm font-bold text-muted-foreground">대상 모델</label>
+                      <select
+                        id="embedding-provider"
+                        value={selectedEmbeddingProvider?.id ?? ''}
+                        onChange={(event) => {
+                          const providerId = Number.parseInt(event.target.value, 10);
+                          const provider = modelProviders.find((candidate) => candidate.id === providerId) ?? null;
+                          setSelectedEmbeddingProviderId(Number.isFinite(providerId) ? providerId : null);
+                          setSelectedEmbeddingModel(provider?.embedding_model ?? 'embeddinggemma');
+                          setModelProviderStatus(null);
+                        }}
+                        disabled={modelProviders.length === 0}
+                        className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {modelProviders.length === 0 ? (
+                          <option value="">등록된 모델 없음</option>
+                        ) : (
+                          modelProviders.map((provider) => (
+                            <option key={provider.id} value={provider.id}>{provider.name}</option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                      {embeddingModelOptions.map((option) => (
+                        <label key={option.value} className="flex min-h-24 cursor-pointer items-center justify-between rounded-xl border border-border p-4 transition-colors hover:border-primary/50 [&:has(:checked)]:border-primary [&:has(:checked)]:bg-primary/5">
+                          <div className="min-w-0">
+                            <p className="break-all font-bold">{option.label}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{option.detail}</p>
+                          </div>
+                          <input
+                            type="radio"
+                            name="embedding_model"
+                            value={option.value}
+                            checked={selectedEmbeddingModel === option.value}
+                            onChange={() => {
+                              setSelectedEmbeddingModel(option.value);
+                              setModelProviderStatus(null);
+                            }}
+                            className="size-4 shrink-0"
+                          />
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleEmbeddingModelSave}
+                      disabled={!selectedEmbeddingProvider || embeddingSaving}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
+                    >
+                      <Network className="size-4" />
+                      {embeddingSaving ? '저장 중' : '임베딩 모델 저장'}
+                    </button>
                   </div>
                 </div>
               </div>

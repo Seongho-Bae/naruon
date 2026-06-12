@@ -46,7 +46,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
   await expect(homeQuickActions.getByRole('link', { name: '메일함 열기' })).toHaveAttribute('href', '/mail');
   await expect(homeQuickActions.getByRole('link', { name: '보낸 메일 답변 추적' })).toHaveAttribute('href', '/mail?folder=sent');
   await expect(homeQuickActions.getByRole('link', { name: '일정 후보 검토' })).toHaveAttribute('href', '/calendar');
-  await expect(homeQuickActions.getByRole('link', { name: '작업 보드' })).toHaveAttribute('href', '/tasks');
+  await expect(homeQuickActions.getByRole('link', { name: '실행 항목 보드' })).toHaveAttribute('href', '/tasks');
   await expect(page.getByRole('button', { name: '메일함 바로가기' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '일정 확인하기' }).first()).toBeVisible();
   await page.getByRole('button', { name: '메일함 바로가기' }).first().click();

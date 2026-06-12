@@ -19,11 +19,65 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
+def test_frontend_dockerfile_runs_as_non_root_user():
+    dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text()
+
+    assert "RUN chown -R node:node /app" in dockerfile
+    assert "USER node" in dockerfile
+    assert dockerfile.rfind("USER node") > dockerfile.rfind("RUN pnpm run build")
+
+
+def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
+    dockerfile = (REPO_ROOT / "Dockerfile.ollama").read_text()
+
+    assert "ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models" in dockerfile
+    assert "useradd --system --create-home --home-dir /home/ollama" in dockerfile
+    assert "curl " not in dockerfile
+    assert "for attempt in $(seq 1 60)" in dockerfile
+    assert "if ollama list > /dev/null 2>&1" in dockerfile
+    assert "cat /tmp/ollama-build.log; exit 1" in dockerfile
+    assert "ollama pull gemma4" in dockerfile
+    assert "ollama pull embeddinggemma" in dockerfile
+    assert dockerfile.count("RUN set -eux;") >= 2
+    assert dockerfile.find("ollama pull gemma4") < dockerfile.find(
+        "ollama pull embeddinggemma"
+    )
+    assert "ollama list | grep -E '^gemma4(:|[[:space:]])'" in dockerfile
+    assert (
+        "ollama list | grep -E '^embeddinggemma(:|[[:space:]])'" in dockerfile
+    )
+    assert "chown -R ollama:ollama /usr/share/ollama/.ollama" in dockerfile
+    assert dockerfile.rfind("USER ollama") > dockerfile.rfind(
+        "chown -R ollama:ollama /usr/share/ollama/.ollama"
+    )
+
+
 def test_backend_requirements_do_not_pin_yanked_email_validator():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 
     assert "email-validator==2.1.0" not in requirements
     assert "email-validator==2.3.0" in requirements
+
+
+def test_backend_requirements_pin_ruff_for_deterministic_ci():
+    requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
+
+    assert "\nruff\n" not in f"\n{requirements}\n"
+    assert "ruff==0.15.16" in requirements
+
+
+def test_traefik_compose_services_disable_privilege_escalation():
+    expected_next_service = {
+        "docker-compose.infra.yml": "  prometheus:",
+        "docker-compose.gateway.yml": "  keycloak:",
+    }
+
+    for compose_name, next_service in expected_next_service.items():
+        compose = (REPO_ROOT / compose_name).read_text()
+        traefik_block = compose.split("  traefik:", 1)[1].split(next_service, 1)[0]
+
+        assert "security_opt:" in traefik_block
+        assert "- no-new-privileges:true" in traefik_block
 
 
 def test_compose_externalizes_postgres_credentials():
@@ -36,6 +90,8 @@ def test_compose_externalizes_postgres_credentials():
     assert "${POSTGRES_PASSWORD" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
     assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
+    assert "ENCRYPTION_KEY" in compose
+    assert "${ENCRYPTION_KEY:?" in compose
 
 
 def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():
@@ -75,13 +131,17 @@ def test_kubernetes_postgres_password_comes_from_secret():
     assert "POSTGRES_PASSWORD" in manifest
 
 
-def test_env_example_documents_required_postgres_password():
+def test_env_example_does_not_ship_runtime_secret_defaults():
     env_example = (REPO_ROOT / ".env.example").read_text()
 
-    assert "POSTGRES_PASSWORD=change-me-local-only" in env_example
-    assert "AUTH_SESSION_HMAC_SECRET=" in env_example
+    assert "POSTGRES_DB=" not in env_example
+    assert "POSTGRES_USER=" not in env_example
+    assert "POSTGRES_PASSWORD=" not in env_example
+    assert "DATABASE_URL=" not in env_example
+    assert "AUTH_SESSION_HMAC_SECRET=" not in env_example
+    assert "ENCRYPTION_KEY=" not in env_example
     assert "postgres:postgres@" not in env_example
-    assert "postgres:change-me-local-only@" in env_example
+    assert "change-me-local-only" not in env_example
 
 
 def test_readme_uses_cross_platform_browser_command():

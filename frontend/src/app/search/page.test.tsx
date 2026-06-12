@@ -229,7 +229,8 @@ describe("SearchPage", () => {
   it("renders search snippets as escaped text instead of executable HTML", async () => {
     const maliciousSnippet =
       '검토 필요 <img src=x onerror="window.__naruonSearchXss = true"><script>window.__naruonSearchXss = true</script>';
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((...args: [RequestInfo | URL, RequestInit?]) => {
+      const [input] = args;
       const url = String(input);
       if (url.endsWith("/api/search")) {
         return Promise.resolve(

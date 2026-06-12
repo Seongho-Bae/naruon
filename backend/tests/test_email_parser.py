@@ -266,3 +266,30 @@ def test_sanitize_nul():
     assert _sanitize_nul(123) == "123"
     assert _sanitize_nul(12.3) == "12.3"
     assert _sanitize_nul(True) == "True"
+
+def test_sanitize_display_text():
+    from services.email_parser import _sanitize_display_text
+
+    # Normal string
+    assert _sanitize_display_text("hello world") == "hello world"
+
+    # Strings with NUL characters
+    assert _sanitize_display_text("hello\x00world") == "helloworld"
+
+    # Strings with HTML tags
+    assert _sanitize_display_text("<b>hello</b> world") == "hello world"
+    assert _sanitize_display_text("<script>alert('xss')</script>") == ""
+    assert _sanitize_display_text("hello <img src=x onerror=alert(1)>world") == "hello world"
+
+    # Strings combining NUL and HTML
+    assert _sanitize_display_text("<b>hello\x00</b>") == "hello"
+    assert _sanitize_display_text("<script\x00>alert('xss')</script>") == ""
+    # Let's see what happens exactly - _sanitize_nul strips NUL first, then strip_html_markup acts on the rest.
+    # So "<script\x00>..." becomes "<script>..." and then strip_html_markup strips it.
+    assert _sanitize_display_text("<script\x00>alert('xss\x00')</script>") == ""
+
+    # Empty string
+    assert _sanitize_display_text("") == ""
+
+    # None value (falls back to _sanitize_nul which converts None to "")
+    assert _sanitize_display_text(None) == ""

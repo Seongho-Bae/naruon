@@ -18,6 +18,7 @@ async def test_generate_embeddings_success():
         "services.embedding.AsyncOpenAI"
     ) as mock_async_openai:
         mock_client = mock_async_openai.return_value
+        mock_client.close = AsyncMock()
         mock_client.embeddings.create = AsyncMock()
         mock_response = AsyncMock()
         mock_data_1 = AsyncMock()
@@ -29,11 +30,48 @@ async def test_generate_embeddings_success():
 
         with patch("services.embedding.settings") as mock_settings:
             mock_settings.OPENAI_EMBEDDING_MODEL = "test-model"
+            mock_settings.OPENAI_BASE_URL = None
             
             embeddings = await generate_embeddings(["test1", "test2"], "test-key")
             assert len(embeddings) == 2
             assert embeddings[0] == [0.1, 0.2, 0.3]
             assert embeddings[1] == [0.4, 0.5, 0.6]
+            mock_client.embeddings.create.assert_awaited_once_with(
+                model="test-model", input=["test1", "test2"]
+            )
+            mock_client.close.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_generate_embeddings_uses_selected_provider_model_and_base_url():
+    with patch("services.embedding.AsyncOpenAI") as mock_async_openai, patch(
+        "services.embedding.build_llm_provider_http_client",
+        new_callable=AsyncMock,
+    ) as mock_build_client:
+        mock_http_client = AsyncMock()
+        mock_build_client.return_value = ("http://ollama:11434/v1", mock_http_client)
+        mock_client = mock_async_openai.return_value
+        mock_client.close = AsyncMock()
+        mock_client.embeddings.create = AsyncMock()
+        mock_response = AsyncMock()
+        mock_data = AsyncMock()
+        mock_data.embedding = [0.1, 0.2, 0.3]
+        mock_response.data = [mock_data]
+        mock_client.embeddings.create.return_value = mock_response
+
+        embeddings = await generate_embeddings(
+            ["test"],
+            "local-provider",
+            base_url="http://ollama:11434/v1",
+            model="embeddinggemma",
+        )
+
+    assert embeddings == [[0.1, 0.2, 0.3]]
+    mock_build_client.assert_awaited_once_with("http://ollama:11434/v1")
+    mock_client.embeddings.create.assert_awaited_once_with(
+        model="embeddinggemma", input=["test"]
+    )
+    mock_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -42,14 +80,17 @@ async def test_generate_embeddings_api_error():
         "services.embedding.AsyncOpenAI"
     ) as mock_async_openai:
         mock_client = mock_async_openai.return_value
+        mock_client.close = AsyncMock()
         mock_client.embeddings.create = AsyncMock(side_effect=openai.OpenAIError("API error"))
 
         with patch("services.embedding.settings") as mock_settings:
             mock_settings.OPENAI_EMBEDDING_MODEL = "test-model"
+            mock_settings.OPENAI_BASE_URL = None
             
             with pytest.raises(EmbeddingGenerationError, match="Failed to generate embeddings: API error"):
 
                 await generate_embeddings(["test"], "test-key")
+            mock_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio

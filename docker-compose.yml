@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
@@ -15,20 +15,36 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    environment:
+      OLLAMA_NO_CLOUD: "true"
+    ports:
+      - "11434:11434"
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      target: backend-runtime
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}@db:5432/${POSTGRES_DB:-ai_email}
       DEBUG: "false"
+      ALLOW_LOCAL_LLM_PROVIDERS: "true"
+      ALLOWED_LLM_BASE_URL_HOSTS: "ollama"
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-ollama}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://ollama:11434/v1}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-embeddinggemma}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gemma4}
     depends_on:
       db:
         condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "8000:8000"
     command: ["sh", "-c", "python scripts/bootstrap_db.py && python scripts/start_backend.py --host 0.0.0.0 --port 8000"]

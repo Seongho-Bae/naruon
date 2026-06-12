@@ -1,6 +1,4 @@
-## 2024-05-18 - Optimized SQL Commit in Python Loop
-**Learning:** Extracting an `await db.commit()` and `await db.refresh(task)` loop-bound statements out of iterative logic significantly drops transaction overhead and improves processing time, especially on retry workflows with `IntegrityError`.
-**Action:** Always inspect the operations surrounding the `except IntegrityError:` loop handling during bulk creation when debugging Python SQLAlchemy database bottlenecks.
+## 2025-02-20 - Optimize redundant dictionary lookups in python loops
 
 ## 2026-06-07 - AsyncDBAPI Batch Execution Overhead
 **Learning:** When executing multiple SQLAlchemy text statements sequentially (like a database bootstrap schema backfill) over an async connection, awaiting `conn.execute()` iteratively incurs Python async event loop context switching overhead for each query.
@@ -34,3 +32,14 @@
 ## 2026-06-07 - Redundant SHA256 Hashing during UniqueThread Deduplication
 **Learning:** `create_unique_thread_intent` iterates over candidates twice to first extract lookups and fingerprint sets, and then iterates over them a second time inside `_find_matches_for_candidates` to match those lookups. This caused `candidate_strong_fingerprint(candidate)` (which performs a SHA256 encoding) to be redundantly executed twice per candidate.
 **Action:** Extract expensive lookups (`candidate_strong_fingerprint` and regex normalizations) into dictionaries mapped by `candidate_key` during the first iteration to prevent redundant processing.
+
+## 2025-06-09 - [Extract and Memoize List Items to Prevent Over-fetching]
+**Learning:** React re-renders long lists entirely when the selected item changes if items are inline mapped. Even if the array length isn't massive (e.g. 50 items), the inline function instantiations and DOM reconciliation add up across the list.
+**Action:** Always extract complex list items into isolated `React.memo` components, especially when selection state is hoisted to the parent component.
+## 2024-06-10 - Resolve N+1 Lazy Loading Iteration Overhead in Worker Scripts
+ **Learning:** In SQLAlchemy async sessions, if we execute `select()` and only grab the result scalars `configs = await session.execute(...); configs.scalars()` without calling `.all()`, and then we loop over that generator outside the `async with AsyncSession()` block, it evaluates lazily. For instances mapped with database relations or configurations this can lead to detached instance errors, or sequential individual I/O reads (N+1 equivalent overhead when the context isn't fully exhausted or mapped properly).
+ **Action:** Always ensure the returned object list is fully materialized using `.scalars().all()` *inside* the `async with AsyncSessionLocal() as session:` block before passing it down or iterating over it.
+
+## 2026-06-10 - Optimize redundant dictionary lookups in tight loops
+ **Learning:** Using `dict.setdefault` and multiple `dict.get` or `key in dict` checks inside tight loops significantly impacts performance due to repeated dictionary lookups and unnecessary list allocations. Caching dictionary lookups (e.g., using a single `dict.get(key)`) and conditionally handling the logic based on the result is much more performant.
+ **Action:** When aggregating or grouping items in a loop, avoid `setdefault`. Instead, check if the key exists using a single `.get()`, and perform initialization/updates conditionally. Additionally, hoist loop-invariant checks (e.g., `folder == "sent"`) outside the loop to avoid redundant evaluations.

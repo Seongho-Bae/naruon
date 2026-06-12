@@ -1,9 +1,11 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import os
 import time
+import zipfile
 
 import pytest
 import pytest_asyncio
@@ -111,6 +113,9 @@ class MockSession:
         return MockResult(self.items)
 
     async def scalar(self, query):
+        query_text = compiled_query_text(query)
+        if "count(" in query_text and "emails" in query_text:
+            return len(self.items)
         return self.tenant_config
 
 
@@ -165,6 +170,42 @@ class ScalarQueryCapturingSession(MockSession):
         return await super().scalar(query)
 
 
+class ImportRecordingSession(MockSession):
+    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+        super().__init__(items, tenant_config=tenant_config)
+        self.added = []
+        self.queries = []
+        self.commit_count = 0
+        self.rollback_count = 0
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return await super().execute(query)
+
+    def add(self, item):
+        self.added.append(item)
+        self.items.append(item)
+
+    async def commit(self):
+        self.commit_count += 1
+
+    async def rollback(self):
+        self.rollback_count += 1
+
+
+class _PostgresDialect:
+    name = "postgresql"
+
+
+class _PostgresBind:
+    dialect = _PostgresDialect()
+
+
+class PostgresImportRecordingSession(ImportRecordingSession):
+    def get_bind(self):
+        return _PostgresBind()
+
+
 def compiled_query_text(query) -> str:
     return str(query).lower()
 
@@ -181,6 +222,38 @@ def assert_query_is_owner_scoped(query) -> None:
     assert "emails.organization_id = :organization_id_1" in query_text
     assert query_params["user_id_1"] == "testuser"
     assert query_params["organization_id_1"] == "org-acme"
+
+
+def advisory_query_texts(session: ImportRecordingSession) -> list[str]:
+    return [
+        compiled_query_text(query)
+        for query in session.queries
+        if "pg_advisory" in compiled_query_text(query)
+    ]
+
+
+def _sample_eml_bytes(
+    *,
+    message_id: str = "<imported@example.com>",
+    subject: str = "Quarter plan",
+    body: str = "Body text",
+) -> bytes:
+    return (
+        "Message-ID: {message_id}\r\n"
+        "Date: Thu, 11 Jun 2026 10:00:00 +0000\r\n"
+        "From: Partner <partner@example.com>\r\n"
+        "To: User <user@example.com>\r\n"
+        "Subject: {subject}\r\n"
+        "\r\n"
+        "{body}\r\n"
+    ).format(message_id=message_id, subject=subject, body=body).encode("utf-8")
+
+
+def _zip_with_eml_bytes(filename: str, eml_bytes: bytes) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(filename, eml_bytes)
+    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -615,6 +688,381 @@ def test_unique_email_thread_intent_accepts_signed_bearer_session(db_session):
     assert response.status_code == 200
     data = response.json()
     assert data["thread_updates"][0]["canonical_thread_id"] == "signed-thread"
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_persists_signed_scoped_eml_upload(
+    client: AsyncClient,
+):
+    from db.session import get_db
+
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "customer-source.eml",
+                        _sample_eml_bytes(
+                            message_id="<imported@example.com>",
+                            subject="<script>bad()</script>Quarter plan",
+                            body="<p>Body text</p>",
+                        ),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "completed"
+    assert data["imported_count"] == 1
+    assert data["skipped_count"] == 0
+    assert data["failed_count"] == 0
+    assert data["provider_write_executed"] is False
+    assert data["provenance"] == "server-authoritative"
+    assert data["items"] == [
+        {
+            "filename": "customer-source.eml",
+            "status": "imported",
+            "reason_code": None,
+            "attachment_count": 0,
+        }
+    ]
+    assert "imported@example.com" not in json.dumps(data)
+
+    assert session.commit_count == 1
+    assert session.rollback_count == 0
+    assert len(session.added) == 1
+    added_email = session.added[0]
+    assert added_email.user_id == "testuser"
+    assert added_email.organization_id == "org-acme"
+    assert added_email.message_id == "imported@example.com"
+    assert added_email.subject == "Quarter plan"
+    assert added_email.body == "Body text"
+    assert added_email.fingerprint
+    assert len(added_email.embedding) == 1536
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_skips_duplicate_message_id(client: AsyncClient):
+    from db.session import get_db
+
+    existing_email = Email(
+        id=80,
+        user_id="testuser",
+        organization_id="org-acme",
+        message_id="<duplicate@example.com>",
+        thread_id="duplicate-thread",
+        sender="partner@example.com",
+        recipients="user@example.com",
+        subject="Duplicate",
+        date=datetime.datetime(2026, 6, 11, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Existing body",
+        embedding=[0.0] * 1536,
+    )
+    session = ImportRecordingSession([existing_email])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "duplicate.eml",
+                        _sample_eml_bytes(
+                            message_id="<duplicate@example.com>",
+                            subject="Duplicate",
+                            body="Existing body",
+                        ),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imported_count"] == 0
+    assert data["skipped_count"] == 1
+    assert data["failed_count"] == 0
+    assert data["items"][0]["status"] == "skipped_duplicate"
+    assert data["items"][0]["reason_code"] == "duplicate_email"
+    assert session.added == []
+    assert session.commit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_extracts_eml_from_zip(client: AsyncClient):
+    from db.session import get_db
+
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "email-archive.zip",
+                        _zip_with_eml_bytes(
+                            "nested/source.eml",
+                            _sample_eml_bytes(message_id="<zip-source@example.com>"),
+                        ),
+                        "application/zip",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imported_count"] == 1
+    assert data["items"][0]["filename"] == "email-archive.zip:source.eml"
+    assert session.added[0].message_id == "zip-source@example.com"
+
+
+def test_import_email_files_accepts_signed_bearer_session(db_session):
+    from db.session import get_db
+
+    session = ImportRecordingSession([])
+    token = _signed_session_token(_valid_session_payload())
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    previous_auth_override = app.dependency_overrides.pop(auth_get_auth_context, None)
+    previous_db_override = app.dependency_overrides.get(get_db)
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = TestClient(app).post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "signed-source.eml",
+                        _sample_eml_bytes(message_id="<signed-import@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    finally:
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+        if previous_auth_override is not None:
+            app.dependency_overrides[auth_get_auth_context] = previous_auth_override
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imported_count"] == 1
+    assert session.added[0].user_id == "testuser"
+    assert session.added[0].organization_id == "org-acme"
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_duplicate_query_is_owner_scoped(
+    client: AsyncClient,
+):
+    from db.session import get_db
+
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "scoped-source.eml",
+                        _sample_eml_bytes(message_id="<scoped-import@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    assert session.queries
+    assert_query_is_owner_scoped(session.queries[0])
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_serializes_quota_with_postgres_owner_lock(
+    client: AsyncClient,
+):
+    from db.session import get_db
+
+    session = PostgresImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "locked-source.eml",
+                        _sample_eml_bytes(message_id="<locked@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    advisory_queries = advisory_query_texts(session)
+    assert "pg_advisory_lock" in advisory_queries[0]
+    assert "pg_advisory_unlock" in advisory_queries[-1]
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
+    client: AsyncClient, monkeypatch
+):
+    from db.session import get_db
+
+    monkeypatch.setattr(
+        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
+    )
+    existing_email = Email(
+        id=90,
+        user_id="testuser",
+        organization_id="org-acme",
+        message_id="<existing@example.com>",
+        thread_id="existing-thread",
+        sender="partner@example.com",
+        recipients="user@example.com",
+        subject="Existing",
+        date=datetime.datetime(2026, 6, 11, 10, 0, tzinfo=datetime.timezone.utc),
+        body="Existing body",
+        embedding=[0.0] * 1536,
+    )
+    session = PostgresImportRecordingSession([existing_email])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "quota-source.eml",
+                        _sample_eml_bytes(message_id="<quota@example.com>"),
+                        "message/rfc822",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "email_import_quota_exceeded"
+    assert session.added == []
+    assert session.commit_count == 0
+    advisory_queries = advisory_query_texts(session)
+    assert "pg_advisory_lock" in advisory_queries[0]
+    assert "pg_advisory_unlock" in advisory_queries[-1]
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_rejects_oversized_archive_before_partial_commit(
+    client: AsyncClient, monkeypatch
+):
+    from db.session import get_db
+
+    monkeypatch.setattr(
+        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
+    )
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr(
+            "first.eml",
+            _sample_eml_bytes(message_id="<quota-first@example.com>"),
+        )
+        bundle.writestr(
+            "second.eml",
+            _sample_eml_bytes(message_id="<quota-second@example.com>"),
+        )
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "quota-archive.zip",
+                        archive.getvalue(),
+                        "application/zip",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 429
+    assert response.json()["detail"] == "email_import_quota_exceeded"
+    assert session.added == []
+    assert session.commit_count == 0
 
 
 @pytest.mark.asyncio
@@ -1210,7 +1658,6 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
 def test_email_owner_filters():
     from api.emails import email_owner_filters
     from api.auth import AuthContext
-    from db.models import Email
 
     # Test with organization_id
     ctx1 = AuthContext(

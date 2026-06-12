@@ -19,7 +19,7 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await expect(page.getByText('2개 일정 반영 의도를 선택한 원본 계정에 요청했습니다.')).toBeVisible();
 
   await page.getByRole('button', { name: 'AI 답장 초안' }).last().click();
-  await expect(page.getByLabel('답장 초안')).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
+  await expect(page.getByRole('textbox', { name: '답장 초안' })).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
 
   await page.getByRole('button', { name: '답장 보내기' }).click();
   await expect(page.getByText('개발 모드에서 답장을 시뮬레이션했습니다. 실제 메일은 전송되지 않았습니다.')).toBeVisible();

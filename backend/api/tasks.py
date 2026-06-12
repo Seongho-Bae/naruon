@@ -224,13 +224,10 @@ async def create_reply_sla_escalations(
                 }
 
                 # Replace un-refreshed tasks to avoid validation errors.
-                for i in range(len(escalated_tasks)):
-                    task, message_id = escalated_tasks[i]
-                    if task.related_email_id in refreshed_tasks_by_email:
-                        escalated_tasks[i] = (
-                            refreshed_tasks_by_email[task.related_email_id],
-                            message_id,
-                        )
+                for i, (task, message_id) in enumerate(escalated_tasks):
+                    refreshed_task = refreshed_tasks_by_email.get(task.related_email_id)
+                    if refreshed_task is not None:
+                        escalated_tasks[i] = (refreshed_task, message_id)
     except IntegrityError:
         await db.rollback()
         created_count = 0
@@ -346,13 +343,10 @@ async def create_reply_sla_escalations(
             }
 
             # Replace un-refreshed tasks to avoid validation errors.
-            for i in range(len(escalated_tasks)):
-                task, message_id = escalated_tasks[i]
-                if task.related_email_id in refreshed_tasks_by_email:
-                    escalated_tasks[i] = (
-                        refreshed_tasks_by_email[task.related_email_id],
-                        message_id,
-                    )
+            for i, (task, message_id) in enumerate(escalated_tasks):
+                refreshed_task = refreshed_tasks_by_email.get(task.related_email_id)
+                if refreshed_task is not None:
+                    escalated_tasks[i] = (refreshed_task, message_id)
 
     return ReplySlaEscalationResponse(
         evaluated=len(pending_replies),
@@ -478,8 +472,6 @@ async def create_tasks_from_email(
         db.add(task)
 
     await db.commit()
-    for task in tasks:
-        await db.refresh(task)
 
     return CreateTasksFromEmailResponse(
         created=len(tasks),

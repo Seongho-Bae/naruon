@@ -2,7 +2,7 @@ import asyncio
 import ipaddress
 from dataclasses import dataclass
 import socket
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import httpcore
 import httpx
@@ -14,6 +14,12 @@ from core.config import settings
 
 LLM_BASE_URL_NOT_ALLOWED = "LLM provider base URL is not allowed"
 _DNS_RESOLUTION_TIMEOUT_SECONDS = 5.0
+_LOCAL_DEV_HOSTNAMES = {"localhost", "localhost.localdomain"}
+_LOCAL_DEV_IP_LITERALS = {"127.0.0.1", "::1"}
+
+
+def _has_url_control_character(value: str) -> bool:
+    return any(ord(character) < 32 or ord(character) == 127 for character in value)
 
 
 @dataclass(frozen=True)
@@ -49,21 +55,69 @@ def _looks_like_ip_literal(candidate: str) -> bool:
     )
 
 
-def _validate_global_address(address: str) -> str:
+def _is_local_dev_host(hostname: str) -> bool:
+    normalized_hostname = hostname.lower().rstrip(".")
+    return (
+        normalized_hostname in _LOCAL_DEV_HOSTNAMES
+        or normalized_hostname in _LOCAL_DEV_IP_LITERALS
+    )
+
+
+def _is_allowlisted_local_provider_host(hostname: str) -> bool:
+    normalized_hostname = hostname.lower().rstrip(".")
+    return (
+        settings.ALLOW_LOCAL_LLM_PROVIDERS
+        and normalized_hostname in _parse_allowed_hosts()
+        and "." not in normalized_hostname
+        and not _is_ip_literal(normalized_hostname)
+        and not _looks_like_ip_literal(normalized_hostname)
+    )
+
+
+def _format_normalized_netloc(
+    hostname: str, port: int, *, explicit_port: bool
+) -> str:
+    host_part = f"[{hostname}]" if ":" in hostname else hostname
+    if not explicit_port:
+        return host_part
+    return f"{host_part}:{port}"
+
+
+def _validate_global_address(address: str, *, hostname: str | None = None) -> str:
+    """Validate that an IP address is globally routable, or explicitly allowed.
+
+    When ``ALLOW_LOCAL_LLM_PROVIDERS`` is enabled the address is accepted if:
+    - the IP is a loopback address, **or**
+    - the *original* hostname (before DNS resolution) is present in
+      ``ALLOWED_LLM_BASE_URL_HOSTS``.
+
+    This second condition is necessary because Docker container names (e.g.
+    ``ollama``) resolve to RFC-1918 private IPs that would otherwise be
+    rejected by the global-address check.
+    """
     try:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
-    if (
-        ip_address.is_private
-        or ip_address.is_loopback
-        or ip_address.is_link_local
-        or ip_address.is_reserved
-        or ip_address.is_unspecified
-        or ip_address.is_multicast
-        or not ip_address.is_global
-    ):
-        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
+    is_allowed_local = False
+    if settings.ALLOW_LOCAL_LLM_PROVIDERS:
+        if ip_address.is_loopback:
+            is_allowed_local = True
+        elif hostname and _is_allowlisted_local_provider_host(hostname):
+            is_allowed_local = True
+
+    if not is_allowed_local:
+        if (
+            ip_address.is_private
+            or ip_address.is_loopback
+            or ip_address.is_link_local
+            or ip_address.is_reserved
+            or ip_address.is_unspecified
+            or ip_address.is_multicast
+            or not ip_address.is_global
+        ):
+            raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
     return str(ip_address)
 
 
@@ -78,7 +132,9 @@ def _resolve_all_global_addresses(hostname: str, port: int) -> tuple[str, ...]:
     addresses: list[str] = []
     seen_addresses: set[str] = set()
     for address_info in address_infos:
-        address = _validate_global_address(str(address_info[4][0]))
+        # Pass the original hostname so that Docker container names listed in
+        # ALLOWED_LLM_BASE_URL_HOSTS are matched before checking the resolved IP.
+        address = _validate_global_address(str(address_info[4][0]), hostname=hostname)
         if address not in seen_addresses:
             seen_addresses.add(address)
             addresses.append(address)
@@ -95,33 +151,50 @@ async def _resolve_all_global_addresses_async(hostname: str, port: int) -> tuple
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
 
-def _normalize_llm_provider_base_url(value: str | None):
+def _parse_and_validate_candidate_url(
+    value: str | None,
+) -> tuple[SplitResult | None, int | None]:
     if value is None:
-        return None, None, None
+        return None, None
 
     candidate = value.strip()
     if not candidate:
-        return None, None, None
+        return None, None
+
+    if "\\" in candidate or _has_url_control_character(candidate):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
     try:
         parsed = urlsplit(candidate)
-        port = parsed.port or 443
+        default_port = 443 if parsed.scheme.lower() == "https" else 80
+        port = parsed.port or default_port
+        return parsed, port
     except ValueError as exc:
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED) from exc
 
-    hostname = (parsed.hostname or "").lower().rstrip(".")
+
+def _validate_url_components(parsed, hostname: str, is_local_dev_host: bool) -> None:
+    if parsed.scheme.lower() not in {"http", "https"}:
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
     if (
-        parsed.scheme.lower() != "https"
-        or not hostname
+        parsed.scheme.lower() == "http"
+        and not is_local_dev_host
+        and not _is_allowlisted_local_provider_host(hostname)
+    ):
+        raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
+
+    if (
+        not hostname
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
         or parsed.fragment
-        or port != 443
-        or hostname in {"localhost", "localhost.localdomain"}
     ):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
+
+def _validate_remote_host_is_allowed(hostname: str) -> None:
     allowed_hosts = _parse_allowed_hosts()
     if not allowed_hosts or any("*" in allowed_host for allowed_host in allowed_hosts):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
@@ -130,8 +203,26 @@ def _normalize_llm_provider_base_url(value: str | None):
     if _is_ip_literal(hostname) or _looks_like_ip_literal(hostname):
         raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
 
-    netloc = hostname if parsed.port is None else f"{hostname}:{port}"
-    return urlunsplit(("https", netloc, parsed.path or "", "", "")), hostname, port
+
+def _normalize_llm_provider_base_url(value: str | None):
+    parsed, port = _parse_and_validate_candidate_url(value)
+    if parsed is None or port is None:
+        return None, None, None
+
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    # Note: Container names like 'ollama' are NOT treated as localhost unless explicitly intended.
+    is_local_dev_host = _is_local_dev_host(hostname)
+
+    _validate_url_components(parsed, hostname, is_local_dev_host)
+
+    # If not localhost, must be in allowed hosts
+    if not is_local_dev_host:
+        _validate_remote_host_is_allowed(hostname)
+
+    netloc = _format_normalized_netloc(
+        hostname, port, explicit_port=parsed.port is not None
+    )
+    return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", "", "")), hostname, port
 
 
 def validate_llm_provider_base_url_details(
@@ -174,8 +265,10 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             raise ValueError(LLM_BASE_URL_NOT_ALLOWED)
         self._hostname = hostname
         self._port = port
+        # Re-validate each address; pass the hostname so Docker-container names
+        # in ALLOWED_LLM_BASE_URL_HOSTS are accepted.
         self._addresses = tuple(
-            _validate_global_address(address) for address in addresses
+            _validate_global_address(address, hostname=hostname) for address in addresses
         )
         self._backend = AutoBackend()
 
@@ -187,7 +280,7 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
         local_address: str | None,
         socket_options,
     ):
-        pinned_address = _validate_global_address(address)
+        pinned_address = _validate_global_address(address, hostname=self._hostname)
         return await self._backend.connect_tcp(
             pinned_address,
             port,
@@ -209,18 +302,51 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
         if normalized_host != self._hostname or int(port) != self._port:
             raise OSError("LLM provider base URL host changed after validation")
 
-        last_error: Exception | None = None
-        for address in self._addresses:
-            try:
-                return await self._connect_validated_ip_address(
+        tasks = {
+            asyncio.create_task(
+                self._connect_validated_ip_address(
                     address,
                     port,
                     timeout=timeout,
                     local_address=local_address,
                     socket_options=socket_options,
                 )
-            except Exception as exc:  # pragma: no cover - backend-specific
-                last_error = exc
+            )
+            for address in self._addresses
+        }
+        last_error: Exception | None = None
+        successful_stream = None
+        try:
+            while tasks:
+                done, tasks = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    try:
+                        stream = task.result()
+                    except Exception as exc:  # pragma: no cover - backend-specific
+                        last_error = exc
+                        continue
+
+                    if successful_stream is None:
+                        successful_stream = stream
+                    else:
+                        await stream.aclose()
+
+                if successful_stream is not None:
+                    pending_tasks = tasks
+                    tasks = set()
+                    for pending_task in pending_tasks:
+                        pending_task.cancel()
+                    if pending_tasks:
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
+                    return successful_stream
+        finally:
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
         if last_error is not None:
             raise last_error
         raise OSError(LLM_BASE_URL_NOT_ALLOWED)

@@ -60,10 +60,13 @@ if settings.ENABLE_PROMETHEUS_METRICS:
         app, include_in_schema=False, should_gzip=True
     )
 
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -73,16 +76,23 @@ async def add_security_headers(request: Request, call_next):
         )
     return response
 
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        origin.strip()
-        for origin in settings.ALLOWED_CORS_ORIGINS.split(",")
-        if origin.strip()
-    ],
+    allow_origins=settings.ALLOWED_CORS_ORIGINS_LIST,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS",
+        "PROPFIND",
+        "REPORT",
+        "MKCOL",
+    ],
+    allow_headers=["Accept", "Content-Type", "Authorization"],
 )
 
 app.include_router(search_router, dependencies=PRIVATE_API_DEPENDENCIES)

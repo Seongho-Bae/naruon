@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState, useEffect } from 'react';
-import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server } from 'lucide-react';
+import { useCallback, useState, useEffect, type ChangeEvent } from 'react';
+import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server, Upload } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type WebdavWritebackIntentResponse = {
@@ -42,6 +42,7 @@ type UniqueThreadIntentResponse = {
 };
 
 type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
+type EmailImportStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 
 type DataSurfaceStatus = 'loading' | 'ready' | 'error';
 
@@ -112,6 +113,23 @@ type DataQualitySurfaceResponse = {
     state_code: string;
     detail_text: string | null;
     observed_at: string;
+  }>;
+};
+
+type EmailFileImportResponse = {
+  status: 'completed';
+  imported_count: number;
+  skipped_count: number;
+  failed_count: number;
+  attachment_count: number;
+  provider_write_executed: boolean;
+  provenance: 'server-authoritative';
+  audit_event: 'email.file_import.completed';
+  items: Array<{
+    filename: string;
+    status: 'imported' | 'skipped_duplicate' | 'failed';
+    reason_code?: string | null;
+    attachment_count: number;
   }>;
 };
 
@@ -251,6 +269,9 @@ export function DataLayout() {
   const [writebackResult, setWritebackResult] = useState<WebdavWritebackIntentResponse | null>(null);
   const [uniqueThreadStatus, setUniqueThreadStatus] = useState<UniqueThreadStatus>('idle');
   const [uniqueThreadResult, setUniqueThreadResult] = useState<UniqueThreadIntentResponse | null>(null);
+  const [emailImportStatus, setEmailImportStatus] = useState<EmailImportStatus>('idle');
+  const [emailImportResult, setEmailImportResult] = useState<EmailFileImportResponse | null>(null);
+  const [emailImportFiles, setEmailImportFiles] = useState<File[]>([]);
   const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
   const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
   const [selectedRepositoryAssetKey, setSelectedRepositoryAssetKey] = useState<string | null>(null);
@@ -340,10 +361,37 @@ export function DataLayout() {
     }
   }, []);
 
+  const handleEmailImportFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    setEmailImportFiles(Array.from(event.target.files ?? []));
+    setEmailImportResult(null);
+    setEmailImportStatus('idle');
+  }, []);
+
+  const requestEmailFileImport = useCallback(async () => {
+    if (emailImportFiles.length === 0) {
+      setEmailImportStatus('error');
+      return;
+    }
+
+    setEmailImportStatus('loading');
+    setEmailImportResult(null);
+    try {
+      const formData = new FormData();
+      emailImportFiles.forEach((file) => formData.append('files', file));
+      const result = await apiClient.postForm<EmailFileImportResponse>('/api/emails/import-files', formData);
+      setEmailImportResult(result);
+      setEmailImportStatus('success');
+    } catch (error: unknown) {
+      const status = getApiErrorStatus(error);
+      setEmailImportStatus(status === 401 || status === 403 ? 'auth' : 'error');
+    }
+  }, [emailImportFiles]);
+
   const isWritebackLoading = writebackStatus === 'loading';
   const isWebdavSourceLoading = webdavAccountStatus === 'loading';
   const canRequestWebdavWriteback = webdavAccountStatus === 'ready';
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
+  const isEmailImportLoading = emailImportStatus === 'loading';
   const selectedWebdavAccount = webdavAccounts.find((account) => (
     account.source_id === selectedWebdavSourceId && account.writeback_enabled
   )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
@@ -399,6 +447,57 @@ export function DataLayout() {
                       className="h-full bg-blue-500 transition-all"
                       style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
                     ></div>
+                  </div>
+                  <div className="mt-4 grid gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary sm:w-fit">
+                        <Upload className="size-4" />
+                        이메일 파일 선택
+                        <input
+                          type="file"
+                          multiple
+                          accept=".eml,.zip,message/rfc822,application/zip"
+                          className="sr-only"
+                          onChange={handleEmailImportFileChange}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void requestEmailFileImport()}
+                        disabled={isEmailImportLoading || emailImportFiles.length === 0}
+                        aria-busy={isEmailImportLoading}
+                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
+                      >
+                        <Upload className="size-4" />
+                        선택 파일 반입
+                      </button>
+                    </div>
+                    <div role="status" aria-live="polite" className="text-xs font-semibold text-muted-foreground">
+                      {emailImportStatus === 'idle' && emailImportFiles.length === 0 && 'EML 또는 ZIP 원본을 선택해 메일/첨부 근거로 수집합니다.'}
+                      {emailImportStatus === 'idle' && emailImportFiles.length > 0 && `${formatCount(emailImportFiles.length)}개 파일 선택됨`}
+                      {emailImportStatus === 'loading' && '이메일 원본 파일을 반입하는 중입니다.'}
+                      {emailImportStatus === 'auth' && <span className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 이메일 원본을 반입할 수 없습니다.</span>}
+                      {emailImportStatus === 'error' && <span className="font-bold text-red-700">이메일 원본 파일 반입에 실패했습니다.</span>}
+                      {emailImportStatus === 'success' && emailImportResult && (
+                        <span className="text-foreground">
+                          {formatCount(emailImportResult.imported_count)}개 반입 · 중복 {formatCount(emailImportResult.skipped_count)}개 · 실패 {formatCount(emailImportResult.failed_count)}개 · 첨부 {formatCount(emailImportResult.attachment_count)}개 · {getWriteBoundaryLabel(emailImportResult.provider_write_executed)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-end">
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      문서 업로드 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      재파싱 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      임베딩 재생성 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary opacity-50 cursor-not-allowed">
+                      HWP 변환 (준비 중)
+                    </button>
+                    </div>
                   </div>
                 </div>
                 
@@ -794,6 +893,12 @@ export function DataLayout() {
                           style={{ width: `${stage.progress_percent}%` }}
                         ></div>
                       </div>
+                      <div className="mt-3 flex justify-end">
+                        <button type="button" disabled className="rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed flex items-center gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          {stage.stage_key.includes('parse') ? '재파싱 (준비 중)' : '재실행 (준비 중)'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -868,6 +973,12 @@ export function DataLayout() {
                           <dd className="mt-1 text-sm font-bold">{formatCount(collection.vector_dimensions)}</dd>
                         </div>
                       </dl>
+                      <div className="mt-4 flex justify-end border-t border-border pt-3">
+                        <button type="button" disabled className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary opacity-50 cursor-not-allowed flex items-center gap-1">
+                          <RefreshCw className="h-3 w-3" />
+                          임베딩 재생성 (준비 중)
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -887,6 +998,14 @@ export function DataLayout() {
                     <span className={`mt-3 inline-flex rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(check.status_code)}`}>
                       {getSurfaceStatusLabel(check.status_code)}
                     </span>
+                    <div className="mt-4 flex gap-2 justify-end border-t border-border pt-3">
+                      <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                        품질 점검
+                      </button>
+                      <button type="button" className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 border border-red-200">
+                        격리
+                      </button>
+                    </div>
                   </div>
                 ))}
                 {dataSurfaceStatus === 'loading' && (

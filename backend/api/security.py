@@ -21,6 +21,7 @@ from db.models import (
     WebdavAccount,
 )
 from db.session import get_db
+from core.config import settings
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
 router = APIRouter(prefix="/api/security", tags=["security"])
@@ -228,7 +229,7 @@ def _access_request(auth_context: AuthContext) -> AccessRequest:
         role=auth_context.role,
         organization_id=auth_context.organization_id,
         group_ids=auth_context.group_ids,
-        data_region="kr",
+        data_region=settings.DATA_REGION,
         consent_scopes=("mail.read", "calendar.read", "webdav.write"),
         workspace_id=auth_context.workspace_id,
     )
@@ -275,7 +276,7 @@ def _source_policy(
         organization_id=organization_id,
         permitted_roles=("tenant_admin", "organization_admin", "group_admin", "member"),
         permitted_group_ids=auth_context.group_ids,
-        data_region="kr",
+        data_region=settings.DATA_REGION,
         required_consent_scopes=required_consent,
         workspace_id=workspace_id,
         delegated_user_ids=delegated_user_ids,
@@ -396,7 +397,7 @@ def _canonical_policy_decisions(
                 organization_id="org-outside-scope",
                 permitted_roles=("tenant_admin", "organization_admin"),
                 permitted_group_ids=(),
-                data_region="kr",
+                data_region=settings.DATA_REGION,
                 required_consent_scopes=(),
                 workspace_id=auth_context.workspace_id,
             ),
@@ -414,7 +415,7 @@ def _canonical_policy_decisions(
                 organization_id=auth_context.organization_id,
                 permitted_roles=("tenant_admin", "organization_admin", "member"),
                 permitted_group_ids=auth_context.group_ids,
-                data_region="eu",
+                data_region=settings.SECONDARY_DATA_REGION,
                 required_consent_scopes=(),
                 workspace_id=auth_context.workspace_id,
             ),

@@ -15,6 +15,7 @@ from services.llm_provider_urls import (
     LLM_BASE_URL_NOT_ALLOWED,
     validate_llm_provider_base_url_async,
 )
+from services.llm_provider_readiness import is_llm_provider_configured
 
 router = APIRouter(prefix="/api/llm-providers", tags=["llm-providers"])
 
@@ -23,6 +24,8 @@ class LLMProviderCreate(BaseModel):
     name: str
     provider_type: str
     base_url: Optional[str] = None
+    model_identifier: Optional[str] = None
+    embedding_model: Optional[str] = None
     api_key: Optional[str] = None
     is_active: bool = False
 
@@ -31,6 +34,8 @@ class LLMProviderUpdate(BaseModel):
     name: Optional[str] = None
     provider_type: Optional[str] = None
     base_url: Optional[str] = None
+    model_identifier: Optional[str] = None
+    embedding_model: Optional[str] = None
     api_key: Optional[str] = None
     is_active: Optional[bool] = None
 
@@ -40,6 +45,8 @@ class LLMProviderResponse(BaseModel):
     name: str
     provider_type: str
     base_url: Optional[str] = None
+    model_identifier: Optional[str] = None
+    embedding_model: Optional[str] = None
     is_active: bool
     configured: bool
     fingerprint: Optional[str] = None
@@ -61,6 +68,28 @@ async def _validated_base_url(value: str | None) -> str | None:
         return await validate_llm_provider_base_url_async(value)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=LLM_BASE_URL_NOT_ALLOWED) from exc
+
+
+def _optional_stripped_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _provider_response(provider: LLMProvider) -> LLMProviderResponse:
+    return LLMProviderResponse(
+        id=provider.id,
+        name=provider.name,
+        provider_type=provider.provider_type,
+        base_url=provider.base_url,
+        model_identifier=provider.model_identifier,
+        embedding_model=provider.embedding_model,
+        is_active=provider.is_active,
+        configured=is_llm_provider_configured(provider),
+        fingerprint=_get_fingerprint(provider.api_key),
+        updated_at=provider.updated_at,
+    )
 
 
 async def check_admin_access(
@@ -121,18 +150,7 @@ async def list_providers(
 
     responses = []
     for p in providers:
-        responses.append(
-            LLMProviderResponse(
-                id=p.id,
-                name=p.name,
-                provider_type=p.provider_type,
-                base_url=p.base_url,
-                is_active=p.is_active,
-                configured=bool(p.api_key),
-                fingerprint=_get_fingerprint(p.api_key),
-                updated_at=p.updated_at,
-            )
-        )
+        responses.append(_provider_response(p))
     return responses
 
 
@@ -148,6 +166,8 @@ async def create_provider(
         name=data.name,
         provider_type=data.provider_type,
         base_url=await _validated_base_url(data.base_url),
+        model_identifier=_optional_stripped_text(data.model_identifier),
+        embedding_model=_optional_stripped_text(data.embedding_model),
         api_key=data.api_key,
         is_active=data.is_active,
     )
@@ -180,16 +200,7 @@ async def create_provider(
         await db.rollback()
         raise HTTPException(status_code=409, detail="Provider name already exists")
 
-    return LLMProviderResponse(
-        id=provider.id,
-        name=provider.name,
-        provider_type=provider.provider_type,
-        base_url=provider.base_url,
-        is_active=provider.is_active,
-        configured=bool(provider.api_key),
-        fingerprint=_get_fingerprint(provider.api_key),
-        updated_at=provider.updated_at,
-    )
+    return _provider_response(provider)
 
 
 @router.put("/{provider_id}", response_model=LLMProviderResponse)
@@ -219,6 +230,12 @@ async def update_provider(
     if data.base_url is not None:
         provider.base_url = await _validated_base_url(data.base_url)
         updated = True
+    if data.model_identifier is not None:
+        provider.model_identifier = _optional_stripped_text(data.model_identifier)
+        updated = True
+    if data.embedding_model is not None:
+        provider.embedding_model = _optional_stripped_text(data.embedding_model)
+        updated = True
     if data.api_key is not None:
         provider.api_key = data.api_key
         updated = True
@@ -246,16 +263,7 @@ async def update_provider(
         await db.commit()
         await db.refresh(provider)
 
-    return LLMProviderResponse(
-        id=provider.id,
-        name=provider.name,
-        provider_type=provider.provider_type,
-        base_url=provider.base_url,
-        is_active=provider.is_active,
-        configured=bool(provider.api_key),
-        fingerprint=_get_fingerprint(provider.api_key),
-        updated_at=provider.updated_at,
-    )
+    return _provider_response(provider)
 
 
 @router.delete("/{provider_id}", status_code=204)

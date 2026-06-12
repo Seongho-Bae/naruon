@@ -1,0 +1,47 @@
+FROM ollama/ollama:latest
+
+ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models
+
+RUN useradd --system --create-home --home-dir /home/ollama --shell /usr/sbin/nologin ollama
+
+# Pull model weights at build time so the container is ready without network
+# access at runtime.  Keep the large chat and smaller embedding model pulls in
+# separate layers so constrained Podman builders do not need to commit one
+# oversized model cache blob.
+RUN set -eux; \
+    mkdir -p "${OLLAMA_MODELS}"; \
+    chown -R ollama:ollama /usr/share/ollama/.ollama; \
+    ollama serve > /tmp/ollama-build.log 2>&1 & \
+    server_pid="$!"; \
+    trap 'kill "$server_pid" 2>/dev/null || true' EXIT; \
+    server_ready=false; \
+    for attempt in $(seq 1 60); do \
+      if ollama list > /dev/null 2>&1; then server_ready=true; break; fi; \
+      sleep 1; \
+    done; \
+    if [ "${server_ready}" != "true" ]; then cat /tmp/ollama-build.log; exit 1; fi; \
+    ollama pull gemma4; \
+    ollama list | grep -E '^gemma4(:|[[:space:]])'; \
+    kill "$server_pid"; \
+    wait "$server_pid" 2>/dev/null || true; \
+    chown -R ollama:ollama /usr/share/ollama/.ollama
+
+RUN set -eux; \
+    chown -R ollama:ollama /usr/share/ollama/.ollama; \
+    ollama serve > /tmp/ollama-build.log 2>&1 & \
+    server_pid="$!"; \
+    trap 'kill "$server_pid" 2>/dev/null || true' EXIT; \
+    server_ready=false; \
+    for attempt in $(seq 1 60); do \
+      if ollama list > /dev/null 2>&1; then server_ready=true; break; fi; \
+      sleep 1; \
+    done; \
+    if [ "${server_ready}" != "true" ]; then cat /tmp/ollama-build.log; exit 1; fi; \
+    ollama pull embeddinggemma; \
+    ollama list | grep -E '^embeddinggemma(:|[[:space:]])'; \
+    kill "$server_pid"; \
+    wait "$server_pid" 2>/dev/null || true; \
+    chown -R ollama:ollama /usr/share/ollama/.ollama
+
+# Run as non-root for security (DS-0002).
+USER ollama

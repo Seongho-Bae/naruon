@@ -147,6 +147,7 @@ ADMIN_ROLES = SYSTEM_ADMIN_ROLES | TENANT_ADMIN_ROLES
 SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
+OIDC_SIGNING_ALGORITHM = "RS256"
 MIN_SESSION_SECRET_BYTES = 32
 
 
@@ -217,20 +218,42 @@ def preload_oidc_jwks() -> None:
         logger.exception("OIDC JWKS preload failed; requests will fail closed.")
 
 
-def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
-    if not _cached_oidc_signing_keys:
-        raise _authentication_error()
+def _oidc_unverified_header(token: str) -> dict[str, Any]:
     try:
         header = jwt.get_unverified_header(token)
     except Exception:
         raise _authentication_error() from None
     _reject_unsupported_critical_headers(header)
+    if header.get("alg") != OIDC_SIGNING_ALGORITHM:
+        raise _authentication_error()
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
         raise _authentication_error()
+    return header
+
+
+def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
+    if not _cached_oidc_signing_keys:
+        raise _authentication_error()
+    header = _oidc_unverified_header(token)
+    key_id = header["kid"].strip()
+
     for signing_key in _cached_oidc_signing_keys:
-        if getattr(signing_key, "key_id", None) == key_id:
-            return signing_key
+        try:
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=[OIDC_SIGNING_ALGORITHM],
+                audience=settings.OIDC_CLIENT_ID,
+                issuer=settings.OIDC_ISSUER_URL,
+            )
+        except jwt.PyJWTError:
+            continue
+        if getattr(signing_key, "key_id", None) != key_id:
+            raise _authentication_error()
+        if not isinstance(payload, dict):
+            raise _authentication_error()
+        return payload
     raise _authentication_error()
 
 
@@ -275,14 +298,7 @@ def _verify_signed_session_payload(
         if jwks_client is None:
             raise _authentication_error()
         try:
-            signing_key = _cached_oidc_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["RS256"],
-                audience=settings.OIDC_CLIENT_ID,
-                issuer=settings.OIDC_ISSUER_URL
-            )
+            payload = _decode_cached_oidc_session_payload(token)
             _reject_signed_session_system_admin_payload(payload)
             return payload, "oidc"
         except Exception:
