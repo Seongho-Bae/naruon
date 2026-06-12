@@ -318,7 +318,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
 	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
 	assert_file_contains "$workflow_file" "always return a final control block instead of a progress summary" "opencode review prompt requires a gate conclusion instead of a progress summary"
-	assert_file_contains "$workflow_file" "timeout 1200 opencode run" "opencode review primary model has a bounded extended timeout for larger workflow diffs"
+	assert_file_contains "$workflow_file" "timeout 600 opencode run" "opencode review primary model has a bounded timeout before failed-check fallback diagnosis"
 	assert_file_contains "$workflow_file" '"ci-review-fallback"' "opencode review workflow declares a dedicated fallback agent"
 	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
 	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
@@ -378,6 +378,11 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '.line | type == "number" and . > 0 and floor == .' "opencode approval gate rejects line zero findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
+	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Self-test Strix gate script" "failed-check review validator requires Strix failed step evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github.event.inputs.strix_llm" "failed-check review validator requires exact Strix missing assertion evidence"
+	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
 	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
 	assert_file_contains "$workflow_file" "Failed check evidence for line-specific fixes" "opencode approval gate includes failed-check evidence when diagnosis cannot complete"
@@ -485,6 +490,58 @@ EOF
 
 	assert_equals "4" "$rc" "opencode normalizer rejects line zero findings"
 	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for line zero findings"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_failed_check_review_validator_rejects_unrelated_findings() {
+	local tmp_dir
+	local control_json
+	local failed_checks_file
+	local evidence_file
+	local rc
+	tmp_dir="$(mktemp -d)"
+	control_json="$tmp_dir/control.json"
+	failed_checks_file="$tmp_dir/failed-checks.txt"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+
+	cat >"$failed_checks_file" <<'EOF'
+- Strix Security Scan/strix: FAILURE (https://github.com/example/repo/actions/runs/1/job/2)
+EOF
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed job steps
+
+- step 6: Self-test Strix gate script (failure)
+
+### Failed log excerpt
+
+FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5'')
+FAIL: strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model')
+FAIL: opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5')
+EOF
+	cat >"$control_json" <<'EOF'
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Generic security concern","summary":"Generic speculative CI issues.","findings":[{"path":"scripts/ci/collect_failed_check_evidence.sh","line":15,"severity":"HIGH","title":"Generic finding","problem":"Speculative input validation issue unrelated to failed checks.","root_cause":"The review did not use the failed Strix evidence.","fix_direction":"Add generic validation.","regression_test_direction":"Add a generic test.","suggested_diff":"diff --git a/scripts/ci/collect_failed_check_evidence.sh b/scripts/ci/collect_failed_check_evidence.sh\n--- a/scripts/ci/collect_failed_check_evidence.sh\n+++ b/scripts/ci/collect_failed_check_evidence.sh\n@@ -1 +1 @@\n-old\n+new"}]}
+EOF
+
+	set +e
+	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \
+		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/bad.out" 2>"$tmp_dir/bad.err"
+	rc=$?
+	set -e
+	assert_equals "4" "$rc" "failed-check review validator rejects unrelated findings"
+	assert_file_contains "$tmp_dir/bad.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator explains unrelated finding rejection"
+
+	cat >"$control_json" <<'EOF'
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed in Self-test Strix gate script because the trusted workflow is missing expected model evidence strings.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix workflow default is not visible to trusted self-test","problem":"Strix Security Scan/strix failed in Self-test Strix gate script: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5''); strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model'); opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5').","root_cause":"The failed check evidence shows Self-test Strix gate script could not find github.event.inputs.strix_llm, STRIX_LLM must select, and MODEL: github-models/openai/gpt-5 in trusted-base files.","fix_direction":"Update the workflow lines that provide the Strix model default and OpenCode model env so the trusted self-test can find those exact strings.","regression_test_direction":"Keep the static self-test assertions for all three missing strings.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-          STRIX_MODEL: old\n+          STRIX_MODEL: ${{ github.event.inputs.strix_llm || 'openai/gpt-5' }}"}]}
+EOF
+	set +e
+	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \
+		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/good.out" 2>"$tmp_dir/good.err"
+	rc=$?
+	set -e
+	assert_equals "0" "$rc" "failed-check review validator accepts Strix log-backed findings"
 
 	rm -rf "$tmp_dir"
 }
@@ -4873,6 +4930,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback
 assert_opencode_review_normalizer_accepts_transcript_json
 
 assert_opencode_review_gate_rejects_line_zero_findings
+
+assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
