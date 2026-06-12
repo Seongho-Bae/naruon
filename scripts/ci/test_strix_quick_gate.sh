@@ -5829,15 +5829,14 @@ run_gate_case_allow_provider_signal "bare-timeout-provider-marker-exhausted-fall
 	"" \
 	"1"
 
-# Sticky INFRA_ERROR_DETECTED flag: first call hits rate-limit (infra error),
-# second call fails with a non-retryable error but leaves a partial LOW report.
-# The gate must refuse the below-threshold bypass because an infrastructure
-# error was detected during this pipeline run.
+# A primary provider error with no findings must not poison a later fallback
+# scan that completes with only below-threshold findings. Same-attempt
+# infra-plus-findings cases above still fail closed.
 run_gate_case_allow_provider_signal "infra-error-sticky-flag" \
 	"vertex_ai/sticky-flag-primary" \
 	"" \
-	"1" \
-	"infrastructure errors occurred" \
+	"0" \
+	"below configured fail threshold" \
 	"3" \
 	"vertex_ai/sticky-flag-primary|vertex_ai/sticky-flag-primary|vertex_ai/gemini-2.5-pro" \
 	"<unset>|<unset>|<unset>" \

@@ -48,6 +48,7 @@ REPO_NAME="${REPO_ROOT##*/}"
 # this flag because the scan itself produced a complete result set.
 INFRA_ERROR_DETECTED=0
 LAST_ATTEMPT_INFRA_ERROR_DETECTED=0
+INFRA_ERROR_WITH_FINDINGS_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
@@ -2101,6 +2102,9 @@ PY
 	if has_detected_infrastructure_error; then
 		INFRA_ERROR_DETECTED=1
 		LAST_ATTEMPT_INFRA_ERROR_DETECTED=1
+		if has_any_reported_severity_markers; then
+			INFRA_ERROR_WITH_FINDINGS_DETECTED=1
+		fi
 		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
 			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2
 			return 1
@@ -2490,23 +2494,18 @@ has_only_below_threshold_vulnerabilities() {
 		done
 	done
 
-	if [ "$found_any_vuln_file" -eq 0 ]; then
-		update_max_severity_from_stream "$STRIX_LOG"
-	fi
+	update_max_severity_from_stream "$STRIX_LOG"
 
 	if [ "$saw_any_severity" -eq 0 ]; then
 		return 1
 	fi
 
-	# Guard against incomplete scans due to infrastructure errors.
-	# Use the sticky INFRA_ERROR_DETECTED flag instead of re-reading
-	# STRIX_LOG, because STRIX_LOG is overwritten per-attempt.  If an
-	# earlier attempt hit an infrastructure error (timeout, rate-limit,
-	# transport failure) and produced a partial report that now sits in
-	# the reports directory, the *current* STRIX_LOG may show a different
-	# failure — or even success — but the partial report's low-severity
-	# findings must not be treated as a clean scan result.
-	if [ "$INFRA_ERROR_DETECTED" -eq 1 ]; then
+	# Guard against incomplete scans due to infrastructure errors. The current
+	# attempt's infrastructure signal must always fail closed. Earlier provider
+	# failures only poison below-threshold handling when they produced severity
+	# markers, because a later fallback can complete a clean scan after a primary
+	# model availability failure with no findings.
+	if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] || [ "$INFRA_ERROR_WITH_FINDINGS_DETECTED" -eq 1 ]; then
 		echo "Below-threshold findings detected, but infrastructure errors occurred during this pipeline run; refusing bypass due to potentially incomplete scan." >&2
 		return 1
 	fi
