@@ -181,8 +181,25 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
     assert "secrets.token_hex" not in dockerfile
     assert "ENV DATABASE_URL=" not in dockerfile
-    assert '"/app/start.sh"' in dockerfile
+    assert '"/app/scripts/docker_entrypoint.sh"' in dockerfile
+    assert "RUN chmod +x /app/scripts/docker_entrypoint.sh" in dockerfile
+    assert "COPY scripts/start_combined.sh" not in dockerfile
+    assert "RUN echo '#!/bin/bash" not in dockerfile
     assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
+
+
+def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> None:
+    start_script = read_repo_text("backend/scripts/docker_entrypoint.sh")
+
+    assert "for var in DATABASE_URL AUTH_SESSION_HMAC_SECRET ENCRYPTION_KEY" in start_script
+    assert "Fernet.generate_key()" in start_script
+    assert "database bootstrap failed" in start_script
+    assert "Backend and frontend will not start." in start_script
+    assert "Starting backend (uvicorn :8000)" in start_script
+    assert "Starting frontend (next start :3000)" in start_script
+    assert 'wait -n "$backend_pid" "$frontend_pid"' in start_script
+    assert "Backend (:8000) exited with code" in start_script
+    assert "Frontend (:3000) exited with code" in start_script
 
 
 def test_backend_compose_commands_use_startup_preflight() -> None:
@@ -195,6 +212,20 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert 'DEBUG: "true"' not in backend_block
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
+    assert "Dockerfile.ollama" in live_e2e_compose
+    assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose
+    assert "postgresql+asyncpg://" not in live_e2e_compose
+    assert '"127.0.0.1:18080:8080"' in live_e2e_compose
+    assert 'OLLAMA_NO_CLOUD: "true"' in compose
+    assert 'OLLAMA_NO_CLOUD: "true"' in live_e2e_compose
+    assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
+    assert "OPENAI_MODEL: gemma4" in live_e2e_compose
+    assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
+    live_nginx = read_repo_text("tests/live/nginx.conf")
+    assert "proxy_read_timeout 600s" in live_nginx
+    assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in live_nginx
+    assert 'add_header X-Content-Type-Options "nosniff" always;' in live_nginx
+    assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
