@@ -1042,6 +1042,34 @@ jobs:
 
             emit_strix_provider_failure_finding
 
+            emit_strix_cancelled_without_log_finding() {
+              local match=""
+              local path=".github/workflows/strix.yml"
+              local line="1"
+
+              if ! grep -Fq "Conclusion:" "$evidence_file" ||
+                ! grep -Fq "cancelled" "$evidence_file" ||
+                ! grep -Fq "No GitHub Actions job log is available for this failed workflow run." "$evidence_file"; then
+                return 0
+              fi
+
+              if [ -f "${repo_root%/}/$path" ]; then
+                match="$(grep -nF -- "cancel-in-progress: false" "${repo_root%/}/$path" | head -n 1 || true)"
+                if [ -n "$match" ]; then
+                  line="${match%%:*}"
+                fi
+              fi
+
+              finding_index=$((finding_index + 1))
+              printf '### %s. HIGH %s:%s - Current-head Strix evidence is missing because the workflow run was cancelled before logs\n' "$finding_index" "$path" "$line"
+              printf -- '- Problem: Strix Security Scan reported a current-head workflow_run conclusion of cancelled, but GitHub emitted no failed job log and no Strix Vulnerability Report window.\n'
+              printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This is a workflow execution/queue state, not an application vulnerability finding, so OpenCode must not invent a source-code fix.\n'
+              printf -- '- Fix: Do not approve from this cancelled run. Re-run the current-head Strix Security Scan after stale runs complete or are cancelled, then review the resulting job log; keep the workflow concurrency line at %s:%s so stale runs do not silently replace current-head evidence.\n' "$path" "$line"
+              printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log so reviewers see that the blocker is missing scanner evidence.\n\n'
+            }
+
+            emit_strix_cancelled_without_log_finding
+
             if [ "$finding_index" -eq 0 ]; then
               printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'
             fi

@@ -317,21 +317,28 @@ done <"$workflow_run_contexts"
 		fi
 		printf '\n'
 
-		if [ "$kind" = "workflow_run" ] && [ -n "$run_id" ]; then
-			log_file="$(mktemp)"
-			stripped_log_file="$(mktemp)"
-			tmp_files+=("$log_file" "$stripped_log_file")
-			if gh run view "$run_id" --repo "$GH_REPOSITORY" --log-failed >"$log_file" 2>&1; then
-				strip_ansi <"$log_file" >"$stripped_log_file"
-				emit_failure_signal_summary "$stripped_log_file" || true
-				printf '### Failed workflow run log excerpt\n\n'
-				printf '```text\n'
-				emit_bounded_file "$stripped_log_file" "$FAILED_CHECK_LOG_LINES"
-				printf '\n```\n\n'
-				if [[ "$label" == *Strix* ]]; then
-					emit_strix_vulnerability_evidence "$stripped_log_file" || true
-				fi
-			else
+			if [ "$kind" = "workflow_run" ] && [ -n "$run_id" ]; then
+				log_file="$(mktemp)"
+				stripped_log_file="$(mktemp)"
+				tmp_files+=("$log_file" "$stripped_log_file")
+				if gh run view "$run_id" --repo "$GH_REPOSITORY" --log-failed >"$log_file" 2>&1; then
+					strip_ansi <"$log_file" >"$stripped_log_file"
+					if [ -s "$stripped_log_file" ]; then
+						emit_failure_signal_summary "$stripped_log_file" || true
+						printf '### Failed workflow run log excerpt\n\n'
+						printf '```text\n'
+						emit_bounded_file "$stripped_log_file" "$FAILED_CHECK_LOG_LINES"
+						printf '\n```\n\n'
+						if [[ "$label" == *Strix* ]]; then
+							emit_strix_vulnerability_evidence "$stripped_log_file" || true
+						fi
+					else
+						printf 'No GitHub Actions job log is available for this failed workflow run.\n\n'
+						if [ "$conclusion" = "cancelled" ]; then
+							printf 'The workflow run completed as cancelled before GitHub emitted a failed job log. Treat this as missing current-head security evidence, not as a source-code vulnerability report.\n\n'
+						fi
+					fi
+				else
 				strip_ansi <"$log_file" >"$stripped_log_file"
 				printf 'No GitHub Actions job log is available for this failed workflow run.\n\n'
 				printf '```text\n'
