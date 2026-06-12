@@ -119,14 +119,19 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
-    previous_oidc_signing_keys = sys.modules["api.auth"]._cached_oidc_signing_keys
+    auth_module = sys.modules["api.auth"]
+    previous_oidc_signing_keys = auth_module._cached_oidc_signing_keys
+    previous_revoked_session_tokens = dict(auth_module._revoked_session_tokens)
+    auth_module._revoked_session_tokens.clear()
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
-    sys.modules["api.auth"]._cached_oidc_signing_keys = previous_oidc_signing_keys
+    auth_module._cached_oidc_signing_keys = previous_oidc_signing_keys
+    auth_module._revoked_session_tokens.clear()
+    auth_module._revoked_session_tokens.update(previous_revoked_session_tokens)
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -244,6 +249,49 @@ async def test_get_auth_context_accepts_signed_bearer_session():
         workspace_id="workspace-org-acme",
     )
     assert context.session_verifier == "hmac"
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_revoked_signed_bearer_session():
+    from api import auth as auth_module
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    payload = _valid_session_payload()
+    token = _signed_session_token(payload)
+
+    auth_module.revoke_session_token(token, float(payload["exp"]))
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+def test_logout_endpoint_revokes_signed_bearer_session():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            logout_response = client.post(
+                "/api/auth/logout",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            revoked_response = client.get(
+                "/api/runner-config",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert logout_response.status_code == 200
+    assert logout_response.json() == {"revoked": True}
+    assert revoked_response.status_code == 401
+    assert revoked_response.json() == {"detail": "Authentication required"}
 
 
 @pytest.mark.asyncio

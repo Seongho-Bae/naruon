@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from api.auth import get_auth_context, preload_oidc_jwks
+from api.auth import get_auth_context, preload_oidc_jwks, router as auth_router
 from api.search import router as search_router
 from api.llm import router as llm_router
 from api.calendar import router as calendar_router
@@ -95,6 +95,7 @@ app.add_middleware(
 )
 
 app.include_router(search_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(auth_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(llm_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(calendar_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(network_router, dependencies=PRIVATE_API_DEPENDENCIES)
