@@ -1173,6 +1173,19 @@ jobs:
                   )
                 | .[]
               ' >"$output_file"
+
+            gh run list \
+              --repo "$GH_REPOSITORY" \
+              --commit "$HEAD_SHA" \
+              --limit 100 \
+              --json databaseId,workflowName,status,conclusion,url \
+              --jq '
+                .[]
+                | select((.workflowName // "") != "OpenCode Review")
+                | select((.status // "") == "completed")
+                | select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
+                | "- " + (if (.workflowName // "") != "" then .workflowName else "workflow run" end) + ": " + (.conclusion // "unknown") + (if (.url // "") != "" then " (" + .url + ")" else "" end)
+              ' >>"$output_file"
           }
 
           collect_pending_github_checks() {

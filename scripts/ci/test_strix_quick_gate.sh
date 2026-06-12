@@ -351,6 +351,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" '--commit "$PR_HEAD_SHA"' "opencode evidence considers pending same-head workflow runs outside statusCheckRollup"
 	assert_file_contains "$workflow_file" 'collect_pending_github_checks()' "opencode approval collects pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" '--commit "$HEAD_SHA"' "opencode approval considers pending same-head workflow runs outside statusCheckRollup"
+	assert_file_contains "$workflow_file" '["failure","timed_out","action_required","cancelled","startup_failure"]' "opencode approval treats failed same-head workflow runs outside statusCheckRollup as blockers"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" '"workflow_run"' "failed-check evidence includes failed same-head workflow runs outside statusCheckRollup"
 	assert_file_contains "$workflow_file" 'wait_for_peer_github_checks "$pending_checks_file"' "opencode approval gates approval on pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" 'OpenCode Agent could not approve because GitHub Checks were still pending before approval.' "opencode approval requests changes when peer checks remain pending"
 	assert_file_contains "$workflow_file" 'select((.status // "") != "COMPLETED")' "opencode approval treats incomplete check runs as approval blockers"
