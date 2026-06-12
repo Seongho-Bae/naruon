@@ -1026,7 +1026,7 @@ jobs:
               fi
 
               if [ -f "${repo_root%/}/$path" ]; then
-                match="$(grep -nF -- "STRIX_FALLBACK_MODELS: deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" "${repo_root%/}/$path" | head -n 1 || true)"
+                match="$(grep -nE -- "^[[:space:]]*STRIX_FALLBACK_MODELS:" "${repo_root%/}/$path" | head -n 1 || true)"
                 if [ -n "$match" ]; then
                   line="${match%%:*}"
                 fi

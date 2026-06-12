@@ -433,6 +433,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "budget limit" "failed-check evidence collector preserves Strix provider budget failures"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "completed as cancelled before GitHub emitted a failed job log" "failed-check evidence collector explains cancelled jobless Strix runs"
 	assert_file_contains "$workflow_file" "emit_strix_provider_failure_finding" "opencode fallback review explains provider blockers without inventing code vulnerabilities"
+	assert_file_contains "$workflow_file" "STRIX_FALLBACK_MODELS:" "opencode provider fallback finding points at the concrete Strix fallback configuration line"
 	assert_file_contains "$workflow_file" "emit_strix_cancelled_without_log_finding" "opencode fallback review explains cancelled Strix runs without inventing code vulnerabilities"
 	assert_file_contains "$workflow_file" "Configured model and fallback models were unavailable" "opencode fallback review preserves exhausted Strix model evidence"
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
