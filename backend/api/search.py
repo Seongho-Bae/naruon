@@ -8,7 +8,7 @@ from db.session import get_db
 from db.models import Email, Attachment
 from services.embedding import generate_embeddings
 from api.auth import AuthContext, get_auth_context
-from services.tenant_config_scope import get_scoped_tenant_config
+from services.llm_provider_selection import resolve_runtime_llm_provider
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -185,17 +185,20 @@ async def hybrid_search(
         return SearchResponse(results=[])
 
     try:
-        tenant_config = await get_scoped_tenant_config(
+        runtime_provider = await resolve_runtime_llm_provider(
             db,
-            target_user_id,
-            auth_context.organization_id,
+            user_id=target_user_id,
+            organization_id=auth_context.organization_id,
         )
-        if not tenant_config or not tenant_config.openai_api_key:
+        if runtime_provider is None:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
 
-        openai_api_key = tenant_config.openai_api_key
-
-        embeddings = await generate_embeddings([request.query], openai_api_key)
+        embeddings = await generate_embeddings(
+            [request.query],
+            runtime_provider.api_key,
+            base_url=runtime_provider.base_url,
+            model=runtime_provider.embedding_model,
+        )
         query_embedding = embeddings[0] if embeddings else None
         if (
             query_embedding is not None

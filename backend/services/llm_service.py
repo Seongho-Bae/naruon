@@ -26,6 +26,7 @@ async def extract_todos_and_summary(
     openai_api_key: str,
     base_url: str | None = None,
     provider_name: str = "OpenAI",
+    model: str | None = None,
 ) -> ExtractionResult:
     if not openai_api_key:
         raise ValueError("API Key is not set")
@@ -39,9 +40,10 @@ async def extract_todos_and_summary(
         base_url=validated_base_url,
         http_client=http_client,
     )
+    selected_model = model or settings.OPENAI_MODEL
     try:
         response = await client.beta.chat.completions.parse(
-            model=settings.OPENAI_MODEL,
+            model=selected_model,
             messages=[
                 {
                     "role": "system",
@@ -65,12 +67,16 @@ async def extract_todos_and_summary(
     if not parsed:
         raise RuntimeError("Failed to parse LLM response")
 
-    parsed.provenance = f"{provider_name} ({settings.OPENAI_MODEL})"
+    parsed.provenance = f"{provider_name} ({selected_model})"
     return parsed
 
 
 async def draft_reply(
-    email_body: str, instruction: str, openai_api_key: str, base_url: str | None = None
+    email_body: str,
+    instruction: str,
+    openai_api_key: str,
+    base_url: str | None = None,
+    model: str | None = None,
 ) -> str:
     if not openai_api_key:
         raise ValueError("API Key is not set")
@@ -84,9 +90,10 @@ async def draft_reply(
         base_url=validated_base_url,
         http_client=http_client,
     )
+    selected_model = model or settings.OPENAI_MODEL
     try:
         response = await client.chat.completions.create(
-            model=settings.OPENAI_MODEL,
+            model=selected_model,
             messages=[
                 {
                     "role": "system",
