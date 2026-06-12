@@ -29,6 +29,8 @@ async def generate_fixture_embedding(text: str) -> list[float]:
         return [0.0] * EMBEDDING_DIMENSION
 
     embeddings = await generate_embeddings([text], openai_api_key=openai_api_key)
+    if not embeddings:
+        return [0.0] * EMBEDDING_DIMENSION
     return fit_embedding_vector(embeddings[0], EMBEDDING_DIMENSION)
 
 

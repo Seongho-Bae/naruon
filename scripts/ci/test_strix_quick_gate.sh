@@ -152,7 +152,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS:" "strix workflow must not expose total timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "strix workflow must not split Strix PR evidence into separate scanner runs"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash'" "strix workflow must not quarantine the approved Vertex preview model after organization secret visibility is fixed"
-	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models GPT-5"
+	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models GPT-5"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM ||" "strix workflow must not let the legacy STRIX_LLM secret override PR defaults"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
 	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)" "strix workflow accepts only exact approved organization Vertex AI models"
@@ -424,6 +424,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Self-test Strix gate script" "failed-check review validator requires Strix failed step evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github.event.inputs.strix_llm" "failed-check review validator requires exact Strix missing assertion evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_required_markers" "failed-check review validator extracts Strix report titles and locations"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "count_strix_review_findings" "failed-check review validator compares Strix reports to Strix-specific findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Severity: \$1" "failed-check review validator requires Strix severity evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Location[[:space:]]+[0-9]+" "failed-check review validator requires Strix location evidence"
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
@@ -662,7 +663,7 @@ Model deepseek/deepseek-v3-0324 Vulnerabilities 1
 
 ### Failed log excerpt
 
-FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/openai/gpt-5'')
+FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5'')
 FAIL: strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model')
 FAIL: opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5')
 EOF
@@ -678,8 +679,73 @@ EOF
 	assert_equals "4" "$rc" "failed-check review validator rejects unrelated findings"
 	assert_file_contains "$tmp_dir/bad.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator explains unrelated finding rejection"
 
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1
+
+Model github-models/openai/gpt-5 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+EOF
 	cat >"$control_json" <<'EOF'
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed in Self-test Strix gate script and reported github-models/openai/gpt-5 Authentication Bypass via X-Dev-User Header with Severity: CRITICAL at backend/app/auth.py:132-135 plus deepseek/deepseek-v3-0324 Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure with Severity: HIGH.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix workflow default is not visible to trusted self-test","problem":"Strix Security Scan/strix failed in Self-test Strix gate script: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/openai/gpt-5''); strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model'); opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5'). The same failed Strix evidence includes github-models/openai/gpt-5 report Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"The failed check evidence shows Self-test Strix gate script could not find github.event.inputs.strix_llm, STRIX_LLM must select, and MODEL: github-models/openai/gpt-5 in trusted-base files, and the model report identifies the backend auth fallback line.","fix_direction":"Update the workflow lines that provide the Strix model default and OpenCode model env so the trusted self-test can find those exact strings, then remove the unauthenticated X-Dev-User fallback at backend/app/auth.py:132-135.","regression_test_direction":"Keep the static self-test assertions for all three missing strings and add auth tests proving /api/me rejects forged X-Dev-User requests without signed auth.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-          STRIX_MODEL: old\n+          STRIX_MODEL: ${{ github.event.inputs.strix_llm || 'openai/openai/gpt-5' }}"},{"path":"frontend/src/app/page.tsx","line":1,"severity":"HIGH","title":"Strix frontend model report must be reviewed separately","problem":"Strix Security Scan/strix failed with a separate deepseek/deepseek-v3-0324 report: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure, Severity: HIGH.","root_cause":"The failed Strix evidence contains a second model vulnerability report, so OpenCode must not collapse it into the first backend finding.","fix_direction":"Inspect the frontend source lines responsible for token storage, hardcoded credentials, dynamic error rendering, and missing CSP, then remove or harden each concrete line before approval.","regression_test_direction":"Add frontend tests covering safe token/session handling, output encoding, and security headers for the affected route.","suggested_diff":"diff --git a/frontend/src/app/page.tsx b/frontend/src/app/page.tsx\n--- a/frontend/src/app/page.tsx\n+++ b/frontend/src/app/page.tsx\n@@ -1 +1 @@\n-export default function Page() { return null }\n+export default function Page() { return null }"}]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed and reported github-models/openai/gpt-5 plus deepseek/deepseek-v3-0324 Authentication Bypass via X-Dev-User Header with Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","findings":[{"path":"backend/app/auth.py","line":132,"severity":"CRITICAL","title":"Authentication Bypass via X-Dev-User Header","problem":"Strix Security Scan/strix failed with github-models/openai/gpt-5 and deepseek/deepseek-v3-0324 reports for Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"The review collapsed two Strix model reports into one finding.","fix_direction":"Remove the unauthenticated fallback at backend/app/auth.py:132-135.","regression_test_direction":"Add auth tests for both request paths.","suggested_diff":"diff --git a/backend/app/auth.py b/backend/app/auth.py\n--- a/backend/app/auth.py\n+++ b/backend/app/auth.py\n@@ -132 +132 @@\n-old\n+new"}]}
+EOF
+	set +e
+	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \
+		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/collapsed.out" 2>"$tmp_dir/collapsed.err"
+	rc=$?
+	set -e
+	assert_equals "4" "$rc" "failed-check review validator rejects collapsed duplicate Strix model reports"
+	assert_file_contains "$tmp_dir/collapsed.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator requires one Strix-specific finding per model report"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed job steps
+
+- step 6: Self-test Strix gate script (failure)
+
+### Strix vulnerability report window 1
+
+Model github-models/openai/gpt-5 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure   │
+│  Severity: HIGH                                                              │
+
+### Failed log excerpt
+
+FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5'')
+FAIL: strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model')
+FAIL: opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5')
+EOF
+
+	cat >"$control_json" <<'EOF'
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed in Self-test Strix gate script and reported github-models/openai/gpt-5 Authentication Bypass via X-Dev-User Header with Severity: CRITICAL at backend/app/auth.py:132-135 plus deepseek/deepseek-v3-0324 Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure with Severity: HIGH.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix workflow default is not visible to trusted self-test","problem":"Strix Security Scan/strix failed in Self-test Strix gate script: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5''); strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model'); opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5'). The same failed Strix evidence includes github-models/openai/gpt-5 report Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"The failed check evidence shows Self-test Strix gate script could not find github.event.inputs.strix_llm, STRIX_LLM must select, and MODEL: github-models/openai/gpt-5 in trusted-base files, and the model report identifies the backend auth fallback line.","fix_direction":"Update the workflow lines that provide the Strix model default and OpenCode model env so the trusted self-test can find those exact strings, then remove the unauthenticated X-Dev-User fallback at backend/app/auth.py:132-135.","regression_test_direction":"Keep the static self-test assertions for all three missing strings and add auth tests proving /api/me rejects forged X-Dev-User requests without signed auth.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-          STRIX_MODEL: old\n+          STRIX_MODEL: ${{ github.event.inputs.strix_llm || 'openai/gpt-5' }}"},{"path":"frontend/src/app/page.tsx","line":1,"severity":"HIGH","title":"Strix frontend model report must be reviewed separately","problem":"Strix Security Scan/strix failed with a separate deepseek/deepseek-v3-0324 report: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure, Severity: HIGH.","root_cause":"The failed Strix evidence contains a second model vulnerability report, so OpenCode must not collapse it into the first backend finding.","fix_direction":"Inspect the frontend source lines responsible for token storage, hardcoded credentials, dynamic error rendering, and missing CSP, then remove or harden each concrete line before approval.","regression_test_direction":"Add frontend tests covering safe token/session handling, output encoding, and security headers for the affected route.","suggested_diff":"diff --git a/frontend/src/app/page.tsx b/frontend/src/app/page.tsx\n--- a/frontend/src/app/page.tsx\n+++ b/frontend/src/app/page.tsx\n@@ -1 +1 @@\n-export default function Page() { return null }\n+export default function Page() { return null }"}]}
 EOF
 	set +e
 	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \

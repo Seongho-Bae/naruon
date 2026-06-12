@@ -202,7 +202,7 @@ describe("SettingsLayout", () => {
             name: String(input).endsWith("/2") ? "Local Gemma4" : "Primary OpenAI",
             provider_type: String(input).endsWith("/2") ? "ollama" : "openai",
             base_url: String(input).endsWith("/2") ? "http://ollama:11434/v1" : "https://api.openai.com/v1",
-            model_identifier: String(input).endsWith("/2") ? "gemma4" : "gpt-5.4",
+            model_identifier: body.model_identifier,
             embedding_model: body.embedding_model,
             is_active: true,
             configured: true,

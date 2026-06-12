@@ -80,7 +80,7 @@ extract_strix_required_markers() {
     if (/^Location[[:space:]]+[0-9]+:[[:space:]]+(.+:[0-9]+(?:-[0-9]+)?)/) {
       print "$1\n";
     }
-  ' "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
+  ' "$FAILED_CHECK_EVIDENCE_FILE"
 }
 
 extract_strix_title_markers() {
@@ -98,7 +98,27 @@ extract_strix_title_markers() {
     if (/^Title:[[:space:]]+(.+)/) {
       print "$1\n";
     }
-  ' "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
+  ' "$FAILED_CHECK_EVIDENCE_FILE"
+}
+
+count_strix_review_findings() {
+  jq -r '
+    [
+      (.findings // [])[]
+      | [
+          .title,
+          .problem,
+          .root_cause,
+          .fix_direction,
+          .regression_test_direction,
+          .suggested_diff
+        ]
+        | map(. // "")
+        | join("\n")
+      | select(test("strix|github[-_]models/|deepseek/|openai/gpt-|vertex_ai/|Vulnerability Report"; "i"))
+    ]
+    | length
+  ' "$CONTROL_JSON_FILE"
 }
 
 while IFS= read -r failed_check_line; do
@@ -136,7 +156,7 @@ done
 
 if grep -Fq "Strix vulnerability report window" "$FAILED_CHECK_EVIDENCE_FILE"; then
   strix_title_count="$(extract_strix_title_markers | sed '/^[[:space:]]*$/d' | wc -l | tr -d '[:space:]')"
-  finding_count="$(jq -r '(.findings // []) | length' "$CONTROL_JSON_FILE")"
+  finding_count="$(count_strix_review_findings)"
   if [ -n "$strix_title_count" ] && [ "$strix_title_count" -gt 0 ] &&
     [ "$finding_count" -lt "$strix_title_count" ]; then
     echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
