@@ -820,6 +820,8 @@ jobs:
           OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outcome }}
           OPENCODE_FALLBACK_OUTCOME: ${{ steps.opencode_review_fallback.outcome }}
           OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outcome }}
+          APPROVAL_CHECK_WAIT_ATTEMPTS: "241"
+          APPROVAL_CHECK_WAIT_SLEEP_SECONDS: "30"
         run: |
           set -euo pipefail
           echo "::group::OpenCode Review Approval Gate"
@@ -986,6 +988,23 @@ jobs:
             } >"$body_file"
           }
 
+          build_pending_check_body() {
+            local pending_checks_file="$1"
+            local body_file="$2"
+
+            {
+              printf 'OpenCode Agent could not approve because GitHub Checks were still pending before approval.\n\n'
+              printf -- '- Result: REQUEST_CHANGES\n'
+              printf -- "- Reason: current-head GitHub Checks did not all complete before the bounded approval wait ended for \`%s\`.\n" "$HEAD_SHA"
+              printf -- "- Head SHA: \`%s\`\n" "$HEAD_SHA"
+              printf -- '- Workflow run: %s\n' "$RUN_ID"
+              printf -- '- Workflow attempt: %s\n\n' "$RUN_ATTEMPT"
+              printf 'Pending checks:\n'
+              cat "$pending_checks_file"
+              printf '\n\nThe OpenCode approval gate must be rerun after these checks complete so failed Strix or other check logs can be mapped to exact source lines before approval.\n'
+            } >"$body_file"
+          }
+
           normalize_opencode_output() {
             local output_file="$1"
 
@@ -1139,6 +1158,91 @@ jobs:
               ' >"$output_file"
           }
 
+          collect_pending_github_checks() {
+            local output_file="$1"
+            local owner="${GH_REPOSITORY%%/*}"
+            local name="${GH_REPOSITORY#*/}"
+            # shellcheck disable=SC2016
+            gh api graphql \
+              -f owner="$owner" \
+              -f name="$name" \
+              -F number="$PR_NUMBER" \
+              -f query='
+                query($owner:String!,$name:String!,$number:Int!) {
+                  repository(owner:$owner,name:$name) {
+                    pullRequest(number:$number) {
+                      statusCheckRollup {
+                        contexts(first: 100) {
+                          nodes {
+                            __typename
+                            ... on CheckRun {
+                              name
+                              status
+                              detailsUrl
+                              checkSuite {
+                                workflowRun {
+                                  workflow {
+                                    name
+                                  }
+                                }
+                              }
+                            }
+                            ... on StatusContext {
+                              context
+                              state
+                              targetUrl
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ' \
+              --jq '
+                (.data.repository.pullRequest.statusCheckRollup.contexts.nodes // [])
+                | map(
+                    if .__typename == "CheckRun" then
+                      select((.name // "") != "opencode-review")
+                      | select((.checkSuite.workflowRun.workflow.name // "") != "OpenCode Review")
+                      | select((.status // "") != "COMPLETED")
+                      | "- " + ((.checkSuite.workflowRun.workflow.name // "") + "/" + (.name // "check") | gsub("^/"; "")) + ": " + (.status // "unknown") + (if (.detailsUrl // "") != "" then " (" + .detailsUrl + ")" else "" end)
+                    elif .__typename == "StatusContext" then
+                      select((.context // "") != "opencode-review")
+                      | select((.state // "" | ascii_upcase) as $s | ["PENDING","EXPECTED"] | index($s))
+                      | "- " + (.context // "status") + ": " + (.state // "unknown") + (if (.targetUrl // "") != "" then " (" + .targetUrl + ")" else "" end)
+                    else
+                      empty
+                    end
+                  )
+                | .[]
+              ' >"$output_file"
+          }
+
+          wait_for_peer_github_checks() {
+            local output_file="$1"
+            local attempts="${APPROVAL_CHECK_WAIT_ATTEMPTS:-121}"
+            local sleep_seconds="${APPROVAL_CHECK_WAIT_SLEEP_SECONDS:-30}"
+            local attempt=1
+
+            while [ "$attempt" -le "$attempts" ]; do
+              if ! collect_pending_github_checks "$output_file"; then
+                return 1
+              fi
+              if [ ! -s "$output_file" ]; then
+                return 0
+              fi
+              if [ "$attempt" -lt "$attempts" ]; then
+                printf 'Waiting for peer GitHub Checks before OpenCode approval (%s/%s):\n' "$attempt" "$attempts"
+                cat "$output_file"
+                sleep "$sleep_seconds"
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            return 2
+          }
+
           live_head_sha="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
@@ -1198,9 +1302,10 @@ jobs:
           failed_checks_file=""
           failed_check_evidence_file=""
           failed_check_review_body_file=""
+          pending_checks_file=""
           # shellcheck disable=SC2329
           cleanup_approval_files() {
-            rm -f "$tmp_body" "$control_json" "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+            rm -f "$tmp_body" "$control_json" "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$pending_checks_file"
           }
           trap cleanup_approval_files EXIT
           printf '%s\n' "$comment_body" >"$tmp_body"
@@ -1210,6 +1315,31 @@ jobs:
 
           case "$gate_result" in
             APPROVE)
+              pending_checks_file="$(mktemp)"
+              set +e
+              wait_for_peer_github_checks "$pending_checks_file"
+              pending_wait_status=$?
+              set -e
+              if [ "$pending_wait_status" -eq 1 ]; then
+                body="$(printf '%s\n' \
+                  "OpenCode Agent could not verify GitHub Checks before approval." \
+                  "" \
+                  "- Result: REQUEST_CHANGES" \
+                  "- Reason: GitHub Checks statusCheckRollup could not be read for current head \`${HEAD_SHA}\`." \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Workflow run: ${RUN_ID}" \
+                  "- Workflow attempt: ${RUN_ATTEMPT}")"
+                create_pull_review "REQUEST_CHANGES" "$body"
+                echo "::endgroup::"
+                exit 0
+              fi
+              if [ "$pending_wait_status" -ne 0 ]; then
+                failed_check_review_body_file="$(mktemp)"
+                build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                echo "::endgroup::"
+                exit 0
+              fi
               failed_checks_file="$(mktemp)"
               if ! collect_failed_github_checks "$failed_checks_file"; then
                 body="$(printf '%s\n' \
