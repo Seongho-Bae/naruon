@@ -1446,7 +1446,13 @@ jobs:
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               fi
             else
-              request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+              pending_checks_file="$(mktemp)"
+              if collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
+                build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+              else
+                request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+              fi
             fi
             echo "::endgroup::"
             exit 0
