@@ -30,7 +30,10 @@ async def extract_todos_and_summary(
     if not openai_api_key:
         raise ValueError("API Key is not set")
 
-    validated_base_url, http_client = await build_llm_provider_http_client(base_url)
+    configured_base_url = base_url if base_url is not None else settings.OPENAI_BASE_URL
+    validated_base_url, http_client = await build_llm_provider_http_client(
+        configured_base_url
+    )
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,
@@ -72,7 +75,10 @@ async def draft_reply(
     if not openai_api_key:
         raise ValueError("API Key is not set")
 
-    validated_base_url, http_client = await build_llm_provider_http_client(base_url)
+    configured_base_url = base_url if base_url is not None else settings.OPENAI_BASE_URL
+    validated_base_url, http_client = await build_llm_provider_http_client(
+        configured_base_url
+    )
     client = AsyncOpenAI(
         api_key=openai_api_key,
         base_url=validated_base_url,

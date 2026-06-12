@@ -204,6 +204,7 @@ def test_settings_repr_redacts_auth_session_hmac_secret(monkeypatch):
 def test_openai_config():
     from core.config import settings
 
+    assert hasattr(settings, "OPENAI_BASE_URL")
     assert hasattr(settings, "OPENAI_EMBEDDING_MODEL")
     assert hasattr(settings, "OPENAI_MODEL")
 

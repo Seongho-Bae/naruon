@@ -18,6 +18,7 @@ async def test_generate_embeddings_success():
         "services.embedding.AsyncOpenAI"
     ) as mock_async_openai:
         mock_client = mock_async_openai.return_value
+        mock_client.close = AsyncMock()
         mock_client.embeddings.create = AsyncMock()
         mock_response = AsyncMock()
         mock_data_1 = AsyncMock()
@@ -29,11 +30,13 @@ async def test_generate_embeddings_success():
 
         with patch("services.embedding.settings") as mock_settings:
             mock_settings.OPENAI_EMBEDDING_MODEL = "test-model"
+            mock_settings.OPENAI_BASE_URL = None
             
             embeddings = await generate_embeddings(["test1", "test2"], "test-key")
             assert len(embeddings) == 2
             assert embeddings[0] == [0.1, 0.2, 0.3]
             assert embeddings[1] == [0.4, 0.5, 0.6]
+            mock_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -42,14 +45,17 @@ async def test_generate_embeddings_api_error():
         "services.embedding.AsyncOpenAI"
     ) as mock_async_openai:
         mock_client = mock_async_openai.return_value
+        mock_client.close = AsyncMock()
         mock_client.embeddings.create = AsyncMock(side_effect=openai.OpenAIError("API error"))
 
         with patch("services.embedding.settings") as mock_settings:
             mock_settings.OPENAI_EMBEDDING_MODEL = "test-model"
+            mock_settings.OPENAI_BASE_URL = None
             
             with pytest.raises(EmbeddingGenerationError, match="Failed to generate embeddings: API error"):
 
                 await generate_embeddings(["test"], "test-key")
+            mock_client.close.assert_awaited_once()
 
 
 @pytest.mark.asyncio
