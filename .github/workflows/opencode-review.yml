@@ -959,6 +959,22 @@ jobs:
             local evidence_file="$1"
             local finding_index=0
             local repo_root="${GITHUB_WORKSPACE:-$PWD}"
+            local strix_evidence_file
+
+            extract_strix_failed_check_block() {
+              local source_file="$1"
+              local output_file="$2"
+
+              awk '
+                /^## Failed check: / {
+                  in_strix = ($0 ~ /^## Failed check: .*Strix/)
+                }
+                in_strix { print }
+              ' "$source_file" >"$output_file"
+            }
+
+            strix_evidence_file="$(mktemp)"
+            extract_strix_failed_check_block "$evidence_file" "$strix_evidence_file"
 
             emit_known_missing_string_finding() {
               local needle="$1"
@@ -1021,7 +1037,7 @@ jobs:
               local path=".github/workflows/strix.yml"
               local line="1"
 
-              if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure" "$evidence_file"; then
+              if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure" "$strix_evidence_file"; then
                 return 0
               fi
 
@@ -1047,9 +1063,9 @@ jobs:
               local path=".github/workflows/strix.yml"
               local line="1"
 
-              if ! grep -Fq "Conclusion:" "$evidence_file" ||
-                ! grep -Fq "cancelled" "$evidence_file" ||
-                ! grep -Fq "No GitHub Actions job log is available for this failed workflow run." "$evidence_file"; then
+              if ! grep -Fq "Conclusion:" "$strix_evidence_file" ||
+                ! grep -Fq "cancelled" "$strix_evidence_file" ||
+                ! grep -Fq "No GitHub Actions job log is available for this failed workflow run." "$strix_evidence_file"; then
                 return 0
               fi
 
@@ -1069,6 +1085,8 @@ jobs:
             }
 
             emit_strix_cancelled_without_log_finding
+
+            rm -f "$strix_evidence_file"
 
             if [ "$finding_index" -eq 0 ]; then
               printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'

@@ -254,17 +254,19 @@ gh api graphql \
 		| @tsv
 		' >"$failed_contexts"
 
-gh run list \
-	--repo "$GH_REPOSITORY" \
-	--commit "$HEAD_SHA" \
-	--limit 100 \
-	--json databaseId,workflowName,status,conclusion,url \
-	--jq '
-		.[]
-		| select((.workflowName // "") != "OpenCode Review")
-		| select((.status // "") == "completed")
-		| select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
-		| [
+	HEAD_SHA="$HEAD_SHA" gh run list \
+		--repo "$GH_REPOSITORY" \
+		--commit "$HEAD_SHA" \
+		--limit 100 \
+		--json databaseId,workflowName,status,conclusion,url,event,headSha \
+		--jq '
+			.[]
+			| select((.event // "") == "pull_request_target")
+			| select((.headSha // "") == env.HEAD_SHA)
+			| select((.workflowName // "") == "Strix Security Scan" or (.workflowName // "") == "Strix")
+			| select((.status // "") == "completed")
+			| select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
+			| [
 			"workflow_run",
 			(if (.workflowName // "") != "" then .workflowName else "workflow run" end),
 			(.conclusion // "unknown"),
