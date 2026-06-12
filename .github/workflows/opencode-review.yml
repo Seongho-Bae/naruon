@@ -141,22 +141,6 @@ jobs:
               '
           }
 
-          current_peer_workflow_runs_still_running() {
-            gh run list \
-              --repo "$GH_REPOSITORY" \
-              --commit "$PR_HEAD_SHA" \
-              --limit 100 \
-              --json databaseId,workflowName,status \
-              --jq '
-                [
-                  .[]
-                  | select((.workflowName // "") != "OpenCode Review")
-                  | select((.status // "") != "completed")
-                ]
-                | length > 0
-              '
-          }
-
           collect_failed_check_evidence_with_wait() {
             local evidence_file="$1"
             local attempts="${FAILED_CHECK_EVIDENCE_ATTEMPTS:-19}"
@@ -168,8 +152,7 @@ jobs:
                 if ! grep -Fq "No completed failed GitHub Checks were present" "$evidence_file"; then
                   return 0
                 fi
-                if [ "$(current_peer_checks_still_running 2>/dev/null || printf 'false')" != "true" ] &&
-                  [ "$(current_peer_workflow_runs_still_running 2>/dev/null || printf 'false')" != "true" ]; then
+                if [ "$(current_peer_checks_still_running 2>/dev/null || printf 'false')" != "true" ]; then
                   return 0
                 fi
               fi
@@ -209,12 +192,16 @@ jobs:
             git diff --stat --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"
             printf '\n## Focused changed hunks\n\n'
             printf '```diff\n'
-            git diff --unified=30 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- \
-              .github/workflows/opencode-review.yml \
-              scripts/ci/collect_failed_check_evidence.sh \
-              scripts/ci/test_strix_quick_gate.sh \
-              backend/requirements.txt |
-              sed -n '1,900p'
+            mapfile -t focused_hunk_paths < <(
+              git diff --name-only --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" |
+                awk 'NF > 0 && $0 !~ /^\// && $0 !~ /(^|\/)\.\.($|\/)/ { print }'
+            )
+            if [ "${#focused_hunk_paths[@]}" -gt 0 ]; then
+              git diff --unified=30 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "${focused_hunk_paths[@]}" |
+                sed -n '1,900p'
+            else
+              printf 'No changed files were available for focused hunk extraction.\n'
+            fi
             printf '\n```\n'
 
             printf '\n## Review inspection contract\n\n'
@@ -1191,18 +1178,6 @@ jobs:
                 | .[]
               ' >"$output_file"
 
-            gh run list \
-              --repo "$GH_REPOSITORY" \
-              --commit "$HEAD_SHA" \
-              --limit 100 \
-              --json databaseId,workflowName,status,conclusion,url \
-              --jq '
-                .[]
-                | select((.workflowName // "") != "OpenCode Review")
-                | select((.status // "") == "completed")
-                | select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
-                | "- " + (if (.workflowName // "") != "" then .workflowName else "workflow run" end) + ": " + (.conclusion // "unknown") + (if (.url // "") != "" then " (" + .url + ")" else "" end)
-              ' >>"$output_file"
           }
 
           collect_pending_github_checks() {
@@ -1265,17 +1240,6 @@ jobs:
                 | .[]
               ' >"$output_file"
 
-            gh run list \
-              --repo "$GH_REPOSITORY" \
-              --commit "$HEAD_SHA" \
-              --limit 100 \
-              --json databaseId,workflowName,status,url \
-              --jq '
-                .[]
-                | select((.workflowName // "") != "OpenCode Review")
-                | select((.status // "") != "completed")
-                | "- " + (if (.workflowName // "") != "" then .workflowName else "workflow run" end) + ": " + (.status // "unknown") + (if (.url // "") != "" then " (" + .url + ")" else "" end)
-              ' >>"$output_file"
           }
 
           wait_for_peer_github_checks() {
