@@ -403,24 +403,30 @@ def _verify_signed_session_payload(
 
 
 def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
-    # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
-        if jwks_client is None:
-            raise _authentication_error()
-        try:
-            signing_key = _cached_oidc_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=[OIDC_SIGNING_ALGORITHM],
-                audience=settings.OIDC_CLIENT_ID,
-                issuer=settings.OIDC_ISSUER_URL,
-            )
-            _reject_signed_session_system_admin_payload(payload)
-            return payload, "oidc"
-        except Exception:
-            raise _authentication_error() from None
+        return _verify_oidc_session_token(token)
+    return _verify_hmac_session_token(token)
 
+
+def _verify_oidc_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
+    if jwks_client is None:
+        raise _authentication_error()
+    try:
+        signing_key = _cached_oidc_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=[OIDC_SIGNING_ALGORITHM],
+            audience=settings.OIDC_CLIENT_ID,
+            issuer=settings.OIDC_ISSUER_URL,
+        )
+        _reject_signed_session_system_admin_payload(payload)
+        return payload, "oidc"
+    except Exception:
+        raise _authentication_error() from None
+
+
+def _verify_hmac_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
     try:
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:

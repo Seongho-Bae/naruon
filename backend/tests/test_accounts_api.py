@@ -43,10 +43,11 @@ class MockResult:
         return self.config
 
 class MockSession:
-    def __init__(self):
+    def __init__(self, forced_config=None):
         self.configs = {}
         self.commits = 0
         self.execute_calls = 0
+        self.forced_config = forced_config
 
     def _query_key(self, stmt):
         params = dict(stmt.compile().params)
@@ -56,6 +57,8 @@ class MockSession:
 
     async def execute(self, stmt):
         self.execute_calls += 1
+        if self.forced_config is not None:
+            return MockResult(self.forced_config)
         return MockResult(self.configs.get(self._query_key(stmt)))
 
     def add(self, obj):
@@ -277,6 +280,34 @@ def test_accounts_config_preserves_scoped_signed_member_session():
     assert response.json()["user_id"] == "mailbox-owner"
     assert response.json()["smtp_server"] is None
     assert session.execute_calls == 1
+
+
+def test_accounts_config_rejects_mismatched_persisted_owner_on_read():
+    session = MockSession(forced_config=MockTenantConfig("other-user", "org-acme"))
+    response = _request_with_signed_session(
+        "GET",
+        "/api/accounts/config",
+        session,
+        _valid_session_payload(),
+    )
+
+    assert response.status_code == 403
+    assert session.execute_calls == 1
+
+
+def test_accounts_config_rejects_mismatched_persisted_owner_on_write():
+    session = MockSession(forced_config=MockTenantConfig("other-user", "org-acme"))
+    response = _request_with_signed_session(
+        "PUT",
+        "/api/accounts/config",
+        session,
+        _valid_session_payload(),
+        {"smtp_server": "smtp.example.com", "smtp_port": 587},
+    )
+
+    assert response.status_code == 403
+    assert session.execute_calls == 1
+    assert session.commits == 0
 
 
 def test_accounts_config_rejects_private_imap_host(client: TestClient):

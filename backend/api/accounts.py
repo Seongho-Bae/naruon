@@ -84,6 +84,14 @@ def _ensure_mailbox_account_owner_session(auth_ctx: AuthContext) -> None:
         raise HTTPException(status_code=403, detail=MAILBOX_ACCOUNT_SETTINGS_FORBIDDEN)
 
 
+def _ensure_tenant_config_owner(config, auth_ctx: AuthContext) -> None:
+    if (
+        config.user_id != auth_ctx.user_id
+        or config.organization_id != auth_ctx.organization_id
+    ):
+        raise HTTPException(status_code=403, detail=MAILBOX_ACCOUNT_SETTINGS_FORBIDDEN)
+
+
 @router.get("/config", response_model=TenantConfigResponse)
 async def get_tenant_config(
     db: AsyncSession = Depends(get_db),
@@ -98,6 +106,7 @@ async def get_tenant_config(
     if not config:
         return _empty_tenant_config_response(auth_ctx.user_id)
 
+    _ensure_tenant_config_owner(config, auth_ctx)
     return _tenant_config_response(config)
 
 @router.put("/config", response_model=TenantConfigResponse)
@@ -118,12 +127,14 @@ async def update_tenant_config(
             organization_id=auth_ctx.organization_id,
         )
         db.add(config)
-        
+    else:
+        _ensure_tenant_config_owner(config, auth_ctx)
+
     update_dict = update_data.model_dump(exclude_unset=True)
     validate_mail_config_update(update_dict, config)
     for key, value in update_dict.items():
         setattr(config, key, value)
-        
+
     await db.commit()
     await db.refresh(config)
 
