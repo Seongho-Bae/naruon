@@ -326,6 +326,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" '"external_directory": "allow"' "opencode review can read the real checkout from its isolated review workspace"
 	assert_file_not_contains "$workflow_file" '"external_directory": "deny"' "opencode review must not block focused reads of the real checkout"
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
+	assert_file_contains "$workflow_file" "## Focused changed hunks" "opencode review evidence includes focused changed hunks"
+	assert_file_contains "$workflow_file" 'git diff --unified=30 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"' "opencode review evidence includes focused hunks from the PR merge base"
+	assert_file_contains "$workflow_file" "backend/requirements.txt" "opencode review evidence includes dependency hunk context for Strix findings"
+	assert_file_contains "$workflow_file" "do not return file-inaccessible findings" "opencode review prompt forbids placeholder inaccessible-file findings when hunks are present"
 	assert_file_contains "$workflow_file" "Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel." "opencode review prompt forbids reasoning text before the control sentinel"
 	assert_file_contains "$workflow_file" "OpenCode output did not include a valid control conclusion." "opencode review model steps fail when output lacks a parseable control conclusion"
 	assert_file_contains "$workflow_file" 'bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"' "opencode review model steps validate the control block before publishing"
@@ -394,6 +398,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
 	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '.line | type == "number" and . > 0 and floor == .' "opencode approval gate rejects line zero findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '$p != "n/a" and $p != "unknown"' "opencode approval gate rejects placeholder finding paths"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" 'startswith("cannot provide diff")' "opencode approval gate rejects placeholder suggested diffs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
@@ -562,6 +568,36 @@ EOF
 
 	assert_equals "4" "$rc" "opencode normalizer rejects line zero findings"
 	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for line zero findings"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_placeholder_findings() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"File inaccessible","summary":"Bogus inaccessible finding.","findings":[{"path":"N/A","line":1,"severity":"BLOCKER","title":"Missing file","problem":"File inaccessible.","root_cause":"The review did not inspect focused hunks.","fix_direction":"Make files accessible.","regression_test_direction":"Add coverage.","suggested_diff":"Cannot provide diff - original file inaccessible"}]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects placeholder findings"
+	assert_equals "NO_CONCLUSION" "$gate_result" "placeholder finding rejection gate result"
 
 	rm -rf "$tmp_dir"
 }
@@ -5008,6 +5044,8 @@ assert_opencode_review_normalizer_accepts_transcript_json
 assert_opencode_review_publish_body_discards_trailing_model_prose
 
 assert_opencode_review_gate_rejects_line_zero_findings
+
+assert_opencode_review_gate_rejects_placeholder_findings
 
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
