@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     ALLOW_LOCAL_LLM_PROVIDERS: bool = False
     ALLOWED_CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
     ENABLE_PROMETHEUS_METRICS: bool = False
+    DATA_REGION: str = "kr"
+    SECONDARY_DATA_REGION: str = "eu"
     SECURITY_CONTENT_SECURITY_POLICY: str = (
         "default-src 'self'; "
         "object-src 'none'; "
