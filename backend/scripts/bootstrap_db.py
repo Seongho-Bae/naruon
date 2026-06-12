@@ -135,6 +135,17 @@ def _get_create_tables_statements() -> list[Executable]:
             "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS revoked_session_tokens ("
+            "token_digest varchar PRIMARY KEY, "
+            "user_id varchar NOT NULL, "
+            "organization_id varchar, "
+            "workspace_id varchar NOT NULL, "
+            "revocation_reason varchar NOT NULL, "
+            "revoked_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "expires_at timestamptz NOT NULL"
+            ")"
+        ),
     ]
 
 
@@ -177,6 +188,11 @@ def _get_create_indexes_statements() -> list[Executable]:
             "CREATE INDEX IF NOT EXISTS ix_security_audit_events_actor_scope "
             "ON security_audit_events "
             "(actor_user_id, organization_id, workspace_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_revoked_session_tokens_scope_time "
+            "ON revoked_session_tokens "
+            "(user_id, organization_id, workspace_id, expires_at)"
         ),
     ]
 

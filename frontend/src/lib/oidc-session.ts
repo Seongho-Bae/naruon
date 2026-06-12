@@ -181,9 +181,25 @@ export function clearOidcTransientState() {
   window.sessionStorage.removeItem(OIDC_RETURN_TO_KEY);
 }
 
-export function clearOidcSession(options: OidcLogoutOptions = {}) {
+async function revokeBackendSession(token: string) {
+  const response = await fetch('/api/auth/logout', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    throw new OidcSessionError('OIDC backend session revocation failed');
+  }
+}
+
+export async function clearOidcSession(options: OidcLogoutOptions = {}) {
   requireBrowserStorage();
   const config = getOidcBrowserConfig();
+  const token = window.localStorage.getItem(SESSION_TOKEN_KEY)?.trim();
+  if (token) {
+    await revokeBackendSession(token);
+  }
   window.localStorage.removeItem(SESSION_TOKEN_KEY);
   clearOidcTransientState();
 

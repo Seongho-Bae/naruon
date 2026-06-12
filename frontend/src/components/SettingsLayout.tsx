@@ -563,10 +563,10 @@ export function SettingsLayout() {
     }
   };
 
-  const handleOidcLogout = () => {
+  const handleOidcLogout = async () => {
     setOidcActionError(null);
     try {
-      clearOidcSession({ postLogoutRedirectUri: window.location.origin });
+      await clearOidcSession({ postLogoutRedirectUri: window.location.origin });
       setOidcSessionClaims(apiClient.getSessionClaims());
     } catch (error) {
       setOidcActionError(error instanceof Error ? error.message : 'OIDC logout failed');

@@ -11,6 +11,7 @@ from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
     ProjectFolder,
+    RevokedSessionToken,
     SecurityAuditEvent,
     SenderRelationship,
     TenantConfig,
@@ -552,6 +553,34 @@ def test_schema_backfill_creates_connector_signal_events():
     assert any(
         "ix_security_audit_events_actor_scope" in statement for statement in statements
     )
+
+
+def test_schema_backfill_creates_revoked_session_tokens_table():
+    statements = [str(statement).lower() for statement in schema_backfill_sql()]
+
+    assert any(
+        "create table if not exists revoked_session_tokens" in statement
+        for statement in statements
+    )
+    assert any("token_digest varchar primary key" in statement for statement in statements)
+    assert any("revocation_reason varchar not null" in statement for statement in statements)
+    assert any("expires_at timestamptz not null" in statement for statement in statements)
+    assert any(
+        "ix_revoked_session_tokens_scope_time" in statement
+        for statement in statements
+    )
+
+    column_names = {column.name for column in RevokedSessionToken.__table__.columns}
+    assert column_names == {
+        "token_digest",
+        "user_id",
+        "organization_id",
+        "workspace_id",
+        "revocation_reason",
+        "revoked_at",
+        "expires_at",
+    }
+    assert all("_" in column_name for column_name in column_names)
 
 
 @pytest.mark.asyncio

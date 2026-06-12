@@ -1,4 +1,6 @@
 from http.client import HTTPSConnection
+import datetime
+import hashlib
 import json
 import logging
 import math
@@ -11,7 +13,8 @@ from urllib.parse import urlsplit
 
 import jwt
 from jwt import PyJWKClient
-from fastapi import Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 from core.url_validation import (
@@ -19,10 +22,15 @@ from core.url_validation import (
     parse_allowed_hosts,
     validate_https_url_host_details,
 )
+from db.models import RevokedSessionToken
+from db.session import get_db
 
 logger = logging.getLogger(__name__)
 OIDC_JWKS_TIMEOUT_SECONDS = 5
 OIDC_JWKS_MAX_RESPONSE_BYTES = 1024 * 1024
+SESSION_TOKEN_DIGEST_ALGORITHM = "sha256"
+router = APIRouter(prefix="/api/auth")
+_revoked_session_token_digests: dict[str, datetime.datetime] = {}
 
 
 class _PinnedHTTPSConnection(HTTPSConnection):
@@ -195,7 +203,8 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
     dependency path. Endpoint tests that need fixture identities must continue to
     use explicit FastAPI dependency overrides.
     """
-    payload, session_verifier = _verify_signed_session_payload(authorization)
+    payload, session_verifier, token = _verify_signed_session_payload(authorization)
+    _reject_revoked_session_token(token)
     return _auth_context_from_session_payload(payload, session_verifier)
 
 
@@ -265,9 +274,47 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
+def _session_token_digest(token: str) -> str:
+    return hashlib.new(SESSION_TOKEN_DIGEST_ALGORITHM, token.encode("utf-8")).hexdigest()
+
+
+def _session_expiration_time(payload: dict[str, Any]) -> datetime.datetime:
+    expires_at = payload.get("exp")
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+        raise _authentication_error()
+    if not math.isfinite(expires_at):
+        raise _authentication_error()
+    return datetime.datetime.fromtimestamp(float(expires_at), datetime.timezone.utc)
+
+
+def _prune_expired_revoked_session_tokens(now: datetime.datetime) -> None:
+    expired_digests = [
+        digest
+        for digest, expires_at in _revoked_session_token_digests.items()
+        if expires_at <= now
+    ]
+    for digest in expired_digests:
+        _revoked_session_token_digests.pop(digest, None)
+
+
+def _remember_revoked_session_token(token: str, payload: dict[str, Any]) -> None:
+    expires_at = _session_expiration_time(payload)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _prune_expired_revoked_session_tokens(now)
+    if expires_at > now:
+        _revoked_session_token_digests[_session_token_digest(token)] = expires_at
+
+
+def _reject_revoked_session_token(token: str) -> None:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _prune_expired_revoked_session_tokens(now)
+    if _session_token_digest(token) in _revoked_session_token_digests:
+        raise _authentication_error()
+
+
 def _verify_signed_session_payload(
     authorization: str | None,
-) -> tuple[dict[str, Any], SessionVerifier]:
+) -> tuple[dict[str, Any], SessionVerifier, str]:
     token = _extract_bearer_token(authorization)
 
     # OIDC RS256 verification is authoritative when configured.
@@ -284,7 +331,7 @@ def _verify_signed_session_payload(
                 issuer=settings.OIDC_ISSUER_URL
             )
             _reject_signed_session_system_admin_payload(payload)
-            return payload, "oidc"
+            return payload, "oidc", token
         except Exception:
             raise _authentication_error() from None
 
@@ -309,7 +356,7 @@ def _verify_signed_session_payload(
     if not isinstance(payload, dict):
         raise _authentication_error()
     _reject_signed_session_system_admin_payload(payload)
-    return payload, "hmac"
+    return payload, "hmac", token
 
 
 def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None:
@@ -393,6 +440,39 @@ def _auth_context_from_session_payload(
         workspace_id=_required_string_claim(payload, "workspace"),
         session_verifier=cast(SessionVerifier, session_verifier),
     )
+
+
+async def revoke_signed_session_token(
+    db: AsyncSession,
+    token: str,
+    auth_context: AuthContext,
+    payload: dict[str, Any],
+    *,
+    reason: str = "logout",
+) -> None:
+    _remember_revoked_session_token(token, payload)
+    db.add(
+        RevokedSessionToken(
+            token_digest=_session_token_digest(token),
+            user_id=auth_context.user_id,
+            organization_id=auth_context.organization_id,
+            workspace_id=auth_context.workspace_id,
+            revocation_reason=reason,
+            expires_at=_session_expiration_time(payload),
+        )
+    )
+    await db.commit()
+
+
+@router.post("/logout")
+async def logout_current_session(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> dict[str, bool]:
+    payload, _session_verifier, token = _verify_signed_session_payload(authorization)
+    await revoke_signed_session_token(db, token, auth_context, payload)
+    return {"revoked": True}
 
 
 async def get_current_user(

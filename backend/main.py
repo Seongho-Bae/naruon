@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from fastapi import Depends, FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
-from api.auth import get_auth_context, preload_oidc_jwks
+from api.auth import get_auth_context, preload_oidc_jwks, router as auth_router
 from api.search import router as search_router
 from api.llm import router as llm_router
 from api.calendar import router as calendar_router
@@ -116,6 +116,7 @@ app.include_router(webdav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(security_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(data_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ai_hub_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(auth_router, dependencies=PRIVATE_API_DEPENDENCIES)
 
 
 @app.get("/")

@@ -91,16 +91,23 @@ describe('oidc-session', () => {
     expect(String(tokenCall[1]?.body)).toContain('code_verifier=verifier-123');
   });
 
-  it('clears local session state and redirects to the provider logout endpoint', () => {
+  it('revokes the backend session, clears local state, and redirects to the provider logout endpoint', async () => {
     localStorage.setItem('naruon_session_token', 'oidc.jwt.token');
     sessionStorage.setItem('naruon_oidc_state', 'state-123');
     const assignedUrls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 200 })));
 
-    clearOidcSession({
+    await clearOidcSession({
       postLogoutRedirectUri: 'https://app.example.com',
       navigate: (url) => assignedUrls.push(url),
     });
 
+    expect(fetch).toHaveBeenCalledWith('/api/auth/logout', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer oidc.jwt.token',
+      },
+    });
     expect(localStorage.getItem('naruon_session_token')).toBeNull();
     expect(sessionStorage.getItem('naruon_oidc_state')).toBeNull();
     const logoutUrl = new URL(assignedUrls[0]);

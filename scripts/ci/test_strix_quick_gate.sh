@@ -190,6 +190,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix before passing model names to LiteLLM"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
+	assert_file_contains "$workflow_file" "openai/gpt-5-mini* | openai/gpt-5-nano*" "strix workflow rejects mini and nano GPT-5 variants for security evidence"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to an unsupported GitHub Models alias"
 	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to Gemini API when GitHub Models is required"
@@ -203,6 +204,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gpt54_model_guard_semantics() {
 	local model="$1"
 	case "$model" in
+	openai/gpt-5-mini* | openai/gpt-5-nano* | \
+	openai/openai/gpt-5-mini* | openai/openai/gpt-5-nano* | \
+	github_models/openai/gpt-5-mini* | github_models/openai/gpt-5-nano*)
+		return 1
+		;;
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
 	github_models/* | \
@@ -220,6 +226,12 @@ assert_strix_gpt54_model_guard_semantics() {
 assert_strix_gpt54_model_guard_cases() {
 	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
 		record_failure "strix guard must accept GitHub Models openai/gpt-5"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "openai/gpt-5-mini"; then
+		record_failure "strix guard must reject GitHub Models openai/gpt-5-mini"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "github_models/openai/gpt-5-nano"; then
+		record_failure "strix guard must reject manual GitHub Models openai/gpt-5-nano"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "gpt-5"; then
 		record_failure "strix GPT-5.4 guard must reject plain gpt-5"

@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
     AuthContext,
+    _session_token_digest,
     ensure_organization_access,
     get_auth_context,
     get_current_user,
@@ -57,6 +58,24 @@ class _MockResult:
 class _EmptyRunnerConfigSession:
     async def execute(self, query):
         return _MockResult(None)
+
+
+class _RevocationSession:
+    def __init__(self, revoked: bool = False):
+        self.revoked = revoked
+        self.added: list[object] = []
+        self.committed = False
+        self.queries: list[object] = []
+
+    async def execute(self, query):
+        self.queries.append(query)
+        return _MockResult("revoked" if self.revoked else None)
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    async def commit(self):
+        self.committed = True
 
 
 def _base64url_encode(raw: bytes) -> str:
@@ -120,6 +139,9 @@ def restore_auth_flags():
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
     previous_oidc_signing_keys = sys.modules["api.auth"]._cached_oidc_signing_keys
+    previous_revoked_session_tokens = dict(
+        sys.modules["api.auth"]._revoked_session_token_digests
+    )
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
@@ -127,6 +149,10 @@ def restore_auth_flags():
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
     sys.modules["api.auth"]._cached_oidc_signing_keys = previous_oidc_signing_keys
+    sys.modules["api.auth"]._revoked_session_token_digests.clear()
+    sys.modules["api.auth"]._revoked_session_token_digests.update(
+        previous_revoked_session_tokens
+    )
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -244,6 +270,60 @@ async def test_get_auth_context_accepts_signed_bearer_session():
         workspace_id="workspace-org-acme",
     )
     assert context.session_verifier == "hmac"
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_revoked_signed_bearer_session():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    from api import auth as auth_module
+
+    payload = _valid_session_payload()
+    token = _signed_session_token(payload)
+    auth_module._remember_revoked_session_token(token, payload)
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+def test_logout_current_session_records_token_digest_without_raw_bearer():
+    from db.models import RevokedSessionToken
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    db = _RevocationSession()
+
+    async def override_get_db():
+        yield db
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/auth/logout",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 200
+    assert response.json() == {"revoked": True}
+    assert db.committed is True
+    assert len(db.added) == 1
+    revoked_token = db.added[0]
+    assert isinstance(revoked_token, RevokedSessionToken)
+    assert revoked_token.token_digest == _session_token_digest(token)
+    assert revoked_token.token_digest != token
+    assert revoked_token.user_id == "alice"
+    assert revoked_token.organization_id == "org-acme"
+    assert revoked_token.workspace_id == "workspace-org-acme"
+    assert revoked_token.revocation_reason == "logout"
+    assert revoked_token.expires_at.tzinfo is not None
 
 
 @pytest.mark.asyncio
