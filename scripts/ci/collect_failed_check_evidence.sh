@@ -208,7 +208,28 @@ gh api graphql \
 		)
 		| .[]
 		| @tsv
-	' >"$failed_contexts"
+		' >"$failed_contexts"
+
+	gh run list \
+		--repo "$GH_REPOSITORY" \
+		--commit "$HEAD_SHA" \
+		--limit 100 \
+		--json databaseId,workflowName,status,conclusion,url \
+		--jq '
+			.[]
+			| select((.workflowName // "") != "OpenCode Review")
+			| select((.status // "") == "completed")
+			| select((.conclusion // "" | ascii_downcase) as $c | ["failure","timed_out","action_required","cancelled","startup_failure"] | index($c))
+			| [
+				"workflow_run",
+				(if (.workflowName // "") != "" then .workflowName else "workflow run" end),
+				(.conclusion // "unknown"),
+				(.url // ""),
+				((.databaseId // "") | tostring),
+				""
+			]
+			| @tsv
+		' >>"$failed_contexts"
 
 {
 	printf '# Failed GitHub Check Evidence\n\n'
@@ -241,6 +262,29 @@ gh api graphql \
 			printf -- '- Check run id: `%s`\n' "$check_run_id"
 		fi
 		printf '\n'
+
+		if [ "$kind" = "workflow_run" ] && [ -n "$run_id" ]; then
+			log_file="$(mktemp)"
+			stripped_log_file="$(mktemp)"
+			tmp_files+=("$log_file" "$stripped_log_file")
+			if gh run view "$run_id" --repo "$GH_REPOSITORY" --log-failed >"$log_file" 2>&1; then
+				strip_ansi <"$log_file" >"$stripped_log_file"
+				printf '### Failed workflow run log excerpt\n\n'
+				printf '```text\n'
+				emit_bounded_file "$stripped_log_file" "$FAILED_CHECK_LOG_LINES"
+				printf '\n```\n\n'
+				if [[ "$label" == *Strix* ]]; then
+					emit_strix_vulnerability_evidence "$stripped_log_file" || true
+				fi
+			else
+				strip_ansi <"$log_file" >"$stripped_log_file"
+				printf 'No GitHub Actions job log is available for this failed workflow run.\n\n'
+				printf '```text\n'
+				emit_bounded_file "$stripped_log_file" 60
+				printf '\n```\n\n'
+			fi
+			continue
+		fi
 
 		if [ "$kind" != "check_run" ] || [ -z "$check_run_id" ]; then
 			printf 'No GitHub Actions job log is available for this status context.\n\n'
