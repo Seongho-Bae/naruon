@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.schema import CreateSchema
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from core.config import settings
@@ -960,7 +959,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     try:
         async with admin_engine.begin() as conn:
             await conn.execute(text("SELECT 1"))
-            await conn.execute(CreateSchema(schema_name))
+            await conn.execute(text(f"CREATE SCHEMA {schema_name}"))
     except (
         ConnectionRefusedError,
         OSError,
