@@ -10,3 +10,7 @@
 **Vulnerability:** The CORS policy in `backend/main.py` hardcoded multiple localhost and 127.0.0.1 development ports directly in the list of allowed origins. This permissive setting would be deployed to production, increasing the risk of CSRF or CORS-based attacks if a malicious or compromised application were hosted on the user's localhost.
 **Learning:** Hardcoding development origins directly in the production CORS configuration undermines environment separation and exposes production deployments to localized attacks. Settings should dynamically parse allowed origins based on environment variables.
 **Prevention:** Introduce an environment-configurable setting (like `ALLOWED_CORS_ORIGINS`) and parse its values to construct the `allow_origins` array, thereby ensuring strict boundary control in production.
+## 2024-06-10 - Update CORS Middleware to restrict HTTP methods
+**Vulnerability:** The FastAPI application used `CORSMiddleware` with `allow_methods=["*"]` allowing any HTTP method across origins.
+**Learning:** This is a common misconfiguration that violates the principle of least privilege, especially when a subset of HTTP methods (including specific WebDAV ones) is all that's required.
+**Prevention:** Explicitly define the required HTTP methods (e.g. GET, POST, PROPFIND) in the `CORSMiddleware` configuration rather than using wildcards.
