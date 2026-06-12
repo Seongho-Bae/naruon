@@ -122,8 +122,8 @@ export function CalendarLayout() {
     <div className="flex h-full min-h-0 bg-background text-foreground">
       {/* Left Sidebar - Calendar List */}
       <aside className="w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-card p-4 hidden lg:flex">
-        <button type="button" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-          <Plus className="size-4" />새 일정
+        <button type="button" aria-label="새 일정 만들기" className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+          <Plus className="size-4" aria-hidden="true" />새 일정
         </button>
 
         <div className="mt-8">
@@ -145,8 +145,8 @@ export function CalendarLayout() {
               </li>
             ))}
           </ul>
-          <button type="button" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-            <Plus className="size-4" /> 캘린더 추가
+          <button type="button" aria-label="새 캘린더 계정 추가" className="mt-4 flex items-center gap-2 text-sm font-semibold text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+            <Plus className="size-4" aria-hidden="true" /> 캘린더 추가
           </button>
         </div>
       </aside>
@@ -431,7 +431,7 @@ export function CalendarLayout() {
             <button type="button" aria-label="닫기" className="grid size-8 place-items-center rounded-md hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"><X className="size-4" /></button>
           </div>
         </div>
-        
+
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className="size-4 rounded-full bg-orange-500"></div>

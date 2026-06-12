@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     ALLOWED_POP3_HOSTS: str = ""
     ALLOWED_POP3_PORTS: str = "995"
     ALLOWED_LLM_BASE_URL_HOSTS: str = ""
+    ALLOWED_CORS_ORIGINS: str = ""
     ENABLE_PROMETHEUS_METRICS: bool = False
     SECURITY_CONTENT_SECURITY_POLICY: str = (
         "default-src 'self'; "

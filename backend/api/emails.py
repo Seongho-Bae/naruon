@@ -227,7 +227,8 @@ async def get_emails(
         .limit(candidate_window)
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    # Optimization: emails are already ordered by date DESC from the DB.
+    # We preserve this order to group effectively without doing O(N log N) sorts in Python.
 
     grouped = {}
     reply_counts = {}
@@ -237,6 +238,7 @@ async def get_emails(
         group_key = canonical_thread_key(email)
         thread_messages.setdefault(group_key, []).append(email)
 
+        # Optimization: track if there is a self-sent message for "sent" folder tracking
         if folder == "sent" and not has_sent_message.get(group_key, False):
             if message_is_from_user(email, user_addresses):
                 has_sent_message[group_key] = True
@@ -246,15 +248,13 @@ async def get_emails(
             reply_counts[group_key] = 1
         else:
             reply_counts[group_key] += 1
-            if email.date > grouped[group_key].date:
-                grouped[group_key] = email
 
     visible_groups = [
         email
         for group_key, email in grouped.items()
         if folder != "sent" or has_sent_message.get(group_key, False)
     ]
-    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
+    sorted_groups = visible_groups[:limit]
 
     items = []
     for email in sorted_groups:
