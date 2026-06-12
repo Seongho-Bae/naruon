@@ -34,6 +34,10 @@ jobs:
           sed -E -i "s#ghcr.io/[^[:space:]]+/ai_email_client-backend:REPLACE_ME_VERSION#${image}#" k8s/backend-deployment.yaml
           grep -F "$image" k8s/backend-deployment.yaml >/dev/null
 
+          frontend_image="ghcr.io/${repo_owner}/ai_email_client-frontend:${version}"
+          sed -E -i "s#ghcr.io/[^[:space:]]+/ai_email_client-frontend:REPLACE_ME_VERSION#${frontend_image}#" k8s/frontend-deployment.yaml
+          grep -F "$frontend_image" k8s/frontend-deployment.yaml >/dev/null
+
       - name: Setup Kubeconfig
         env:
           AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}
@@ -52,3 +56,5 @@ jobs:
           trap 'rm -f "$KUBECONFIG"' EXIT
           kubectl apply -f k8s/backend-deployment.yaml -n naruon-dev
           kubectl rollout status deployment/backend -n naruon-dev --timeout=120s
+          kubectl apply -f k8s/frontend-deployment.yaml -n naruon-dev
+          kubectl rollout status deployment/frontend -n naruon-dev --timeout=120s
