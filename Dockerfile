@@ -55,19 +55,12 @@ COPY --from=frontend-builder /app/node_modules /app/frontend/node_modules
 COPY --from=frontend-builder /app/package.json /app/frontend/package.json
 COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
-# Create a startup script. DATABASE_URL and AUTH_SESSION_HMAC_SECRET must be
-# supplied by the operator or orchestrator; do not generate runtime secrets here.
-RUN echo '#!/bin/bash\n\
-set -euo pipefail\n\
-echo "Starting Naruon Backend and Frontend..."\n\
-python scripts/bootstrap_db.py\n\
-python scripts/start_backend.py --host 0.0.0.0 --port 8000 &\n\
-BACKEND_PID=$!\n\
-cd frontend && ./node_modules/.bin/next start --hostname 0.0.0.0 --port 3000 &\n\
-FRONTEND_PID=$!\n\
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true" EXIT\n\
-wait -n "$BACKEND_PID" "$FRONTEND_PID"\n\
-' > /app/start.sh && chmod +x /app/start.sh
+# Startup is handled by scripts/docker_entrypoint.sh (copied with the backend in
+# stage 1). It validates required configuration (DATABASE_URL,
+# AUTH_SESSION_HMAC_SECRET, and a valid Fernet ENCRYPTION_KEY — never generated
+# at runtime), then starts backend and frontend together and reports which
+# service exits. Secrets must be supplied by the operator or orchestrator.
+RUN chmod +x /app/scripts/docker_entrypoint.sh
 
 # Create non-root user
 RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
@@ -80,4 +73,4 @@ ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
 
 EXPOSE 3000 8000
 
-CMD ["/app/start.sh"]
+CMD ["/app/scripts/docker_entrypoint.sh"]
