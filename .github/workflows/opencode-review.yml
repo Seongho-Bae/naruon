@@ -76,8 +76,95 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
+          FAILED_CHECK_EVIDENCE_ATTEMPTS: "19"
+          FAILED_CHECK_EVIDENCE_SLEEP_SECONDS: "10"
         run: |
           set -euo pipefail
+
+          current_peer_checks_still_running() {
+            local owner="${GH_REPOSITORY%%/*}"
+            local name="${GH_REPOSITORY#*/}"
+
+            # Exclude this OpenCode check run; otherwise the evidence step would
+            # wait on itself until the bounded retry budget is exhausted.
+            # shellcheck disable=SC2016
+            gh api graphql \
+              -f owner="$owner" \
+              -f name="$name" \
+              -F number="$PR_NUMBER" \
+              -f query='
+                query($owner:String!,$name:String!,$number:Int!) {
+                  repository(owner:$owner,name:$name) {
+                    pullRequest(number:$number) {
+                      statusCheckRollup {
+                        contexts(first: 100) {
+                          nodes {
+                            __typename
+                            ... on CheckRun {
+                              name
+                              status
+                              checkSuite {
+                                workflowRun {
+                                  workflow {
+                                    name
+                                  }
+                                }
+                              }
+                            }
+                            ... on StatusContext {
+                              context
+                              state
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ' \
+              --jq '
+                [
+                  (.data.repository.pullRequest.statusCheckRollup.contexts.nodes // [])
+                  | .[]
+                  | if .__typename == "CheckRun" then
+                      select((.name // "") != "opencode-review")
+                      | select((.checkSuite.workflowRun.workflow.name // "") != "OpenCode PR Review")
+                      | select((.status // "") != "COMPLETED")
+                    elif .__typename == "StatusContext" then
+                      select((.context // "") != "opencode-review")
+                      | select((.state // "" | ascii_upcase) as $s | ["PENDING","EXPECTED"] | index($s))
+                    else
+                      empty
+                    end
+                ]
+                | length > 0
+              '
+          }
+
+          collect_failed_check_evidence_with_wait() {
+            local evidence_file="$1"
+            local attempts="${FAILED_CHECK_EVIDENCE_ATTEMPTS:-19}"
+            local sleep_seconds="${FAILED_CHECK_EVIDENCE_SLEEP_SECONDS:-10}"
+            local attempt=1
+
+            while [ "$attempt" -le "$attempts" ]; do
+              if scripts/ci/collect_failed_check_evidence.sh "$evidence_file"; then
+                if ! grep -Fq "No completed failed GitHub Checks were present" "$evidence_file"; then
+                  return 0
+                fi
+                if [ "$(current_peer_checks_still_running 2>/dev/null || printf 'false')" != "true" ]; then
+                  return 0
+                fi
+              fi
+
+              if [ "$attempt" -lt "$attempts" ]; then
+                sleep "$sleep_seconds"
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            scripts/ci/collect_failed_check_evidence.sh "$evidence_file"
+          }
 
           {
             printf '# OpenCode bounded PR review evidence\n\n'
@@ -92,7 +179,7 @@ jobs:
             printf 'OpenCode must use the configured CodeGraph MCP tools for structural frontend review questions.\n\n'
 
             printf '## Failed GitHub Check evidence\n\n'
-            if scripts/ci/collect_failed_check_evidence.sh "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"; then
+            if collect_failed_check_evidence_with_wait "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"; then
               sed -n '1,900p' "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"
             else
               printf 'Failed GitHub Check evidence could not be collected. OpenCode must treat check lookup failure as a review blocker unless later gate evidence proves checks passed.\n'
