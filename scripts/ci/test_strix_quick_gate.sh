@@ -369,7 +369,11 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'sed -n '"'"'1,900p'"'"' "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"' "opencode review includes enough failed-check evidence for multiple Strix model reports"
 	assert_file_contains "$workflow_file" "Do not request changes with only a check URL, workflow name, or generic failure summary." "opencode review prompt forbids generic failed-check reviews"
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
+	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '.line | type == "number" and . > 0 and floor == .' "opencode approval gate rejects line zero findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
+	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
 	assert_file_contains "$workflow_file" "Failed check evidence for line-specific fixes" "opencode approval gate includes failed-check evidence when diagnosis cannot complete"
 	assert_file_contains "$workflow_file" "- Root cause:" "opencode review request-changes body includes root cause per finding"
 	assert_file_contains "$workflow_file" "- Regression test:" "opencode review request-changes body includes regression test direction per finding"
@@ -436,6 +440,45 @@ EOF
 
 	assert_equals "0" "$rc" "normalized OpenCode transcript passes approval gate"
 	assert_equals "APPROVE" "$gate_result" "normalized OpenCode transcript gate result"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_line_zero_findings() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Generic blocker","summary":"Generic finding with no real source line.","findings":[{"path":"scripts/ci/example.sh","line":0,"severity":"HIGH","title":"Generic finding","problem":"Line zero is not actionable.","root_cause":"The review did not inspect a concrete line.","fix_direction":"Inspect the actual file and cite a positive line number.","regression_test_direction":"Add a gate test for line zero rejection.","suggested_diff":"diff --git a/scripts/ci/example.sh b/scripts/ci/example.sh\n--- a/scripts/ci/example.sh\n+++ b/scripts/ci/example.sh\n@@ -1 +1 @@\n-old\n+new"}]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects line zero findings"
+	assert_equals "NO_CONCLUSION" "$gate_result" "line zero rejection gate result"
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects line zero findings"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for line zero findings"
 
 	rm -rf "$tmp_dir"
 }
@@ -4822,6 +4865,8 @@ assert_strix_child_target_uses_constant_argument
 assert_opencode_review_uses_codegraph_and_gpt5_fallback
 
 assert_opencode_review_normalizer_accepts_transcript_json
+
+assert_opencode_review_gate_rejects_line_zero_findings
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

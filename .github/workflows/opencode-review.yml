@@ -333,7 +333,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -421,7 +421,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -509,7 +509,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the log evidence that led to the line and a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -865,7 +865,7 @@ jobs:
 
             {
               printf 'GitHub Checks failed after the initial OpenCode review. Diagnose the failed checks and return a line-specific REQUEST_CHANGES review for PR #%s in %s.\n' "$PR_NUMBER" "$GITHUB_WORKSPACE"
-              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The fix_direction must state the concrete from/to change, not only the workflow URL. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve the model name in problem or root_cause. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
+              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. The fix_direction must state the concrete from/to change, not only the workflow URL. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve the model name in problem or root_cause. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
               printf 'Failed checks:\n'
               cat "$failed_checks_file"
               printf '\n\nDetailed failed-check evidence:\n<failed-check-evidence>\n'
@@ -991,7 +991,27 @@ jobs:
           fi
 
           if [ "$opencode_review_outcome" != "success" ]; then
-            request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+            failed_checks_file="$(mktemp)"
+            failed_check_evidence_file="$(mktemp)"
+            failed_check_review_body_file="$(mktemp)"
+            # shellcheck disable=SC2329
+            cleanup_failed_outcome_files() {
+              rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+            }
+            trap cleanup_failed_outcome_files EXIT
+            if collect_failed_github_checks "$failed_checks_file" && [ -s "$failed_checks_file" ]; then
+              if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
+                printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
+              fi
+              if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+              else
+                build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+              fi
+            else
+              request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+            fi
             echo "::endgroup::"
             exit 0
           fi
@@ -1014,6 +1034,7 @@ jobs:
           failed_checks_file=""
           failed_check_evidence_file=""
           failed_check_review_body_file=""
+          # shellcheck disable=SC2329
           cleanup_approval_files() {
             rm -f "$tmp_body" "$control_json" "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
           }
