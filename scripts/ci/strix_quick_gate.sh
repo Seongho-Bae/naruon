@@ -948,7 +948,7 @@ authoritative_sca_checks_passed_for_pr_head() {
 		return 1
 	fi
 
-	local head_sha pr_number repository gh_token workflow_runs_json verification_result
+	local head_sha pr_number repository workflow_runs_json verification_result
 	if ! head_sha="$(load_pull_request_head_sha)"; then
 		echo "Unable to determine pull request head SHA for authoritative SCA verification; failing closed." >&2
 		return 1
@@ -964,13 +964,12 @@ authoritative_sca_checks_passed_for_pr_head() {
 		return 1
 	fi
 
-	gh_token="$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")"
-	if [ -z "$gh_token" ]; then
+	if [ -z "$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")" ]; then
 		echo "GitHub token is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
-	if ! workflow_runs_json="$(GH_TOKEN="$gh_token" gh api \
+	if ! workflow_runs_json="$(gh api \
 		-H "Accept: application/vnd.github+json" \
 		"repos/$repository/actions/runs?head_sha=$head_sha&event=pull_request&per_page=100")"; then
 		echo "Unable to query authoritative SCA workflow runs for this pull request head; failing closed." >&2
@@ -1760,6 +1759,10 @@ evaluate_pull_request_findings() {
 		if [ "$rank" -ge "$threshold_rank" ]; then
 			mapfile -t vulnerability_locations < <(extract_vulnerability_locations "$STRIX_LOG")
 			if [ "${#vulnerability_locations[@]}" -eq 0 ]; then
+				if vulnerability_file_is_retryable_model_inconsistency "$STRIX_LOG"; then
+					PR_FINDINGS_DECISION="retry_model_inconsistency"
+					return 1
+				fi
 				PR_FINDINGS_DECISION="block_unmapped"
 				echo "Unable to map Strix findings to changed files; failing closed for pull request." >&2
 				return 1
@@ -2267,6 +2270,21 @@ is_rate_limit_error() {
 	return 1
 }
 
+is_github_models_unavailable_model_error() {
+	local model="$1"
+
+	if [ -n "$model" ] && ! is_github_models_model "$model"; then
+		return 1
+	fi
+
+	if grep -Fq 'Unavailable model' "$STRIX_LOG" &&
+		grep -Eiq '(litellm\.BadRequestError|OpenAIException|GitHub Models|models\.github\.ai)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 ## Timeout classification — three-tier hierarchy:
 ##
 ##   1. litellm.exceptions.Timeout — SDK-level timeout raised by litellm.
@@ -2353,6 +2371,10 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_rate_limit_error; then
+		return 0
+	fi
+
+	if is_github_models_unavailable_model_error ""; then
 		return 0
 	fi
 
@@ -2619,6 +2641,8 @@ vulnerability_file_has_absent_endpoint_finding() {
 			#   STRIX_REPORTS_DIR — strix output itself (would always match).
 			#       Both the full path and basename are excluded so that
 			#       nested paths like "reports/strix_runs" are also caught.
+			#       Some Strix builds still write scope-local strix_runs/
+			#       despite STRIX_REPORTS_DIR, so exclude that literal too.
 			#   .git             — VCS internals
 			#   node_modules     — JS/TS dependencies (may contain API strings)
 			#   vendor           — Go/PHP vendored deps
@@ -2634,6 +2658,7 @@ vulnerability_file_has_absent_endpoint_finding() {
 			if grep -r -Fq \
 				--exclude-dir="$STRIX_REPORTS_DIR" \
 				--exclude-dir="$(basename "$STRIX_REPORTS_DIR")" \
+				--exclude-dir="strix_runs" \
 				--exclude-dir=".git" \
 				--exclude-dir="node_modules" \
 				--exclude-dir="vendor" \
@@ -2819,6 +2844,10 @@ is_model_retryable_error() {
 	local model="$1"
 
 	if is_vertex_model "$model" && is_vertex_not_found_error; then
+		return 0
+	fi
+
+	if is_github_models_unavailable_model_error "$model"; then
 		return 0
 	fi
 

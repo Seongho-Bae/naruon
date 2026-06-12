@@ -135,6 +135,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PNPM_CONFIG_IGNORE_SCRIPTS"] = "true"' "strix gate child process disables pnpm lifecycle scripts"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["YARN_ENABLE_SCRIPTS"] = "false"' "strix gate child process disables yarn lifecycle scripts"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix gate child env narrowly filters the known third-party Pydantic serializer warning"
+	assert_file_not_contains "$GATE_SCRIPT" 'GH_TOKEN="$gh_token" gh api' "strix gate must not re-export GitHub tokens into command-scoped child environments"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
@@ -226,6 +227,7 @@ assert_changed_file_membership_uses_cached_normalized_paths() {
 assert_absent_endpoint_search_uses_canonical_target_path() {
 	assert_file_contains "$GATE_SCRIPT" 'resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null)"' "absent-endpoint search resolves canonical target root"
 	assert_file_contains "$GATE_SCRIPT" 'candidate="${resolved_target_root%/}/$dir_entry"' "absent-endpoint search uses canonical target root"
+	assert_file_contains "$GATE_SCRIPT" '--exclude-dir="strix_runs"' "absent-endpoint search ignores scope-local Strix report output"
 	assert_file_not_contains "$GATE_SCRIPT" 'candidate="${TARGET_PATH%/}/$dir_entry"' "absent-endpoint search avoids relative target path roots"
 }
 
@@ -430,6 +432,51 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		*)
 			echo "Error: GitHub Models rate-limit fallback path unexpected (${STRIX_LLM:-})" >&2
 			exit 9
+			;;
+		esac
+		;;
+	github-models-primary-unavailable-strict-fallback-success)
+		case "${STRIX_LLM:-}" in
+		openai/openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			exit 1
+			;;
+		deepseek/deepseek-r1-0528)
+			echo "scan ok after GitHub Models unavailable-model fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models unavailable-model fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 9
+			;;
+		esac
+		;;
+	github-models-pr-scope-local-report-hallucinated-endpoint-fallback-success)
+		case "${STRIX_LLM:-}" in
+		openai/openai/gpt-5)
+			mkdir -p "$target_path/strix_runs/fake-local-hallucinated/vulnerabilities"
+			cat >"$target_path/strix_runs/fake-local-hallucinated/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** CRITICAL
+**Target:** /workspace/strix-pr-scope.fake
+**Endpoint:** /api/users/login
+
+**Location 1:** `routes/users.js` (line 15)
+EOS
+			echo "Severity: CRITICAL"
+			echo "Target: /workspace/strix-pr-scope.fake"
+			echo "Endpoint: /api/users/login"
+			echo "**Location 1:** \`routes/users.js\` (line 15)"
+			echo "Penetration test failed: hallucinated Express route in scope-local Strix report"
+			exit 2
+			;;
+		deepseek/deepseek-r1-0528)
+			echo "scan ok after scope-local hallucinated report fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: scope-local hallucinated report path unexpected (${STRIX_LLM:-})" >&2
+			exit 42
 			;;
 		esac
 		;;
@@ -6941,6 +6988,64 @@ run_gate_case "github-models-primary-ratelimit-strict-fallback-success" \
 	"0" \
 	"" \
 	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324"
+
+run_gate_case "github-models-primary-unavailable-strict-fallback-success" \
+	"openai/openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
+	"2" \
+	"openai/openai/gpt-5|deepseek/deepseek-r1-0528" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324"
+
+run_gate_case "github-models-pr-scope-local-report-hallucinated-endpoint-fallback-success" \
+	"openai/openai/gpt-5" \
+	"" \
+	"0" \
+	"scan ok after scope-local hallucinated report fallback" \
+	"2" \
+	"openai/openai/gpt-5|deepseek/deepseek-r1-0528" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	$'scripts/ci/strix_quick_gate.sh\nscripts/ci/test_strix_quick_gate.sh' \
 	"" \
 	"" \
 	"0" \
