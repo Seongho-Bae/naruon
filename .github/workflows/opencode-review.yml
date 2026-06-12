@@ -282,7 +282,7 @@ jobs:
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MODEL: github-models/openai/gpt-4o
+          MODEL: github-models/openai/gpt-5
           USE_GITHUB_TOKEN: "true"
           SHARE: "false"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
