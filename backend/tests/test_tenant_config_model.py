@@ -128,20 +128,24 @@ def test_tenant_config_model_encryption(db_session):
 
     # Verify that the value in the database is actually encrypted
     result = db_session.execute(
-        text("SELECT openai_api_key FROM tenant_configs WHERE user_id='test_user2'")
+        text("SELECT openai_api_key FROM tenant_configs WHERE user_id = :user_id"),
+        {"user_id": "test_user2"},
     ).scalar()
     assert result != "test_key2"
     assert result is not None
     assert isinstance(result, str)
 
     imap_pw = db_session.execute(
-        text("SELECT imap_password FROM tenant_configs WHERE user_id='test_user2'")
+        text("SELECT imap_password FROM tenant_configs WHERE user_id = :user_id"),
+        {"user_id": "test_user2"},
     ).scalar()
     smtp_pw = db_session.execute(
-        text("SELECT smtp_password FROM tenant_configs WHERE user_id='test_user2'")
+        text("SELECT smtp_password FROM tenant_configs WHERE user_id = :user_id"),
+        {"user_id": "test_user2"},
     ).scalar()
     pop3_pw = db_session.execute(
-        text("SELECT pop3_password FROM tenant_configs WHERE user_id='test_user2'")
+        text("SELECT pop3_password FROM tenant_configs WHERE user_id = :user_id"),
+        {"user_id": "test_user2"},
     ).scalar()
     assert imap_pw != TEST_IMAP_PASSWORD
     assert smtp_pw != TEST_SMTP_PASSWORD

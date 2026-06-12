@@ -167,7 +167,7 @@ def _normalize_smtp_host(host: str) -> str:
     return _normalize_mail_host(host, SMTP_HOST_NOT_ALLOWED)
 
 
-def _validate_public_ip_address(address: str, host_error: str) -> None:
+def _validate_public_ip_address(address: str, host_error: str) -> str:
     try:
         ip_address = ipaddress.ip_address(address)
     except ValueError as exc:
@@ -182,6 +182,7 @@ def _validate_public_ip_address(address: str, host_error: str) -> None:
         or not ip_address.is_global
     ):
         raise ValueError(host_error)
+    return str(ip_address)
 
 
 def _is_ip_literal(candidate: str) -> bool:
@@ -224,10 +225,12 @@ def _resolve_all_public_mail_addresses(
         raise ValueError(host_error) from exc
 
     validated_address_infos = []
-    for address_info in address_infos:
-        sockaddr = address_info[4]
-        _validate_public_ip_address(str(sockaddr[0]), host_error)
-        validated_address_infos.append(address_info)
+    for family, socktype, proto, canonname, sockaddr in address_infos:
+        validated_address = _validate_public_ip_address(str(sockaddr[0]), host_error)
+        validated_sockaddr = (validated_address, *tuple(sockaddr[1:]))
+        validated_address_infos.append(
+            (family, socktype, proto, canonname, validated_sockaddr)
+        )
     if not validated_address_infos:
         raise ValueError(host_error)
     return validated_address_infos
@@ -373,18 +376,21 @@ def _resolve_smtp_connect_address(
     raise ValueError(SMTP_HOST_NOT_ALLOWED)
 
 
-def _validate_pinned_smtp_sockaddr(sockaddr: tuple[Any, ...]) -> None:
+def _validate_pinned_smtp_sockaddr(sockaddr: tuple[Any, ...]) -> tuple[Any, ...]:
     """Ensure the connection target is a pre-resolved public IP, not a hostname."""
     if not sockaddr:
         raise ValueError(SMTP_HOST_NOT_ALLOWED)
-    _validate_public_ip_address(str(sockaddr[0]), SMTP_HOST_NOT_ALLOWED)
+    validated_address = _validate_public_ip_address(
+        str(sockaddr[0]), SMTP_HOST_NOT_ALLOWED
+    )
+    return (validated_address, *tuple(sockaddr[1:]))
 
 
 async def _connect_validated_smtp_socket(
     smtp_destination: ValidatedSmtpDestination,
 ) -> socket.socket:
     """Connect a non-blocking socket to the pre-resolved SMTP address."""
-    _validate_pinned_smtp_sockaddr(smtp_destination.sockaddr)
+    connect_sockaddr = _validate_pinned_smtp_sockaddr(smtp_destination.sockaddr)
     smtp_socket = socket.socket(
         smtp_destination.family, smtp_destination.socktype, smtp_destination.proto
     )
@@ -392,7 +398,7 @@ async def _connect_validated_smtp_socket(
     try:
         await asyncio.wait_for(
             asyncio.get_running_loop().sock_connect(
-                smtp_socket, smtp_destination.sockaddr
+                smtp_socket, connect_sockaddr
             ),
             timeout=SMTP_TIMEOUT_SECONDS,
         )
