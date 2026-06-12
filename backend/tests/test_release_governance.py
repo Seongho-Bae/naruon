@@ -213,12 +213,19 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
+    assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose
+    assert "postgresql+asyncpg://" not in live_e2e_compose
+    assert '"127.0.0.1:18080:8080"' in live_e2e_compose
     assert 'OLLAMA_NO_CLOUD: "true"' in compose
     assert 'OLLAMA_NO_CLOUD: "true"' in live_e2e_compose
     assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
     assert "OPENAI_MODEL: gemma4" in live_e2e_compose
     assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
-    assert "proxy_read_timeout 600s" in read_repo_text("tests/live/nginx.conf")
+    live_nginx = read_repo_text("tests/live/nginx.conf")
+    assert "proxy_read_timeout 600s" in live_nginx
+    assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in live_nginx
+    assert 'add_header X-Content-Type-Options "nosniff" always;' in live_nginx
+    assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
