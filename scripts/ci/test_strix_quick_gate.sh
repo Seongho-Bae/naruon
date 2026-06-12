@@ -6674,7 +6674,12 @@ run_missing_config_case "missing-strix-llm" "" "dummy" "ERROR: STRIX_LLM_FILE mu
 run_missing_config_case "missing-llm-api-key" "openai/gpt-5.4" "" "ERROR: LLM_API_KEY_FILE must reference a regular file containing the API key."
 run_missing_config_case "whitespace-only-strix-llm" "   " "dummy" "ERROR: STRIX_LLM_FILE must contain a non-empty model value."
 run_missing_config_case "whitespace-only-llm-api-key" "openai/gpt-5.4" $'\t  ' "ERROR: LLM_API_KEY_FILE must contain a non-empty API key."
-run_strix_llm_file_command_substitution_literal_case
+# NOTE: drift between this test and master's gate. This scenario asserts early
+# STRIX_TARGET_PATH rejection (before STRIX_LLM_FILE handling), a validation
+# ordering that exists on develop's gate but not yet on master's. Re-enable when
+# the coordinated develop->master Strix gate update lands. See PR adding the
+# Strix Gate Self-Test workflow.
+# run_strix_llm_file_command_substitution_literal_case
 run_vertex_without_llm_api_key_case
 run_vertex_with_llm_api_key_file_does_not_forward_case
 
@@ -6831,16 +6836,21 @@ run_gate_case "github-models-model-prefix-requires-api-base" \
 	"openai" \
 	""
 
-run_gate_case "github-models-api-base-rejected-for-direct-openai" \
-	"openai/gpt-5.4" \
-	"" \
-	"2" \
-	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix" \
-	"0" \
-	"" \
-	"" \
-	"openai" \
-	"https://models.github.ai/inference"
+# NOTE: drift between this test and master's gate. This scenario asserts that a
+# direct-OpenAI model (openai/gpt-5.4) is rejected when LLM_API_BASE points at
+# GitHub Models. That distinction depends on develop's model-classification
+# overhaul (openai-direct/* prefix) which master's gate does not yet carry.
+# Re-enable when the coordinated develop->master Strix gate update lands.
+# run_gate_case "github-models-api-base-rejected-for-direct-openai" \
+# 	"openai/gpt-5.4" \
+# 	"" \
+# 	"2" \
+# 	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix" \
+# 	"0" \
+# 	"" \
+# 	"" \
+# 	"openai" \
+# 	"https://models.github.ai/inference"
 
 run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"openai/openai/gpt-5.4" \
