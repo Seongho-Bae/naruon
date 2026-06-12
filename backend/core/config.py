@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     )
 
     # OpenAI Settings
+    OPENAI_BASE_URL: str | None = None
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     OPENAI_MODEL: str = "gpt-4o"
 

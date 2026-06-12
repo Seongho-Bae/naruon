@@ -14,11 +14,20 @@ services:
     volumes:
       - live-postgres-data:/var/lib/postgresql/data
 
+  ollama:
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
+    environment:
+      OLLAMA_NO_CLOUD: "true"
+    expose:
+      - "11434"
+
   migrate:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
@@ -32,7 +41,7 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
@@ -46,16 +55,21 @@ services:
     image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a pre-built backend image}
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}@db:5432/${POSTGRES_DB:-ai_email_live}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
       TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
       DEBUG: "false"
-      OPENAI_API_KEY: ""
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      ALLOW_LOCAL_LLM_PROVIDERS: "true"
+      ALLOWED_LLM_BASE_URL_HOSTS: "ollama"
+      OPENAI_API_KEY: ollama
+      OPENAI_BASE_URL: http://ollama:11434/v1
+      OPENAI_EMBEDDING_MODEL: embeddinggemma
+      OPENAI_MODEL: gemma4
     depends_on:
       live-seed:
         condition: service_completed_successfully
+      ollama:
+        condition: service_started
     expose:
       - "8000"
     command: ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
