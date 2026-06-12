@@ -452,6 +452,46 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	github-models-unreferenced-rich-fallback-success)
+		case "${STRIX_LLM:-}" in
+		openai/openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			exit 1
+			;;
+		deepseek/deepseek-r1-0528)
+			echo "+-- VULN-0001 ---------------------------------------------------------------+"
+			echo "|  Vulnerability Report                                                      |"
+			echo "|  Title: Insecure Deserialization in Third-Party Library 'rich'             |"
+			echo "|  Severity: CRITICAL                                                        |"
+			echo "|  Target: /workspace/trusted-workspace                                      |"
+			echo "|  Description                                                               |"
+			echo "|  The application uses the 'rich' library which has been identified by      |"
+			echo "|  static analysis to have insecure deserialization patterns. The Static     |"
+			echo "|  Analysis Agent found 4 instances. However, the exact code paths within    |"
+			echo "|  the library were not provided.                                            |"
+			echo "|  PoC Description                                                           |"
+			echo "|  Not available due to lack of details.                                     |"
+			echo "|  PoC Code                                                                  |"
+			echo "|  Not available.                                                            |"
+			echo "|  Technical Analysis                                                        |"
+			echo "|  The primary finding was an insecure deserialization vulnerability in the  |"
+			echo "|  'rich' library (CVE-2024-XXXX).                                           |"
+			echo "+----------------------------------------------------------------------------+"
+			echo "Penetration test completed"
+			echo "Vulnerabilities  CRITICAL: 1 (Total: 1)"
+			exit 2
+			;;
+		deepseek/deepseek-v3-0324)
+			echo "scan ok after unreferenced dependency hallucination fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: unreferenced dependency fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 43
+			;;
+		esac
+		;;
 	github-models-pr-scope-local-report-hallucinated-endpoint-fallback-success)
 		case "${STRIX_LLM:-}" in
 		openai/openai/gpt-5)
@@ -7004,6 +7044,35 @@ run_gate_case "github-models-primary-unavailable-strict-fallback-success" \
 	"2" \
 	"openai/openai/gpt-5|deepseek/deepseek-r1-0528" \
 	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324"
+
+run_gate_case "github-models-unreferenced-rich-fallback-success" \
+	"openai/openai/gpt-5" \
+	"" \
+	"0" \
+	"scan ok after unreferenced dependency hallucination fallback" \
+	"3" \
+	"openai/openai/gpt-5|deepseek/deepseek-r1-0528|deepseek/deepseek-v3-0324" \
+	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
 	"" \

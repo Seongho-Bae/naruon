@@ -2812,12 +2812,128 @@ vulnerability_file_has_hallucinated_source_claim() {
 	return 1
 }
 
+vulnerability_file_has_unreferenced_dependency_claim() {
+	local vuln_file="$1"
+	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+		return 1
+	fi
+
+	local resolved_target_root=""
+	resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null || true)"
+
+	python3 - "$vuln_file" "${resolved_target_root:-$REPO_ROOT}" "$REPO_ROOT" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+report_path = Path(sys.argv[1])
+target_root = Path(sys.argv[2]).resolve(strict=False)
+repo_root = Path(sys.argv[3]).resolve(strict=False)
+text = report_path.read_text(encoding="utf-8", errors="replace")
+
+package_names = {
+    match.group(1).lower().replace("_", "-").replace(".", "-")
+    for match in re.finditer(
+        r"\b(?:library|package)\s+['`\"]([A-Za-z0-9_.-]+)['`\"]",
+        text,
+        re.IGNORECASE,
+    )
+}
+if not package_names:
+    raise SystemExit(1)
+
+has_placeholder_cve = re.search(r"\bCVE-\d{4}-X{2,}\b", text, re.IGNORECASE)
+has_missing_evidence = re.search(
+    r"(exact code paths.*not provided|without more details|lack of details|PoC (?:Code|Description)\s+Not available)",
+    text,
+    re.IGNORECASE | re.DOTALL,
+)
+has_code_location = re.search(
+    r"\b(Code Locations?|Location\s+\d+\s*:)\b|Target:\s*(?:/workspace/)?[^\n]*\.[A-Za-z0-9_]+",
+    text,
+    re.IGNORECASE,
+)
+if has_code_location or not (has_placeholder_cve or has_missing_evidence):
+    raise SystemExit(1)
+
+manifest_names = (
+    "requirements.txt",
+    "pyproject.toml",
+    "poetry.lock",
+    "uv.lock",
+    "Pipfile",
+    "Pipfile.lock",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+)
+manifest_globs = ("requirements-*.txt",)
+
+def normalize_name(value: str) -> str:
+    return value.lower().replace("_", "-").replace(".", "-")
+
+def direct_requirement_names(manifest_text: str) -> set[str]:
+    names: set[str] = set()
+    for raw_line in manifest_text.splitlines():
+        line = raw_line.split("#", 1)[0].strip()
+        if not line or line.startswith(("-", "--")):
+            continue
+        match = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(?:[<>=!~]=?|$)", line)
+        if match:
+            names.add(normalize_name(match.group(1)))
+    return names
+
+search_roots = []
+for base in (target_root, repo_root):
+    search_roots.append(base)
+    for child in ("backend", "frontend", "src"):
+        search_roots.append(base / child)
+
+manifest_paths: list[Path] = []
+seen_paths: set[Path] = set()
+for root in search_roots:
+    if not root.is_dir() or root.is_symlink():
+        continue
+    for manifest_name in manifest_names:
+        candidate = root / manifest_name
+        if candidate not in seen_paths:
+            seen_paths.add(candidate)
+            manifest_paths.append(candidate)
+    for manifest_glob in manifest_globs:
+        for candidate in root.glob(manifest_glob):
+            if candidate not in seen_paths:
+                seen_paths.add(candidate)
+                manifest_paths.append(candidate)
+
+for manifest_path in manifest_paths:
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        continue
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        continue
+    normalized_text = normalize_name(manifest_text)
+    direct_names = direct_requirement_names(manifest_text)
+    if package_names & direct_names:
+        raise SystemExit(1)
+    for package_name in package_names:
+        if re.search(rf'["\']{re.escape(package_name)}["\']', normalized_text):
+            raise SystemExit(1)
+
+raise SystemExit(0)
+PY
+}
+
 vulnerability_file_is_retryable_model_inconsistency() {
 	local vuln_file="$1"
 	if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
 		return 0
 	fi
 	if vulnerability_file_has_hallucinated_source_claim "$vuln_file"; then
+		return 0
+	fi
+	if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
 		return 0
 	fi
 	return 1
@@ -2835,6 +2951,26 @@ is_hallucinated_source_claim_finding() {
 			return 0
 		fi
 	done
+
+	return 1
+}
+
+is_unreferenced_dependency_claim_finding() {
+	local latest_report_dir
+	if latest_report_dir="$(latest_strix_report_dir)"; then
+		local vuln_file
+		for vuln_file in "$latest_report_dir"/vulnerabilities/*.md; do
+			if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
+				echo "Detected Strix dependency report for a package absent from target manifests; treating as retryable model inconsistency." >&2
+				return 0
+			fi
+		done
+	fi
+
+	if vulnerability_file_has_unreferenced_dependency_claim "$STRIX_LOG"; then
+		echo "Detected Strix dependency report for a package absent from target manifests; treating as retryable model inconsistency." >&2
+		return 0
+	fi
 
 	return 1
 }
@@ -2886,6 +3022,10 @@ is_model_retryable_error() {
 	fi
 
 	if is_hallucinated_source_claim_finding; then
+		return 0
+	fi
+
+	if is_unreferenced_dependency_claim_finding; then
 		return 0
 	fi
 
