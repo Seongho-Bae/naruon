@@ -47,6 +47,7 @@ REPO_NAME="${REPO_ROOT##*/}"
 # from masking scan incompleteness — a successful strix run (exit 0) ignores
 # this flag because the scan itself produced a complete result set.
 INFRA_ERROR_DETECTED=0
+LAST_ATTEMPT_INFRA_ERROR_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
@@ -1920,6 +1921,7 @@ run_strix_once() {
 	local llm_api_base_value
 	local resolved_target_path
 	local timeout_seconds="$STRIX_PROCESS_TIMEOUT_SECONDS"
+	LAST_ATTEMPT_INFRA_ERROR_DETECTED=0
 	if [ "$STRIX_TOTAL_TIMEOUT_SECONDS" -gt 0 ]; then
 		local remaining_budget
 		remaining_budget="$(remaining_total_budget)"
@@ -2095,6 +2097,7 @@ PY
 
 	if has_detected_infrastructure_error; then
 		INFRA_ERROR_DETECTED=1
+		LAST_ATTEMPT_INFRA_ERROR_DETECTED=1
 		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
 			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2
 			return 1
@@ -2868,7 +2871,7 @@ run_current_target_scan() {
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
-		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+		if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
 			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
 			return 1
 		fi
@@ -2876,11 +2879,6 @@ run_current_target_scan() {
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
 		return 2
-	fi
-
-	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-		echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-		return 1
 	fi
 
 	if has_only_below_threshold_vulnerabilities; then
@@ -2896,6 +2894,10 @@ run_current_target_scan() {
 		return 1
 		;;
 	esac
+
+	if provider_signal_fail_closed_enabled && should_fail_pull_request_infra_zero_findings; then
+		return 1
+	fi
 
 	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
@@ -2929,7 +2931,7 @@ run_current_target_scan() {
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
-			if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
 				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
 				return 1
 			fi
@@ -2938,11 +2940,6 @@ run_current_target_scan() {
 		fi
 		if [ "$fallback_scan_rc" -eq 2 ]; then
 			return 2
-		fi
-
-		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-			echo "Strix fallback scan failed after provider infrastructure or failure-signal output; failing closed." >&2
-			return 1
 		fi
 
 		if has_only_below_threshold_vulnerabilities; then
@@ -2958,6 +2955,10 @@ run_current_target_scan() {
 			return 1
 			;;
 		esac
+
+		if should_fail_pull_request_infra_zero_findings; then
+			return 1
+		fi
 
 		if ! is_model_retryable_error "$candidate"; then
 			echo "Strix quick scan failed with a non-recoverable error." >&2

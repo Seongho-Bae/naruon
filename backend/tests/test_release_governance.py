@@ -198,11 +198,13 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
     assert "strix_llm:" in workflow
-    assert "github.event.inputs.strix_llm || 'openai/openai/gpt-4.1'" in workflow
+    assert "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" in workflow
     assert "secrets.STRIX_LLM ||" not in workflow
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow
     assert "github.token is required for GitHub Models Strix scans" in workflow
+    assert "deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" in workflow
+    assert "openai/openai/gpt-4.1" not in workflow
     assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
     assert (
         "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' "

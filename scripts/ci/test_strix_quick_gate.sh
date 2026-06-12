@@ -416,6 +416,23 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	github-models-primary-ratelimit-strict-fallback-success)
+		case "${STRIX_LLM:-}" in
+		openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests"
+			exit 1
+			;;
+		deepseek/deepseek-r1-0528)
+			echo "scan ok after GitHub Models rate-limit fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models rate-limit fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 9
+			;;
+		esac
+		;;
 	vertex-all-notfound)
 		echo "Error: litellm.NotFoundError: Vertex_aiException - x"
 		echo '"status": "NOT_FOUND"'
@@ -6903,6 +6920,35 @@ run_gate_case "github-models-fallback-success" \
 	"" \
 	"" \
 	0
+
+run_gate_case "github-models-primary-ratelimit-strict-fallback-success" \
+	"openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
+	"2" \
+	"openai/gpt-5|deepseek/deepseek-r1-0528" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324"
 
 # Endpoint only exists in excluded directories (.git/, node_modules/).
 # The grep --exclude-dir patterns must prevent matching, so the finding
