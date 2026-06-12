@@ -17,7 +17,7 @@ google-api-python-client==2.126.0
 google-auth-httplib2==0.2.0
 google-auth-oauthlib==1.2.0
 email-validator==2.3.0
-cryptography==47.0.0
+cryptography==48.0.1
 python-multipart==0.0.27
 prometheus-fastapi-instrumentator==8.0.0
 opentelemetry-api==1.25.0
@@ -26,6 +26,6 @@ opentelemetry-instrumentation-fastapi==0.46b0
 opentelemetry-exporter-otlp==1.25.0
 setuptools==78.1.1
 websockets==14.1
-PyJWT==2.13.0
+PyJWT==2.13.0  # latest verified 2026-06-12; do not downgrade to 2.8.0
 icalendar==7.1.2
 ruff==0.15.16
