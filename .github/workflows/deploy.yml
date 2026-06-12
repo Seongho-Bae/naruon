@@ -5,9 +5,6 @@ on:
     workflows: ["Build and Publish Docker Images"]
     types:
       - completed
-    branches:
-      - master
-      - "release/**"
 
 permissions:
   contents: read
@@ -16,33 +13,46 @@ jobs:
   deploy:
     name: Deploy to AKS
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    if: >-
+      ${{
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        startsWith(github.event.workflow_run.head_branch, 'v') &&
+        github.event.workflow_run.head_repository.full_name == github.repository
+      }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
 
-      - name: Read VERSION
-        id: read_version
-        run: echo "VERSION=$(cat VERSION)" >> $GITHUB_OUTPUT
-
-      - name: Patch k8s manifest with tag
+      - name: Validate tag and patch k8s manifest
         env:
-          DEPLOY_VERSION: ${{ steps.read_version.outputs.VERSION }}
           REPO_OWNER: ${{ github.repository_owner }}
+          TAG_NAME: ${{ github.event.workflow_run.head_branch }}
         run: |
-          sed -E -i "s#ghcr.io/.*/ai_email_client-backend:.*#ghcr.io/${REPO_OWNER}/ai_email_client-backend:${DEPLOY_VERSION}#" k8s/backend-deployment.yaml
-
-      - name: Setup Kubeconfig
-        run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.AKS_KUBECONFIG }}" > ~/.kube/config
-          chmod 600 ~/.kube/config
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'Workflow tag %s is not a valid release tag\n' "$TAG_NAME" >&2
+            exit 1
+          fi
+          version="${TAG_NAME#v}"
+          repo_owner="$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$repo_owner" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+            printf 'Repository owner %s is not valid for GHCR image names\n' "$repo_owner" >&2
+            exit 1
+          fi
+          image="ghcr.io/${repo_owner}/ai_email_client-backend:${version}"
+          sed -E -i "s#ghcr.io/[^[:space:]]+/ai_email_client-backend:REPLACE_ME_VERSION#${image}#" k8s/backend-deployment.yaml
+          grep -F "$image" k8s/backend-deployment.yaml >/dev/null
 
       - name: Apply to AKS
         env:
-          KUBECONFIG: ~/.kube/config
+          AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}
         run: |
+          kubeconfig_file="$(mktemp)"
+          trap 'rm -f "$kubeconfig_file"' EXIT
+          umask 077
+          printf '%s' "$AKS_KUBECONFIG_CONTENT" > "$kubeconfig_file"
+          export KUBECONFIG="$kubeconfig_file"
           kubectl apply -f k8s/backend-deployment.yaml -n naruon-dev
           kubectl rollout status deployment/backend -n naruon-dev --timeout=120s
