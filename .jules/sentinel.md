@@ -6,3 +6,7 @@
 **Vulnerability:** Log Injection / Terminal Escape Sequence Injection (CWE-117)
 **Learning:** Custom logic like `path.replace("\n", "").replace("\r", "")` is insufficient to prevent log injection and terminal escape sequence injection, as it leaves characters like ANSI color codes intact.
 **Prevention:** Use standard mechanisms like `repr()` or proper unicode escaping instead of custom string replacements.
+## 2026-06-09 - Insecure XML Parsing in Tests
+**Vulnerability:** Found `xml.etree.ElementTree.fromstring` being used to parse HTTP responses in `backend/tests/test_dav_api.py`.
+**Learning:** Using the standard library `xml.etree` module for parsing untrusted or external XML data exposes the application to XML External Entity (XXE) and XML bomb attacks (CWE-20). This was flagged by static analysis tools (Bandit B314).
+**Prevention:** Always use `defusedxml.ElementTree` instead of `xml.etree.ElementTree` when parsing XML to ensure protection against XML vulnerabilities. Ensure `defusedxml` is listed in `requirements.txt`.
