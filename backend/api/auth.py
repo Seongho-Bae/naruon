@@ -1,4 +1,5 @@
 import http.client
+import hashlib
 import json
 import logging
 import math
@@ -11,7 +12,8 @@ from urllib.parse import urlsplit
 
 import jwt
 from jwt import PyJWKClient
-from fastapi import Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 from core.url_validation import (
@@ -149,6 +151,9 @@ SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
 OIDC_SIGNING_ALGORITHM = "RS256"
 MIN_SESSION_SECRET_BYTES = 32
+_revoked_session_tokens: dict[str, float] = {}
+
+router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @dataclass(frozen=True)
@@ -159,6 +164,10 @@ class AuthContext:
     group_ids: tuple[str, ...]
     workspace_id: str
     session_verifier: SessionVerifier = field(default="override", compare=False)
+
+
+class LogoutResponse(BaseModel):
+    revoked: bool
 
 
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
@@ -267,6 +276,35 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
+def _session_token_fingerprint(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _prune_revoked_session_tokens(now: float | None = None) -> None:
+    current_time = time.time() if now is None else now
+    expired_fingerprints = [
+        fingerprint
+        for fingerprint, expires_at in _revoked_session_tokens.items()
+        if expires_at <= current_time
+    ]
+    for fingerprint in expired_fingerprints:
+        _revoked_session_tokens.pop(fingerprint, None)
+
+
+def revoke_session_token(token: str, expires_at: float) -> None:
+    _prune_revoked_session_tokens()
+    if expires_at <= time.time():
+        return
+    _revoked_session_tokens[_session_token_fingerprint(token)] = expires_at
+
+
+def _reject_revoked_session_token(token: str) -> None:
+    _prune_revoked_session_tokens()
+    expires_at = _revoked_session_tokens.get(_session_token_fingerprint(token))
+    if expires_at is not None and expires_at > time.time():
+        raise _authentication_error()
+
+
 def _verify_signed_session_payload(
     authorization: str | None,
 ) -> tuple[dict[str, Any], SessionVerifier]:
@@ -285,6 +323,7 @@ def _verify_signed_session_payload(
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL,
             )
+            _reject_revoked_session_token(token)
             _reject_signed_session_system_admin_payload(payload)
             return payload, "oidc"
         except Exception:
@@ -310,6 +349,7 @@ def _verify_signed_session_payload(
         raise _authentication_error()
     if not isinstance(payload, dict):
         raise _authentication_error()
+    _reject_revoked_session_token(token)
     _reject_signed_session_system_admin_payload(payload)
     return payload, "hmac"
 
@@ -354,6 +394,15 @@ def _tuple_string_claim(payload: dict[str, Any], name: str) -> tuple[str, ...]:
     return tuple(normalized)
 
 
+def _session_expires_at(payload: dict[str, Any]) -> float:
+    expires_at = payload.get("exp")
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+        raise _authentication_error()
+    if not math.isfinite(expires_at):
+        raise _authentication_error()
+    return float(expires_at)
+
+
 def _validate_session_metadata(payload: dict[str, Any]) -> None:
     # If OIDC is configured, the issuer/audience might be verified by jwt.decode
     if not settings.OIDC_ISSUER_URL:
@@ -363,12 +412,7 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
             raise _authentication_error()
         if payload.get("aud") != SESSION_AUDIENCE:
             raise _authentication_error()
-    expires_at = payload.get("exp")
-    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
-        raise _authentication_error()
-    if not math.isfinite(expires_at):
-        raise _authentication_error()
-    if expires_at <= time.time():
+    if _session_expires_at(payload) <= time.time():
         raise _authentication_error()
 
 
@@ -409,3 +453,14 @@ async def get_current_user_role(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> str:
     return auth_context.role
+
+
+@router.post("/logout", response_model=LogoutResponse)
+async def logout_current_session(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+) -> LogoutResponse:
+    token = _extract_bearer_token(authorization)
+    payload, _session_verifier = _verify_signed_session_payload(authorization)
+    _validate_session_metadata(payload)
+    revoke_session_token(token, _session_expires_at(payload))
+    return LogoutResponse(revoked=True)
