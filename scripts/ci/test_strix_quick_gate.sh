@@ -187,8 +187,10 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
 	assert_file_contains "$workflow_file" "deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
+	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix before passing model names to LiteLLM"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
+	assert_file_contains "$workflow_file" "openai/gpt-5-mini* | openai/gpt-5-nano*" "strix workflow rejects mini and nano GPT-5 variants for security evidence"
 	assert_file_contains "$workflow_file" "openai/gpt-5*" "strix workflow accepts GitHub Models OpenAI GPT-5 model prefixes"
 	assert_file_not_contains "$workflow_file" "github/gpt-4o" "strix workflow must not default to an unsupported GitHub Models alias"
 	assert_file_not_contains "$workflow_file" "gemini/gemini-pro-3.1-preview" "strix workflow must not default to Gemini API when GitHub Models is required"
@@ -202,6 +204,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 assert_strix_gpt54_model_guard_semantics() {
 	local model="$1"
 	case "$model" in
+	openai/gpt-5-mini* | openai/gpt-5-nano* | \
+	openai/openai/gpt-5-mini* | openai/openai/gpt-5-nano* | \
+	github_models/openai/gpt-5-mini* | github_models/openai/gpt-5-nano*)
+		return 1
+		;;
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
 	github_models/* | \
@@ -219,6 +226,12 @@ assert_strix_gpt54_model_guard_semantics() {
 assert_strix_gpt54_model_guard_cases() {
 	if ! assert_strix_gpt54_model_guard_semantics "openai/gpt-5"; then
 		record_failure "strix guard must accept GitHub Models openai/gpt-5"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "openai/gpt-5-mini"; then
+		record_failure "strix guard must reject GitHub Models openai/gpt-5-mini"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "github_models/openai/gpt-5-nano"; then
+		record_failure "strix guard must reject manual GitHub Models openai/gpt-5-nano"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "gpt-5"; then
 		record_failure "strix GPT-5.4 guard must reject plain gpt-5"
@@ -305,7 +318,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
 	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
 	assert_file_contains "$workflow_file" "always return a final control block instead of a progress summary" "opencode review prompt requires a gate conclusion instead of a progress summary"
-	assert_file_contains "$workflow_file" "timeout 540 opencode run" "opencode review primary model has a bounded extended timeout for larger workflow diffs"
+	assert_file_contains "$workflow_file" "timeout 1200 opencode run" "opencode review primary model has a bounded extended timeout for larger workflow diffs"
 	assert_file_contains "$workflow_file" '"ci-review-fallback"' "opencode review workflow declares a dedicated fallback agent"
 	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
 	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
@@ -458,7 +471,7 @@ run_gate_case() {
 	fi
 	local transient_retry_per_model="${12-0}"
 	local min_fail_severity="${13-CRITICAL}"
-	local transient_retry_backoff_seconds="${14-0}"
+	local transient_retry_backoff_seconds="${14:-0}"
 	local custom_target_path="${15-}"
 	local custom_source_dirs="${16-}"
 	local process_timeout_seconds="${17-1200}"
