@@ -131,7 +131,7 @@ jobs:
 
           jq -n --arg workspace "$GITHUB_WORKSPACE" '{
             "$schema": "https://opencode.ai/config.json",
-            "model": "github-models/openai/gpt-4o",
+            "model": "github-models/openai/gpt-5",
             "small_model": "github-models/deepseek/deepseek-v3-0324",
             "enabled_providers": ["github-models"],
             "mcp": {
@@ -243,12 +243,13 @@ jobs:
                   "apiKey": "{env:STRIX_GITHUB_MODELS_TOKEN}"
                 },
                 "models": {
-                  "openai/gpt-4o": {
-                    "name": "OpenAI GPT-4o",
+                  "openai/gpt-5": {
+                    "name": "OpenAI GPT-5",
                     "tool_call": true,
+                    "reasoning": true,
                     "limit": {
-                      "context": 128000,
-                      "output": 4096
+                      "context": 200000,
+                      "output": 100000
                     }
                   },
                   "deepseek/deepseek-r1-0528": {
