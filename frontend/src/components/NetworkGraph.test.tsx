@@ -178,11 +178,22 @@ describe("NetworkGraph", () => {
     expect(resizeObserverCallback).not.toBeNull();
     expect(fitMock).toHaveBeenCalledTimes(0);
 
-    await act(async () => {
-      resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
-      await Promise.resolve();
-    });
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
+        vi.advanceTimersByTime(49);
+      });
 
-    expect(fitMock).toHaveBeenCalledTimes(1);
+      expect(fitMock).toHaveBeenCalledTimes(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(fitMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
