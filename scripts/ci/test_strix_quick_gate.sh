@@ -323,6 +323,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
 	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
 	assert_file_contains "$workflow_file" '"grep": "allow"' "opencode review allows focused literal searches"
+	assert_file_contains "$workflow_file" '"external_directory": "allow"' "opencode review can read the real checkout from its isolated review workspace"
+	assert_file_not_contains "$workflow_file" '"external_directory": "deny"' "opencode review must not block focused reads of the real checkout"
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
 	assert_file_contains "$workflow_file" "Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel." "opencode review prompt forbids reasoning text before the control sentinel"
 	assert_file_contains "$workflow_file" "OpenCode output did not include a valid control conclusion." "opencode review model steps fail when output lacks a parseable control conclusion"

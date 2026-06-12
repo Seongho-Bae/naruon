@@ -297,7 +297,7 @@ jobs:
               "webfetch": "deny",
               "websearch": "deny",
               "lsp": "deny",
-              "external_directory": "deny"
+              "external_directory": "allow"
             },
             "agent": {
               "ci-review": {
@@ -316,7 +316,7 @@ jobs:
                   "webfetch": "deny",
                   "websearch": "deny",
                   "lsp": "deny",
-                  "external_directory": "deny"
+                  "external_directory": "allow"
                 }
               },
               "ci-review-fallback": {
@@ -335,7 +335,7 @@ jobs:
                   "webfetch": "deny",
                   "websearch": "deny",
                   "lsp": "deny",
-                  "external_directory": "deny"
+                  "external_directory": "allow"
                 }
               }
             },
