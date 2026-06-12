@@ -132,7 +132,8 @@ jobs:
               ;;
             openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
             openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-            github_models/*)
+            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
+            github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=github_models' >> "$GITHUB_OUTPUT"
               sanitized_github_models_token="$(printf '%s' "$STRIX_GITHUB_MODELS_TOKEN" | tr -d '\r\n')"
@@ -266,7 +267,8 @@ jobs:
               ;;
             openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
             openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-            github_models/*)
+            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
+            github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)
               printf '%s' "${strix_model#github_models/}" > "$strix_llm_file"
               ;;
             openai/*)

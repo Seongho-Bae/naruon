@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 // backend reaches an OpenAI-compatible local provider (ollama) serving the
 // packaged Gemma models. It proves the user-facing model paths reach a REAL
 // model rather than a mock:
-//   - chat:      POST /api/llm/draft  -> gemma4            (답장 초안)
+//   - chat:      POST /api/llm/draft  -> gemma4:e2b-it-qat (답장 초안)
 //   - embedding: POST /api/search     -> embeddinggemma    (맥락 검색)
 //
 // Requests go through the frontend same-origin /api proxy, which forwards the
@@ -47,13 +47,13 @@ function signLiveSession(): string {
 
 test.skip(
   !process.env.LIVE_BASE_URL && process.env.RUN_LIVE_E2E !== '1',
-  'Requires a live stack with ollama serving gemma4 + embeddinggemma.',
+  'Requires a live stack with ollama serving gemma4:e2b-it-qat + embeddinggemma.',
 );
 
 // Local model inference on CPU is slow, especially on a cold model load.
-test.setTimeout(300_000);
+test.setTimeout(600_000);
 
-test('nano live: 답장 초안 reaches the gemma4 chat model', async ({ request }) => {
+test('nano live: 답장 초안 reaches the gemma4 e2b chat model', async ({ request }) => {
   const token = signLiveSession();
   const response = await request.post('/api/llm/draft', {
     headers: { Authorization: `Bearer ${token}` },
@@ -62,7 +62,7 @@ test('nano live: 답장 초안 reaches the gemma4 chat model', async ({ request 
         '다음 주 화요일 오후 2시에 프로젝트 킥오프 미팅을 제안드립니다. 가능하신지 회신 부탁드립니다.',
       instruction: '정중하게 수락하는 짧은 답장 초안을 작성해줘.',
     },
-    timeout: 280_000,
+    timeout: 600_000,
   });
   expect(response.ok()).toBeTruthy();
   const body = await response.json();

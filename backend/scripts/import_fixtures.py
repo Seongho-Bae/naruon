@@ -12,7 +12,12 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 
 from services.archive import extract_backup_async
 from services.email_parser import parse_eml
-from services.embedding import chunk_text, generate_embeddings
+from services.embedding import (
+    STORAGE_EMBEDDING_DIMENSION,
+    chunk_text,
+    fit_embedding_vector,
+    generate_embeddings,
+)
 from services.threading_service import assign_thread_id
 from db.session import AsyncSessionLocal
 from db.models import Email, TenantConfig
@@ -61,7 +66,10 @@ async def process_zip_file(zip_path: str | Path, session: AsyncSession):
                     ) or ""
                     embeddings = await generate_embeddings([chunks[0]], api_key)
                     if embeddings:
-                        embedding = embeddings[0]
+                        embedding = fit_embedding_vector(
+                            embeddings[0],
+                            STORAGE_EMBEDDING_DIMENSION,
+                        )
                 except Exception as e:
                     logger.error(
                         f"Failed to generate embedding for {email_data['message_id']}: {e}"

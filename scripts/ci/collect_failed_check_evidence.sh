@@ -37,6 +37,38 @@ emit_bounded_file() {
 	tail -n "$tail_lines" "$file_path"
 }
 
+emit_failure_signal_summary() {
+	local log_file="$1"
+	local summary_tmp
+
+	summary_tmp="$(mktemp)"
+	tmp_files+=("$summary_tmp")
+
+	awk '
+		/FAIL:/ ||
+		/::error::/ ||
+		/##\[error\]/ ||
+		/Process completed with exit code/ ||
+		/[Ff]atal/ ||
+		/[Dd]enied/ ||
+		/[Tt]imeout/ ||
+		/[Ww]arn/ {
+			if (!seen[$0]++) {
+				print
+			}
+		}
+	' "$log_file" >"$summary_tmp"
+
+	if [ ! -s "$summary_tmp" ]; then
+		return 1
+	fi
+
+	printf '### Failed log signal summary\n\n'
+	printf '```text\n'
+	emit_bounded_file "$summary_tmp" 120
+	printf '\n```\n\n'
+}
+
 emit_strix_vulnerability_evidence() {
 	local log_file="$1"
 	local summary_tmp
@@ -241,7 +273,7 @@ gh api graphql \
 	printf -- '- For each actionable failed check, inspect the local source or diff and identify the exact file line that must change.\n'
 	printf -- '- OpenCode `REQUEST_CHANGES` findings must include `path`, `line`, `root_cause`, `fix_direction`, `regression_test_direction`, and `suggested_diff`.\n'
 	printf -- '- Do not request changes with only a GitHub Actions URL or a generic check name.\n\n'
-	printf -- '- When Strix logs contain multiple `Vulnerability Report` or `Model ... Vulnerabilities ...` sections, include every model-reported vulnerability in the review evidence and findings.\n\n'
+	printf -- '- When Strix logs contain multiple `Vulnerability Report` or `Model ... Vulnerabilities ...` sections, include every model-reported vulnerability in the review evidence and findings, including model name, title, severity, endpoint, and Code Locations/path:line evidence when present.\n\n'
 
 	if [ ! -s "$failed_contexts" ]; then
 		printf 'No completed failed GitHub Checks were present when evidence was collected.\n'
@@ -269,6 +301,7 @@ gh api graphql \
 			tmp_files+=("$log_file" "$stripped_log_file")
 			if gh run view "$run_id" --repo "$GH_REPOSITORY" --log-failed >"$log_file" 2>&1; then
 				strip_ansi <"$log_file" >"$stripped_log_file"
+				emit_failure_signal_summary "$stripped_log_file" || true
 				printf '### Failed workflow run log excerpt\n\n'
 				printf '```text\n'
 				emit_bounded_file "$stripped_log_file" "$FAILED_CHECK_LOG_LINES"
@@ -331,6 +364,7 @@ gh api graphql \
 			--log-failed >"$log_raw" 2>&1; then
 			strip_ansi <"$log_raw" >"$log_clean"
 			if [ -s "$log_clean" ]; then
+				emit_failure_signal_summary "$log_clean" || true
 				if emit_strix_vulnerability_evidence "$log_clean"; then
 					printf '\n'
 				fi

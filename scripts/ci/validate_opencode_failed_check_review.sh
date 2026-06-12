@@ -52,6 +52,55 @@ contains_review_text() {
   grep -Fqi -- "$needle" <<<"$review_text"
 }
 
+extract_strix_required_markers() {
+  perl -CS -ne '
+    s/\r//g;
+    s/\x1b\[[0-9;?]*[A-Za-z]//g;
+    if (/│/) {
+      s/^.*?│[[:space:]]*//;
+      s/[[:space:]]*│.*$//;
+    } else {
+      s/^.*?[0-9]Z[[:space:]]+//;
+    }
+    s/[[:space:]]+/ /g;
+    s/^[[:space:]]+|[[:space:]]+$//g;
+
+    if (/^Title:[[:space:]]+(.+)/) {
+      print "$1\n";
+    }
+    if (/^Severity:[[:space:]]+(CRITICAL|HIGH|MEDIUM|LOW)\b/) {
+      print "Severity: $1\n";
+    }
+    if (/^Endpoint:[[:space:]]+(.+)/) {
+      print "$1\n";
+    }
+    if (/^Method:[[:space:]]+(.+)/) {
+      print "Method: $1\n";
+    }
+    if (/^Location[[:space:]]+[0-9]+:[[:space:]]+(.+:[0-9]+(?:-[0-9]+)?)/) {
+      print "$1\n";
+    }
+  ' "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
+}
+
+extract_strix_title_markers() {
+  perl -CS -ne '
+    s/\r//g;
+    s/\x1b\[[0-9;?]*[A-Za-z]//g;
+    if (/│/) {
+      s/^.*?│[[:space:]]*//;
+      s/[[:space:]]*│.*$//;
+    } else {
+      s/^.*?[0-9]Z[[:space:]]+//;
+    }
+    s/[[:space:]]+/ /g;
+    s/^[[:space:]]+|[[:space:]]+$//g;
+    if (/^Title:[[:space:]]+(.+)/) {
+      print "$1\n";
+    }
+  ' "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
+}
+
 while IFS= read -r failed_check_line; do
   case "$failed_check_line" in
     "- "*)
@@ -86,6 +135,14 @@ do
 done
 
 if grep -Fq "Strix vulnerability report window" "$FAILED_CHECK_EVIDENCE_FILE"; then
+  strix_title_count="$(extract_strix_title_markers | sed '/^[[:space:]]*$/d' | wc -l | tr -d '[:space:]')"
+  finding_count="$(jq -r '(.findings // []) | length' "$CONTROL_JSON_FILE")"
+  if [ -n "$strix_title_count" ] && [ "$strix_title_count" -gt 0 ] &&
+    [ "$finding_count" -lt "$strix_title_count" ]; then
+    echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
+    exit 4
+  fi
+
   while IFS= read -r model_name; do
     if ! contains_review_text "$model_name"; then
       echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
@@ -95,6 +152,13 @@ if grep -Fq "Strix vulnerability report window" "$FAILED_CHECK_EVIDENCE_FILE"; t
     perl -ne 'while (m{(?:openai|deepseek|vertex_ai|github(?:_|-)models)/[A-Za-z0-9._/-]+}g) { print "$&\n" }' \
       "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
   )
+
+  while IFS= read -r strix_marker; do
+    if ! contains_review_text "$strix_marker"; then
+      echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
+      exit 4
+    fi
+  done < <(extract_strix_required_markers)
 fi
 
 exit 0

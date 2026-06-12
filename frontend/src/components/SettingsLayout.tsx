@@ -199,7 +199,7 @@ const localModelFormDefaults: ModelProviderFormState = {
   name: 'Local Gemma4',
   providerType: 'ollama',
   baseUrl: 'http://ollama:11434/v1',
-  modelIdentifier: 'gemma4',
+  modelIdentifier: 'gemma4:e2b-it-qat',
   embeddingModel: 'embeddinggemma',
   apiKey: '',
   isActive: true,
@@ -1027,7 +1027,7 @@ export function SettingsLayout() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <label htmlFor="local-model-id" className="text-sm font-bold text-muted-foreground">모델 식별자</label>
-                          <input id="local-model-id" value={localModelForm.modelIdentifier} onChange={(event) => updateLocalModelField('modelIdentifier', event.target.value)} placeholder="gemma4" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                          <input id="local-model-id" value={localModelForm.modelIdentifier} onChange={(event) => updateLocalModelField('modelIdentifier', event.target.value)} placeholder="gemma4:e2b-it-qat" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                         </div>
                         <div className="space-y-2">
                           <label htmlFor="local-embedding-model" className="text-sm font-bold text-muted-foreground">임베딩 모델</label>

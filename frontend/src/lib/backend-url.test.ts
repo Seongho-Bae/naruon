@@ -42,13 +42,25 @@ describe("backend URL guard", () => {
     }
   });
 
-  it("allows the exact Compose backend URL only with the explicit opt-in", () => {
+  it("allows exact Docker internal backend URLs only with the explicit opt-in", () => {
     expect(() => parseBackendInternalUrl("http://backend:8000")).toThrow(
+      "https://",
+    );
+    expect(() => parseBackendInternalUrl("http://127.0.0.1:8000")).toThrow(
       "https://",
     );
     process.env.ALLOW_DOCKER_BACKEND_INTERNAL_URL = "1";
     expect(parseBackendInternalUrl("http://backend:8000").origin).toBe(
       "http://backend:8000",
+    );
+    expect(parseBackendInternalUrl("http://127.0.0.1:8000").origin).toBe(
+      "http://127.0.0.1:8000",
+    );
+    expect(parseBackendInternalUrl("http://localhost:8000").origin).toBe(
+      "http://localhost:8000",
+    );
+    expect(() => parseBackendInternalUrl("http://127.0.0.1:8001")).toThrow(
+      "https://",
     );
   });
 
