@@ -141,6 +141,22 @@ jobs:
               '
           }
 
+          current_peer_workflow_runs_still_running() {
+            gh run list \
+              --repo "$GH_REPOSITORY" \
+              --commit "$PR_HEAD_SHA" \
+              --limit 100 \
+              --json databaseId,workflowName,status \
+              --jq '
+                [
+                  .[]
+                  | select((.workflowName // "") != "OpenCode Review")
+                  | select((.status // "") != "completed")
+                ]
+                | length > 0
+              '
+          }
+
           collect_failed_check_evidence_with_wait() {
             local evidence_file="$1"
             local attempts="${FAILED_CHECK_EVIDENCE_ATTEMPTS:-19}"
@@ -152,7 +168,8 @@ jobs:
                 if ! grep -Fq "No completed failed GitHub Checks were present" "$evidence_file"; then
                   return 0
                 fi
-                if [ "$(current_peer_checks_still_running 2>/dev/null || printf 'false')" != "true" ]; then
+                if [ "$(current_peer_checks_still_running 2>/dev/null || printf 'false')" != "true" ] &&
+                  [ "$(current_peer_workflow_runs_still_running 2>/dev/null || printf 'false')" != "true" ]; then
                   return 0
                 fi
               fi
@@ -1217,6 +1234,18 @@ jobs:
                   )
                 | .[]
               ' >"$output_file"
+
+            gh run list \
+              --repo "$GH_REPOSITORY" \
+              --commit "$HEAD_SHA" \
+              --limit 100 \
+              --json databaseId,workflowName,status,url \
+              --jq '
+                .[]
+                | select((.workflowName // "") != "OpenCode Review")
+                | select((.status // "") != "completed")
+                | "- " + (if (.workflowName // "") != "" then .workflowName else "workflow run" end) + ": " + (.status // "unknown") + (if (.url // "") != "" then " (" + .url + ")" else "" end)
+              ' >>"$output_file"
           }
 
           wait_for_peer_github_checks() {
