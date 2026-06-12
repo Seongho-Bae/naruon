@@ -24,7 +24,7 @@ on:
       strix_llm:
         description: Optional Strix model override for manual evidence runs
         required: false
-        default: openai/gpt-4o
+        default: openai/gpt-5
         type: string
 
 concurrency:
