@@ -171,6 +171,12 @@ class LogoutResponse(BaseModel):
     revoked: bool
 
 
+class SessionResponse(BaseModel):
+    user_id: str
+    organization_id: str | None
+    workspace_id: str
+
+
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
     if is_system_admin_role(auth_context.role):
         return
@@ -553,6 +559,17 @@ async def get_current_user_role(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> str:
     return auth_context.role
+
+
+@router.get("/session", response_model=SessionResponse)
+async def current_session(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> SessionResponse:
+    return SessionResponse(
+        user_id=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
+    )
 
 
 @router.post("/logout", response_model=LogoutResponse)

@@ -73,6 +73,26 @@ const priorityLabel: Record<TaskPriority, string> = {
   low: '낮음',
 };
 
+function normalizeTaskStatus(value: unknown): TaskStatus {
+  return typeof value === 'string' && value in taskStatusLabel
+    ? (value as TaskStatus)
+    : 'open';
+}
+
+function normalizeTaskPriority(value: unknown): TaskPriority {
+  return typeof value === 'string' && value in priorityLabel
+    ? (value as TaskPriority)
+    : 'normal';
+}
+
+function normalizeTicketTask(task: TicketTask): TicketTask {
+  return {
+    ...task,
+    status: normalizeTaskStatus(task.status),
+    priority: normalizeTaskPriority(task.priority),
+  };
+}
+
 function safeText(value: string | null | undefined, fallback = '') {
   return toSafeReactText(value, fallback).trim() || fallback;
 }
@@ -178,13 +198,14 @@ export function ProjectsLayout() {
     };
   }, []);
 
+  const normalizedTasks = useMemo(() => tasks.map(normalizeTicketTask), [tasks]);
   const authorizedFolders = useMemo(
     () => folders.filter((folder) => isAuthorizedToViewProject(folder, projectScope)),
     [folders, projectScope],
   );
-  const projects = useMemo(() => buildProjects(authorizedFolders, tasks), [authorizedFolders, tasks]);
+  const projects = useMemo(() => buildProjects(authorizedFolders, normalizedTasks), [authorizedFolders, normalizedTasks]);
   const activeProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
-  const projectTasks = tasks;
+  const projectTasks = normalizedTasks;
   const openCount = countByStatus(projectTasks, 'open');
   const inProgressCount = countByStatus(projectTasks, 'in_progress');
   const blockedCount = countByStatus(projectTasks, 'blocked');

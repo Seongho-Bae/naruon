@@ -670,6 +670,37 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
     assert response.json()["configured"] is False
 
 
+def test_auth_session_route_returns_verified_session_claims():
+    def override_auth_context():
+        return AuthContext(
+            user_id="alice",
+            role="member",
+            organization_id="org-acme",
+            group_ids=("group-1",),
+            workspace_id="workspace-org-acme",
+            session_verifier="hmac",
+        )
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_auth_context] = override_auth_context
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get(
+                "/api/auth/session",
+                headers={"Authorization": "Bearer verified-session-token"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "alice",
+        "organization_id": "org-acme",
+        "workspace_id": "workspace-org-acme",
+    }
+
+
 def test_auth_dependency_overrides_are_opt_in_by_default():
     assert get_auth_context not in app.dependency_overrides
     assert get_current_user not in app.dependency_overrides

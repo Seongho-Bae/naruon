@@ -70,7 +70,7 @@ describe("ProjectsPage", () => {
         return jsonResponse([
           {
             folder_uid: "webdav_folder_roadmap",
-            project_name: "Naruon Roadmap 2026",
+            project_name: `<img src=x onerror="alert('folder')">Naruon Roadmap 2026`,
             webdav_path: "/Projects/Naruon_Roadmap_2026",
             owner_user_id: "alice",
             organization_id: "org-acme",
@@ -108,6 +108,17 @@ describe("ProjectsPage", () => {
             created_at: "2026-05-19T00:00:00Z",
             updated_at: "2026-05-24T00:00:00Z",
           },
+          {
+            id: "task-malicious-status",
+            title: `<img src=x onerror="alert('task')">Naruon 2.0 런칭`,
+            status: "done bg-[url(javascript:alert(1))]",
+            priority: "urgent text-[url(javascript:alert(1))]",
+            source_type: `<script>alert('source')</script>`,
+            source_email_id: "<q2@example.com>",
+            related_thread_id: "thread-malicious",
+            created_at: "2026-05-19T00:00:00Z",
+            updated_at: "2026-05-25T00:00:00Z",
+          },
         ]);
       }
       return jsonResponse({}, false, 404);
@@ -131,7 +142,11 @@ describe("ProjectsPage", () => {
     expect(container.textContent).toContain("provider_write_executed=false");
     expect(container.textContent).toContain("리소스 배정 검토 회의");
     expect(container.textContent).toContain("순차 DB id는 화면에 노출하지 않습니다");
-    expect(container.textContent).not.toContain("Naruon 2.0 런칭");
+    expect(container.textContent).toContain("Naruon 2.0 런칭");
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+    expect(container.innerHTML).toContain("&lt;img");
+    expect(container.innerHTML).not.toContain("bg-[url");
   });
 
   it("renders an actionable fallback when project evidence fails", async () => {

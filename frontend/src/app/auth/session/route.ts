@@ -5,15 +5,59 @@ import {
   SESSION_COOKIE_NAME,
   buildExpiredSessionCookieOptions,
   buildSessionCookieOptions,
-  decodeSessionClaimsFromToken,
   normalizeSessionToken,
-  sessionCookieMaxAge,
+  type SessionClaims,
 } from "@/lib/session-cookie";
+import { backendApiBaseUrl } from "@/lib/backend-url";
 
 export const runtime = "nodejs";
 
-function sessionJson(token: string | null) {
-  if (!token) {
+type BackendSessionResponse = {
+  user_id?: unknown;
+  organization_id?: unknown;
+  workspace_id?: unknown;
+};
+
+function stringClaim(value: unknown) {
+  return typeof value === "string" ? value.trim() || null : null;
+}
+
+function claimsFromBackendSession(body: BackendSessionResponse): SessionClaims | null {
+  const userId = stringClaim(body.user_id);
+  const workspaceId = stringClaim(body.workspace_id);
+  if (!userId || !workspaceId) return null;
+  return {
+    userId,
+    organizationId: stringClaim(body.organization_id),
+    workspaceId,
+  };
+}
+
+async function verifySessionToken(token: string): Promise<SessionClaims | null> {
+  const target = backendApiBaseUrl();
+  target.pathname = "/api/auth/session";
+  target.search = "";
+
+  try {
+    const response = await fetch(target, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      cache: "no-store",
+    });
+    if (!response.ok) return null;
+
+    const body = (await response.json()) as BackendSessionResponse;
+    return claimsFromBackendSession(body);
+  } catch {
+    return null;
+  }
+}
+
+function sessionJson(claims: SessionClaims | null) {
+  if (!claims) {
     return {
       authenticated: false,
       claims: ANONYMOUS_SESSION_CLAIMS,
@@ -21,13 +65,14 @@ function sessionJson(token: string | null) {
   }
   return {
     authenticated: true,
-    claims: decodeSessionClaimsFromToken(token),
+    claims,
   };
 }
 
 export async function GET(request: NextRequest) {
   const token = normalizeSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
-  return NextResponse.json(sessionJson(token));
+  const claims = token ? await verifySessionToken(token) : null;
+  return NextResponse.json(sessionJson(claims));
 }
 
 export async function POST(request: NextRequest) {
@@ -52,14 +97,15 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  if (sessionCookieMaxAge(accessToken) === 0) {
+  const claims = await verifySessionToken(accessToken);
+  if (!claims) {
     return NextResponse.json(
-      { error_code: "expired_session_token" },
+      { error_code: "invalid_session_token" },
       { status: 401 },
     );
   }
 
-  const response = NextResponse.json(sessionJson(accessToken));
+  const response = NextResponse.json(sessionJson(claims));
   response.cookies.set(buildSessionCookieOptions(request, accessToken));
   return response;
 }

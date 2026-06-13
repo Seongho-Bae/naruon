@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DELETE, GET, POST } from "./route";
+
+const ORIGINAL_ENV = { ...process.env };
 
 function base64UrlJson(body: unknown) {
   return Buffer.from(JSON.stringify(body)).toString("base64url");
@@ -11,7 +13,28 @@ function signedFixtureToken(payload: Record<string, unknown>) {
   return `${base64UrlJson({ alg: "HS256", typ: "JWT" })}.${base64UrlJson(payload)}.signature`;
 }
 
+function verifiedSessionResponse() {
+  return Response.json({
+    user_id: "user-1",
+    organization_id: "org-acme",
+    workspace_id: "workspace-acme",
+  });
+}
+
 describe("/auth/session route", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    process.env = { ...ORIGINAL_ENV };
+    vi.stubEnv("BACKEND_INTERNAL_URL", "https://api.naruon.net");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    process.env = { ...ORIGINAL_ENV };
+  });
+
   it("stores the bearer token in an HttpOnly secure same-site cookie", async () => {
     const token = signedFixtureToken({
       sub: "user-1",
@@ -19,6 +42,12 @@ describe("/auth/session route", () => {
       workspace: "workspace-acme",
       exp: Math.floor(Date.now() / 1000) + 300,
     });
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://api.naruon.net/api/auth/session");
+      expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${token}`);
+      return verifiedSessionResponse();
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
       method: "POST",
@@ -40,6 +69,7 @@ describe("/auth/session route", () => {
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("SameSite=lax");
     expect(setCookie).not.toContain("access_token");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("returns public claims without exposing the cookie value", async () => {
@@ -48,6 +78,16 @@ describe("/auth/session route", () => {
       org: "org-beta",
       workspace: "workspace-beta",
     });
+    const fetchMock = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      expect(String(input)).toBe("https://api.naruon.net/api/auth/session");
+      expect(new Headers(init?.headers).get("authorization")).toBe(`Bearer ${token}`);
+      return Response.json({
+        user_id: "user-2",
+        organization_id: "org-beta",
+        workspace_id: "workspace-beta",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const request = new NextRequest("https://app.naruon.net/auth/session", {
       headers: { Cookie: `naruon_session=${token}` },
     });
@@ -61,6 +101,31 @@ describe("/auth/session route", () => {
         organizationId: "org-beta",
         workspaceId: "workspace-beta",
       },
+    });
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects forged tokens that the backend verifier does not accept", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(
+      { detail: "Authentication required" },
+      { status: 401 },
+    )));
+    const forgedToken = signedFixtureToken({
+      sub: "attacker",
+      org: "org-victim",
+      workspace: "workspace-victim",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: forgedToken }),
+    }));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_session_token",
     });
     expect(response.headers.get("set-cookie")).toBeNull();
   });
