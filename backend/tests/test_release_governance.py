@@ -8,6 +8,8 @@ workflow governance before a release branch can land.
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -238,6 +240,31 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "unexpected_count" in scanner
     assert "Use --ui/--no-ui" in scanner
     assert "or deprecated --webui/--no-webui" in scanner
+
+
+def test_compose_log_scanner_allows_nginx_stderr_startup_notices() -> None:
+    nginx_startup_lines = "\n".join(
+        [
+            '2026/06/13 06:25:27 [notice] 1#1: using the "epoll" event method',
+            "2026/06/13 06:25:27 [notice] 1#1: nginx/1.27.5",
+            "2026/06/13 06:25:27 [notice] 1#1: built by gcc 14.2.0 (Alpine 14.2.0)",
+            "2026/06/13 06:25:27 [notice] 1#1: OS: Linux 6.19.7-200.fc43.aarch64",
+            "2026/06/13 06:25:27 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 524288:524288",
+            "2026/06/13 06:25:27 [notice] 1#1: start worker processes",
+            "2026/06/13 06:25:27 [notice] 1#1: start worker process 16",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/check_compose_logs.py")],
+        input=nginx_startup_lines,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "PASS compose log policy: allowed_count=7" in result.stdout
 
 
 def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> (
