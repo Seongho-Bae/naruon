@@ -29,6 +29,15 @@ type CalendarWritebackSource = {
 
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
 
+const calendarList = [
+  { name: '김나루 (나)', swatchClassName: 'bg-primary' },
+  { name: 'Naruon PM 팀', swatchClassName: 'bg-red-500' },
+  { name: '제품 개발팀', swatchClassName: 'bg-green-500' },
+  { name: '마케팅팀', swatchClassName: 'bg-purple-500' },
+  { name: '회사 공용', swatchClassName: 'bg-indigo-500' },
+  { name: '공휴일', swatchClassName: 'bg-slate-400' },
+] as const;
+
 function isCustomerOwnedWritableSource(source: CalendarWritebackSource) {
   return source.writeback_enabled
     && source.protocol !== 'local'
@@ -131,16 +140,10 @@ export function CalendarLayout() {
             <h2 className="text-xs font-bold text-muted-foreground">캘린더 목록</h2>
           </div>
           <ul className="space-y-3">
-            {[
-              { name: '김나루 (나)', color: 'bg-primary' },
-              { name: 'Naruon PM 팀', color: 'bg-red-500' },
-              { name: '제품 개발팀', color: 'bg-green-500' },
-              { name: '마케팅팀', color: 'bg-purple-500' },
-              { name: '회사 공용', color: 'bg-indigo-500' },
-              { name: '공휴일', color: 'bg-slate-400' },
-            ].map((cal) => (
+            {calendarList.map((cal) => (
               <li key={cal.name} className="flex items-center gap-3 text-sm">
-                <input type="checkbox" defaultChecked className={`size-4 rounded border-border text-primary focus:ring-primary`} style={{ accentColor: cal.color }} />
+                <input type="checkbox" defaultChecked className="size-4 rounded border-border accent-primary text-primary focus:ring-primary" />
+                <span className={`size-2.5 shrink-0 rounded-full ${cal.swatchClassName}`} aria-hidden="true" />
                 <span className="font-medium text-foreground">{cal.name}</span>
               </li>
             ))}

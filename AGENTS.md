@@ -365,6 +365,10 @@
   deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
+- Tailwind v4 scans source text and can emit CSS for class-looking strings in
+  tests. Keep test paths excluded with `@source not` in `globals.css`, and do
+  not place hostile arbitrary utility payloads such as URL/style injection
+  examples as static class-looking strings in source or tests.
 
 ## Phase 10 development rules
 

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
+import { boundedPercent, boundedPercentStyle } from '@/lib/safe-style';
 
 type SurfaceStatus = 'loading' | 'ready' | 'error';
 type TabId = 'prompts' | 'workflows' | 'agents' | 'evaluation' | 'runs';
@@ -241,18 +242,21 @@ function AgentsPanel({ agents }: { agents: AgentCard[] }) {
 function EvaluationPanel({ metrics }: { metrics: EvaluationMetric[] }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      {metrics.map((metric) => (
-        <article key={metric.metric_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-base font-black">{metric.metric_label}</h2>
-            <span className="text-2xl font-black text-primary">{metric.score_value}</span>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${Math.max(0, Math.min(metric.score_value, 100))}%` }} />
-          </div>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
-        </article>
-      ))}
+      {metrics.map((metric) => {
+        const scoreValue = boundedPercent(metric.score_value);
+        return (
+          <article key={metric.metric_key} className="rounded-lg border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-base font-black">{metric.metric_label}</h2>
+              <span className="text-2xl font-black text-primary">{scoreValue}</span>
+            </div>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary" style={boundedPercentStyle(metric.score_value)} />
+            </div>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{metric.trend_text}</p>
+          </article>
+        );
+      })}
     </div>
   );
 }
