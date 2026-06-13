@@ -454,6 +454,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "emit_line_specific_fallback_findings" "opencode failed-check fallback maps known Strix failures to source lines"
 	assert_file_contains "$workflow_file" 'repo_root="${GITHUB_WORKSPACE:-$PWD}"' "opencode failed-check fallback maps source lines from the repository root"
 	assert_file_contains "$workflow_file" "Line-specific fallback findings" "opencode failed-check fallback publishes line-specific repair findings"
+	assert_file_contains "$workflow_file" "emit_opencode_failed_check_fallback_findings.sh" "opencode failed-check fallback delegates deterministic Strix report expansion to tested helper"
+	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper exited non-zero; using inline fallback." "opencode failed-check fallback handles helper failures without aborting under set -e"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "emit_strix_report_findings" "failed-check fallback emits every Strix vulnerability report as a separate finding"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider signal left current-head security evidence incomplete" "failed-check fallback does not claim reports are absent after Strix emitted vulnerabilities"
 	assert_file_contains "$workflow_file" "- Root cause:" "opencode review request-changes body includes root cause per finding"
 	assert_file_contains "$workflow_file" "- Regression test:" "opencode review request-changes body includes regression test direction per finding"
 	assert_file_contains "$workflow_file" "- Suggested diff:" "opencode review request-changes body includes suggested diff per finding"
@@ -803,6 +807,62 @@ EOF
 	rc=$?
 	set -e
 	assert_equals "0" "$rc" "failed-check review validator accepts Strix log-backed findings"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_failed_check_fallback_emits_each_strix_report() {
+	local tmp_dir
+	local evidence_file
+	local output_file
+	tmp_dir="$(mktemp -d)"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	LLM CONNECTION FAILED
+strix	Run Strix (quick)	Strix fallback model 'deepseek/deepseek-r1-0528' emitted provider infrastructure or failure-signal output; trying next configured fallback if available.
+```
+
+### Strix vulnerability report window 1
+
+Model deepseek/deepseek-r1-0528 Vulnerabilities 2
+│  Vulnerability Report                                                        │
+│  Title: Path Traversal in Email Attachment Handling                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /services/email_parser.py                                         │
+│    Location 1: backend/services/email_parser.py:60-72                        │
+│  Vulnerability Report                                                        │
+│  Title: Prompt Injection and XSS in AI Prompt Studio                         │
+│  Severity: HIGH                                                              │
+│  Endpoint: /prompt-studio                                                    │
+│    Location 1: frontend/src/app/prompt-studio/page.tsx:29-32                 │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Missing Content Security Policy in Next.js Frontend                  │
+│  Severity: HIGH                                                              │
+│  Endpoint: all frontend pages                                                │
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$REPO_ROOT" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Path Traversal in Email Attachment Handling" "fallback includes first model report"
+	assert_file_contains "$output_file" "backend/services/email_parser.py:60" "fallback maps first report to exact source line"
+	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Prompt Injection and XSS in AI Prompt Studio" "fallback includes second report from same model"
+	assert_file_contains "$output_file" "frontend/src/app/prompt-studio/page.tsx:29" "fallback maps second report to exact source line"
+	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Missing Content Security Policy in Next.js Frontend" "fallback includes report from second model"
+	assert_file_contains "$output_file" "frontend/next.config.ts:10" "fallback derives a concrete CSP hardening line"
+	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback still reports provider failure after vulnerability reports"
+	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not contradict preserved Strix report windows"
 
 	rm -rf "$tmp_dir"
 }
@@ -5199,6 +5259,8 @@ assert_opencode_review_gate_rejects_placeholder_findings
 assert_opencode_review_gate_rejects_non_source_backed_findings
 
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
+
+assert_opencode_failed_check_fallback_emits_each_strix_report
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

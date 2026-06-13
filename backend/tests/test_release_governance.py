@@ -326,6 +326,23 @@ def test_strix_workflow_validates_vertex_credentials_before_export() -> None:
     assert "json.loads(credentials_path.read_text())" not in workflow
 
 
+def test_opencode_review_fallbacks_do_not_emit_successful_error_annotations() -> None:
+    workflow = read_repo_text(".github/workflows/opencode-review.yml")
+
+    assert "continue-on-error: true" not in workflow
+    assert 'printf \'review_status=%s\\n\' "$1" >>"$GITHUB_OUTPUT"' in workflow
+    assert "record_review_status \"failed\"" in workflow
+    assert "record_review_status \"success\"" in workflow
+    assert "steps.opencode_review_primary.outputs.review_status != 'success'" in workflow
+    assert (
+        "steps.opencode_review_primary.outputs.review_status == 'success'"
+        in workflow
+    )
+    assert "steps.opencode_review_primary.outcome" not in workflow
+    assert "steps.opencode_review_fallback.outcome" not in workflow
+    assert "steps.opencode_review_second_fallback.outcome" not in workflow
+
+
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
     None
 ):
