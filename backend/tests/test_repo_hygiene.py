@@ -82,17 +82,36 @@ def test_traefik_compose_services_disable_privilege_escalation():
 
 def test_compose_externalizes_postgres_credentials():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
+    compose_without_runtime_preflights = (
+        compose.replace(
+            '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}',
+            "",
+        )
+        .replace(
+            '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}',
+            "",
+        )
+        .replace(
+            '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}',
+            "",
+        )
+    )
 
     assert "POSTGRES_PASSWORD: postgres" not in compose
     assert "postgres:postgres@" not in compose
-    assert "POSTGRES_DB: ai_email" in compose
-    assert "POSTGRES_USER: postgres" in compose
+    assert "POSTGRES_DB=ai_email" in compose
+    assert "POSTGRES_USER=postgres" in compose
+    assert "POSTGRES_PASSWORD:-postgres" not in compose
     assert "${POSTGRES_PASSWORD" in compose
+    assert "${POSTGRES_PASSWORD:?" not in compose_without_runtime_preflights
+    assert '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}' in compose
     assert "127.0.0.1:15432:5432" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
-    assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
+    assert "${AUTH_SESSION_HMAC_SECRET:?" not in compose_without_runtime_preflights
+    assert '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}' in compose
     assert "ENCRYPTION_KEY" in compose
-    assert "${ENCRYPTION_KEY:?" in compose
+    assert "${ENCRYPTION_KEY:?" not in compose_without_runtime_preflights
+    assert '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}' in compose
 
 
 def test_compose_allows_only_the_local_ollama_provider_host():
@@ -100,10 +119,22 @@ def test_compose_allows_only_the_local_ollama_provider_host():
     live_compose = (REPO_ROOT / "docker-compose.live-e2e.yml").read_text()
 
     for compose in (local_compose, live_compose):
-        assert 'ALLOW_LOCAL_LLM_PROVIDERS: "true"' in compose
-        assert 'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"' in compose
-        assert "OPENAI_BASE_URL: http://ollama:11434/v1" in compose
-        assert "OPENAI_MODEL: gemma4:e2b-it-qat" in compose
+        assert (
+            'ALLOW_LOCAL_LLM_PROVIDERS: "true"' in compose
+            or "ALLOW_LOCAL_LLM_PROVIDERS=true" in compose
+        )
+        assert (
+            'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"' in compose
+            or "ALLOWED_LLM_BASE_URL_HOSTS=ollama" in compose
+        )
+        assert (
+            "OPENAI_BASE_URL: http://ollama:11434/v1" in compose
+            or "OPENAI_BASE_URL=http://ollama:11434/v1" in compose
+        )
+        assert (
+            "OPENAI_MODEL: gemma4:e2b-it-qat" in compose
+            or "OPENAI_MODEL=gemma4:e2b-it-qat" in compose
+        )
 
 
 def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():

@@ -151,7 +151,9 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     dockerfile = read_repo_text("frontend/Dockerfile")
+    package_json = read_repo_text("frontend/package.json")
 
+    assert '"packageManager": "pnpm@11.5.3"' in package_json
     assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
         "RUN pnpm run build"
     )
@@ -208,8 +210,8 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
 
     backend_block = compose.split("  backend:", 1)[1].split("  frontend:", 1)[0]
     assert "target: backend-runtime" in backend_block
-    assert 'DEBUG: "false"' in backend_block
-    assert 'DEBUG: "true"' not in backend_block
+    assert "DEBUG=false" in backend_block
+    assert "DEBUG=true" not in backend_block
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
