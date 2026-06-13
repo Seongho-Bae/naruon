@@ -151,7 +151,9 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     dockerfile = read_repo_text("frontend/Dockerfile")
+    package_json = read_repo_text("frontend/package.json")
 
+    assert '"packageManager": "pnpm@11.5.3"' in package_json
     assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
         "RUN pnpm run build"
     )
@@ -208,8 +210,8 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
 
     backend_block = compose.split("  backend:", 1)[1].split("  frontend:", 1)[0]
     assert "target: backend-runtime" in backend_block
-    assert 'DEBUG: "false"' in backend_block
-    assert 'DEBUG: "true"' not in backend_block
+    assert "DEBUG=false" in backend_block
+    assert "DEBUG=true" not in backend_block
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
@@ -276,6 +278,25 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
         in gate_script
     )
     assert "ignore::UserWarning" not in workflow
+
+
+def test_strix_workflow_validates_vertex_credentials_before_export() -> None:
+    workflow = read_repo_text(".github/workflows/strix.yml")
+
+    assert "credentials_path.read_text(encoding=\"utf-8\")" in workflow
+    assert "object_pairs_hook=reject_duplicate_json_keys" in workflow
+    assert "raise ValueError(\"duplicate credential key\")" in workflow
+    assert (
+        "except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):"
+        in workflow
+    )
+    assert (
+        "GCP_SA_KEY must be valid service account JSON for Vertex AI Strix scans."
+        in workflow
+    )
+    assert "if not isinstance(credentials, dict):" in workflow
+    assert "GCP_SA_KEY must be a JSON object for Vertex AI Strix scans." in workflow
+    assert "json.loads(credentials_path.read_text())" not in workflow
 
 
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (

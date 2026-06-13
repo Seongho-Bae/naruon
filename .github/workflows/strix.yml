@@ -236,7 +236,29 @@ jobs:
           import sys
 
           credentials_path = pathlib.Path(sys.argv[1])
-          credentials = json.loads(credentials_path.read_text())
+
+          def reject_duplicate_json_keys(pairs):
+              parsed = {}
+              for key, value in pairs:
+                  if key in parsed:
+                      raise ValueError("duplicate credential key")
+                  parsed[key] = value
+              return parsed
+
+          try:
+              credentials_text = credentials_path.read_text(encoding="utf-8")
+              credentials = json.loads(
+                  credentials_text,
+                  object_pairs_hook=reject_duplicate_json_keys,
+              )
+          except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):
+              raise SystemExit(
+                  "GCP_SA_KEY must be valid service account JSON for Vertex AI Strix scans."
+              )
+          if not isinstance(credentials, dict):
+              raise SystemExit(
+                  "GCP_SA_KEY must be a JSON object for Vertex AI Strix scans."
+              )
           project_id = str(credentials.get("project_id", "")).strip()
           if not project_id:
               raise SystemExit("GCP_SA_KEY must include project_id for Vertex AI Strix scans.")
