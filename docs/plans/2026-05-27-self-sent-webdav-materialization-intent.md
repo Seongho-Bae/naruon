@@ -34,8 +34,8 @@ from an unscoped backend path.
   non-self-sent 422, no WebDAV account 422, signed bearer acceptance, and service
   source-type rejection.
 - Add a Tasks workspace subsection for self-sent knowledge tasks. It calls the
-  intent endpoint with the stored `naruon_session_token` bearer path through
-  `apiClient`, and displays the planned target without claiming execution.
+  intent endpoint through the HttpOnly cookie-backed `apiClient` proxy path, and
+  displays the planned target without claiming execution.
 - Extend Playwright mocks and screenshots for desktop/mobile/mobile-scroll
   evidence.
 

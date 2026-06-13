@@ -133,7 +133,6 @@ describe('AIHubPage', () => {
   });
 
   it('fetches the signed AI Hub surface and renders every operational tab', async () => {
-    localStorage.setItem('naruon_session_token', 'signed-session-token');
     const fetchMock = vi.fn(async () => jsonResponse(aiHubSurface));
     vi.stubGlobal('fetch', fetchMock);
     container = document.createElement('div');
@@ -149,7 +148,7 @@ describe('AIHubPage', () => {
       '/api/ai-hub/surface',
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: 'Bearer signed-session-token',
+          'Content-Type': 'application/json',
         }),
       }),
     );

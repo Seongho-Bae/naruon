@@ -345,11 +345,12 @@ decision-evidence logs, document
 repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
-exist. Browser writes to signed backend routes use the stored
-`naruon_session_token` as an `Authorization: Bearer` session, and the frontend
-API client strips public identity headers such as `X-User-Id` and
-`X-Organization-Id`, including group and dev-token variants, rather than
-forwarding development identity fallbacks.
+exist. Browser writes to signed backend routes rely on the HttpOnly
+`naruon_session` cookie set by `/auth/session`; the Next.js `/api/*` proxy reads
+that cookie server-side and forwards the backend `Authorization: Bearer`
+session. Browser code must not persist session bearer tokens in web storage or
+send public identity headers such as `X-User-Id` and `X-Organization-Id`,
+including group and dev-token variants.
 Settings connected-account workflow reads and saves `/api/accounts/config`
 through the same signed-session path and scopes provider settings by the signed
 `user_id + organization_id` owner. It displays SMTP, IMAP, POP3, OAuth,

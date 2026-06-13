@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { backendApiBaseUrl } from "@/lib/backend-url";
+import { SESSION_COOKIE_NAME, normalizeSessionToken } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 ]);
 
 const CLIENT_AUTHORITY_HEADERS = new Set([
+  "authorization",
   "x-dev-auth-token",
   "x-group-id",
   "x-group-ids",
@@ -130,6 +132,10 @@ async function proxyApiRequest(
     headers: filteredRequestHeaders(request),
     redirect: "manual",
   };
+  const sessionToken = normalizeSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
+  if (sessionToken) {
+    (init.headers as Headers).set("Authorization", `Bearer ${sessionToken}`);
+  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = await request.arrayBuffer();
   }

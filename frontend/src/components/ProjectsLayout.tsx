@@ -73,6 +73,26 @@ const priorityLabel: Record<TaskPriority, string> = {
   low: '낮음',
 };
 
+function normalizeTaskStatus(value: unknown): TaskStatus {
+  return typeof value === 'string' && value in taskStatusLabel
+    ? (value as TaskStatus)
+    : 'open';
+}
+
+function normalizeTaskPriority(value: unknown): TaskPriority {
+  return typeof value === 'string' && value in priorityLabel
+    ? (value as TaskPriority)
+    : 'normal';
+}
+
+function normalizeTicketTask(task: TicketTask): TicketTask {
+  return {
+    ...task,
+    status: normalizeTaskStatus(task.status),
+    priority: normalizeTaskPriority(task.priority),
+  };
+}
+
 function safeText(value: string | null | undefined, fallback = '') {
   return toSafeReactText(value, fallback).trim() || fallback;
 }
@@ -140,10 +160,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
-  const projectScope = useMemo(() => {
-    const claims = apiClient.getSessionClaims();
-    return { userId: claims.userId, organizationId: claims.organizationId };
-  }, []);
+  const [projectScope, setProjectScope] = useState<ProjectAccessScope>({
+    userId: null,
+    organizationId: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -151,11 +171,16 @@ export function ProjectsLayout() {
     void Promise.all([
       apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
       apiClient.get<TicketTask[]>('/api/tasks'),
+      apiClient.getServerSessionClaims(),
     ])
-      .then(([folderRows, taskRows]) => {
+      .then(([folderRows, taskRows, claims]) => {
         if (cancelled) return;
         setFolders(Array.isArray(folderRows) ? folderRows : []);
         setTasks(Array.isArray(taskRows) ? taskRows : []);
+        setProjectScope({
+          userId: claims.userId,
+          organizationId: claims.organizationId,
+        });
         setError(null);
       })
       .catch((fetchError: Error) => {
@@ -173,13 +198,14 @@ export function ProjectsLayout() {
     };
   }, []);
 
+  const normalizedTasks = useMemo(() => tasks.map(normalizeTicketTask), [tasks]);
   const authorizedFolders = useMemo(
     () => folders.filter((folder) => isAuthorizedToViewProject(folder, projectScope)),
     [folders, projectScope],
   );
-  const projects = useMemo(() => buildProjects(authorizedFolders, tasks), [authorizedFolders, tasks]);
+  const projects = useMemo(() => buildProjects(authorizedFolders, normalizedTasks), [authorizedFolders, normalizedTasks]);
   const activeProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
-  const projectTasks = tasks;
+  const projectTasks = normalizedTasks;
   const openCount = countByStatus(projectTasks, 'open');
   const inProgressCount = countByStatus(projectTasks, 'in_progress');
   const blockedCount = countByStatus(projectTasks, 'blocked');

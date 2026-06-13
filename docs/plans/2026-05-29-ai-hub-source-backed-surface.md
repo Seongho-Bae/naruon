@@ -26,8 +26,8 @@
   of exposing sequential database identifiers.
 - Replace static AI Hub UI fixtures with API-wired tabs and empty/error/loading
   states.
-- Preserve the stored `naruon_session_token` bearer path and keep public
-  identity headers out of frontend requests.
+- Preserve the HttpOnly cookie-backed proxy session and keep browser
+  `Authorization` plus public identity headers out of frontend requests.
 
 ## Verification
 

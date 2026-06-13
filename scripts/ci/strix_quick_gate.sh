@@ -2152,6 +2152,15 @@ is_llm_service_unavailable_error() {
 	return 1
 }
 
+is_llm_budget_limit_error() {
+	if grep -Eiq '(litellm|DeepseekException|OpenAIException|GitHub Models|models\.github\.ai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
+		grep -Eiq '(account has reached its budget limit|budget limit|usage limit|insufficient quota|quota exceeded|billing hard limit)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 ## Determines whether the last strix failure is a transient error eligible
 ## for same-model retry (up to STRIX_TRANSIENT_RETRY_PER_MODEL times).
 ## Four error families qualify:
@@ -2391,6 +2400,10 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_llm_service_unavailable_error; then
+		return 0
+	fi
+
+	if is_llm_budget_limit_error; then
 		return 0
 	fi
 
@@ -2925,6 +2938,24 @@ raise SystemExit(0)
 PY
 }
 
+vulnerability_file_has_incomplete_codebase_assessment() {
+	local vuln_file="$1"
+	if ! is_pull_request_event; then
+		return 1
+	fi
+	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+		return 1
+	fi
+
+	if grep -Eiq '(Limited Security Assessment Due to Incomplete Codebase|assessment .*limited due to missing implementation files|incomplete codebase)' "$vuln_file" &&
+		grep -Eiq '(Endpoint:[[:space:]]*Entire codebase|Target:[[:space:]]*/workspace/strix-pr-scope|missing implementation files|missing code and dependencies)' "$vuln_file"; then
+		echo "Detected Strix PR-scope incomplete-codebase assessment; treating as retryable model inconsistency." >&2
+		return 0
+	fi
+
+	return 1
+}
+
 vulnerability_file_is_retryable_model_inconsistency() {
 	local vuln_file="$1"
 	if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
@@ -2934,6 +2965,9 @@ vulnerability_file_is_retryable_model_inconsistency() {
 		return 0
 	fi
 	if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
+		return 0
+	fi
+	if vulnerability_file_has_incomplete_codebase_assessment "$vuln_file"; then
 		return 0
 	fi
 	return 1
@@ -3006,6 +3040,10 @@ is_model_retryable_error() {
 	fi
 
 	if is_llm_service_unavailable_error; then
+		return 0
+	fi
+
+	if is_llm_budget_limit_error; then
 		return 0
 	fi
 

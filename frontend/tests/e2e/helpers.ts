@@ -694,6 +694,17 @@ async function fulfillJson(route: Route, body: unknown) {
 }
 
 export async function mockDashboardApi(page: Page, onApiRequest?: (path: string, request: Request) => void) {
+  await page.route('**/auth/session', async (route) => {
+    await fulfillJson(route, {
+      authenticated: true,
+      claims: {
+        userId: 'alice',
+        organizationId: 'org-acme',
+        workspaceId: 'workspace-org-acme',
+      },
+    });
+  });
+
   await page.route('**/api/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());

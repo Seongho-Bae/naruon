@@ -435,6 +435,28 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
+	github-models-fallback-budget-continues-to-next)
+		case "${STRIX_LLM:-}" in
+		openai/openai/gpt-5)
+			echo "LLM CONNECTION FAILED"
+			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests"
+			exit 1
+			;;
+		deepseek/deepseek-r1-0528)
+			echo "LLM CONNECTION FAILED"
+			echo 'Error: litellm.APIError: APIError: DeepseekException - {"error":{"message":"Unable to proceed with model usage. This account has reached its budget limit."}}'
+			exit 1
+			;;
+		deepseek/deepseek-v3-0324)
+			echo "scan ok after GitHub Models budget-limit fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: GitHub Models budget-limit fallback path unexpected (${STRIX_LLM:-})" >&2
+			exit 9
+			;;
+		esac
+		;;
 	github-models-primary-unavailable-strict-fallback-success)
 		case "${STRIX_LLM:-}" in
 		openai/openai/gpt-5)
@@ -1030,6 +1052,32 @@ EOS
 		*)
 			echo "Error: changed-retry-marker scenario unexpected model (${STRIX_LLM:-})" >&2
 			exit 34
+			;;
+		esac
+		;;
+	pr-incomplete-codebase-fallback-success)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/incomplete-pr-scope-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-incomplete-codebase/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-incomplete-codebase/vulnerabilities/vuln-0001.md" <<'EOS'
+# Limited Security Assessment Due to Incomplete Codebase
+
+**Severity:** HIGH
+**Target:** /workspace/strix-pr-scope.example
+**Endpoint:** Entire codebase
+
+The security assessment was limited due to missing implementation files and dependencies in the provided codebase.
+EOS
+			echo "Penetration test failed: incomplete PR scope assessment"
+			exit 2
+			;;
+		vertex_ai/fallback-one)
+			echo "scan ok after incomplete-codebase fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: incomplete-codebase scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 35
 			;;
 		esac
 		;;
@@ -2035,6 +2083,9 @@ class WorkspaceRunnerConfig:
 EOS
 		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
 	elif [ "$scenario" = "pr-changed-finding-with-retry-marker-blocks" ]; then
+		mkdir -p "$repo_root_dir/backend/api"
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-incomplete-codebase-fallback-success" ]; then
 		mkdir -p "$repo_root_dir/backend/api"
 		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
 	elif [ "$scenario" = "pr-stale-report-plus-inline-changed-finding-blocks" ]; then
@@ -5463,6 +5514,27 @@ run_gate_case_allow_provider_signal "pr-changed-finding-with-retry-marker-blocks
 	"pull_request" \
 	"backend/api/emails.py"
 
+run_gate_case "pr-incomplete-codebase-fallback-success" \
+	"vertex_ai/incomplete-pr-scope-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after incomplete-codebase fallback" \
+	"2" \
+	"vertex_ai/incomplete-pr-scope-primary|vertex_ai/fallback-one" \
+	"<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"backend/api/emails.py"
+
 run_gate_case "pr-stale-report-plus-inline-changed-finding-blocks" \
 	"vertex_ai/stale-inline-primary" \
 	"vertex_ai/fallback-one vertex_ai/fallback-two" \
@@ -7015,6 +7087,35 @@ run_gate_case "github-models-primary-ratelimit-strict-fallback-success" \
 	"2" \
 	"openai/gpt-5|deepseek/deepseek-r1-0528" \
 	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__UNSET__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324"
+
+run_gate_case "github-models-fallback-budget-continues-to-next" \
+	"openai/openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-v3-0324' in [0-9]+s\\." \
+	"3" \
+	"openai/openai/gpt-5|deepseek/deepseek-r1-0528|deepseek/deepseek-v3-0324" \
+	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
 	"" \
