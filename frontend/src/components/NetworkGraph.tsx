@@ -116,15 +116,22 @@ export default function NetworkGraph() {
         network.fit({ animation: false });
       };
 
+      let resizeTimer: ReturnType<typeof setTimeout> | null = null;
       const resizeObserver = typeof ResizeObserver === 'undefined'
         ? null
         : new ResizeObserver(() => {
-            fitGraph();
+            if (resizeTimer !== null) {
+              clearTimeout(resizeTimer);
+            }
+            resizeTimer = setTimeout(fitGraph, 50);
           });
 
       resizeObserver?.observe(container);
 
       return () => {
+        if (resizeTimer !== null) {
+          clearTimeout(resizeTimer);
+        }
         resizeObserver?.disconnect();
         network.destroy();
       };

@@ -206,7 +206,7 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
-def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
+def test_search_pads_local_embedding_dimension_for_vector_search(
     mock_generate_embeddings,
 ):
     mock_generate_embeddings.return_value = [[0.1] * 768]
@@ -228,4 +228,4 @@ def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
     assert response.status_code == 200
     query_text = str(session.statements[-1]).lower()
     assert "ts_rank_cd" in query_text
-    assert "<=>" not in query_text
+    assert "<=>" in query_text

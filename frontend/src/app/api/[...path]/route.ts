@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { backendApiBaseUrl } from "@/lib/backend-url";
+import { SESSION_COOKIE_NAME, normalizeSessionToken } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,8 @@ const HOP_BY_HOP_HEADERS = new Set([
 ]);
 
 const CLIENT_AUTHORITY_HEADERS = new Set([
+  "authorization",
+  "cookie",
   "x-dev-auth-token",
   "x-group-id",
   "x-group-ids",
@@ -37,6 +40,7 @@ const ALLOWED_BACKEND_QUERY_PARAMS = new Set([
 const MAX_QUERY_PARAM_COUNT = 12;
 const MAX_QUERY_PARAM_VALUE_LENGTH = 2048;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 type ApiRouteContext = {
   params: Promise<{ path?: string[] }> | { path?: string[] };
@@ -57,6 +61,12 @@ function filteredRequestHeaders(request: NextRequest): Headers {
     if (CLIENT_AUTHORITY_HEADERS.has(lowerName)) return;
     headers.set(name, value);
   });
+  const sessionToken = normalizeSessionToken(
+    request.cookies.get(SESSION_COOKIE_NAME)?.value,
+  );
+  if (sessionToken) {
+    headers.set("Authorization", `Bearer ${sessionToken}`);
+  }
   return headers;
 }
 
@@ -99,10 +109,41 @@ function safeBackendQuery(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
+function sameOriginStateChangingRequest(request: NextRequest): boolean {
+  if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;
+
+  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
+  if (fetchSite === "cross-site") return false;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+
+  try {
+    return new URL(origin).origin === request.nextUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
 async function proxyApiRequest(
   request: NextRequest,
   context: ApiRouteContext,
 ): Promise<NextResponse> {
+  if (!sameOriginStateChangingRequest(request)) {
+    return NextResponse.json(
+      {
+        error_code: "csrf_origin_rejected",
+        message: "Cross-site state-changing API requests are not allowed",
+      },
+      {
+        status: 403,
+        headers: {
+          "Referrer-Policy": "no-referrer",
+        },
+      },
+    );
+  }
+
   const params = await context.params;
   const path = params.path ?? [];
   const target = backendApiBaseUrl();
@@ -135,7 +176,6 @@ async function proxyApiRequest(
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = await request.arrayBuffer();
   }
-
 
   let response: Response;
   try {

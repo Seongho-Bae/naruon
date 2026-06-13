@@ -72,8 +72,9 @@ assert_workflow_uses_are_sha_pinned() {
 			printf '%s\n' "$line_text" |
 				sed -E 's/^[[:space:]]*uses:[[:space:]]*([^[:space:]#]+).*/\1/'
 		)"
-		if ! printf '%s\n' "$uses_ref" | grep -Eq '@[0-9a-fA-F]{40}$'; then
-			record_failure "$message must pin uses refs to full commit SHAs at line $line_number: $uses_ref"
+		if ! printf '%s\n' "$line_text" |
+			grep -Eq '^[[:space:]]*uses:[[:space:]]+[^[:space:]#]+@[0-9a-fA-F]{40}[[:space:]]+# v[0-9]+([.][0-9]+)*([[:space:]]|$)'; then
+			record_failure "$message must pin uses refs to full commit SHAs with trailing version comments at line $line_number: $uses_ref"
 		fi
 	done < <(grep -nE '^[[:space:]]+uses:[[:space:]]+' "$workflow_file" || true)
 }
@@ -151,7 +152,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_not_contains "$workflow_file" "STRIX_TOTAL_TIMEOUT_SECONDS:" "strix workflow must not expose total timeout env names in GitHub logs"
 	assert_file_not_contains "$workflow_file" "STRIX_PR_SCOPE_MAX_FILES_PER_BATCH" "strix workflow must not split Strix PR evidence into separate scanner runs"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' && 'vertex_ai/gemini-2.5-flash'" "strix workflow must not quarantine the approved Vertex preview model after organization secret visibility is fixed"
-	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models GPT-5"
+	assert_file_contains "$workflow_file" "github.event.inputs.strix_llm || 'openai/gpt-5'" "strix workflow defaults PR Strix scans to GitHub Models GPT-5"
 	assert_file_not_contains "$workflow_file" "secrets.STRIX_LLM ||" "strix workflow must not let the legacy STRIX_LLM secret override PR defaults"
 	assert_file_contains "$workflow_file" "STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model" "strix workflow rejects unsupported model inputs"
 	assert_file_contains "$workflow_file" "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)" "strix workflow accepts only exact approved organization Vertex AI models"
@@ -211,7 +212,8 @@ assert_strix_gpt54_model_guard_semantics() {
 		;;
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-	github_models/* | \
+	github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
+	github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324 | \
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
 	openai-direct/gpt-5.[4-9]* | openai-direct/gpt-5.[1-9][0-9]* | openai-direct/gpt-[6-9]* | openai-direct/gpt-[1-9][0-9]* | \
 	vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
@@ -232,6 +234,9 @@ assert_strix_gpt54_model_guard_cases() {
 	fi
 	if assert_strix_gpt54_model_guard_semantics "github_models/openai/gpt-5-nano"; then
 		record_failure "strix guard must reject manual GitHub Models openai/gpt-5-nano"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "github_models/openai/gpt-4.1"; then
+		record_failure "strix guard must reject weaker GitHub Models gpt-4.1"
 	fi
 	if assert_strix_gpt54_model_guard_semantics "gpt-5"; then
 		record_failure "strix GPT-5.4 guard must reject plain gpt-5"
@@ -299,8 +304,11 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
 	assert_file_contains "$workflow_file" "Prepare bounded OpenCode review evidence" "opencode review workflow prepares bounded local evidence instead of oversized GitHub prompt data"
+	assert_file_contains "$workflow_file" "emit_file_prefix" "opencode review prompt evidence is byte-capped before GitHub Models requests"
+	assert_file_contains "$workflow_file" 'head -c 7000 "$OPENCODE_EVIDENCE_FILE"' "opencode review prompt includes a compact evidence prefix"
 	assert_file_contains "$workflow_file" "Prepare isolated OpenCode review workspace" "opencode review workflow isolates from the large project AGENTS.md"
 	assert_file_contains "$workflow_file" 'cd "$OPENCODE_REVIEW_WORKDIR"' "opencode review runs from the isolated OpenCode workspace"
+	assert_file_contains "$workflow_file" "failed-check-evidence.md" "opencode review copies full failed-check evidence into the isolated workspace"
 	assert_file_contains "$workflow_file" 'PR_MERGE_BASE="$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"' "opencode review evidence diffs use the PR merge base"
 	assert_file_matches "$workflow_file" 'uses:[[:space:]]+actions/checkout@[0-9a-fA-F]{40}([[:space:]]|$)' "opencode review workflow pins checkout to a full commit SHA"
 	assert_workflow_uses_are_sha_pinned "$workflow_file" "opencode review workflow"
@@ -327,7 +335,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_not_contains "$workflow_file" '"external_directory": "deny"' "opencode review must not block focused reads of the real checkout"
 	assert_file_contains "$workflow_file" "Bounded evidence follows as untrusted PR metadata" "opencode review prompt includes bounded PR metadata in the model prompt"
 	assert_file_contains "$workflow_file" "## Focused changed hunks" "opencode review evidence includes focused changed hunks"
-	assert_file_contains "$workflow_file" 'git diff --unified=30 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"' "opencode review evidence includes focused hunks from the PR merge base"
+	assert_file_contains "$workflow_file" 'git diff --unified=12 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"' "opencode review evidence includes focused hunks from the PR merge base"
 	assert_file_contains "$workflow_file" 'mapfile -t focused_hunk_paths' "opencode review evidence builds focused hunks from the changed file list"
 	assert_file_contains "$workflow_file" 'git diff --name-only --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"' "opencode review evidence discovers focused hunk paths dynamically"
 	assert_file_contains "$workflow_file" '-- "${focused_hunk_paths[@]}"' "opencode review evidence passes dynamic changed paths to git diff"
@@ -361,7 +369,13 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'select((.head_sha // "") == $head_sha)' "opencode approval filters supplemental Strix workflow runs to the current PR head"
 	assert_file_contains "$workflow_file" 'Strix Security Scan/strix workflow run' "opencode approval reports pending or failed current-head Strix workflow runs explicitly"
 	assert_file_contains "$workflow_file" '["FAILURE","TIMED_OUT","ACTION_REQUIRED","CANCELLED","STARTUP_FAILURE"]' "opencode approval treats failed PR statusCheckRollup check runs as blockers"
+	assert_file_contains "$workflow_file" 'grep -Fq -- "Strix Security Scan/strix:" "$rollup_file"' "opencode approval avoids duplicate supplemental Strix workflow-run blockers when statusCheckRollup already has the Strix check"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" '"workflow_run"' "failed-check evidence includes failed same-head workflow runs outside statusCheckRollup"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "--json databaseId,workflowName,status,conclusion,url,event,headSha" "failed-check evidence scopes supplemental workflow runs with event and head SHA metadata"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")' "failed-check evidence appends PR Strix workflow runs and manual PR evidence reruns"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'select((.headSha // "") == env.HEAD_SHA)' "failed-check evidence only appends current-head workflow runs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'select((.workflowName // "") == "Strix Security Scan" or (.workflowName // "") == "Strix")' "failed-check evidence only appends Strix workflow runs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'awk -F '"'"'\t'"'"' -v run_id="$run_id"' "failed-check evidence avoids duplicate workflow-run evidence when statusCheckRollup already includes the run"
 	assert_file_contains "$workflow_file" 'wait_for_peer_github_checks "$pending_checks_file"' "opencode approval gates approval on pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" 'OpenCode Agent could not approve because GitHub Checks were still pending before approval.' "opencode approval requests changes when peer checks remain pending"
 	assert_file_contains "$workflow_file" 'select((.status // "") != "COMPLETED")' "opencode approval treats incomplete check runs as approval blockers"
@@ -396,25 +410,43 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'gh run view "$run_id"' "failed-check evidence collector reads failed GitHub Actions job logs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'check-runs/${check_run_id}/annotations' "failed-check evidence collector reads GitHub Check annotations"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Line-specific repair contract" "failed-check evidence requires line-specific repairs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Failed log signal summary" "failed-check evidence collector preserves fail/error signal lines outside bounded excerpts"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Strix model attempt and finding summary" "failed-check evidence collector summarizes every Strix model attempt"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Strix vulnerability report window" "failed-check evidence collector preserves Strix vulnerability report windows"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "When Strix logs contain multiple" "failed-check evidence collector requires all model-reported vulnerabilities"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "model name, title, severity, endpoint, and Code Locations/path:line evidence" "failed-check evidence collector names required Strix report fields"
 	assert_file_contains "$workflow_file" "If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed." "opencode review prompt forces failed-check diagnosis"
 	assert_file_contains "$workflow_file" "include every model-reported vulnerability as a separate evidence-backed finding" "opencode review prompt requires all Strix model findings"
 	assert_file_contains "$workflow_file" "Multiple Strix model reports must not be collapsed" "opencode review prompt prevents collapsing multiple Strix model reports"
-	assert_file_contains "$workflow_file" 'sed -n '"'"'1,900p'"'"' "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"' "opencode review includes enough failed-check evidence for multiple Strix model reports"
+	assert_file_contains "$workflow_file" "model name, report title, severity, endpoint, and Code Locations/path:line evidence" "opencode review prompt preserves exact Strix report fields"
+	assert_file_contains "$workflow_file" "Full failed-check evidence, when collected, is available as failed-check-evidence.md" "opencode review exposes full failed-check evidence for multiple Strix model reports without oversizing the prompt"
 	assert_file_contains "$workflow_file" "Do not request changes with only a check URL, workflow name, or generic failure summary." "opencode review prompt forbids generic failed-check reviews"
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
 	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
+	assert_file_contains "$workflow_file" "The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file" "opencode review prompt forbids non-source-backed suggested diffs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '.line | type == "number" and . > 0 and floor == .' "opencode approval gate rejects line zero findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '$p != "n/a" and $p != "unknown"' "opencode approval gate rejects placeholder finding paths"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" 'startswith("cannot provide diff")' "opencode approval gate rejects placeholder suggested diffs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "source_file.is_file()" "opencode approval gate requires finding paths to exist"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "removed_line not in source_line_set" "opencode approval gate rejects suggested diffs that remove code absent from the cited file"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github(?:_|-)models" "failed-check review validator extracts both github_models and github-models model prefixes"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Self-test Strix gate script" "failed-check review validator requires Strix failed step evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github.event.inputs.strix_llm" "failed-check review validator requires exact Strix missing assertion evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_required_markers" "failed-check review validator extracts Strix report titles and locations"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "count_strix_review_findings" "failed-check review validator compares Strix reports to Strix-specific findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Severity: \$1" "failed-check review validator requires Strix severity evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Location[[:space:]]+[0-9]+" "failed-check review validator requires Strix location evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "RateLimitError" "failed-check evidence collector preserves Strix provider rate-limit failures"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "budget limit" "failed-check evidence collector preserves Strix provider budget failures"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "completed as cancelled before GitHub emitted a failed job log" "failed-check evidence collector explains cancelled jobless Strix runs"
+	assert_file_contains "$workflow_file" "emit_strix_provider_failure_finding" "opencode fallback review explains provider blockers without inventing code vulnerabilities"
+	assert_file_contains "$workflow_file" 'extract_strix_failed_check_block "$evidence_file" "$strix_evidence_file"' "opencode fallback review scopes provider and cancellation diagnosis to extracted Strix failed-check evidence"
+	assert_file_contains "$workflow_file" "STRIX_FALLBACK_MODELS:" "opencode provider fallback finding points at the concrete Strix fallback configuration line"
+	assert_file_contains "$workflow_file" "emit_strix_cancelled_without_log_finding" "opencode fallback review explains cancelled Strix runs without inventing code vulnerabilities"
+	assert_file_contains "$workflow_file" "Configured model and fallback models were unavailable" "opencode fallback review preserves exhausted Strix model evidence"
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
 	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
@@ -611,6 +643,36 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_review_gate_rejects_non_source_backed_findings() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Hallucinated blocker","summary":"Finding cites code that is not present in the source file.","findings":[{"path":"scripts/ci/opencode_review_approve_gate.sh","line":1,"severity":"HIGH","title":"Non-source-backed finding","problem":"The finding removes a line that is not in the cited file.","root_cause":"The review did not inspect current source before suggesting a diff.","fix_direction":"Only cite lines present in the current source.","regression_test_direction":"Reject request-changes findings whose removed diff lines are absent from the cited file.","suggested_diff":"diff --git a/scripts/ci/opencode_review_approve_gate.sh b/scripts/ci/opencode_review_approve_gate.sh\n--- a/scripts/ci/opencode_review_approve_gate.sh\n+++ b/scripts/ci/opencode_review_approve_gate.sh\n@@ -1 +1 @@\n-  return Math.random().toString(36)\n+  return crypto.getRandomValues(new Uint8Array(32))"}]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects non-source-backed findings"
+	assert_equals "NO_CONCLUSION" "$gate_result" "non-source-backed finding rejection gate result"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings() {
 	local tmp_dir
 	local control_json
@@ -635,10 +697,23 @@ EOF
 ### Strix vulnerability report window 1
 
 Model github-models/openai/gpt-5 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure   │
+│  Severity: HIGH                                                              │
 
 ### Failed log excerpt
 
-FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/openai/gpt-5'')
+FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5'')
 FAIL: strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model')
 FAIL: opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5')
 EOF
@@ -654,8 +729,73 @@ EOF
 	assert_equals "4" "$rc" "failed-check review validator rejects unrelated findings"
 	assert_file_contains "$tmp_dir/bad.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator explains unrelated finding rejection"
 
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1
+
+Model github-models/openai/gpt-5 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+EOF
 	cat >"$control_json" <<'EOF'
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed in Self-test Strix gate script because the trusted workflow is missing expected model evidence strings.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix workflow default is not visible to trusted self-test","problem":"Strix Security Scan/strix failed in Self-test Strix gate script: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/openai/gpt-5''); strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model'); opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5').","root_cause":"The failed check evidence shows Self-test Strix gate script could not find github.event.inputs.strix_llm, STRIX_LLM must select, and MODEL: github-models/openai/gpt-5 in trusted-base files.","fix_direction":"Update the workflow lines that provide the Strix model default and OpenCode model env so the trusted self-test can find those exact strings.","regression_test_direction":"Keep the static self-test assertions for all three missing strings.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-          STRIX_MODEL: old\n+          STRIX_MODEL: ${{ github.event.inputs.strix_llm || 'openai/openai/gpt-5' }}"}]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed and reported github-models/openai/gpt-5 plus deepseek/deepseek-v3-0324 Authentication Bypass via X-Dev-User Header with Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","findings":[{"path":"backend/app/auth.py","line":132,"severity":"CRITICAL","title":"Authentication Bypass via X-Dev-User Header","problem":"Strix Security Scan/strix failed with github-models/openai/gpt-5 and deepseek/deepseek-v3-0324 reports for Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"The review collapsed two Strix model reports into one finding.","fix_direction":"Remove the unauthenticated fallback at backend/app/auth.py:132-135.","regression_test_direction":"Add auth tests for both request paths.","suggested_diff":"diff --git a/backend/app/auth.py b/backend/app/auth.py\n--- a/backend/app/auth.py\n+++ b/backend/app/auth.py\n@@ -132 +132 @@\n-old\n+new"}]}
+EOF
+	set +e
+	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \
+		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/collapsed.out" 2>"$tmp_dir/collapsed.err"
+	rc=$?
+	set -e
+	assert_equals "4" "$rc" "failed-check review validator rejects collapsed duplicate Strix model reports"
+	assert_file_contains "$tmp_dir/collapsed.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator requires one Strix-specific finding per model report"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed job steps
+
+- step 6: Self-test Strix gate script (failure)
+
+### Strix vulnerability report window 1
+
+Model github-models/openai/gpt-5 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│    Location 1: backend/app/auth.py:132-135                                   │
+
+### Strix vulnerability report window 2
+
+Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure   │
+│  Severity: HIGH                                                              │
+
+### Failed log excerpt
+
+FAIL: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5'')
+FAIL: strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model')
+FAIL: opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5')
+EOF
+
+	cat >"$control_json" <<'EOF'
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed in Self-test Strix gate script and reported github-models/openai/gpt-5 Authentication Bypass via X-Dev-User Header with Severity: CRITICAL at backend/app/auth.py:132-135 plus deepseek/deepseek-v3-0324 Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure with Severity: HIGH.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix workflow default is not visible to trusted self-test","problem":"Strix Security Scan/strix failed in Self-test Strix gate script: strix workflow defaults PR Strix scans to GitHub Models GPT-5 (missing 'github.event.inputs.strix_llm || 'openai/gpt-5''); strix workflow rejects unsupported model inputs (missing 'STRIX_LLM must select GitHub Models openai/gpt-5 or newer, direct OpenAI GPT-5.4 or newer, or an approved organization Vertex AI model'); opencode review tries GitHub Models GPT-5 first (missing 'MODEL: github-models/openai/gpt-5'). The same failed Strix evidence includes github-models/openai/gpt-5 report Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"The failed check evidence shows Self-test Strix gate script could not find github.event.inputs.strix_llm, STRIX_LLM must select, and MODEL: github-models/openai/gpt-5 in trusted-base files, and the model report identifies the backend auth fallback line.","fix_direction":"Update the workflow lines that provide the Strix model default and OpenCode model env so the trusted self-test can find those exact strings, then remove the unauthenticated X-Dev-User fallback at backend/app/auth.py:132-135.","regression_test_direction":"Keep the static self-test assertions for all three missing strings and add auth tests proving /api/me rejects forged X-Dev-User requests without signed auth.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-          STRIX_MODEL: old\n+          STRIX_MODEL: ${{ github.event.inputs.strix_llm || 'openai/gpt-5' }}"},{"path":"frontend/src/app/page.tsx","line":1,"severity":"HIGH","title":"Strix frontend model report must be reviewed separately","problem":"Strix Security Scan/strix failed with a separate deepseek/deepseek-v3-0324 report: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure, Severity: HIGH.","root_cause":"The failed Strix evidence contains a second model vulnerability report, so OpenCode must not collapse it into the first backend finding.","fix_direction":"Inspect the frontend source lines responsible for token storage, hardcoded credentials, dynamic error rendering, and missing CSP, then remove or harden each concrete line before approval.","regression_test_direction":"Add frontend tests covering safe token/session handling, output encoding, and security headers for the affected route.","suggested_diff":"diff --git a/frontend/src/app/page.tsx b/frontend/src/app/page.tsx\n--- a/frontend/src/app/page.tsx\n+++ b/frontend/src/app/page.tsx\n@@ -1 +1 @@\n-export default function Page() { return null }\n+export default function Page() { return null }"}]}
 EOF
 	set +e
 	bash "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" \
@@ -5055,6 +5195,8 @@ assert_opencode_review_publish_body_discards_trailing_model_prose
 assert_opencode_review_gate_rejects_line_zero_findings
 
 assert_opencode_review_gate_rejects_placeholder_findings
+
+assert_opencode_review_gate_rejects_non_source_backed_findings
 
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 

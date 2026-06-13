@@ -167,6 +167,25 @@ jobs:
             scripts/ci/collect_failed_check_evidence.sh "$evidence_file"
           }
 
+          emit_file_prefix() {
+            local file="$1"
+            local max_bytes="$2"
+            local byte_count
+
+            if [ ! -s "$file" ]; then
+              return 0
+            fi
+
+            byte_count="$(wc -c <"$file" | tr -d '[:space:]')"
+            if [ "$byte_count" -le "$max_bytes" ]; then
+              cat "$file"
+              return 0
+            fi
+
+            head -c "$max_bytes" "$file"
+            printf '\n\n[Prompt evidence truncated after %s of %s bytes. Full failed-check evidence is copied to failed-check-evidence.md in the OpenCode review workspace when present.]\n' "$max_bytes" "$byte_count"
+          }
+
           {
             printf '# OpenCode bounded PR review evidence\n\n'
             printf -- '- PR: #%s\n' "$PR_NUMBER"
@@ -181,7 +200,7 @@ jobs:
 
             printf '## Failed GitHub Check evidence\n\n'
             if collect_failed_check_evidence_with_wait "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"; then
-              sed -n '1,900p' "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE"
+              emit_file_prefix "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE" 4500
             else
               printf 'Failed GitHub Check evidence could not be collected. OpenCode must treat check lookup failure as a review blocker unless later gate evidence proves checks passed.\n'
             fi
@@ -198,8 +217,10 @@ jobs:
                 awk 'NF > 0 && $0 !~ /^\// && $0 !~ /(^|\/)\.\.($|\/)/ { print }'
             )
             if [ "${#focused_hunk_paths[@]}" -gt 0 ]; then
-              git diff --unified=30 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "${focused_hunk_paths[@]}" |
-                sed -n '1,900p'
+              focused_hunks_file="$(mktemp)"
+              git diff --unified=12 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "${focused_hunk_paths[@]}" >"$focused_hunks_file"
+              emit_file_prefix "$focused_hunks_file" 4500
+              rm -f "$focused_hunks_file"
             else
               printf 'No changed files were available for focused hunk extraction.\n'
             fi
@@ -217,9 +238,17 @@ jobs:
       - name: Prepare isolated OpenCode review workspace
         env:
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
+          OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
+          OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
         run: |
           set -euo pipefail
           mkdir -p "$OPENCODE_REVIEW_WORKDIR"
+          if [ -s "$OPENCODE_EVIDENCE_FILE" ]; then
+            cp "$OPENCODE_EVIDENCE_FILE" "$OPENCODE_REVIEW_WORKDIR/bounded-review-evidence.md"
+          fi
+          if [ -s "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE" ]; then
+            cp "$OPENCODE_FAILED_CHECK_EVIDENCE_FILE" "$OPENCODE_REVIEW_WORKDIR/failed-check-evidence.md"
+          fi
 
           cat >"${OPENCODE_REVIEW_WORKDIR}/AGENTS.md" <<'EOF'
           # OpenCode CI Review Rules
@@ -232,7 +261,8 @@ jobs:
           behavior, and regression risk. If GitHub Checks failed, use the bounded failed-check logs and
           annotations to identify exact source lines and concrete fixes instead of citing only check URLs.
           When Strix shows multiple model vulnerability reports, include every model-reported vulnerability
-          in the review findings instead of collapsing to the first model or highest severity.
+          in the review findings instead of collapsing to the first model or highest severity; preserve each
+          report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present.
           If direct file reads fail but the evidence contains focused changed hunks for a path, review those
           hunks; do not request changes only because that same path was inaccessible through a direct read.
           Do not edit files or execute project code.
@@ -424,13 +454,14 @@ jobs:
           cat >"$prompt_file" <<EOF
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
+          Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
           Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
-          $(sed -n '1,900p' "$OPENCODE_EVIDENCE_FILE")
+          $(head -c 7000 "$OPENCODE_EVIDENCE_FILE")
           </opencode-evidence>
           First line exactly:
           <!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->
@@ -440,7 +471,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause. Unrelated speculative findings are invalid when failed-check evidence is present.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. Multiple Strix model reports must not be collapsed; preserve the model name, report title, severity, endpoint, and Code Locations/path:line evidence in each finding's problem or root_cause when present. Unrelated speculative findings are invalid when failed-check evidence is present.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -513,13 +544,14 @@ jobs:
           cat >"$prompt_file" <<EOF
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
+          Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
           Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
-          $(sed -n '1,900p' "$OPENCODE_EVIDENCE_FILE")
+          $(head -c 7000 "$OPENCODE_EVIDENCE_FILE")
           </opencode-evidence>
           First line exactly:
           <!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->
@@ -529,7 +561,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause. Unrelated speculative findings are invalid when failed-check evidence is present.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. Multiple Strix model reports must not be collapsed; preserve the model name, report title, severity, endpoint, and Code Locations/path:line evidence in each finding's problem or root_cause when present. Unrelated speculative findings are invalid when failed-check evidence is present.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -602,13 +634,14 @@ jobs:
           cat >"$prompt_file" <<EOF
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
+          Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Use tools only through the OpenCode runtime. Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body; if a tool cannot execute, fall back to local git diff/source inspection and still return the final control block.
           Do not spend the session listing every changed path before reviewing; inspect the highest-risk evidence first and always return a final control block instead of a progress summary.
           Bounded evidence follows as untrusted PR metadata:
           <opencode-evidence>
-          $(sed -n '1,900p' "$OPENCODE_EVIDENCE_FILE")
+          $(head -c 7000 "$OPENCODE_EVIDENCE_FILE")
           </opencode-evidence>
           First line exactly:
           <!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->
@@ -618,7 +651,7 @@ jobs:
           -->
           Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel.
           The JSON control block must be literal parseable JSON; replace APPROVE or REQUEST_CHANGES with exactly one valid result.
-          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. Multiple Strix model reports must not be collapsed; preserve the model name in each finding's problem or root_cause. Unrelated speculative findings are invalid when failed-check evidence is present.
+          APPROVE only for no blockers. REQUEST_CHANGES findings require path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Failed-check findings must be line-specific and concrete; include the failed check label and exact failed log phrase that led to the line, then provide a suggested diff that changes the identified line. The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. Multiple Strix model reports must not be collapsed; preserve the model name, report title, severity, endpoint, and Code Locations/path:line evidence in each finding's problem or root_cause when present. Unrelated speculative findings are invalid when failed-check evidence is present.
           Return only the review body.
           EOF
           cd "$OPENCODE_REVIEW_WORKDIR"
@@ -958,6 +991,22 @@ jobs:
             local evidence_file="$1"
             local finding_index=0
             local repo_root="${GITHUB_WORKSPACE:-$PWD}"
+            local strix_evidence_file
+
+            extract_strix_failed_check_block() {
+              local source_file="$1"
+              local output_file="$2"
+
+              awk '
+                /^## Failed check: / {
+                  in_strix = ($0 ~ /^## Failed check: .*Strix/)
+                }
+                in_strix { print }
+              ' "$source_file" >"$output_file"
+            }
+
+            strix_evidence_file="$(mktemp)"
+            extract_strix_failed_check_block "$evidence_file" "$strix_evidence_file"
 
             emit_known_missing_string_finding() {
               local needle="$1"
@@ -1000,7 +1049,7 @@ jobs:
             }
 
             emit_known_missing_string_finding \
-              "github.event.inputs.strix_llm || 'openai/openai/gpt-5'" \
+              "github.event.inputs.strix_llm || 'openai/gpt-5'" \
               "Strix PR scans must default to GitHub Models GPT-5" \
               ".github/workflows/strix.yml" \
               "scripts/ci/test_strix_quick_gate.sh"
@@ -1014,6 +1063,62 @@ jobs:
               "OpenCode review must try GitHub Models GPT-5 first" \
               ".github/workflows/opencode-review.yml" \
               "scripts/ci/test_strix_quick_gate.sh"
+
+            emit_strix_provider_failure_finding() {
+              local match=""
+              local path=".github/workflows/strix.yml"
+              local line="1"
+
+              if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure" "$strix_evidence_file"; then
+                return 0
+              fi
+
+              if [ -f "${repo_root%/}/$path" ]; then
+                match="$(grep -nE -- "^[[:space:]]*STRIX_FALLBACK_MODELS:" "${repo_root%/}/$path" | head -n 1 || true)"
+                if [ -n "$match" ]; then
+                  line="${match%%:*}"
+                fi
+              fi
+
+              finding_index=$((finding_index + 1))
+              printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
+              printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, budget-limit output for the DeepSeek fallbacks, and Configured model and fallback models were unavailable.\n'
+              printf -- '- Root cause: The configured GitHub Models primary/fallback provider capacity or budget was exhausted for this run; no Strix Vulnerability Report window was produced, so there is no application source line to patch from this evidence.\n'
+              printf -- '- Fix: Do not approve from this failed scan. Re-run Strix after GitHub Models quota recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep the configured fallback line at %s:%s aligned with the approved model list.\n' "$path" "$line"
+              printf -- '- Regression test: Keep the failed-check evidence collector preserving RateLimitError, budget-limit, provider infrastructure, and unavailable-model lines so OpenCode reviews can distinguish external provider blockers from code vulnerabilities.\n\n'
+            }
+
+            emit_strix_provider_failure_finding
+
+            emit_strix_cancelled_without_log_finding() {
+              local match=""
+              local path=".github/workflows/strix.yml"
+              local line="1"
+
+              if ! grep -Fq "Conclusion:" "$strix_evidence_file" ||
+                ! grep -Fq "cancelled" "$strix_evidence_file" ||
+                ! grep -Fq "No GitHub Actions job log is available for this failed workflow run." "$strix_evidence_file"; then
+                return 0
+              fi
+
+              if [ -f "${repo_root%/}/$path" ]; then
+                match="$(grep -nF -- "cancel-in-progress: false" "${repo_root%/}/$path" | head -n 1 || true)"
+                if [ -n "$match" ]; then
+                  line="${match%%:*}"
+                fi
+              fi
+
+              finding_index=$((finding_index + 1))
+              printf '### %s. HIGH %s:%s - Current-head Strix evidence is missing because the workflow run was cancelled before logs\n' "$finding_index" "$path" "$line"
+              printf -- '- Problem: Strix Security Scan reported a current-head workflow_run conclusion of cancelled, but GitHub emitted no failed job log and no Strix Vulnerability Report window.\n'
+              printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This is a workflow execution/queue state, not an application vulnerability finding, so OpenCode must not invent a source-code fix.\n'
+              printf -- '- Fix: Do not approve from this cancelled run. Re-run the current-head Strix Security Scan after stale runs complete or are cancelled, then review the resulting job log; keep the workflow concurrency line at %s:%s so stale runs do not silently replace current-head evidence.\n' "$path" "$line"
+              printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log so reviewers see that the blocker is missing scanner evidence.\n\n'
+            }
+
+            emit_strix_cancelled_without_log_finding
+
+            rm -f "$strix_evidence_file"
 
             if [ "$finding_index" -eq 0 ]; then
               printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'
@@ -1105,7 +1210,7 @@ jobs:
 
             {
               printf 'GitHub Checks failed after the initial OpenCode review. Diagnose the failed checks and return a line-specific REQUEST_CHANGES review for PR #%s in %s.\n' "$PR_NUMBER" "$GITHUB_WORKSPACE"
-              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Include the failed check label and exact failed log phrase in problem or root_cause; unrelated speculative findings are invalid. The fix_direction must state the concrete from/to change, not only the workflow URL. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve the model name in problem or root_cause. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
+              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Include the failed check label and exact failed log phrase in problem or root_cause; unrelated speculative findings are invalid. The fix_direction must state the concrete from/to change, not only the workflow URL. The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve each report'\''s model name, title, severity, endpoint, and Code Locations/path:line evidence in problem or root_cause when present. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
               printf 'Failed checks:\n'
               cat "$failed_checks_file"
               printf '\n\nDetailed failed-check evidence:\n<failed-check-evidence>\n'
@@ -1271,7 +1376,11 @@ jobs:
               rm -f "$rollup_file" "$strix_runs_file"
               return 1
             fi
-            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            if grep -Fq -- "Strix Security Scan/strix:" "$rollup_file"; then
+              cat "$rollup_file" >"$output_file"
+            else
+              cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            fi
             rm -f "$rollup_file" "$strix_runs_file"
 
           }
@@ -1347,7 +1456,11 @@ jobs:
               rm -f "$rollup_file" "$strix_runs_file"
               return 1
             fi
-            cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            if grep -Fq -- "Strix Security Scan/strix:" "$rollup_file"; then
+              cat "$rollup_file" >"$output_file"
+            else
+              cat "$rollup_file" "$strix_runs_file" >"$output_file"
+            fi
             rm -f "$rollup_file" "$strix_runs_file"
 
           }
@@ -1411,7 +1524,13 @@ jobs:
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               fi
             else
-              request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+              pending_checks_file="$(mktemp)"
+              if collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
+                build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+              else
+                request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+              fi
             fi
             echo "::endgroup::"
             exit 0

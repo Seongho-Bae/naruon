@@ -125,6 +125,91 @@ if ! jq -e '
   exit 4
 fi
 
+SOURCE_ROOT="${GITHUB_WORKSPACE:-$PWD}"
+if ! python3 - "$SOURCE_ROOT" "$TMP_JSON" <<'PY'
+from __future__ import annotations
+
+import json
+import os
+import sys
+from pathlib import Path
+
+
+source_root = Path(sys.argv[1]).resolve()
+control_file = Path(sys.argv[2])
+control = json.loads(control_file.read_text(encoding="utf-8"))
+
+if control.get("result") != "REQUEST_CHANGES":
+    raise SystemExit(0)
+
+
+def normalized_line(value: str) -> str:
+    return " ".join(value.strip().split())
+
+
+def finding_is_source_backed(finding: dict[str, object]) -> bool:
+    path_value = str(finding.get("path", ""))
+    if (
+        not path_value
+        or path_value.startswith("/")
+        or path_value == "."
+        or ".." in Path(path_value).parts
+    ):
+        return False
+
+    source_file = (source_root / path_value).resolve()
+    try:
+        source_file.relative_to(source_root)
+    except ValueError:
+        return False
+    if not source_file.is_file():
+        return False
+
+    try:
+        source_lines = source_file.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError:
+        return False
+
+    line_number = finding.get("line")
+    if not isinstance(line_number, int) or line_number < 1 or line_number > len(source_lines):
+        return False
+
+    source_line_set = {
+        normalized_line(line)
+        for line in source_lines
+        if normalized_line(line)
+    }
+    suggested_diff = str(finding.get("suggested_diff", ""))
+    removed_lines = []
+    added_lines = []
+    for raw_line in suggested_diff.splitlines():
+        if raw_line.startswith("--- ") or raw_line.startswith("+++ "):
+            continue
+        if raw_line.startswith("-"):
+            stripped = normalized_line(raw_line[1:])
+            if stripped:
+                removed_lines.append(stripped)
+        elif raw_line.startswith("+"):
+            stripped = normalized_line(raw_line[1:])
+            if stripped:
+                added_lines.append(stripped)
+
+    if not removed_lines and not added_lines:
+        return False
+    for removed_line in removed_lines:
+        if removed_line not in source_line_set:
+            return False
+    return True
+
+
+if not all(finding_is_source_backed(finding) for finding in control.get("findings", [])):
+    raise SystemExit(1)
+PY
+then
+  echo "NO_CONCLUSION"
+  exit 4
+fi
+
 if [ -n "$NORMALIZED_JSON_FILE" ]; then
   jq -c '{head_sha, run_id, run_attempt, result, reason, summary, findings}' "$TMP_JSON" >"$NORMALIZED_JSON_FILE"
 fi

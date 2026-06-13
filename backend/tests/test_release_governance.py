@@ -219,7 +219,7 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert 'OLLAMA_NO_CLOUD: "true"' in compose
     assert 'OLLAMA_NO_CLOUD: "true"' in live_e2e_compose
     assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
-    assert "OPENAI_MODEL: gemma4" in live_e2e_compose
+    assert "OPENAI_MODEL: gemma4:e2b-it-qat" in live_e2e_compose
     assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
     live_nginx = read_repo_text("tests/live/nginx.conf")
     assert "proxy_read_timeout 600s" in live_nginx
