@@ -21,6 +21,10 @@ RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # Copy Backend
 COPY backend /app/
 
+RUN useradd --system --create-home --home-dir /home/appuser --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
@@ -43,6 +47,7 @@ RUN pnpm run build
 
 # Stage 3: Combined image (Python + Node.js)
 FROM backend-runtime
+USER root
 
 # Runtime Node is copied from the frontend builder so apt does not install a
 # distro Node package with noisy alternatives output.
@@ -60,10 +65,8 @@ COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 # AUTH_SESSION_HMAC_SECRET, and a valid Fernet ENCRYPTION_KEY — never generated
 # at runtime), then starts backend and frontend together and reports which
 # service exits. Secrets must be supplied by the operator or orchestrator.
-RUN chmod +x /app/scripts/docker_entrypoint.sh
-
-# Create non-root user
-RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
+RUN chmod +x /app/scripts/docker_entrypoint.sh \
+    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh
 USER appuser
 
 # Environment variables for Frontend proxying inside the combined image

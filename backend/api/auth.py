@@ -1,4 +1,5 @@
 from http.client import HTTPSConnection
+import hashlib
 import json
 import logging
 import math
@@ -152,6 +153,12 @@ SESSION_ALLOWED_ALGORITHMS = (SESSION_SIGNING_ALGORITHM,)
 OIDC_ALLOWED_ALGORITHMS = (OIDC_SIGNING_ALGORITHM,)
 JWT_DECODE_REQUIRED_CLAIMS = ("exp", "iss", "aud")
 MIN_SESSION_SECRET_BYTES = 32
+MAX_SIGNED_SESSION_EXPIRATION_SECONDS = 12 * 60 * 60
+MAX_SIGNED_SESSION_CLOCK_SKEW_SECONDS = 60
+SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+SESSION_AUTH_RATE_LIMIT_MAX_FAILURES = 10
+SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS = 4096
+_session_auth_failure_buckets: dict[str, tuple[int, float]] = {}
 
 
 @dataclass(frozen=True)
@@ -295,11 +302,76 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
+def _session_auth_failure_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _prune_session_auth_failure_buckets(now: float) -> None:
+    expired_keys = [
+        key
+        for key, (_failure_count, reset_at) in _session_auth_failure_buckets.items()
+        if reset_at <= now
+    ]
+    for key in expired_keys:
+        _session_auth_failure_buckets.pop(key, None)
+
+
+def _ensure_session_auth_failure_bucket_capacity(key: str) -> None:
+    if (
+        key in _session_auth_failure_buckets
+        or len(_session_auth_failure_buckets) < SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS
+    ):
+        return
+    _session_auth_failure_buckets.pop(next(iter(_session_auth_failure_buckets)), None)
+
+
+def _reject_if_session_auth_rate_limited(token: str) -> None:
+    now = time.monotonic()
+    _prune_session_auth_failure_buckets(now)
+    key = _session_auth_failure_key(token)
+    failure_count, _reset_at = _session_auth_failure_buckets.get(
+        key,
+        (0, now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS),
+    )
+    if failure_count >= SESSION_AUTH_RATE_LIMIT_MAX_FAILURES:
+        raise _authentication_error()
+
+
+def _record_session_auth_failure(token: str) -> None:
+    now = time.monotonic()
+    _prune_session_auth_failure_buckets(now)
+    key = _session_auth_failure_key(token)
+    _ensure_session_auth_failure_bucket_capacity(key)
+    failure_count, reset_at = _session_auth_failure_buckets.get(
+        key,
+        (0, now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS),
+    )
+    if reset_at <= now:
+        failure_count = 0
+        reset_at = now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS
+    _session_auth_failure_buckets[key] = (failure_count + 1, reset_at)
+
+
+def _clear_session_auth_failures(token: str) -> None:
+    _session_auth_failure_buckets.pop(_session_auth_failure_key(token), None)
+
+
 def _verify_signed_session_payload(
     authorization: str | None,
 ) -> tuple[dict[str, Any], SessionVerifier]:
     token = _extract_bearer_token(authorization)
+    _reject_if_session_auth_rate_limited(token)
 
+    try:
+        payload, session_verifier = _verify_signed_session_token(token)
+    except HTTPException:
+        _record_session_auth_failure(token)
+        raise
+    _clear_session_auth_failures(token)
+    return payload, session_verifier
+
+
+def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
     # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
@@ -395,8 +467,23 @@ def _validate_session_metadata(payload: dict[str, Any]) -> None:
         raise _authentication_error()
     if not math.isfinite(expires_at):
         raise _authentication_error()
-    if expires_at <= time.time():
+    now = time.time()
+    if expires_at <= now:
         raise _authentication_error()
+    if expires_at > now + MAX_SIGNED_SESSION_EXPIRATION_SECONDS:
+        raise _authentication_error()
+    issued_at = payload.get("iat")
+    if issued_at is not None:
+        if isinstance(issued_at, bool) or not isinstance(issued_at, (int, float)):
+            raise _authentication_error()
+        if not math.isfinite(issued_at):
+            raise _authentication_error()
+        if issued_at > now + MAX_SIGNED_SESSION_CLOCK_SKEW_SECONDS:
+            raise _authentication_error()
+        if expires_at <= issued_at:
+            raise _authentication_error()
+        if expires_at - issued_at > MAX_SIGNED_SESSION_EXPIRATION_SECONDS:
+            raise _authentication_error()
 
 
 def _auth_context_from_session_payload(

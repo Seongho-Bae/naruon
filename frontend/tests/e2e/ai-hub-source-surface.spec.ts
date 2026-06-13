@@ -19,7 +19,7 @@ const viewports = [
 
 for (const viewport of viewports) {
   test(`renders source-backed AI Hub with scroll at ${viewport.name}`, async ({ page }, testInfo) => {
-    const sessionToken = `signed-ai-hub-${viewport.name}`;
+    const sessionToken = `signed-ai-hub.${viewport.name}.token`;
     const surfaceRequestHeaders: Record<string, string>[] = [];
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockDashboardApi(page, (path, request) => {

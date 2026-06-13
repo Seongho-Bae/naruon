@@ -39,6 +39,22 @@ function textOnlyTooltip(value: unknown): HTMLElement {
   return tooltip;
 }
 
+const HTML_TEXT_ESCAPE_PATTERN = /[&<>"']/g;
+const HTML_TEXT_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeGraphLabel(value: unknown): string {
+  return String(value ?? '').replace(
+    HTML_TEXT_ESCAPE_PATTERN,
+    (character) => HTML_TEXT_ESCAPES[character] ?? character,
+  );
+}
+
 function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   const sanitized = { ...item };
 
@@ -47,6 +63,16 @@ function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   }
 
   return sanitized;
+}
+
+function escapeVisNetworkLabels<T extends Node | Edge>(items: T[]): T[] {
+  return items.map((item) => {
+    if (!Object.prototype.hasOwnProperty.call(item, 'label')) return item;
+    return {
+      ...item,
+      label: escapeGraphLabel(item.label),
+    };
+  });
 }
 
 function isGraphId(value: unknown): value is number | string {
@@ -107,7 +133,10 @@ export default function NetworkGraph() {
   useEffect(() => {
     if (containerRef.current && nodes.length > 0) {
       const container = containerRef.current;
-      const network = new Network(container, { nodes, edges }, {
+      const network = new Network(container, {
+        nodes: escapeVisNetworkLabels(nodes),
+        edges: escapeVisNetworkLabels(edges),
+      }, {
         nodes: { shape: 'dot', size: 16 },
         edges: { arrows: 'to' }
       });

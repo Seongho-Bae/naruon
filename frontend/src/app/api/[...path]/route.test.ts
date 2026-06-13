@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST, PUT } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
-const SIGNED_SESSION_TOKEN = "signed-session-token";
+const SIGNED_SESSION_TOKEN = "signed.session.token";
 
 describe("/api runtime proxy route", () => {
   beforeEach(() => {
@@ -54,7 +54,7 @@ describe("/api runtime proxy route", () => {
 
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
-      auth_header: "Bearer signed-session-token",
+      auth_header: "Bearer signed.session.token",
       cookie_header: null,
       user_header: null,
       request_body: '{"state":"open"}',

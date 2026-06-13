@@ -75,7 +75,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
 });
 
 test('renders Today dashboard pending reply lane with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-dashboard-pending-replies-token';
+  const expectedNaruonToken = 'signed-dashboard.pending-replies.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -382,7 +382,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
 });
 
 test('renders Security governance access audit sharing and policy with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-security-governance-e2e-token';
+  const expectedNaruonToken = 'signed-security.governance-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -481,7 +481,7 @@ test('renders Security governance access audit sharing and policy with signed AP
 });
 
 test('renders Data quality surface across viewports with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-data-quality-e2e-token';
+  const expectedNaruonToken = 'signed-data.quality-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -592,7 +592,7 @@ test('renders Data quality surface across viewports with signed API headers', as
 });
 
 test('renders sent mail reply tracking route with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-sent-mail-e2e-token';
+  const expectedNaruonToken = 'signed-sent.mail-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -652,7 +652,7 @@ test('renders sent mail reply tracking route with signed API headers', async ({ 
 });
 
 test('updates source-linked task ticket status with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-task-status-e2e-token';
+  const expectedNaruonToken = 'signed-task.status-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -713,7 +713,7 @@ test('updates source-linked task ticket status with signed API headers', async (
 });
 
 test('creates pending reply SLA task escalation with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-reply-sla-e2e-token';
+  const expectedNaruonToken = 'signed-reply.sla-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -788,7 +788,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
 });
 
 test('creates self-sent knowledge WebDAV intent with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-self-sent-knowledge-e2e-token';
+  const expectedNaruonToken = 'signed-self-sent.knowledge-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -940,7 +940,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
   }[] = [];
 
   await page.addInitScript(() => {
-    document.cookie = 'naruon_session=signed-settings-e2e-token; Path=/; SameSite=Lax';
+    document.cookie = 'naruon_session=signed-settings.e2e.token; Path=/; SameSite=Lax';
   });
   await mockDashboardApi(page, (path, request) => {
     if (path === '/api/accounts/config') {
@@ -1008,13 +1008,13 @@ test('renders source-backed mail account settings across desktop tablet and mobi
   await page.screenshot({ path: testInfo.outputPath('settings-mail-account-mobile-scroll.png'), fullPage: false });
 
   const getRequest = accountRequests.find((request) => request.method === 'GET');
-  expectBrowserCookieSession(getRequest?.headers, 'signed-settings-e2e-token');
+  expectBrowserCookieSession(getRequest?.headers, 'signed-settings.e2e.token');
   for (const header of ['x-user-id', 'x-organization-id', 'x-group-id', 'x-group-ids', 'x-user-role', 'x-dev-auth-token']) {
     expect(getRequest?.headers[header]).toBeUndefined();
   }
 
   const putRequest = accountRequests.find((request) => request.method === 'PUT');
-  expectBrowserCookieSession(putRequest?.headers, 'signed-settings-e2e-token');
+  expectBrowserCookieSession(putRequest?.headers, 'signed-settings.e2e.token');
   const putBody = JSON.parse(putRequest?.postData || '{}') as Record<string, unknown>;
   expect(putBody).toMatchObject({
     smtp_server: 'smtp.example.com',
@@ -1036,7 +1036,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
 });
 
 test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-calendar-e2e-token';
+  const expectedNaruonToken = 'signed-calendar.e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1130,7 +1130,7 @@ test('renders calendar writeback intent status without direct provider writes', 
 });
 
 test('renders data WebDAV writeback intent status without direct provider writes', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-webdav-e2e-token';
+  const expectedNaruonToken = 'signed-webdav.e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1222,7 +1222,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
 });
 
 test('renders unique email canonical thread intent with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-email-dedupe-e2e-token';
+  const expectedNaruonToken = 'signed-email.dedupe-e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1302,7 +1302,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
 });
 
 test('renders API-backed context search sender DAG and reply tracking', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-search-e2e-token';
+  const expectedNaruonToken = 'signed-search.e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',

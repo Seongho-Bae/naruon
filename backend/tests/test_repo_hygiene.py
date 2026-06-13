@@ -19,6 +19,19 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
+def test_backend_dockerfile_runtime_stages_run_as_non_root_user():
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
+    backend_cmd = (
+        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    )
+    combined_cmd = 'CMD ["/app/scripts/docker_entrypoint.sh"]'
+
+    assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
+    assert "chown -R appuser:appuser /app" in dockerfile
+    assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
+    assert dockerfile.rfind("USER appuser") < dockerfile.find(combined_cmd)
+
+
 def test_frontend_dockerfile_runs_as_non_root_user():
     dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text()
 
@@ -99,17 +112,23 @@ def test_compose_externalizes_postgres_credentials():
 
     assert "POSTGRES_PASSWORD: postgres" not in compose
     assert "postgres:postgres@" not in compose
-    assert "POSTGRES_DB=ai_email" in compose
-    assert "POSTGRES_USER=postgres" in compose
+    assert "POSTGRES_DB: ai_email" in compose
+    assert "POSTGRES_USER: postgres" in compose
+    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}" in compose
+    assert "- POSTGRES_PASSWORD" not in compose
     assert "POSTGRES_PASSWORD:-postgres" not in compose
     assert "${POSTGRES_PASSWORD" in compose
     assert "${POSTGRES_PASSWORD:?" not in compose_without_runtime_preflights
     assert '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}' in compose
     assert "127.0.0.1:15432:5432" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
+    assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in compose
+    assert "- AUTH_SESSION_HMAC_SECRET" not in compose
     assert "${AUTH_SESSION_HMAC_SECRET:?" not in compose_without_runtime_preflights
     assert '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}' in compose
     assert "ENCRYPTION_KEY" in compose
+    assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in compose
+    assert "- ENCRYPTION_KEY" not in compose
     assert "${ENCRYPTION_KEY:?" not in compose_without_runtime_preflights
     assert '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}' in compose
 
@@ -138,6 +157,7 @@ def test_compose_allows_only_the_local_ollama_provider_host():
         assert has_exact_compose_line(
             compose,
             'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"',
+            "ALLOWED_LLM_BASE_URL_HOSTS: ollama",
             "ALLOWED_LLM_BASE_URL_HOSTS=ollama",
         )
         assert has_exact_compose_line(

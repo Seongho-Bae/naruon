@@ -6,8 +6,8 @@ describe("fetchRuntimeConfig", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const module = await import("./runtime-config");
-    fetchRuntimeConfig = module.fetchRuntimeConfig;
+    const runtimeConfigModule = await import("./runtime-config");
+    fetchRuntimeConfig = runtimeConfigModule.fetchRuntimeConfig;
   });
 
   afterEach(() => {
@@ -71,8 +71,8 @@ describe("fetchRuntimeConfig", () => {
   });
 
   it("returns the in-flight promise if a fetch is already in progress", async () => {
-    let resolveJson: (value: any) => void;
-    const jsonPromise = new Promise((resolve) => {
+    let resolveJson: (value: RuntimeConfig) => void;
+    const jsonPromise = new Promise<RuntimeConfig>((resolve) => {
       resolveJson = resolve;
     });
 

@@ -81,14 +81,15 @@ describe("backend URL guard", () => {
     // since Node.js newer URL parser rejects `https:///` and similar.
     const originalURL = global.URL;
     try {
-      global.URL = class extends URL {
+      const MockURL = class extends URL {
         constructor(input: string | URL, base?: string | URL) {
           super(input, base);
           if (input === "https:///empty") {
             Object.defineProperty(this, "hostname", { get: () => "" });
           }
         }
-      } as any;
+      };
+      global.URL = MockURL as unknown as typeof URL;
       expect(() => parseBackendInternalUrl("https:///empty")).toThrow(
         "BACKEND_INTERNAL_URL must include a hostname",
       );

@@ -47,7 +47,7 @@ function signLiveSession(expiresInSeconds = 300): string {
 }
 
 test('nano test: verify user requested features', async ({ page }) => {
-  const sessionToken = 'signed-nano-session';
+  const sessionToken = 'signed.nano.session';
   const providerRequestHeaders: Record<string, string>[] = [];
   await mockDashboardApi(page, (path, request) => {
     if (path === '/api/llm-providers' && request.method() === 'GET') {
