@@ -118,6 +118,45 @@ describe("/api runtime proxy route", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("accepts browser same-origin state changes when the runtime URL is internal", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+        const headers = init?.headers as Headers;
+        return Response.json({
+          target_url: String(input),
+          auth_header: headers.get("authorization"),
+          request_body: await new Response(init?.body).text(),
+        });
+      }),
+    );
+
+    const request = new NextRequest(
+      "http://internal-frontend:3000/api/search",
+      {
+        method: "POST",
+        headers: {
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Host: "127.0.0.1:3000",
+          Origin: "http://127.0.0.1:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: "일정 충돌 일정 조율 회의 후보", limit: 3 }),
+      },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["search"] }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      target_url: "https://api.naruon.net/api/search",
+      auth_header: "Bearer signed.session.token",
+      request_body: '{"query":"일정 충돌 일정 조율 회의 후보","limit":3}',
+    });
+  });
+
   it("rejects cross-site fetch metadata before proxying", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
