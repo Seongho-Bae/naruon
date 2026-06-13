@@ -94,6 +94,34 @@ describe("CalendarPage", () => {
     expect(container.querySelector('button[aria-label="닫기"]')).not.toBeNull();
   });
 
+  it("filters rendered calendar events when a calendar visibility checkbox changes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(calendarSourceList)));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<CalendarPage />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("제품 리뷰");
+    const productCalendarToggle = container.querySelector<HTMLInputElement>(
+      'input[aria-label="제품 개발팀 캘린더 표시 토글"]',
+    );
+    expect(productCalendarToggle).not.toBeNull();
+    expect(productCalendarToggle?.checked).toBe(true);
+
+    await act(async () => {
+      productCalendarToggle?.click();
+    });
+    await flushAsyncWork();
+
+    expect(productCalendarToggle?.checked).toBe(false);
+    expect(container.textContent).not.toContain("제품 리뷰");
+    expect(container.textContent).toContain("출시 회의");
+  });
+
   it("creates a signed customer-owned calendar writeback intent", async () => {
     localStorage.setItem("naruon_session_token", "signed-calendar-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

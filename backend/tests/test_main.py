@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from core.config import settings
 from main import app
 
 client = TestClient(app)
@@ -86,3 +87,27 @@ def test_state_changing_api_allows_trusted_origin_to_reach_auth_gate():
 
     assert response.status_code == 401
     assert response.json() == {"detail": "Authentication required"}
+
+
+def test_state_changing_api_canonicalizes_default_origin_ports(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "ALLOWED_CORS_ORIGINS",
+        "https://app.example.com:443,http://app.example.com:80",
+    )
+
+    https_response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "https://app.example.com"},
+        json={"smtp_server": "mail.example.com"},
+    )
+    http_referer_response = client.put(
+        "/api/accounts/config",
+        headers={"Referer": "http://app.example.com/settings/accounts"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert https_response.status_code == 401
+    assert https_response.json() == {"detail": "Authentication required"}
+    assert http_referer_response.status_code == 401
+    assert http_referer_response.json() == {"detail": "Authentication required"}

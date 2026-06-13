@@ -27,7 +27,7 @@ from api.webdav import router as webdav_router
 from api.security import router as security_router
 from api.data import router as data_router
 from api.ai_hub import router as ai_hub_router
-from core.config import settings
+from core.config import canonical_origin, settings
 from core.telemetry import setup_telemetry
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -82,10 +82,10 @@ def _normalized_origin(header_value: str | None) -> str | None:
     ):
         return None
     try:
-        parsed.port
+        port = parsed.port
     except ValueError:
         return None
-    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+    return canonical_origin(parsed.scheme, parsed.hostname, port)
 
 
 def _origin_from_referer(header_value: str | None) -> str | None:
@@ -97,10 +97,10 @@ def _origin_from_referer(header_value: str | None) -> str | None:
     if not parsed.netloc or not parsed.hostname:
         return None
     try:
-        parsed.port
+        port = parsed.port
     except ValueError:
         return None
-    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+    return canonical_origin(parsed.scheme, parsed.hostname, port)
 
 
 def _is_trusted_browser_origin(origin: str | None) -> bool:

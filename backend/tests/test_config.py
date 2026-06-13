@@ -78,14 +78,16 @@ def test_allowed_cors_origins_are_validated_and_normalized(monkeypatch):
     _set_required_runtime_env(monkeypatch)
     monkeypatch.setenv(
         "ALLOWED_CORS_ORIGINS",
-        " https://Example.com:443 , http://localhost:3000 ",
+        " https://Example.com:443 , http://localhost:3000 , http://Example.com:80 , https://example.com:8443 ",
     )
 
     loaded_settings = _settings_without_env_file()
 
     assert loaded_settings.ALLOWED_CORS_ORIGINS_LIST == [
-        "https://example.com:443",
+        "https://example.com",
         "http://localhost:3000",
+        "http://example.com",
+        "https://example.com:8443",
     ]
 
 

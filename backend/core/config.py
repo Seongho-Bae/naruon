@@ -9,6 +9,21 @@ from core.runtime_secrets import (
 )
 from core.url_validation import parse_allowed_hosts, validate_https_url_host
 
+DEFAULT_ORIGIN_PORTS = {
+    "http": 80,
+    "https": 443,
+}
+
+
+def canonical_origin(scheme: str, hostname: str, port: int | None) -> str:
+    normalized_scheme = scheme.lower()
+    normalized_host = hostname.lower()
+    if ":" in normalized_host and not normalized_host.startswith("["):
+        normalized_host = f"[{normalized_host}]"
+    default_port = DEFAULT_ORIGIN_PORTS.get(normalized_scheme)
+    port_suffix = f":{port}" if port is not None and port != default_port else ""
+    return f"{normalized_scheme}://{normalized_host}{port_suffix}"
+
 
 def parse_allowed_cors_origins(raw_origins: str) -> list[str]:
     origins: list[str] = []
@@ -31,13 +46,13 @@ def parse_allowed_cors_origins(raw_origins: str) -> list[str]:
                 "ALLOWED_CORS_ORIGINS entries must be origins without path, query, or fragment"
             )
         try:
-            parsed.port
+            port = parsed.port
         except ValueError as exc:
             raise ValueError(
                 "ALLOWED_CORS_ORIGINS entries must include a valid port"
             ) from exc
 
-        origins.append(f"{parsed.scheme.lower()}://{parsed.netloc.lower()}")
+        origins.append(canonical_origin(parsed.scheme, parsed.hostname, port))
     return origins
 
 

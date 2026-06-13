@@ -352,6 +352,101 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(linkHrefByText("보안 감사 로그")).toBe("/security");
   });
 
+  it("marks a Today dashboard task done through the signed task API", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    localStorage.setItem("naruon_session_token", "signed-home-task-update");
+    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      fetchCalls.push({ url, init });
+      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/emails")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({ emails: [] }),
+        });
+      }
+      if (url.endsWith("/api/tasks/task-home-toggle")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            id: "task-home-toggle",
+            title: "계약 승인 확인",
+            status: "done",
+            priority: "high",
+            created_at: "2026-05-17T09:00:00Z",
+            updated_at: "2026-05-17T10:00:00Z",
+          }),
+        });
+      }
+      if (url.endsWith("/api/tasks")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "task-home-toggle",
+              title: "계약 승인 확인",
+              status: "open",
+              priority: "high",
+              created_at: "2026-05-17T09:00:00Z",
+              updated_at: "2026-05-17T09:00:00Z",
+            },
+          ]),
+        });
+      }
+      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
+      if (sourceEvidenceResponse) return sourceEvidenceResponse;
+      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
+      if (calendarCandidateResponse) return calendarCandidateResponse;
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
+    });
+    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인") ?? false);
+
+    const taskCheckbox = container.querySelector<HTMLInputElement>(
+      'input[aria-label="계약 승인 확인 작업 선택"]',
+    );
+    expect(taskCheckbox).not.toBeNull();
+    expect(taskCheckbox?.checked).toBe(false);
+
+    await act(async () => {
+      taskCheckbox?.click();
+    });
+    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인 작업을 완료 처리했습니다.") ?? false);
+
+    const patchCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/task-home-toggle"));
+    expect(patchCall?.init?.method).toBe("PATCH");
+    expect(JSON.parse(String(patchCall?.init?.body))).toEqual({ status: "done" });
+    const headers = patchCall?.init?.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer signed-home-task-update");
+    for (const headerName of [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ]) {
+      expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+    }
+  });
+
   it("backs Today dashboard operating metrics with source evidence instead of fixed fixture numbers", async () => {
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
       matches: false,
