@@ -186,7 +186,19 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "secrets.token_hex" not in dockerfile
     assert "ENV DATABASE_URL=" not in dockerfile
     assert '"/app/scripts/docker_entrypoint.sh"' in dockerfile
-    assert "RUN chmod +x /app/scripts/docker_entrypoint.sh" in dockerfile
+    assert (
+        "RUN chmod +x /app/scripts/docker_entrypoint.sh \\\n"
+        "    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh"
+        in dockerfile
+    )
+    assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
+    backend_cmd = (
+        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    )
+    assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
+    assert dockerfile.rfind("USER appuser") < dockerfile.find(
+        'CMD ["/app/scripts/docker_entrypoint.sh"]'
+    )
     assert "COPY scripts/start_combined.sh" not in dockerfile
     assert "RUN echo '#!/bin/bash" not in dockerfile
     assert "uvicorn" not in dockerfile.split("CMD", 1)[1]

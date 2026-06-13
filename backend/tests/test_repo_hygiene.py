@@ -19,6 +19,19 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
+def test_backend_dockerfile_runtime_stages_run_as_non_root_user():
+    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
+    backend_cmd = (
+        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    )
+    combined_cmd = 'CMD ["/app/scripts/docker_entrypoint.sh"]'
+
+    assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
+    assert "chown -R appuser:appuser /app" in dockerfile
+    assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
+    assert dockerfile.rfind("USER appuser") < dockerfile.find(combined_cmd)
+
+
 def test_frontend_dockerfile_runs_as_non_root_user():
     dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text()
 
