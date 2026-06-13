@@ -34,10 +34,16 @@
 - `backend/db/models.py` no longer contains a fallback Fernet key or SHA256
   passphrase-derivation path. Secret-field encryption now requires an explicit
   valid Fernet `ENCRYPTION_KEY` in every runtime mode, including `DEBUG=true`.
-  Decryption failures return `None` instead of ciphertext; user-facing routes
-  that touch encrypted fields should return the existing operator-facing
-  missing-key or unavailable-secret error rather than fallback encryption or raw
-  encrypted blobs.
+  `ENCRYPTION_KEY_ID` labels the active key, and `ENCRYPTION_PREVIOUS_KEYS`
+  accepts comma-separated `key_id=fernet_key` entries for decrypt-only retired
+  keys during rotation. New ciphertext is stored as
+  `fernet:v1:{key_id}:{ciphertext}` so the backend can decrypt records written
+  by an older active key after the operator promotes a new key. Existing
+  unprefixed Fernet ciphertext is still readable by trying the active key and
+  previous keys. Decryption failures return `None` instead of ciphertext;
+  user-facing routes that touch encrypted fields should return the existing
+  operator-facing missing-key or unavailable-secret error rather than fallback
+  encryption or raw encrypted blobs.
 - Email rows now have nullable `user_id` and `organization_id` owner keys, and
   email/search/network graph queries are scoped to the authenticated user plus
   organization. Existing local databases receive the columns and null-row
@@ -61,8 +67,9 @@
 - Keycloak and Casdoor should be evaluated as OIDC providers before production
   multi-user access is claimed. The HMAC session envelope is a narrow internal
   bridge, not the final external IdP integration.
-- Production still needs key rotation runbooks and separate secret scopes for
-  `AUTH_SESSION_HMAC_SECRET`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
+- Production still needs operator-owned rotation schedules, KMS/secret-manager
+  storage, and separate secret scopes for `AUTH_SESSION_HMAC_SECRET`,
+  `ENCRYPTION_KEY`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
 ## Universal RBAC/ABAC contract
 

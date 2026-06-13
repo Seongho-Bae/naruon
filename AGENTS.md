@@ -148,6 +148,12 @@
   by `user_id` only. Frontend Settings onboarding must use bearer-session API
   calls for account config, CalDAV/WebDAV source readiness, and runner token
   rotation, and mocks must not reintroduce public identity headers.
+- Secret-field encryption must support operator key rotation. New encrypted
+  values must be tagged with the active opaque `ENCRYPTION_KEY_ID`, decrypted
+  through the active key plus explicit decrypt-only `ENCRYPTION_PREVIOUS_KEYS`,
+  and remain compatible with legacy untagged Fernet ciphertext during rotation.
+  Do not reintroduce a single-key-only `EncryptedString` path, hard-coded Fernet
+  keys, SHA/passphrase derivation, or ciphertext fallback on decrypt failure.
 - Self-service mailbox configuration routes must enforce owner-required
   RBAC/ABAC through `services.access_policy`; system/platform admins may not use
   user-facing `/api/config` routes to read or mutate another user's mailbox

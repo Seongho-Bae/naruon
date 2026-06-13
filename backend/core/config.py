@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     RUNTIME_ENVIRONMENT: str = "production"
     AUTH_SESSION_HMAC_SECRET: SecretStr | None = None
     ENCRYPTION_KEY: SecretStr | None = None
+    ENCRYPTION_KEY_ID: str = "primary"
+    ENCRYPTION_PREVIOUS_KEYS: SecretStr | None = None
     CONTROL_PLANE_DOMAIN: str = "naruon.net"
     ALLOWED_SMTP_HOSTS: str = ""
     ALLOWED_SMTP_PORTS: str = "465,587"
