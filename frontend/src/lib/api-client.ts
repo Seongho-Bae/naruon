@@ -73,20 +73,24 @@ export class ApiClient {
   }
 
   async getServerSessionClaims(): Promise<SessionClaims> {
-    const response = await fetch('/auth/session', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      credentials: 'same-origin',
-    });
-    if (!response.ok) return ANONYMOUS_SESSION_CLAIMS;
+    try {
+      const response = await fetch('/auth/session', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!response.ok) return ANONYMOUS_SESSION_CLAIMS;
 
-    const body = await response.json() as { claims?: Partial<SessionClaims> };
-    const claims = body.claims ?? {};
-    return {
-      userId: typeof claims.userId === 'string' ? claims.userId : null,
-      organizationId: typeof claims.organizationId === 'string' ? claims.organizationId : null,
-      workspaceId: typeof claims.workspaceId === 'string' ? claims.workspaceId : null,
-    };
+      const body = await response.json() as { claims?: Partial<SessionClaims> };
+      const claims = body.claims ?? {};
+      return {
+        userId: typeof claims.userId === 'string' ? claims.userId : null,
+        organizationId: typeof claims.organizationId === 'string' ? claims.organizationId : null,
+        workspaceId: typeof claims.workspaceId === 'string' ? claims.workspaceId : null,
+      };
+    } catch {
+      return ANONYMOUS_SESSION_CLAIMS;
+    }
   }
 
   getCurrentUserId() {

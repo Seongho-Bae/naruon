@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
   }
 
   const response = NextResponse.json(sessionJson(claims));
-  response.cookies.set(buildSessionCookieOptions(request, accessToken));
+  response.cookies.set(buildSessionCookieOptions(accessToken));
   return response;
 }
 
@@ -155,6 +155,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   const response = NextResponse.json(sessionJson(null));
-  response.cookies.set(buildExpiredSessionCookieOptions(request));
+  response.cookies.set(buildExpiredSessionCookieOptions());
   return response;
 }

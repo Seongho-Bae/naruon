@@ -199,4 +199,19 @@ describe("ApiClient", () => {
       credentials: "same-origin",
     });
   });
+
+  it("fails closed to anonymous claims when the server session route is unavailable", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network unavailable");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient();
+
+    await expect(client.getServerSessionClaims()).resolves.toEqual({
+      userId: null,
+      organizationId: null,
+      workspaceId: null,
+    });
+  });
 });

@@ -1,5 +1,3 @@
-import type { NextRequest } from "next/server";
-
 export interface SessionClaims {
   userId: string | null;
   organizationId: string | null;
@@ -25,8 +23,7 @@ export function normalizeSessionToken(value: unknown): string | null {
   return token;
 }
 
-export function buildSessionCookieOptions(request: NextRequest, token: string) {
-  void request;
+export function buildSessionCookieOptions(token: string) {
   return {
     name: SESSION_COOKIE_NAME,
     value: token,
@@ -37,8 +34,7 @@ export function buildSessionCookieOptions(request: NextRequest, token: string) {
   };
 }
 
-export function buildExpiredSessionCookieOptions(request: NextRequest) {
-  void request;
+export function buildExpiredSessionCookieOptions() {
   return {
     name: SESSION_COOKIE_NAME,
     value: "",
