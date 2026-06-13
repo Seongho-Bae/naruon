@@ -280,6 +280,25 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "ignore::UserWarning" not in workflow
 
 
+def test_strix_workflow_validates_vertex_credentials_before_export() -> None:
+    workflow = read_repo_text(".github/workflows/strix.yml")
+
+    assert "credentials_path.read_text(encoding=\"utf-8\")" in workflow
+    assert "object_pairs_hook=reject_duplicate_json_keys" in workflow
+    assert "raise ValueError(\"duplicate credential key\")" in workflow
+    assert (
+        "except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):"
+        in workflow
+    )
+    assert (
+        "GCP_SA_KEY must be valid service account JSON for Vertex AI Strix scans."
+        in workflow
+    )
+    assert "if not isinstance(credentials, dict):" in workflow
+    assert "GCP_SA_KEY must be a JSON object for Vertex AI Strix scans." in workflow
+    assert "json.loads(credentials_path.read_text())" not in workflow
+
+
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
     None
 ):
