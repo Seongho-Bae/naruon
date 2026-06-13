@@ -993,6 +993,11 @@ jobs:
             local repo_root="${GITHUB_WORKSPACE:-$PWD}"
             local strix_evidence_file
 
+            if [ -x "${repo_root%/}/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" ]; then
+              "${repo_root%/}/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "$evidence_file" "$repo_root"
+              return 0
+            fi
+
             extract_strix_failed_check_block() {
               local source_file="$1"
               local output_file="$2"
