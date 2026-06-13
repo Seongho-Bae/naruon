@@ -22,6 +22,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 
 const CLIENT_AUTHORITY_HEADERS = new Set([
   "authorization",
+  "cookie",
   "x-dev-auth-token",
   "x-group-id",
   "x-group-ids",
@@ -60,6 +61,12 @@ function filteredRequestHeaders(request: NextRequest): Headers {
     if (CLIENT_AUTHORITY_HEADERS.has(lowerName)) return;
     headers.set(name, value);
   });
+  const sessionToken = normalizeSessionToken(
+    request.cookies.get(SESSION_COOKIE_NAME)?.value,
+  );
+  if (sessionToken) {
+    headers.set("Authorization", `Bearer ${sessionToken}`);
+  }
   return headers;
 }
 
@@ -166,12 +173,6 @@ async function proxyApiRequest(
     headers: filteredRequestHeaders(request),
     redirect: "manual",
   };
-  const sessionToken = normalizeSessionToken(
-    request.cookies.get(SESSION_COOKIE_NAME)?.value,
-  );
-  if (sessionToken) {
-    (init.headers as Headers).set("Authorization", `Bearer ${sessionToken}`);
-  }
   if (request.method !== "GET" && request.method !== "HEAD") {
     init.body = await request.arrayBuffer();
   }

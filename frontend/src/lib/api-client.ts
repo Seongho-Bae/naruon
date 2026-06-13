@@ -96,6 +96,7 @@ export class ApiClient {
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
@@ -110,6 +111,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
@@ -125,6 +127,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getFormHeaders(init),
       body,
     });
@@ -140,6 +143,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'PUT',
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
@@ -157,6 +161,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'PATCH',
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
@@ -172,6 +177,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'DELETE',
+      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {

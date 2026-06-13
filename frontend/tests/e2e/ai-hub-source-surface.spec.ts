@@ -28,14 +28,15 @@ for (const viewport of viewports) {
       }
     });
     await page.addInitScript((token) => {
-      window.localStorage.setItem('naruon_session_token', token);
+      document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
     }, sessionToken);
 
     await page.goto('/ai-hub');
     await expect.poll(() => surfaceRequestHeaders.length).toBeGreaterThan(0);
 
     const headers = surfaceRequestHeaders.at(-1) ?? {};
-    expect(headers.authorization).toBe(`Bearer ${sessionToken}`);
+    expect(headers.authorization).toBeUndefined();
+    expect(headers.cookie).toContain(`naruon_session=${sessionToken}`);
     for (const headerName of publicIdentityHeaders) {
       expect(headers[headerName]).toBeUndefined();
     }

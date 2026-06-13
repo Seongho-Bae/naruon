@@ -2,11 +2,17 @@
 
 import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network, Plus, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import type { SessionClaims } from '@/lib/session-cookie';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
 
 export type SettingsTab = '워크스페이스' | '멤버' | 'AI 모델' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
+const EMPTY_SESSION_CLAIMS: SessionClaims = {
+  userId: null,
+  organizationId: null,
+  workspaceId: null,
+};
 
 interface RunnerConfig {
   workspace_id: string;
@@ -502,7 +508,7 @@ export function SettingsLayout() {
   const [selectedEmbeddingProviderId, setSelectedEmbeddingProviderId] = useState<number | null>(null);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('embeddinggemma');
   const [embeddingSaving, setEmbeddingSaving] = useState(false);
-  const [oidcSessionClaims, setOidcSessionClaims] = useState(() => apiClient.getSessionClaims());
+  const [oidcSessionClaims, setOidcSessionClaims] = useState<SessionClaims>(EMPTY_SESSION_CLAIMS);
   const [oidcActionError, setOidcActionError] = useState<string | null>(null);
   const startupView = useWorkspaceStartupView();
   const oidcBrowserConfig = getOidcBrowserConfig();
@@ -563,11 +569,11 @@ export function SettingsLayout() {
     }
   };
 
-  const handleOidcLogout = () => {
+  const handleOidcLogout = async () => {
     setOidcActionError(null);
     try {
-      clearOidcSession({ postLogoutRedirectUri: window.location.origin });
-      setOidcSessionClaims(apiClient.getSessionClaims());
+      await clearOidcSession({ postLogoutRedirectUri: window.location.origin });
+      setOidcSessionClaims(EMPTY_SESSION_CLAIMS);
     } catch (error) {
       setOidcActionError(error instanceof Error ? error.message : 'OIDC logout failed');
     }
@@ -680,6 +686,15 @@ export function SettingsLayout() {
 
   useEffect(() => {
     let cancelled = false;
+
+    void apiClient
+      .getServerSessionClaims()
+      .then((claims) => {
+        if (!cancelled) setOidcSessionClaims(claims);
+      })
+      .catch(() => {
+        if (!cancelled) setOidcSessionClaims(EMPTY_SESSION_CLAIMS);
+      });
 
     void apiClient
       .get<RunnerConfig>('/api/runner-config')

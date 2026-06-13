@@ -101,7 +101,6 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
-    localStorage.setItem("naruon_session_token", "signed-dashboard-token");
     const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -165,8 +164,9 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(container.textContent).toContain("계약 검토 회신 SLA");
     const pendingCall = fetchCalls.find((call) => call.url.endsWith("/api/emails/pending-replies?limit=3"));
     expect(pendingCall).toBeDefined();
+    expect(pendingCall?.init?.credentials).toBe("same-origin");
     const headers = pendingCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer signed-dashboard-token");
+    expect(headers.Authorization).toBeUndefined();
     expect(headers["X-User-Id"]).toBeUndefined();
     expect(headers["X-Organization-Id"]).toBeUndefined();
     expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
@@ -179,7 +179,6 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
-    localStorage.setItem("naruon_session_token", "signed-home-reply-sla");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -259,9 +258,10 @@ describe("WorkspaceHome Today dashboard", () => {
     const escalationCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/reply-sla-escalations"));
     expect(escalationCall).toBeDefined();
     expect(escalationCall?.init?.method).toBe("POST");
+    expect(escalationCall?.init?.credentials).toBe("same-origin");
     expect(JSON.parse(String(escalationCall?.init?.body))).toEqual({ overdue_hours: 48 });
     const headers = escalationCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer signed-home-reply-sla");
+    expect(headers.Authorization).toBeUndefined();
     for (const headerName of publicIdentityHeaders) {
       expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
     }
@@ -359,7 +359,6 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
-    localStorage.setItem("naruon_session_token", "signed-home-task-update");
     const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -432,9 +431,10 @@ describe("WorkspaceHome Today dashboard", () => {
 
     const patchCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/task-home-toggle"));
     expect(patchCall?.init?.method).toBe("PATCH");
+    expect(patchCall?.init?.credentials).toBe("same-origin");
     expect(JSON.parse(String(patchCall?.init?.body))).toEqual({ status: "done" });
     const headers = patchCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBe("Bearer signed-home-task-update");
+    expect(headers.Authorization).toBeUndefined();
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -454,7 +454,6 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
-    localStorage.setItem("naruon_session_token", "signed-source-backed-home");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -611,8 +610,9 @@ describe("WorkspaceHome Today dashboard", () => {
     });
     for (const sourceCall of [calendarSourceCall, projectFolderCall, calendarCandidateCall]) {
       expect(sourceCall).toBeDefined();
+      expect(sourceCall?.init?.credentials).toBe("same-origin");
       const headers = sourceCall?.init?.headers as Record<string, string>;
-      expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
+      expect(headers.Authorization).toBeUndefined();
       for (const headerName of publicIdentityHeaders) {
         expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
       }

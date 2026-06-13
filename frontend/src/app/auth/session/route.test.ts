@@ -130,6 +130,27 @@ describe("/auth/session route", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  it("rejects cross-site session persistence before backend verification", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+      },
+      body: JSON.stringify({ access_token: "attacker.jwt.token" }),
+    }));
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "csrf_origin_rejected",
+      message: "Cross-site session updates are not allowed",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("expires the session cookie on logout", async () => {
     const response = await DELETE(new NextRequest("https://app.naruon.net/auth/session", {
       method: "DELETE",

@@ -42,20 +42,11 @@ function jsonResponse(body: unknown) {
   });
 }
 
-function sessionToken(payload: Record<string, unknown>) {
-  const encodedPayload = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `header.${encodedPayload}.signature`;
-}
-
 describe("SettingsLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
   beforeEach(() => {
-    localStorage.setItem("naruon_session_token", "signed-runner-session-token");
     oidcMocks.getOidcBrowserConfig.mockReturnValue({
       issuerUrl: "https://login.example.com/realms/naruon",
       clientId: "naruon-web",
@@ -68,6 +59,16 @@ describe("SettingsLayout", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/auth/session") {
+          return jsonResponse({
+            authenticated: true,
+            claims: {
+              userId: "alice",
+              organizationId: "org-acme",
+              workspaceId: "workspace-org-acme",
+            },
+          });
+        }
         if (String(input) === "/api/runner-config") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
@@ -305,18 +306,17 @@ describe("SettingsLayout", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/runner-config",
       expect.objectContaining({
+        credentials: "same-origin",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
     expect(fetch).toHaveBeenCalledWith(
       "/api/observability/operational-signals",
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer signed-runner-session-token",
-        }),
+        credentials: "same-origin",
+        headers: expect.any(Object),
       }),
     );
     const operationalCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/observability/operational-signals");
@@ -368,9 +368,8 @@ describe("SettingsLayout", () => {
     });
 
     const rotateCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/runner-config/rotate" && init?.method === "POST");
-    expect(rotateCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(rotateCall?.[1]?.credentials).toBe("same-origin");
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("Authorization");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
@@ -418,10 +417,7 @@ describe("SettingsLayout", () => {
 
   it("wires Keycloak OIDC login and logout controls to the stored bearer session", async () => {
     window.history.pushState({}, "", "/settings");
-    localStorage.setItem(
-      "naruon_session_token",
-      sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" }),
-    );
+    oidcMocks.clearOidcSession.mockResolvedValue(undefined);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -466,6 +462,7 @@ describe("SettingsLayout", () => {
     await act(async () => {
       logoutButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
+      await Promise.resolve();
     });
     expect(oidcMocks.clearOidcSession).toHaveBeenCalledWith({
       postLogoutRedirectUri: "http://localhost:3000",
@@ -494,9 +491,9 @@ describe("SettingsLayout", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/accounts/config",
       expect.objectContaining({
+        credentials: "same-origin",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
@@ -509,12 +506,10 @@ describe("SettingsLayout", () => {
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     const calendarSourcesCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/calendar/writeback-sources");
     const webdavAccountsCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
-    expect(calendarSourcesCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
-    expect(webdavAccountsCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(calendarSourcesCall?.[1]?.credentials).toBe("same-origin");
+    expect(webdavAccountsCall?.[1]?.credentials).toBe("same-origin");
+    expect(calendarSourcesCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    expect(webdavAccountsCall?.[1]?.headers).not.toHaveProperty("Authorization");
     for (const sourceCall of [calendarSourcesCall, webdavAccountsCall]) {
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
@@ -601,9 +596,8 @@ describe("SettingsLayout", () => {
     });
 
     const providerListCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers" && init?.method !== "POST");
-    expect(providerListCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(providerListCall?.[1]?.credentials).toBe("same-origin");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("Authorization");
     expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
@@ -626,9 +620,8 @@ describe("SettingsLayout", () => {
     });
 
     const providerPostCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers" && init?.method === "POST");
-    expect(providerPostCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(providerPostCall?.[1]?.credentials).toBe("same-origin");
+    expect(providerPostCall?.[1]?.headers).not.toHaveProperty("Authorization");
     expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
@@ -653,9 +646,8 @@ describe("SettingsLayout", () => {
     });
 
     const embeddingPutCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers/2" && init?.method === "PUT");
-    expect(embeddingPutCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(embeddingPutCall?.[1]?.credentials).toBe("same-origin");
+    expect(embeddingPutCall?.[1]?.headers).not.toHaveProperty("Authorization");
     const embeddingPutBody = JSON.parse(String(embeddingPutCall?.[1]?.body));
     expect(embeddingPutBody).toEqual({ embedding_model: "embeddinggemma" });
     expect(container.textContent).toContain("임베딩 모델 지정을 저장했습니다");

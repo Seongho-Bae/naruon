@@ -11,6 +11,41 @@ import {
 import { backendApiBaseUrl } from "@/lib/backend-url";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function sameOriginStateChangingRequest(request: NextRequest): boolean {
+  if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;
+
+  const fetchSite = request.headers.get("sec-fetch-site")?.trim().toLowerCase();
+  if (fetchSite === "cross-site") return false;
+
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+
+  try {
+    return new URL(origin).origin === request.nextUrl.origin;
+  } catch {
+    return false;
+  }
+}
+
+function csrfRejectedResponse() {
+  return NextResponse.json(
+    {
+      error_code: "csrf_origin_rejected",
+      message: "Cross-site session updates are not allowed",
+    },
+    {
+      status: 403,
+      headers: {
+        "Referrer-Policy": "no-referrer",
+      },
+    },
+  );
+}
 
 type BackendSessionResponse = {
   user_id?: unknown;
@@ -76,6 +111,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!sameOriginStateChangingRequest(request)) {
+    return csrfRejectedResponse();
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -111,6 +150,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  if (!sameOriginStateChangingRequest(request)) {
+    return csrfRejectedResponse();
+  }
+
   const response = NextResponse.json(sessionJson(null));
   response.cookies.set(buildExpiredSessionCookieOptions(request));
   return response;

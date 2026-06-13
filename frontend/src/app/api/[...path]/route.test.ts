@@ -27,6 +27,7 @@ describe("/api runtime proxy route", () => {
         return Response.json({
           target_url: String(input),
           auth_header: headers.get("authorization"),
+          cookie_header: headers.get("cookie"),
           user_header: headers.get("x-user-id"),
           request_body: await new Response(init?.body).text(),
         });
@@ -38,9 +39,9 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
           Authorization: "Bearer attacker-controlled-token",
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          "Content-Type": "application/json",
           "X-User-Id": "public-user-id",
         },
         body: JSON.stringify({ state: "open" }),
@@ -54,6 +55,7 @@ describe("/api runtime proxy route", () => {
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
       auth_header: "Bearer signed-session-token",
+      cookie_header: null,
       user_header: null,
       request_body: '{"state":"open"}',
     });
@@ -68,7 +70,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
         },
         body: "{}",
       },
@@ -96,7 +98,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "PUT",
         headers: {
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
           Origin: "https://evil.example",
         },
         body: "{}",
@@ -125,7 +127,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "PUT",
         headers: {
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
           "Sec-Fetch-Site": "cross-site",
         },
         body: "{}",
@@ -156,7 +158,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
         },
         body: "{}",
       },

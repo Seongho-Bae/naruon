@@ -150,6 +150,7 @@ SESSION_SIGNING_ALGORITHM = "HS256"
 OIDC_SIGNING_ALGORITHM = "RS256"
 SESSION_ALLOWED_ALGORITHMS = (SESSION_SIGNING_ALGORITHM,)
 OIDC_ALLOWED_ALGORITHMS = (OIDC_SIGNING_ALGORITHM,)
+JWT_DECODE_REQUIRED_CLAIMS = ("exp", "iss", "aud")
 MIN_SESSION_SECRET_BYTES = 32
 
 
@@ -248,6 +249,10 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
                 algorithms=OIDC_ALLOWED_ALGORITHMS,
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL,
+                options={
+                    "require": JWT_DECODE_REQUIRED_CLAIMS,
+                    "verify_signature": True,
+                },
             )
         except jwt.PyJWTError:
             continue
@@ -321,6 +326,10 @@ def _verify_signed_session_payload(
             algorithms=SESSION_ALLOWED_ALGORITHMS,
             audience=SESSION_AUDIENCE,
             issuer=SESSION_ISSUER,
+            options={
+                "require": JWT_DECODE_REQUIRED_CLAIMS,
+                "verify_signature": True,
+            },
         )
     except jwt.PyJWTError:
         raise _authentication_error()

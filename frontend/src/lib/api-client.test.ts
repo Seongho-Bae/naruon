@@ -30,7 +30,7 @@ describe("ApiClient", () => {
 
     expect(client.getCurrentUserId()).toBeNull();
 
-    localStorage.setItem("legacy_browser_session", "legacy.browser.token");
+    localStorage.setItem("legacy_browser_context", "legacy.browser.value");
 
     expect(client.getCurrentUserId()).toBeNull();
   });

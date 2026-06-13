@@ -123,22 +123,23 @@ describe("CalendarPage", () => {
   });
 
   it("creates a signed customer-owned calendar writeback intent", async () => {
-    localStorage.setItem("naruon_session_token", "signed-calendar-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/calendar/writeback-sources") {
         expect(init?.method).toBeUndefined();
+        expect(init?.credentials).toBe("same-origin");
         expect(init?.headers).toEqual(expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-calendar-session",
         }));
+        expect(init?.headers).not.toHaveProperty("Authorization");
         return jsonResponse(calendarSourceList);
       }
       expect(String(input)).toBe("/api/calendar/writeback-intent");
       expect(init?.method).toBe("POST");
+      expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
-        Authorization: "Bearer signed-calendar-session",
       }));
+      expect(init?.headers).not.toHaveProperty("Authorization");
       const requestHeaders = init?.headers as Record<string, string>;
       const normalizedHeaderNames = new Set(Object.keys(requestHeaders).map((headerName) => headerName.toLowerCase()));
       for (const publicHeader of [
@@ -204,20 +205,21 @@ describe("CalendarPage", () => {
   });
 
   it("lets the user choose a specific customer-owned calendar source before intent creation", async () => {
-    localStorage.setItem("naruon_session_token", "signed-calendar-source-selection");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/calendar/writeback-sources") {
+        expect(init?.credentials).toBe("same-origin");
         expect(init?.headers).toEqual(expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-calendar-source-selection",
         }));
+        expect(init?.headers).not.toHaveProperty("Authorization");
         return jsonResponse(calendarSourceList);
       }
       expect(String(input)).toBe("/api/calendar/writeback-intent");
+      expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
-        Authorization: "Bearer signed-calendar-source-selection",
       }));
+      expect(init?.headers).not.toHaveProperty("Authorization");
       expect(JSON.parse(String(init?.body))).toEqual({
         action: "create",
         summary: "Naruon 일정 후보 writeback intent 점검",

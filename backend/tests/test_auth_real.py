@@ -153,14 +153,16 @@ def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
         app.dependency_overrides.update(original_overrides)
 
 
-def _request_without_dependency_overrides(method: str, path: str):
+def _request_without_dependency_overrides(
+    method: str, path: str, headers: dict[str, str] | None = None
+):
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
 
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            return client.request(method, path)
+            return client.request(method, path, headers=headers)
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -357,9 +359,11 @@ async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(_valid_session_payload())
     decode_algorithms: list[tuple[str, ...]] = []
+    decode_options: list[dict[str, object]] = []
 
     def mock_jwt_decode(*args, **kwargs):
         decode_algorithms.append(tuple(kwargs["algorithms"]))
+        decode_options.append(dict(kwargs["options"]))
         return _valid_session_payload()
 
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
@@ -368,6 +372,27 @@ async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist
 
     assert context.user_id == "alice"
     assert decode_algorithms == [SESSION_ALLOWED_ALGORITHMS]
+    assert decode_options == [
+        {"require": ("exp", "iss", "aud"), "verify_signature": True}
+    ]
+
+
+def test_auth_session_route_returns_server_verified_claims():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+
+    response = _request_without_dependency_overrides(
+        "GET",
+        "/api/auth/session",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "alice",
+        "organization_id": "org-acme",
+        "workspace_id": "workspace-org-acme",
+    }
 
 
 @pytest.mark.asyncio
@@ -695,37 +720,6 @@ def test_http_route_rejects_public_identity_headers_without_dev_token():
     )
 
 
-def test_auth_session_route_returns_verified_session_claims():
-    def override_auth_context():
-        return AuthContext(
-            user_id="alice",
-            role="member",
-            organization_id="org-acme",
-            group_ids=("group-1",),
-            workspace_id="workspace-org-acme",
-            session_verifier="hmac",
-        )
-
-    original_overrides = dict(app.dependency_overrides)
-    app.dependency_overrides[get_auth_context] = override_auth_context
-    try:
-        with TestClient(app, raise_server_exceptions=False) as client:
-            response = client.get(
-                "/api/auth/session",
-                headers={"Authorization": "Bearer verified-session-token"},
-            )
-    finally:
-        app.dependency_overrides.clear()
-        app.dependency_overrides.update(original_overrides)
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "user_id": "alice",
-        "organization_id": "org-acme",
-        "workspace_id": "workspace-org-acme",
-    }
-
-
 def test_runtime_auth_rejects_scoped_enterprise_role_headers():
     _enable_local_dev_headers()
 
@@ -866,9 +860,11 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
 
     decode_algorithms: list[tuple[str, ...]] = []
+    decode_options: list[dict[str, object]] = []
 
     def mock_jwt_decode(*args, **kwargs):
         decode_algorithms.append(tuple(kwargs["algorithms"]))
+        decode_options.append(dict(kwargs["options"]))
         return {
             "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
@@ -899,6 +895,9 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     assert context.organization_id == "org-acme"
     assert context.session_verifier == "oidc"
     assert decode_algorithms == [OIDC_ALLOWED_ALGORITHMS]
+    assert decode_options == [
+        {"require": ("exp", "iss", "aud"), "verify_signature": True}
+    ]
 
 
 @pytest.mark.asyncio

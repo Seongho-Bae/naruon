@@ -55,7 +55,7 @@ test('live dashboard renders seeded inbox through real HTTP', async ({ page }) =
   const sessionToken = signLiveSession();
 
   await page.addInitScript((token) => {
-    window.localStorage.setItem('naruon_session_token', token);
+    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
   }, sessionToken);
   await page.goto('/');
 
