@@ -80,6 +80,40 @@ describe("/auth/session route", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("stores a session when browser origin matches the forwarded host", async () => {
+    const token = signedFixtureToken({
+      sub: "user-1",
+      org: "org-acme",
+      workspace: "workspace-acme",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    const fetchMock = vi.fn(async () => verifiedSessionResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://internal-frontend:3000/auth/session", {
+        method: "POST",
+        headers: {
+          Host: "127.0.0.1:3000",
+          Origin: "http://127.0.0.1:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: token }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      authenticated: true,
+      claims: {
+        userId: "user-1",
+        organizationId: "org-acme",
+        workspaceId: "workspace-acme",
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("returns public claims without exposing the cookie value", async () => {
     const token = signedFixtureToken({
       sub: "user-2",

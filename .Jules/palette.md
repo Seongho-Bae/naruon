@@ -9,3 +9,7 @@
 ## 2026-06-11 - Adding Repository Badges and Communication Guidelines
 **Learning:** Organizing a repository with Issue/PR templates, CI badges, and a Code of Conduct creates an immediate impression of professionalism and hygiene, saving developers time on repetitive questions.
 **Action:** When setting up a new repository or performing repository hygiene, always ensure a base set of standard templates and CI badges are included.
+
+## 2024-06-12 - Adding a11y Roles to InsightCard Status States
+**Learning:** Generic wrapper components like `InsightCard` which dynamically load and present data often conditionally render a generic loader or error state. Screen readers may ignore these visual cues unless they are accompanied by proper semantic roles, such as `role="status"` and `aria-live="polite"` for loading spinners, and `role="alert"` for error messages. Also adding `aria-hidden="true"` to visual icons within these states reduces noise.
+**Action:** When creating reusable data-fetching card components, always annotate loading and error state container elements with the appropriate ARIA roles and live regions, and hide purely decorative elements.

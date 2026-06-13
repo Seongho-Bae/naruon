@@ -65,28 +65,29 @@ export function InsightCard({
 
         <CardContent className="flex-1 p-4 overflow-auto">
           {loading ? (
-            <div className="flex flex-col items-center justify-center h-32 space-y-3">
-              <div className="relative flex items-center justify-center">
+            <div role="status" aria-live="polite" className="flex flex-col items-center justify-center h-32 space-y-3">
+              <div className="relative flex items-center justify-center" aria-hidden="true">
                 <div className="absolute inset-0 border-t-2 border-primary rounded-full animate-spin w-8 h-8 opacity-70"></div>
                 <div className="absolute inset-2 bg-primary/20 rounded-full blur-sm"></div>
               </div>
               <span className="text-xs text-muted-foreground font-medium tracking-wide">AI가 분석 중입니다...</span>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center h-32 text-center space-y-3 p-4 bg-red-50/50 rounded-xl border border-red-100">
-              <div className="bg-red-100 p-2 rounded-full">
+            <div role="alert" className="flex flex-col items-center justify-center h-32 text-center space-y-3 p-4 bg-red-50/50 rounded-xl border border-red-100">
+              <div className="bg-red-100 p-2 rounded-full" aria-hidden="true">
                 <AlertCircle className="w-5 h-5 text-red-500" />
               </div>
               <span className="text-sm text-red-600 font-medium">{error}</span>
               {onRetry && (
                 <Button variant="outline" size="sm" onClick={onRetry} className="mt-2 h-8 text-xs bg-white hover:bg-red-50 hover:text-red-600 border-red-200">
-                  <RefreshCw className="w-3 h-3 mr-1.5" /> 다시 시도
+                  <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> 다시 시도
                 </Button>
               )}
             </div>
           ) : empty ? (
-            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/60">
-              {emptyMessage}
+            <div className="flex flex-col items-center justify-center h-32 text-sm text-muted-foreground bg-secondary/30 rounded-xl border border-dashed border-border/60 space-y-2 p-4 text-center">
+              <Info className="w-5 h-5 text-muted-foreground/50" aria-hidden="true" />
+              <span>{emptyMessage}</span>
             </div>
           ) : (
             <div className="text-sm text-foreground leading-relaxed">

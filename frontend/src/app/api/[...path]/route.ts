@@ -109,6 +109,36 @@ function safeBackendQuery(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
+function firstHeaderValue(value: string | null): string | null {
+  return value?.split(",")[0]?.trim() || null;
+}
+
+function forwardedProtocol(request: NextRequest): string {
+  const proto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
+  if (proto === "http" || proto === "https") return proto;
+  return request.nextUrl.protocol.replace(":", "");
+}
+
+function requestOriginCandidates(request: NextRequest): Set<string> {
+  const origins = new Set([request.nextUrl.origin]);
+  const proto = forwardedProtocol(request);
+  const hosts = [
+    firstHeaderValue(request.headers.get("x-forwarded-host")),
+    firstHeaderValue(request.headers.get("host")),
+  ];
+
+  for (const host of hosts) {
+    if (!host || CONTROL_CHARACTER_PATTERN.test(host)) continue;
+    try {
+      origins.add(new URL(`${proto}://${host}`).origin);
+    } catch {
+      // Ignore malformed proxy host metadata and keep the stricter origin set.
+    }
+  }
+
+  return origins;
+}
+
 function sameOriginStateChangingRequest(request: NextRequest): boolean {
   if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;
 
@@ -119,7 +149,7 @@ function sameOriginStateChangingRequest(request: NextRequest): boolean {
   if (!origin) return true;
 
   try {
-    return new URL(origin).origin === request.nextUrl.origin;
+    return requestOriginCandidates(request).has(new URL(origin).origin);
   } catch {
     return false;
   }

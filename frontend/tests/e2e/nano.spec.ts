@@ -46,6 +46,10 @@ function signLiveSession(expiresInSeconds = 300): string {
   return `${header}.${payload}.${signature}`;
 }
 
+function liveSessionCookie(token: string): string {
+  return `naruon_session=${token}`;
+}
+
 test('nano test: verify user requested features', async ({ page }) => {
   const sessionToken = 'signed.nano.session';
   const providerRequestHeaders: Record<string, string>[] = [];
@@ -91,10 +95,10 @@ test('nano live model: ollama gemma4 e2b chat and embedding search complete', as
   );
 
   const token = signLiveSession(1_200);
-  const authorization = `Bearer ${token}`;
+  const cookie = liveSessionCookie(token);
 
   const draftResponse = await request.post('/api/llm/draft', {
-    headers: { Authorization: authorization },
+    headers: { Cookie: cookie },
     data: {
       email_body: 'Live Gemma4 verification request from Naruon E2E.',
       instruction: 'Reply with one concise Korean sentence confirming receipt.',
@@ -106,7 +110,7 @@ test('nano live model: ollama gemma4 e2b chat and embedding search complete', as
   expect(String(draftBody.draft ?? '').trim().length).toBeGreaterThan(0);
 
   const searchResponse = await request.post('/api/search', {
-    headers: { Authorization: authorization },
+    headers: { Cookie: cookie },
     data: { query: 'Live E2E Release', limit: 3 },
     timeout: 600_000,
   });
