@@ -423,9 +423,12 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Do not request changes with only a check URL, workflow name, or generic failure summary." "opencode review prompt forbids generic failed-check reviews"
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
 	assert_file_contains "$workflow_file" "never use line 0" "opencode review prompt forbids non-specific line 0 findings"
+	assert_file_contains "$workflow_file" "The suggested_diff must be source-backed: every removed line in the diff must exist in the cited current local file" "opencode review prompt forbids non-source-backed suggested diffs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '.line | type == "number" and . > 0 and floor == .' "opencode approval gate rejects line zero findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" '$p != "n/a" and $p != "unknown"' "opencode approval gate rejects placeholder finding paths"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" 'startswith("cannot provide diff")' "opencode approval gate rejects placeholder suggested diffs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "source_file.is_file()" "opencode approval gate requires finding paths to exist"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "removed_line not in source_line_set" "opencode approval gate rejects suggested diffs that remove code absent from the cited file"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
@@ -636,6 +639,36 @@ EOF
 
 	assert_equals "4" "$rc" "opencode approval gate rejects placeholder findings"
 	assert_equals "NO_CONCLUSION" "$gate_result" "placeholder finding rejection gate result"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_non_source_backed_findings() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Hallucinated blocker","summary":"Finding cites code that is not present in the source file.","findings":[{"path":"scripts/ci/opencode_review_approve_gate.sh","line":1,"severity":"HIGH","title":"Non-source-backed finding","problem":"The finding removes a line that is not in the cited file.","root_cause":"The review did not inspect current source before suggesting a diff.","fix_direction":"Only cite lines present in the current source.","regression_test_direction":"Reject request-changes findings whose removed diff lines are absent from the cited file.","suggested_diff":"diff --git a/scripts/ci/opencode_review_approve_gate.sh b/scripts/ci/opencode_review_approve_gate.sh\n--- a/scripts/ci/opencode_review_approve_gate.sh\n+++ b/scripts/ci/opencode_review_approve_gate.sh\n@@ -1 +1 @@\n-  return Math.random().toString(36)\n+  return crypto.getRandomValues(new Uint8Array(32))"}]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects non-source-backed findings"
+	assert_equals "NO_CONCLUSION" "$gate_result" "non-source-backed finding rejection gate result"
 
 	rm -rf "$tmp_dir"
 }
@@ -5162,6 +5195,8 @@ assert_opencode_review_publish_body_discards_trailing_model_prose
 assert_opencode_review_gate_rejects_line_zero_findings
 
 assert_opencode_review_gate_rejects_placeholder_findings
+
+assert_opencode_review_gate_rejects_non_source_backed_findings
 
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
