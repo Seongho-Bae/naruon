@@ -5530,7 +5530,7 @@ run_gate_case "pr-incomplete-codebase-fallback-success" \
 	"1200" \
 	"0" \
 	"pull_request" \
-	"frontend/src/lib/api-client.ts"
+	"backend/api/emails.py"
 
 run_gate_case "pr-stale-report-plus-inline-changed-finding-blocks" \
 	"vertex_ai/stale-inline-primary" \
