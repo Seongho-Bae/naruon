@@ -480,12 +480,13 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               ) : pendingTasks.slice(0, 3).map((task) => {
                 const pKor = mapPriorityToKorean(task.priority);
                 const pClass = pKor === '긴급' || pKor === '높음' ? 'text-red-500' : pKor === '보통' ? 'text-green-500' : 'text-muted-foreground';
+                const displayTitle = safeWorkspaceTitle(task.title, '제목 없는 작업');
                 return (
                   <div key={task.id} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <input type="checkbox" className="size-4 rounded border-border text-primary" />
-                      <span className="text-sm font-medium">{safeWorkspaceTitle(task.title, '제목 없는 작업')}</span>
-                    </div>
+                    <label className="flex cursor-pointer items-center gap-3 group">
+                      <input type="checkbox" className="size-4 cursor-pointer rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40" aria-label={`${displayTitle} 작업 선택`} />
+                      <span className="text-sm font-medium transition-colors group-hover:text-primary">{displayTitle}</span>
+                    </label>
                     <div className="flex items-center gap-2 text-xs">
                       <span className={`font-semibold ${pClass}`}>{pKor}</span>
                     </div>
