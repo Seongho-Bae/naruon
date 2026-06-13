@@ -258,6 +258,17 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
     assert "upstream live_backend" not in live_nginx
     api_location = live_nginx.split("    location /api/ {", 1)[1].split("    }", 1)[0]
+    root_location = live_nginx.split("    location / {", 1)[1].split("    }", 1)[0]
+    for location in (api_location, root_location):
+        assert "proxy_set_header Host $host;" in location
+        assert "proxy_set_header X-Real-IP $remote_addr;" in location
+        assert (
+            "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+            in location
+        )
+        assert "proxy_set_header X-Forwarded-Proto $scheme;" in location
+        assert "proxy_set_header Upgrade $http_upgrade;" in location
+        assert 'proxy_set_header Connection "upgrade";' in location
     assert "proxy_pass http://live_frontend;" in api_location
     assert "proxy_pass http://live_backend;" not in api_location
 
