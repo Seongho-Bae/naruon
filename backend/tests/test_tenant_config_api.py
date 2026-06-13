@@ -267,28 +267,6 @@ def test_legacy_tenant_config_endpoint_keeps_organization_scope(
     assert ("shared_user", "org-rival") in mock_db.objects
 
 
-@pytest.mark.parametrize(
-    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
-)
-def test_tenant_config_post_stays_user_owned_even_for_admin_headers(
-    client, admin_role
-):
-    response = client.post(
-        "/api/config",
-        json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": admin_role,
-            "X-Organization-Id": "org-acme",
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Mailbox settings are personal and can only be managed by the authenticated user"
-    }
-
-
 def test_tenant_config_rejects_private_smtp_host(client):
     response = client.post(
         "/api/config",

@@ -39,8 +39,28 @@ function textOnlyTooltip(value: unknown): HTMLElement {
   return tooltip;
 }
 
+const HTML_TEXT_ESCAPE_PATTERN = /[&<>"']/g;
+const HTML_TEXT_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+function escapeGraphLabel(value: unknown): string {
+  return String(value ?? '').replace(
+    HTML_TEXT_ESCAPE_PATTERN,
+    (character) => HTML_TEXT_ESCAPES[character] ?? character,
+  );
+}
+
 function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   const sanitized = { ...item };
+
+  if (Object.prototype.hasOwnProperty.call(item, 'label')) {
+    sanitized.label = escapeGraphLabel(item.label);
+  }
 
   if (Object.prototype.hasOwnProperty.call(item, 'title')) {
     sanitized.title = textOnlyTooltip(item.title);

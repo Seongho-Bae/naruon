@@ -157,6 +157,7 @@ MAX_SIGNED_SESSION_EXPIRATION_SECONDS = 12 * 60 * 60
 MAX_SIGNED_SESSION_CLOCK_SKEW_SECONDS = 60
 SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
 SESSION_AUTH_RATE_LIMIT_MAX_FAILURES = 10
+SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS = 4096
 _session_auth_failure_buckets: dict[str, tuple[int, float]] = {}
 
 
@@ -315,6 +316,15 @@ def _prune_session_auth_failure_buckets(now: float) -> None:
         _session_auth_failure_buckets.pop(key, None)
 
 
+def _ensure_session_auth_failure_bucket_capacity(key: str) -> None:
+    if (
+        key in _session_auth_failure_buckets
+        or len(_session_auth_failure_buckets) < SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS
+    ):
+        return
+    _session_auth_failure_buckets.pop(next(iter(_session_auth_failure_buckets)), None)
+
+
 def _reject_if_session_auth_rate_limited(token: str) -> None:
     now = time.monotonic()
     _prune_session_auth_failure_buckets(now)
@@ -331,6 +341,7 @@ def _record_session_auth_failure(token: str) -> None:
     now = time.monotonic()
     _prune_session_auth_failure_buckets(now)
     key = _session_auth_failure_key(token)
+    _ensure_session_auth_failure_bucket_capacity(key)
     failure_count, reset_at = _session_auth_failure_buckets.get(
         key,
         (0, now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS),

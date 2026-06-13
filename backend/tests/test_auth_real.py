@@ -544,6 +544,21 @@ async def test_signed_bearer_session_rate_limits_repeated_invalid_token(monkeypa
 
 
 @pytest.mark.asyncio
+async def test_signed_bearer_session_failure_buckets_are_bounded(monkeypatch):
+    from api import auth as auth_module
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    monkeypatch.setattr(auth_module, "SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS", 3)
+
+    for index in range(5):
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer invalid.jwt.token{index}")
+        assert exc.value.status_code == 401
+
+    assert len(_session_auth_failure_buckets) == 3
+
+
+@pytest.mark.asyncio
 async def test_signed_bearer_session_requires_strong_configured_secret():
     token = _signed_session_token(_valid_session_payload())
 

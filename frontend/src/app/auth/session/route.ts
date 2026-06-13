@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { NextRequest, NextResponse } from "next/server";
 
 import {
@@ -18,6 +20,16 @@ const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
 };
+const SESSION_VERIFICATION_RATE_LIMIT_WINDOW_MS = 60_000;
+const SESSION_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS = 10;
+const SESSION_VERIFICATION_RATE_LIMIT_MAX_BUCKETS = 4096;
+
+type SessionVerificationBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const sessionVerificationBuckets = new Map<string, SessionVerificationBucket>();
 
 function sameOriginStateChangingRequest(request: NextRequest): boolean {
   if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;
@@ -44,7 +56,76 @@ function csrfRejectedResponse() {
     {
       status: 403,
       headers: {
+        ...NO_STORE_HEADERS,
         "Referrer-Policy": "no-referrer",
+      },
+    },
+  );
+}
+
+function sessionVerificationKey(token: string) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function pruneSessionVerificationBuckets(now: number) {
+  for (const [key, bucket] of sessionVerificationBuckets) {
+    if (bucket.resetAt <= now) {
+      sessionVerificationBuckets.delete(key);
+    }
+  }
+}
+
+function ensureSessionVerificationBucketCapacity(key: string) {
+  if (
+    sessionVerificationBuckets.has(key) ||
+    sessionVerificationBuckets.size < SESSION_VERIFICATION_RATE_LIMIT_MAX_BUCKETS
+  ) {
+    return;
+  }
+
+  const oldestKey = sessionVerificationBuckets.keys().next().value;
+  if (oldestKey) {
+    sessionVerificationBuckets.delete(oldestKey);
+  }
+}
+
+function recordSessionVerificationAttempt(token: string):
+  | { limited: false }
+  | { limited: true; retryAfterSeconds: number } {
+  const now = Date.now();
+  pruneSessionVerificationBuckets(now);
+
+  const key = sessionVerificationKey(token);
+  const bucket = sessionVerificationBuckets.get(key);
+  if (bucket && bucket.count >= SESSION_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS) {
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+    };
+  }
+
+  ensureSessionVerificationBucketCapacity(key);
+  const nextBucket =
+    bucket && bucket.resetAt > now
+      ? { count: bucket.count + 1, resetAt: bucket.resetAt }
+      : {
+          count: 1,
+          resetAt: now + SESSION_VERIFICATION_RATE_LIMIT_WINDOW_MS,
+        };
+  sessionVerificationBuckets.set(key, nextBucket);
+  return { limited: false };
+}
+
+function sessionRateLimitedResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error_code: "session_verification_rate_limited" },
+    {
+      status: 429,
+      headers: {
+        ...NO_STORE_HEADERS,
+        "Retry-After": String(retryAfterSeconds),
+        "X-RateLimit-Limit": String(SESSION_VERIFICATION_RATE_LIMIT_MAX_ATTEMPTS),
+        "X-RateLimit-Remaining": "0",
       },
     },
   );
@@ -125,7 +206,7 @@ export async function POST(request: NextRequest) {
   } catch {
     return NextResponse.json(
       { error_code: "invalid_session_request" },
-      { status: 400 },
+      { status: 400, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -137,14 +218,19 @@ export async function POST(request: NextRequest) {
   if (!accessToken) {
     return NextResponse.json(
       { error_code: "invalid_session_token" },
-      { status: 400 },
+      { status: 400, headers: NO_STORE_HEADERS },
     );
   }
+  const rateLimit = recordSessionVerificationAttempt(accessToken);
+  if (rateLimit.limited) {
+    return sessionRateLimitedResponse(rateLimit.retryAfterSeconds);
+  }
+
   const claims = await verifySessionToken(accessToken);
   if (!claims) {
     return NextResponse.json(
       { error_code: "invalid_session_token" },
-      { status: 401 },
+      { status: 401, headers: NO_STORE_HEADERS },
     );
   }
 
