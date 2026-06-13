@@ -35,6 +35,21 @@ function signLiveSession(): string {
   return `${header}.${payload}.${signature}`;
 }
 
+async function hasVisibleSeededInboxText(page: import('@playwright/test').Page): Promise<boolean> {
+  return page.getByText('Live E2E Release').evaluateAll((elements) =>
+    elements.some((element) => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    }),
+  );
+}
+
 test.skip(
   !process.env.LIVE_BASE_URL && process.env.RUN_LIVE_E2E !== '1',
   'Requires a live frontend/backend environment with seeded data.',
@@ -60,8 +75,8 @@ test('live dashboard renders seeded inbox through real HTTP', async ({ page }) =
   await page.goto('/');
 
   await expect(page.getByRole('img', { name: 'Naruon' })).toBeVisible();
-  await expect(page.getByText('Live E2E Release').first()).toBeVisible({
+  await expect.poll(() => hasVisibleSeededInboxText(page), {
     timeout: 15_000,
-  });
+  }).toBe(true);
   await expect(page.getByText('Failed to load emails.')).toHaveCount(0);
 });
