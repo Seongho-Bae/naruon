@@ -432,7 +432,6 @@ jobs:
       - name: Run OpenCode PR Review (GPT-5)
         id: opencode_review_primary
         timeout-minutes: 60
-        continue-on-error: true
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -450,6 +449,9 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
+          record_review_status() {
+            printf 'review_status=%s\n' "$1" >>"$GITHUB_OUTPUT"
+          }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
@@ -477,24 +479,38 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
+          set +e
           timeout 1200 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review \
             --model "$MODEL" \
             --format json \
             --title "PR #${PR_NUMBER} OpenCode bounded review ${MODEL}" >"$opencode_json_file"
+          opencode_run_status=$?
+          set -e
+          if [ "$opencode_run_status" -ne 0 ]; then
+            echo "OpenCode primary review attempt did not complete; fallback review will run."
+            record_review_status "failed"
+            exit 0
+          fi
           session_id="$(jq -r 'select(.type == "step_start") | .sessionID' "$opencode_json_file" | tail -n 1)"
           if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
             echo "OpenCode JSON output did not include a session id."
             cat "$opencode_json_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
-          opencode export "$session_id" --pure >"$opencode_export_file"
+          if ! opencode export "$session_id" --pure >"$opencode_export_file"; then
+            echo "OpenCode session export did not complete."
+            record_review_status "failed"
+            exit 0
+          fi
           jq -r '.messages[] | select(.info.role == "assistant") | .parts[]? | select(.type == "text") | .text' "$opencode_export_file" >"$OPENCODE_OUTPUT_FILE"
           if [ ! -s "$OPENCODE_OUTPUT_FILE" ]; then
             echo "OpenCode session export did not include assistant text."
             cat "$opencode_export_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
           normalize_opencode_output() {
             local output_file="$1"
@@ -515,14 +531,15 @@ jobs:
           if ! normalize_opencode_output "$OPENCODE_OUTPUT_FILE"; then
             echo "OpenCode output did not include a valid control conclusion."
             cat "$OPENCODE_OUTPUT_FILE"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
+          record_review_status "success"
 
       - name: Run OpenCode PR Review fallback (DeepSeek R1)
         id: opencode_review_fallback
-        if: steps.opencode_review_primary.outcome != 'success'
+        if: steps.opencode_review_primary.outputs.review_status != 'success'
         timeout-minutes: 60
-        continue-on-error: true
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -540,6 +557,9 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
+          record_review_status() {
+            printf 'review_status=%s\n' "$1" >>"$GITHUB_OUTPUT"
+          }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
@@ -567,24 +587,38 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
+          set +e
           timeout 300 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review-fallback \
             --model "$MODEL" \
             --format json \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
+          opencode_run_status=$?
+          set -e
+          if [ "$opencode_run_status" -ne 0 ]; then
+            echo "OpenCode DeepSeek R1 review attempt did not complete; next fallback review will run."
+            record_review_status "failed"
+            exit 0
+          fi
           session_id="$(jq -r 'select(.type == "step_start") | .sessionID' "$opencode_json_file" | tail -n 1)"
           if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
             echo "OpenCode JSON output did not include a session id."
             cat "$opencode_json_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
-          opencode export "$session_id" --pure >"$opencode_export_file"
+          if ! opencode export "$session_id" --pure >"$opencode_export_file"; then
+            echo "OpenCode session export did not complete."
+            record_review_status "failed"
+            exit 0
+          fi
           jq -r '.messages[] | select(.info.role == "assistant") | .parts[]? | select(.type == "text") | .text' "$opencode_export_file" >"$OPENCODE_OUTPUT_FILE"
           if [ ! -s "$OPENCODE_OUTPUT_FILE" ]; then
             echo "OpenCode session export did not include assistant text."
             cat "$opencode_export_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
           normalize_opencode_output() {
             local output_file="$1"
@@ -605,14 +639,15 @@ jobs:
           if ! normalize_opencode_output "$OPENCODE_OUTPUT_FILE"; then
             echo "OpenCode output did not include a valid control conclusion."
             cat "$OPENCODE_OUTPUT_FILE"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
+          record_review_status "success"
 
       - name: Run OpenCode PR Review fallback (DeepSeek V3)
         id: opencode_review_second_fallback
-        if: steps.opencode_review_primary.outcome != 'success' && steps.opencode_review_fallback.outcome != 'success'
+        if: steps.opencode_review_primary.outputs.review_status != 'success' && steps.opencode_review_fallback.outputs.review_status != 'success'
         timeout-minutes: 60
-        continue-on-error: true
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -630,6 +665,9 @@ jobs:
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           set -euo pipefail
+          record_review_status() {
+            printf 'review_status=%s\n' "$1" >>"$GITHUB_OUTPUT"
+          }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: use CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups when needed. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
@@ -657,24 +695,38 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
+          set +e
           timeout 300 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review-fallback \
             --model "$MODEL" \
             --format json \
             --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
+          opencode_run_status=$?
+          set -e
+          if [ "$opencode_run_status" -ne 0 ]; then
+            echo "OpenCode DeepSeek V3 review attempt did not complete."
+            record_review_status "failed"
+            exit 0
+          fi
           session_id="$(jq -r 'select(.type == "step_start") | .sessionID' "$opencode_json_file" | tail -n 1)"
           if [ -z "$session_id" ] || [ "$session_id" = "null" ]; then
             echo "OpenCode JSON output did not include a session id."
             cat "$opencode_json_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
-          opencode export "$session_id" --pure >"$opencode_export_file"
+          if ! opencode export "$session_id" --pure >"$opencode_export_file"; then
+            echo "OpenCode session export did not complete."
+            record_review_status "failed"
+            exit 0
+          fi
           jq -r '.messages[] | select(.info.role == "assistant") | .parts[]? | select(.type == "text") | .text' "$opencode_export_file" >"$OPENCODE_OUTPUT_FILE"
           if [ ! -s "$OPENCODE_OUTPUT_FILE" ]; then
             echo "OpenCode session export did not include assistant text."
             cat "$opencode_export_file"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
           normalize_opencode_output() {
             local output_file="$1"
@@ -695,15 +747,17 @@ jobs:
           if ! normalize_opencode_output "$OPENCODE_OUTPUT_FILE"; then
             echo "OpenCode output did not include a valid control conclusion."
             cat "$OPENCODE_OUTPUT_FILE"
-            exit 1
+            record_review_status "failed"
+            exit 0
           fi
+          record_review_status "success"
 
       - name: Publish bounded OpenCode review comment
         if: >-
           always()
-          && (steps.opencode_review_primary.outcome == 'success'
-              || steps.opencode_review_fallback.outcome == 'success'
-              || steps.opencode_review_second_fallback.outcome == 'success')
+          && (steps.opencode_review_primary.outputs.review_status == 'success'
+              || steps.opencode_review_fallback.outputs.review_status == 'success'
+              || steps.opencode_review_second_fallback.outputs.review_status == 'success')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPOSITORY: ${{ github.repository }}
@@ -711,9 +765,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outcome }}
-          OPENCODE_FALLBACK_OUTCOME: ${{ steps.opencode_review_fallback.outcome }}
-          OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outcome }}
+          OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outputs.review_status }}
+          OPENCODE_FALLBACK_OUTCOME: ${{ steps.opencode_review_fallback.outputs.review_status }}
+          OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outputs.review_status }}
           OPENCODE_PRIMARY_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-primary.md
           OPENCODE_FALLBACK_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-fallback.md
           OPENCODE_SECOND_FALLBACK_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-second-fallback.md
@@ -872,9 +926,9 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
-          OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outcome }}
-          OPENCODE_FALLBACK_OUTCOME: ${{ steps.opencode_review_fallback.outcome }}
-          OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outcome }}
+          OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outputs.review_status }}
+          OPENCODE_FALLBACK_OUTCOME: ${{ steps.opencode_review_fallback.outputs.review_status }}
+          OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outputs.review_status }}
           APPROVAL_CHECK_WAIT_ATTEMPTS: "241"
           APPROVAL_CHECK_WAIT_SLEEP_SECONDS: "30"
         run: |
