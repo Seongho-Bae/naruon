@@ -118,22 +118,37 @@ def test_compose_allows_only_the_local_ollama_provider_host():
     local_compose = (REPO_ROOT / "docker-compose.yml").read_text()
     live_compose = (REPO_ROOT / "docker-compose.live-e2e.yml").read_text()
 
+    def has_exact_compose_line(compose: str, *expected_lines: str) -> bool:
+        normalized_lines = {
+            line.strip().removeprefix("- ").strip() for line in compose.splitlines()
+        }
+        return any(expected_line in normalized_lines for expected_line in expected_lines)
+
+    assert not has_exact_compose_line(
+        "ALLOWED_LLM_BASE_URL_HOSTS=ollama,evil.example",
+        "ALLOWED_LLM_BASE_URL_HOSTS=ollama",
+    )
+
     for compose in (local_compose, live_compose):
-        assert (
-            'ALLOW_LOCAL_LLM_PROVIDERS: "true"' in compose
-            or "ALLOW_LOCAL_LLM_PROVIDERS=true" in compose
+        assert has_exact_compose_line(
+            compose,
+            'ALLOW_LOCAL_LLM_PROVIDERS: "true"',
+            "ALLOW_LOCAL_LLM_PROVIDERS=true",
         )
-        assert (
-            'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"' in compose
-            or "ALLOWED_LLM_BASE_URL_HOSTS=ollama" in compose
+        assert has_exact_compose_line(
+            compose,
+            'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"',
+            "ALLOWED_LLM_BASE_URL_HOSTS=ollama",
         )
-        assert (
-            "OPENAI_BASE_URL: http://ollama:11434/v1" in compose
-            or "OPENAI_BASE_URL=http://ollama:11434/v1" in compose
+        assert has_exact_compose_line(
+            compose,
+            "OPENAI_BASE_URL: http://ollama:11434/v1",
+            "OPENAI_BASE_URL=http://ollama:11434/v1",
         )
-        assert (
-            "OPENAI_MODEL: gemma4:e2b-it-qat" in compose
-            or "OPENAI_MODEL=gemma4:e2b-it-qat" in compose
+        assert has_exact_compose_line(
+            compose,
+            "OPENAI_MODEL: gemma4:e2b-it-qat",
+            "OPENAI_MODEL=gemma4:e2b-it-qat",
         )
 
 
