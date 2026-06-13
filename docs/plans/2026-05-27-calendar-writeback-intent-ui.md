@@ -20,8 +20,8 @@ is the calendar server or directly writing provider data from the browser.
   `if_match`, and `audit_event` when the intent is accepted.
 - `422` means no customer-owned source is available.
 - `409` means ETag/If-Match conflict protection stopped an overwrite.
-- Browser requests use the stored `naruon_session_token` as
-  `Authorization: Bearer`; public identity headers are not part of this flow.
+- Browser requests use the HttpOnly cookie-backed `/api/*` proxy session;
+  browser `Authorization` and public identity headers are not part of this flow.
 
 ## Implemented Slice
 

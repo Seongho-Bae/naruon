@@ -264,7 +264,6 @@ describe("EmailDetail", () => {
   });
 
   it("lets users create tasks from visible execution items in the email detail", async () => {
-    localStorage.setItem("naruon_session_token", "signed.task.session");
     const email: TestEmail = {
       id: 14,
       message_id: "<tasks@example.com>",
@@ -287,9 +286,7 @@ describe("EmailDetail", () => {
       }
       if (url.endsWith("/api/tasks/from-email")) {
         expect(init?.method).toBe("POST");
-        expect(init?.headers).toMatchObject({
-          Authorization: "Bearer signed.task.session",
-        });
+        expect(init?.headers).not.toHaveProperty("Authorization");
         expect(JSON.parse(String(init?.body))).toEqual({
           source_email_id: "<tasks@example.com>",
           thread_id: "<tasks@example.com>",

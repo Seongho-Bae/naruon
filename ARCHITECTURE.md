@@ -211,18 +211,20 @@ provider endpoints additionally require an operator-owned egress allowlist so an
 organization admin cannot point LLM traffic at localhost, private networks, or
 cloud metadata services.
 
-The browser API client reads `naruon_session_token` from local storage and sends
-it as the bearer session on signed routes. It does not synthesize or forward
-public identity headers such as `X-User-Id`, `X-Organization-Id`, `X-Group-Id`,
-`X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`; any local development
-identity-header flow is limited to explicit unsigned/test harness paths and is
-not accepted by authenticated runtime dependencies. UI flows that create
-source-linked tasks or other server-side writes must keep that signed-session
-path covered in fast tests and E2E mocks so authenticated backend behavior is
-not masked by stale fixtures.
-Caller-supplied `Authorization` headers are dropped before the stored signed
-session is applied, so browser code cannot shadow the bearer token with a
-case-variant header.
+The OIDC callback posts the returned access token once to `/auth/session`, which
+sets an HttpOnly, Secure, SameSite=Lax `naruon_session` cookie. The browser API
+client does not persist bearer tokens in web storage and does not attach bearer
+`Authorization` directly; the Next.js `/api/*` proxy reads the cookie
+server-side and forwards the backend `Authorization: Bearer` session. Browser
+code does not synthesize or forward public identity headers such as
+`X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or
+`X-Dev-Auth-Token`; any local development identity-header flow is limited to
+explicit unsigned/test harness paths and is not accepted by authenticated
+runtime dependencies. UI flows that create source-linked tasks or other
+server-side writes must keep that cookie-backed signed-session path covered in
+fast tests and E2E mocks so authenticated backend behavior is not masked by
+stale fixtures. Browser-visible session claims come from `/auth/session` and
+must not include the bearer token.
 
 Secret-field encryption has no code fallback key. `backend/db/models.py` requires
 an explicit, valid Fernet `ENCRYPTION_KEY` before encrypting or decrypting OAuth,

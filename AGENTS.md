@@ -90,11 +90,15 @@
   Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
-- Browser frontend writes to signed backend routes must carry the stored
-  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
-  public identity headers such as `X-User-Id`, `X-Organization-Id`,
-  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
-  tests/mocks must exercise the signed-session path.
+- Browser frontend writes to signed backend routes must use the HttpOnly
+  `naruon_session` cookie set by `/auth/session`; the Next.js `/api/*` proxy
+  reads that cookie server-side and forwards `Authorization: Bearer` to the
+  backend. Browser code must not persist bearer tokens in localStorage or
+  sessionStorage, must not attach bearer `Authorization` directly, and must not
+  emit or forward public identity headers such as `X-User-Id`,
+  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or
+  `X-Dev-Auth-Token`; tests/mocks must exercise the cookie-backed
+  signed-session path.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
@@ -137,8 +141,8 @@
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
-  stored `naruon_session_token` bearer path and must not add public identity
-  headers.
+  HttpOnly cookie-backed signed-session path through the Next.js proxy and must
+  not add browser `Authorization` or public identity headers.
 - TenantConfig/provider account settings must be scoped by signed-session
   `user_id` and `organization_id`; do not query provider credentials or API keys
   by `user_id` only. Frontend Settings onboarding must use bearer-session API

@@ -105,12 +105,10 @@ describe("TasksPage", () => {
   });
 
   it("updates ticket status through the signed task API", async () => {
-    localStorage.setItem("naruon_session_token", "signed.task.status");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/tasks/task_public_123" && init?.method === "PATCH") {
         expect(init.headers).toEqual(expect.objectContaining({
-          Authorization: "Bearer signed.task.status",
           "Content-Type": "application/json",
         }));
         expect(JSON.parse(String(init.body))).toEqual({ status: "done" });
@@ -163,7 +161,6 @@ describe("TasksPage", () => {
   });
 
   it("creates reply SLA ticket escalations with signed headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.reply.sla");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -177,7 +174,7 @@ describe("TasksPage", () => {
       if (url === "/api/tasks/reply-sla-escalations") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(headers.Authorization).toBe("Bearer signed.reply.sla");
+        expect(headers.Authorization).toBeUndefined();
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
@@ -232,7 +229,6 @@ describe("TasksPage", () => {
   });
 
   it("creates self-sent knowledge WebDAV materialization intent with signed headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.knowledge.intent");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -246,7 +242,7 @@ describe("TasksPage", () => {
       if (url === "/api/webdav/knowledge-materialization-intent") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(headers.Authorization).toBe("Bearer signed.knowledge.intent");
+        expect(headers.Authorization).toBeUndefined();
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);

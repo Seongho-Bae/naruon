@@ -140,10 +140,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
-  const projectScope = useMemo(() => {
-    const claims = apiClient.getSessionClaims();
-    return { userId: claims.userId, organizationId: claims.organizationId };
-  }, []);
+  const [projectScope, setProjectScope] = useState<ProjectAccessScope>({
+    userId: null,
+    organizationId: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -151,11 +151,16 @@ export function ProjectsLayout() {
     void Promise.all([
       apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
       apiClient.get<TicketTask[]>('/api/tasks'),
+      apiClient.getServerSessionClaims(),
     ])
-      .then(([folderRows, taskRows]) => {
+      .then(([folderRows, taskRows, claims]) => {
         if (cancelled) return;
         setFolders(Array.isArray(folderRows) ? folderRows : []);
         setTasks(Array.isArray(taskRows) ? taskRows : []);
+        setProjectScope({
+          userId: claims.userId,
+          organizationId: claims.organizationId,
+        });
         setError(null);
       })
       .catch((fetchError: Error) => {

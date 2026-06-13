@@ -19,12 +19,8 @@ const viewports = [
 
 for (const viewport of viewports) {
   test(`renders source-backed AI Hub with scroll at ${viewport.name}`, async ({ page }, testInfo) => {
-    const sessionToken = `signed-ai-hub-${viewport.name}`;
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockDashboardApi(page);
-    await page.addInitScript((token) => {
-      window.localStorage.setItem('naruon_session_token', token);
-    }, sessionToken);
 
     const surfaceRequest = page.waitForRequest((request) => {
       const url = new URL(request.url());
@@ -33,7 +29,7 @@ for (const viewport of viewports) {
 
     await page.goto('/ai-hub');
     const headers = (await surfaceRequest).headers();
-    expect(headers.authorization).toBe(`Bearer ${sessionToken}`);
+    expect(headers.authorization).toBeUndefined();
     for (const headerName of publicIdentityHeaders) {
       expect(headers[headerName]).toBeUndefined();
     }

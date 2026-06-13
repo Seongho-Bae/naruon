@@ -28,11 +28,6 @@ function jsonResponse(body: unknown, ok = true, status = ok ? 200 : 500) {
   } as Response);
 }
 
-function sessionToken(payload: Record<string, unknown>) {
-  const encode = (value: unknown) => btoa(JSON.stringify(value)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
-}
-
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
@@ -54,15 +49,23 @@ describe("ProjectsPage", () => {
   });
 
   it("loads project folders and ticket tasks through signed APIs", async () => {
-    const expectedSessionToken = sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" });
-    window.localStorage.setItem("naruon_session_token", expectedSessionToken);
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const headers = new Headers(init?.headers);
-      expect(headers.get("Authorization")).toBe(`Bearer ${expectedSessionToken}`);
+      expect(headers.get("Authorization")).toBeNull();
       expect(headers.get("X-User-Id")).toBeNull();
       expect(headers.get("X-Organization-Id")).toBeNull();
 
       const path = String(input);
+      if (path === "/auth/session") {
+        return jsonResponse({
+          authenticated: true,
+          claims: {
+            userId: "alice",
+            organizationId: "org-acme",
+            workspaceId: "workspace-org-acme",
+          },
+        });
+      }
       if (path === "/api/webdav/folders") {
         return jsonResponse([
           {
@@ -132,7 +135,6 @@ describe("ProjectsPage", () => {
   });
 
   it("renders an actionable fallback when project evidence fails", async () => {
-    window.localStorage.setItem("naruon_session_token", "signed.projects.error");
     vi.stubGlobal("fetch", vi.fn(() => jsonResponse({ detail: "failed" }, false, 500)));
 
     container = document.createElement("div");

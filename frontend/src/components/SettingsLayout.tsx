@@ -360,10 +360,27 @@ export function SettingsLayout() {
     }
   };
 
-  const handleOidcLogout = () => {
+  useEffect(() => {
+    let cancelled = false;
+    void apiClient
+      .getServerSessionClaims()
+      .then((claims) => {
+        if (!cancelled) setOidcSessionClaims(claims);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setOidcSessionClaims({ userId: null, organizationId: null, workspaceId: null });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleOidcLogout = async () => {
     setOidcActionError(null);
     try {
-      clearOidcSession({ postLogoutRedirectUri: window.location.origin });
+      await clearOidcSession({ postLogoutRedirectUri: window.location.origin });
       setOidcSessionClaims(apiClient.getSessionClaims());
     } catch (error) {
       setOidcActionError(error instanceof Error ? error.message : 'OIDC logout failed');

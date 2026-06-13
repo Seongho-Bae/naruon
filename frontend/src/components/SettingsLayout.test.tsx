@@ -38,20 +38,11 @@ function jsonResponse(body: unknown) {
   });
 }
 
-function sessionToken(payload: Record<string, unknown>) {
-  const encodedPayload = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `header.${encodedPayload}.signature`;
-}
-
 describe("SettingsLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
   beforeEach(() => {
-    localStorage.setItem("naruon_session_token", "signed-runner-session-token");
     oidcMocks.getOidcBrowserConfig.mockReturnValue({
       issuerUrl: "https://login.example.com/realms/naruon",
       clientId: "naruon-web",
@@ -64,6 +55,16 @@ describe("SettingsLayout", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/auth/session") {
+          return jsonResponse({
+            authenticated: true,
+            claims: {
+              userId: "alice",
+              organizationId: "org-acme",
+              workspaceId: "workspace-org-acme",
+            },
+          });
+        }
         if (String(input) === "/api/runner-config") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
@@ -257,7 +258,6 @@ describe("SettingsLayout", () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
@@ -265,7 +265,7 @@ describe("SettingsLayout", () => {
       "/api/observability/operational-signals",
       expect.objectContaining({
         headers: expect.objectContaining({
-          Authorization: "Bearer signed-runner-session-token",
+          "Content-Type": "application/json",
         }),
       }),
     );
@@ -307,9 +307,7 @@ describe("SettingsLayout", () => {
     });
 
     const rotateCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/runner-config/rotate" && init?.method === "POST");
-    expect(rotateCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("Authorization");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
@@ -356,10 +354,6 @@ describe("SettingsLayout", () => {
 
   it("wires Keycloak OIDC login and logout controls to the stored bearer session", async () => {
     window.history.pushState({}, "", "/settings");
-    localStorage.setItem(
-      "naruon_session_token",
-      sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" }),
-    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -429,7 +423,6 @@ describe("SettingsLayout", () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
@@ -442,12 +435,8 @@ describe("SettingsLayout", () => {
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     const calendarSourcesCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/calendar/writeback-sources");
     const webdavAccountsCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
-    expect(calendarSourcesCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
-    expect(webdavAccountsCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(calendarSourcesCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    expect(webdavAccountsCall?.[1]?.headers).not.toHaveProperty("Authorization");
     for (const sourceCall of [calendarSourcesCall, webdavAccountsCall]) {
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
