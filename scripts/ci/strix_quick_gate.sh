@@ -2152,6 +2152,15 @@ is_llm_service_unavailable_error() {
 	return 1
 }
 
+is_llm_budget_limit_error() {
+	if grep -Eiq '(litellm|DeepseekException|OpenAIException|GitHub Models|models\.github\.ai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
+		grep -Eiq '(account has reached its budget limit|budget limit|usage limit|insufficient quota|quota exceeded|billing hard limit)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 ## Determines whether the last strix failure is a transient error eligible
 ## for same-model retry (up to STRIX_TRANSIENT_RETRY_PER_MODEL times).
 ## Four error families qualify:
@@ -2391,6 +2400,10 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_llm_service_unavailable_error; then
+		return 0
+	fi
+
+	if is_llm_budget_limit_error; then
 		return 0
 	fi
 
@@ -3006,6 +3019,10 @@ is_model_retryable_error() {
 	fi
 
 	if is_llm_service_unavailable_error; then
+		return 0
+	fi
+
+	if is_llm_budget_limit_error; then
 		return 0
 	fi
 
