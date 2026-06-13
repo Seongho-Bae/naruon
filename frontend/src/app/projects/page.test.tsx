@@ -111,8 +111,8 @@ describe("ProjectsPage", () => {
           {
             id: "task-malicious-status",
             title: `<img src=x onerror="alert('task')">Naruon 2.0 런칭`,
-            status: "done bg-[url(javascript:alert(1))]",
-            priority: "urgent text-[url(javascript:alert(1))]",
+            status: "done malicious-extra-status-token",
+            priority: "urgent malicious-extra-priority-token",
             source_type: `<script>alert('source')</script>`,
             source_email_id: "<q2@example.com>",
             related_thread_id: "thread-malicious",
@@ -146,7 +146,8 @@ describe("ProjectsPage", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
     expect(container.innerHTML).toContain("&lt;img");
-    expect(container.innerHTML).not.toContain("bg-[url");
+    expect(container.innerHTML).not.toContain("malicious-extra-status-token");
+    expect(container.innerHTML).not.toContain("malicious-extra-priority-token");
   });
 
   it("renders an actionable fallback when project evidence fails", async () => {

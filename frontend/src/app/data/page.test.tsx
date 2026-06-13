@@ -361,6 +361,48 @@ describe("DataPage", () => {
     expect(container.textContent).not.toContain("<asset-ready@example.com>");
   });
 
+  it("clamps API progress values before rendering inline style widths", async () => {
+    const hostileSurface = {
+      ...dataQualitySurface,
+      pipeline_stages: dataQualitySurface.pipeline_stages.map((stage, index) => ({
+        ...stage,
+        progress_percent: index === 0
+          ? "not-a-percent"
+          : 150,
+      })),
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/data/quality-surface") return jsonResponse(hostileSurface);
+      if (path === "/api/webdav/accounts") return jsonResponse([]);
+      if (path === "/api/webdav/folders") return jsonResponse([]);
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const pipelineTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("수집 파이프라인"),
+    );
+    await act(async () => {
+      pipelineTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const styleText = Array.from(container.querySelectorAll<HTMLElement>("[style]"))
+      .map((node) => node.getAttribute("style") ?? "")
+      .join(" ");
+    expect(styleText).not.toContain("not-a-percent");
+    expect(container.textContent).not.toContain("not-a-percent");
+    expect(container.textContent).toContain("0%");
+    expect(container.textContent).toContain("100%");
+  });
+
   it("renders API-backed pipeline embedding and quality tabs", async () => {
     vi.stubGlobal("fetch", mockWebdavFetch());
     container = document.createElement("div");

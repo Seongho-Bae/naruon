@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import { boundedPercentStyle, formatBoundedPercent } from '@/lib/safe-style';
 
 type WebdavWritebackIntentResponse = {
   intent: string;
@@ -350,7 +351,7 @@ export function DataLayout() {
                   <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                     <div
                       className="h-full bg-blue-500 transition-all"
-                      style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
+                      style={boundedPercentStyle(embeddingStage?.progress_percent)}
                     ></div>
                   </div>
                 </div>
@@ -752,13 +753,13 @@ export function DataLayout() {
                           <p className="mt-1 break-all font-mono text-[11px] font-semibold text-muted-foreground">{stage.evidence_source}</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(stage.status_code)}`}>
-                          {getSurfaceStatusLabel(stage.status_code)} · {stage.progress_percent}%
+                          {getSurfaceStatusLabel(stage.status_code)} · {formatBoundedPercent(stage.progress_percent)}
                         </span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
                         <div
                           className="h-full bg-primary transition-all"
-                          style={{ width: `${stage.progress_percent}%` }}
+                          style={boundedPercentStyle(stage.progress_percent)}
                         ></div>
                       </div>
                     </div>
