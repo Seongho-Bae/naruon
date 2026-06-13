@@ -245,11 +245,32 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
     assert "OPENAI_MODEL: gemma4:e2b-it-qat" in live_e2e_compose
     assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
+    live_frontend_block = live_e2e_compose.split("  frontend:", 1)[1].split(
+        "  nginx:", 1
+    )[0]
+    assert "NEXT_PUBLIC_API_URL: http://127.0.0.1:18080" in live_frontend_block
+    assert "BACKEND_INTERNAL_URL: http://backend:8000" in live_frontend_block
+    assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"' in live_frontend_block
     live_nginx = read_repo_text("tests/live/nginx.conf")
     assert "proxy_read_timeout 600s" in live_nginx
     assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in live_nginx
     assert 'add_header X-Content-Type-Options "nosniff" always;' in live_nginx
     assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
+    assert "upstream live_backend" not in live_nginx
+    api_location = live_nginx.split("    location /api/ {", 1)[1].split("    }", 1)[0]
+    root_location = live_nginx.split("    location / {", 1)[1].split("    }", 1)[0]
+    for location in (api_location, root_location):
+        assert "proxy_set_header Host $host;" in location
+        assert "proxy_set_header X-Real-IP $remote_addr;" in location
+        assert (
+            "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+            in location
+        )
+        assert "proxy_set_header X-Forwarded-Proto $scheme;" in location
+        assert "proxy_set_header Upgrade $http_upgrade;" in location
+        assert 'proxy_set_header Connection "upgrade";' in location
+    assert "proxy_pass http://live_frontend;" in api_location
+    assert "proxy_pass http://live_backend;" not in api_location
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
