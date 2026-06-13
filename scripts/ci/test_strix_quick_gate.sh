@@ -1055,6 +1055,32 @@ EOS
 			;;
 		esac
 		;;
+	pr-incomplete-codebase-fallback-success)
+		case "${STRIX_LLM:-}" in
+		vertex_ai/incomplete-pr-scope-primary)
+			mkdir -p "$STRIX_REPORTS_DIR/fake-incomplete-codebase/vulnerabilities"
+			cat >"$STRIX_REPORTS_DIR/fake-incomplete-codebase/vulnerabilities/vuln-0001.md" <<'EOS'
+# Limited Security Assessment Due to Incomplete Codebase
+
+**Severity:** HIGH
+**Target:** /workspace/strix-pr-scope.example
+**Endpoint:** Entire codebase
+
+The security assessment was limited due to missing implementation files and dependencies in the provided codebase.
+EOS
+			echo "Penetration test failed: incomplete PR scope assessment"
+			exit 2
+			;;
+		vertex_ai/fallback-one)
+			echo "scan ok after incomplete-codebase fallback"
+			exit 0
+			;;
+		*)
+			echo "Error: incomplete-codebase scenario unexpected model (${STRIX_LLM:-})" >&2
+			exit 35
+			;;
+		esac
+		;;
 	pr-stale-report-plus-inline-changed-finding-blocks)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/stale-inline-primary)
@@ -5484,6 +5510,27 @@ run_gate_case_allow_provider_signal "pr-changed-finding-with-retry-marker-blocks
 	"0" \
 	"pull_request" \
 	"backend/api/emails.py"
+
+run_gate_case "pr-incomplete-codebase-fallback-success" \
+	"vertex_ai/incomplete-pr-scope-primary" \
+	"vertex_ai/fallback-one vertex_ai/fallback-two" \
+	"0" \
+	"scan ok after incomplete-codebase fallback" \
+	"2" \
+	"vertex_ai/incomplete-pr-scope-primary|vertex_ai/fallback-one" \
+	"<unset>|<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"HIGH" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"frontend/src/lib/api-client.ts"
 
 run_gate_case "pr-stale-report-plus-inline-changed-finding-blocks" \
 	"vertex_ai/stale-inline-primary" \

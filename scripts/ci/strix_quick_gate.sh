@@ -2938,6 +2938,24 @@ raise SystemExit(0)
 PY
 }
 
+vulnerability_file_has_incomplete_codebase_assessment() {
+	local vuln_file="$1"
+	if ! is_pull_request_event; then
+		return 1
+	fi
+	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+		return 1
+	fi
+
+	if grep -Eiq '(Limited Security Assessment Due to Incomplete Codebase|assessment .*limited due to missing implementation files|incomplete codebase)' "$vuln_file" &&
+		grep -Eiq '(Endpoint:[[:space:]]*Entire codebase|Target:[[:space:]]*/workspace/strix-pr-scope|missing implementation files|missing code and dependencies)' "$vuln_file"; then
+		echo "Detected Strix PR-scope incomplete-codebase assessment; treating as retryable model inconsistency." >&2
+		return 0
+	fi
+
+	return 1
+}
+
 vulnerability_file_is_retryable_model_inconsistency() {
 	local vuln_file="$1"
 	if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
@@ -2947,6 +2965,9 @@ vulnerability_file_is_retryable_model_inconsistency() {
 		return 0
 	fi
 	if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
+		return 0
+	fi
+	if vulnerability_file_has_incomplete_codebase_assessment "$vuln_file"; then
 		return 0
 	fi
 	return 1
