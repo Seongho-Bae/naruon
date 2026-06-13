@@ -130,6 +130,30 @@ describe("/auth/session route", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  it("rejects backend session responses without organization scope", async () => {
+    const token = signedFixtureToken({
+      sub: "user-1",
+      org: "org-acme",
+      workspace: "workspace-acme",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({
+      user_id: "user-1",
+      workspace_id: "workspace-acme",
+    })));
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_session_token",
+    });
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
   it("rejects cross-site session persistence before backend verification", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

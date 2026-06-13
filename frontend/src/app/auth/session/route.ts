@@ -59,11 +59,12 @@ function stringClaim(value: unknown) {
 
 function claimsFromBackendSession(body: BackendSessionResponse): SessionClaims | null {
   const userId = stringClaim(body.user_id);
+  const organizationId = stringClaim(body.organization_id);
   const workspaceId = stringClaim(body.workspace_id);
-  if (!userId || !workspaceId) return null;
+  if (!userId || !organizationId || !workspaceId) return null;
   return {
     userId,
-    organizationId: stringClaim(body.organization_id),
+    organizationId,
     workspaceId,
   };
 }
