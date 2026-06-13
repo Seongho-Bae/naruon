@@ -99,6 +99,14 @@ derive_location_from_report() {
 			path="frontend/src/app/prompt-studio/page.tsx"
 			line="$(first_existing_line "$path" "apiClient\\.post|testResult|setTestResult")"
 			;;
+		*"Frontend Security Issues"*|*"Hardcoded Credentials"*|*"Insecure Data Handling"*)
+			path="frontend/next.config.ts"
+			line="$(first_existing_line "$path" 'const nextConfig|headers|Content-Security-Policy')"
+			if [ ! -f "${REPO_ROOT%/}/$path" ]; then
+				path="frontend/src/app/page.tsx"
+				line="$(first_existing_line "$path")"
+			fi
+			;;
 		*"Content Security Policy"*|*"security headers"*|*"Security Headers"*)
 			path="frontend/next.config.ts"
 			line="$(first_existing_line "$path" 'const nextConfig|headers')"
@@ -146,6 +154,10 @@ extract_strix_reports() {
 			$line =~ s/^[[:space:]]+|[[:space:]]+$//g;
 			return $line;
 		}
+		sub starts_new_field {
+			my ($line) = @_;
+			return $line =~ /^(Title|Severity|CVSS Score|CVSS Vector|Target|Endpoint|Method|Description|Impact|Technical Analysis|PoC Description|PoC Code|Code Locations|Remediation)\b/i;
+		}
 		sub finish_report {
 			return unless defined $title && length $title;
 			push @reports, {
@@ -186,13 +198,30 @@ extract_strix_reports() {
 			$line =~ m{Strix run failed for model '\''([^'\'']+)'\''}) {
 			$current_model = $1;
 			$window_model ||= $1 if $in_window;
-			$report_model ||= $1 if defined $title && length $title;
+			$report_model = $1 if defined $title && length $title;
 		}
 		next unless $in_window;
+		if (defined $continuation_field && length $continuation_field) {
+			if (!length $line) {
+				$continuation_field = "";
+			} elsif (!starts_new_field($line) && $line !~ /^[╭╰─]+/ && $line !~ /^Vulnerability Report$/i) {
+				if ($continuation_field eq "title") {
+					$title .= " " . $line;
+				} elsif ($continuation_field eq "endpoint") {
+					$endpoint .= " " . $line;
+				} elsif ($continuation_field eq "target") {
+					$target .= " " . $line;
+				}
+				next;
+			} else {
+				$continuation_field = "";
+			}
+		}
 		if ($line =~ /^Title:[[:space:]]+(.+)/i) {
 			finish_report();
 			$title = $1;
 			$report_model = $window_model || $current_model || "";
+			$continuation_field = "title";
 			next;
 		}
 		if ($line =~ /^Severity:[[:space:]]+(CRITICAL|HIGH|MEDIUM|LOW|NONE)\b/i) {
@@ -201,14 +230,17 @@ extract_strix_reports() {
 		}
 		if ($line =~ /^Endpoint:[[:space:]]+(.+)/i) {
 			$endpoint = $1;
+			$continuation_field = "endpoint";
 			next;
 		}
 		if ($line =~ /^Method:[[:space:]]+(.+)/i) {
 			$method = $1;
+			$continuation_field = "";
 			next;
 		}
 		if ($line =~ /^Target:[[:space:]]+(.+)/i) {
 			$target = $1;
+			$continuation_field = "target";
 			next;
 		}
 		if ($line =~ /(?:Code[[:space:]]+)?Location(?:s)?(?:[[:space:]]+[0-9]+)?[[:space:]]*:[[:space:]]*(.+?:[0-9]+(?:-[0-9]+)?)/i) {
@@ -312,7 +344,7 @@ emit_strix_provider_failure_finding() {
 	local path=".github/workflows/strix.yml"
 	local line="1"
 
-	if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure" "$strix_evidence_file"; then
+	if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure|Below-threshold findings detected|Unable to map Strix findings" "$strix_evidence_file"; then
 		return 0
 	fi
 
@@ -326,7 +358,7 @@ emit_strix_provider_failure_finding() {
 	finding_index=$((finding_index + 1))
 	if grep -Fq "Strix vulnerability report window" "$strix_evidence_file"; then
 		printf '### %s. HIGH %s:%s - Strix provider signal left current-head security evidence incomplete\n' "$finding_index" "$path" "$line"
-		printf -- '- Problem: Strix produced one or more vulnerability report windows, then the failed log still reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, or fallback provider signal.\n'
+		printf -- '- Problem: Strix produced one or more vulnerability report windows, then the failed log still reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal.\n'
 		printf -- '- Root cause: The scanner evidence is incomplete even after model reports were emitted; OpenCode must include every model report above and must not approve until a clean current-head Strix run or equivalent manual evidence exists.\n'
 		printf -- '- Fix: Re-run Strix after GitHub Models capacity recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep %s:%s aligned with the approved fallback model list.\n' "$path" "$line"
 		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports so partial reports cannot be downgraded to approval.\n\n'
