@@ -14,6 +14,8 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
     AuthContext,
+    OIDC_ALLOWED_ALGORITHMS,
+    SESSION_ALLOWED_ALGORITHMS,
     ensure_organization_access,
     get_auth_context,
     get_current_user,
@@ -192,9 +194,7 @@ def test_private_api_routes_have_default_signed_session_dependency():
 
 
 def test_explicit_public_routes_do_not_require_signed_session():
-    for method, path in (
-        ("GET", "/"),
-    ):
+    for method, path in (("GET", "/"),):
         response = _request_without_dependency_overrides(method, path)
         assert response.status_code == 200, f"{method} {path}: {response.text}"
 
@@ -346,6 +346,28 @@ async def test_signed_bearer_session_rejects_rs256_algorithm():
         await get_auth_context(authorization=f"Bearer {token}")
 
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist(
+    monkeypatch,
+):
+    import jwt
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    decode_algorithms: list[tuple[str, ...]] = []
+
+    def mock_jwt_decode(*args, **kwargs):
+        decode_algorithms.append(tuple(kwargs["algorithms"]))
+        return _valid_session_payload()
+
+    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
+
+    context = await get_auth_context(authorization=f"Bearer {token}")
+
+    assert context.user_id == "alice"
+    assert decode_algorithms == [SESSION_ALLOWED_ALGORITHMS]
 
 
 @pytest.mark.asyncio
@@ -555,7 +577,6 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
 
     assert response.status_code == 200
     assert response.json()["product_name"] == "Naruon"
-
 
 
 def test_auth_dependency_overrides_are_opt_in_by_default():
@@ -798,22 +819,25 @@ def test_oidc_jwks_client_fetches_from_validated_pinned_address(monkeypatch):
 @pytest.mark.asyncio
 async def test_signed_bearer_session_with_oidc(monkeypatch):
     import jwt
-    
+
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    
+
     class MockKey:
         key_id = "test-key"
         key = "public_key"
 
     monkeypatch.setattr("api.auth.jwks_client", object())
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-    
+
+    decode_algorithms: list[tuple[str, ...]] = []
+
     def mock_jwt_decode(*args, **kwargs):
+        decode_algorithms.append(tuple(kwargs["algorithms"]))
         return {
             "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
@@ -825,6 +849,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
             "exp": int(time.time()) + 300,
             "_session_verifier": "hmac",
         }
+
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 
     try:
@@ -842,6 +867,7 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
     assert context.role == "member"
     assert context.organization_id == "org-acme"
     assert context.session_verifier == "oidc"
+    assert decode_algorithms == [OIDC_ALLOWED_ALGORITHMS]
 
 
 @pytest.mark.asyncio

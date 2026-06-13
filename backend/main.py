@@ -1,8 +1,11 @@
 import os
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
+
 from fastapi import Depends, FastAPI
 from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from api.auth import get_auth_context, preload_oidc_jwks
 from api.search import router as search_router
 from api.llm import router as llm_router
@@ -33,6 +36,7 @@ imap_worker = ImapSyncWorker()
 
 DISABLE_WORKERS = os.environ.get("DISABLE_BACKGROUND_WORKERS") == "1"
 PRIVATE_API_DEPENDENCIES = [Depends(get_auth_context)]
+STATE_CHANGING_API_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE", "MKCOL"})
 
 
 @asynccontextmanager
@@ -59,6 +63,97 @@ if settings.ENABLE_PROMETHEUS_METRICS:
     Instrumentator().instrument(app).expose(
         app, include_in_schema=False, should_gzip=True
     )
+
+
+def _normalized_origin(header_value: str | None) -> str | None:
+    if header_value is None:
+        return None
+    parsed = urlsplit(header_value.strip())
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return None
+    if not parsed.netloc or not parsed.hostname:
+        return None
+    if (
+        parsed.username
+        or parsed.password
+        or parsed.path
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    try:
+        parsed.port
+    except ValueError:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _origin_from_referer(header_value: str | None) -> str | None:
+    if header_value is None:
+        return None
+    parsed = urlsplit(header_value.strip())
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return None
+    if not parsed.netloc or not parsed.hostname:
+        return None
+    try:
+        parsed.port
+    except ValueError:
+        return None
+    return f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+
+
+def _is_trusted_browser_origin(origin: str | None) -> bool:
+    if origin is None:
+        return True
+    return origin in set(settings.ALLOWED_CORS_ORIGINS_LIST)
+
+
+def _requires_browser_origin_check(request: Request) -> bool:
+    return (
+        request.method.upper() in STATE_CHANGING_API_METHODS
+        and request.url.path.startswith("/api/")
+    )
+
+
+@app.middleware("http")
+async def reject_cross_site_state_changing_api_requests(request: Request, call_next):
+    if _requires_browser_origin_check(request):
+        fetch_site = request.headers.get("sec-fetch-site", "").strip().lower()
+        if fetch_site == "cross-site":
+            return JSONResponse(
+                status_code=403,
+                content={"error_code": "csrf_fetch_site_rejected"},
+            )
+
+        raw_origin = request.headers.get("origin")
+        origin = _normalized_origin(raw_origin)
+        if raw_origin is not None and origin is None:
+            return JSONResponse(
+                status_code=403,
+                content={"error_code": "csrf_origin_rejected"},
+            )
+        if not _is_trusted_browser_origin(origin):
+            return JSONResponse(
+                status_code=403,
+                content={"error_code": "csrf_origin_rejected"},
+            )
+
+        if origin is None:
+            raw_referer = request.headers.get("referer")
+            referer_origin = _origin_from_referer(raw_referer)
+            if raw_referer is not None and referer_origin is None:
+                return JSONResponse(
+                    status_code=403,
+                    content={"error_code": "csrf_referer_rejected"},
+                )
+            if not _is_trusted_browser_origin(referer_origin):
+                return JSONResponse(
+                    status_code=403,
+                    content={"error_code": "csrf_referer_rejected"},
+                )
+
+    return await call_next(request)
 
 
 @app.middleware("http")

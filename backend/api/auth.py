@@ -148,6 +148,8 @@ SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
 OIDC_SIGNING_ALGORITHM = "RS256"
+SESSION_ALLOWED_ALGORITHMS = (SESSION_SIGNING_ALGORITHM,)
+OIDC_ALLOWED_ALGORITHMS = (OIDC_SIGNING_ALGORITHM,)
 MIN_SESSION_SECRET_BYTES = 32
 
 
@@ -224,7 +226,7 @@ def _oidc_unverified_header(token: str) -> dict[str, Any]:
     except Exception:
         raise _authentication_error() from None
     _reject_unsupported_critical_headers(header)
-    if header.get("alg") != OIDC_SIGNING_ALGORITHM:
+    if header.get("alg") not in OIDC_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
@@ -243,7 +245,7 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
             payload = jwt.decode(
                 token,
                 signing_key.key,
-                algorithms=[OIDC_SIGNING_ALGORITHM],
+                algorithms=OIDC_ALLOWED_ALGORITHMS,
                 audience=settings.OIDC_CLIENT_ID,
                 issuer=settings.OIDC_ISSUER_URL,
             )
@@ -308,7 +310,7 @@ def _verify_signed_session_payload(
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
         raise _authentication_error() from None
-    if header.get("alg") != SESSION_SIGNING_ALGORITHM:
+    if header.get("alg") not in SESSION_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 
@@ -316,7 +318,7 @@ def _verify_signed_session_payload(
         payload = jwt.decode(
             token,
             _session_secret_bytes(),
-            algorithms=[SESSION_SIGNING_ALGORITHM],
+            algorithms=SESSION_ALLOWED_ALGORITHMS,
             audience=SESSION_AUDIENCE,
             issuer=SESSION_ISSUER,
         )

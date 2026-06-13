@@ -53,3 +53,36 @@ def test_cors_policy_is_restrictive():
     assert "Content-Type" in allowed_headers
     assert "Authorization" in allowed_headers
     assert "*" not in allowed_headers
+
+
+def test_state_changing_api_rejects_cross_site_fetch_metadata():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Sec-Fetch-Site": "cross-site"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"error_code": "csrf_fetch_site_rejected"}
+
+
+def test_state_changing_api_rejects_untrusted_origin():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "https://evil.example"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"error_code": "csrf_origin_rejected"}
+
+
+def test_state_changing_api_allows_trusted_origin_to_reach_auth_gate():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "http://localhost:3000"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
