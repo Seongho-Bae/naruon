@@ -7,8 +7,8 @@ describe("normalizeSessionToken", () => {
     expect(normalizeSessionToken(" header.payload.signature ")).toBe(
       "header.payload.signature",
     );
-    expect(normalizeSessionToken("eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig-123_abc")).toBe(
-      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.sig-123_abc",
+    expect(normalizeSessionToken("hdr_segment.payload_segment.sig_segment")).toBe(
+      "hdr_segment.payload_segment.sig_segment",
     );
   });
 

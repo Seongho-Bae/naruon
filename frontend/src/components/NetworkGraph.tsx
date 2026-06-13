@@ -58,15 +58,21 @@ function escapeGraphLabel(value: unknown): string {
 function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   const sanitized = { ...item };
 
-  if (Object.prototype.hasOwnProperty.call(item, 'label')) {
-    sanitized.label = escapeGraphLabel(item.label);
-  }
-
   if (Object.prototype.hasOwnProperty.call(item, 'title')) {
     sanitized.title = textOnlyTooltip(item.title);
   }
 
   return sanitized;
+}
+
+function escapeVisNetworkLabels<T extends Node | Edge>(items: T[]): T[] {
+  return items.map((item) => {
+    if (!Object.prototype.hasOwnProperty.call(item, 'label')) return item;
+    return {
+      ...item,
+      label: escapeGraphLabel(item.label),
+    };
+  });
 }
 
 function isGraphId(value: unknown): value is number | string {
@@ -127,7 +133,10 @@ export default function NetworkGraph() {
   useEffect(() => {
     if (containerRef.current && nodes.length > 0) {
       const container = containerRef.current;
-      const network = new Network(container, { nodes, edges }, {
+      const network = new Network(container, {
+        nodes: escapeVisNetworkLabels(nodes),
+        edges: escapeVisNetworkLabels(edges),
+      }, {
         nodes: { shape: 'dot', size: 16 },
         edges: { arrows: 'to' }
       });

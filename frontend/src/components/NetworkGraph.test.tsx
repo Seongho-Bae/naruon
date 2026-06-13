@@ -95,7 +95,7 @@ describe("NetworkGraph", () => {
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
   });
 
-  it("escapes graph labels before passing them to vis-network or text summaries", async () => {
+  it("escapes graph labels before passing them to vis-network while keeping React text plain", async () => {
     const maliciousLabel = '<img src=x onerror="globalThis.__xss = true">';
     const fetchMock = vi.fn(() =>
       Promise.resolve(
@@ -125,9 +125,7 @@ describe("NetworkGraph", () => {
     );
     expect(nodes[0]?.label).not.toContain("<img");
     expect(container.innerHTML).not.toContain("<img");
-    expect(container.textContent).toContain(
-      '&lt;img src=x onerror=&quot;globalThis.__xss = true&quot;&gt;',
-    );
+    expect(container.textContent).toContain(maliciousLabel);
   });
 
   it("renders a Korean text fallback for graph relationships", async () => {
