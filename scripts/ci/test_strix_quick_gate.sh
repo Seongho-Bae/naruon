@@ -2085,6 +2085,9 @@ EOS
 	elif [ "$scenario" = "pr-changed-finding-with-retry-marker-blocks" ]; then
 		mkdir -p "$repo_root_dir/backend/api"
 		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
+	elif [ "$scenario" = "pr-incomplete-codebase-fallback-success" ]; then
+		mkdir -p "$repo_root_dir/backend/api"
+		echo 'def real_changed_endpoint(): pass' >"$repo_root_dir/backend/api/emails.py"
 	elif [ "$scenario" = "pr-stale-report-plus-inline-changed-finding-blocks" ]; then
 		mkdir -p "$repo_root_dir/backend/db" "$repo_root_dir/backend/api"
 		cat >"$repo_root_dir/backend/db/models.py" <<'EOS'
