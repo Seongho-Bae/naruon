@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, FolderOpen, ListChecks, Search, User } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -130,30 +130,6 @@ function getWorkspaceScopeLabel(scope: ProjectAccessScope) {
   return scope.organizationId ? '서명된 조직 워크스페이스' : '서명된 개인 워크스페이스';
 }
 
-function getProjectScopeSnapshot() {
-  const claims = apiClient.getSessionClaims();
-  return `${claims.userId ?? ''}|${claims.organizationId ?? ''}`;
-}
-
-function getProjectScopeServerSnapshot() {
-  return '|';
-}
-
-function subscribeProjectScope(onStoreChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === 'naruon_session_token') onStoreChange();
-  };
-  const refreshHandle = window.setTimeout(onStoreChange, 0);
-  window.addEventListener('storage', handleStorage);
-
-  return () => {
-    window.clearTimeout(refreshHandle);
-    window.removeEventListener('storage', handleStorage);
-  };
-}
-
 function isAuthorizedToViewProject(folder: ProjectFolder, scope: ProjectAccessScope) {
   const ownerUserId = safeText(folder.owner_user_id);
   if (!ownerUserId || !scope.userId || ownerUserId !== scope.userId) return false;
@@ -199,15 +175,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
-  const projectScopeSnapshot = useSyncExternalStore(
-    subscribeProjectScope,
-    getProjectScopeSnapshot,
-    getProjectScopeServerSnapshot,
-  );
-  const projectScope = useMemo<ProjectAccessScope>(() => {
-    const [userId, organizationId] = projectScopeSnapshot.split('|');
-    return { userId: userId || null, organizationId: organizationId || null };
-  }, [projectScopeSnapshot]);
+  const [projectScope, setProjectScope] = useState<ProjectAccessScope>({
+    userId: null,
+    organizationId: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -215,11 +186,16 @@ export function ProjectsLayout() {
     void Promise.all([
       apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
       apiClient.get<TicketTask[]>('/api/tasks'),
+      apiClient.getServerSessionClaims(),
     ])
-      .then(([folderRows, taskRows]) => {
+      .then(([folderRows, taskRows, claims]) => {
         if (cancelled) return;
         setFolders(Array.isArray(folderRows) ? folderRows : []);
         setTasks(Array.isArray(taskRows) ? taskRows : []);
+        setProjectScope({
+          userId: claims.userId,
+          organizationId: claims.organizationId,
+        });
         setError(null);
       })
       .catch((fetchError: Error) => {

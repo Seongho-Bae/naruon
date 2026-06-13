@@ -38,8 +38,9 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
           "Content-Type": "application/json",
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: "Bearer attacker-controlled-token",
           "X-User-Id": "public-user-id",
         },
         body: JSON.stringify({ state: "open" }),
@@ -67,7 +68,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
         },
         body: "{}",
       },
@@ -95,7 +96,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
           Origin: "https://evil.example",
         },
         body: "{}",
@@ -124,7 +125,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "PUT",
         headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
           "Sec-Fetch-Site": "cross-site",
         },
         body: "{}",
@@ -155,7 +156,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
         },
         body: "{}",
       },

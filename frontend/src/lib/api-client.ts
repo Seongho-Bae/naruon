@@ -1,8 +1,4 @@
-export interface SessionClaims {
-  userId: string | null;
-  organizationId: string | null;
-  workspaceId: string | null;
-}
+import { ANONYMOUS_SESSION_CLAIMS, type SessionClaims } from "./session-cookie";
 
 const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
   'authorization',
@@ -30,34 +26,20 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
-    const sessionToken = this.getSessionToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...this.getSafeCallerHeaders(init?.headers),
     };
-    if (sessionToken) {
-      return {
-        ...headers,
-        Authorization: `Bearer ${sessionToken}`,
-      };
-    }
     return headers;
   }
 
   private getFormHeaders(init?: RequestInit): HeadersInit {
-    const sessionToken = this.getSessionToken();
     const headers: Record<string, string> = this.getSafeCallerHeaders(init?.headers);
     Object.keys(headers).forEach((name) => {
       if (name.toLowerCase() === 'content-type') {
         delete headers[name];
       }
     });
-    if (sessionToken) {
-      return {
-        ...headers,
-        Authorization: `Bearer ${sessionToken}`,
-      };
-    }
     return headers;
   }
 
@@ -83,41 +65,28 @@ export class ApiClient {
   }
 
   getSessionToken() {
-    if (typeof window === 'undefined') return null;
-
-    const stored = localStorage.getItem('naruon_session_token')?.trim();
-    return stored || null;
+    return null;
   }
 
   getSessionClaims(): SessionClaims {
-    const sessionToken = this.getSessionToken();
-    if (!sessionToken) {
-      return { userId: null, organizationId: null, workspaceId: null };
-    }
+    return ANONYMOUS_SESSION_CLAIMS;
+  }
 
-    const [, payloadSegment] = sessionToken.split('.');
-    if (!payloadSegment) {
-      return { userId: null, organizationId: null, workspaceId: null };
-    }
+  async getServerSessionClaims(): Promise<SessionClaims> {
+    const response = await fetch('/auth/session', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    if (!response.ok) return ANONYMOUS_SESSION_CLAIMS;
 
-    try {
-      const normalizedPayload = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-      const paddedPayload = normalizedPayload.padEnd(
-        Math.ceil(normalizedPayload.length / 4) * 4,
-        '=',
-      );
-      const decodedPayload = JSON.parse(atob(paddedPayload)) as {
-        sub?: unknown;
-        org?: unknown;
-        workspace?: unknown;
-      };
-      const userId = typeof decodedPayload.sub === 'string' ? decodedPayload.sub.trim() || null : null;
-      const organizationId = typeof decodedPayload.org === 'string' ? decodedPayload.org.trim() || null : null;
-      const workspaceId = typeof decodedPayload.workspace === 'string' ? decodedPayload.workspace.trim() || null : null;
-      return { userId, organizationId, workspaceId };
-    } catch {
-      return { userId: null, organizationId: null, workspaceId: null };
-    }
+    const body = await response.json() as { claims?: Partial<SessionClaims> };
+    const claims = body.claims ?? {};
+    return {
+      userId: typeof claims.userId === 'string' ? claims.userId : null,
+      organizationId: typeof claims.organizationId === 'string' ? claims.organizationId : null,
+      workspaceId: typeof claims.workspaceId === 'string' ? claims.workspaceId : null,
+    };
   }
 
   getCurrentUserId() {
