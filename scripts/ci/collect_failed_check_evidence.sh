@@ -261,7 +261,7 @@ gh api graphql \
 		--json databaseId,workflowName,status,conclusion,url,event,headSha \
 		--jq '
 			.[]
-			| select((.event // "") == "pull_request_target")
+			| select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
 			| select((.headSha // "") == env.HEAD_SHA)
 			| select((.workflowName // "") == "Strix Security Scan" or (.workflowName // "") == "Strix")
 			| select((.status // "") == "completed")
