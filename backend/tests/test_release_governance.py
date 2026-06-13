@@ -212,8 +212,16 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
 
     backend_block = compose.split("  backend:", 1)[1].split("  frontend:", 1)[0]
     assert "target: backend-runtime" in backend_block
-    assert "DEBUG=false" in backend_block
-    assert "DEBUG=true" not in backend_block
+    assert 'DEBUG: "false"' in backend_block
+    assert "DEBUG: true" not in backend_block
+    assert (
+        "DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@db:5432/ai_email"
+        in backend_block
+    )
+    assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in backend_block
+    assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in backend_block
+    assert "- AUTH_SESSION_HMAC_SECRET" not in backend_block
+    assert "- ENCRYPTION_KEY" not in backend_block
     assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
