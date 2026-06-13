@@ -5,6 +5,7 @@ export interface SessionClaims {
 }
 
 export const SESSION_COOKIE_NAME = "naruon_session";
+export const SESSION_COOKIE_MAX_AGE_SECONDS = 12 * 60 * 60;
 export const ANONYMOUS_SESSION_CLAIMS: SessionClaims = {
   userId: null,
   organizationId: null,
@@ -31,6 +32,7 @@ export function buildSessionCookieOptions(token: string) {
     secure: true,
     sameSite: "lax" as const,
     path: "/",
+    maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
   };
 }
 

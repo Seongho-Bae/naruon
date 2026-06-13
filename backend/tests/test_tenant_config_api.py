@@ -481,6 +481,26 @@ def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
     }
 
 
+@pytest.mark.parametrize(
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
+)
+def test_tenant_config_post_rejects_cross_user_admin_access(client, admin_role):
+    response = client.post(
+        "/api/config",
+        json={"user_id": "member-user"},
+        headers={
+            "X-User-Id": "admin",
+            "X-User-Role": admin_role,
+            "X-Organization-Id": "org-acme",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {
+        "detail": "Mailbox settings are personal and can only be managed by the authenticated user"
+    }
+
+
 @pytest.mark.parametrize("role", ("group_admin", "member"))
 def test_global_config_requires_admin(client, role):
     response = client.get(

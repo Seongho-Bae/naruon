@@ -16,6 +16,8 @@ from api.auth import (
     AuthContext,
     OIDC_ALLOWED_ALGORITHMS,
     SESSION_ALLOWED_ALGORITHMS,
+    SESSION_AUTH_RATE_LIMIT_MAX_FAILURES,
+    _session_auth_failure_buckets,
     ensure_organization_access,
     get_auth_context,
     get_current_user,
@@ -122,6 +124,7 @@ def restore_auth_flags():
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
     previous_oidc_signing_keys = sys.modules["api.auth"]._cached_oidc_signing_keys
+    _session_auth_failure_buckets.clear()
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
@@ -129,6 +132,7 @@ def restore_auth_flags():
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
     sys.modules["api.auth"]._cached_oidc_signing_keys = previous_oidc_signing_keys
+    _session_auth_failure_buckets.clear()
 
 
 def _set_runtime_environment(value: str) -> None:
@@ -466,6 +470,77 @@ async def test_signed_bearer_session_rejects_expired_token():
         await get_auth_context(authorization=f"Bearer {token}")
 
     assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_excessive_expiration():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(exp=int(time.time()) + (13 * 60 * 60))
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_future_issued_at():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            iat=int(time.time()) + 120,
+            exp=int(time.time()) + 300,
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rejects_issued_at_after_expiration():
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(
+        _valid_session_payload(
+            iat=int(time.time()) + 240,
+            exp=int(time.time()) + 120,
+        )
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_signed_bearer_session_rate_limits_repeated_invalid_token(monkeypatch):
+    from api import auth as auth_module
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    decode_attempts = 0
+
+    def reject_header(token: str):
+        nonlocal decode_attempts
+        decode_attempts += 1
+        raise auth_module.jwt.PyJWTError("invalid")
+
+    monkeypatch.setattr(auth_module.jwt, "get_unverified_header", reject_header)
+
+    for _attempt in range(SESSION_AUTH_RATE_LIMIT_MAX_FAILURES):
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization="Bearer invalid.jwt.token")
+        assert exc.value.status_code == 401
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization="Bearer invalid.jwt.token")
+
+    assert exc.value.status_code == 401
+    assert decode_attempts == SESSION_AUTH_RATE_LIMIT_MAX_FAILURES
 
 
 @pytest.mark.asyncio

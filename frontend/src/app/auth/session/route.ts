@@ -15,6 +15,9 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+};
 
 function sameOriginStateChangingRequest(request: NextRequest): boolean {
   if (!STATE_CHANGING_METHODS.has(request.method.toUpperCase())) return true;
@@ -108,7 +111,7 @@ function sessionJson(claims: SessionClaims | null) {
 export async function GET(request: NextRequest) {
   const token = normalizeSessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   const claims = token ? await verifySessionToken(token) : null;
-  return NextResponse.json(sessionJson(claims));
+  return NextResponse.json(sessionJson(claims), { headers: NO_STORE_HEADERS });
 }
 
 export async function POST(request: NextRequest) {
@@ -145,7 +148,11 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const response = NextResponse.json(sessionJson(claims));
+  const response = NextResponse.json(sessionJson(claims), {
+    headers: NO_STORE_HEADERS,
+  });
+  // Do not promote an existing browser cookie; install only the backend-verified
+  // bearer session supplied in this request, replacing any previous session id.
   response.cookies.set(buildSessionCookieOptions(accessToken));
   return response;
 }
@@ -155,7 +162,7 @@ export async function DELETE(request: NextRequest) {
     return csrfRejectedResponse();
   }
 
-  const response = NextResponse.json(sessionJson(null));
+  const response = NextResponse.json(sessionJson(null), { headers: NO_STORE_HEADERS });
   response.cookies.set(buildExpiredSessionCookieOptions());
   return response;
 }

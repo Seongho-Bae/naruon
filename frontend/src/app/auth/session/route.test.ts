@@ -49,12 +49,18 @@ describe("/auth/session route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
-      method: "POST",
-      body: JSON.stringify({ access_token: token }),
-    }));
+    const response = await POST(
+      new NextRequest("https://app.naruon.net/auth/session", {
+        method: "POST",
+        headers: {
+          Cookie: "naruon_session=attacker-fixed-session",
+        },
+        body: JSON.stringify({ access_token: token }),
+      }),
+    );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       authenticated: true,
       claims: {
@@ -68,7 +74,9 @@ describe("/auth/session route", () => {
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("SameSite=lax");
+    expect(setCookie).toContain("Max-Age=43200");
     expect(setCookie).not.toContain("access_token");
+    expect(setCookie).not.toContain("attacker-fixed-session");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -102,6 +110,7 @@ describe("/auth/session route", () => {
         workspaceId: "workspace-beta",
       },
     });
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -181,6 +190,7 @@ describe("/auth/session route", () => {
     }));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("naruon_session=");
     expect(setCookie).toContain("Max-Age=0");
