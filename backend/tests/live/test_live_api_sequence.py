@@ -53,7 +53,7 @@ def _live_base_url() -> str:
     live_base_url = os.environ.get("LIVE_BASE_URL")
     if not live_base_url:
         raise AssertionError("LIVE_BASE_URL is required for live API smoke")
-    return live_base_url.rstrip("/")
+    return live_base_url
 
 
 def read_json(

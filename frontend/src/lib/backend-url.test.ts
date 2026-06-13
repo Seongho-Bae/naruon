@@ -76,7 +76,7 @@ describe("backend URL guard", () => {
             Object.defineProperty(this, "hostname", { get: () => "" });
           }
         }
-      } as any;
+      } as unknown as typeof URL;
       expect(() => parseBackendInternalUrl("https:///empty")).toThrow(
         "BACKEND_INTERNAL_URL must include a hostname",
       );
