@@ -867,6 +867,82 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape() {
+	local tmp_dir
+	local fixture_repo
+	local evidence_file
+	local output_file
+	tmp_dir="$(mktemp -d)"
+	fixture_repo="$tmp_dir/repo"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	mkdir -p "$fixture_repo/backend/app" "$fixture_repo/frontend"
+	for line_number in $(seq 1 150); do
+		printf '# auth fixture line %s\n' "$line_number"
+	done >"$fixture_repo/backend/app/auth.py"
+	cat >"$fixture_repo/frontend/next.config.ts" <<'EOF'
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  async headers() {
+    return [];
+  },
+};
+
+export default nextConfig;
+EOF
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
+strix	Run Strix (quick)	Below-threshold findings detected, but infrastructure errors occurred during this pipeline run; refusing bypass due to potentially incomplete scan.
+strix	Run Strix (quick)	Unable to map Strix findings to changed files; failing closed for pull request.
+```
+
+### Strix vulnerability report window 1
+
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Target: /workspace/strix-pr-scope.I4RF8w                                    │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│  Code Locations                                                              │
+│    Location 1: backend/app/auth.py:132-135                                   │
+│  Model deepseek/deepseek-r1-0528                                             │
+│  Vulnerabilities 1                                                           │
+
+### Strix vulnerability report window 2
+
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure   │
+│  Data Handling                                                               │
+│  Severity: HIGH                                                              │
+│  Target: /workspace/strix-pr-scope.I4RF8w/frontend                           │
+│  Model deepseek/deepseek-v3-0324                                             │
+│  Vulnerabilities 1                                                           │
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$fixture_repo" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Authentication Bypass via X-Dev-User Header" "fallback includes pg-erd-cloud first model report"
+	assert_file_contains "$output_file" "backend/app/auth.py:132" "fallback maps pg-erd-cloud auth report to exact line"
+	assert_file_contains "$output_file" "Endpoint: /api/me. Method: GET" "fallback preserves pg-erd-cloud endpoint and method"
+	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure Data Handling" "fallback preserves wrapped pg-erd-cloud frontend title"
+	assert_file_contains "$output_file" "frontend/next.config.ts:3" "fallback anchors locationless frontend report to a concrete frontend hardening line"
+	assert_file_contains "$output_file" "Unable to map Strix findings" "fallback preserves failed Strix mapping signal"
+	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback reports incomplete Strix evidence after model findings"
+	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not erase model findings after provider signals"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -5261,6 +5337,8 @@ assert_opencode_review_gate_rejects_non_source_backed_findings
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
 assert_opencode_failed_check_fallback_emits_each_strix_report
+
+assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \
