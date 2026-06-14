@@ -16,6 +16,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
   CornerDownRight: () => <svg aria-hidden="true" />,
   Loader2: () => <svg aria-hidden="true" className="lucide-loader-2" />,
+  X: () => <svg aria-hidden="true" />,
 }));
 
 vi.mock("vis-network", () => ({

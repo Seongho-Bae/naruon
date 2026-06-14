@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
@@ -14,6 +14,7 @@ import {
   Network,
   Search,
   Sparkles,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -242,6 +243,7 @@ function SenderDagPanel({
 
 export function SearchLayout() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
   const [activeFilter, setActiveFilter] = useState<ResultFilter>("all");
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -494,13 +496,29 @@ export function SearchLayout() {
             />
             <input
               id="search-input"
-              type="search"
+              ref={searchInputRef}
+              type="text"
+              inputMode="search"
+              role="searchbox"
               aria-label="맥락 검색어 입력"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..."
-              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-4 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                aria-label="검색어 지우기"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
           <button
             type="submit"
