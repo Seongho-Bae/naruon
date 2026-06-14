@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, FolderOpen, ListChecks, Search, User } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -130,30 +130,6 @@ function getWorkspaceScopeLabel(scope: ProjectAccessScope) {
   return scope.organizationId ? '서명된 조직 워크스페이스' : '서명된 개인 워크스페이스';
 }
 
-function getProjectScopeSnapshot() {
-  const claims = apiClient.getSessionClaims();
-  return `${claims.userId ?? ''}|${claims.organizationId ?? ''}`;
-}
-
-function getProjectScopeServerSnapshot() {
-  return '|';
-}
-
-function subscribeProjectScope(onStoreChange: () => void) {
-  if (typeof window === 'undefined') return () => {};
-
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === 'naruon_session_token') onStoreChange();
-  };
-  const refreshHandle = window.setTimeout(onStoreChange, 0);
-  window.addEventListener('storage', handleStorage);
-
-  return () => {
-    window.clearTimeout(refreshHandle);
-    window.removeEventListener('storage', handleStorage);
-  };
-}
-
 function isAuthorizedToViewProject(folder: ProjectFolder, scope: ProjectAccessScope) {
   const ownerUserId = safeText(folder.owner_user_id);
   if (!ownerUserId || !scope.userId || ownerUserId !== scope.userId) return false;
@@ -199,15 +175,10 @@ export function ProjectsLayout() {
   const [error, setError] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ProjectViewMode>('프로젝트 상세');
-  const projectScopeSnapshot = useSyncExternalStore(
-    subscribeProjectScope,
-    getProjectScopeSnapshot,
-    getProjectScopeServerSnapshot,
-  );
-  const projectScope = useMemo<ProjectAccessScope>(() => {
-    const [userId, organizationId] = projectScopeSnapshot.split('|');
-    return { userId: userId || null, organizationId: organizationId || null };
-  }, [projectScopeSnapshot]);
+  const [projectScope, setProjectScope] = useState<ProjectAccessScope>({
+    userId: null,
+    organizationId: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -215,11 +186,16 @@ export function ProjectsLayout() {
     void Promise.all([
       apiClient.get<ProjectFolder[]>('/api/webdav/folders'),
       apiClient.get<TicketTask[]>('/api/tasks'),
+      apiClient.getServerSessionClaims(),
     ])
-      .then(([folderRows, taskRows]) => {
+      .then(([folderRows, taskRows, claims]) => {
         if (cancelled) return;
         setFolders(Array.isArray(folderRows) ? folderRows : []);
         setTasks(Array.isArray(taskRows) ? taskRows : []);
+        setProjectScope({
+          userId: claims.userId,
+          organizationId: claims.organizationId,
+        });
         setError(null);
       })
       .catch((fetchError: Error) => {
@@ -373,7 +349,7 @@ export function ProjectsLayout() {
               <section aria-label="프로젝트 의사결정 로그" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                 <div className="flex items-center justify-between border-b border-border bg-primary/5 p-5">
                   <h2 className="font-bold text-lg text-primary">의사결정 로그</h2>
-                  <button type="button" onClick={() => setViewMode('의사결정 로그')} className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90">의사결정 추가</button>
+                  <button type="button" aria-label="프로젝트 의사결정 추가" onClick={() => setViewMode('의사결정 로그')} className="rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90">의사결정 추가</button>
                 </div>
                 <div className="divide-y divide-border">
                   <article className="p-5">
@@ -445,9 +421,9 @@ export function ProjectsLayout() {
               <h2 className="mb-4 font-bold text-base">프로젝트 액션</h2>
               <div className="grid gap-2 text-sm">
                 <a href="/data" className="flex min-h-10 items-center gap-2 rounded-md bg-primary px-3 font-bold text-primary-foreground hover:bg-primary/90"><FolderOpen className="size-4" /> 새 프로젝트</a>
-                <button type="button" onClick={() => setViewMode('프로젝트 상세')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 프로젝트 열기</button>
+                <button type="button" aria-label="프로젝트 상세 열기" onClick={() => setViewMode('프로젝트 상세')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 프로젝트 열기</button>
                 <a href="/tasks" className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><ListChecks className="size-4 text-primary" /> 마일스톤 추가</a>
-                <button type="button" onClick={() => setViewMode('의사결정 로그')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 의사결정 추가</button>
+                <button type="button" aria-label="프로젝트 의사결정 추가" onClick={() => setViewMode('의사결정 로그')} className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><CheckCircle2 className="size-4 text-primary" /> 의사결정 추가</button>
                 <a href="/search" className="flex min-h-10 items-center gap-2 rounded-md border border-border bg-background px-3 font-bold hover:bg-secondary"><Search className="size-4 text-primary" /> 관련 문서/메일 연결</a>
               </div>
             </section>

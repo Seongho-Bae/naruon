@@ -6,12 +6,16 @@ from pathlib import Path
 from db.session import AsyncSessionLocal
 from db.models import Email, Attachment
 from services.email_parser import parse_eml
-from services.embedding import generate_embeddings
+from services.embedding import (
+    STORAGE_EMBEDDING_DIMENSION,
+    fit_embedding_vector,
+    generate_embeddings,
+)
 from services.threading_service import assign_thread_id
 import os
 from sqlalchemy import select
 
-EMBEDDING_DIMENSION = 1536
+EMBEDDING_DIMENSION = STORAGE_EMBEDDING_DIMENSION
 IMPORT_USER_ID = os.environ.get("NARUON_IMPORT_USER_ID", "default")
 IMPORT_ORGANIZATION_ID = os.environ.get("NARUON_IMPORT_ORGANIZATION_ID", "default")
 
@@ -24,7 +28,10 @@ async def generate_fixture_embedding(text: str) -> list[float]:
     if not openai_api_key:
         return [0.0] * EMBEDDING_DIMENSION
 
-    return (await generate_embeddings([text], openai_api_key=openai_api_key))[0]
+    embeddings = await generate_embeddings([text], openai_api_key=openai_api_key)
+    if not embeddings:
+        return [0.0] * EMBEDDING_DIMENSION
+    return fit_embedding_vector(embeddings[0], EMBEDDING_DIMENSION)
 
 
 async def import_eml_file(session, eml_file: Path) -> bool:

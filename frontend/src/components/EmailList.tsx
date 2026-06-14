@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, MessagesSquare, Network, Search, Sparkles, X } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
 import { toMailDisplayText } from "@/lib/mail-text";
 
@@ -217,10 +217,24 @@ export function EmailList({
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-xl border-input bg-background/80 pl-9 shadow-inner shadow-slate-950/[0.02]"
+              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  void fetchEmails("");
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+                aria-label="검색어 지우기"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
           <Button type="submit" disabled={isSearching || loading} className="h-10 rounded-xl px-4">
+            {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {isSearching ? "검색 중" : "검색"}
           </Button>
         </form>

@@ -6,13 +6,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, union_all
 from db.session import get_db
 from db.models import Email, Attachment
-from services.embedding import generate_embeddings
+from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector, generate_embeddings
 from api.auth import AuthContext, get_auth_context
-from services.tenant_config_scope import get_scoped_tenant_config
+from services.llm_provider_selection import resolve_runtime_llm_provider
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
-SEARCH_VECTOR_DIMENSIONS = 1536
+SEARCH_VECTOR_DIMENSIONS = STORAGE_EMBEDDING_DIMENSION
 
 
 class SearchRequest(BaseModel):
@@ -185,23 +185,25 @@ async def hybrid_search(
         return SearchResponse(results=[])
 
     try:
-        tenant_config = await get_scoped_tenant_config(
+        runtime_provider = await resolve_runtime_llm_provider(
             db,
-            target_user_id,
-            auth_context.organization_id,
+            user_id=target_user_id,
+            organization_id=auth_context.organization_id,
         )
-        if not tenant_config or not tenant_config.openai_api_key:
+        if runtime_provider is None:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
 
-        openai_api_key = tenant_config.openai_api_key
-
-        embeddings = await generate_embeddings([request.query], openai_api_key)
-        query_embedding = embeddings[0] if embeddings else None
-        if (
-            query_embedding is not None
-            and len(query_embedding) != SEARCH_VECTOR_DIMENSIONS
-        ):
-            query_embedding = None
+        embeddings = await generate_embeddings(
+            [request.query],
+            runtime_provider.api_key,
+            base_url=runtime_provider.base_url,
+            model=runtime_provider.embedding_model,
+        )
+        query_embedding = (
+            fit_embedding_vector(embeddings[0], SEARCH_VECTOR_DIMENSIONS)
+            if embeddings
+            else None
+        )
 
         owner_filters = email_owner_filters(
             target_user_id, auth_context.organization_id

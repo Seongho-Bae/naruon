@@ -7,6 +7,12 @@ export interface RuntimeConfig {
 let configCache: RuntimeConfig | null = null;
 let fetchPromise: Promise<RuntimeConfig> | null = null;
 
+function getRuntimeConfigErrorLogMetadata(error: unknown) {
+  return {
+    error_type: error instanceof Error ? error.name || 'Error' : typeof error,
+  };
+}
+
 export async function fetchRuntimeConfig(baseUrl: string = ''): Promise<RuntimeConfig> {
   if (configCache) return configCache;
   if (fetchPromise) return fetchPromise;
@@ -24,7 +30,7 @@ export async function fetchRuntimeConfig(baseUrl: string = ''): Promise<RuntimeC
       return config;
     })
     .catch((err) => {
-      console.error('Runtime config fetch failed, using fallback', err);
+      console.error('Runtime config fetch failed, using fallback', getRuntimeConfigErrorLogMetadata(err));
       const fallback: RuntimeConfig = {
         product_name: 'Naruon',
         version: 'fallback',

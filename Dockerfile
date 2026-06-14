@@ -21,6 +21,10 @@ RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
 # Copy Backend
 COPY backend /app/
 
+RUN useradd --system --create-home --home-dir /home/appuser --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
@@ -43,6 +47,7 @@ RUN pnpm run build
 
 # Stage 3: Combined image (Python + Node.js)
 FROM backend-runtime
+USER root
 
 # Runtime Node is copied from the frontend builder so apt does not install a
 # distro Node package with noisy alternatives output.
@@ -55,22 +60,13 @@ COPY --from=frontend-builder /app/node_modules /app/frontend/node_modules
 COPY --from=frontend-builder /app/package.json /app/frontend/package.json
 COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
-# Create a startup script. DATABASE_URL and AUTH_SESSION_HMAC_SECRET must be
-# supplied by the operator or orchestrator; do not generate runtime secrets here.
-RUN echo '#!/bin/bash\n\
-set -euo pipefail\n\
-echo "Starting Naruon Backend and Frontend..."\n\
-python scripts/bootstrap_db.py\n\
-python scripts/start_backend.py --host 0.0.0.0 --port 8000 &\n\
-BACKEND_PID=$!\n\
-cd frontend && ./node_modules/.bin/next start --hostname 0.0.0.0 --port 3000 &\n\
-FRONTEND_PID=$!\n\
-trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null || true" EXIT\n\
-wait -n "$BACKEND_PID" "$FRONTEND_PID"\n\
-' > /app/start.sh && chmod +x /app/start.sh
-
-# Create non-root user
-RUN useradd -m -s /bin/bash appuser && chown -R appuser:appuser /app
+# Startup is handled by scripts/docker_entrypoint.sh (copied with the backend in
+# stage 1). It validates required configuration (DATABASE_URL,
+# AUTH_SESSION_HMAC_SECRET, and a valid Fernet ENCRYPTION_KEY — never generated
+# at runtime), then starts backend and frontend together and reports which
+# service exits. Secrets must be supplied by the operator or orchestrator.
+RUN chmod +x /app/scripts/docker_entrypoint.sh \
+    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh
 USER appuser
 
 # Environment variables for Frontend proxying inside the combined image
@@ -80,4 +76,4 @@ ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
 
 EXPOSE 3000 8000
 
-CMD ["/app/start.sh"]
+CMD ["/app/scripts/docker_entrypoint.sh"]
