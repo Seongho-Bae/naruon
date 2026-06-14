@@ -82,6 +82,7 @@ assert_workflow_uses_are_sha_pinned() {
 assert_strix_pr_scope_includes_deployment_context() {
 	assert_file_contains "$GATE_SCRIPT" "needs_deployment_context=0" "strix gate tracks deployment-context scoped PRs"
 	assert_file_contains "$GATE_SCRIPT" ".github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml" "strix gate recognizes deployment and CI files"
+	assert_file_contains "$GATE_SCRIPT" "backend/scripts/docker_entrypoint.sh" "strix gate includes the combined Docker image entrypoint with deployment context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
 	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
@@ -303,6 +304,15 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	local opencode_config="$REPO_ROOT/opencode.jsonc"
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
+	assert_file_contains "$workflow_file" "actions: read" "opencode review workflow can read failed Actions logs for GitHub Check diagnosis"
+	assert_file_contains "$workflow_file" "checks: read" "opencode review workflow can read failed check-run annotations for line-specific findings"
+	assert_file_contains "$workflow_file" "contents: read" "opencode review workflow uses read-only repository contents permission"
+	assert_file_not_contains "$workflow_file" "contents: write" "opencode review workflow must not request repository content write permission"
+	assert_file_contains "$workflow_file" "pull-requests: read" "opencode review workflow reads pull request metadata through the job token"
+	assert_file_not_contains "$workflow_file" "pull-requests: write" "opencode review workflow writes reviews through the OpenCode app token instead of the job token"
+	assert_file_contains "$workflow_file" "issues: read" "opencode review workflow reads overview comments through the job token"
+	assert_file_not_contains "$workflow_file" "issues: write" "opencode review workflow writes overview comments through the OpenCode app token instead of the job token"
+	assert_file_contains "$workflow_file" "statuses: read" "opencode review workflow can read failed status contexts for approval gating"
 	assert_file_contains "$workflow_file" "Prepare bounded OpenCode review evidence" "opencode review workflow prepares bounded local evidence instead of oversized GitHub prompt data"
 	assert_file_contains "$workflow_file" "emit_file_prefix" "opencode review prompt evidence is byte-capped before GitHub Models requests"
 	assert_file_contains "$workflow_file" 'head -c 7000 "$OPENCODE_EVIDENCE_FILE"' "opencode review prompt includes a compact evidence prefix"
@@ -361,6 +371,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file" "$normalized_comment_json"' "opencode review publish step extracts normalized control JSON"
 	assert_file_contains "$workflow_file" 'cat "$normalized_comment_json"' "opencode review publish step rebuilds the overview from normalized control JSON"
 	assert_file_contains "$workflow_file" 'APPROVAL_CHECK_WAIT_ATTEMPTS: "241"' "opencode approval waits for long-running peer checks before approving"
+	assert_file_contains "$workflow_file" 'CHECK_LOOKUP_RETRY_ATTEMPTS: "5"' "opencode approval retries transient GitHub check lookup failures before changing review state"
+	assert_file_contains "$workflow_file" 'GitHub Checks lookup failed; retrying' "opencode approval logs transient check lookup retries"
+	assert_file_contains "$workflow_file" 'collect_github_checks_with_retry collect_pending_github_checks "$output_file"' "opencode approval retry-wraps pending check lookup"
+	assert_file_contains "$workflow_file" 'collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file"' "opencode approval retry-wraps failed check lookup"
 	assert_file_contains "$workflow_file" 'current_peer_checks_still_running()' "opencode evidence waits for PR statusCheckRollup peer checks before reviewing"
 	assert_file_contains "$workflow_file" 'collect_pending_github_checks()' "opencode approval collects pending peer GitHub Checks"
 	assert_file_not_contains "$workflow_file" 'gh run list' "opencode approval must not mix non-PR workflow runs into PR gate decisions"
@@ -383,6 +397,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "<!-- opencode-review-overview -->" "opencode review publishes a durable Review Overview marker"
 	assert_file_contains "$workflow_file" "## OpenCode Review Overview" "opencode review publishes a visible Review Overview heading"
 	assert_file_contains "$workflow_file" 'gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}"' "opencode review updates an existing Review Overview comment instead of duplicating it"
+	assert_file_contains "$workflow_file" "Exchange OpenCode app token for review writes" "opencode review obtains an app token before publishing review writes"
+	assert_file_contains "$workflow_file" 'steps.opencode_app_token.outputs.token || secrets.OPENCODE_APPROVE_TOKEN || secrets.GITHUB_TOKEN' "opencode review prefers the OpenCode app token for PR review and overview writes"
+	assert_file_contains "$workflow_file" 'opencode-agent[bot]' "opencode review can find overview comments written by the OpenCode app token"
 	assert_file_contains "$workflow_file" 'update_review_overview()' "opencode approval step can rewrite the durable Review Overview after final gate decisions"
 	assert_file_contains "$workflow_file" 'update_review_overview "$event" "$body"' "opencode approval reviews refresh the durable overview with the actual approval-step event"
 	assert_file_contains "$workflow_file" 'env GH_TOKEN="$overview_comment_token"' "opencode approval overview updates use the workflow comment token"
@@ -451,6 +468,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "STRIX_FALLBACK_MODELS:" "opencode provider fallback finding points at the concrete Strix fallback configuration line"
 	assert_file_contains "$workflow_file" "emit_strix_cancelled_without_log_finding" "opencode fallback review explains cancelled Strix runs without inventing code vulnerabilities"
 	assert_file_contains "$workflow_file" "Configured model and fallback models were unavailable" "opencode fallback review preserves exhausted Strix model evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" '^CMD \["/app/scripts/docker_entrypoint\.sh"\]' "opencode failed-check fallback maps missing Docker entrypoint reports to the Dockerfile CMD line"
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
 	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
@@ -2611,6 +2629,26 @@ EOS
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
 		;;
+	pr-deployment-scope-entrypoint-context)
+		if [ ! -f "$target_path/Dockerfile" ]; then
+			echo "Error: deployment scope missing Dockerfile ($target_path)" >&2
+			exit 56
+		fi
+		if [ ! -f "$target_path/backend/scripts/docker_entrypoint.sh" ]; then
+			echo "Error: deployment scope missing backend/scripts/docker_entrypoint.sh ($target_path)" >&2
+			exit 57
+		fi
+		if ! grep -Fq -- 'CMD ["/app/scripts/docker_entrypoint.sh"]' "$target_path/Dockerfile"; then
+			echo "Error: deployment Dockerfile does not reference docker_entrypoint.sh ($target_path)" >&2
+			exit 58
+		fi
+		if ! grep -Fq -- 'Starting backend (uvicorn :8000)' "$target_path/backend/scripts/docker_entrypoint.sh"; then
+			echo "Error: deployment entrypoint context did not include trusted script content ($target_path)" >&2
+			exit 59
+		fi
+		echo "scan ok with deployment entrypoint context"
+		exit 0
+		;;
 	*)
 		echo "unknown scenario ${FAKE_STRIX_SCENARIO:?}" >&2
 		exit 8
@@ -2766,7 +2804,29 @@ EOS
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
-		elif [ "$scenario" = "pr-large-scope-full-set" ]; then
+	elif [ "$scenario" = "pr-deployment-scope-entrypoint-context" ]; then
+		mkdir -p "$repo_root_dir/.github/workflows" "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
+		echo 'name: OpenCode Review' >"$repo_root_dir/.github/workflows/opencode-review.yml"
+		cat >"$repo_root_dir/Dockerfile" <<'EOS'
+FROM python:3.11-slim AS backend-runtime
+WORKDIR /app
+COPY backend /app/
+FROM backend-runtime
+RUN chmod +x /app/scripts/docker_entrypoint.sh
+CMD ["/app/scripts/docker_entrypoint.sh"]
+EOS
+		cat >"$repo_root_dir/backend/scripts/docker_entrypoint.sh" <<'EOS'
+#!/usr/bin/env bash
+echo "Starting backend (uvicorn :8000)"
+EOS
+		touch "$repo_root_dir/frontend/Dockerfile"
+		echo '{"scripts":{"start":"next start"}}' >"$repo_root_dir/frontend/package.json"
+		touch "$repo_root_dir/frontend/next.config.ts"
+		touch "$repo_root_dir/frontend/postcss.config.mjs"
+		touch "$repo_root_dir/docker-compose.yml"
+		touch "$repo_root_dir/render.yaml"
+		echo '0.0.0' >"$repo_root_dir/VERSION"
+	elif [ "$scenario" = "pr-large-scope-full-set" ]; then
 		mkdir -p "$repo_root_dir/backend/large-scope"
 		local large_scope_index
 		for large_scope_index in $(seq 1 38); do
@@ -6900,6 +6960,27 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
+
+run_gate_case "pr-deployment-scope-entrypoint-context" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with deployment entrypoint context" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	".github/workflows/opencode-review.yml"
 
 run_gate_case "pr-empty-diff-skip" \
 	"openai/gpt-4o-mini" \

@@ -87,6 +87,10 @@ derive_location_from_report() {
 	fi
 
 	case "$title" in
+		*"docker_entrypoint.sh"*|*"Docker Runtime Failure"*)
+			path="Dockerfile"
+			line="$(first_existing_line "$path" '^CMD \["/app/scripts/docker_entrypoint\.sh"\]|^ENTRYPOINT .*docker_entrypoint\.sh')"
+			;;
 		*"Path Traversal"*Attachment*|*"attachment"*filename*)
 			path="backend/services/email_parser.py"
 			line="$(first_existing_line "$path" 'filename = part\.get_filename\(\)|"filename":')"
