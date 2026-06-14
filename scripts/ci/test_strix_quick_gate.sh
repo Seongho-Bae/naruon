@@ -303,6 +303,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	local opencode_config="$REPO_ROOT/opencode.jsonc"
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
+	assert_file_contains "$workflow_file" "actions: read" "opencode review workflow can read failed Actions logs for GitHub Check diagnosis"
+	assert_file_contains "$workflow_file" "checks: read" "opencode review workflow can read failed check-run annotations for line-specific findings"
+	assert_file_contains "$workflow_file" "statuses: read" "opencode review workflow can read failed status contexts for approval gating"
 	assert_file_contains "$workflow_file" "Prepare bounded OpenCode review evidence" "opencode review workflow prepares bounded local evidence instead of oversized GitHub prompt data"
 	assert_file_contains "$workflow_file" "emit_file_prefix" "opencode review prompt evidence is byte-capped before GitHub Models requests"
 	assert_file_contains "$workflow_file" 'head -c 7000 "$OPENCODE_EVIDENCE_FILE"' "opencode review prompt includes a compact evidence prefix"

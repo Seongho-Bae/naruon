@@ -15,8 +15,11 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
+      actions: read
+      checks: read
       id-token: write
       contents: write
+      statuses: read
       pull-requests: write
       issues: write
     steps:
