@@ -29,6 +29,16 @@ if ! python -c "import os; from cryptography.fernet import Fernet; Fernet(os.env
   fail "ENCRYPTION_KEY is not a valid Fernet key. Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'."
 fi
 
+# 1c. Match the backend runtime preflight for the signed-session HMAC secret.
+#     Without this, weak secrets fail during bootstrap imports and produce a
+#     Pydantic traceback before the operator sees the actionable rule.
+if ! python -c "import os; from core.runtime_secrets import validate_auth_session_hmac_secret_value; validate_auth_session_hmac_secret_value(os.environ['AUTH_SESSION_HMAC_SECRET'])" 2>/tmp/naruon-auth-secret-check.log; then
+  auth_secret_error="$(tail -n 1 /tmp/naruon-auth-secret-check.log 2>/dev/null || true)"
+  rm -f /tmp/naruon-auth-secret-check.log
+  fail "${auth_secret_error:-AUTH_SESSION_HMAC_SECRET is invalid. It must be at least 32 bytes, contain at least 12 distinct characters, and use at least three character classes.}"
+fi
+rm -f /tmp/naruon-auth-secret-check.log
+
 # 2. Bootstrap the database schema. A failure here must be reported with an
 #    actionable message rather than just an asyncpg/SQLAlchemy traceback.
 log "Bootstrapping database schema..."
