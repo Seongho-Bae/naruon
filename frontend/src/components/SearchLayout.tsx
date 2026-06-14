@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
@@ -124,6 +124,70 @@ function buildOntologyUrl(result: SearchResultItem) {
     ? `/api/ontology/relationships?${query}`
     : "/api/ontology/relationships";
 }
+
+// ⚡ Bolt: Extracted and memoized individual search result items
+const SearchResultItemComponent = memo(function SearchResultItemComponent({
+  result,
+  isActive,
+  onSelect,
+}: {
+  result: SearchResultItem;
+  isActive: boolean;
+  onSelect: (id: number) => void;
+}) {
+  const confidence = confidencePercent(result.score);
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(result.id)}
+      aria-current={isActive ? "true" : undefined}
+      className={`w-full border-l-4 p-4 text-left transition-colors focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
+        isActive
+          ? "border-primary bg-secondary/50"
+          : "border-transparent hover:bg-secondary/20"
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <div className="mt-1 rounded-lg border border-border bg-background p-2">
+          <Mail className="size-4 text-primary" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate text-sm font-bold">
+            {resultTitle(result)}
+          </h3>
+          <p className="mt-1 truncate text-xs text-muted-foreground">
+            {result.sender}
+          </p>
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            {result.snippet}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
+              <FileText className="size-3" aria-hidden="true" />
+              {result.thread_id ? "메일 스레드" : "메일"}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              <Clock
+                className="mr-0.5 inline size-3"
+                aria-hidden="true"
+              />
+              {formatResultDate(result.date)}
+            </span>
+            <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+              답장 {result.reply_count ?? 1}건
+            </span>
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${confidenceTone(confidence)}`}
+            >
+              {confidenceLabel(confidence)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+});
 
 function SenderDagPanel({
   relationships,
@@ -420,58 +484,14 @@ export function SearchLayout() {
       ) : (
         filteredResults.map((result) => {
           const isActive = activeResult?.id === result.id;
-          const confidence = confidencePercent(result.score);
 
           return (
-            <button
+            <SearchResultItemComponent
               key={result.id}
-              type="button"
-              onClick={() => setActiveResultId(result.id)}
-              aria-current={isActive ? "true" : undefined}
-              className={`w-full border-l-4 p-4 text-left transition-colors focus-visible:border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${
-                isActive
-                  ? "border-primary bg-secondary/50"
-                  : "border-transparent hover:bg-secondary/20"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-1 rounded-lg border border-border bg-background p-2">
-                  <Mail className="size-4 text-primary" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-sm font-bold">
-                    {resultTitle(result)}
-                  </h3>
-                  <p className="mt-1 truncate text-xs text-muted-foreground">
-                    {result.sender}
-                  </p>
-                  <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {result.snippet}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded bg-border/50 px-1.5 py-0.5 text-[10px] font-bold text-muted-foreground">
-                      <FileText className="size-3" aria-hidden="true" />
-                      {result.thread_id ? "메일 스레드" : "메일"}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      <Clock
-                        className="mr-0.5 inline size-3"
-                        aria-hidden="true"
-                      />
-                      {formatResultDate(result.date)}
-                    </span>
-                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                      답장 {result.reply_count ?? 1}건
-                    </span>
-                    <span
-                      className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${confidenceTone(confidence)}`}
-                    >
-                      {confidenceLabel(confidence)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </button>
+              result={result}
+              isActive={isActive}
+              onSelect={setActiveResultId}
+            />
           );
         })
       )}
