@@ -18,6 +18,7 @@ export interface OidcLogoutOptions {
   navigate?: (url: string) => void;
 }
 
+const SESSION_TOKEN_KEY = 'naruon_session_token';
 const OIDC_STATE_KEY = 'naruon_oidc_state';
 const OIDC_VERIFIER_KEY = 'naruon_oidc_pkce_verifier';
 const OIDC_RETURN_TO_KEY = 'naruon_oidc_return_to';
@@ -27,28 +28,6 @@ export class OidcSessionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'OidcSessionError';
-  }
-}
-
-async function persistOidcSession(accessToken: string) {
-  const response = await fetch('/auth/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify({ access_token: accessToken }),
-  });
-  if (!response.ok) {
-    throw new OidcSessionError('OIDC session persistence failed');
-  }
-}
-
-async function clearPersistedOidcSession() {
-  const response = await fetch('/auth/session', {
-    method: 'DELETE',
-    credentials: 'same-origin',
-  });
-  if (!response.ok) {
-    throw new OidcSessionError('OIDC session clear failed');
   }
 }
 
@@ -189,7 +168,7 @@ export async function completeOidcRedirect(search = window.location.search) {
     throw new OidcSessionError('OIDC token response did not include an access token');
   }
 
-  await persistOidcSession(accessToken);
+  window.localStorage.setItem(SESSION_TOKEN_KEY, accessToken);
   const returnTo = window.sessionStorage.getItem(OIDC_RETURN_TO_KEY) || '/';
   clearOidcTransientState();
   return { returnTo };
@@ -202,10 +181,10 @@ export function clearOidcTransientState() {
   window.sessionStorage.removeItem(OIDC_RETURN_TO_KEY);
 }
 
-export async function clearOidcSession(options: OidcLogoutOptions = {}) {
+export function clearOidcSession(options: OidcLogoutOptions = {}) {
   requireBrowserStorage();
   const config = getOidcBrowserConfig();
-  await clearPersistedOidcSession();
+  window.localStorage.removeItem(SESSION_TOKEN_KEY);
   clearOidcTransientState();
 
   if (!config) return;

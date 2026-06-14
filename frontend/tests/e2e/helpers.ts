@@ -696,7 +696,7 @@ const llmProviders = [
     name: 'Local Gemma4',
     provider_type: 'ollama',
     base_url: 'http://ollama:11434/v1',
-    model_identifier: 'gemma4:e2b-it-qat',
+    model_identifier: 'gemma4',
     embedding_model: 'embeddinggemma',
     is_active: true,
     configured: true,

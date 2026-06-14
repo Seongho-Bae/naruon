@@ -209,33 +209,6 @@ async def test_extract_todos_and_summary_success(mock_openai):
     assert result.summary == "Test summary"
     assert result.todos == ["Task 1"]
     mock_openai.beta.chat.completions.parse.assert_called_once()
-    assert (
-        mock_openai.beta.chat.completions.parse.call_args.kwargs["model"]
-        == settings.OPENAI_MODEL
-    )
-
-
-@pytest.mark.asyncio
-async def test_extract_todos_and_summary_uses_selected_provider_model(mock_openai):
-    mock_response = MagicMock()
-    mock_message = MagicMock()
-    mock_message.parsed = ExtractionResult(
-        summary="Test summary", todos=["Task 1"], confidence=90
-    )
-    mock_choice = MagicMock()
-    mock_choice.message = mock_message
-    mock_response.choices = [mock_choice]
-    mock_openai.beta.chat.completions.parse = AsyncMock(return_value=mock_response)
-
-    result = await extract_todos_and_summary(
-        "Test email",
-        "test-key",
-        provider_name="Local Gemma4",
-        model="gemma4",
-    )
-
-    assert result.provenance == "Local Gemma4 (gemma4)"
-    assert mock_openai.beta.chat.completions.parse.call_args.kwargs["model"] == "gemma4"
 
 
 @pytest.mark.asyncio
@@ -452,32 +425,6 @@ async def test_draft_reply_success(mock_openai):
     # Verify results
     assert result == "Drafted reply text"
     mock_openai.chat.completions.create.assert_called_once()
-    assert (
-        mock_openai.chat.completions.create.call_args.kwargs["model"]
-        == settings.OPENAI_MODEL
-    )
-
-
-@pytest.mark.asyncio
-async def test_draft_reply_uses_selected_provider_model(mock_openai):
-    mock_response = MagicMock()
-    mock_message = MagicMock()
-    mock_message.content = "Drafted reply text"
-    mock_choice = MagicMock()
-    mock_choice.message = mock_message
-    mock_response.choices = [mock_choice]
-
-    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
-
-    result = await draft_reply(
-        "Test email",
-        "Draft a positive reply",
-        "test-key",
-        model="gemma4",
-    )
-
-    assert result == "Drafted reply text"
-    assert mock_openai.chat.completions.create.call_args.kwargs["model"] == "gemma4"
 
 
 @pytest.mark.asyncio

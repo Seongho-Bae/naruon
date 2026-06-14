@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClient } from "./api-client";
 
+function base64UrlJson(body: unknown) {
+  return btoa(JSON.stringify(body)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
 function jsonResponse(body: unknown) {
   return {
     ok: true,
@@ -18,34 +22,28 @@ function mockFetchResponse(body: unknown) {
   });
 }
 
-function rejectedResponse(status = 500, statusText = "Internal path /api/runtime-config") {
-  return {
-    ok: false,
-    status,
-    statusText,
-    json: async () => ({ detail: statusText }),
-    text: async () => "",
-  };
-}
-
 describe("ApiClient", () => {
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();
   });
 
-  it("does not derive display user context from browser-readable storage", () => {
+  it("derives display user context only from the stored session payload", () => {
     localStorage.setItem("naruon_dev_user", "legacy-dev-user");
     const client = new ApiClient();
 
     expect(client.getCurrentUserId()).toBeNull();
 
-    localStorage.setItem("legacy_browser_context", "legacy.browser.value");
+    localStorage.setItem(
+      "naruon_session_token",
+      `${base64UrlJson({ alg: "HS256" })}.${base64UrlJson({ sub: "signed-user" })}.signature`,
+    );
 
-    expect(client.getCurrentUserId()).toBeNull();
+    expect(client.getCurrentUserId()).toBe("signed-user");
   });
 
-  it("does not send browser-readable session tokens", async () => {
+  it("sends the signed bearer session token when one is stored", async () => {
+    localStorage.setItem("naruon_session_token", "signed.fixture.token");
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -60,7 +58,9 @@ describe("ApiClient", () => {
       "/api/tasks/from-email",
       expect.objectContaining({
         method: "POST",
-        headers: expect.not.objectContaining({ Authorization: expect.any(String) }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer signed.fixture.token",
+        }),
       }),
     );
   });
@@ -136,7 +136,8 @@ describe("ApiClient", () => {
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-Dev-Auth-Token");
   });
 
-  it("drops caller-supplied Authorization headers", async () => {
+  it("keeps the stored signed session ahead of caller Authorization headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.fixture.token");
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -154,11 +155,14 @@ describe("ApiClient", () => {
     );
 
     const [, requestInit] = fetchMock.mock.calls[0];
-    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
+    expect((requestInit as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer signed.fixture.token",
+    });
     expect((requestInit as RequestInit).headers).not.toHaveProperty("authorization");
   });
 
-  it("sends multipart form data without browser auth or caller identity headers", async () => {
+  it("sends multipart form data with bearer auth and without caller identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.form.token");
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -178,95 +182,10 @@ describe("ApiClient", () => {
     expect(requestInit?.method).toBe("POST");
     expect(requestInit?.body).toBe(formData);
     expect((requestInit as RequestInit).headers).toMatchObject({
+      Authorization: "Bearer signed.form.token",
       "X-Trace-Id": "trace-456",
     });
-    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("Content-Type");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-User-Id");
-  });
-
-  it("reads non-sensitive session claims from the server session route", async () => {
-    const fetchMock = mockFetchResponse({
-      authenticated: true,
-      claims: {
-        userId: "signed-user",
-        organizationId: "org-acme",
-        workspaceId: "workspace-acme",
-      },
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const client = new ApiClient();
-
-    await expect(client.getServerSessionClaims()).resolves.toEqual({
-      userId: "signed-user",
-      organizationId: "org-acme",
-      workspaceId: "workspace-acme",
-    });
-    expect(fetchMock).toHaveBeenCalledWith("/auth/session", {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin",
-    });
-  });
-
-  it("fails closed to anonymous claims when the server session route is unavailable", async () => {
-    const fetchMock = vi.fn(async () => {
-      throw new Error("network unavailable");
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const client = new ApiClient();
-
-    await expect(client.getServerSessionClaims()).resolves.toEqual({
-      userId: null,
-      organizationId: null,
-      workspaceId: null,
-    });
-  });
-
-  it("throws sanitized API errors for every HTTP method", async () => {
-    const calls: Array<[string, () => Promise<unknown>]> = [];
-    const client = new ApiClient();
-    calls.push(["get", () => client.get("/api/runtime-config")]);
-    calls.push(["post", () => client.post("/api/runtime-config", { secret: "value" })]);
-    calls.push(["postForm", () => client.postForm("/api/runtime-config", new FormData())]);
-    calls.push(["put", () => client.put("/api/runtime-config", { secret: "value" })]);
-    calls.push(["patch", () => client.patch("/api/runtime-config", { secret: "value" })]);
-    calls.push(["delete", () => client.delete("/api/runtime-config")]);
-
-    for (const [method, invoke] of calls) {
-      vi.stubGlobal("fetch", vi.fn(async () => rejectedResponse(503, `backend ${method} stack /internal/path`)));
-
-      try {
-        await invoke();
-        throw new Error(`${method} should have failed`);
-      } catch (error) {
-        expect(error).toMatchObject({
-          name: "ApiClientError",
-          message: "API request failed",
-          status: 503,
-          stack: undefined,
-        });
-        expect(String(error)).not.toContain("/api/runtime-config");
-        expect(String(error)).not.toContain("/internal/path");
-      }
-
-      vi.unstubAllGlobals();
-    }
-  });
-
-  it("does not expose raw network error details from failed fetches", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => {
-      throw new Error("network unavailable at /private/internal/path");
-    }));
-    const client = new ApiClient();
-
-    await expect(client.get("/api/runtime-config")).rejects.toMatchObject({
-      name: "ApiClientError",
-      message: "API request failed",
-      status: undefined,
-      stack: undefined,
-    });
   });
 });

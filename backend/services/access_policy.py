@@ -129,8 +129,6 @@ def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessD
 
     owns_resource = request.user_id == resource.owner_id
     has_delegation = request.user_id in resource.delegated_user_ids
-    # Self-service resources set require_owner_match=True to disable privileged
-    # role owner bypasses for personal mailbox and provider credential surfaces.
     owner_match_required = resource.require_owner_match or not system_admin_allowed
     if owner_match_required and not owns_resource and not has_delegation:
         return AccessDecision(allowed=False, reason="ownership_denied")

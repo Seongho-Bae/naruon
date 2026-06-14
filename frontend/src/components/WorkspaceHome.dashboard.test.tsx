@@ -101,6 +101,7 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
+    localStorage.setItem("naruon_session_token", "signed-dashboard-token");
     const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -164,9 +165,8 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(container.textContent).toContain("계약 검토 회신 SLA");
     const pendingCall = fetchCalls.find((call) => call.url.endsWith("/api/emails/pending-replies?limit=3"));
     expect(pendingCall).toBeDefined();
-    expect(pendingCall?.init?.credentials).toBe("same-origin");
     const headers = pendingCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Authorization).toBe("Bearer signed-dashboard-token");
     expect(headers["X-User-Id"]).toBeUndefined();
     expect(headers["X-Organization-Id"]).toBeUndefined();
     expect(headers["X-Dev-Auth-Token"]).toBeUndefined();
@@ -179,6 +179,7 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
+    localStorage.setItem("naruon_session_token", "signed-home-reply-sla");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -258,10 +259,9 @@ describe("WorkspaceHome Today dashboard", () => {
     const escalationCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/reply-sla-escalations"));
     expect(escalationCall).toBeDefined();
     expect(escalationCall?.init?.method).toBe("POST");
-    expect(escalationCall?.init?.credentials).toBe("same-origin");
     expect(JSON.parse(String(escalationCall?.init?.body))).toEqual({ overdue_hours: 48 });
     const headers = escalationCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Authorization).toBe("Bearer signed-home-reply-sla");
     for (const headerName of publicIdentityHeaders) {
       expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
     }
@@ -352,205 +352,6 @@ describe("WorkspaceHome Today dashboard", () => {
     expect(linkHrefByText("보안 감사 로그")).toBe("/security");
   });
 
-  it("marks a Today dashboard task done through the signed task API", async () => {
-    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })));
-    const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      fetchCalls.push({ url, init });
-      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ emails: [] }),
-        });
-      }
-      if (url.endsWith("/api/emails")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ emails: [] }),
-        });
-      }
-      if (url.endsWith("/api/tasks/task-home-toggle")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            id: "task-home-toggle",
-            title: "계약 승인 확인",
-            status: "done",
-            priority: "high",
-            created_at: "2026-05-17T09:00:00Z",
-            updated_at: "2026-05-17T10:00:00Z",
-          }),
-        });
-      }
-      if (url.endsWith("/api/tasks")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ([
-            {
-              id: "task-home-toggle",
-              title: "계약 승인 확인",
-              status: "open",
-              priority: "high",
-              created_at: "2026-05-17T09:00:00Z",
-              updated_at: "2026-05-17T09:00:00Z",
-            },
-          ]),
-        });
-      }
-      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
-      if (sourceEvidenceResponse) return sourceEvidenceResponse;
-      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
-      if (calendarCandidateResponse) return calendarCandidateResponse;
-      throw new Error(`Unexpected fetch: ${url}`);
-    }));
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
-    });
-    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인") ?? false);
-
-    const taskCheckbox = container.querySelector<HTMLInputElement>(
-      'input[aria-label="계약 승인 확인 작업 선택"]',
-    );
-    expect(taskCheckbox).not.toBeNull();
-    expect(taskCheckbox?.checked).toBe(false);
-
-    await act(async () => {
-      taskCheckbox?.click();
-    });
-    await waitForCondition(() => container?.textContent?.includes("계약 승인 확인 작업을 완료 처리했습니다.") ?? false);
-
-    const patchCall = fetchCalls.find((call) => call.url.endsWith("/api/tasks/task-home-toggle"));
-    expect(patchCall?.init?.method).toBe("PATCH");
-    expect(patchCall?.init?.credentials).toBe("same-origin");
-    expect(JSON.parse(String(patchCall?.init?.body))).toEqual({ status: "done" });
-    const headers = patchCall?.init?.headers as Record<string, string>;
-    expect(headers.Authorization).toBeUndefined();
-    for (const headerName of [
-      "x-user-id",
-      "x-organization-id",
-      "x-group-id",
-      "x-group-ids",
-      "x-user-role",
-      "x-dev-auth-token",
-    ]) {
-      expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
-    }
-  });
-
-  it("keeps Today dashboard task update feedback keyed per task", async () => {
-    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
-      matches: false,
-      media: query,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    })));
-    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith("/api/emails/pending-replies?limit=3")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ emails: [] }),
-        });
-      }
-      if (url.endsWith("/api/emails")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ emails: [] }),
-        });
-      }
-      if (url.endsWith("/api/tasks/task-alpha")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            id: "task-alpha",
-            title: "계약 승인 확인",
-            status: "done",
-            priority: "high",
-            created_at: "2026-05-17T09:00:00Z",
-            updated_at: "2026-05-17T10:00:00Z",
-          }),
-        });
-      }
-      if (url.endsWith("/api/tasks/task-beta")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({
-            id: "task-beta",
-            title: "회의록 공유",
-            status: "done",
-            priority: "normal",
-            created_at: "2026-05-17T09:00:00Z",
-            updated_at: "2026-05-17T10:00:00Z",
-          }),
-        });
-      }
-      if (url.endsWith("/api/tasks")) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ([
-            {
-              id: "task-alpha",
-              title: "계약 승인 확인",
-              status: "open",
-              priority: "high",
-              created_at: "2026-05-17T09:00:00Z",
-              updated_at: "2026-05-17T09:00:00Z",
-            },
-            {
-              id: "task-beta",
-              title: "회의록 공유",
-              status: "open",
-              priority: "normal",
-              created_at: "2026-05-17T09:00:00Z",
-              updated_at: "2026-05-17T09:00:00Z",
-            },
-          ]),
-        });
-      }
-      const sourceEvidenceResponse = emptySourceEvidenceResponse(url);
-      if (sourceEvidenceResponse) return sourceEvidenceResponse;
-      const calendarCandidateResponse = emptyCalendarCandidateSearchResponse(url);
-      if (calendarCandidateResponse) return calendarCandidateResponse;
-      throw new Error(`Unexpected fetch: ${url}`);
-    }));
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<WorkspaceHome forcedStartupView="dashboard" />);
-    });
-    await waitForCondition(() => container?.textContent?.includes("회의록 공유") ?? false);
-
-    const contractCheckbox = container.querySelector<HTMLInputElement>(
-      'input[aria-label="계약 승인 확인 작업 선택"]',
-    );
-    const notesCheckbox = container.querySelector<HTMLInputElement>(
-      'input[aria-label="회의록 공유 작업 선택"]',
-    );
-    expect(contractCheckbox).not.toBeNull();
-    expect(notesCheckbox).not.toBeNull();
-
-    await act(async () => {
-      contractCheckbox?.click();
-      notesCheckbox?.click();
-    });
-    await waitForCondition(() => (
-      (container?.textContent?.includes("계약 승인 확인 작업을 완료 처리했습니다.") ?? false)
-      && (container?.textContent?.includes("회의록 공유 작업을 완료 처리했습니다.") ?? false)
-    ));
-  });
-
   it("backs Today dashboard operating metrics with source evidence instead of fixed fixture numbers", async () => {
     vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
       matches: false,
@@ -558,6 +359,7 @@ describe("WorkspaceHome Today dashboard", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })));
+    localStorage.setItem("naruon_session_token", "signed-source-backed-home");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -714,9 +516,8 @@ describe("WorkspaceHome Today dashboard", () => {
     });
     for (const sourceCall of [calendarSourceCall, projectFolderCall, calendarCandidateCall]) {
       expect(sourceCall).toBeDefined();
-      expect(sourceCall?.init?.credentials).toBe("same-origin");
       const headers = sourceCall?.init?.headers as Record<string, string>;
-      expect(headers.Authorization).toBeUndefined();
+      expect(headers.Authorization).toBe("Bearer signed-source-backed-home");
       for (const headerName of publicIdentityHeaders) {
         expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
       }

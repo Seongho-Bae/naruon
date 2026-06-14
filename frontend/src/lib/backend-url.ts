@@ -50,11 +50,10 @@ function isPrivateBackendHost(parsed: URL): boolean {
 }
 
 function isAllowedComposeBackendUrl(parsed: URL): boolean {
-  const host = normalizeHost(parsed);
   return (
     process.env.ALLOW_DOCKER_BACKEND_INTERNAL_URL === "1" &&
     parsed.protocol === "http:" &&
-    (host === "backend" || host === "127.0.0.1" || host === "localhost") &&
+    normalizeHost(parsed) === "backend" &&
     parsed.port === "8000" &&
     (parsed.pathname === "" || parsed.pathname === "/")
   );

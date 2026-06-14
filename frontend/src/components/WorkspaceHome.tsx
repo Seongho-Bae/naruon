@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import type { MailFolder } from '@/components/EmailList';
@@ -212,7 +212,7 @@ function useDashboardData() {
     };
   }, []);
 
-  return { emails, pendingReplies, tasks, setTasks, calendarSources, projectFolders, loading, sourceEvidenceStatus };
+  return { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus };
 }
 
 function formatStartupDate(value: string) {
@@ -255,13 +255,12 @@ function StartupResultList({ results }: { results: StartupSearchResult[] }) {
 }
 
 function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupView) => void }) {
-  const { emails, pendingReplies, tasks, setTasks: setDashboardTasks, calendarSources, projectFolders, loading, sourceEvidenceStatus } = useDashboardData();
+  const { emails, pendingReplies, tasks, calendarSources, projectFolders, loading, sourceEvidenceStatus } = useDashboardData();
   const calendarCandidateEvidence = useStartupSearch('일정 충돌 일정 조율 회의 후보', 3);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [replySlaMessage, setReplySlaMessage] = useState<string | null>(null);
-  const [taskUpdateStatusById, setTaskUpdateStatusById] = useState<Map<string, string>>(() => new Map());
   const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingReplyCount = pendingReplies.length;
@@ -308,46 +307,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
       case 'normal': return '보통';
       case 'low': return '낮음';
       default: return p;
-    }
-  };
-
-  const handleTaskCompletionToggle = async (task: TaskItem) => {
-    const nextStatus: TaskItem['status'] = task.status === 'done' ? 'open' : 'done';
-    const displayTitle = safeWorkspaceTitle(task.title, '제목 없는 작업');
-    setTaskUpdateStatusById((currentStatuses) => {
-      const nextStatuses = new Map(currentStatuses);
-      nextStatuses.delete(task.id);
-      return nextStatuses;
-    });
-    setDashboardTasks((currentTasks) =>
-      currentTasks.map((currentTask) => (
-        currentTask.id === task.id
-          ? { ...currentTask, status: nextStatus, updated_at: new Date().toISOString() }
-          : currentTask
-      )),
-    );
-    try {
-      const updatedTask = await apiClient.patch<TaskItem>(
-        `/api/tasks/${encodeURIComponent(task.id)}`,
-        { status: nextStatus },
-      );
-      setDashboardTasks((currentTasks) =>
-        currentTasks.map((currentTask) => (currentTask.id === updatedTask.id ? updatedTask : currentTask)),
-      );
-      setTaskUpdateStatusById((currentStatuses) => {
-        const nextStatuses = new Map(currentStatuses);
-        nextStatuses.set(task.id, `${displayTitle} 작업을 완료 처리했습니다.`);
-        return nextStatuses;
-      });
-    } catch {
-      setDashboardTasks((currentTasks) =>
-        currentTasks.map((currentTask) => (currentTask.id === task.id ? task : currentTask)),
-      );
-      setTaskUpdateStatusById((currentStatuses) => {
-        const nextStatuses = new Map(currentStatuses);
-        nextStatuses.set(task.id, `${displayTitle} 작업 상태 변경에 실패했습니다.`);
-        return nextStatuses;
-      });
     }
   };
 
@@ -521,19 +480,12 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               ) : pendingTasks.slice(0, 3).map((task) => {
                 const pKor = mapPriorityToKorean(task.priority);
                 const pClass = pKor === '긴급' || pKor === '높음' ? 'text-red-500' : pKor === '보통' ? 'text-green-500' : 'text-muted-foreground';
-                const displayTitle = safeWorkspaceTitle(task.title, '제목 없는 작업');
                 return (
                   <div key={task.id} className="flex items-center justify-between">
-                    <label className="flex cursor-pointer items-center gap-3 group">
-                      <input
-                        type="checkbox"
-                        checked={task.status === 'done'}
-                        onChange={() => void handleTaskCompletionToggle(task)}
-                        className="size-4 cursor-pointer rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                        aria-label={`${displayTitle} 작업 선택`}
-                      />
-                      <span className="text-sm font-medium transition-colors group-hover:text-primary">{displayTitle}</span>
-                    </label>
+                    <div className="flex items-center gap-3">
+                      <input type="checkbox" className="size-4 rounded border-border text-primary" />
+                      <span className="text-sm font-medium">{safeWorkspaceTitle(task.title, '제목 없는 작업')}</span>
+                    </div>
                     <div className="flex items-center gap-2 text-xs">
                       <span className={`font-semibold ${pClass}`}>{pKor}</span>
                     </div>
@@ -541,9 +493,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            {Array.from(taskUpdateStatusById.entries()).map(([taskId, taskUpdateStatus]) => (
-              <p key={taskId} role="status" className="mt-3 text-xs font-semibold text-muted-foreground">{taskUpdateStatus}</p>
-            ))}
             <a href="/tasks" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">전체 작업 보기</a>
           </div>
 
@@ -727,7 +676,7 @@ export function WorkspaceHome({
       setMobileWorkspaceView('calendar', { updateHash: false });
     }
   };
-  const handleSelectEmail = useCallback((emailId: number) => {
+  const handleSelectEmail = (emailId: number) => {
     setStartupViewOverride('email');
     setSelectedEmail(emailId);
     setWorkspaceActionNotice(null);
@@ -736,7 +685,7 @@ export function WorkspaceHome({
     if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1023px)').matches) {
       setMobileWorkspaceView('detail');
     }
-  }, []);
+  };
 
   useEffect(() => {
     const mediaQuery = window.matchMedia?.('(max-width: 1023px)');

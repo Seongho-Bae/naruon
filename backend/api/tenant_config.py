@@ -1,9 +1,7 @@
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
@@ -34,7 +32,6 @@ from services.email_client import (
 )
 
 router = APIRouter(prefix="/api/config")
-logger = logging.getLogger(__name__)
 
 @router.get("/global")
 async def get_global_config(
@@ -163,10 +160,6 @@ def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> Non
         if smtp_server is not None and smtp_port is not None:
             validate_smtp_destination(smtp_server, smtp_port)
     except ValueError as exc:
-        logger.warning(
-            "SMTP configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
         raise HTTPException(status_code=400, detail="Invalid SMTP configuration") from exc
 
 
@@ -179,10 +172,6 @@ def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> Non
         elif imap_port is not None:
             validate_imap_port(imap_port)
     except ValueError as exc:
-        logger.warning(
-            "IMAP configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
         raise HTTPException(
             status_code=400,
             detail="Invalid IMAP configuration",
@@ -198,10 +187,6 @@ def _validate_pop3_config(pop3_server: str | None, pop3_port: int | None) -> Non
         elif pop3_port is not None:
             validate_pop3_port(pop3_port)
     except ValueError as exc:
-        logger.warning(
-            "POP3 configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
         raise HTTPException(
             status_code=400,
             detail="Invalid POP3 configuration",

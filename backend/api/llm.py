@@ -10,7 +10,7 @@ from services.llm_service import (
     ExtractionResult,
 )
 from core.exceptions import LLMServiceError
-from services.llm_provider_selection import resolve_runtime_llm_provider
+from services.tenant_config_scope import get_scoped_tenant_config
 
 router = APIRouter(prefix="/api/llm")
 
@@ -36,21 +36,16 @@ async def summarize_endpoint(
     target_user_id = user_id or auth_context.user_id
 
     try:
-        runtime_provider = await resolve_runtime_llm_provider(
+        tenant_config = await get_scoped_tenant_config(
             db,
-            user_id=target_user_id,
-            organization_id=auth_context.organization_id,
+            target_user_id,
+            auth_context.organization_id,
         )
-        if runtime_provider is None:
+        if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
 
-        return await extract_todos_and_summary(
-            request.email_body,
-            runtime_provider.api_key,
-            base_url=runtime_provider.base_url,
-            provider_name=runtime_provider.provider_name,
-            model=runtime_provider.chat_model,
-        )
+        openai_api_key = tenant_config.openai_api_key
+        return await extract_todos_and_summary(request.email_body, openai_api_key)
     except LLMServiceError:
         raise HTTPException(
             status_code=500,
@@ -77,21 +72,16 @@ async def draft_endpoint(
     target_user_id = user_id or auth_context.user_id
 
     try:
-        runtime_provider = await resolve_runtime_llm_provider(
+        tenant_config = await get_scoped_tenant_config(
             db,
-            user_id=target_user_id,
-            organization_id=auth_context.organization_id,
+            target_user_id,
+            auth_context.organization_id,
         )
-        if runtime_provider is None:
+        if not tenant_config or not tenant_config.openai_api_key:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
 
-        reply = await draft_reply(
-            request.email_body,
-            request.instruction,
-            runtime_provider.api_key,
-            base_url=runtime_provider.base_url,
-            model=runtime_provider.chat_model,
-        )
+        openai_api_key = tenant_config.openai_api_key
+        reply = await draft_reply(request.email_body, request.instruction, openai_api_key)
         return {"draft": reply}
     except LLMServiceError:
         raise HTTPException(

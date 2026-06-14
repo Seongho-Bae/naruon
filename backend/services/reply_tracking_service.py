@@ -8,7 +8,6 @@ from services.threading_service import normalize_message_id
 import datetime
 import email.utils as email_utils
 from functools import lru_cache
-from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +62,11 @@ def message_is_self_sent(email_message: Email, user_addresses: set[str]) -> bool
 
 
 def reply_tracking_thread_key(email_message: Email) -> str:
-    normalized_key = normalize_message_id(
-        email_message.thread_id
-    ) or normalize_message_id(email_message.message_id)
+    normalized_key = normalize_message_id(email_message.thread_id) or normalize_message_id(
+        email_message.message_id
+    )
     return normalized_key or email_message.message_id
+
 
 
 def detect_reply_tracking(body: str | None) -> bool:
@@ -75,7 +75,6 @@ def detect_reply_tracking(body: str | None) -> bool:
     """
     body_str = str(body or "").lower()
     return "please reply" in body_str or "?" in body_str
-
 
 def thread_reply_candidate(
     thread_messages: list[Email], user_addresses: set[str]
@@ -96,7 +95,8 @@ def thread_reply_candidate(
 
         if is_from_user and not message_is_self_sent(message, user_addresses):
             has_later_external_reply = (
-                latest_external_date is not None and latest_external_date > message.date
+                latest_external_date is not None
+                and latest_external_date > message.date
             )
             if not has_later_external_reply:
                 if detect_reply_tracking(message.body):
@@ -138,23 +138,19 @@ async def check_missing_replies(
         if organization_id is not None
         else Email.organization_id.is_(None)
     )
-    stmt = (
-        select(Email)
-        .where(
-            Email.user_id == user_id,
-            organization_filter,
-            Email.date > recent_limit,
-        )
-        .order_by(Email.date.asc())
-    )
+    stmt = select(Email).where(
+        Email.user_id == user_id,
+        organization_filter,
+        Email.date > recent_limit,
+    ).order_by(Email.date.asc())
     result = await session.execute(stmt)
     emails = result.scalars().all()
 
-    # ⚡ Bolt: Use defaultdict(list) to avoid unnecessary list allocations on every iteration
-    # previously caused by `setdefault(..., []).append(...)`. Measured ~10% performance gain for large list.
-    threads: dict[str, list[Email]] = defaultdict(list)
+    threads: dict[str, list[Email]] = {}
     for email_message in emails:
-        threads[reply_tracking_thread_key(email_message)].append(email_message)
+        threads.setdefault(reply_tracking_thread_key(email_message), []).append(
+            email_message
+        )
 
     flagged = []
     for thread_messages in threads.values():

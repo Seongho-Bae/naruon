@@ -165,7 +165,7 @@ graph LR
 
 | 영역 | 점검 내용 |
 |--------|--------|
-| Dockerfile | 백엔드/통합/프론트엔드 이미지 모두 non-root 사용자로 실행됨. K8s 매니페스트 내 `SecurityContext` 강제는 별도 보완 필요 |
+| Dockerfile | 루트 실행. (`useradd`가 Dockerfile 하단에 있으나, 프론트엔드는 확인 필요. K8s 매니페스트 내 `SecurityContext`로 강제하지 않음) |
 | Container | `readOnlyRootFilesystem`, `capabilities drop` 여부: **없음** |
 | Dependency | Dependabot 설정 등 명시적 구성 확인 안 됨 (`.github/dependabot.yml` 없음) |
 | SAST | `bandit.yml`, `strix.yml` (Security Scan) 등 사용 확인됨 |

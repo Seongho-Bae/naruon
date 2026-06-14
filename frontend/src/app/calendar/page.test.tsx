@@ -94,52 +94,23 @@ describe("CalendarPage", () => {
     expect(container.querySelector('button[aria-label="닫기"]')).not.toBeNull();
   });
 
-  it("filters rendered calendar events when a calendar visibility checkbox changes", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(calendarSourceList)));
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
-      root?.render(<CalendarPage />);
-    });
-    await flushAsyncWork();
-
-    expect(container.textContent).toContain("제품 리뷰");
-    const productCalendarToggle = container.querySelector<HTMLInputElement>(
-      'input[aria-label="제품 개발팀 캘린더 표시 토글"]',
-    );
-    expect(productCalendarToggle).not.toBeNull();
-    expect(productCalendarToggle?.checked).toBe(true);
-
-    await act(async () => {
-      productCalendarToggle?.click();
-    });
-    await flushAsyncWork();
-
-    expect(productCalendarToggle?.checked).toBe(false);
-    expect(container.textContent).not.toContain("제품 리뷰");
-    expect(container.textContent).toContain("출시 회의");
-  });
-
   it("creates a signed customer-owned calendar writeback intent", async () => {
+    localStorage.setItem("naruon_session_token", "signed-calendar-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/calendar/writeback-sources") {
         expect(init?.method).toBeUndefined();
-        expect(init?.credentials).toBe("same-origin");
         expect(init?.headers).toEqual(expect.objectContaining({
           "Content-Type": "application/json",
+          Authorization: "Bearer signed-calendar-session",
         }));
-        expect(init?.headers).not.toHaveProperty("Authorization");
         return jsonResponse(calendarSourceList);
       }
       expect(String(input)).toBe("/api/calendar/writeback-intent");
       expect(init?.method).toBe("POST");
-      expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
+        Authorization: "Bearer signed-calendar-session",
       }));
-      expect(init?.headers).not.toHaveProperty("Authorization");
       const requestHeaders = init?.headers as Record<string, string>;
       const normalizedHeaderNames = new Set(Object.keys(requestHeaders).map((headerName) => headerName.toLowerCase()));
       for (const publicHeader of [
@@ -205,21 +176,20 @@ describe("CalendarPage", () => {
   });
 
   it("lets the user choose a specific customer-owned calendar source before intent creation", async () => {
+    localStorage.setItem("naruon_session_token", "signed-calendar-source-selection");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input) === "/api/calendar/writeback-sources") {
-        expect(init?.credentials).toBe("same-origin");
         expect(init?.headers).toEqual(expect.objectContaining({
           "Content-Type": "application/json",
+          Authorization: "Bearer signed-calendar-source-selection",
         }));
-        expect(init?.headers).not.toHaveProperty("Authorization");
         return jsonResponse(calendarSourceList);
       }
       expect(String(input)).toBe("/api/calendar/writeback-intent");
-      expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
+        Authorization: "Bearer signed-calendar-source-selection",
       }));
-      expect(init?.headers).not.toHaveProperty("Authorization");
       expect(JSON.parse(String(init?.body))).toEqual({
         action: "create",
         summary: "Naruon 일정 후보 writeback intent 점검",

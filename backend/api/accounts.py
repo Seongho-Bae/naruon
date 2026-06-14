@@ -4,12 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import get_db
 from api.auth import AuthContext, get_auth_context, is_system_admin_role
-from api.tenant_config import (
-    MAILBOX_MANAGE_FORBIDDEN,
-    MAILBOX_VIEW_FORBIDDEN,
-    ensure_mailbox_config_self_access,
-    validate_mail_config_update,
-)
+from api.tenant_config import validate_mail_config_update
 from services.tenant_config_scope import (
     get_scoped_tenant_config,
     new_scoped_tenant_config,
@@ -84,12 +79,9 @@ def _empty_tenant_config_response(user_id: str) -> TenantConfigResponse:
     return _tenant_config_response(config)
 
 
-def _ensure_mailbox_account_owner_session(
-    auth_ctx: AuthContext, forbidden_detail: str
-) -> None:
+def _ensure_mailbox_account_owner_session(auth_ctx: AuthContext) -> None:
     if is_system_admin_role(auth_ctx.role):
         raise HTTPException(status_code=403, detail=MAILBOX_ACCOUNT_SETTINGS_FORBIDDEN)
-    ensure_mailbox_config_self_access(auth_ctx.user_id, auth_ctx, forbidden_detail)
 
 
 @router.get("/config", response_model=TenantConfigResponse)
@@ -97,7 +89,7 @@ async def get_tenant_config(
     db: AsyncSession = Depends(get_db),
     auth_ctx: AuthContext = Depends(get_auth_context)
 ):
-    _ensure_mailbox_account_owner_session(auth_ctx, MAILBOX_VIEW_FORBIDDEN)
+    _ensure_mailbox_account_owner_session(auth_ctx)
     config = await get_scoped_tenant_config(
         db,
         auth_ctx.user_id,
@@ -114,7 +106,7 @@ async def update_tenant_config(
     db: AsyncSession = Depends(get_db),
     auth_ctx: AuthContext = Depends(get_auth_context)
 ):
-    _ensure_mailbox_account_owner_session(auth_ctx, MAILBOX_MANAGE_FORBIDDEN)
+    _ensure_mailbox_account_owner_session(auth_ctx)
     config = await get_scoped_tenant_config(
         db,
         auth_ctx.user_id,

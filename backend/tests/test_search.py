@@ -2,10 +2,8 @@ import datetime
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-from db.models import LLMProvider
 from main import app
 from db.session import get_db
-from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -36,36 +34,14 @@ class MockTenantConfigResult:
         return self.config
 
 
-class MockScalars:
-    def __init__(self, items):
-        self.items = items
-
-    def first(self):
-        return self.items[0] if self.items else None
-
-
-class MockProviderResult:
-    def __init__(self, providers):
-        self.providers = providers
-
-    def scalars(self):
-        return MockScalars(self.providers)
-
-
 class MockTenantConfig:
     def __init__(self):
         self.openai_api_key = "test-key"
 
 
 class MockSession:
-    def __init__(self, providers=None):
-        self.providers = providers or []
-
     async def execute(self, stmt):
-        statement_text = str(stmt).lower()
-        if "llm_providers" in statement_text:
-            return MockProviderResult(self.providers)
-        if "tenant_configs" in statement_text:
+        if "tenant_configs" in str(stmt).lower():
             return MockTenantConfigResult(MockTenantConfig())
         return MockResult()
 
@@ -79,7 +55,6 @@ async def override_get_db():
 
 class CapturingMockSession(MockSession):
     def __init__(self):
-        super().__init__()
         self.statements = []
 
     async def execute(self, stmt):
@@ -116,45 +91,6 @@ def test_search_endpoint_success(mock_generate_embeddings, client):
     assert data["results"][0]["source_message_id"] == "<test@example.com>"
     assert data["results"][0]["thread_id"] == "thread-123"
     assert data["results"][0]["reply_count"] == 2
-
-
-@patch("api.search.generate_embeddings", new_callable=AsyncMock)
-def test_search_endpoint_uses_active_provider_embedding_model(mock_generate_embeddings):
-    provider = LLMProvider(
-        id=4,
-        user_id="admin",
-        organization_id="org-acme",
-        name="Local Gemma4",
-        provider_type="ollama",
-        base_url="http://ollama:11434/v1",
-        model_identifier="gemma4",
-        embedding_model="embeddinggemma",
-        api_key=None,
-        is_active=True,
-    )
-    mock_generate_embeddings.return_value = [[0.1] * 1536]
-    session = MockSession(providers=[provider])
-
-    async def override_scoped_db():
-        yield session
-
-    app.dependency_overrides[get_db] = override_scoped_db
-    try:
-        with TestClient(
-            app,
-            headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
-        ) as client:
-            response = client.post("/api/search", json={"query": "test query"})
-    finally:
-        app.dependency_overrides.clear()
-
-    assert response.status_code == 200
-    mock_generate_embeddings.assert_awaited_once_with(
-        ["test query"],
-        LOCAL_PROVIDER_API_KEY,
-        base_url="http://ollama:11434/v1",
-        model="embeddinggemma",
-    )
 
 
 def test_search_reply_counts_group_by_coalesced_thread_key():
@@ -206,7 +142,7 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
-def test_search_pads_local_embedding_dimension_for_vector_search(
+def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
     mock_generate_embeddings,
 ):
     mock_generate_embeddings.return_value = [[0.1] * 768]
@@ -228,4 +164,4 @@ def test_search_pads_local_embedding_dimension_for_vector_search(
     assert response.status_code == 200
     query_text = str(session.statements[-1]).lower()
     assert "ts_rank_cd" in query_text
-    assert "<=>" in query_text
+    assert "<=>" not in query_text
