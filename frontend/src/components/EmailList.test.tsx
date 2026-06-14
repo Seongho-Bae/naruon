@@ -123,7 +123,7 @@ describe("EmailList", () => {
 
   it("shows search loading feedback and clears the query back to inbox results", async () => {
     let resolveSearch: ((value: ReturnType<typeof jsonResponse>) => void) | null = null;
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/api/search")) {
         return new Promise((resolve) => {

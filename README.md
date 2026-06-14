@@ -184,12 +184,17 @@ threading proof path works offline.
 
 Backend settings read environment variables first, then `.env`, `../.env`, and
 `~/.env`. `DATABASE_URL`, `AUTH_SESSION_HMAC_SECRET`, and `ENCRYPTION_KEY` still
-have no code defaults; Compose and Kubernetes must inject them explicitly. For Compose,
-`./scripts/naruon_compose.sh` reads `${NARUON_ENV_FILE}` when set, otherwise
-uses `~/.env` if present, and falls back to the project `.env`. It passes that
-file to Docker Compose only as an interpolation source so the backend service
-receives the whitelisted variables in `docker-compose*.yml`, not every local
-secret present in `~/.env`. The backend image starts through
+have no code defaults; Compose and Kubernetes must inject them explicitly before
+runtime. `docker compose build backend frontend` is intentionally allowed to
+parse without local secrets because image builds do not need database or session
+credentials. `docker compose up` still fails closed inside the database/backend
+startup path when `POSTGRES_PASSWORD`, `AUTH_SESSION_HMAC_SECRET`, or
+`ENCRYPTION_KEY` are missing. For Compose, `./scripts/naruon_compose.sh` reads
+`${NARUON_ENV_FILE}` when set, otherwise uses `~/.env` if present, and falls back
+to the project `.env`. It passes that file to Docker Compose only as an
+interpolation source so the backend service receives the whitelisted variables
+in `docker-compose*.yml`, not every local secret present in `~/.env`. The
+backend image starts through
 `python scripts/start_backend.py`, which checks the same required settings before
 `uvicorn` imports the app. A direct `docker run` therefore still needs explicit
 environment injection through `--env`, an orchestrator secret, or a minimal

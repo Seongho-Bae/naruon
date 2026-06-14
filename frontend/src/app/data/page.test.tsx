@@ -352,7 +352,6 @@ describe("DataPage", () => {
   });
 
   it("loads signed data quality surface without public identity headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed-data-quality-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -366,6 +365,7 @@ describe("DataPage", () => {
     const dataCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/data/quality-surface");
     expect(dataCall).toBeDefined();
     const [, init] = dataCall ?? [];
+    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -374,9 +374,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
-      authorization: "Bearer signed-data-quality-session",
       "content-type": "application/json",
     }));
+    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -437,7 +437,6 @@ describe("DataPage", () => {
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {
-    localStorage.setItem("naruon_session_token", "signed-webdav-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -451,6 +450,7 @@ describe("DataPage", () => {
     const accountsCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
     expect(accountsCall).toBeDefined();
     const [, accountsInit] = accountsCall ?? [];
+    expect(accountsInit?.credentials).toBe("same-origin");
     const accountsHeaderEntries =
       accountsInit?.headers instanceof Headers
         ? Array.from(accountsInit.headers.entries())
@@ -459,9 +459,9 @@ describe("DataPage", () => {
       accountsHeaderEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(accountsHeaders).toEqual(expect.objectContaining({
-      authorization: "Bearer signed-webdav-session",
       "content-type": "application/json",
     }));
+    expect(accountsHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -486,6 +486,7 @@ describe("DataPage", () => {
     expect(writebackCall).toBeDefined();
     const [, init] = writebackCall ?? [];
     expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -494,9 +495,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
-      authorization: "Bearer signed-webdav-session",
       "content-type": "application/json",
     }));
+    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -520,7 +521,6 @@ describe("DataPage", () => {
   });
 
   it("sanitizes WebDAV source labels that contain opaque source ids", async () => {
-    localStorage.setItem("naruon_session_token", "signed-webdav-source-label-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/data/quality-surface") return jsonResponse(dataQualitySurface);
@@ -577,7 +577,6 @@ describe("DataPage", () => {
   });
 
   it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
-    localStorage.setItem("naruon_session_token", "signed-webdav-conflict-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/webdav/accounts") {
@@ -633,12 +632,11 @@ describe("DataPage", () => {
   });
 
   it("keeps WebDAV writeback disabled when account loading fails", async () => {
-    localStorage.setItem("naruon_session_token", "signed-webdav-session");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/webdav/accounts") {
-        throw new Error("signed-webdav-session should not be logged");
+        throw new Error("account source fetch failed");
       }
       if (path === "/api/webdav/folders") return jsonResponse([]);
       if (path === "/api/webdav/writeback-intent") throw new Error("writeback should stay disabled");
@@ -666,11 +664,10 @@ describe("DataPage", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/webdav/writeback-intent")).toBe(false);
     expect(container.textContent).toContain("WebDAV 원본 계정 목록을 확인하지 못했습니다.");
     expect(JSON.stringify(consoleError.mock.calls)).toContain("WebDAV accounts fetch error");
-    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("signed-webdav-session");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("naruon_session");
   });
 
   it("creates a signed unique email thread intent without public identity headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed-email-dedupe-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -694,6 +691,7 @@ describe("DataPage", () => {
     expect(intentCall).toBeDefined();
     const [, init] = intentCall ?? [];
     expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -702,9 +700,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
-      authorization: "Bearer signed-email-dedupe-session",
       "content-type": "application/json",
     }));
+    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -731,7 +729,6 @@ describe("DataPage", () => {
   });
 
   it("imports email source files through signed multipart upload without public identity headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed-email-import-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -765,6 +762,7 @@ describe("DataPage", () => {
     expect(importCall).toBeDefined();
     const [, init] = importCall ?? [];
     expect(init?.method).toBe("POST");
+    expect(init?.credentials).toBe("same-origin");
     expect(init?.body).toBeInstanceOf(FormData);
     const headerEntries =
       init?.headers instanceof Headers
@@ -773,9 +771,7 @@ describe("DataPage", () => {
     const requestHeaders = Object.fromEntries(
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
-    expect(requestHeaders).toEqual(expect.objectContaining({
-      authorization: "Bearer signed-email-import-session",
-    }));
+    expect(requestHeaders.authorization).toBeUndefined();
     expect(requestHeaders["content-type"]).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",

@@ -5,6 +5,8 @@ from core.config import settings
 from services.llm_provider_urls import build_llm_provider_http_client
 from services.exceptions import EmbeddingGenerationError
 
+STORAGE_EMBEDDING_DIMENSION = 1536
+
 
 def chunk_text(
     text: str, chunk_size: int = 1000, chunk_overlap: int = 200
@@ -16,6 +18,20 @@ def chunk_text(
         length_function=len,
     )
     return splitter.split_text(text)
+
+
+def fit_embedding_vector(
+    embedding: list[float],
+    target_dimension: int = STORAGE_EMBEDDING_DIMENSION,
+) -> list[float]:
+    if target_dimension <= 0:
+        raise ValueError("target_dimension must be positive")
+
+    if len(embedding) == target_dimension:
+        return list(embedding)
+    if len(embedding) < target_dimension:
+        return [*embedding, *([0.0] * (target_dimension - len(embedding)))]
+    return embedding[:target_dimension]
 
 
 async def generate_embeddings(
