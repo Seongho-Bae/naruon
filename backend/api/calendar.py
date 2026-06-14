@@ -217,9 +217,9 @@ async def sync_todos(
         results = await asyncio.gather(*coros)
         return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
     except CalendarServiceError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="An internal server error occurred while communicating with the calendar service")
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)

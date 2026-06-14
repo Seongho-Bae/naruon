@@ -286,7 +286,7 @@ def test_accounts_config_rejects_private_imap_host(client: TestClient):
     )
 
     assert response.status_code == 400
-    assert "imap_server" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_private_pop3_host(client: TestClient):
@@ -296,7 +296,7 @@ def test_accounts_config_rejects_private_pop3_host(client: TestClient):
     )
 
     assert response.status_code == 400
-    assert "pop3_server" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_unsafe_imap_port(client: TestClient, monkeypatch):
@@ -317,7 +317,7 @@ def test_accounts_config_rejects_unsafe_imap_port(client: TestClient, monkeypatc
     )
 
     assert response.status_code == 400
-    assert "imap_port" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_unsafe_pop3_port(client: TestClient, monkeypatch):
@@ -335,4 +335,4 @@ def test_accounts_config_rejects_unsafe_pop3_port(client: TestClient, monkeypatc
     )
 
     assert response.status_code == 400
-    assert "pop3_port" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]

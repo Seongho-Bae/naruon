@@ -1398,7 +1398,7 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
         app.dependency_overrides.clear()
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid email configuration" in response.json()["detail"]
     mock_send_email.assert_not_called()
 
 

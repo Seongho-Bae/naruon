@@ -160,7 +160,7 @@ def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> Non
         if smtp_server is not None and smtp_port is not None:
             validate_smtp_destination(smtp_server, smtp_port)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=400, detail="Invalid SMTP configuration") from exc
 
 
 def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> None:
@@ -174,7 +174,7 @@ def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> Non
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"imap_server/imap_port validation failed: {exc}",
+            detail="Invalid IMAP configuration",
         ) from exc
 
 
@@ -189,7 +189,7 @@ def _validate_pop3_config(pop3_server: str | None, pop3_port: int | None) -> Non
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=f"pop3_server/pop3_port validation failed: {exc}",
+            detail="Invalid POP3 configuration",
         ) from exc
 
 
