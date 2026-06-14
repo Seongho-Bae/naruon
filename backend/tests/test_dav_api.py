@@ -104,7 +104,6 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
 
     caplog.set_level(logging.INFO)
     # URL encode the payload so httpx doesn't reject it; FastAPI will decode it back to the raw control chars
-    #
 
     # Since HTTP clients block raw control chars and starlette unquotes but might reject it before reaching our route,
     # we test the handler directly to ensure the logger is using repr().
