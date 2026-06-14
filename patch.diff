@@ -1,0 +1,28 @@
+--- frontend/src/components/WorkspaceHome.tsx
++++ frontend/src/components/WorkspaceHome.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+
+-import { useEffect, useMemo, useRef, useState } from 'react';
++import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+
+ import { EmailList } from '@/components/EmailList';
+ import type { MailFolder } from '@/components/EmailList';
+@@ -715,14 +715,14 @@
+       setMobileWorkspaceView('calendar', { updateHash: false });
+     }
+   };
+-  const handleSelectEmail = (emailId: number) => {
++  const handleSelectEmail = useCallback((emailId: number) => {
+     setStartupViewOverride('email');
+     setSelectedEmail(emailId);
+     setWorkspaceActionNotice(null);
+     setDesktopDetailActionCommand(null);
+     setMobileDetailActionCommand(null);
+     if (typeof window !== 'undefined' && window.matchMedia?.('(max-width: 1023px)').matches) {
+       setMobileWorkspaceView('detail');
+     }
+-  };
++  }, []);
+
+   useEffect(() => {
