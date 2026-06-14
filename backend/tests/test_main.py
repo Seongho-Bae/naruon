@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from core.config import settings
 from main import app
 
 client = TestClient(app)
@@ -27,3 +28,86 @@ def test_root_response_has_security_headers():
         "frame-ancestors 'none'"
     )
     assert "x-xss-protection" not in response.headers
+
+
+def test_cors_policy_is_restrictive():
+    response = client.options(
+        "/",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+    allowed_methods = response.headers["access-control-allow-methods"]
+    assert "GET" in allowed_methods
+    assert "POST" in allowed_methods
+    assert "PROPFIND" in allowed_methods
+    assert "DELETE" in allowed_methods
+    assert "OPTIONS" in allowed_methods
+    assert "*" not in allowed_methods
+
+    allowed_headers = response.headers["access-control-allow-headers"]
+    assert "Accept" in allowed_headers
+    assert "Content-Type" in allowed_headers
+    assert "Authorization" in allowed_headers
+    assert "*" not in allowed_headers
+
+
+def test_state_changing_api_rejects_cross_site_fetch_metadata():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Sec-Fetch-Site": "cross-site"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"error_code": "csrf_fetch_site_rejected"}
+
+
+def test_state_changing_api_rejects_untrusted_origin():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "https://evil.example"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"error_code": "csrf_origin_rejected"}
+
+
+def test_state_changing_api_allows_trusted_origin_to_reach_auth_gate():
+    response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "http://localhost:3000"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+
+
+def test_state_changing_api_canonicalizes_default_origin_ports(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "ALLOWED_CORS_ORIGINS",
+        "https://app.example.com:443,http://app.example.com:80",
+    )
+
+    https_response = client.put(
+        "/api/accounts/config",
+        headers={"Origin": "https://app.example.com"},
+        json={"smtp_server": "mail.example.com"},
+    )
+    http_referer_response = client.put(
+        "/api/accounts/config",
+        headers={"Referer": "http://app.example.com/settings/accounts"},
+        json={"smtp_server": "mail.example.com"},
+    )
+
+    assert https_response.status_code == 401
+    assert https_response.json() == {"detail": "Authentication required"}
+    assert http_referer_response.status_code == 401
+    assert http_referer_response.json() == {"detail": "Authentication required"}

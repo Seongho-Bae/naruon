@@ -5,3 +5,15 @@
 ## 2024-06-06 - Always Include Focus States for Custom Buttons
 **Learning:** Custom UI buttons without explicitly defined focus styles become invisible during keyboard navigation. This fundamentally breaks keyboard accessibility, leaving power users and screen reader users unable to track their current position on the page. In this application, several action and filter buttons lacked proper focus indicators despite having hover states.
 **Action:** Whenever creating or modifying custom interactive elements (like `<button>` or `<a>`), unconditionally add standard focus styles, such as `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40`.
+
+## 2026-06-11 - Adding Repository Badges and Communication Guidelines
+**Learning:** Organizing a repository with Issue/PR templates, CI badges, and a Code of Conduct creates an immediate impression of professionalism and hygiene, saving developers time on repetitive questions.
+**Action:** When setting up a new repository or performing repository hygiene, always ensure a base set of standard templates and CI badges are included.
+
+## 2024-06-12 - Adding a11y Roles to InsightCard Status States
+**Learning:** Generic wrapper components like `InsightCard` which dynamically load and present data often conditionally render a generic loader or error state. Screen readers may ignore these visual cues unless they are accompanied by proper semantic roles, such as `role="status"` and `aria-live="polite"` for loading spinners, and `role="alert"` for error messages. Also adding `aria-hidden="true"` to visual icons within these states reduces noise.
+**Action:** When creating reusable data-fetching card components, always annotate loading and error state container elements with the appropriate ARIA roles and live regions, and hide purely decorative elements.
+
+## 2026-06-13 - Use type=text for Custom Search Inputs
+**Learning:** When implementing a custom clear button for search inputs, using `type="search"` causes WebKit browsers to display a native clear button, resulting in double buttons. While CSS `::-webkit-search-cancel-button` tricks exist, they can be unreliable across environments.
+**Action:** Use `<input type="text" inputMode="search" role="searchbox">`. This prevents the native clear button from rendering while perfectly preserving screen reader semantics and triggering the mobile search keyboard.

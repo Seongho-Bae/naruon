@@ -1,6 +1,6 @@
 "use client";
 
-import { completeOidcRedirect, isValidRedirect } from '@/lib/oidc-session';
+import { completeOidcRedirect, toSafeOidcReturnTo } from '@/lib/oidc-session';
 import { useEffect, useState } from 'react';
 
 export default function AuthCallbackPage() {
@@ -10,10 +10,7 @@ export default function AuthCallbackPage() {
     let cancelled = false;
     completeOidcRedirect()
       .then(({ returnTo }) => {
-        if (!cancelled) {
-          const safeReturnTo = isValidRedirect(returnTo) ? returnTo : '/';
-          window.location.replace(safeReturnTo);
-        }
+        if (!cancelled) window.location.replace(toSafeOidcReturnTo(returnTo));
       })
       .catch((err: unknown) => {
         if (cancelled) return;

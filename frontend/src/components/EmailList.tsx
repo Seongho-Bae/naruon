@@ -1,11 +1,11 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, memo } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { CheckCircle2, Mail, MessagesSquare, Network, Search, Sparkles } from "lucide-react";
+import { CheckCircle2, Loader2, Mail, MessagesSquare, Network, Search, Sparkles, X } from "lucide-react";
 import { formatEmailDate } from "@/lib/email-threading";
 import { toMailDisplayText } from "@/lib/mail-text";
 
@@ -43,6 +43,71 @@ async function fetchFolderEmails(folder: MailFolder) {
   folderRequests.set(folder, request);
   return request;
 }
+
+
+
+// ⚡ Bolt: Extracted and memoized individual email items
+// 🎯 Why: Previously, selecting a single email caused the entire list of 50+ items to re-render.
+// 💡 Impact: Reduces re-renders to only 2 items per selection change (the old active item and the new one), saving CPU cycles.
+const EmailListItemComponent = memo(function EmailListItemComponent({
+
+  email,
+  selected,
+  onSelectEmail
+}: {
+  email: EmailItem;
+  selected: boolean;
+  onSelectEmail: (id: number) => void;
+}) {
+  const safeSender = toMailDisplayText(email.sender, '보낸 사람');
+  const subject = email.subject?.trim() === '' ? undefined : email.subject;
+  const safeSubject = toMailDisplayText(subject, '(제목 없음)');
+  const safeSnippet = toMailDisplayText(email.snippet);
+
+  return (
+    <button type="button"
+      onClick={() => onSelectEmail(email.id)}
+      aria-current={selected ? "true" : undefined}
+      className={`group relative flex min-h-20 flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 pl-4 text-left text-sm transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
+    >
+      <span className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${selected ? 'bg-primary' : 'bg-transparent group-hover:bg-primary/50'}`} aria-hidden="true" />
+      <div className="flex w-full flex-col gap-1">
+        <div className="flex items-center">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-8 w-8 border border-primary/10 bg-primary/10 text-primary">
+              <AvatarFallback>{safeSender ? safeSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
+            </Avatar>
+            <div className="max-w-[140px] truncate font-bold text-foreground">{safeSender}</div>
+          </div>
+          <div className="ml-auto max-w-24 truncate text-right text-xs text-muted-foreground">
+            {formatEmailDate(email.date)}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 w-full">
+          <div className="truncate text-sm font-bold flex-1 text-foreground">{safeSubject}</div>
+          {email.reply_count && email.reply_count > 1 && (
+            <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
+              <MessagesSquare className="w-3 h-3" />
+              {email.reply_count}개 메시지
+            </Badge>
+          )}
+        </div>
+      </div>
+      <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
+        {safeSnippet}
+      </div>
+      {(email.unread || email.has_draft || email.is_self_sent || email.requires_reply || email.schedule_conflict) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {email.unread && <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>}
+          {email.has_draft && <Badge variant="secondary" className="border-blue-500/20 bg-blue-500/10 text-[10px] text-blue-700">답장 초안</Badge>}
+          {email.is_self_sent && <Badge variant="secondary" className="border-purple-500/20 bg-purple-500/10 text-[10px] text-purple-700">지식 정리</Badge>}
+          {email.requires_reply && <Badge variant="outline" className="border-primary/30 text-[10px] text-primary bg-primary/5">응답 대기 중</Badge>}
+          {email.schedule_conflict && <Badge variant="outline" className="border-emerald-500/30 text-[10px] text-emerald-700 bg-emerald-500/5">일정 충돌 조율</Badge>}
+        </div>
+      )}
+    </button>
+  );
+});
 
 export function EmailList({
   onSelectEmail,
@@ -152,10 +217,24 @@ export function EmailList({
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-xl border-input bg-background/80 pl-9 shadow-inner shadow-slate-950/[0.02]"
+              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  void fetchEmails("");
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
+                aria-label="검색어 지우기"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
           <Button type="submit" disabled={isSearching || loading} className="h-10 rounded-xl px-4">
+            {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {isSearching ? "검색 중" : "검색"}
           </Button>
         </form>
@@ -172,58 +251,14 @@ export function EmailList({
               <p className="mt-1 text-xs leading-5">{folderCopy.emptyBody}</p>
             </div>
           ) : (
-            emails.map((email: EmailItem) => {
-              const selected = selectedEmailId === email.id;
-              const safeSender = toMailDisplayText(email.sender, '보낸 사람');
-              const subject = email.subject?.trim() === '' ? undefined : email.subject;
-              const safeSubject = toMailDisplayText(subject, '(제목 없음)');
-              const safeSnippet = toMailDisplayText(email.snippet);
-
-              return (
-              <button type="button"
+            emails.map((email: EmailItem) => (
+              <EmailListItemComponent
                 key={email.id}
-                onClick={() => onSelectEmail(email.id)}
-                aria-current={selected ? "true" : undefined}
-                className={`group relative flex min-h-20 flex-col items-start gap-2 overflow-hidden rounded-2xl border p-3 pl-4 text-left text-sm transition-all hover:border-primary/35 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${selected ? 'border-primary/60 bg-primary/10 shadow-[0_16px_36px_rgba(37,99,255,0.14)]' : 'border-border bg-card'}`}
-              >
-                <span className={`absolute inset-y-3 left-0 w-1 rounded-r-full ${selected ? 'bg-primary' : 'bg-transparent group-hover:bg-primary/50'}`} aria-hidden="true" />
-                <div className="flex w-full flex-col gap-1">
-                  <div className="flex items-center">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-8 w-8 border border-primary/10 bg-primary/10 text-primary">
-                        <AvatarFallback>{safeSender ? safeSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
-                      </Avatar>
-                      <div className="max-w-[140px] truncate font-bold text-foreground">{safeSender}</div>
-                    </div>
-                    <div className="ml-auto max-w-24 truncate text-right text-xs text-muted-foreground">
-                      {formatEmailDate(email.date)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 w-full">
-                    <div className="truncate text-sm font-bold flex-1 text-foreground">{safeSubject}</div>
-                    {email.reply_count && email.reply_count > 1 && (
-                      <Badge variant="secondary" className="h-5 whitespace-nowrap border border-primary/10 bg-primary/10 px-2 py-0 text-[10px] leading-none text-primary flex items-center gap-1">
-                        <MessagesSquare className="w-3 h-3" />
-                        {email.reply_count}개 메시지
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="line-clamp-2 w-full text-xs leading-5 text-muted-foreground">
-                  {safeSnippet}
-                </div>
-                {(email.unread || email.has_draft || email.is_self_sent || email.requires_reply || email.schedule_conflict) && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {email.unread && <Badge variant="default" className="bg-emerald-500 text-[10px] text-white">새 메일</Badge>}
-                    {email.has_draft && <Badge variant="secondary" className="border-blue-500/20 bg-blue-500/10 text-[10px] text-blue-700">답장 초안</Badge>}
-                    {email.is_self_sent && <Badge variant="secondary" className="border-purple-500/20 bg-purple-500/10 text-[10px] text-purple-700">지식 정리</Badge>}
-                    {email.requires_reply && <Badge variant="outline" className="border-primary/30 text-[10px] text-primary bg-primary/5">응답 대기 중</Badge>}
-                    {email.schedule_conflict && <Badge variant="outline" className="border-emerald-500/30 text-[10px] text-emerald-700 bg-emerald-500/5">일정 충돌 조율</Badge>}
-                  </div>
-                )}
-              </button>
-              );
-            })
+                email={email}
+                selected={selectedEmailId === email.id}
+                onSelectEmail={onSelectEmail}
+              />
+            ))
           )}
         </div>
       </ScrollArea>

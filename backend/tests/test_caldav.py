@@ -1,4 +1,3 @@
-import pytest
 from services.caldav_service import caldav_service
 
 def test_determine_writeback_target():

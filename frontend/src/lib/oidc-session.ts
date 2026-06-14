@@ -18,7 +18,6 @@ export interface OidcLogoutOptions {
   navigate?: (url: string) => void;
 }
 
-const SESSION_TOKEN_KEY = 'naruon_session_token';
 const OIDC_STATE_KEY = 'naruon_oidc_state';
 const OIDC_VERIFIER_KEY = 'naruon_oidc_pkce_verifier';
 const OIDC_RETURN_TO_KEY = 'naruon_oidc_return_to';
@@ -28,6 +27,28 @@ export class OidcSessionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'OidcSessionError';
+  }
+}
+
+async function persistOidcSession(accessToken: string) {
+  const response = await fetch('/auth/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ access_token: accessToken }),
+  });
+  if (!response.ok) {
+    throw new OidcSessionError('OIDC session persistence failed');
+  }
+}
+
+async function clearPersistedOidcSession() {
+  const response = await fetch('/auth/session', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+  });
+  if (!response.ok) {
+    throw new OidcSessionError('OIDC session clear failed');
   }
 }
 
@@ -47,19 +68,6 @@ function defaultBrowserOrigin() {
 
 function defaultRedirectUri(origin: string) {
   return origin ? `${origin}/auth/callback` : '/auth/callback';
-}
-
-export function isValidRedirect(url: string | null | undefined): boolean {
-  if (!url) return false;
-  if (url.startsWith('/') && !url.startsWith('//')) {
-    return true;
-  }
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.origin === window.location.origin;
-  } catch {
-    return false;
-  }
 }
 
 export function getOidcBrowserConfig(origin = defaultBrowserOrigin()): OidcBrowserConfig | null {
@@ -84,6 +92,20 @@ function requireBrowserStorage() {
   if (typeof window === 'undefined') {
     throw new OidcSessionError('OIDC browser session storage is unavailable');
   }
+}
+
+export function toSafeOidcReturnTo(returnTo: string | null | undefined) {
+  const candidate = returnTo?.trim() ?? '';
+  if (
+    !candidate ||
+    !candidate.startsWith('/') ||
+    candidate.startsWith('//') ||
+    candidate.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(candidate)
+  ) {
+    return '/';
+  }
+  return candidate;
 }
 
 function randomUrlSafeString(byteLength: number) {
@@ -132,10 +154,10 @@ export async function startOidcLogin(options: OidcLoginOptions = {}) {
   const verifier = randomUrlSafeString(64);
   window.sessionStorage.setItem(OIDC_STATE_KEY, state);
   window.sessionStorage.setItem(OIDC_VERIFIER_KEY, verifier);
-
-  const rawReturnTo = options.returnTo ?? window.location.pathname;
-  const safeReturnTo = isValidRedirect(rawReturnTo) ? rawReturnTo : '/';
-  window.sessionStorage.setItem(OIDC_RETURN_TO_KEY, safeReturnTo);
+  window.sessionStorage.setItem(
+    OIDC_RETURN_TO_KEY,
+    toSafeOidcReturnTo(options.returnTo ?? window.location.pathname),
+  );
 
   const authorizationUrl = await buildOidcAuthorizationUrl(config, state, verifier);
   const navigate = options.navigate ?? ((url: string) => window.location.assign(url));
@@ -184,8 +206,8 @@ export async function completeOidcRedirect(search = window.location.search) {
     throw new OidcSessionError('OIDC token response did not include an access token');
   }
 
-  window.localStorage.setItem(SESSION_TOKEN_KEY, accessToken);
-  const returnTo = window.sessionStorage.getItem(OIDC_RETURN_TO_KEY) || '/';
+  await persistOidcSession(accessToken);
+  const returnTo = toSafeOidcReturnTo(window.sessionStorage.getItem(OIDC_RETURN_TO_KEY));
   clearOidcTransientState();
   return { returnTo };
 }
@@ -197,10 +219,10 @@ export function clearOidcTransientState() {
   window.sessionStorage.removeItem(OIDC_RETURN_TO_KEY);
 }
 
-export function clearOidcSession(options: OidcLogoutOptions = {}) {
+export async function clearOidcSession(options: OidcLogoutOptions = {}) {
   requireBrowserStorage();
   const config = getOidcBrowserConfig();
-  window.localStorage.removeItem(SESSION_TOKEN_KEY);
+  await clearPersistedOidcSession();
   clearOidcTransientState();
 
   if (!config) return;
