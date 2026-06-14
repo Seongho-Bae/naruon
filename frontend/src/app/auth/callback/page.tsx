@@ -10,7 +10,11 @@ export default function AuthCallbackPage() {
     let cancelled = false;
     completeOidcRedirect()
       .then(({ returnTo }) => {
-        if (!cancelled) window.location.replace(returnTo || '/');
+        let safeReturnTo = '/';
+        if (returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+          safeReturnTo = returnTo;
+        }
+        if (!cancelled) window.location.replace(safeReturnTo);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
