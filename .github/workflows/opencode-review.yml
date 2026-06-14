@@ -938,6 +938,8 @@ jobs:
           OPENCODE_SECOND_FALLBACK_OUTCOME: ${{ steps.opencode_review_second_fallback.outputs.review_status }}
           APPROVAL_CHECK_WAIT_ATTEMPTS: "241"
           APPROVAL_CHECK_WAIT_SLEEP_SECONDS: "30"
+          CHECK_LOOKUP_RETRY_ATTEMPTS: "5"
+          CHECK_LOOKUP_RETRY_SLEEP_SECONDS: "5"
         run: |
           set -euo pipefail
           echo "::group::OpenCode Review Approval Gate"
@@ -1533,6 +1535,28 @@ jobs:
 
           }
 
+          collect_github_checks_with_retry() {
+            local collector="$1"
+            local output_file="$2"
+            local attempts="${CHECK_LOOKUP_RETRY_ATTEMPTS:-5}"
+            local sleep_seconds="${CHECK_LOOKUP_RETRY_SLEEP_SECONDS:-5}"
+            local attempt=1
+
+            while [ "$attempt" -le "$attempts" ]; do
+              if "$collector" "$output_file"; then
+                return 0
+              fi
+              : >"$output_file"
+              if [ "$attempt" -lt "$attempts" ]; then
+                printf 'GitHub Checks lookup failed; retrying %s/%s before changing review state.\n' "$attempt" "$attempts" >&2
+                sleep "$sleep_seconds"
+              fi
+              attempt=$((attempt + 1))
+            done
+
+            return 1
+          }
+
           wait_for_peer_github_checks() {
             local output_file="$1"
             local attempts="${APPROVAL_CHECK_WAIT_ATTEMPTS:-121}"
@@ -1540,7 +1564,7 @@ jobs:
             local attempt=1
 
             while [ "$attempt" -le "$attempts" ]; do
-              if ! collect_pending_github_checks "$output_file"; then
+              if ! collect_github_checks_with_retry collect_pending_github_checks "$output_file"; then
                 return 1
               fi
               if [ ! -s "$output_file" ]; then
@@ -1581,7 +1605,7 @@ jobs:
               rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
             }
             trap cleanup_failed_outcome_files EXIT
-            if collect_failed_github_checks "$failed_checks_file" && [ -s "$failed_checks_file" ]; then
+            if collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file" && [ -s "$failed_checks_file" ]; then
               if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                 printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
               fi
@@ -1593,7 +1617,7 @@ jobs:
               fi
             else
               pending_checks_file="$(mktemp)"
-              if collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
+              if collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
                 build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               else
@@ -1661,7 +1685,7 @@ jobs:
                 exit 0
               fi
               failed_checks_file="$(mktemp)"
-              if ! collect_failed_github_checks "$failed_checks_file"; then
+              if ! collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file"; then
                 body="$(printf '%s\n' \
                   "OpenCode Agent could not verify GitHub Checks before approval." \
                   "" \
@@ -1706,7 +1730,7 @@ jobs:
             REQUEST_CHANGES)
               failed_check_review_body_file="$(mktemp)"
               failed_checks_file="$(mktemp)"
-              if ! collect_failed_github_checks "$failed_checks_file"; then
+              if ! collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file"; then
                 request_changes_for_gate_failure "GitHub Checks statusCheckRollup could not be read before validating OpenCode REQUEST_CHANGES against current-head failed checks."
                 echo "::endgroup::"
                 exit 0
