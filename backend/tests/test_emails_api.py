@@ -1214,7 +1214,6 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
 def test_email_owner_filters():
     from api.emails import email_owner_filters
     from api.auth import AuthContext
-    from db.models import Email
 
     # Test with organization_id
     ctx1 = AuthContext(
