@@ -8,8 +8,11 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => <svg aria-hidden="true" />,
   Bell: () => <svg aria-hidden="true" />,
   Bot: () => <svg aria-hidden="true" />,
+  CheckCircle2: () => <svg aria-hidden="true" />,
+  Cpu: () => <svg aria-hidden="true" />,
   Mail: () => <svg aria-hidden="true" />,
   Monitor: () => <svg aria-hidden="true" />,
+  Network: () => <svg aria-hidden="true" />,
   Plus: () => <svg aria-hidden="true" />,
   RefreshCw: () => <svg aria-hidden="true" />,
   Settings: () => <svg aria-hidden="true" />,
@@ -39,20 +42,11 @@ function jsonResponse(body: unknown) {
   });
 }
 
-function sessionToken(payload: Record<string, unknown>) {
-  const encodedPayload = btoa(JSON.stringify(payload))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-  return `header.${encodedPayload}.signature`;
-}
-
 describe("SettingsLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
   beforeEach(() => {
-    localStorage.setItem("naruon_session_token", "signed-runner-session-token");
     oidcMocks.getOidcBrowserConfig.mockReturnValue({
       issuerUrl: "https://login.example.com/realms/naruon",
       clientId: "naruon-web",
@@ -65,6 +59,16 @@ describe("SettingsLayout", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === "/auth/session") {
+          return jsonResponse({
+            authenticated: true,
+            claims: {
+              userId: "alice",
+              organizationId: "org-acme",
+              workspaceId: "workspace-org-acme",
+            },
+          });
+        }
         if (String(input) === "/api/runner-config") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
@@ -177,6 +181,52 @@ describe("SettingsLayout", () => {
             },
           ]);
         }
+        if (String(input) === "/api/llm-providers" && init?.method === "POST") {
+          const body = JSON.parse(String(init.body));
+          return jsonResponse({
+            id: 2,
+            name: body.name,
+            provider_type: body.provider_type,
+            base_url: body.base_url,
+            model_identifier: body.model_identifier,
+            embedding_model: body.embedding_model,
+            is_active: body.is_active,
+            configured: true,
+            fingerprint: body.api_key ? "***1234" : null,
+            updated_at: "2026-06-11T04:00:00Z",
+          });
+        }
+        if ((String(input) === "/api/llm-providers/1" || String(input) === "/api/llm-providers/2") && init?.method === "PUT") {
+          const body = JSON.parse(String(init.body));
+          return jsonResponse({
+            id: String(input).endsWith("/2") ? 2 : 1,
+            name: String(input).endsWith("/2") ? "Local Gemma4" : "Primary OpenAI",
+            provider_type: String(input).endsWith("/2") ? "ollama" : "openai",
+            base_url: String(input).endsWith("/2") ? "http://ollama:11434/v1" : "https://api.openai.com/v1",
+            model_identifier: body.model_identifier,
+            embedding_model: body.embedding_model,
+            is_active: true,
+            configured: true,
+            fingerprint: String(input).endsWith("/2") ? null : "***1234",
+            updated_at: "2026-06-11T05:00:00Z",
+          });
+        }
+        if (String(input) === "/api/llm-providers") {
+          return jsonResponse([
+            {
+              id: 1,
+              name: "Primary OpenAI",
+              provider_type: "openai",
+              base_url: "https://api.openai.com/v1",
+              model_identifier: "gpt-5.4",
+              embedding_model: "text-embedding-3-small",
+              is_active: true,
+              configured: true,
+              fingerprint: "***1234",
+              updated_at: "2026-06-11T03:00:00Z",
+            },
+          ]);
+        }
         if (String(input) === "/api/accounts/config" && init?.method === "PUT") {
           const body = JSON.parse(String(init.body));
           return jsonResponse({
@@ -256,18 +306,17 @@ describe("SettingsLayout", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/runner-config",
       expect.objectContaining({
+        credentials: "same-origin",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
     expect(fetch).toHaveBeenCalledWith(
       "/api/observability/operational-signals",
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: "Bearer signed-runner-session-token",
-        }),
+        credentials: "same-origin",
+        headers: expect.any(Object),
       }),
     );
     const operationalCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/observability/operational-signals");
@@ -319,9 +368,8 @@ describe("SettingsLayout", () => {
     });
 
     const rotateCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/runner-config/rotate" && init?.method === "POST");
-    expect(rotateCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(rotateCall?.[1]?.credentials).toBe("same-origin");
+    expect(rotateCall?.[1]?.headers).not.toHaveProperty("Authorization");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
@@ -369,10 +417,7 @@ describe("SettingsLayout", () => {
 
   it("wires Keycloak OIDC login and logout controls to the stored bearer session", async () => {
     window.history.pushState({}, "", "/settings");
-    localStorage.setItem(
-      "naruon_session_token",
-      sessionToken({ sub: "alice", org: "org-acme", workspace: "workspace-org-acme" }),
-    );
+    oidcMocks.clearOidcSession.mockResolvedValue(undefined);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -417,6 +462,7 @@ describe("SettingsLayout", () => {
     await act(async () => {
       logoutButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await Promise.resolve();
+      await Promise.resolve();
     });
     expect(oidcMocks.clearOidcSession).toHaveBeenCalledWith({
       postLogoutRedirectUri: "http://localhost:3000",
@@ -445,9 +491,9 @@ describe("SettingsLayout", () => {
     expect(fetch).toHaveBeenCalledWith(
       "/api/accounts/config",
       expect.objectContaining({
+        credentials: "same-origin",
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          Authorization: "Bearer signed-runner-session-token",
         }),
       }),
     );
@@ -460,12 +506,10 @@ describe("SettingsLayout", () => {
     expect(configGetCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     const calendarSourcesCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/calendar/writeback-sources");
     const webdavAccountsCall = vi.mocked(fetch).mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
-    expect(calendarSourcesCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
-    expect(webdavAccountsCall?.[1]?.headers).toMatchObject({
-      Authorization: "Bearer signed-runner-session-token",
-    });
+    expect(calendarSourcesCall?.[1]?.credentials).toBe("same-origin");
+    expect(webdavAccountsCall?.[1]?.credentials).toBe("same-origin");
+    expect(calendarSourcesCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    expect(webdavAccountsCall?.[1]?.headers).not.toHaveProperty("Authorization");
     for (const sourceCall of [calendarSourcesCall, webdavAccountsCall]) {
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
       expect(sourceCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
@@ -530,6 +574,83 @@ describe("SettingsLayout", () => {
     expect(putBody).not.toHaveProperty("pop3_password");
     expect(putBody).not.toHaveProperty("oauth_client_secret");
     expect(container.textContent).toContain("계정 설정을 저장했습니다");
+  });
+
+  it("loads and saves AI model registry entries without public identity headers or secret replay", async () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SettingsLayout />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const modelButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "AI 모델");
+    expect(modelButton).toBeTruthy();
+    await act(async () => {
+      modelButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const providerListCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers" && init?.method !== "POST");
+    expect(providerListCall?.[1]?.credentials).toBe("same-origin");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Group-Id");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Group-Ids");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-User-Role");
+    expect(providerListCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+    expect(container.textContent).toContain("등록된 모델 레지스트리");
+    expect(container.textContent).toContain("Primary OpenAI");
+    expect(container.textContent).toContain("gpt-5.4");
+    expect(container.textContent).toContain("text-embedding-3-small");
+    expect(container.textContent).toContain("Gemma4 로컬 모델 등록");
+    expect(container.textContent).not.toContain("sk-");
+
+    const localRegisterButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Gemma4 로컬 모델 등록"));
+    expect(localRegisterButton).toBeTruthy();
+    await act(async () => {
+      localRegisterButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const providerPostCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers" && init?.method === "POST");
+    expect(providerPostCall?.[1]?.credentials).toBe("same-origin");
+    expect(providerPostCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-User-Id");
+    expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-Organization-Id");
+    expect(providerPostCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
+    const providerPostBody = JSON.parse(String(providerPostCall?.[1]?.body));
+    expect(providerPostBody).toMatchObject({
+      name: "Local Gemma4",
+      provider_type: "ollama",
+      base_url: "http://ollama:11434/v1",
+      model_identifier: "gemma4:e2b-it-qat",
+      embedding_model: "embeddinggemma",
+      is_active: true,
+    });
+    expect(providerPostBody).not.toHaveProperty("api_key");
+    expect(container.textContent).toContain("Gemma4 로컬 모델을 등록했습니다");
+
+    const embeddingSaveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("임베딩 모델 저장"));
+    expect(embeddingSaveButton).toBeTruthy();
+    await act(async () => {
+      embeddingSaveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const embeddingPutCall = vi.mocked(fetch).mock.calls.find(([input, init]) => String(input) === "/api/llm-providers/2" && init?.method === "PUT");
+    expect(embeddingPutCall?.[1]?.credentials).toBe("same-origin");
+    expect(embeddingPutCall?.[1]?.headers).not.toHaveProperty("Authorization");
+    const embeddingPutBody = JSON.parse(String(embeddingPutCall?.[1]?.body));
+    expect(embeddingPutBody).toEqual({ embedding_model: "embeddinggemma" });
+    expect(container.textContent).toContain("임베딩 모델 지정을 저장했습니다");
   });
 
   it("renders settings tabs as detail surfaces instead of placeholder dead space", async () => {

@@ -9,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import AuthContext, get_auth_context, is_admin_role
 from db.models import LLMProvider, PromptTemplate, SecurityAuditEvent
 from db.session import get_db
+from services.llm_provider_readiness import (
+    is_llm_provider_configured,
+    llm_provider_model_label,
+)
 
 router = APIRouter(prefix="/api/ai-hub", tags=["ai-hub"])
 
@@ -91,7 +95,7 @@ def _prompt_card(prompt: PromptTemplate) -> AiHubPromptCard:
 
 
 def _agent_card(provider: LLMProvider) -> AiHubAgentCard:
-    configured = bool(provider.api_key)
+    configured = is_llm_provider_configured(provider)
     if provider.is_active and configured:
         state_code = "active"
     elif configured:
@@ -107,7 +111,7 @@ def _agent_card(provider: LLMProvider) -> AiHubAgentCard:
             provider.name,
         ),
         agent_title=provider.name,
-        model_label=provider.provider_type,
+        model_label=llm_provider_model_label(provider),
         state_code=state_code,
         configured=configured,
         governance_text="organization llm provider registry",
@@ -321,7 +325,9 @@ async def get_ai_hub_surface(
 
     prompt_cards = [_prompt_card(prompt) for prompt in prompts]
     active_provider_count = sum(
-        1 for provider in providers if provider.is_active and provider.api_key
+        1
+        for provider in providers
+        if provider.is_active and is_llm_provider_configured(provider)
     )
     workflow_cards = _workflow_cards(prompt_cards, active_provider_count)
     agent_cards = [_agent_card(provider) for provider in providers]

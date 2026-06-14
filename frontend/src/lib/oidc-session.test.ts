@@ -71,38 +71,60 @@ describe('oidc-session', () => {
     expect(authorizationUrl.searchParams.get('code_challenge')).toBe('AQIDBA');
   });
 
-  it('exchanges a valid OIDC callback code and stores the bearer session token', async () => {
+  it('exchanges a valid OIDC callback code and persists the server session cookie', async () => {
     sessionStorage.setItem('naruon_oidc_state', 'state-123');
     sessionStorage.setItem('naruon_oidc_pkce_verifier', 'verifier-123');
     sessionStorage.setItem('naruon_oidc_return_to', '/security');
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ access_token: 'oidc.jwt.token' }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })));
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/auth/session') {
+        return new Response(JSON.stringify({ authenticated: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ access_token: 'oidc.jwt.token' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }));
 
     const result = await completeOidcRedirect('?code=auth-code&state=state-123');
 
     expect(result.returnTo).toBe('/security');
-    expect(localStorage.getItem('naruon_session_token')).toBe('oidc.jwt.token');
     expect(sessionStorage.getItem('naruon_oidc_state')).toBeNull();
     const tokenCall = vi.mocked(fetch).mock.calls[0];
     expect(tokenCall[0]).toBe('https://login.example.com/realms/naruon/protocol/openid-connect/token');
     expect(String(tokenCall[1]?.body)).toContain('grant_type=authorization_code');
     expect(String(tokenCall[1]?.body)).toContain('code_verifier=verifier-123');
+    expect(vi.mocked(fetch).mock.calls[1]).toEqual([
+      '/auth/session',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ access_token: 'oidc.jwt.token' }),
+      },
+    ]);
   });
 
-  it('clears local session state and redirects to the provider logout endpoint', () => {
-    localStorage.setItem('naruon_session_token', 'oidc.jwt.token');
+  it('clears the server session state and redirects to the provider logout endpoint', async () => {
     sessionStorage.setItem('naruon_oidc_state', 'state-123');
     const assignedUrls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ authenticated: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })));
 
-    clearOidcSession({
+    await clearOidcSession({
       postLogoutRedirectUri: 'https://app.example.com',
       navigate: (url) => assignedUrls.push(url),
     });
 
-    expect(localStorage.getItem('naruon_session_token')).toBeNull();
     expect(sessionStorage.getItem('naruon_oidc_state')).toBeNull();
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith('/auth/session', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
     const logoutUrl = new URL(assignedUrls[0]);
     expect(logoutUrl.toString()).toContain('/protocol/openid-connect/logout');
     expect(logoutUrl.searchParams.get('client_id')).toBe('naruon-web');

@@ -1,0 +1,60 @@
+name: Deploy to AKS
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to AKS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate version and patch k8s manifest
+        env:
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          version="$(cat VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            printf 'VERSION %s is not a valid release version\n' "$version" >&2
+            exit 1
+          fi
+          repo_owner="$(printf '%s' "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')"
+          if [[ ! "$repo_owner" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+            printf 'Repository owner %s is not valid for GHCR image names\n' "$repo_owner" >&2
+            exit 1
+          fi
+          image="ghcr.io/${repo_owner}/ai_email_client-backend:${version}"
+          sed -E -i "s#ghcr.io/[^[:space:]]+/ai_email_client-backend:REPLACE_ME_VERSION#${image}#" k8s/backend-deployment.yaml
+          grep -F "$image" k8s/backend-deployment.yaml >/dev/null
+
+          frontend_image="ghcr.io/${repo_owner}/ai_email_client-frontend:${version}"
+          sed -E -i "s#ghcr.io/[^[:space:]]+/ai_email_client-frontend:REPLACE_ME_VERSION#${frontend_image}#" k8s/frontend-deployment.yaml
+          grep -F "$frontend_image" k8s/frontend-deployment.yaml >/dev/null
+
+      - name: Setup Kubeconfig
+        env:
+          AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}
+        run: |
+          if [ -z "$AKS_KUBECONFIG_CONTENT" ]; then
+            printf 'AKS kubeconfig secret is not configured\n' >&2
+            exit 1
+          fi
+          kubeconfig_file="$RUNNER_TEMP/aks-kubeconfig"
+          umask 077
+          printf '%s' "$AKS_KUBECONFIG_CONTENT" > "$kubeconfig_file"
+          printf 'KUBECONFIG=%s\n' "$kubeconfig_file" >> "$GITHUB_ENV"
+
+      - name: Apply to AKS
+        run: |
+          trap 'rm -f "$KUBECONFIG"' EXIT
+          kubectl apply -f k8s/backend-deployment.yaml -n naruon-dev
+          kubectl rollout status deployment/backend -n naruon-dev --timeout=120s
+          kubectl apply -f k8s/frontend-deployment.yaml -n naruon-dev
+          kubectl rollout status deployment/frontend -n naruon-dev --timeout=120s

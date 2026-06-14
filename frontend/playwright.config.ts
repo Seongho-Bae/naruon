@@ -15,12 +15,14 @@ export default defineConfig({
     actionTimeout: 15_000,
     navigationTimeout: 60_000,
   },
-  webServer: {
-    command: `npm run dev -- -p ${devServerPort}`,
-    port: devServerPort,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: process.env.LIVE_BASE_URL
+    ? undefined
+    : {
+        command: `npm run dev -- -p ${devServerPort}`,
+        port: devServerPort,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
   projects: [
     {
       name: 'desktop',
