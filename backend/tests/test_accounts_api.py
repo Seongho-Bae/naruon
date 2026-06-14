@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
+from api.tenant_config import MAILBOX_MANAGE_FORBIDDEN, MAILBOX_VIEW_FORBIDDEN
 from core.config import settings
 from db.session import get_db
 from main import app
@@ -277,6 +278,57 @@ def test_accounts_config_preserves_scoped_signed_member_session():
     assert response.json()["user_id"] == "mailbox-owner"
     assert response.json()["smtp_server"] is None
     assert session.execute_calls == 1
+
+
+def test_accounts_config_enforces_current_user_self_access_policy(monkeypatch):
+    session = MockSession()
+    calls = []
+
+    def record_self_access(target_user_id, auth_ctx, forbidden_detail):
+        calls.append(
+            (
+                target_user_id,
+                auth_ctx.user_id,
+                auth_ctx.organization_id,
+                forbidden_detail,
+            )
+        )
+
+    monkeypatch.setattr(
+        "api.accounts.ensure_mailbox_config_self_access", record_self_access
+    )
+    payload = _valid_session_payload(sub="mailbox-owner", org="org-acme")
+
+    read_response = _request_with_signed_session(
+        "GET",
+        "/api/accounts/config",
+        session,
+        payload,
+    )
+    write_response = _request_with_signed_session(
+        "PUT",
+        "/api/accounts/config",
+        session,
+        payload,
+        {},
+    )
+
+    assert read_response.status_code == 200
+    assert write_response.status_code == 200
+    assert calls == [
+        (
+            "mailbox-owner",
+            "mailbox-owner",
+            "org-acme",
+            MAILBOX_VIEW_FORBIDDEN,
+        ),
+        (
+            "mailbox-owner",
+            "mailbox-owner",
+            "org-acme",
+            MAILBOX_MANAGE_FORBIDDEN,
+        ),
+    ]
 
 
 def test_accounts_config_rejects_private_imap_host(client: TestClient):

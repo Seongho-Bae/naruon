@@ -21,6 +21,15 @@ async function flushAsyncWork() {
   }
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  valueSetter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("EmailList", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -110,6 +119,69 @@ describe("EmailList", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("(제목 없음)");
+  });
+
+  it("shows search loading feedback and clears the query back to inbox results", async () => {
+    let resolveSearch: ((value: ReturnType<typeof jsonResponse>) => void) | null = null;
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/search")) {
+        return new Promise((resolve) => {
+          resolveSearch = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse({ emails: [] }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<EmailList onSelectEmail={vi.fn()} selectedEmailId={null} />);
+    });
+    await flushAsyncWork();
+
+    const input = container.querySelector<HTMLInputElement>("#email-search");
+    const form = input?.closest("form");
+    const submitButton = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(input).not.toBeNull();
+    expect(form).not.toBeNull();
+    expect(submitButton).not.toBeNull();
+
+    await act(async () => {
+      setInputValue(input as HTMLInputElement, "계약");
+    });
+    const clearButton = container.querySelector<HTMLButtonElement>('button[aria-label="검색어 지우기"]');
+    expect(clearButton).not.toBeNull();
+
+    await act(async () => {
+      form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+
+    expect(submitButton?.disabled).toBe(true);
+    expect(submitButton?.textContent).toContain("검색 중");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/search",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ query: "계약" }),
+      }),
+    );
+
+    await act(async () => {
+      resolveSearch?.(jsonResponse({ results: [] }));
+    });
+    await flushAsyncWork();
+
+    await act(async () => {
+      clearButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(input?.value).toBe("");
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/emails", expect.any(Object));
   });
 
   it("renders sent mail reply tracking mode from the sent folder API", async () => {

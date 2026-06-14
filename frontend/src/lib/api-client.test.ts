@@ -3,10 +3,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClient } from "./api-client";
 
-function base64UrlJson(body: unknown) {
-  return btoa(JSON.stringify(body)).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
-
 function jsonResponse(body: unknown) {
   return {
     ok: true,
@@ -28,22 +24,18 @@ describe("ApiClient", () => {
     vi.unstubAllGlobals();
   });
 
-  it("derives display user context only from the stored session payload", () => {
+  it("does not derive display user context from browser-readable storage", () => {
     localStorage.setItem("naruon_dev_user", "legacy-dev-user");
     const client = new ApiClient();
 
     expect(client.getCurrentUserId()).toBeNull();
 
-    localStorage.setItem(
-      "naruon_session_token",
-      `${base64UrlJson({ alg: "HS256" })}.${base64UrlJson({ sub: "signed-user" })}.signature`,
-    );
+    localStorage.setItem("legacy_browser_context", "legacy.browser.value");
 
-    expect(client.getCurrentUserId()).toBe("signed-user");
+    expect(client.getCurrentUserId()).toBeNull();
   });
 
-  it("sends the signed bearer session token when one is stored", async () => {
-    localStorage.setItem("naruon_session_token", "signed.fixture.token");
+  it("does not send browser-readable session tokens", async () => {
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -58,9 +50,7 @@ describe("ApiClient", () => {
       "/api/tasks/from-email",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: "Bearer signed.fixture.token",
-        }),
+        headers: expect.not.objectContaining({ Authorization: expect.any(String) }),
       }),
     );
   });
@@ -136,8 +126,7 @@ describe("ApiClient", () => {
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-Dev-Auth-Token");
   });
 
-  it("keeps the stored signed session ahead of caller Authorization headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.fixture.token");
+  it("drops caller-supplied Authorization headers", async () => {
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -155,14 +144,11 @@ describe("ApiClient", () => {
     );
 
     const [, requestInit] = fetchMock.mock.calls[0];
-    expect((requestInit as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer signed.fixture.token",
-    });
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("authorization");
   });
 
-  it("sends multipart form data with bearer auth and without caller identity headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.form.token");
+  it("sends multipart form data without browser auth or caller identity headers", async () => {
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -182,10 +168,50 @@ describe("ApiClient", () => {
     expect(requestInit?.method).toBe("POST");
     expect(requestInit?.body).toBe(formData);
     expect((requestInit as RequestInit).headers).toMatchObject({
-      Authorization: "Bearer signed.form.token",
       "X-Trace-Id": "trace-456",
     });
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("Content-Type");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-User-Id");
+  });
+
+  it("reads non-sensitive session claims from the server session route", async () => {
+    const fetchMock = mockFetchResponse({
+      authenticated: true,
+      claims: {
+        userId: "signed-user",
+        organizationId: "org-acme",
+        workspaceId: "workspace-acme",
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient();
+
+    await expect(client.getServerSessionClaims()).resolves.toEqual({
+      userId: "signed-user",
+      organizationId: "org-acme",
+      workspaceId: "workspace-acme",
+    });
+    expect(fetchMock).toHaveBeenCalledWith("/auth/session", {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  });
+
+  it("fails closed to anonymous claims when the server session route is unavailable", async () => {
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network unavailable");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new ApiClient();
+
+    await expect(client.getServerSessionClaims()).resolves.toEqual({
+      userId: null,
+      organizationId: null,
+      workspaceId: null,
+    });
   });
 });
