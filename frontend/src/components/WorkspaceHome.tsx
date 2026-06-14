@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EmailList } from '@/components/EmailList';
 import type { MailFolder } from '@/components/EmailList';
@@ -261,7 +261,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   const [currentTimestamp, setCurrentTimestamp] = useState('');
   const [replySlaStatus, setReplySlaStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [replySlaMessage, setReplySlaMessage] = useState<string | null>(null);
-  const [taskUpdateStatus, setTaskUpdateStatus] = useState<string | null>(null);
+  const [taskUpdateStatusById, setTaskUpdateStatusById] = useState<Map<string, string>>(() => new Map());
   const settingsMenuId = 'workspace-startup-settings-menu';
   const unreadCount = emails.filter((e) => e.unread).length;
   const pendingReplyCount = pendingReplies.length;
@@ -314,7 +314,11 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
   const handleTaskCompletionToggle = async (task: TaskItem) => {
     const nextStatus: TaskItem['status'] = task.status === 'done' ? 'open' : 'done';
     const displayTitle = safeWorkspaceTitle(task.title, '제목 없는 작업');
-    setTaskUpdateStatus(null);
+    setTaskUpdateStatusById((currentStatuses) => {
+      const nextStatuses = new Map(currentStatuses);
+      nextStatuses.delete(task.id);
+      return nextStatuses;
+    });
     setDashboardTasks((currentTasks) =>
       currentTasks.map((currentTask) => (
         currentTask.id === task.id
@@ -330,12 +334,20 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
       setDashboardTasks((currentTasks) =>
         currentTasks.map((currentTask) => (currentTask.id === updatedTask.id ? updatedTask : currentTask)),
       );
-      setTaskUpdateStatus(`${displayTitle} 작업을 완료 처리했습니다.`);
+      setTaskUpdateStatusById((currentStatuses) => {
+        const nextStatuses = new Map(currentStatuses);
+        nextStatuses.set(task.id, `${displayTitle} 작업을 완료 처리했습니다.`);
+        return nextStatuses;
+      });
     } catch {
       setDashboardTasks((currentTasks) =>
         currentTasks.map((currentTask) => (currentTask.id === task.id ? task : currentTask)),
       );
-      setTaskUpdateStatus('작업 상태 변경에 실패했습니다.');
+      setTaskUpdateStatusById((currentStatuses) => {
+        const nextStatuses = new Map(currentStatuses);
+        nextStatuses.set(task.id, `${displayTitle} 작업 상태 변경에 실패했습니다.`);
+        return nextStatuses;
+      });
     }
   };
 
@@ -529,9 +541,9 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            {taskUpdateStatus && (
-              <p role="status" className="mt-3 text-xs font-semibold text-muted-foreground">{taskUpdateStatus}</p>
-            )}
+            {Array.from(taskUpdateStatusById.entries()).map(([taskId, taskUpdateStatus]) => (
+              <p key={taskId} role="status" className="mt-3 text-xs font-semibold text-muted-foreground">{taskUpdateStatus}</p>
+            ))}
             <a href="/tasks" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">전체 작업 보기</a>
           </div>
 
@@ -715,8 +727,6 @@ export function WorkspaceHome({
       setMobileWorkspaceView('calendar', { updateHash: false });
     }
   };
-  // ⚡ Bolt: Memoized handleSelectEmail to prevent unnecessary re-renders of EmailListItemComponent
-  // 🎯 Why: EmailListItemComponent is wrapped in React.memo, but was re-rendering because this function reference kept changing.
   const handleSelectEmail = useCallback((emailId: number) => {
     setStartupViewOverride('email');
     setSelectedEmail(emailId);
