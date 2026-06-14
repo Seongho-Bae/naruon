@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from collections.abc import Sequence
 from typing import Literal
 
@@ -16,6 +17,7 @@ from services.calendar_service import create_calendar_event, validate_calendar_t
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 router = APIRouter(prefix="/api/calendar")
+logger = logging.getLogger(__name__)
 
 
 class SyncRequest(BaseModel):
@@ -217,9 +219,13 @@ async def sync_todos(
         results = await asyncio.gather(*coros)
         return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
     except CalendarServiceError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.warning(
+            "Calendar service error during sync_todos",
+            extra={"error_type": type(e).__name__},
+        )
+        raise HTTPException(status_code=500, detail="An internal server error occurred while communicating with the calendar service")
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)

@@ -97,22 +97,41 @@ export class ApiClient {
     return this.getSessionClaims().userId;
   }
 
+  private createApiError(status?: number) {
+    const error = new Error("API request failed") as Error & { status?: number };
+    error.name = "ApiClientError";
+    error.status = status;
+    error.stack = undefined;
+    return error;
+  }
+
+  private async fetchApi(endpoint: string, init: RequestInit) {
+    try {
+      return await fetch(`${this.baseUrl}${endpoint}`, init);
+    } catch {
+      throw this.createApiError();
+    }
+  }
+
+  private async parseOptionalJson<T>(response: Response): Promise<T> {
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
+  }
+
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      const error = new Error(`API GET ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
     return response.json();
   }
 
   async post<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       method: 'POST',
       credentials: init?.credentials ?? 'same-origin',
@@ -120,15 +139,13 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
     return response.json();
   }
 
   async postForm<T>(endpoint: string, body: FormData, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       method: 'POST',
       credentials: init?.credentials ?? 'same-origin',
@@ -136,15 +153,13 @@ export class ApiClient {
       body,
     });
     if (!response.ok) {
-      const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
     return response.json();
   }
 
   async put<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       method: 'PUT',
       credentials: init?.credentials ?? 'same-origin',
@@ -152,17 +167,13 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      const error = new Error(`API PUT ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
-    // PUT might return 204 No Content
-    const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
+    return this.parseOptionalJson<T>(response);
   }
 
   async patch<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       method: 'PATCH',
       credentials: init?.credentials ?? 'same-origin',
@@ -170,28 +181,22 @@ export class ApiClient {
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      const error = new Error(`API PATCH ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
     return response.json();
   }
 
   async delete<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const response = await this.fetchApi(endpoint, {
       ...init,
       method: 'DELETE',
       credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      const error = new Error(`API DELETE ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
-      error.status = response.status;
-      throw error;
+      throw this.createApiError(response.status);
     }
-    // DELETE might return 204 No Content, handle gracefully
-    const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
+    return this.parseOptionalJson<T>(response);
   }
 }
 

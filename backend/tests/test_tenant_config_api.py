@@ -207,14 +207,17 @@ def test_validate_mail_config_update_revalidates_existing_mail_hosts(monkeypatch
     ]
 
 
-def test_validate_mail_config_update_rejects_unsafe_partial_override():
+def test_validate_mail_config_update_rejects_unsafe_partial_override(caplog):
     from api.tenant_config import validate_mail_config_update
 
-    with pytest.raises(HTTPException) as exc_info:
-        validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
+    with caplog.at_level("WARNING", logger="api.tenant_config"):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
 
     assert exc_info.value.status_code == 400
-    assert "imap_server/imap_port validation failed" in exc_info.value.detail
+    assert exc_info.value.detail == "Invalid IMAP configuration"
+    assert "IMAP configuration validation failed" in caplog.text
+    assert "127.0.0.1" not in caplog.text
 
 
 def test_legacy_tenant_config_endpoint_keeps_organization_scope(
@@ -279,7 +282,7 @@ def test_tenant_config_rejects_private_smtp_host(client):
     )
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_metadata_smtp_host(client):
@@ -294,7 +297,7 @@ def test_tenant_config_rejects_metadata_smtp_host(client):
     )
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
@@ -314,7 +317,7 @@ def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "SMTP port is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_private_pop3_host(client):
@@ -329,7 +332,7 @@ def test_tenant_config_rejects_private_pop3_host(client):
     )
 
     assert response.status_code == 400
-    assert "pop3_server" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_private_imap_host(client):
@@ -344,7 +347,7 @@ def test_tenant_config_rejects_private_imap_host(client):
     )
 
     assert response.status_code == 400
-    assert "imap_server" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
@@ -364,7 +367,7 @@ def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "imap_server" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
@@ -384,7 +387,7 @@ def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "pop3_server" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
@@ -410,7 +413,7 @@ def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "imap_port" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
@@ -436,7 +439,7 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "pop3_port" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 @pytest.mark.parametrize(

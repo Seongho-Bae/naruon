@@ -18,6 +18,16 @@ function mockFetchResponse(body: unknown) {
   });
 }
 
+function rejectedResponse(status = 500, statusText = "Internal path /api/runtime-config") {
+  return {
+    ok: false,
+    status,
+    statusText,
+    json: async () => ({ detail: statusText }),
+    text: async () => "",
+  };
+}
+
 describe("ApiClient", () => {
   afterEach(() => {
     localStorage.clear();
@@ -212,6 +222,51 @@ describe("ApiClient", () => {
       userId: null,
       organizationId: null,
       workspaceId: null,
+    });
+  });
+
+  it("throws sanitized API errors for every HTTP method", async () => {
+    const calls: Array<[string, () => Promise<unknown>]> = [];
+    const client = new ApiClient();
+    calls.push(["get", () => client.get("/api/runtime-config")]);
+    calls.push(["post", () => client.post("/api/runtime-config", { secret: "value" })]);
+    calls.push(["postForm", () => client.postForm("/api/runtime-config", new FormData())]);
+    calls.push(["put", () => client.put("/api/runtime-config", { secret: "value" })]);
+    calls.push(["patch", () => client.patch("/api/runtime-config", { secret: "value" })]);
+    calls.push(["delete", () => client.delete("/api/runtime-config")]);
+
+    for (const [method, invoke] of calls) {
+      vi.stubGlobal("fetch", vi.fn(async () => rejectedResponse(503, `backend ${method} stack /internal/path`)));
+
+      try {
+        await invoke();
+        throw new Error(`${method} should have failed`);
+      } catch (error) {
+        expect(error).toMatchObject({
+          name: "ApiClientError",
+          message: "API request failed",
+          status: 503,
+          stack: undefined,
+        });
+        expect(String(error)).not.toContain("/api/runtime-config");
+        expect(String(error)).not.toContain("/internal/path");
+      }
+
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("does not expose raw network error details from failed fetches", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("network unavailable at /private/internal/path");
+    }));
+    const client = new ApiClient();
+
+    await expect(client.get("/api/runtime-config")).rejects.toMatchObject({
+      name: "ApiClientError",
+      message: "API request failed",
+      status: undefined,
+      stack: undefined,
     });
   });
 });
