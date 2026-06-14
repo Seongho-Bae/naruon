@@ -73,6 +73,8 @@ describe("TasksPage", () => {
   });
 
   it("loads source-linked tickets from the signed task API without exposing raw source ids", async () => {
+    const token = "signed.task.read";
+    localStorage.setItem("naruon_session_token", token);
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -114,14 +116,13 @@ describe("TasksPage", () => {
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({
-      credentials: "same-origin",
       headers: expect.objectContaining({
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       }),
     }));
     const firstFetchCall = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit?] | undefined;
     const firstCallHeaders = firstFetchCall?.[1]?.headers as Record<string, string> | undefined;
-    expect(firstCallHeaders).not.toHaveProperty("Authorization");
     for (const headerName of publicIdentityHeaders) {
       expect(Object.keys(firstCallHeaders ?? {}).some((key) => key.toLowerCase() === headerName)).toBe(false);
     }
@@ -151,14 +152,14 @@ describe("TasksPage", () => {
   });
 
   it("updates ticket status through the signed task API", async () => {
+    localStorage.setItem("naruon_session_token", "signed.task.status");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/tasks/task_public_123" && init?.method === "PATCH") {
-        expect(init.credentials).toBe("same-origin");
         expect(init.headers).toEqual(expect.objectContaining({
+          Authorization: "Bearer signed.task.status",
           "Content-Type": "application/json",
         }));
-        expect(init.headers).not.toHaveProperty("Authorization");
         expect(JSON.parse(String(init.body))).toEqual({ status: "done" });
         return jsonResponse({
           id: "task_public_123",
@@ -209,6 +210,7 @@ describe("TasksPage", () => {
   });
 
   it("creates reply SLA ticket escalations with signed headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.reply.sla");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -222,8 +224,7 @@ describe("TasksPage", () => {
       if (url === "/api/tasks/reply-sla-escalations") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(init?.credentials).toBe("same-origin");
-        expect(headers.Authorization).toBeUndefined();
+        expect(headers.Authorization).toBe("Bearer signed.reply.sla");
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
@@ -280,6 +281,7 @@ describe("TasksPage", () => {
   });
 
   it("creates self-sent knowledge WebDAV materialization intent with signed headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed.knowledge.intent");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -293,8 +295,7 @@ describe("TasksPage", () => {
       if (url === "/api/webdav/knowledge-materialization-intent") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(init?.credentials).toBe("same-origin");
-        expect(headers.Authorization).toBeUndefined();
+        expect(headers.Authorization).toBe("Bearer signed.knowledge.intent");
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);

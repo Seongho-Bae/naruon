@@ -97,13 +97,16 @@ async def get_webdav_writeback_intent(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    from pathlib import Path
+    safe_target = Path(req.target_source_id).name if req.target_source_id else None
+
     user_id = auth_context.user_id
     result = await webdav_service.determine_webdav_writeback_intent_from_db(
         db,
         user_id,
         auth_context.organization_id,
         auth_context.workspace_id,
-        target_source_id=req.target_source_id,
+        target_source_id=safe_target,
     )
     if result.get("status") == "error":
         raise HTTPException(status_code=422, detail=result.get("message"))
@@ -118,13 +121,16 @@ async def get_knowledge_materialization_intent(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    from pathlib import Path
+    safe_target = Path(req.target_source_id).name if req.target_source_id else None
+
     result = await webdav_service.determine_knowledge_materialization_intent_from_db(
         db,
         auth_context.user_id,
         auth_context.organization_id,
         auth_context.workspace_id,
         req.source_task_id,
-        target_source_id=req.target_source_id,
+        target_source_id=safe_target,
     )
     if result.get("status") == "error":
         status_code = WEB_DAV_ERROR_STATUS_CODES.get(

@@ -142,11 +142,10 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
-            configs = result.scalars().all()
+            configs = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
             
         tasks = []
-        for config in configs:
+        for config in configs.scalars():
             if not config.imap_server or not config.imap_port:
                 continue
             tasks.append(self._sync_tenant(config))
@@ -173,9 +172,7 @@ class ImapSyncWorker:
             imap_port,
             config.user_id,
         )
-        import ssl
-        ssl_context = ssl.create_default_context()
-        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port, ssl_context=ssl_context)
+        imap_client = aioimaplib.IMAP4_SSL(imap_server, imap_port)
 
         try:
             await imap_client.wait_hello_from_server()

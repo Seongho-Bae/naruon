@@ -23,12 +23,6 @@ GOOGLE_OAUTH_ALLOWED_KEYS = {
     "token_uri",
     "universe_domain",
 }
-GOOGLE_OAUTH_REQUIRED_KEYS = {
-    "client_id",
-    "client_secret",
-    "refresh_token",
-    "token_uri",
-}
 
 
 def validate_calendar_todo_text(todo_text: str) -> str:
@@ -52,22 +46,8 @@ def validate_google_user_token(user_token: dict) -> dict:
     if unexpected_keys:
         raise CalendarServiceError("Invalid calendar credentials")
 
-    missing_required_keys = {
-        key
-        for key in GOOGLE_OAUTH_REQUIRED_KEYS
-        if not isinstance(user_token.get(key), str) or not user_token[key].strip()
-    }
-    if missing_required_keys:
-        raise CalendarServiceError("Invalid calendar credentials")
-
     token_uri = user_token.get("token_uri")
-    if token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
-        raise CalendarServiceError("Invalid calendar credentials")
-
-    access_token = user_token.get("token")
-    if access_token is not None and (
-        not isinstance(access_token, str) or not access_token.strip()
-    ):
+    if token_uri is not None and token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
         raise CalendarServiceError("Invalid calendar credentials")
 
     return dict(user_token)

@@ -53,12 +53,11 @@ class Pop3SyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(TenantConfig).where(TenantConfig.pop3_server.isnot(None)))
-            configs = result.scalars().all()
+            configs = await session.execute(select(TenantConfig).where(TenantConfig.pop3_server.isnot(None)))
             
         semaphore = asyncio.Semaphore(10)
         tasks = []
-        for config in configs:
+        for config in configs.scalars():
             if not config.pop3_server or not config.pop3_port:
                 continue
             tasks.append(self._sync_tenant(config, semaphore))

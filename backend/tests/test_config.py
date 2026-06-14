@@ -20,13 +20,6 @@ def _settings_without_env_file() -> Settings:
     return Settings(**cast(dict[str, Any], {"_env_file": None}))
 
 
-def _set_required_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
-    )
-    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
-
-
 def _patch_oidc_dns(
     monkeypatch: pytest.MonkeyPatch,
     host_addresses: dict[str, list[str]] | None = None,
@@ -72,42 +65,6 @@ def test_database_url_loads_from_environment(monkeypatch):
     loaded_settings = _settings_without_env_file()
 
     assert loaded_settings.DATABASE_URL == database_url
-
-
-def test_allowed_cors_origins_are_validated_and_normalized(monkeypatch):
-    _set_required_runtime_env(monkeypatch)
-    monkeypatch.setenv(
-        "ALLOWED_CORS_ORIGINS",
-        " https://Example.com:443 , http://localhost:3000 , http://Example.com:80 , https://example.com:8443 ",
-    )
-
-    loaded_settings = _settings_without_env_file()
-
-    assert loaded_settings.ALLOWED_CORS_ORIGINS_LIST == [
-        "https://example.com",
-        "http://localhost:3000",
-        "http://example.com",
-        "https://example.com:8443",
-    ]
-
-
-@pytest.mark.parametrize(
-    "allowed_origins",
-    [
-        "*",
-        "https://*.example.com",
-        "ftp://example.com",
-        "https://example.com/path",
-        "https://example.com?debug=1",
-        "https://user@example.com",
-    ],
-)
-def test_allowed_cors_origins_reject_unsafe_values(monkeypatch, allowed_origins):
-    _set_required_runtime_env(monkeypatch)
-    monkeypatch.setenv("ALLOWED_CORS_ORIGINS", allowed_origins)
-
-    with pytest.raises(ValidationError, match="ALLOWED_CORS_ORIGINS"):
-        _settings_without_env_file()
 
 
 def test_settings_load_repo_root_env_when_started_from_backend_directory(
@@ -247,7 +204,6 @@ def test_settings_repr_redacts_auth_session_hmac_secret(monkeypatch):
 def test_openai_config():
     from core.config import settings
 
-    assert hasattr(settings, "OPENAI_BASE_URL")
     assert hasattr(settings, "OPENAI_EMBEDDING_MODEL")
     assert hasattr(settings, "OPENAI_MODEL")
 

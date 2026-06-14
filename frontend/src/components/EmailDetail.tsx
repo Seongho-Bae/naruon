@@ -26,17 +26,6 @@ type EmailData = ThreadEmailData & {
 interface LlmData {
   summary: string;
   todos: string[];
-  provenance?: string;
-  confidence?: number;
-}
-
-function toConfidencePercent(confidence: number | undefined): number | undefined {
-  if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
-    return undefined;
-  }
-
-  const percent = confidence >= 0 && confidence <= 1 ? confidence * 100 : confidence;
-  return Math.round(Math.min(100, Math.max(0, percent)));
 }
 
 interface CreateTasksFromEmailResponse {
@@ -327,7 +316,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   const safeEmailSender = toMailDisplayText(email.sender, '보낸 사람');
   const safeEmailSubject = toMailDisplayText(email.subject, '(제목 없음)');
   const safeReplyTo = toMailDisplayText(email.reply_to || email.sender, '답장 주소 없음');
-  const confidencePercent = toConfidencePercent(llmData?.confidence);
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -367,8 +355,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             icon={<span aria-hidden="true">✦</span>}
             loading={!llmData && !llmError}
             error={llmError}
-            provenance={llmData?.provenance || "AI 생성"}
-            confidence={confidencePercent}
+            provenance="AI 생성"
+            // TODO: API 연동 시 실제 llmData.confidence 값으로 대체
           >
             {llmData ? (
               <div className="flex flex-col gap-2">
@@ -389,10 +377,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             error={llmError ? '실행 항목을 추출하지 못했습니다.' : null}
             empty={Boolean(llmData && llmData.todos.length === 0)}
             emptyMessage="실행 항목이 없습니다."
-            provenance={
-              confidencePercent !== undefined ? `신뢰도 ${confidencePercent}%` : undefined
-            }
-            confidence={confidencePercent}
+            provenance={`${llmData?.todos.length || 0}개 실행 항목`}
+            // TODO: API 연동 시 실제 llmData.confidence 값으로 대체
             footerActions={llmData && (llmData.todos.length > 0 || syncStatus || taskStatus) ? (
               <>
                 {llmData.todos.length > 0 && (

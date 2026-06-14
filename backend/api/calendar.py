@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from collections.abc import Sequence
 from typing import Literal
 
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.auth import (
     AuthContext,
     get_auth_context,
+    is_system_admin_role,
 )
 from db.models import CalendarWritebackSource
 from db.session import get_db
@@ -17,7 +17,6 @@ from services.calendar_service import create_calendar_event, validate_calendar_t
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 router = APIRouter(prefix="/api/calendar")
-logger = logging.getLogger(__name__)
 
 
 class SyncRequest(BaseModel):
@@ -219,13 +218,9 @@ async def sync_todos(
         results = await asyncio.gather(*coros)
         return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError as e:
-        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
+        raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:
-        logger.warning(
-            "Calendar service error during sync_todos",
-            extra={"error_type": type(e).__name__},
-        )
-        raise HTTPException(status_code=500, detail="An internal server error occurred while communicating with the calendar service")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)

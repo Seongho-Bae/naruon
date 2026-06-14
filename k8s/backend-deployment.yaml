@@ -14,12 +14,10 @@ spec:
       labels:
         app: backend
     spec:
-      imagePullSecrets:
-        - name: ghcr-registry
       containers:
       - name: backend
-        image: ghcr.io/seongho-bae/ai_email_client-backend:REPLACE_ME_VERSION
-        imagePullPolicy: IfNotPresent
+        image: ghcr.io/seongho-bae/ai_email_client:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8000
         env:

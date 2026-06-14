@@ -1,7 +1,7 @@
 import datetime
 
 from db.models import Email
-from services.reply_tracking_service import thread_reply_candidate, detect_reply_tracking
+from services.reply_tracking_service import thread_reply_candidate
 
 
 USER_ADDRESSES = {"me@example.com"}
@@ -155,21 +155,3 @@ def test_thread_requires_reply_returns_false_when_no_candidate():
         body="I will handle it.",
     )
     assert thread_requires_reply([sent_message, later_external_reply], USER_ADDRESSES) is False
-
-def test_detect_reply_tracking_please_reply():
-    assert detect_reply_tracking("This is an important message, please reply soon.") is True
-
-def test_detect_reply_tracking_question_mark():
-    assert detect_reply_tracking("How are you doing today?") is True
-
-def test_detect_reply_tracking_case_insensitive():
-    assert detect_reply_tracking("Please Reply to this email.") is True
-
-def test_detect_reply_tracking_no_match():
-    assert detect_reply_tracking(
-        "This is a standard statement without any tracking triggers."
-    ) is False
-
-def test_detect_reply_tracking_empty_body():
-    assert detect_reply_tracking(None) is False
-    assert detect_reply_tracking("") is False

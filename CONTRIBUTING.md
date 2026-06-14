@@ -28,14 +28,3 @@ For backend-only changes, run `cd backend && python3 -m pytest -q`. For frontend
 ## Secrets and data
 
 Never commit `.env`, real mailbox exports, SMTP credentials, OAuth secrets, OpenAI keys, or user email content. Use synthetic `.eml` fixtures only.
-
-## Communication Guidelines
-
-To keep our project organized and easy to navigate for everyone, please adhere to the following communication guidelines:
-
-* **Issues:** Use the provided Issue Templates (`Bug Report` or `Feature Request`). Search existing issues before creating a new one to prevent duplicates.
-* **Pull Requests:** Ensure your PR title is descriptive (e.g., `fix: correct email parsing bug`). Fill out the PR template entirely. Keep PRs focused on a single logical change.
-* **Review Process:**
-    * Ensure all CI checks pass (linting, tests, etc.) before requesting a review.
-    * Respond to reviewer comments promptly.
-    * Be respectful and constructive in your code reviews.

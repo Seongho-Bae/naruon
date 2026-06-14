@@ -19,7 +19,7 @@ const viewports = [
 
 for (const viewport of viewports) {
   test(`renders source-backed AI Hub with scroll at ${viewport.name}`, async ({ page }, testInfo) => {
-    const sessionToken = `signed-ai-hub.${viewport.name}.token`;
+    const sessionToken = `signed-ai-hub-${viewport.name}`;
     const surfaceRequestHeaders: Record<string, string>[] = [];
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await mockDashboardApi(page, (path, request) => {
@@ -28,15 +28,14 @@ for (const viewport of viewports) {
       }
     });
     await page.addInitScript((token) => {
-      document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+      window.localStorage.setItem('naruon_session_token', token);
     }, sessionToken);
 
     await page.goto('/ai-hub');
     await expect.poll(() => surfaceRequestHeaders.length).toBeGreaterThan(0);
 
     const headers = surfaceRequestHeaders.at(-1) ?? {};
-    expect(headers.authorization).toBeUndefined();
-    expect(headers.cookie).toContain(`naruon_session=${sessionToken}`);
+    expect(headers.authorization).toBe(`Bearer ${sessionToken}`);
     for (const headerName of publicIdentityHeaders) {
       expect(headers[headerName]).toBeUndefined();
     }

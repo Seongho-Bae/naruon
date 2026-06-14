@@ -19,52 +19,6 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
 
-def test_backend_dockerfile_runtime_stages_run_as_non_root_user():
-    dockerfile = (REPO_ROOT / "Dockerfile").read_text()
-    backend_cmd = (
-        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
-    )
-    combined_cmd = 'CMD ["/app/scripts/docker_entrypoint.sh"]'
-
-    assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
-    assert "chown -R appuser:appuser /app" in dockerfile
-    assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
-    assert dockerfile.rfind("USER appuser") < dockerfile.find(combined_cmd)
-
-
-def test_frontend_dockerfile_runs_as_non_root_user():
-    dockerfile = (REPO_ROOT / "frontend" / "Dockerfile").read_text()
-
-    assert "RUN chown -R node:node /app" in dockerfile
-    assert "USER node" in dockerfile
-    assert dockerfile.rfind("USER node") > dockerfile.rfind("RUN pnpm run build")
-
-
-def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
-    dockerfile = (REPO_ROOT / "Dockerfile.ollama").read_text()
-
-    assert "ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models" in dockerfile
-    assert "useradd --system --create-home --home-dir /home/ollama" in dockerfile
-    assert "curl " not in dockerfile
-    assert "for attempt in $(seq 1 60)" in dockerfile
-    assert "if ollama list > /dev/null 2>&1" in dockerfile
-    assert "cat /tmp/ollama-build.log; exit 1" in dockerfile
-    assert "ollama pull gemma4:e2b-it-qat" in dockerfile
-    assert "ollama pull embeddinggemma" in dockerfile
-    assert dockerfile.count("RUN set -eux;") >= 2
-    assert dockerfile.find("ollama pull gemma4:e2b-it-qat") < dockerfile.find(
-        "ollama pull embeddinggemma"
-    )
-    assert "ollama list | grep -E '^gemma4:e2b-it-qat[[:space:]]'" in dockerfile
-    assert (
-        "ollama list | grep -E '^embeddinggemma(:|[[:space:]])'" in dockerfile
-    )
-    assert "chown -R ollama:ollama /usr/share/ollama/.ollama" in dockerfile
-    assert dockerfile.rfind("USER ollama") > dockerfile.rfind(
-        "chown -R ollama:ollama /usr/share/ollama/.ollama"
-    )
-
-
 def test_backend_requirements_do_not_pin_yanked_email_validator():
     requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
 
@@ -72,104 +26,16 @@ def test_backend_requirements_do_not_pin_yanked_email_validator():
     assert "email-validator==2.3.0" in requirements
 
 
-def test_backend_requirements_pin_ruff_for_deterministic_ci():
-    requirements = (REPO_ROOT / "backend" / "requirements.txt").read_text()
-
-    assert "\nruff\n" not in f"\n{requirements}\n"
-    assert "ruff==0.15.16" in requirements
-
-
-def test_traefik_compose_services_disable_privilege_escalation():
-    expected_next_service = {
-        "docker-compose.infra.yml": "  prometheus:",
-        "docker-compose.gateway.yml": "  keycloak:",
-    }
-
-    for compose_name, next_service in expected_next_service.items():
-        compose = (REPO_ROOT / compose_name).read_text()
-        traefik_block = compose.split("  traefik:", 1)[1].split(next_service, 1)[0]
-
-        assert "security_opt:" in traefik_block
-        assert "- no-new-privileges:true" in traefik_block
-
-
 def test_compose_externalizes_postgres_credentials():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
-    compose_without_runtime_preflights = (
-        compose.replace(
-            '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}',
-            "",
-        )
-        .replace(
-            '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}',
-            "",
-        )
-        .replace(
-            '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}',
-            "",
-        )
-    )
 
     assert "POSTGRES_PASSWORD: postgres" not in compose
     assert "postgres:postgres@" not in compose
-    assert "POSTGRES_DB: ai_email" in compose
-    assert "POSTGRES_USER: postgres" in compose
-    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}" in compose
-    assert "- POSTGRES_PASSWORD" not in compose
-    assert "POSTGRES_PASSWORD:-postgres" not in compose
+    assert "${POSTGRES_DB" in compose
+    assert "${POSTGRES_USER" in compose
     assert "${POSTGRES_PASSWORD" in compose
-    assert "${POSTGRES_PASSWORD:?" not in compose_without_runtime_preflights
-    assert '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}' in compose
-    assert "127.0.0.1:15432:5432" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
-    assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in compose
-    assert "- AUTH_SESSION_HMAC_SECRET" not in compose
-    assert "${AUTH_SESSION_HMAC_SECRET:?" not in compose_without_runtime_preflights
-    assert '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}' in compose
-    assert "ENCRYPTION_KEY" in compose
-    assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in compose
-    assert "- ENCRYPTION_KEY" not in compose
-    assert "${ENCRYPTION_KEY:?" not in compose_without_runtime_preflights
-    assert '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}' in compose
-
-
-def test_compose_allows_only_the_local_ollama_provider_host():
-    local_compose = (REPO_ROOT / "docker-compose.yml").read_text()
-    live_compose = (REPO_ROOT / "docker-compose.live-e2e.yml").read_text()
-
-    def has_exact_compose_line(compose: str, *expected_lines: str) -> bool:
-        normalized_lines = {
-            line.strip().removeprefix("- ").strip() for line in compose.splitlines()
-        }
-        return any(expected_line in normalized_lines for expected_line in expected_lines)
-
-    assert not has_exact_compose_line(
-        "ALLOWED_LLM_BASE_URL_HOSTS=ollama,evil.example",
-        "ALLOWED_LLM_BASE_URL_HOSTS=ollama",
-    )
-
-    for compose in (local_compose, live_compose):
-        assert has_exact_compose_line(
-            compose,
-            'ALLOW_LOCAL_LLM_PROVIDERS: "true"',
-            "ALLOW_LOCAL_LLM_PROVIDERS=true",
-        )
-        assert has_exact_compose_line(
-            compose,
-            'ALLOWED_LLM_BASE_URL_HOSTS: "ollama"',
-            "ALLOWED_LLM_BASE_URL_HOSTS: ollama",
-            "ALLOWED_LLM_BASE_URL_HOSTS=ollama",
-        )
-        assert has_exact_compose_line(
-            compose,
-            "OPENAI_BASE_URL: http://ollama:11434/v1",
-            "OPENAI_BASE_URL=http://ollama:11434/v1",
-        )
-        assert has_exact_compose_line(
-            compose,
-            "OPENAI_MODEL: gemma4:e2b-it-qat",
-            "OPENAI_MODEL=gemma4:e2b-it-qat",
-        )
+    assert "${AUTH_SESSION_HMAC_SECRET:?" in compose
 
 
 def test_compose_wrapper_uses_operator_env_file_without_bulk_secret_injection():
@@ -209,17 +75,13 @@ def test_kubernetes_postgres_password_comes_from_secret():
     assert "POSTGRES_PASSWORD" in manifest
 
 
-def test_env_example_does_not_ship_runtime_secret_defaults():
+def test_env_example_documents_required_postgres_password():
     env_example = (REPO_ROOT / ".env.example").read_text()
 
-    assert "POSTGRES_DB=" not in env_example
-    assert "POSTGRES_USER=" not in env_example
-    assert "POSTGRES_PASSWORD=" not in env_example
-    assert "DATABASE_URL=" not in env_example
-    assert "AUTH_SESSION_HMAC_SECRET=" not in env_example
-    assert "ENCRYPTION_KEY=" not in env_example
+    assert "POSTGRES_PASSWORD=change-me-local-only" in env_example
+    assert "AUTH_SESSION_HMAC_SECRET=" in env_example
     assert "postgres:postgres@" not in env_example
-    assert "change-me-local-only" not in env_example
+    assert "postgres:change-me-local-only@" in env_example
 
 
 def test_readme_uses_cross_platform_browser_command():

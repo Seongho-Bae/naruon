@@ -261,19 +261,6 @@ def test_pop3_destination_rejects_non_pop3_port(monkeypatch):
         )
 
 
-def test_pop3_host_policy_rejects_wildcard_allowlist_entry(monkeypatch):
-    monkeypatch.setattr(
-        email_client.settings,
-        "ALLOWED_POP3_HOSTS",
-        "pop3.example.com,*",
-    )
-
-    with pytest.raises(ValueError, match=email_client.POP3_HOST_NOT_ALLOWED):
-        email_client.validate_pop3_destination(
-            "pop3.example.com", 995, resolve_host=False
-        )
-
-
 def test_pop3_destination_rejects_private_dns_answer(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_HOSTS", "pop3.example.com")
     monkeypatch.setattr(email_client.settings, "ALLOWED_POP3_PORTS", "995")

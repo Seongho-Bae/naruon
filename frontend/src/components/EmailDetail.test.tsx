@@ -280,7 +280,6 @@ describe("EmailDetail", () => {
         return Promise.resolve(jsonResponse({
           summary: "출시 메시지의 핵심 맥락입니다.",
           todos: ["캘린더에 출시 리뷰 일정을 반영", "답장 초안 준비"],
-          confidence: 0.82,
         }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
@@ -301,13 +300,12 @@ describe("EmailDetail", () => {
     );
     expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('[role="heading"][aria-level="3"]')?.textContent).toContain("답장 초안");
     expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("출시 메시지의 핵심 맥락입니다.");
-    expect(cards.find((card) => card.getAttribute("aria-label") === "맥락 종합")?.textContent).toContain("82%");
     expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("캘린더에 출시 리뷰 일정을 반영");
-    expect(cards.find((card) => card.getAttribute("aria-label") === "실행 항목")?.textContent).toContain("82%");
     expect(cards.find((card) => card.getAttribute("aria-label") === "답장 초안")?.querySelector('textarea[aria-label="답장 초안"]')).not.toBeNull();
   });
 
   it("lets users create tasks from visible execution items in the email detail", async () => {
+    localStorage.setItem("naruon_session_token", "signed.task.session");
     const email: TestEmail = {
       id: 14,
       message_id: "<tasks@example.com>",
@@ -330,11 +328,9 @@ describe("EmailDetail", () => {
       }
       if (url.endsWith("/api/tasks/from-email")) {
         expect(init?.method).toBe("POST");
-        expect(init?.credentials).toBe("same-origin");
         expect(init?.headers).toMatchObject({
-          "Content-Type": "application/json",
+          Authorization: "Bearer signed.task.session",
         });
-        expect(init?.headers).not.toHaveProperty("Authorization");
         expect(JSON.parse(String(init?.body))).toEqual({
           source_email_id: "<tasks@example.com>",
           thread_id: "<tasks@example.com>",
@@ -473,13 +469,7 @@ describe("EmailDetail", () => {
       const url = String(input);
       if (url.endsWith("/api/emails/5")) return Promise.resolve(jsonResponse(email));
       if (url.endsWith("/api/llm/summarize")) {
-        return Promise.resolve(
-          jsonResponse({
-            summary: "출시 계획 검토",
-            todos: ["일정 확인"],
-            confidence: 0.91,
-          }),
-        );
+        return Promise.resolve(jsonResponse({ summary: "출시 계획 검토", todos: ["일정 확인"] }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -497,7 +487,7 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("맥락 종합");
     expect(container.textContent).toContain("AI 생성");
     expect(container.textContent).toContain("실행 항목");
-    expect(container.textContent).toContain("신뢰도 91%");
+    expect(container.textContent).toContain("1개 실행 항목");
     expect(container.textContent).not.toContain("AI Generated");
     expect(container.textContent).not.toContain("Tasks");
   });
