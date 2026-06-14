@@ -462,6 +462,16 @@ def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
     }
 
 
+def test_tenant_config_get_rejects_sql_shaped_user_id(client):
+    response = client.get(
+        "/api/config",
+        params={"user_id": "member-user' OR '1'='1"},
+        headers={"X-User-Id": "member-user' OR '1'='1"},
+    )
+
+    assert response.status_code == 422
+
+
 @pytest.mark.parametrize(
     "admin_role", ("system_admin", "platform_admin", "tenant_admin")
 )
