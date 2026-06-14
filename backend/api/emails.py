@@ -630,6 +630,10 @@ async def send_email_endpoint(
                     ),
                 ) from exc
             if isinstance(exc, ValueError):
+                logger.warning(
+                    "Email send rejected invalid SMTP configuration",
+                    extra={"error_type": type(exc).__name__},
+                )
                 raise HTTPException(status_code=400, detail="Invalid email configuration") from exc
             raise
 

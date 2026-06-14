@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import os
 import time
 import zipfile
@@ -1568,7 +1569,7 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
 
 @patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
-def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email):
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email, caplog):
     from main import app
     from fastapi.testclient import TestClient
     from db.session import get_db
@@ -1582,6 +1583,7 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
     async def unsafe_smtp_db():
         yield MockSession([], tenant_config=UnsafeTenantConfig())
 
+    caplog.set_level(logging.WARNING, logger="api.emails")
     app.dependency_overrides[get_db] = unsafe_smtp_db
     try:
         client = TestClient(app, headers={"X-User-Id": "testuser"})
@@ -1598,6 +1600,8 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
 
     assert response.status_code == 400
     assert "Invalid email configuration" in response.json()["detail"]
+    assert "Email send rejected invalid SMTP configuration" in caplog.text
+    assert "127.0.0.1" not in caplog.text
     mock_send_email.assert_not_called()
 
 
