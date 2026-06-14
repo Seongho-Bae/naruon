@@ -303,8 +303,9 @@ export function CalendarLayout() {
               {['월간 캘린더', '주간 캘린더', '일정 상세', '회의 조율', '일정 후보'].map((mode) => (
                 <button type="button"
                   key={mode}
+                  aria-pressed={viewMode === mode}
                   onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
-                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
                 </button>
