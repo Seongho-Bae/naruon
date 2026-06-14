@@ -27,6 +27,7 @@ from services.email_dedupe_service import (
     email_strong_fingerprint,
 )
 from services.email_import_service import (
+    EmailImportQuotaExceeded,
     MAX_IMPORT_UPLOAD_BYTES,
     MAX_IMPORT_UPLOADS,
     EmailImportItemStatus,
@@ -283,11 +284,14 @@ async def get_emails(
             if message_is_from_user(email, user_addresses):
                 has_sent_message[group_key] = True
 
-    visible_groups = [
-        email
-        for group_key, email in grouped.items()
-        if folder != "sent" or has_sent_message.get(group_key, False)
-    ]
+    if is_sent_folder:
+        visible_groups = [
+            email
+            for group_key, email in grouped.items()
+            if has_sent_message.get(group_key, False)
+        ]
+    else:
+        visible_groups = list(grouped.values())
     sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
 
     items = []
@@ -390,12 +394,15 @@ def _build_email_lookup_dicts(
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
         for lookup_value in _email_message_lookup_values(email_row):
-            by_message_id.setdefault(lookup_value, email_row)
+            if lookup_value not in by_message_id:
+                by_message_id[lookup_value] = email_row
         row_fingerprint = email_strong_fingerprint(email_row)
         if row_fingerprint:
-            by_fingerprint.setdefault(row_fingerprint, email_row)
+            if row_fingerprint not in by_fingerprint:
+                by_fingerprint[row_fingerprint] = email_row
         if email_row.fingerprint:
-            by_fingerprint.setdefault(email_row.fingerprint, email_row)
+            if email_row.fingerprint not in by_fingerprint:
+                by_fingerprint[email_row.fingerprint] = email_row
     return by_message_id, by_fingerprint
 
 
@@ -501,12 +508,17 @@ async def import_email_files(
             )
         )
 
-    import_result = await import_email_uploads(
-        db,
-        uploads=uploads,
-        user_id=auth_context.user_id,
-        organization_id=auth_context.organization_id,
-    )
+    try:
+        import_result = await import_email_uploads(
+            db,
+            uploads=uploads,
+            user_id=auth_context.user_id,
+            organization_id=auth_context.organization_id,
+        )
+    except EmailImportQuotaExceeded as exc:
+        raise HTTPException(
+            status_code=429, detail="email_import_quota_exceeded"
+        ) from exc
     return EmailFileImportResponse(
         status="completed",
         imported_count=import_result.imported_count,

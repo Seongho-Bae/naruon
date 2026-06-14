@@ -2,8 +2,8 @@ services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-ai_email_live}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_DB: ai_email_live
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD for live E2E}
       POSTGRES_INITDB_ARGS: "--auth-local=scram-sha-256 --auth-host=scram-sha-256"
     healthcheck:
@@ -29,7 +29,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
-      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
+      TRUST_DEV_HEADERS: "false"
       DEBUG: "false"
       OPENAI_API_KEY: ""
     depends_on:
@@ -43,7 +43,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
-      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
+      TRUST_DEV_HEADERS: "false"
       DEBUG: "false"
       OPENAI_API_KEY: ""
     depends_on:
@@ -57,14 +57,14 @@ services:
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Set ENCRYPTION_KEY for live E2E}
       AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET for live E2E}
-      TRUST_DEV_HEADERS: ${TRUST_DEV_HEADERS:-false}
+      TRUST_DEV_HEADERS: "false"
       DEBUG: "false"
       ALLOW_LOCAL_LLM_PROVIDERS: "true"
       ALLOWED_LLM_BASE_URL_HOSTS: "ollama"
       OPENAI_API_KEY: ollama
       OPENAI_BASE_URL: http://ollama:11434/v1
       OPENAI_EMBEDDING_MODEL: embeddinggemma
-      OPENAI_MODEL: gemma4
+      OPENAI_MODEL: gemma4:e2b-it-qat
     depends_on:
       live-seed:
         condition: service_completed_successfully
@@ -78,6 +78,8 @@ services:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a pre-built frontend image}
     environment:
       NEXT_PUBLIC_API_URL: http://127.0.0.1:18080
+      BACKEND_INTERNAL_URL: http://backend:8000
+      ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"
     depends_on:
       - backend
     expose:
