@@ -82,6 +82,7 @@ assert_workflow_uses_are_sha_pinned() {
 assert_strix_pr_scope_includes_deployment_context() {
 	assert_file_contains "$GATE_SCRIPT" "needs_deployment_context=0" "strix gate tracks deployment-context scoped PRs"
 	assert_file_contains "$GATE_SCRIPT" ".github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml" "strix gate recognizes deployment and CI files"
+	assert_file_contains "$GATE_SCRIPT" "backend/scripts/docker_entrypoint.sh" "strix gate includes the combined Docker image entrypoint with deployment context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
 	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
@@ -463,6 +464,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "STRIX_FALLBACK_MODELS:" "opencode provider fallback finding points at the concrete Strix fallback configuration line"
 	assert_file_contains "$workflow_file" "emit_strix_cancelled_without_log_finding" "opencode fallback review explains cancelled Strix runs without inventing code vulnerabilities"
 	assert_file_contains "$workflow_file" "Configured model and fallback models were unavailable" "opencode fallback review preserves exhausted Strix model evidence"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" '^CMD \["/app/scripts/docker_entrypoint\.sh"\]' "opencode failed-check fallback maps missing Docker entrypoint reports to the Dockerfile CMD line"
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
 	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
@@ -2623,6 +2625,26 @@ EOS
 		echo "Error: PR changed-file scope missing CI support dependency ($target_path)" >&2
 		exit 55
 		;;
+	pr-deployment-scope-entrypoint-context)
+		if [ ! -f "$target_path/Dockerfile" ]; then
+			echo "Error: deployment scope missing Dockerfile ($target_path)" >&2
+			exit 56
+		fi
+		if [ ! -f "$target_path/backend/scripts/docker_entrypoint.sh" ]; then
+			echo "Error: deployment scope missing backend/scripts/docker_entrypoint.sh ($target_path)" >&2
+			exit 57
+		fi
+		if ! grep -Fq -- 'CMD ["/app/scripts/docker_entrypoint.sh"]' "$target_path/Dockerfile"; then
+			echo "Error: deployment Dockerfile does not reference docker_entrypoint.sh ($target_path)" >&2
+			exit 58
+		fi
+		if ! grep -Fq -- 'Starting backend (uvicorn :8000)' "$target_path/backend/scripts/docker_entrypoint.sh"; then
+			echo "Error: deployment entrypoint context did not include trusted script content ($target_path)" >&2
+			exit 59
+		fi
+		echo "scan ok with deployment entrypoint context"
+		exit 0
+		;;
 	*)
 		echo "unknown scenario ${FAKE_STRIX_SCENARIO:?}" >&2
 		exit 8
@@ -2778,7 +2800,28 @@ EOS
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
-		elif [ "$scenario" = "pr-large-scope-full-set" ]; then
+	elif [ "$scenario" = "pr-deployment-scope-entrypoint-context" ]; then
+		mkdir -p "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
+		cat >"$repo_root_dir/Dockerfile" <<'EOS'
+FROM python:3.11-slim AS backend-runtime
+WORKDIR /app
+COPY backend /app/
+FROM backend-runtime
+RUN chmod +x /app/scripts/docker_entrypoint.sh
+CMD ["/app/scripts/docker_entrypoint.sh"]
+EOS
+		cat >"$repo_root_dir/backend/scripts/docker_entrypoint.sh" <<'EOS'
+#!/usr/bin/env bash
+echo "Starting backend (uvicorn :8000)"
+EOS
+		touch "$repo_root_dir/frontend/Dockerfile"
+		echo '{"scripts":{"start":"next start"}}' >"$repo_root_dir/frontend/package.json"
+		touch "$repo_root_dir/frontend/next.config.ts"
+		touch "$repo_root_dir/frontend/postcss.config.mjs"
+		touch "$repo_root_dir/docker-compose.yml"
+		touch "$repo_root_dir/render.yaml"
+		echo '0.0.0' >"$repo_root_dir/VERSION"
+	elif [ "$scenario" = "pr-large-scope-full-set" ]; then
 		mkdir -p "$repo_root_dir/backend/large-scope"
 		local large_scope_index
 		for large_scope_index in $(seq 1 38); do
@@ -6912,6 +6955,27 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
+
+run_gate_case "pr-deployment-scope-entrypoint-context" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"scan ok with deployment entrypoint context" \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"Dockerfile"
 
 run_gate_case "pr-empty-diff-skip" \
 	"openai/gpt-4o-mini" \
