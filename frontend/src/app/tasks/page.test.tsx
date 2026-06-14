@@ -19,6 +19,7 @@ vi.mock("lucide-react", () => ({
   User: () => <svg aria-hidden="true" />,
   UserRoundCheck: () => <svg aria-hidden="true" />,
   Plus: () => <svg aria-hidden="true" />,
+  X: () => <svg aria-hidden="true" />,
 }));
 
 import TasksPage from "./page";
@@ -148,6 +149,16 @@ describe("TasksPage", () => {
     await flushAsyncWork();
     expect(container.textContent).toContain("보낸 메일 회신 추적");
     expect(container.textContent).not.toContain("문서 원본 검토");
+
+    const clearSearchButton = container.querySelector<HTMLButtonElement>('button[aria-label="검색어 지우기"]');
+    expect(clearSearchButton).not.toBeNull();
+    await act(async () => {
+      clearSearchButton?.click();
+    });
+    await flushAsyncWork();
+    expect(taskSearchInput?.value).toBe("");
+    expect(document.activeElement).toBe(taskSearchInput);
+    expect(container.textContent).toContain("문서 원본 검토");
   });
 
   it("updates ticket status through the signed task API", async () => {
