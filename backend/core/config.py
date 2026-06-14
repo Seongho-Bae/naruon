@@ -71,9 +71,7 @@ class Settings(BaseSettings):
     ALLOWED_POP3_PORTS: str = "995"
     ALLOWED_LLM_BASE_URL_HOSTS: str = ""
     ALLOW_LOCAL_LLM_PROVIDERS: bool = False
-    ALLOWED_CORS_ORIGINS: str = (
-        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000"
-    )
+    ALLOWED_CORS_ORIGINS: str = ""
     ENABLE_PROMETHEUS_METRICS: bool = False
     DATA_REGION: str = "kr"
     SECONDARY_DATA_REGION: str = "eu"

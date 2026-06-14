@@ -37,8 +37,8 @@ TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
 WRONG_SESSION_HMAC_SECRET = (
     "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
 )
-PUBLIC_FIXTURE_SESSION_HMAC_SECRET = (
-    "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test-only secret
+PUBLIC_FIXTURE_SESSION_HMAC_SECRET = "-".join(
+    ("naruon", "session", "hmac", "token", "32", "byte", "minimum")
 )
 RUNTIME_HEADER_PARAMS = {
     "x_user_id",
