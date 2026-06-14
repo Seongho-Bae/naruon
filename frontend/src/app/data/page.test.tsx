@@ -19,7 +19,6 @@ vi.mock("lucide-react", () => ({
   FileText: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
   Server: () => <svg aria-hidden="true" />,
-  Upload: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
@@ -261,27 +260,6 @@ function mockWebdavFetch() {
         ],
       });
     }
-    if (path === "/api/emails/import-files") {
-      void init;
-      return jsonResponse({
-        status: "completed",
-        imported_count: 1,
-        skipped_count: 0,
-        failed_count: 0,
-        attachment_count: 1,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "email.file_import.completed",
-        items: [
-          {
-            filename: "customer-source.eml",
-            status: "imported",
-            reason_code: null,
-            attachment_count: 1,
-          },
-        ],
-      });
-    }
     throw new Error(`Unhandled fetch: ${path}`);
   });
 }
@@ -352,6 +330,7 @@ describe("DataPage", () => {
   });
 
   it("loads signed data quality surface without public identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed-data-quality-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -365,7 +344,6 @@ describe("DataPage", () => {
     const dataCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/data/quality-surface");
     expect(dataCall).toBeDefined();
     const [, init] = dataCall ?? [];
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -374,9 +352,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-data-quality-session",
       "content-type": "application/json",
     }));
-    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -437,6 +415,7 @@ describe("DataPage", () => {
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -450,7 +429,6 @@ describe("DataPage", () => {
     const accountsCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
     expect(accountsCall).toBeDefined();
     const [, accountsInit] = accountsCall ?? [];
-    expect(accountsInit?.credentials).toBe("same-origin");
     const accountsHeaderEntries =
       accountsInit?.headers instanceof Headers
         ? Array.from(accountsInit.headers.entries())
@@ -459,9 +437,9 @@ describe("DataPage", () => {
       accountsHeaderEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(accountsHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-webdav-session",
       "content-type": "application/json",
     }));
-    expect(accountsHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -486,7 +464,6 @@ describe("DataPage", () => {
     expect(writebackCall).toBeDefined();
     const [, init] = writebackCall ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -495,9 +472,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-webdav-session",
       "content-type": "application/json",
     }));
-    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -521,6 +498,7 @@ describe("DataPage", () => {
   });
 
   it("sanitizes WebDAV source labels that contain opaque source ids", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-source-label-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/data/quality-surface") return jsonResponse(dataQualitySurface);
@@ -577,6 +555,7 @@ describe("DataPage", () => {
   });
 
   it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-conflict-session");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
       if (path === "/api/webdav/accounts") {
@@ -632,11 +611,12 @@ describe("DataPage", () => {
   });
 
   it("keeps WebDAV writeback disabled when account loading fails", async () => {
+    localStorage.setItem("naruon_session_token", "signed-webdav-session");
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/webdav/accounts") {
-        throw new Error("account source fetch failed");
+        throw new Error("signed-webdav-session should not be logged");
       }
       if (path === "/api/webdav/folders") return jsonResponse([]);
       if (path === "/api/webdav/writeback-intent") throw new Error("writeback should stay disabled");
@@ -664,10 +644,11 @@ describe("DataPage", () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/webdav/writeback-intent")).toBe(false);
     expect(container.textContent).toContain("WebDAV 원본 계정 목록을 확인하지 못했습니다.");
     expect(JSON.stringify(consoleError.mock.calls)).toContain("WebDAV accounts fetch error");
-    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("naruon_session");
+    expect(JSON.stringify(consoleError.mock.calls)).not.toContain("signed-webdav-session");
   });
 
   it("creates a signed unique email thread intent without public identity headers", async () => {
+    localStorage.setItem("naruon_session_token", "signed-email-dedupe-session");
     const fetchMock = mockWebdavFetch();
     vi.stubGlobal("fetch", fetchMock);
     container = document.createElement("div");
@@ -691,7 +672,6 @@ describe("DataPage", () => {
     expect(intentCall).toBeDefined();
     const [, init] = intentCall ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -700,9 +680,9 @@ describe("DataPage", () => {
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
     expect(requestHeaders).toEqual(expect.objectContaining({
+      authorization: "Bearer signed-email-dedupe-session",
       "content-type": "application/json",
     }));
-    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",
@@ -726,68 +706,5 @@ describe("DataPage", () => {
     expect(container.textContent).not.toContain("email.unique_thread_intent.created");
     expect(container.textContent).not.toContain("thread-q2-root");
     expect(container.textContent).not.toContain("provider_write_executed=false");
-  });
-
-  it("imports email source files through signed multipart upload without public identity headers", async () => {
-    const fetchMock = mockWebdavFetch();
-    vi.stubGlobal("fetch", fetchMock);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<DataPage />);
-    });
-
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
-    expect(input).toBeDefined();
-    const emailFile = new File(["raw email"], "customer-source.eml", { type: "message/rfc822" });
-    Object.defineProperty(input, "files", {
-      configurable: true,
-      value: [emailFile],
-    });
-    await act(async () => {
-      input?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const importButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("선택 파일 반입"),
-    );
-    expect(importButton).toBeDefined();
-    await act(async () => {
-      importButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const importCall = fetchMock.mock.calls.find(([inputUrl]) => String(inputUrl) === "/api/emails/import-files");
-    expect(importCall).toBeDefined();
-    const [, init] = importCall ?? [];
-    expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
-    expect(init?.body).toBeInstanceOf(FormData);
-    const headerEntries =
-      init?.headers instanceof Headers
-        ? Array.from(init.headers.entries())
-        : Object.entries((init?.headers as Record<string, string>) ?? {});
-    const requestHeaders = Object.fromEntries(
-      headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
-    );
-    expect(requestHeaders.authorization).toBeUndefined();
-    expect(requestHeaders["content-type"]).toBeUndefined();
-    for (const publicHeader of [
-      "x-user-id",
-      "x-organization-id",
-      "x-group-id",
-      "x-group-ids",
-      "x-user-role",
-      "x-dev-auth-token",
-    ]) {
-      expect(requestHeaders[publicHeader]).toBeUndefined();
-    }
-    expect(container.textContent).toContain("1개 반입");
-    expect(container.textContent).toContain("중복 0개");
-    expect(container.textContent).toContain("첨부 1개");
-    expect(container.textContent).toContain("의도만 기록");
-    expect(container.textContent).not.toContain("email.file_import.completed");
-    expect(container.textContent).not.toContain("imported@example.com");
   });
 });

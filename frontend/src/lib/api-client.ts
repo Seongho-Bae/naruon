@@ -1,4 +1,8 @@
-import { ANONYMOUS_SESSION_CLAIMS, type SessionClaims } from "./session-cookie";
+export interface SessionClaims {
+  userId: string | null;
+  organizationId: string | null;
+  workspaceId: string | null;
+}
 
 const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
   'authorization',
@@ -26,20 +30,17 @@ export class ApiClient {
   }
 
   private getHeaders(init?: RequestInit): HeadersInit {
+    const sessionToken = this.getSessionToken();
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...this.getSafeCallerHeaders(init?.headers),
     };
-    return headers;
-  }
-
-  private getFormHeaders(init?: RequestInit): HeadersInit {
-    const headers: Record<string, string> = this.getSafeCallerHeaders(init?.headers);
-    Object.keys(headers).forEach((name) => {
-      if (name.toLowerCase() === 'content-type') {
-        delete headers[name];
-      }
-    });
+    if (sessionToken) {
+      return {
+        ...headers,
+        Authorization: `Bearer ${sessionToken}`,
+      };
+    }
     return headers;
   }
 
@@ -65,31 +66,40 @@ export class ApiClient {
   }
 
   getSessionToken() {
-    return null;
+    if (typeof window === 'undefined') return null;
+
+    const stored = localStorage.getItem('naruon_session_token')?.trim();
+    return stored || null;
   }
 
   getSessionClaims(): SessionClaims {
-    return ANONYMOUS_SESSION_CLAIMS;
-  }
+    const sessionToken = this.getSessionToken();
+    if (!sessionToken) {
+      return { userId: null, organizationId: null, workspaceId: null };
+    }
 
-  async getServerSessionClaims(): Promise<SessionClaims> {
+    const [, payloadSegment] = sessionToken.split('.');
+    if (!payloadSegment) {
+      return { userId: null, organizationId: null, workspaceId: null };
+    }
+
     try {
-      const response = await fetch('/auth/session', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        credentials: 'same-origin',
-      });
-      if (!response.ok) return ANONYMOUS_SESSION_CLAIMS;
-
-      const body = await response.json() as { claims?: Partial<SessionClaims> };
-      const claims = body.claims ?? {};
-      return {
-        userId: typeof claims.userId === 'string' ? claims.userId : null,
-        organizationId: typeof claims.organizationId === 'string' ? claims.organizationId : null,
-        workspaceId: typeof claims.workspaceId === 'string' ? claims.workspaceId : null,
+      const normalizedPayload = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+      const paddedPayload = normalizedPayload.padEnd(
+        Math.ceil(normalizedPayload.length / 4) * 4,
+        '=',
+      );
+      const decodedPayload = JSON.parse(atob(paddedPayload)) as {
+        sub?: unknown;
+        org?: unknown;
+        workspace?: unknown;
       };
+      const userId = typeof decodedPayload.sub === 'string' ? decodedPayload.sub.trim() || null : null;
+      const organizationId = typeof decodedPayload.org === 'string' ? decodedPayload.org.trim() || null : null;
+      const workspaceId = typeof decodedPayload.workspace === 'string' ? decodedPayload.workspace.trim() || null : null;
+      return { userId, organizationId, workspaceId };
     } catch {
-      return ANONYMOUS_SESSION_CLAIMS;
+      return { userId: null, organizationId: null, workspaceId: null };
     }
   }
 
@@ -97,106 +107,80 @@ export class ApiClient {
     return this.getSessionClaims().userId;
   }
 
-  private createApiError(status?: number) {
-    const error = new Error("API request failed") as Error & { status?: number };
-    error.name = "ApiClientError";
-    error.status = status;
-    error.stack = undefined;
-    return error;
-  }
-
-  private async fetchApi(endpoint: string, init: RequestInit) {
-    try {
-      return await fetch(`${this.baseUrl}${endpoint}`, init);
-    } catch {
-      throw this.createApiError();
-    }
-  }
-
-  private async parseOptionalJson<T>(response: Response): Promise<T> {
-    const text = await response.text();
-    return text ? JSON.parse(text) : ({} as T);
-  }
-
   async get<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
-      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      throw this.createApiError(response.status);
+      const error = new Error(`API GET ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
 
   async post<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'POST',
-      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw this.createApiError(response.status);
-    }
-    return response.json();
-  }
-
-  async postForm<T>(endpoint: string, body: FormData, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
-      ...init,
-      method: 'POST',
-      credentials: init?.credentials ?? 'same-origin',
-      headers: this.getFormHeaders(init),
-      body,
-    });
-    if (!response.ok) {
-      throw this.createApiError(response.status);
+      const error = new Error(`API POST ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
 
   async put<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'PUT',
-      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw this.createApiError(response.status);
+      const error = new Error(`API PUT ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
-    return this.parseOptionalJson<T>(response);
+    // PUT might return 204 No Content
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
   }
 
   async patch<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'PATCH',
-      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
       body: JSON.stringify(body),
     });
     if (!response.ok) {
-      throw this.createApiError(response.status);
+      const error = new Error(`API PATCH ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
     return response.json();
   }
 
   async delete<T>(endpoint: string, init?: RequestInit): Promise<T> {
-    const response = await this.fetchApi(endpoint, {
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
       ...init,
       method: 'DELETE',
-      credentials: init?.credentials ?? 'same-origin',
       headers: this.getHeaders(init),
     });
     if (!response.ok) {
-      throw this.createApiError(response.status);
+      const error = new Error(`API DELETE ${endpoint} failed: ${response.status} ${response.statusText}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
     }
-    return this.parseOptionalJson<T>(response);
+    // DELETE might return 204 No Content, handle gracefully
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
   }
 }
 

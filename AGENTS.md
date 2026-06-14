@@ -72,15 +72,6 @@
   completed check run or status context failed, or the check rollup cannot be
   verified, the OpenCode review must request changes or explain the verification
   failure instead of approving.
-- When OpenCode requests changes because Strix or another GitHub Check failed,
-  it must access the failed check logs and annotations, cite the exact failure
-  phrase, map each actionable failure to a concrete repository `path:line`, and
-  provide root cause, fix direction, regression-test direction, and a
-  source-backed suggested diff. A review that only cites a workflow URL, check
-  name, or generic failure summary is not sufficient. If Strix output contains
-  multiple model vulnerability reports, include every model-reported
-  vulnerability separately with the model name, title, severity, endpoint, and
-  Code Locations/path:line evidence when present.
 - OpenCode Agent PR reviews must be general-purpose and meticulous rather than
   narrowly scenario-specific. Configure the review prompt to use all relevant
   MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,

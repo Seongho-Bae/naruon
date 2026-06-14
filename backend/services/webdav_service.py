@@ -273,11 +273,9 @@ class WebDavService:
         accounts: List[Dict[str, Any]],
         target_source_id: str | None = None,
     ) -> Dict[str, Any]:
-        writable_accounts = {
-            account["source_id"]: account
-            for account in accounts
-            if account.get("writeback_enabled", False)
-        }
+        writable_accounts = [
+            account for account in accounts if account.get("writeback_enabled", False)
+        ]
         if not writable_accounts:
             return {
                 "status": "error",
@@ -285,16 +283,19 @@ class WebDavService:
                 "message": "No connected WebDAV accounts found.",
             }
             
+        selected_account = writable_accounts[0]
         if target_source_id is not None:
-            selected_account = writable_accounts.get(target_source_id)
+            selected_account = None
+            for acc in writable_accounts:
+                if acc["source_id"] == target_source_id:
+                    selected_account = acc
+                    break
             if selected_account is None:
                 return {
                     "status": "error",
                     "error_code": "webdav_account_not_found",
                     "message": "Requested WebDAV account was not found.",
                 }
-        else:
-            selected_account = next(iter(writable_accounts.values()))
                     
         return {
             "intent": "writeback",

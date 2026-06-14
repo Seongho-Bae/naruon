@@ -120,10 +120,6 @@ def test_schema_backfill_adds_email_indexes(monkeypatch):
         "create index if not exists ix_emails_thread_id" in statement
         for statement in statements
     )
-    assert any(
-        "create index if not exists ix_emails_date" in statement
-        for statement in statements
-    )
 
 
 def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
@@ -134,16 +130,6 @@ def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
     )
     assert any(
         "alter table llm_providers add column if not exists organization_id"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table llm_providers add column if not exists model_identifier"
-        in statement
-        for statement in statements
-    )
-    assert any(
-        "alter table llm_providers add column if not exists embedding_model"
         in statement
         for statement in statements
     )

@@ -19,6 +19,12 @@ def generate_email_fingerprint(email_data: Dict[str, Any]) -> str:
     raw_str = f"{sender}|{subject}|{date}|{body_snippet}"
     return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
+def detect_reply_tracking(email_data: Dict[str, Any]) -> bool:
+    """
+    Detects if the user sent an email that expects a reply.
+    """
+    body = str(email_data.get("body") or "").lower()
+    return "please reply" in body or "?" in body
 
 def process_self_to_self(email_data: Dict[str, Any], user_email: str) -> bool:
     """

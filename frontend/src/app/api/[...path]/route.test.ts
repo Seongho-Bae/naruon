@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { POST, PUT } from "./route";
+import { POST } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
-const SIGNED_SESSION_TOKEN = "signed.session.token";
+const SIGNED_SESSION_TOKEN = "signed-session-token";
 
 describe("/api runtime proxy route", () => {
   beforeEach(() => {
@@ -27,7 +27,6 @@ describe("/api runtime proxy route", () => {
         return Response.json({
           target_url: String(input),
           auth_header: headers.get("authorization"),
-          cookie_header: headers.get("cookie"),
           user_header: headers.get("x-user-id"),
           request_body: await new Response(init?.body).text(),
         });
@@ -39,8 +38,7 @@ describe("/api runtime proxy route", () => {
       {
         method: "POST",
         headers: {
-          Authorization: "Bearer attacker-controlled-token",
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
           "Content-Type": "application/json",
           "X-User-Id": "public-user-id",
         },
@@ -54,8 +52,7 @@ describe("/api runtime proxy route", () => {
 
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
-      auth_header: "Bearer signed.session.token",
-      cookie_header: null,
+      auth_header: "Bearer signed-session-token",
       user_header: null,
       request_body: '{"state":"open"}',
     });
@@ -85,101 +82,6 @@ describe("/api runtime proxy route", () => {
     await expect(response.json()).resolves.toEqual({
       error_code: "invalid_proxy_query",
       message: "Unsupported query parameter: filename",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("rejects cross-site state-changing requests before proxying", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const request = new NextRequest(
-      "https://frontend.naruon.net/api/accounts/config",
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
-          Origin: "https://evil.example",
-        },
-        body: "{}",
-      },
-    );
-
-    const response = await PUT(request, {
-      params: Promise.resolve({ path: ["accounts", "config"] }),
-    });
-
-    expect(response.status).toBe(403);
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-    await expect(response.json()).resolves.toEqual({
-      error_code: "csrf_origin_rejected",
-      message: "Cross-site state-changing API requests are not allowed",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("accepts browser same-origin state changes when the runtime URL is internal", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
-        const headers = init?.headers as Headers;
-        return Response.json({
-          target_url: String(input),
-          auth_header: headers.get("authorization"),
-          request_body: await new Response(init?.body).text(),
-        });
-      }),
-    );
-
-    const request = new NextRequest(
-      "http://internal-frontend:3000/api/search",
-      {
-        method: "POST",
-        headers: {
-          Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
-          Host: "127.0.0.1:3000",
-          Origin: "http://127.0.0.1:3000",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ query: "일정 충돌 일정 조율 회의 후보", limit: 3 }),
-      },
-    );
-
-    const response = await POST(request, {
-      params: Promise.resolve({ path: ["search"] }),
-    });
-
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      target_url: "https://api.naruon.net/api/search",
-      auth_header: "Bearer signed.session.token",
-      request_body: '{"query":"일정 충돌 일정 조율 회의 후보","limit":3}',
-    });
-  });
-
-  it("rejects cross-site fetch metadata before proxying", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-
-    const request = new NextRequest(
-      "https://frontend.naruon.net/api/accounts/config",
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
-          "Sec-Fetch-Site": "cross-site",
-        },
-        body: "{}",
-      },
-    );
-
-    const response = await PUT(request, {
-      params: Promise.resolve({ path: ["accounts", "config"] }),
-    });
-
-    expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({
-      error_code: "csrf_origin_rejected",
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

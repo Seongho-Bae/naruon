@@ -1,7 +1,6 @@
 import asyncio
 import websockets
 import sys
-import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -27,12 +26,5 @@ async def run_agent(token: str, url: str = "ws://127.0.0.1:8000/ws/runner"):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    token = os.environ.get("RUNNER_TOKEN")
-    if not token and len(sys.argv) > 1:
-        token = sys.argv[1]
-
-    if not token:
-        logger.error("No token provided. Please set the RUNNER_TOKEN environment variable or provide it as a CLI argument.")
-        sys.exit(1)
-
+    token = sys.argv[1] if len(sys.argv) > 1 else "demo-token"
     asyncio.run(run_agent(token))

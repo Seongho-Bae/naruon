@@ -136,8 +136,6 @@ class LLMProvider(Base):
         String
     )  # e.g. openai, anthropic, gemini, ollama
     base_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    model_identifier: Mapped[str | None] = mapped_column(String, nullable=True)
-    embedding_model: Mapped[str | None] = mapped_column(String, nullable=True)
     api_key: Mapped[str | None] = mapped_column(EncryptedString, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime.datetime] = mapped_column(
@@ -287,7 +285,7 @@ class Email(Base):
     subject: Mapped[str | None] = mapped_column(String, nullable=True)
     in_reply_to: Mapped[str | None] = mapped_column(String, nullable=True)
     references: Mapped[str | None] = mapped_column(String, nullable=True)
-    date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
+    date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True))
     body: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
     attachments: Mapped[list["Attachment"]] = relationship(

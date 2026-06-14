@@ -1,7 +1,7 @@
 import uuid
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from db.models import Email
 from services.email_parser import EmailData
 
@@ -63,41 +63,21 @@ def email_owner_filters(user_id: str, organization_id: str | None):
     return (Email.user_id == user_id, organization_filter)
 
 
-async def _find_existing_thread_ids(
+async def _find_existing_thread_id(
     session: AsyncSession,
-    message_ids: list[str],
+    message_id: str,
     *,
     user_id: str,
     organization_id: str | None,
-) -> dict[str, str]:
-    if not message_ids:
-        return {}
-
-    target_ids: list[str] = []
-    seen_target_ids: set[str] = set()
-    for message_id in message_ids:
-        for target_id in (message_id, f"<{message_id}>"):
-            if target_id not in seen_target_ids:
-                seen_target_ids.add(target_id)
-                target_ids.append(target_id)
-
+) -> str | None:
+    bracketed = f"<{message_id}>"
     result = await session.execute(
-        select(Email.message_id, Email.thread_id).where(
+        select(Email.thread_id).where(
             *email_owner_filters(user_id, organization_id),
-            Email.message_id.in_(target_ids),
+            or_(Email.message_id == message_id, Email.message_id == bracketed),
         )
     )
-
-    thread_ids_by_message_id: dict[str, str] = {}
-    for message_id, thread_id in result.all():
-        if not thread_id:
-            continue
-        normalized_message_id = normalize_message_id(message_id)
-        if normalized_message_id:
-            thread_ids_by_message_id[normalized_message_id] = (
-                normalize_message_id(thread_id) or thread_id
-            )
-    return thread_ids_by_message_id
+    return result.scalar_one_or_none()
 
 
 async def assign_thread_id(
@@ -125,17 +105,15 @@ async def assign_thread_id(
             seen.add(ref)
             existing_candidates.append(ref)
 
-    if existing_candidates:
-        thread_ids_by_message_id = await _find_existing_thread_ids(
+    for candidate in existing_candidates:
+        thread_id = await _find_existing_thread_id(
             session,
-            existing_candidates,
+            candidate,
             user_id=user_id,
             organization_id=organization_id,
         )
-        for candidate in existing_candidates:
-            thread_id = thread_ids_by_message_id.get(candidate)
-            if thread_id:
-                return thread_id
+        if thread_id:
+            return normalize_message_id(thread_id) or thread_id
 
     # If the parent/root has not been imported yet, use the oldest known ancestor
     # as the deterministic thread root so later imports converge on one thread.

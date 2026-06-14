@@ -1,8 +1,6 @@
 services:
   traefik:
     image: traefik:v3.0
-    security_opt:
-      - no-new-privileges:true
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"

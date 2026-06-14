@@ -1,3 +1,4 @@
+import pytest
 from services.ontology_service import ontology_service
 
 def test_analyze_sender_relationship():

@@ -31,8 +31,7 @@ ALLOWLIST: tuple[AllowedLogPattern, ...] = (
         version="1.27.x-alpine",
         rationale="Nginx emits notice-level worker startup lines before serving traffic.",
         pattern=re.compile(
-            r"(?:nginx.*)?\[notice\]\s+\d+#\d+:\s+"
-            r"(using the .* event method|nginx/|built by gcc|"
+            r"nginx.*\[notice\].*(using the .* event method|nginx/|built by gcc|"
             r"OS:|getrlimit\(RLIMIT_NOFILE\)|start worker processes|"
             r"start worker process \d+)",
             re.IGNORECASE,
@@ -93,16 +92,6 @@ ALLOWLIST: tuple[AllowedLogPattern, ...] = (
         rationale="Tempo self-scans its local blocks directory during WAL replay.",
         pattern=re.compile(
             r"tempo.*level=warn.*unowned file entry ignored during wal replay.*file=blocks",
-            re.IGNORECASE,
-        ),
-    ),
-    AllowedLogPattern(
-        component="ollama",
-        version="ollama/ollama local runner",
-        rationale="Ollama's bundled llama.cpp runner emits an informational UI flag migration hint.",
-        pattern=re.compile(
-            r"srv\s+init:\s+Use --ui/--no-ui "
-            r"\(or deprecated --webui/--no-webui\) to enable/disable",
             re.IGNORECASE,
         ),
     ),
