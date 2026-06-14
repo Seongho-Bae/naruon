@@ -209,6 +209,8 @@ def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> N
 
     assert "for var in DATABASE_URL AUTH_SESSION_HMAC_SECRET ENCRYPTION_KEY" in start_script
     assert "Fernet.generate_key()" in start_script
+    assert "validate_auth_session_hmac_secret_value" in start_script
+    assert "AUTH_SESSION_HMAC_SECRET is invalid" in start_script
     assert "database bootstrap failed" in start_script
     assert "Backend and frontend will not start." in start_script
     assert "Starting backend (uvicorn :8000)" in start_script
