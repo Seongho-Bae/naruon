@@ -207,14 +207,17 @@ def test_validate_mail_config_update_revalidates_existing_mail_hosts(monkeypatch
     ]
 
 
-def test_validate_mail_config_update_rejects_unsafe_partial_override():
+def test_validate_mail_config_update_rejects_unsafe_partial_override(caplog):
     from api.tenant_config import validate_mail_config_update
 
-    with pytest.raises(HTTPException) as exc_info:
-        validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
+    with caplog.at_level("WARNING", logger="api.tenant_config"):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Invalid IMAP configuration"
+    assert "IMAP configuration validation failed" in caplog.text
+    assert "127.0.0.1" not in caplog.text
 
 
 def test_legacy_tenant_config_endpoint_keeps_organization_scope(

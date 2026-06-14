@@ -169,17 +169,20 @@ def test_calendar_sync_uses_server_authoritative_calendar_credentials(mock_creat
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override):
+def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override, caplog):
     mock_create.side_effect = CalendarServiceError("Mocked error")
     calendar_user_token_override(_server_owned_google_credentials())
 
-    response = client.post(
-        "/api/calendar/sync",
-        json={"todos": ["Test todo"]},
-    )
+    with caplog.at_level("WARNING", logger="api.calendar"):
+        response = client.post(
+            "/api/calendar/sync",
+            json={"todos": ["Test todo"]},
+        )
 
     assert response.status_code == 500
     assert response.json() == {"detail": "An internal server error occurred while communicating with the calendar service"}
+    assert "Calendar service error during sync_todos" in caplog.text
+    assert "Mocked error" not in caplog.text
 
 
 @pytest.mark.parametrize(
