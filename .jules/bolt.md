@@ -1,3 +1,6 @@
 ## 2024-06-10 - Redundant Python sorting of DB results
 **Learning:** Python's `sorted()` was being called on query results that were already sorted correctly by the database using `order_by()`. Since Python 3.7+ dictionaries preserve insertion order, we can stream correctly ordered database results into a grouping dictionary (e.g., grouping thread messages) and naturally preserve the newest-first order without an additional $O(N \log N)$ sort step on the grouped results.
 **Action:** Avoid applying Python's `sorted()` to lists of SQLAlchemy objects if the database query already applies an equivalent `.order_by()` clause. Rely on dictionary insertion ordering when grouping inherently pre-sorted streaming records.
+## 2024-06-14 - Batch querying for existing threads in Email Service
+**Learning:** In the email threading service (`backend/services/threading_service.py`), resolving multiple candidate message IDs historically caused an N+1 query overhead by executing single `SELECT`s within a loop.
+**Action:** When evaluating a list of foreign keys or identifier mappings, use `sqlalchemy.select(...).where(Column.in_(ids))` to fetch results in a single batched operation, significantly reducing database roundtrips. Ensure unit tests are refactored to simulate batched mock returning operations (`.all()`).

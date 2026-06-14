@@ -1,12 +1,13 @@
 import uuid
 import re
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from db.models import Email
 from services.email_parser import EmailData
 
 
 import hashlib
+
 
 def generate_email_fingerprint(
     subject: str | None,
@@ -66,21 +67,28 @@ def email_owner_filters(user_id: str, organization_id: str | None):
     return (Email.user_id == user_id, organization_filter)
 
 
-async def _find_existing_thread_id(
+async def _find_existing_thread_ids(
     session: AsyncSession,
-    message_id: str,
+    message_ids: list[str],
     *,
     user_id: str,
     organization_id: str | None,
-) -> str | None:
-    bracketed = f"<{message_id}>"
+) -> dict[str, str]:
+    """Fetch existing thread IDs for a batch of message IDs in a single query."""
+    if not message_ids:
+        return {}
+
+    bracketed = [f"<{mid}>" for mid in message_ids]
+    search_ids = message_ids + bracketed
+
     result = await session.execute(
-        select(Email.thread_id).where(
+        select(Email.message_id, Email.thread_id).where(
             *email_owner_filters(user_id, organization_id),
-            or_(Email.message_id == message_id, Email.message_id == bracketed),
+            Email.message_id.in_(search_ids),
         )
     )
-    return result.scalar_one_or_none()
+
+    return {row.message_id: row.thread_id for row in result.all()}
 
 
 async def assign_thread_id(
@@ -108,15 +116,19 @@ async def assign_thread_id(
             seen.add(ref)
             existing_candidates.append(ref)
 
-    for candidate in existing_candidates:
-        thread_id = await _find_existing_thread_id(
+    if existing_candidates:
+        thread_ids_map = await _find_existing_thread_ids(
             session,
-            candidate,
+            existing_candidates,
             user_id=user_id,
             organization_id=organization_id,
         )
-        if thread_id:
-            return normalize_message_id(thread_id) or thread_id
+        for candidate in existing_candidates:
+            thread_id = thread_ids_map.get(candidate) or thread_ids_map.get(
+                f"<{candidate}>"
+            )
+            if thread_id:
+                return normalize_message_id(thread_id) or thread_id
 
     # If the parent/root has not been imported yet, use the oldest known ancestor
     # as the deterministic thread root so later imports converge on one thread.
