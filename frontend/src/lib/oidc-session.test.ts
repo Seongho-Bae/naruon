@@ -6,7 +6,6 @@ import {
   completeOidcRedirect,
   getOidcBrowserConfig,
   startOidcLogin,
-  toSafeOidcReturnTo,
 } from './oidc-session';
 
 function installCrypto() {
@@ -72,27 +71,6 @@ describe('oidc-session', () => {
     expect(authorizationUrl.searchParams.get('code_challenge')).toBe('AQIDBA');
   });
 
-  it('stores only local return paths for transient OIDC login state', async () => {
-    const assignedUrls: string[] = [];
-
-    await startOidcLogin({
-      returnTo: 'https://evil.example/phish',
-      navigate: (url) => assignedUrls.push(url),
-    });
-
-    expect(assignedUrls).toHaveLength(1);
-    expect(sessionStorage.getItem('naruon_oidc_return_to')).toBe('/');
-  });
-
-  it('normalizes OIDC callback return targets to local paths', () => {
-    expect(toSafeOidcReturnTo('/settings?tab=security#oidc')).toBe('/settings?tab=security#oidc');
-    expect(toSafeOidcReturnTo('https://evil.example/phish')).toBe('/');
-    expect(toSafeOidcReturnTo('//evil.example/phish')).toBe('/');
-    expect(toSafeOidcReturnTo('settings')).toBe('/');
-    expect(toSafeOidcReturnTo('/\\evil.example')).toBe('/');
-    expect(toSafeOidcReturnTo(null)).toBe('/');
-  });
-
   it('exchanges a valid OIDC callback code and persists the server session cookie', async () => {
     sessionStorage.setItem('naruon_oidc_state', 'state-123');
     sessionStorage.setItem('naruon_oidc_pkce_verifier', 'verifier-123');
@@ -127,28 +105,6 @@ describe('oidc-session', () => {
         body: JSON.stringify({ access_token: 'oidc.jwt.token' }),
       },
     ]);
-  });
-
-  it('rejects tampered external return targets after a valid OIDC callback', async () => {
-    sessionStorage.setItem('naruon_oidc_state', 'state-123');
-    sessionStorage.setItem('naruon_oidc_pkce_verifier', 'verifier-123');
-    sessionStorage.setItem('naruon_oidc_return_to', '//evil.example/phish');
-    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input) === '/auth/session') {
-        return new Response(JSON.stringify({ authenticated: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ access_token: 'oidc.jwt.token' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }));
-
-    const result = await completeOidcRedirect('?code=auth-code&state=state-123');
-
-    expect(result.returnTo).toBe('/');
   });
 
   it('clears the server session state and redirects to the provider logout endpoint', async () => {

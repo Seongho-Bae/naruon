@@ -94,20 +94,6 @@ function requireBrowserStorage() {
   }
 }
 
-export function toSafeOidcReturnTo(returnTo: string | null | undefined) {
-  const candidate = returnTo?.trim() ?? '';
-  if (
-    !candidate ||
-    !candidate.startsWith('/') ||
-    candidate.startsWith('//') ||
-    candidate.includes('\\') ||
-    /[\u0000-\u001f\u007f]/.test(candidate)
-  ) {
-    return '/';
-  }
-  return candidate;
-}
-
 function randomUrlSafeString(byteLength: number) {
   requireBrowserStorage();
   const bytes = new Uint8Array(byteLength);
@@ -154,10 +140,7 @@ export async function startOidcLogin(options: OidcLoginOptions = {}) {
   const verifier = randomUrlSafeString(64);
   window.sessionStorage.setItem(OIDC_STATE_KEY, state);
   window.sessionStorage.setItem(OIDC_VERIFIER_KEY, verifier);
-  window.sessionStorage.setItem(
-    OIDC_RETURN_TO_KEY,
-    toSafeOidcReturnTo(options.returnTo ?? window.location.pathname),
-  );
+  window.sessionStorage.setItem(OIDC_RETURN_TO_KEY, options.returnTo ?? window.location.pathname);
 
   const authorizationUrl = await buildOidcAuthorizationUrl(config, state, verifier);
   const navigate = options.navigate ?? ((url: string) => window.location.assign(url));
@@ -207,7 +190,7 @@ export async function completeOidcRedirect(search = window.location.search) {
   }
 
   await persistOidcSession(accessToken);
-  const returnTo = toSafeOidcReturnTo(window.sessionStorage.getItem(OIDC_RETURN_TO_KEY));
+  const returnTo = window.sessionStorage.getItem(OIDC_RETURN_TO_KEY) || '/';
   clearOidcTransientState();
   return { returnTo };
 }
