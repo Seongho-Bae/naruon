@@ -214,7 +214,7 @@ def test_validate_mail_config_update_rejects_unsafe_partial_override():
         validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
 
     assert exc_info.value.status_code == 400
-    assert "imap_server/imap_port validation failed" in exc_info.value.detail
+    assert exc_info.value.detail == "Invalid IMAP configuration"
 
 
 def test_legacy_tenant_config_endpoint_keeps_organization_scope(
