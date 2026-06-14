@@ -167,7 +167,7 @@ def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override)
     )
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "Mocked error"}
+    assert response.json() == {"detail": "Failed to sync calendar event"}
 
 
 @pytest.mark.parametrize(

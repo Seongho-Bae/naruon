@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import Sequence
 from typing import Literal
 
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
@@ -14,6 +15,8 @@ from db.models import CalendarWritebackSource
 from db.session import get_db
 from services.calendar_service import create_calendar_event, validate_calendar_todo_text
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/calendar")
 
@@ -219,7 +222,8 @@ async def sync_todos(
     except UnsafeCalendarTodoError as e:
         raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Calendar sync failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to sync calendar event")
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)
