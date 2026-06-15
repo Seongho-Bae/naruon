@@ -319,7 +319,6 @@ export function TasksLayout() {
                 type="button"
                 aria-label="보낸 메일 답변 SLA 티켓 생성"
                 disabled={replySlaStatus === 'loading'}
-                title={replySlaStatus === 'loading' ? "보낸 메일의 답변 SLA 상태를 확인 중입니다" : "답변 SLA 티켓을 생성합니다"}
                 onClick={() => void handleReplySlaEscalation()}
                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               >
@@ -417,7 +416,6 @@ export function TasksLayout() {
                           type="button"
                           aria-label={`${task.title} WebDAV 지식 노트 intent 생성`}
                           disabled={currentKnowledgeIntent.state === 'loading'}
-                          title={currentKnowledgeIntent.state === 'loading' ? "WebDAV 지식 노트 intent를 생성 중입니다" : "WebDAV 지식 노트 intent를 생성합니다"}
                           onClick={() => void handleKnowledgeIntentCreate(task.id)}
                           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                         >
