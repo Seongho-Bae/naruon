@@ -248,13 +248,77 @@ def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> N
     assert "Fernet.generate_key()" in start_script
     assert "validate_auth_session_hmac_secret_value" in start_script
     assert "AUTH_SESSION_HMAC_SECRET is invalid" in start_script
-    assert "database bootstrap failed" in start_script
+    assert "database migration failed" in start_script
     assert "Backend and frontend will not start." in start_script
     assert "Starting backend (uvicorn :8000)" in start_script
     assert "Starting frontend (next start :3000)" in start_script
     assert 'wait -n "$backend_pid" "$frontend_pid"' in start_script
     assert "Backend (:8000) exited with code" in start_script
     assert "Frontend (:3000) exited with code" in start_script
+
+
+def test_deepwiki_qna_gap_execution_tracker_covers_requested_scope() -> None:
+    tracker = read_repo_text("docs/development/deepwiki-qna-gap-execution-track.md")
+
+    required_items = {
+        "dav-propfind-db-backed",
+        "alembic-migrations",
+        "oidc-production-multi-user",
+        "self-hosted-connector-adapters",
+        "caldav-webdav-provider-write",
+        "ready-soon-ui-removal",
+        "postgresql-ha-physical-replication",
+        "pop3-runtime-sync",
+        "reply-sla-scheduler",
+        "data-workspace-documents",
+        "connector-apm-history",
+        "sender-dag-source-filtering",
+    }
+    for item in required_items:
+        assert item in tracker
+
+    required_evidence = [
+        "backend/api/dav.py",
+        "backend/tests/test_dav_api.py",
+        "backend/alembic/versions/0001_initial_control_plane.py",
+        "backend/api/auth.py",
+        "backend/runner/local_mail_adapters.py",
+        "backend/runner/local_dav_adapters.py",
+        "backend/api/calendar.py",
+        "backend/api/webdav.py",
+        "backend/api/observability.py",
+        "backend/services/provider_writeback_retry_service.py",
+        "backend/main.py",
+        "backend/alembic/versions/0002_provider_writeback_retry_queue.py",
+        "backend/tests/test_provider_writeback_retry_service.py",
+        "backend/tests/test_observability_api.py",
+        "backend/tests/test_main.py",
+        "frontend/src/components/CalendarLayout.tsx",
+        "frontend/src/app/calendar/page.test.tsx",
+        "frontend/src/components/TasksLayout.tsx",
+        "frontend/src/app/tasks/page.test.tsx",
+        "frontend/src/components/DataLayout.tsx",
+        "frontend/src/components/SettingsLayout.tsx",
+        "frontend/src/components/SettingsLayout.test.tsx",
+        "docs/operations/postgresql-physical-replication.md",
+        "docs/operations/postgresql-ha-drill-20260615.md",
+        "scripts/postgres_ha_drill.sh",
+        "scripts/postgres-ha/init-primary-replication.sh",
+        "backend/tests/test_infra_evaluations.py",
+        "backend/core/config.py",
+        "backend/db/session.py",
+        "backend/tests/test_db_session.py",
+        "backend/services/pop3_worker.py",
+        "backend/services/reply_sla_scheduler.py",
+        "backend/api/data.py",
+        "backend/api/observability.py",
+        "backend/api/ontology.py",
+    ]
+    for evidence_path in required_evidence:
+        assert evidence_path in tracker
+
+    assert "remaining_executable_goal" in tracker
+    assert "verification_command" in tracker
 
 
 def test_backend_compose_commands_use_startup_preflight() -> None:
@@ -269,11 +333,12 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
         "DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@db:5432/ai_email"
         in backend_block
     )
+    assert "READONLY_DATABASE_URL: ${READONLY_DATABASE_URL:-}" in backend_block
     assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in backend_block
     assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in backend_block
     assert "- AUTH_SESSION_HMAC_SECRET" not in backend_block
     assert "- ENCRYPTION_KEY" not in backend_block
-    assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
+    assert "python scripts/migrate_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
     assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose

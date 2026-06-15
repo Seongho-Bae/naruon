@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 const devServerPort = Number.parseInt(process.env.PLAYWRIGHT_PORT ?? '18080', 10);
 const devServerUrl = `http://127.0.0.1:${devServerPort}`;
+const webServerEnv = { ...process.env };
+delete webServerEnv.NO_COLOR;
+delete webServerEnv.FORCE_COLOR;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -18,7 +21,12 @@ export default defineConfig({
   webServer: process.env.LIVE_BASE_URL
     ? undefined
     : {
-        command: `npm run dev -- -p ${devServerPort}`,
+        command: `npm run dev -- --port ${devServerPort}`,
+        env: {
+          ...webServerEnv,
+          POSTCSS_WORKERS: '1',
+          DISABLE_POSTCSS_WORKERS: 'true',
+        },
         port: devServerPort,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

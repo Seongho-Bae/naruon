@@ -1,7 +1,7 @@
 from typing import Any, cast
 from urllib.parse import urlsplit
 
-from pydantic import SecretStr, model_validator
+from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from core.runtime_secrets import (
@@ -58,6 +58,7 @@ def parse_allowed_cors_origins(raw_origins: str) -> list[str]:
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    READONLY_DATABASE_URL: str | None = None
     DEBUG: bool = False
     RUNTIME_ENVIRONMENT: str = "production"
     AUTH_SESSION_HMAC_SECRET: SecretStr | None = None
@@ -99,6 +100,13 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @field_validator("READONLY_DATABASE_URL", mode="before")
+    @classmethod
+    def normalize_blank_readonly_database_url(cls, value: Any) -> Any:
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def validate_session_secret(self) -> "Settings":

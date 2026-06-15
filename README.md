@@ -79,13 +79,18 @@ mail/calendar/file systems.
   evidence for this security posture surface; enterprise OIDC/JWKS or an
   explicit server-side membership path must establish the workspace boundary.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
-  The endpoint summarizes scoped repositories, recent email-attachment file
-  assets, ingestion inventory, embedding coverage, quality checks, and connector
-  evidence from existing rows, returns `provider_write_executed=false`, and does
-  not expose provider credentials, raw usernames, server URLs, message bodies,
-  raw message/thread ids, or sequential ids. The Data workspace lets operators
-  select a source-linked attachment asset and inspect safe provenance fields
-  without turning Naruon into a file-storage source of truth.
+  The endpoint summarizes scoped repositories, workspace documents, recent
+  email-attachment file assets, ingestion inventory, embedding coverage,
+  quality checks, and connector evidence from existing rows, returns
+  `provider_write_executed=false`, and does not expose provider credentials,
+  raw usernames, server URLs, message bodies, raw message/thread ids, or
+  sequential ids. The Data workspace lets operators upload a signed-session
+  workspace document, request document reparse, embedding regeneration intent,
+  HWP conversion intent, and explicit WebDAV document materialization. The
+  materialization route re-reads the selected `document_id` from the signed
+  workspace, derives the provider path and Markdown content server-side, and
+  dispatches `write_webdav` only when the caller explicitly requests
+  `execute_provider=true`.
 - Projects are source-backed through signed `/api/webdav/folders` and
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels
@@ -116,8 +121,11 @@ mail/calendar/file systems.
   same address now create one idempotent, source-linked `self_sent_knowledge`
   ticket task with a plain-text memo title. The Tasks workspace can request a
   signed WebDAV/Notes materialization intent for that task and shows the planned
-  customer-owned target with `provider_write_executed=false`; actual provider
-  mutation remains connector execution work.
+  customer-owned target with `provider_write_executed=false`; connector-side
+  WebDAV/CalDAV PUT adapters now enforce `If-Match`, and
+  `execute_provider=true` dispatches the signed materialization command to an
+  active outbound runner. Durable retry queues and extended execution audit
+  workflows remain future work.
 - **Pending reply dashboard**: the Today dashboard reads signed
   `/api/emails/pending-replies?limit=3` data and shows sent-mail reply waits in
   Home KPIs and judgment points. Pending replies are calculated from
@@ -212,7 +220,7 @@ Backend:
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
-python3 scripts/bootstrap_db.py
+python3 scripts/migrate_db.py
 python3 -m pytest -q
 uvicorn main:app --reload
 ```
@@ -327,13 +335,14 @@ curl -s -X POST http://localhost:8000/api/tasks/from-email \
   -d "$TASK_BODY"
 
 # Request a customer-owned calendar writeback intent. This selects a trusted
-# server-side source and returns no provider secret or direct write proof.
+# server-side source and returns no provider secret. Provider execution is
+# explicit opt-in and requires If-Match/ETag evidence.
 curl -s http://localhost:8000/api/calendar/writeback-sources \
   -H "Authorization: Bearer $NARUON_DEV_BEARER"
 curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
-  -d '{"action":"create","summary":"담당자 확인 회의","target_source_id":"caldav-primary"}'
+  -d '{"action":"update","summary":"담당자 확인 회의","target_source_id":"caldav-primary","execute_provider":true}'
 
 # Review source-backed Security governance without exposing provider secrets.
 curl -s http://localhost:8000/api/security/access-surface \
@@ -344,6 +353,12 @@ curl -s http://localhost:8000/api/security/access-surface \
 curl -s http://localhost:8000/api/data/quality-surface \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   | jq '{workspace_id, audit_event, repositories, quality_checks}'
+curl -s -X POST http://localhost:8000/api/data/documents \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
+  -H 'content-type: application/json' \
+  -d '{"document_name":"decision-note.md","document_type":"text/markdown","document_content":"# Decision note"}'
+curl -s -X POST http://localhost:8000/api/data/documents/doc_example/reparse \
+  -H "Authorization: Bearer $NARUON_DEV_BEARER"
 ```
 
 ## Error-message contract
@@ -425,10 +440,15 @@ CalDAV account ids, and the Calendar workspace loads those rows through signed
 `/api/calendar/writeback-sources` before posting an opaque `target_source_id`.
 The workspace now presents those sources as explicit selectable writeback
 targets and shows the selected source ETag/capability state before intent
-creation.
+creation. Provider execution is opt-in through `execute_provider=true`; the API
+dispatches a signed `write_caldav` command to an active outbound runner only
+after server-authoritative source selection and If-Match evidence are available.
 The browser no longer claims `/api/calendar/sync` success from the mail-detail
-action path; direct provider writes stay deferred until connector execution can
-enforce ETag/If-Match and owner capability checks.
+action path; direct browser provider writes stay deferred. Connector-side DAV
+adapters can execute ETag/If-Match-guarded PUTs, and the WebDAV
+materialization endpoint can dispatch signed commands to an active outbound
+runner. Durable queueing, retry, and broader UI dispatch controls remain
+connector workflow follow-ups.
 WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
@@ -443,9 +463,17 @@ organization and expose opaque `project_folders.folder_uid` values instead of
 sequential `folder_id` values, and the `/dav` PUT skeleton fails closed until
 provider-backed source, capability, and ETag/If-Match checks exist.
 Data repository, ingestion, embedding, and quality status is loaded from signed
-`/api/data/quality-surface`. The UI must not reintroduce static ingestion logs,
-fake vector counts, unsupported embedding model names, or fake quality totals;
-use source-backed rows or explicit pending states.
+`/api/data/quality-surface`. Workspace document uploads use signed
+`POST /api/data/documents`, while reparse, embedding-regeneration, and HWP
+conversion controls call the scoped document action endpoints and keep
+`provider_write_executed=false`. Workspace document WebDAV materialization uses
+signed `POST /api/data/documents/{document_id}/webdav-materialization-intent`
+with an opaque selected WebDAV `source_uid`; the backend derives the target path
+and content server-side and dispatches connector execution only on
+`execute_provider=true`. The UI must not reintroduce static ingestion logs, fake
+vector counts, unsupported embedding model names, fake quality totals, or inert
+permanent ready-soon controls; use source-backed rows or explicit pending
+states.
 
 ## Operations and release docs
 

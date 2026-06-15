@@ -8,6 +8,7 @@ from db.session import get_db
 from db.models import Email, Attachment
 from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector, generate_embeddings
 from api.auth import AuthContext, get_auth_context
+from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import resolve_runtime_llm_provider
 
 router = APIRouter(prefix="/api")
@@ -193,17 +194,21 @@ async def hybrid_search(
         if runtime_provider is None:
             raise HTTPException(status_code=400, detail="OpenAI API key not configured")
 
-        embeddings = await generate_embeddings(
-            [request.query],
-            runtime_provider.api_key,
-            base_url=runtime_provider.base_url,
-            model=runtime_provider.embedding_model,
-        )
-        query_embedding = (
-            fit_embedding_vector(embeddings[0], SEARCH_VECTOR_DIMENSIONS)
-            if embeddings
-            else None
-        )
+        query_embedding = None
+        try:
+            embeddings = await generate_embeddings(
+                [request.query],
+                runtime_provider.api_key,
+                base_url=runtime_provider.base_url,
+                model=runtime_provider.embedding_model,
+            )
+            query_embedding = (
+                fit_embedding_vector(embeddings[0], SEARCH_VECTOR_DIMENSIONS)
+                if embeddings
+                else None
+            )
+        except EmbeddingGenerationError:
+            logger.info("Search embedding unavailable; using full-text search only")
 
         owner_filters = email_owner_filters(
             target_user_id, auth_context.organization_id

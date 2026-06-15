@@ -37,6 +37,7 @@ services:
       target: backend-runtime
     environment:
       DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@db:5432/ai_email
+      READONLY_DATABASE_URL: ${READONLY_DATABASE_URL:-}
       DEBUG: "false"
       ALLOW_LOCAL_LLM_PROVIDERS: "true"
       ALLOWED_LLM_BASE_URL_HOSTS: ollama
@@ -59,7 +60,7 @@ services:
       - |
         : "$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}"
         : "$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}"
-        python scripts/bootstrap_db.py && python scripts/start_backend.py --host 0.0.0.0 --port 8000
+        python scripts/migrate_db.py && python scripts/start_backend.py --host 0.0.0.0 --port 8000
 
   frontend:
     build:

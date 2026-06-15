@@ -271,6 +271,83 @@ describe("CalendarPage", () => {
     expect(container.textContent).not.toContain("Team CalDAV");
   });
 
+  it("lets the user explicitly request provider execution for an ETag-guarded calendar update", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/calendar/writeback-sources") {
+        expect(init?.credentials).toBe("same-origin");
+        expect(init?.headers).toEqual(expect.objectContaining({
+          "Content-Type": "application/json",
+        }));
+        expect(init?.headers).not.toHaveProperty("Authorization");
+        return jsonResponse(calendarSourceList);
+      }
+      expect(String(input)).toBe("/api/calendar/writeback-intent");
+      expect(init?.method).toBe("POST");
+      expect(init?.credentials).toBe("same-origin");
+      const requestHeaders = init?.headers as Record<string, string>;
+      const normalizedHeaderNames = new Set(Object.keys(requestHeaders).map((headerName) => headerName.toLowerCase()));
+      for (const publicHeader of [
+        "x-user-id",
+        "x-organization-id",
+        "x-group-id",
+        "x-group-ids",
+        "x-user-role",
+        "x-dev-auth-token",
+      ]) {
+        expect(normalizedHeaderNames.has(publicHeader)).toBe(false);
+      }
+      expect(JSON.parse(String(init?.body))).toEqual({
+        action: "update",
+        summary: "Naruon 기존 일정 ETag/If-Match 충돌 점검",
+        target_source_id: "caldav-primary",
+        execute_provider: true,
+      });
+      return jsonResponse({
+        workspace_id: "workspace-org-acme",
+        target_source_id: "caldav-primary",
+        protocol: "caldav",
+        writeback_mode: "customer_owned",
+        requires_if_match: true,
+        if_match: "etag-caldav-1",
+        provenance: {
+          created_by: "user-1",
+          source_provider: "Customer CalDAV",
+          source_protocol: "caldav",
+        },
+        audit_event: "calendar.writeback.dispatch_failed",
+        provider_write_executed: false,
+        status: "queued",
+        runner_request_id: "runner-request-1",
+        provider_status: null,
+        retry_item_uid: "retry-item-1",
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<CalendarPage />);
+    });
+    await flushAsyncWork();
+
+    const executeButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("ETag 실행 요청"));
+    expect(executeButton).toBeTruthy();
+    await act(async () => {
+      executeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("커넥터 실행 요청 접수");
+    expect(container.textContent).toContain("If-Match 필요");
+    expect(container.textContent).toContain("재시도 대기");
+    expect(container.textContent).not.toContain("runner-request-1");
+    expect(container.textContent).not.toContain("retry-item-1");
+    expect(container.textContent).not.toContain("calendar.writeback.dispatch_failed");
+  });
+
   it("does not post writeback intent before source registry readiness", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       expect(String(input)).toBe("/api/calendar/writeback-sources");

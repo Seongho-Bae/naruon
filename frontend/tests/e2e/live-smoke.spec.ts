@@ -50,6 +50,14 @@ async function hasVisibleSeededInboxText(page: import('@playwright/test').Page):
   );
 }
 
+async function installLiveSession(page: import('@playwright/test').Page): Promise<void> {
+  const sessionToken = signLiveSession();
+
+  await page.addInitScript((token) => {
+    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+  }, sessionToken);
+}
+
 test.skip(
   !process.env.LIVE_BASE_URL && process.env.RUN_LIVE_E2E !== '1',
   'Requires a live frontend/backend environment with seeded data.',
@@ -67,11 +75,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('live dashboard renders seeded inbox through real HTTP', async ({ page }) => {
-  const sessionToken = signLiveSession();
-
-  await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
-  }, sessionToken);
+  await installLiveSession(page);
   await page.goto('/');
 
   await expect(page.getByRole('img', { name: 'Naruon' })).toBeVisible();
@@ -79,4 +83,58 @@ test('live dashboard renders seeded inbox through real HTTP', async ({ page }) =
     timeout: 15_000,
   }).toBe(true);
   await expect(page.getByText('Failed to load emails.')).toHaveCount(0);
+});
+
+test('live data workspace reaches backend-backed WebDAV and document APIs without 503', async ({
+  page,
+}) => {
+  await installLiveSession(page);
+
+  const failedResponses: string[] = [];
+  page.on('response', (response) => {
+    const url = response.url();
+    if (url.includes('/api/') && response.status() >= 500) {
+      failedResponses.push(`${response.status()} ${url}`);
+    }
+  });
+
+  await page.goto('/data');
+
+  await expect(
+    page.getByRole('heading', { name: '데이터와 파일' })
+  ).toBeVisible();
+  await expect(
+    page
+      .getByLabel('선택한 파일 자산 상세')
+      .getByRole('heading', { name: 'roadmap.md' })
+  ).toBeVisible();
+  await expect(
+    page.getByText('쓰기 가능 · 충돌 검사용 ETag 준비')
+  ).toBeVisible();
+  await expect(
+    page.getByText('문서 자산 근거를 불러오지 못했습니다.')
+  ).toHaveCount(0);
+  await expect(
+    page.getByText('WebDAV 원본 계정 목록을 확인하지 못했습니다.')
+  ).toHaveCount(0);
+
+  const intentResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname.endsWith('/api/webdav/writeback-intent');
+  });
+  await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
+  expect((await intentResponse).status()).toBeLessThan(500);
+
+  const materializationResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname.endsWith(
+      '/api/data/documents/doc_repository_ready/webdav-materialization-intent'
+    );
+  });
+  await page
+    .getByRole('button', { name: 'WebDAV 문서 실행 요청' })
+    .click();
+  expect((await materializationResponse).status()).toBeLessThan(500);
+
+  expect(failedResponses).toEqual([]);
 });

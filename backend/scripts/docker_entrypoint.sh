@@ -39,11 +39,11 @@ if ! python -c "import os; from core.runtime_secrets import validate_auth_sessio
 fi
 rm -f /tmp/naruon-auth-secret-check.log
 
-# 2. Bootstrap the database schema. A failure here must be reported with an
+# 2. Apply database migrations. A failure here must be reported with an
 #    actionable message rather than just an asyncpg/SQLAlchemy traceback.
-log "Bootstrapping database schema..."
-if ! python scripts/bootstrap_db.py; then
-  fail "database bootstrap failed. Common causes: DATABASE_URL unreachable; ENCRYPTION_KEY is not a valid Fernet key; or existing emails require NARUON_IMPORT_USER_ID and NARUON_IMPORT_ORGANIZATION_ID. Backend and frontend will not start."
+log "Applying database migrations..."
+if ! python scripts/migrate_db.py; then
+  fail "database migration failed. Common causes: DATABASE_URL unreachable; ENCRYPTION_KEY is not a valid Fernet key; missing pgvector extension privileges; or existing emails require NARUON_IMPORT_USER_ID and NARUON_IMPORT_ORGANIZATION_ID. Backend and frontend will not start."
 fi
 
 # 3. Start backend and frontend, tracking each PID.

@@ -1,4 +1,7 @@
 from fastapi.testclient import TestClient
+import pytest
+
+import main
 from core.config import settings
 from main import app
 
@@ -111,3 +114,54 @@ def test_state_changing_api_canonicalizes_default_origin_ports(monkeypatch):
     assert https_response.json() == {"detail": "Authentication required"}
     assert http_referer_response.status_code == 401
     assert http_referer_response.json() == {"detail": "Authentication required"}
+
+
+@pytest.mark.asyncio
+async def test_lifespan_starts_mail_reply_sla_and_writeback_retry_workers(monkeypatch):
+    events: list[str] = []
+
+    class FakeWorker:
+        def __init__(self, name: str):
+            self.name = name
+
+        async def start(self):
+            events.append(f"start:{self.name}")
+
+        async def stop(self):
+            events.append(f"stop:{self.name}")
+
+    monkeypatch.setattr(main, "DISABLE_WORKERS", False)
+    monkeypatch.setattr(main, "preload_oidc_jwks", lambda: None)
+    monkeypatch.setattr(main, "imap_worker", FakeWorker("imap"))
+    monkeypatch.setattr(main, "pop3_worker", FakeWorker("pop3"), raising=False)
+    monkeypatch.setattr(
+        main,
+        "reply_sla_scheduler",
+        FakeWorker("reply_sla"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        main,
+        "provider_writeback_retry_worker",
+        FakeWorker("provider_writeback_retry"),
+        raising=False,
+    )
+
+    async with main.lifespan(app):
+        assert events == [
+            "start:imap",
+            "start:pop3",
+            "start:reply_sla",
+            "start:provider_writeback_retry",
+        ]
+
+    assert events == [
+        "start:imap",
+        "start:pop3",
+        "start:reply_sla",
+        "start:provider_writeback_retry",
+        "stop:provider_writeback_retry",
+        "stop:reply_sla",
+        "stop:pop3",
+        "stop:imap",
+    ]

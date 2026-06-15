@@ -120,7 +120,14 @@ describe("SettingsLayout", () => {
               local_protocols: ["imap", "pop3", "smtp", "caldav", "carddav", "webdav"],
               last_heartbeat_at: "2026-05-27T12:00:00Z",
               last_disconnect_at: null,
-              queue_depth_state: "not_reported",
+              queue_depth_state: "degraded",
+              queue_depth: {
+                pending_count: 2,
+                running_count: 1,
+                failed_count: 1,
+                total_count: 4,
+                next_retry_at: "2026-06-15T12:05:00Z",
+              },
               recent_events: [
                 {
                   event_uid: "connector_evt_heartbeat",
@@ -145,6 +152,14 @@ describe("SettingsLayout", () => {
                 state: "enabled",
                 evidence_source: "runner WebSocket manager",
                 detail: "Live heartbeat uses active outbound runner sockets.",
+                provider_write_executed: false,
+              },
+              {
+                signal_key: "writeback_retry_queue",
+                display_name: "Writeback retry queue",
+                state: "enabled",
+                evidence_source: "provider_writeback_retry_items",
+                detail: "4 queued writeback retry items are tracked by state.",
                 provider_write_executed: false,
               },
               {
@@ -342,6 +357,9 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("연결됨");
     expect(container.textContent).toContain("OTel endpoint");
     expect(container.textContent).toContain("최근 connector 신호");
+    expect(container.textContent).toContain("Writeback retry queue");
+    expect(container.textContent).toContain("재시도 대기 2건");
+    expect(container.textContent).toContain("실패 1건");
     expect(container.textContent).toContain("하트비트 수신");
     expect(container.textContent).toContain("서버가 runner 하트비트를 관측했습니다");
     expect(container.textContent).not.toContain("self-hosted_connector");

@@ -19,7 +19,7 @@ type TicketTask = {
 
 type KnowledgeMaterializationIntent = {
   intent: 'knowledge_materialization';
-  status: 'intent_ready';
+  status: string;
   task_id: string;
   source_type: 'self_sent_knowledge';
   source_email_id: string | null;
@@ -31,6 +31,10 @@ type KnowledgeMaterializationIntent = {
   provenance: string;
   provider_write_executed: boolean;
   audit_event: string;
+  runner_request_id?: string | null;
+  provider_status?: number | null;
+  error_code?: string | null;
+  retry_item_uid?: string | null;
 };
 
 type KnowledgeIntentEntry = {
@@ -135,6 +139,19 @@ function getWriteBoundaryLabel(providerWriteExecuted: boolean) {
   return providerWriteExecuted ? '외부 쓰기 실행됨' : '의도만 기록';
 }
 
+function getKnowledgeExecutionLabel(intent: KnowledgeMaterializationIntent) {
+  if (intent.provider_write_executed) return '외부 쓰기 실행됨';
+  if (intent.retry_item_uid || intent.status === 'queued') return '커넥터 실행 요청 접수';
+  if (intent.error_code) return '커넥터 실행 실패';
+  return getWriteBoundaryLabel(false);
+}
+
+function getKnowledgeRetryLabel(intent: KnowledgeMaterializationIntent) {
+  if (intent.retry_item_uid || intent.status === 'queued') return '재시도 대기';
+  if (intent.provider_write_executed) return '재시도 없음';
+  return '실행 요청 없음';
+}
+
 export function TasksLayout() {
   const [viewMode, setViewMode] = useState<'내 작업' | '위임한 작업' | '칸반' | '작업 상세'>('칸반');
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -182,7 +199,7 @@ export function TasksLayout() {
     }
   };
 
-  const handleKnowledgeIntentCreate = async (taskId: string) => {
+  const handleKnowledgeIntentCreate = async (taskId: string, executeProvider = false) => {
     setKnowledgeIntentByTask((current) => ({
       ...current,
       [taskId]: { state: 'loading', result: null },
@@ -190,7 +207,10 @@ export function TasksLayout() {
     try {
       const result = await apiClient.post<KnowledgeMaterializationIntent>(
         '/api/webdav/knowledge-materialization-intent',
-        { source_task_id: taskId },
+        {
+          source_task_id: taskId,
+          ...(executeProvider ? { execute_provider: true } : {}),
+        },
       );
       setKnowledgeIntentByTask((current) => ({
         ...current,
@@ -463,7 +483,7 @@ export function TasksLayout() {
                 <div>
                   <h3 className="text-sm font-bold text-foreground">나에게 보낸 지식 노트</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    나에게 보낸 지식 메일 작업을 고객 WebDAV/Notes 의도로만 준비하고 외부 쓰기는 실행하지 않습니다.
+                    나에게 보낸 지식 메일 작업은 고객 WebDAV/Notes 의도로 준비하고, 사용자가 명시적으로 요청한 경우에만 커넥터 실행을 요청합니다.
                   </p>
                 </div>
                 <span className="rounded-full bg-secondary px-3 py-1 text-xs font-bold text-secondary-foreground">
@@ -485,16 +505,27 @@ export function TasksLayout() {
                           <h4 className="font-bold text-foreground">{displayTitle}</h4>
                           <p className="mt-1 text-xs text-muted-foreground">{getTaskEvidenceLabel(task)}</p>
                         </div>
-                        <button
-                          type="button"
-                          aria-label={`${displayTitle} WebDAV 지식 노트 의도 생성`}
-                          disabled={currentKnowledgeIntent.state === 'loading'}
-                          onClick={() => void handleKnowledgeIntentCreate(task.id)}
-                          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
-                        >
-                          <Plus className="size-3.5" />
-                          {currentKnowledgeIntent.state === 'loading' ? '생성 중' : '의도 생성'}
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            aria-label={`${displayTitle} WebDAV 지식 노트 의도 생성`}
+                            disabled={currentKnowledgeIntent.state === 'loading'}
+                            onClick={() => void handleKnowledgeIntentCreate(task.id)}
+                            className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            <Plus className="size-3.5" />
+                            {currentKnowledgeIntent.state === 'loading' ? '생성 중' : '의도 생성'}
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`${displayTitle} WebDAV 지식 노트 실행 요청`}
+                            disabled={currentKnowledgeIntent.state === 'loading'}
+                            onClick={() => void handleKnowledgeIntentCreate(task.id, true)}
+                            className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            실행 요청
+                          </button>
+                        </div>
                       </div>
                       {currentKnowledgeIntent.state === 'error' ? (
                         <p role="status" className="mt-3 rounded-md border border-red-300 bg-red-50 p-2 text-xs font-semibold text-red-900">
@@ -509,7 +540,7 @@ export function TasksLayout() {
                           </div>
                           <div>
                             <dt className="font-bold text-foreground">쓰기 경계</dt>
-                            <dd className="text-muted-foreground">{getWriteBoundaryLabel(currentIntent.provider_write_executed)}</dd>
+                            <dd className="text-muted-foreground">{getKnowledgeExecutionLabel(currentIntent)}</dd>
                           </div>
                           <div>
                             <dt className="font-bold text-foreground">충돌 정책</dt>
@@ -518,6 +549,10 @@ export function TasksLayout() {
                           <div>
                             <dt className="font-bold text-foreground">감사 근거</dt>
                             <dd className="text-muted-foreground">기록됨</dd>
+                          </div>
+                          <div>
+                            <dt className="font-bold text-foreground">재시도 상태</dt>
+                            <dd className="text-muted-foreground">{getKnowledgeRetryLabel(currentIntent)}</dd>
                           </div>
                         </dl>
                       ) : null}

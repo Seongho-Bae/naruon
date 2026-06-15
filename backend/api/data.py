@@ -3,25 +3,32 @@ from datetime import datetime, timezone
 import hashlib
 from typing import Literal
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
+from api.runner_ws import manager as runner_manager
 from core.config import settings
 from db.models import (
     Attachment,
     ConnectorSignalEvent,
+    Document,
     Email,
     ProjectFolder,
     WebdavAccount,
 )
 from db.session import get_db
+from services.webdav_service import webdav_service
 
 router = APIRouter(prefix="/api/data", tags=["data"])
 
 DATA_VECTOR_DIMENSIONS = 1536
+WEB_DAV_ERROR_STATUS_CODES = {
+    "no_webdav_account": 422,
+    "webdav_account_not_found": 422,
+}
 SurfaceStatus = Literal[
     "ready",
     "running",
@@ -36,6 +43,7 @@ RepositoryType = Literal[
     "project_folder",
     "email_repository",
     "attachment_repository",
+    "document_repository",
 ]
 
 
@@ -51,7 +59,7 @@ class DataRepositorySummary(BaseModel):
 
 class DataRepositoryAsset(BaseModel):
     asset_key: str
-    asset_type: Literal["email_attachment"]
+    asset_type: Literal["email_attachment", "workspace_document"]
     display_name: str
     source_label: str
     state_code: RepositoryAssetState
@@ -104,6 +112,54 @@ class DataConnectorEvent(BaseModel):
     observed_at: str
 
 
+class DataDocumentUploadRequest(BaseModel):
+    document_name: str = Field(min_length=1, max_length=240)
+    document_type: str = Field(min_length=1, max_length=120)
+    document_content: str = Field(default="", max_length=2_000_000)
+
+
+class DataDocumentWebdavMaterializationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_source_id: str | None = None
+    execute_provider: bool = False
+
+
+class DataDocumentActionResponse(BaseModel):
+    document_id: str
+    workspace_id: str
+    document_name: str
+    document_type: str
+    document_status: str
+    content_chars: int
+    provider_write_executed: bool
+    provenance: Literal["server-authoritative"]
+    audit_event: str
+    message: str
+
+
+class DataDocumentWebdavMaterializationResponse(BaseModel):
+    intent: Literal["document_webdav_materialization"]
+    status: str
+    document_id: str
+    workspace_id: str
+    document_name: str
+    document_type: str
+    source_id: str | None
+    target_label: str | None
+    target_path: str
+    requires_if_match: bool
+    if_match: str | None = None
+    provenance: Literal["server-authoritative"]
+    provider_write_executed: bool
+    audit_event: str
+    runner_request_id: str | None = None
+    provider_status: int | None = None
+    error_code: str | None = None
+    retry_item_uid: str | None = None
+    message: str
+
+
 class DataQualitySurfaceResponse(BaseModel):
     workspace_id: str
     organization_id: str | None
@@ -126,6 +182,125 @@ def _datetime_to_utc_iso(value: datetime) -> str:
 def _safe_display_text(value: str | None, fallback: str) -> str:
     cleaned = (value or fallback).replace("<", "").replace(">", "").strip()
     return " ".join(cleaned.split())[:120] or fallback
+
+
+def _safe_document_type(value: str) -> str:
+    return _safe_display_text(value, "application/octet-stream")[:120]
+
+
+def _safe_path_segment(value: str | None, fallback: str) -> str:
+    cleaned = _safe_display_text(value, fallback)
+    cleaned = cleaned.replace("\x00", "").replace("/", "-").replace("\\", "-")
+    while ".." in cleaned:
+        cleaned = cleaned.replace("..", ".")
+    cleaned = cleaned.strip(" .-_")
+    return cleaned[:96] or fallback
+
+
+def _materialized_document_name(document: Document) -> str:
+    return _safe_path_segment(document.document_name, "workspace-document")
+
+
+def _materialized_document_target_path(document: Document) -> str:
+    digest = hashlib.sha256(document.document_id.encode("utf-8")).hexdigest()[:8]
+    filename = f"{_materialized_document_name(document)}-{digest}.md"
+    return f"/Naruon/Data/{filename}"
+
+
+def _materialized_document_content(document: Document) -> str:
+    return (document.document_content or "").strip()
+
+
+def _document_content_chars(document: Document) -> int:
+    return len((document.document_content or "").strip())
+
+
+def _document_response(
+    document: Document,
+    *,
+    audit_event: str,
+    message: str,
+) -> DataDocumentActionResponse:
+    return DataDocumentActionResponse(
+        document_id=document.document_id,
+        workspace_id=document.workspace_id,
+        document_name=document.document_name,
+        document_type=document.document_type,
+        document_status=document.document_status,
+        content_chars=_document_content_chars(document),
+        provider_write_executed=False,
+        provenance="server-authoritative",
+        audit_event=audit_event,
+        message=message,
+    )
+
+
+def _document_webdav_materialization_response(
+    document: Document,
+    source_result: dict,
+) -> dict:
+    return {
+        "intent": "document_webdav_materialization",
+        "status": "intent_ready",
+        "document_id": document.document_id,
+        "workspace_id": document.workspace_id,
+        "document_name": _materialized_document_name(document),
+        "document_type": document.document_type,
+        "source_id": source_result["source_id"],
+        "target_label": source_result["target_label"],
+        "target_path": _materialized_document_target_path(document),
+        "requires_if_match": source_result["requires_if_match"],
+        "if_match": source_result.get("if_match"),
+        "provenance": "server-authoritative",
+        "provider_write_executed": False,
+        "audit_event": "data.document.webdav_materialization_intent.created",
+        "runner_request_id": None,
+        "provider_status": None,
+        "error_code": None,
+        "retry_item_uid": None,
+        "message": (
+            "Workspace document WebDAV materialization intent recorded; "
+            "no provider write executed."
+        ),
+    }
+
+
+def _document_webdav_runner_command(document: Document, intent_result: dict) -> dict[str, object]:
+    return {
+        "action": "write_webdav",
+        "account": intent_result["source_id"],
+        "source_id": intent_result["source_id"],
+        "target_path": intent_result["target_path"],
+        "if_match": intent_result.get("if_match"),
+        "content_type": "text/markdown; charset=utf-8",
+        "content": _materialized_document_content(document),
+    }
+
+
+def _merge_document_webdav_dispatch_result(
+    intent_result: dict,
+    dispatch_result: dict,
+) -> dict:
+    result = dict(intent_result)
+    result["status"] = str(dispatch_result.get("status") or "error")
+    result["provider_write_executed"] = bool(
+        dispatch_result.get("provider_write_executed", False)
+    )
+    result["runner_request_id"] = dispatch_result.get("request_id")
+    result["provider_status"] = dispatch_result.get("provider_status")
+    result["error_code"] = dispatch_result.get("error_code")
+    result["retry_item_uid"] = dispatch_result.get("retry_item_uid")
+    result["audit_event"] = (
+        "data.document.webdav_materialization.executed"
+        if result["provider_write_executed"]
+        else "data.document.webdav_materialization.dispatch_failed"
+    )
+    result["message"] = (
+        "Workspace document WebDAV materialization executed by the connector."
+        if result["provider_write_executed"]
+        else "Workspace document WebDAV materialization dispatch failed."
+    )
+    return result
 
 
 def _opaque_asset_key(email: Email, attachment: Attachment) -> str:
@@ -203,6 +378,23 @@ async def _count_scalar(db: AsyncSession, statement) -> int:
     return int(result.scalar_one() or 0)
 
 
+async def _get_workspace_document(
+    db: AsyncSession,
+    auth_context: AuthContext,
+    document_id: str,
+) -> Document:
+    result = await db.execute(
+        select(Document).where(
+            Document.document_id == document_id,
+            Document.workspace_id == auth_context.workspace_id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
 def _status_from_ratio(total_count: int, ready_count: int) -> SurfaceStatus:
     if total_count <= 0:
         return "pending"
@@ -245,6 +437,7 @@ def _repository_summaries(
     project_folders: list[ProjectFolder],
     email_count: int,
     attachment_count: int,
+    document_count: int,
 ) -> list[DataRepositorySummary]:
     repositories: list[DataRepositorySummary] = [
         DataRepositorySummary(
@@ -263,6 +456,15 @@ def _repository_summaries(
             object_count=attachment_count,
             writeback_enabled=None,
             evidence_source="attachments",
+            provider_write_executed=False,
+        ),
+        DataRepositorySummary(
+            source_id="document_repository",
+            repository_type="document_repository",
+            display_name="Scoped document repository",
+            object_count=document_count,
+            writeback_enabled=None,
+            evidence_source="documents",
             provider_write_executed=False,
         ),
     ]
@@ -293,7 +495,7 @@ def _repository_summaries(
     return repositories
 
 
-def _repository_assets(rows) -> list[DataRepositoryAsset]:
+def _attachment_repository_assets(rows) -> list[DataRepositoryAsset]:
     assets: list[DataRepositoryAsset] = []
     for attachment, email in rows:
         content_chars = len((attachment.content or "").strip())
@@ -320,6 +522,37 @@ def _repository_assets(rows) -> list[DataRepositoryAsset]:
                 captured_at=_datetime_to_utc_iso(email.date),
                 evidence_source="attachments.content, emails.thread_id",
                 thread_key=_opaque_thread_key(email),
+                provider_write_executed=False,
+            )
+        )
+    return assets
+
+
+def _document_repository_assets(documents: list[Document]) -> list[DataRepositoryAsset]:
+    assets: list[DataRepositoryAsset] = []
+    for document in documents:
+        content_chars = _document_content_chars(document)
+        pending_statuses = {"embedding_pending", "hwp_conversion_pending"}
+        state_code: RepositoryAssetState = (
+            "needs_attention"
+            if content_chars <= 0 or document.document_status in pending_statuses
+            else "ready"
+        )
+        assets.append(
+            DataRepositoryAsset(
+                asset_key=document.document_id,
+                asset_type="workspace_document",
+                display_name=_safe_display_text(
+                    document.document_name,
+                    "workspace document",
+                ),
+                source_label="Workspace document",
+                state_code=state_code,
+                detail_text=f"document status: {document.document_status}",
+                content_chars=content_chars,
+                captured_at=_datetime_to_utc_iso(document.created_at),
+                evidence_source="documents.document_status",
+                thread_key="workspace_document",
                 provider_write_executed=False,
             )
         )
@@ -516,6 +749,128 @@ def _quality_checks(
     ]
 
 
+@router.post("/documents", response_model=DataDocumentActionResponse)
+async def upload_data_document(
+    request: DataDocumentUploadRequest,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataDocumentActionResponse:
+    document = Document(
+        workspace_id=auth_context.workspace_id,
+        document_name=_safe_display_text(request.document_name, "workspace document"),
+        document_type=_safe_document_type(request.document_type),
+        document_content=request.document_content,
+        document_status="uploaded",
+    )
+    db.add(document)
+    await db.commit()
+    await db.refresh(document)
+    return _document_response(
+        document,
+        audit_event="data.document.uploaded",
+        message="Document stored in the signed workspace scope.",
+    )
+
+
+@router.post("/documents/{document_id}/reparse", response_model=DataDocumentActionResponse)
+async def reparse_data_document(
+    document_id: str,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataDocumentActionResponse:
+    document = await _get_workspace_document(db, auth_context, document_id)
+    document.document_status = "parsed"
+    await db.commit()
+    await db.refresh(document)
+    return _document_response(
+        document,
+        audit_event="data.document.reparsed",
+        message="Document parse metadata refreshed in the signed workspace scope.",
+    )
+
+
+@router.post(
+    "/documents/{document_id}/embedding-regeneration-intent",
+    response_model=DataDocumentActionResponse,
+)
+async def create_document_embedding_regeneration_intent(
+    document_id: str,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataDocumentActionResponse:
+    document = await _get_workspace_document(db, auth_context, document_id)
+    document.document_status = "embedding_pending"
+    await db.commit()
+    await db.refresh(document)
+    return _document_response(
+        document,
+        audit_event="data.document.embedding_regeneration_intent",
+        message="Embedding regeneration intent recorded; no provider write executed.",
+    )
+
+
+@router.post(
+    "/documents/{document_id}/hwp-conversion-intent",
+    response_model=DataDocumentActionResponse,
+)
+async def create_document_hwp_conversion_intent(
+    document_id: str,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataDocumentActionResponse:
+    document = await _get_workspace_document(db, auth_context, document_id)
+    document.document_status = "hwp_conversion_pending"
+    await db.commit()
+    await db.refresh(document)
+    return _document_response(
+        document,
+        audit_event="data.document.hwp_conversion_intent",
+        message="HWP conversion intent recorded; no provider write executed.",
+    )
+
+
+@router.post(
+    "/documents/{document_id}/webdav-materialization-intent",
+    response_model=DataDocumentWebdavMaterializationResponse,
+)
+async def create_document_webdav_materialization_intent(
+    document_id: str,
+    request: DataDocumentWebdavMaterializationRequest,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> DataDocumentWebdavMaterializationResponse:
+    document = await _get_workspace_document(db, auth_context, document_id)
+    if not _materialized_document_content(document):
+        raise HTTPException(
+            status_code=422,
+            detail="Workspace document has no materializable content.",
+        )
+
+    source_result = await webdav_service.determine_webdav_writeback_intent_from_db(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
+        auth_context.workspace_id,
+        target_source_id=request.target_source_id,
+    )
+    if source_result.get("status") == "error":
+        status_code = WEB_DAV_ERROR_STATUS_CODES.get(
+            str(source_result.get("error_code") or ""),
+            422,
+        )
+        raise HTTPException(status_code=status_code, detail=source_result.get("message"))
+
+    result = _document_webdav_materialization_response(document, source_result)
+    if request.execute_provider:
+        dispatch_result = await runner_manager.dispatch_command(
+            auth_context.organization_id,
+            auth_context.workspace_id,
+            _document_webdav_runner_command(document, result),
+        )
+        result = _merge_document_webdav_dispatch_result(result, dispatch_result)
+    return DataDocumentWebdavMaterializationResponse(**result)
+
+
 @router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
 async def get_data_quality_surface(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -534,6 +889,13 @@ async def get_data_quality_surface(
             ProjectFolder.created_at.asc(),
             ProjectFolder.folder_uid.asc(),
         ),
+    )
+    documents = await _scoped_rows(
+        db,
+        select(Document)
+        .where(Document.workspace_id == auth_context.workspace_id)
+        .order_by(Document.created_at.desc(), Document.document_id.asc())
+        .limit(8),
     )
     email_scope = _email_scope_filter(auth_context)
     email_count = await _count_scalar(
@@ -594,7 +956,7 @@ async def get_data_quality_surface(
 
     source_count = len(webdav_accounts) + len(project_folders)
     embedded_total = embedded_email_count + embedded_attachment_count
-    object_total = email_count + attachment_count
+    object_total = email_count + attachment_count + len(documents)
     return DataQualitySurfaceResponse(
         workspace_id=auth_context.workspace_id,
         organization_id=auth_context.organization_id,
@@ -605,8 +967,12 @@ async def get_data_quality_surface(
             project_folders,
             email_count,
             attachment_count,
+            len(documents),
         ),
-        repository_assets=_repository_assets(attachment_asset_rows),
+        repository_assets=[
+            *_document_repository_assets(documents),
+            *_attachment_repository_assets(attachment_asset_rows),
+        ],
         pipeline_stages=_pipeline_stages(
             source_count=source_count,
             email_count=email_count,

@@ -15,6 +15,12 @@ type CalendarWritebackIntentResponse = {
   if_match: string | null;
   provenance: Record<string, string>;
   audit_event: string;
+  provider_write_executed: boolean;
+  status: string;
+  runner_request_id: string | null;
+  provider_status: number | null;
+  error_code: string | null;
+  retry_item_uid?: string | null;
 };
 
 type CalendarWritebackSource = {
@@ -138,6 +144,19 @@ function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_
   return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
 }
 
+function getProviderExecutionLabel(result: CalendarWritebackIntentResponse) {
+  if (result.provider_write_executed) return '외부 원본 쓰기 완료';
+  if (result.retry_item_uid || result.status === 'queued') return '커넥터 실행 요청 접수';
+  if (result.error_code) return '커넥터 실행 실패';
+  return '의도만 기록';
+}
+
+function getProviderRetryLabel(result: CalendarWritebackIntentResponse) {
+  if (result.retry_item_uid || result.status === 'queued') return '재시도 대기';
+  if (result.provider_write_executed) return '재시도 없음';
+  return '실행 요청 없음';
+}
+
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
   if (typeof shapedError?.status === 'number') return shapedError.status;
@@ -211,7 +230,7 @@ export function CalendarLayout() {
   }, [selectedSourceId, writebackSources]);
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
-  const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
+  const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -231,6 +250,7 @@ export function CalendarLayout() {
           ? 'Naruon 일정 후보 writeback intent 점검'
           : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
         ...(selectedWritebackSource ? { target_source_id: selectedWritebackSource.source_id } : {}),
+        ...(executeProvider ? { execute_provider: true } : {}),
       });
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -250,6 +270,7 @@ export function CalendarLayout() {
 
   const isWritebackLoading = writebackStatus === 'loading';
   const isWritebackActionDisabled = isWritebackLoading || !isSourceRegistryReady;
+  const isProviderExecutionDisabled = isWritebackActionDisabled || !selectedWritebackSource?.etag;
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -346,6 +367,14 @@ export function CalendarLayout() {
                 >
                   ETag 업데이트 점검
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void requestWritebackIntent('update', true)}
+                  disabled={isProviderExecutionDisabled}
+                  className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  ETag 실행 요청
+                </button>
               </div>
             </div>
 
@@ -441,6 +470,14 @@ export function CalendarLayout() {
                   <div>
                     <dt className="font-black text-muted-foreground">감사 근거</dt>
                     <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">커넥터 실행</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">재시도 상태</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
                   </div>
                 </dl>
               )}
