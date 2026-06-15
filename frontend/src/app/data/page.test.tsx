@@ -470,7 +470,7 @@ describe("DataPage", () => {
       root?.render(<DataPage />);
     });
 
-    const fileInput = container.querySelector('input[accept=".txt,.md,.markdown,.hwp,text/plain,text/markdown"]') as HTMLInputElement | null;
+    const fileInput = container.querySelector('input[accept=".txt,.md,.markdown,text/plain,text/markdown"]') as HTMLInputElement | null;
     expect(fileInput).toBeTruthy();
     const file = new File(["# decision note"], "decision-note.md", { type: "text/markdown" });
     Object.defineProperty(fileInput, "files", {

@@ -231,6 +231,10 @@ function getDocumentTypeForFile(file: File) {
   return file.type || 'text/plain';
 }
 
+function isTextDocumentUploadType(documentType: string) {
+  return documentType.startsWith('text/');
+}
+
 function getSourceReadinessLabel(account: { writeback_enabled: boolean; etag?: string | null }) {
   if (!account.writeback_enabled) return '읽기 전용';
   return account.etag ? '쓰기 가능 · 충돌 검사용 ETag 준비' : '쓰기 가능 · ETag 확인 필요';
@@ -446,12 +450,17 @@ export function DataLayout() {
     setDocumentActionStatus('loading');
     setDocumentActionResult(null);
     try {
+      const documentType = getDocumentTypeForFile(file);
+      if (!isTextDocumentUploadType(documentType)) {
+        setDocumentActionStatus('error');
+        return;
+      }
       const documentContent = await file.text();
       const result = await apiClient.post<DataDocumentActionResponse>(
         '/api/data/documents',
         {
           document_name: file.name,
-          document_type: getDocumentTypeForFile(file),
+          document_type: documentType,
           document_content: documentContent,
         },
       );
@@ -614,7 +623,7 @@ export function DataLayout() {
                         문서 원본 선택
                         <input
                           type="file"
-                          accept=".txt,.md,.markdown,.hwp,text/plain,text/markdown"
+                          accept=".txt,.md,.markdown,text/plain,text/markdown"
                           className="sr-only"
                           onChange={handleDocumentFileChange}
                         />

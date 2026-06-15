@@ -229,7 +229,11 @@ async def create_reply_sla_escalation_tasks(
                     continue
                 task = conflicted_tasks_by_email.get(email.id)
                 if task is None:
-                    raise ReplySlaTaskConflict() from None
+                    raise ReplySlaTaskConflict(
+                        "reply_sla_task_conflict: "
+                        f"user_id={user_id!r} organization_id={organization_id!r} "
+                        f"scoped_email_key={email.id!r}"
+                    ) from None
 
                 if task.status != "done":
                     task.title = _reply_sla_task_title(email)

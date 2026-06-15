@@ -85,6 +85,43 @@ async def test_local_smtp_adapter_fails_closed_when_account_config_is_incomplete
 
 
 @pytest.mark.asyncio
+async def test_local_smtp_adapter_requires_password_before_send(monkeypatch):
+    async def fail_send_email(message_params, smtp_config):
+        raise AssertionError("SMTP send must not run without a configured password")
+
+    monkeypatch.setattr("runner.local_mail_adapters.send_email", fail_send_email)
+    adapters = LocalMailAdapters(
+        [
+            LocalMailAccountConfig(
+                account="mailbox-1",
+                user_id="user-1",
+                organization_id="org-1",
+                smtp_server="smtp.example.com",
+                smtp_port=587,
+                smtp_username="sender@example.com",
+                smtp_password=None,
+            )
+        ]
+    )
+
+    result = await adapters.send_smtp(
+        {
+            "account": "mailbox-1",
+            "to": "recipient@example.com",
+            "subject": "Runner send",
+            "body": "body",
+        }
+    )
+
+    assert result == {
+        "status": "error",
+        "error": "account_configuration_incomplete",
+        "error_code": "account_configuration_incomplete",
+        "provider_write_executed": False,
+    }
+
+
+@pytest.mark.asyncio
 async def test_local_imap_adapter_imports_with_configured_worker():
     synced_configs = []
 

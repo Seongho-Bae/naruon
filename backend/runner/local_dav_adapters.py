@@ -1,3 +1,5 @@
+import ipaddress
+import socket
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Literal
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -136,8 +138,21 @@ class LocalDavAdapters:
 
     def _target_url(self, base_url: str, target_path: str) -> str:
         parsed = urlsplit(base_url)
-        if parsed.scheme != "https" or not parsed.netloc:
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
             raise ValueError("invalid_source_url")
+        try:
+            source_port = parsed.port or 443
+        except ValueError as exc:
+            raise ValueError("invalid_source_url") from exc
+        self._validate_global_source_host(parsed.hostname, source_port)
         base_path = parsed.path.rstrip("/")
         return urlunsplit(
             (
@@ -148,6 +163,34 @@ class LocalDavAdapters:
                 "",
             )
         )
+
+    def _validate_global_source_host(self, hostname: str, port: int) -> None:
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            pass
+        else:
+            self._validate_global_address(hostname)
+            return
+
+        try:
+            address_infos = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+        except OSError as exc:
+            raise ValueError("invalid_source_url") from exc
+        addresses = {str(address_info[4][0]) for address_info in address_infos}
+        if not addresses:
+            raise ValueError("invalid_source_url")
+        for address in addresses:
+            self._validate_global_address(address)
+
+    @staticmethod
+    def _validate_global_address(address: str) -> None:
+        try:
+            ip_address = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise ValueError("invalid_source_url") from exc
+        if not ip_address.is_global:
+            raise ValueError("invalid_source_url")
 
     def _result_from_response(self, response) -> dict[str, Any]:
         status_code = int(response.status_code)

@@ -1,3 +1,5 @@
+import socket
+
 import pytest
 
 from runner.local_dav_adapters import LocalDavAdapters, LocalDavSourceConfig
@@ -30,6 +32,22 @@ class FakeDavClient:
             }
         )
         return self.response
+
+
+@pytest.fixture(autouse=True)
+def stub_dav_dns(monkeypatch):
+    def fake_getaddrinfo(host, port, type=socket.SOCK_STREAM):
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                ("93.184.216.34", port),
+            )
+        ]
+
+    monkeypatch.setattr("runner.local_dav_adapters.socket.getaddrinfo", fake_getaddrinfo)
 
 
 @pytest.mark.asyncio
@@ -173,6 +191,56 @@ async def test_webdav_adapter_rejects_path_traversal_before_network_request():
         "status": "error",
         "error": "invalid_target_path",
         "error_code": "invalid_target_path",
+        "provider_write_executed": False,
+    }
+    assert fake_client.requests == []
+
+
+@pytest.mark.asyncio
+async def test_webdav_adapter_rejects_private_source_url_before_network_request(
+    monkeypatch,
+):
+    def fake_private_getaddrinfo(host, port, type=socket.SOCK_STREAM):
+        return [
+            (
+                socket.AF_INET,
+                socket.SOCK_STREAM,
+                6,
+                "",
+                ("192.168.1.10", port),
+            )
+        ]
+
+    monkeypatch.setattr(
+        "runner.local_dav_adapters.socket.getaddrinfo",
+        fake_private_getaddrinfo,
+    )
+    fake_client = FakeDavClient(FakeDavResponse(204))
+    adapters = LocalDavAdapters(
+        [
+            LocalDavSourceConfig(
+                source_id="webdav_src_1",
+                protocol="webdav",
+                base_url="https://webdav.example.com",
+                writeback_enabled=True,
+            )
+        ],
+        http_client_factory=lambda: fake_client,
+    )
+
+    result = await adapters.write_webdav(
+        {
+            "source_id": "webdav_src_1",
+            "target_path": "/Naruon/Notes/task.md",
+            "content": "# Note\n",
+            "if_match": "etag-before-write",
+        }
+    )
+
+    assert result == {
+        "status": "error",
+        "error": "invalid_source_url",
+        "error_code": "invalid_source_url",
         "provider_write_executed": False,
     }
     assert fake_client.requests == []

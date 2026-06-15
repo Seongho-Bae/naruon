@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
 
 
 def alembic_config() -> Config:
-    backend_root = Path(__file__).resolve().parents[1]
-    config = Config(str(backend_root / "alembic.ini"))
-    config.set_main_option("script_location", str(backend_root / "alembic"))
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
     return config
 
 

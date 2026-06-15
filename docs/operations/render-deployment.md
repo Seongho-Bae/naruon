@@ -80,8 +80,9 @@ backend secrets.
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
-   and trigger a redeploy of `naruon-backend`. The bootstrap script
-   becomes a no-op for the extension after that.
+   and trigger a redeploy of `naruon-backend`. Subsequent migration runs
+   are a no-op for the extension because `CREATE EXTENSION IF NOT EXISTS
+   vector` is idempotent.
 
 ## Verifying the deploy
 

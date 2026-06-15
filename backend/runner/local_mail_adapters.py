@@ -43,6 +43,7 @@ class LocalMailAdapters:
             not account.smtp_server
             or not account.smtp_port
             or not account.smtp_username
+            or not account.smtp_password
         ):
             return self._error("account_configuration_incomplete")
 
