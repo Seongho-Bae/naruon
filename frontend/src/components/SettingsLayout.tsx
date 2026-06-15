@@ -1267,6 +1267,7 @@ export function SettingsLayout() {
                       type="submit"
                       disabled={accountSaving || !accountReady}
                       aria-disabled={accountSaving || !accountReady}
+                      title={accountSaving ? "저장 중입니다" : !accountReady ? "입력값이 부족합니다" : "계정 설정 저장"}
                       className="rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {accountSaving ? '저장 중' : '계정 설정 저장'}
@@ -1400,6 +1401,7 @@ export function SettingsLayout() {
                       onClick={handleRunnerTokenRotate}
                       disabled={runnerRotating}
                       aria-disabled={runnerRotating}
+                      title={runnerRotating ? "등록 토큰을 회전 중입니다" : "등록 토큰을 회전합니다"}
                       className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RefreshCw className={`size-4 ${runnerRotating ? 'animate-spin' : ''}`} />
@@ -1569,6 +1571,7 @@ export function SettingsLayout() {
                         type="button"
                         onClick={handleOidcLogin}
                         disabled={!oidcBrowserConfig}
+                        title={!oidcBrowserConfig ? "OIDC 브라우저 설정이 없습니다" : "OIDC 로그인"}
                         className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         OIDC 로그인
@@ -1577,6 +1580,7 @@ export function SettingsLayout() {
                         type="button"
                         onClick={handleOidcLogout}
                         disabled={!oidcSessionClaims.userId}
+                        title={!oidcSessionClaims.userId ? "로그인된 세션이 없습니다" : "로그아웃"}
                         className="rounded-lg border border-border px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         로그아웃
