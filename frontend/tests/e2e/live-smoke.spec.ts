@@ -50,13 +50,14 @@ async function hasVisibleSeededInboxText(page: import('@playwright/test').Page):
   );
 }
 
-async function installLiveSession(page: import('@playwright/test').Page): Promise<void> {
+async function installLiveSession(page: import('@playwright/test').Page): Promise<string> {
   const sessionToken = signLiveSession();
 
   await page.addInitScript((token) => {
     document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
     window.localStorage.setItem('naruon_session_token', token);
   }, sessionToken);
+  return sessionToken;
 }
 
 test.skip(
@@ -89,7 +90,7 @@ test('live dashboard renders seeded inbox through real HTTP', async ({ page }) =
 test('live data workspace reaches backend-backed WebDAV and document APIs without 503', async ({
   page,
 }) => {
-  await installLiveSession(page);
+  const sessionToken = await installLiveSession(page);
 
   const failedResponses: string[] = [];
   page.on('response', (response) => {
@@ -124,7 +125,11 @@ test('live data workspace reaches backend-backed WebDAV and document APIs withou
     return url.pathname.endsWith('/api/webdav/writeback-intent');
   });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
-  expect((await intentResponse).status()).toBeLessThan(500);
+  const webdavIntentResponse = await intentResponse;
+  expect(webdavIntentResponse.status()).toBeLessThan(500);
+  expect(webdavIntentResponse.request().headers().authorization).toBe(
+    `Bearer ${sessionToken}`,
+  );
 
   const materializationResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -135,7 +140,11 @@ test('live data workspace reaches backend-backed WebDAV and document APIs withou
   await page
     .getByRole('button', { name: 'WebDAV 문서 실행 요청' })
     .click();
-  expect((await materializationResponse).status()).toBeLessThan(500);
+  const webdavMaterializationResponse = await materializationResponse;
+  expect(webdavMaterializationResponse.status()).toBeLessThan(500);
+  expect(webdavMaterializationResponse.request().headers().authorization).toBe(
+    `Bearer ${sessionToken}`,
+  );
 
   expect(failedResponses).toEqual([]);
 });

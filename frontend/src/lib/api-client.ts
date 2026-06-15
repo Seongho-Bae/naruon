@@ -1,4 +1,6 @@
-import { ANONYMOUS_SESSION_CLAIMS, type SessionClaims } from "./session-cookie";
+import { ANONYMOUS_SESSION_CLAIMS, normalizeSessionToken, type SessionClaims } from "./session-cookie";
+
+const SESSION_TOKEN_STORAGE_KEY = 'naruon_session_token';
 
 const CLIENT_CONTROLLED_AUTHORITY_HEADERS = new Set([
   'authorization',
@@ -30,6 +32,7 @@ export class ApiClient {
       'Content-Type': 'application/json',
       ...this.getSafeCallerHeaders(init?.headers),
     };
+    this.applyStoredSessionAuthorization(headers);
     return headers;
   }
 
@@ -40,7 +43,22 @@ export class ApiClient {
         delete headers[name];
       }
     });
+    this.applyStoredSessionAuthorization(headers);
     return headers;
+  }
+
+  private applyStoredSessionAuthorization(headers: HeadersInit) {
+    const sessionToken = this.getSessionToken();
+    if (!sessionToken) return;
+    if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+      headers.set('Authorization', `Bearer ${sessionToken}`);
+      return;
+    }
+    if (Array.isArray(headers)) {
+      headers.push(['Authorization', `Bearer ${sessionToken}`]);
+      return;
+    }
+    (headers as Record<string, string>).Authorization = `Bearer ${sessionToken}`;
   }
 
   private getSafeCallerHeaders(headers?: HeadersInit): Record<string, string> {
@@ -65,7 +83,12 @@ export class ApiClient {
   }
 
   getSessionToken() {
-    return null;
+    if (typeof window === 'undefined') return null;
+    try {
+      return normalizeSessionToken(window.localStorage.getItem(SESSION_TOKEN_STORAGE_KEY));
+    } catch {
+      return null;
+    }
   }
 
   getSessionClaims(): SessionClaims {
