@@ -488,6 +488,196 @@ def test_opencode_review_fallbacks_do_not_emit_successful_error_annotations() ->
     assert "steps.opencode_review_second_fallback.outcome" not in workflow
 
 
+def test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct(
+    tmp_path: Path,
+) -> None:
+    agents = read_repo_text("AGENTS.md")
+    repo_root = tmp_path / "repo"
+    auth_file = repo_root / "backend" / "app" / "auth.py"
+    page_file = repo_root / "frontend" / "src" / "app" / "page.tsx"
+    workflow_file = repo_root / ".github" / "workflows" / "strix.yml"
+    auth_file.parent.mkdir(parents=True)
+    page_file.parent.mkdir(parents=True)
+    workflow_file.parent.mkdir(parents=True)
+    auth_file.write_text("\n".join(f"# auth line {line}" for line in range(1, 180)))
+    page_file.write_text("\n".join(f"// page line {line}" for line in range(1, 80)))
+    workflow_file.write_text("STRIX_FALLBACK_MODELS: deepseek/deepseek-r1-0528\n")
+
+    evidence_file = tmp_path / "failed-check-evidence.md"
+    failed_checks_file = tmp_path / "failed-checks.md"
+    failed_checks_file.write_text("- Strix Security Scan/strix: FAILURE\n")
+    evidence_file.write_text(
+        """
+# Failed GitHub Check Evidence
+
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1 (log lines 100-210)
+
+```text
+Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│  Code Locations                                                              │
+│    Location 1: backend/app/auth.py:132-135                                   │
+│  Model deepseek/deepseek-r1-0528                                             │
+│  Vulnerabilities 1                                                           │
+```
+
+### Strix vulnerability report window 2 (log lines 220-340)
+
+```text
+Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS and Insecure Data Handling             │
+│  Severity: HIGH                                                              │
+│  Endpoint: /                                                                 │
+│  Method: GET                                                                 │
+│  Code Locations                                                              │
+│    Location 1: frontend/src/app/page.tsx:8-12                                │
+│  Model deepseek/deepseek-v3-0324                                             │
+│  Vulnerabilities 1                                                           │
+```
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fallback = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
+            str(evidence_file),
+            str(repo_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert (
+        "Strix report from deepseek/deepseek-r1-0528: "
+        "Authentication Bypass via X-Dev-User Header"
+    ) in fallback.stdout
+    assert (
+        "Strix report from deepseek/deepseek-v3-0324: "
+        "Frontend Security Issues: XSS and Insecure Data Handling"
+    ) in fallback.stdout
+    assert (
+        "Strix report from openai/gpt-5: Authentication Bypass"
+        not in fallback.stdout
+    )
+    assert fallback.stdout.count("Strix report from deepseek/") == 2
+    normalized_agents = " ".join(agents.split())
+    assert "Strix logs may print the report's `Model ...` line after" in agents
+    assert "not to a previous retry attempt" in normalized_agents
+
+    good_control_file = tmp_path / "good-control.json"
+    good_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with two fallback model reports.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from deepseek/deepseek-r1-0528",
+                        "problem": (
+                            "Strix Security Scan/strix reported "
+                            "Authentication Bypass via X-Dev-User Header. "
+                            "Severity: CRITICAL. Endpoint: /api/me. Method: GET. "
+                            "Code location backend/app/auth.py:132-135."
+                        ),
+                        "root_cause": "deepseek/deepseek-r1-0528 report evidence",
+                        "fix_direction": "Remove X-Dev-User trust from this line.",
+                        "regression_test_direction": "Cover /api/me auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    },
+                    {
+                        "path": "frontend/src/app/page.tsx",
+                        "line": 8,
+                        "severity": "HIGH",
+                        "title": "Strix report from deepseek/deepseek-v3-0324",
+                        "problem": (
+                            "Strix Security Scan/strix reported Frontend Security "
+                            "Issues: XSS and Insecure Data Handling. Severity: HIGH. "
+                            "Endpoint: /. Method: GET. Code location "
+                            "frontend/src/app/page.tsx:8-12."
+                        ),
+                        "root_cause": "deepseek/deepseek-v3-0324 report evidence",
+                        "fix_direction": "Patch the frontend render boundary.",
+                        "regression_test_direction": "Cover escaped page output.",
+                        "suggested_diff": "- old\n+ new",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    good_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(good_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert good_validation.returncode == 0, good_validation.stderr
+
+    collapsed_control_file = tmp_path / "collapsed-control.json"
+    collapsed_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with two fallback model reports.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix reports from deepseek/deepseek-r1-0528 and deepseek/deepseek-v3-0324",
+                        "problem": (
+                            "Authentication Bypass via X-Dev-User Header; "
+                            "Frontend Security Issues: XSS and Insecure Data Handling. "
+                            "Severity: CRITICAL HIGH. Endpoints: /api/me and /. "
+                            "Method: GET. Locations: backend/app/auth.py:132-135 "
+                            "and frontend/src/app/page.tsx:8-12."
+                        ),
+                        "root_cause": "Collapsed both Strix model reports into one finding.",
+                        "fix_direction": "Patch both reported locations.",
+                        "regression_test_direction": "Cover both reports.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    collapsed_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(collapsed_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert collapsed_validation.returncode == 4
+    assert "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" in collapsed_validation.stdout
+
+
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
     None
 ):
