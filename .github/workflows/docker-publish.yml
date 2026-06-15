@@ -57,6 +57,52 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
+      - name: Prepare OCI annotation values
+        id: oci
+        env:
+          GIT_REF_NAME: ${{ github.ref_name }}
+          IMAGE_COMPONENT: ${{ matrix.component }}
+          IMAGE_NAME: ${{ matrix.image }}
+          REPOSITORY: ${{ github.repository }}
+          REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          version="$(cat VERSION)"
+          created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          vendor="${REPOSITORY%%/*}"
+          case "$IMAGE_COMPONENT" in
+            frontend)
+              title="naruon frontend"
+              description="Naruon Next.js frontend runtime image"
+              base_name="docker.io/library/node:24-slim"
+              ;;
+            backend)
+              title="naruon backend"
+              description="Naruon FastAPI backend runtime image"
+              base_name="docker.io/library/python:3.11-slim"
+              ;;
+            *)
+              title="naruon"
+              description="Naruon combined FastAPI and Next.js runtime image"
+              base_name="docker.io/library/python:3.11-slim"
+              ;;
+          esac
+          {
+            printf 'created=%s\n' "$created"
+            printf 'authors=%s\n' "Seongho Bae"
+            printf 'url=https://github.com/%s/pkgs/container/%s\n' "$REPOSITORY" "$IMAGE_NAME"
+            printf 'documentation=https://github.com/%s#readme\n' "$REPOSITORY"
+            printf 'source=https://github.com/%s\n' "$REPOSITORY"
+            printf 'version=%s\n' "$version"
+            printf 'revision=%s\n' "$REVISION"
+            printf 'vendor=%s\n' "$vendor"
+            printf 'licenses=%s\n' "LicenseRef-Naruon-Proprietary"
+            printf 'ref_name=%s\n' "$GIT_REF_NAME"
+            printf 'title=%s\n' "$title"
+            printf 'description=%s\n' "$description"
+            printf 'base_digest=\n'
+            printf 'base_name=%s\n' "$base_name"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build PR image without publishing
         id: build
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
@@ -65,7 +111,22 @@ jobs:
           file: ${{ matrix.dockerfile }}
           platforms: linux/amd64,linux/arm64
           push: false
-          build-args: ${{ matrix.build_args }}
+          build-args: |
+            ${{ matrix.build_args }}
+            OCI_IMAGE_CREATED=${{ steps.oci.outputs.created }}
+            OCI_IMAGE_AUTHORS=${{ steps.oci.outputs.authors }}
+            OCI_IMAGE_URL=${{ steps.oci.outputs.url }}
+            OCI_IMAGE_DOCUMENTATION=${{ steps.oci.outputs.documentation }}
+            OCI_IMAGE_SOURCE=${{ steps.oci.outputs.source }}
+            OCI_IMAGE_VERSION=${{ steps.oci.outputs.version }}
+            OCI_IMAGE_REVISION=${{ steps.oci.outputs.revision }}
+            OCI_IMAGE_VENDOR=${{ steps.oci.outputs.vendor }}
+            OCI_IMAGE_LICENSES=${{ steps.oci.outputs.licenses }}
+            OCI_IMAGE_REF_NAME=${{ steps.oci.outputs.ref_name }}
+            OCI_IMAGE_TITLE=${{ steps.oci.outputs.title }}
+            OCI_IMAGE_DESCRIPTION=${{ steps.oci.outputs.description }}
+            OCI_IMAGE_BASE_DIGEST=${{ steps.oci.outputs.base_digest }}
+            OCI_IMAGE_BASE_NAME=${{ steps.oci.outputs.base_name }}
           provenance: true
           sbom: true
 
@@ -119,6 +180,53 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
 
+      - name: Prepare OCI annotation values
+        id: oci
+        env:
+          GIT_REF_NAME: ${{ github.ref_name }}
+          IMAGE_COMPONENT: ${{ matrix.component }}
+          IMAGE_NAME: ${{ matrix.image }}
+          REPOSITORY: ${{ github.repository }}
+          REVISION: ${{ github.sha }}
+          VERSION_VALUE: ${{ steps.version.outputs.version }}
+        run: |
+          version="${VERSION_VALUE:-$(cat VERSION)}"
+          created="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          vendor="${REPOSITORY%%/*}"
+          case "$IMAGE_COMPONENT" in
+            frontend)
+              title="naruon frontend"
+              description="Naruon Next.js frontend runtime image"
+              base_name="docker.io/library/node:24-slim"
+              ;;
+            backend)
+              title="naruon backend"
+              description="Naruon FastAPI backend runtime image"
+              base_name="docker.io/library/python:3.11-slim"
+              ;;
+            *)
+              title="naruon"
+              description="Naruon combined FastAPI and Next.js runtime image"
+              base_name="docker.io/library/python:3.11-slim"
+              ;;
+          esac
+          {
+            printf 'created=%s\n' "$created"
+            printf 'authors=%s\n' "Seongho Bae"
+            printf 'url=https://github.com/%s/pkgs/container/%s\n' "$REPOSITORY" "$IMAGE_NAME"
+            printf 'documentation=https://github.com/%s#readme\n' "$REPOSITORY"
+            printf 'source=https://github.com/%s\n' "$REPOSITORY"
+            printf 'version=%s\n' "$version"
+            printf 'revision=%s\n' "$REVISION"
+            printf 'vendor=%s\n' "$vendor"
+            printf 'licenses=%s\n' "LicenseRef-Naruon-Proprietary"
+            printf 'ref_name=%s\n' "$GIT_REF_NAME"
+            printf 'title=%s\n' "$title"
+            printf 'description=%s\n' "$description"
+            printf 'base_digest=\n'
+            printf 'base_name=%s\n' "$base_name"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         with:
@@ -129,12 +237,29 @@ jobs:
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=${{ steps.version.outputs.version }}
             type=raw,value=latest
+          labels: |
+            org.opencontainers.image.created=${{ steps.oci.outputs.created }}
+            org.opencontainers.image.authors=${{ steps.oci.outputs.authors }}
+            org.opencontainers.image.url=${{ steps.oci.outputs.url }}
+            org.opencontainers.image.documentation=${{ steps.oci.outputs.documentation }}
+            org.opencontainers.image.source=${{ steps.oci.outputs.source }}
+            org.opencontainers.image.version=${{ steps.oci.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.oci.outputs.revision }}
+            org.opencontainers.image.vendor=${{ steps.oci.outputs.vendor }}
+            org.opencontainers.image.licenses=${{ steps.oci.outputs.licenses }}
+            org.opencontainers.image.ref.name=${{ steps.oci.outputs.ref_name }}
+            org.opencontainers.image.title=${{ steps.oci.outputs.title }}
+            org.opencontainers.image.description=${{ steps.oci.outputs.description }}
+            org.opencontainers.image.base.digest=${{ steps.oci.outputs.base_digest }}
+            org.opencontainers.image.base.name=${{ steps.oci.outputs.base_name }}
 
       - name: Build and publish Docker image
         id: build
@@ -146,7 +271,23 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.build_args }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          build-args: |
+            ${{ matrix.build_args }}
+            OCI_IMAGE_CREATED=${{ steps.oci.outputs.created }}
+            OCI_IMAGE_AUTHORS=${{ steps.oci.outputs.authors }}
+            OCI_IMAGE_URL=${{ steps.oci.outputs.url }}
+            OCI_IMAGE_DOCUMENTATION=${{ steps.oci.outputs.documentation }}
+            OCI_IMAGE_SOURCE=${{ steps.oci.outputs.source }}
+            OCI_IMAGE_VERSION=${{ steps.oci.outputs.version }}
+            OCI_IMAGE_REVISION=${{ steps.oci.outputs.revision }}
+            OCI_IMAGE_VENDOR=${{ steps.oci.outputs.vendor }}
+            OCI_IMAGE_LICENSES=${{ steps.oci.outputs.licenses }}
+            OCI_IMAGE_REF_NAME=${{ steps.oci.outputs.ref_name }}
+            OCI_IMAGE_TITLE=${{ steps.oci.outputs.title }}
+            OCI_IMAGE_DESCRIPTION=${{ steps.oci.outputs.description }}
+            OCI_IMAGE_BASE_DIGEST=${{ steps.oci.outputs.base_digest }}
+            OCI_IMAGE_BASE_NAME=${{ steps.oci.outputs.base_name }}
           provenance: true
           sbom: true
 
