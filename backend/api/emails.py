@@ -449,7 +449,6 @@ async def get_email_thread(
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
 

@@ -1,3 +1,6 @@
 ## 2024-06-10 - Redundant Python sorting of DB results
 **Learning:** Python's `sorted()` was being called on query results that were already sorted correctly by the database using `order_by()`. Since Python 3.7+ dictionaries preserve insertion order, we can stream correctly ordered database results into a grouping dictionary (e.g., grouping thread messages) and naturally preserve the newest-first order without an additional $O(N \log N)$ sort step on the grouped results.
 **Action:** Avoid applying Python's `sorted()` to lists of SQLAlchemy objects if the database query already applies an equivalent `.order_by()` clause. Rely on dictionary insertion ordering when grouping inherently pre-sorted streaming records.
+## 2026-06-15 - Prevent SQLAlchemy AsyncSession Concurrency Issues
+**Learning:** Using `asyncio.gather` to execute multiple concurrent queries on a single SQLAlchemy `AsyncSession` is unsafe because the session is not thread-safe and will cause connection conflicts or exceptions.
+**Action:** Avoid concurrent query execution on a single session. Find performance gains elsewhere, like removing redundant Python-side sorting (e.g., `sorted()`) when the database query already returns sorted results via `.order_by()`.
