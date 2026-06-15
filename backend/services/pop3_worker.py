@@ -5,8 +5,12 @@ from sqlalchemy import select
 from db.session import AsyncSessionLocal
 from db.models import TenantConfig
 from services.email_client import validate_pop3_destination
+from services.email_parser import parse_eml_bytes
+from services.exceptions import EmailParseError
+from services.imap_worker import process_fetched_email
 
 logger = logging.getLogger(__name__)
+MAX_POP3_FETCH_MESSAGES = 10
 
 
 class Pop3SyncWorker:
@@ -81,16 +85,54 @@ class Pop3SyncWorker:
             )
             try:
                 # We use asyncio.to_thread for synchronous poplib
-                await asyncio.to_thread(
+                messages = await asyncio.to_thread(
                     self._do_pop3_sync, config, pop3_server, pop3_port
                 )
-                logger.info(f"Successfully connected to POP3 server for user {config.user_id}.")
+                imported_count = await self._import_messages(config, messages)
+                logger.info(
+                    "Successfully synced POP3 server for user %s with %s imported messages.",
+                    config.user_id,
+                    imported_count,
+                )
             except Exception as e:
                 logger.error(
                     "Failed to connect or sync with POP3 server for user %s: %s",
                     config.user_id,
                     type(e).__name__,
                 )
+
+    async def _import_messages(
+        self, config: TenantConfig, messages: list[bytes]
+    ) -> int:
+        if not messages:
+            return 0
+
+        imported_count = 0
+        owner_addresses = [config.pop3_username] if config.pop3_username else None
+        async with AsyncSessionLocal() as session:
+            try:
+                for raw_message in messages:
+                    try:
+                        email_data = parse_eml_bytes(raw_message)
+                    except EmailParseError:
+                        logger.info(
+                            "Skipping unparsable POP3 message for user %s.",
+                            config.user_id,
+                        )
+                        continue
+                    await process_fetched_email(
+                        session,
+                        email_data,
+                        config.user_id,
+                        config.organization_id,
+                        owner_addresses=owner_addresses,
+                    )
+                    imported_count += 1
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+        return imported_count
 
     def _validated_destination(self, config: TenantConfig) -> tuple[str, int]:
         return validate_pop3_destination(
@@ -103,7 +145,7 @@ class Pop3SyncWorker:
         config: TenantConfig,
         pop3_server: str | None = None,
         pop3_port: int | None = None,
-    ):
+    ) -> list[bytes]:
         if pop3_server is None or pop3_port is None:
             pop3_server, pop3_port = self._validated_destination(config)
         pop3_client = poplib.POP3_SSL(pop3_server, pop3_port)
@@ -126,5 +168,34 @@ class Pop3SyncWorker:
                 )
             pop3_client.user(config.pop3_username)
             pop3_client.pass_(config.pop3_password)
+            _response, listings, _octets = pop3_client.list()
+            messages: list[bytes] = []
+            for listing in listings[:MAX_POP3_FETCH_MESSAGES]:
+                message_number = self._message_number_from_listing(listing)
+                if message_number is None:
+                    continue
+                _retr_response, lines, _retr_octets = pop3_client.retr(message_number)
+                messages.append(b"\r\n".join(self._bytes_line(line) for line in lines))
+            return messages
         finally:
             pop3_client.quit()
+
+    def _message_number_from_listing(self, listing: bytes | str) -> int | None:
+        raw_listing = (
+            listing.decode("ascii", errors="ignore")
+            if isinstance(listing, bytes)
+            else listing
+        )
+        candidate = (
+            raw_listing.strip().split(maxsplit=1)[0] if raw_listing.strip() else ""
+        )
+        if not candidate.isdigit():
+            return None
+        return int(candidate)
+
+    def _bytes_line(self, line: bytes | str) -> bytes:
+        return (
+            line
+            if isinstance(line, bytes)
+            else line.encode("utf-8", errors="replace")
+        )

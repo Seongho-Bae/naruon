@@ -1,10 +1,13 @@
 import xml.etree.ElementTree as ET
+from contextlib import contextmanager
 from urllib.parse import unquote
 
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from api.auth import get_auth_context
+from db.models import ProjectFolder
+from db.session import get_db
 from main import app
 
 AUTH_HEADERS = {
@@ -12,6 +15,63 @@ AUTH_HEADERS = {
     "X-User-Role": "organization_admin",
     "X-Organization-Id": "org-acme",
 }
+
+
+class MockScalars:
+    def __init__(self, items):
+        self.items = items
+
+    def all(self):
+        return self.items
+
+
+class MockResult:
+    def __init__(self, items):
+        self.items = items
+
+    def scalars(self):
+        return MockScalars(self.items)
+
+
+class MockDavSession:
+    def __init__(self, folders):
+        self.folders = folders
+        self.statements = []
+        self.params = []
+
+    async def execute(self, stmt):
+        self.statements.append(stmt)
+        self.params.append(dict(stmt.compile().params))
+        return MockResult(self.folders)
+
+
+@contextmanager
+def dav_db_override(session):
+    async def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        yield
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+def project_folder(
+    folder_uid: str,
+    project_name: str,
+    *,
+    user_id: str = "user123",
+    organization_id: str | None = "org-acme",
+    webdav_path: str = "/Projects/Naruon_Roadmap_2026",
+) -> ProjectFolder:
+    return ProjectFolder(
+        folder_uid=folder_uid,
+        user_id=user_id,
+        organization_id=organization_id,
+        project_name=project_name,
+        webdav_path=webdav_path,
+    )
 
 
 def test_dav_rejects_missing_auth():
@@ -64,24 +124,90 @@ def test_dav_rejects_ownerless_options_before_capability_discovery(
 
 
 def test_dav_propfind(dev_auth_dependency_overrides):
+    session = MockDavSession(
+        [
+            project_folder("webdav_folder_roadmap", "Naruon Roadmap 2026"),
+            project_folder("webdav_folder_research", "Research Notes"),
+        ]
+    )
     with TestClient(app) as client:
-        response = client.request(
-            "PROPFIND", "/dav/user123/projects/", headers=AUTH_HEADERS
-        )
+        with dav_db_override(session):
+            response = client.request(
+                "PROPFIND",
+                "/dav/user123/projects/",
+                headers={**AUTH_HEADERS, "Depth": "1"},
+            )
         assert response.status_code == 207
         assert "<D:multistatus" in response.text
         root = ET.fromstring(response.text)
-        assert root.find(".//{DAV:}collection") is not None
+        hrefs = [node.text for node in root.findall(".//{DAV:}href")]
+        display_names = [node.text for node in root.findall(".//{DAV:}displayname")]
+        assert "/api/dav/user123/projects/webdav_folder_roadmap" in hrefs
+        assert "/api/dav/user123/projects/webdav_folder_research" in hrefs
+        assert "Naruon Roadmap 2026" in display_names
+        assert "Research Notes" in display_names
+        assert "/Projects/Naruon_Roadmap_2026" not in response.text
+        assert session.params[-1]["user_id_1"] == "user123"
+        assert session.params[-1]["organization_id_1"] == "org-acme"
+
+
+def test_dav_propfind_empty_projects_returns_empty_multistatus(
+    dev_auth_dependency_overrides,
+):
+    session = MockDavSession([])
+    with TestClient(app) as client:
+        with dav_db_override(session):
+            response = client.request(
+                "PROPFIND",
+                "/dav/user123/projects/",
+                headers={**AUTH_HEADERS, "Depth": "1"},
+            )
+
+    assert response.status_code == 207
+    root = ET.fromstring(response.text)
+    assert root.findall(".//{DAV:}response") == []
+    assert session.params[-1]["user_id_1"] == "user123"
+    assert session.params[-1]["organization_id_1"] == "org-acme"
+
+
+def test_dav_propfind_missing_folder_uid_returns_404(dev_auth_dependency_overrides):
+    session = MockDavSession([])
+    with TestClient(app) as client:
+        with dav_db_override(session):
+            response = client.request(
+                "PROPFIND",
+                "/dav/user123/projects/webdav_folder_missing",
+                headers={**AUTH_HEADERS, "Depth": "0"},
+            )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "DAV project folder not found"
+    assert session.params[-1]["user_id_1"] == "user123"
+    assert session.params[-1]["organization_id_1"] == "org-acme"
 
 
 def test_dav_propfind_escapes_path_values(dev_auth_dependency_overrides):
+    session = MockDavSession(
+        [
+            project_folder(
+                "x&y<z>",
+                "Folder & Research <2026>",
+                webdav_path="/Projects/Unsafe_Display",
+            )
+        ]
+    )
     with TestClient(app) as client:
-        response = client.request(
-            "PROPFIND", "/dav/user123/projects/x%26y%3Cz%3E", headers=AUTH_HEADERS
-        )
+        with dav_db_override(session):
+            response = client.request(
+                "PROPFIND",
+                "/dav/user123/projects/x%26y%3Cz%3E",
+                headers={**AUTH_HEADERS, "Depth": "0"},
+            )
         assert response.status_code == 207
         assert "x&amp;y&lt;z&gt;" in response.text
         assert "x&y<z>" not in response.text
+        assert "Folder &amp; Research &lt;2026&gt;" in response.text
+        assert "Folder & Research <2026>" not in response.text
         ET.fromstring(response.text)
 
 
@@ -108,7 +234,9 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
 
     caplog.set_level(logging.INFO, logger="api.dav")
     malicious_path = "user123/projects/test%1B%5B31minjected%0A%0D"
+    malicious_folder_uid = unquote("test%1B%5B31minjected%0A%0D")
     scope = {"type": "http", "method": "PROPFIND", "headers": []}
+    session = MockDavSession([project_folder(malicious_folder_uid, "Injected path")])
 
     async def run_handler():
         req = Request(scope)
@@ -123,6 +251,7 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
             request=req,
             path=unquote(malicious_path),
             auth_context=auth_context,
+            db=session,
         )
 
     asyncio.run(run_handler())

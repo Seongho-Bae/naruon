@@ -2,8 +2,11 @@ import logging
 from html import escape as escape_xml_text
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context
+from db.session import get_db
+from services.webdav_service import webdav_service
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +36,115 @@ def _ensure_dav_owner_scope(path: str, auth_context: AuthContext) -> None:
     )
 
 
+def _dav_path_segments(path: str) -> list[str]:
+    return [segment for segment in path.strip("/").split("/") if segment]
+
+
+def _dav_multistatus_xml(responses: list[str]) -> str:
+    response_xml = "\n".join(responses)
+    if response_xml:
+        response_xml = f"\n{response_xml}\n"
+    return f"""<?xml version="1.0" encoding="utf-8" ?>
+<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">{response_xml}</D:multistatus>"""
+
+
+def _dav_response_xml(
+    *,
+    href: str,
+    display_name: str,
+    is_collection: bool = True,
+) -> str:
+    resourcetype = "<D:collection/>" if is_collection else ""
+    escaped_href = escape_xml_text(href)
+    escaped_display_name = escape_xml_text(display_name)
+    return f"""  <D:response>
+    <D:href>{escaped_href}</D:href>
+    <D:propstat>
+      <D:prop>
+        <D:resourcetype>{resourcetype}</D:resourcetype>
+        <D:displayname>{escaped_display_name}</D:displayname>
+      </D:prop>
+      <D:status>HTTP/1.1 200 OK</D:status>
+    </D:propstat>
+  </D:response>"""
+
+
+def _dav_xml_response(responses: list[str]) -> Response:
+    return Response(
+        content=_dav_multistatus_xml(responses),
+        media_type="application/xml",
+        status_code=207,
+    )
+
+
+def _dav_depth(request: Request) -> str:
+    depth = request.headers.get("Depth", "1").strip().lower()
+    if depth == "0":
+        return "0"
+    return "1"
+
+
+def _project_folder_response(path_owner_user_id: str, folder: dict) -> str:
+    folder_uid = str(folder["folder_uid"])
+    project_name = str(folder["project_name"])
+    return _dav_response_xml(
+        href=f"/api/dav/{path_owner_user_id}/projects/{folder_uid}",
+        display_name=project_name,
+        is_collection=True,
+    )
+
+
+async def _handle_project_propfind(
+    *,
+    request: Request,
+    path: str,
+    auth_context: AuthContext,
+    db: AsyncSession,
+) -> Response:
+    segments = _dav_path_segments(path)
+    if len(segments) < 2 or segments[1] != "projects":
+        raise HTTPException(status_code=404, detail="DAV collection not found")
+
+    path_owner_user_id = segments[0]
+    depth = _dav_depth(request)
+    folder_uid = segments[2] if len(segments) == 3 else None
+    if len(segments) > 3:
+        raise HTTPException(status_code=404, detail="DAV project folder not found")
+
+    if folder_uid is None and depth == "0":
+        return _dav_xml_response(
+            [
+                _dav_response_xml(
+                    href=f"/api/dav/{path_owner_user_id}/projects/",
+                    display_name="projects",
+                    is_collection=True,
+                )
+            ]
+        )
+
+    folders = await webdav_service.get_project_folders_from_db(
+        db,
+        auth_context.user_id,
+        auth_context.organization_id,
+    )
+
+    if folder_uid is None:
+        return _dav_xml_response(
+            [
+                _project_folder_response(path_owner_user_id, folder)
+                for folder in folders
+            ]
+        )
+
+    for folder in folders:
+        if folder.get("folder_uid") == folder_uid:
+            return _dav_xml_response(
+                [_project_folder_response(path_owner_user_id, folder)]
+            )
+
+    raise HTTPException(status_code=404, detail="DAV project folder not found")
+
+
 @router.api_route(
     "/{path:path}",
     methods=["PROPFIND", "REPORT", "MKCOL", "GET", "PUT", "DELETE", "OPTIONS"],
@@ -41,6 +153,7 @@ async def dav_handler(
     request: Request,
     path: str,
     auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Skeleton endpoint for CalDAV / WebDAV routing.
@@ -62,27 +175,11 @@ async def dav_handler(
         return Response(status_code=200, headers=headers)
 
     if request.method == "PROPFIND":
-        # Simulate virtual collections: /dav/projects/
-        is_collection = path.endswith("/") or path == "" or "projects" in path
-        resourcetype = "<D:collection/>" if is_collection else ""
-        escaped_href = escape_xml_text(f"/api/dav/{path}")
-        escaped_display_name = escape_xml_text(path.split("/")[-1] or "Root")
-
-        xml_response = f"""<?xml version="1.0" encoding="utf-8" ?>
-<D:multistatus xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
-  <D:response>
-    <D:href>{escaped_href}</D:href>
-    <D:propstat>
-      <D:prop>
-        <D:resourcetype>{resourcetype}</D:resourcetype>
-        <D:displayname>{escaped_display_name}</D:displayname>
-      </D:prop>
-      <D:status>HTTP/1.1 200 OK</D:status>
-    </D:propstat>
-  </D:response>
-</D:multistatus>"""
-        return Response(
-            content=xml_response, media_type="application/xml", status_code=207
+        return await _handle_project_propfind(
+            request=request,
+            path=path,
+            auth_context=auth_context,
+            db=db,
         )
 
     if request.method == "PUT":

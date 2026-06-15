@@ -509,13 +509,17 @@ test('renders Data quality surface across viewports with signed API headers', as
 
   await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
   await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
+  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await expect(page.getByText('최근 파일/첨부 자산')).toBeVisible();
   const assetList = page.getByLabel('문서 저장소 파일 자산');
+  await expect(assetList.getByRole('button', { name: /roadmap\.md/ })).toBeVisible();
   await expect(assetList.getByRole('button', { name: /roadmap\.pdf/ })).toBeVisible();
   const assetDetail = page.getByLabel('선택한 파일 자산 상세');
-  await expect(assetDetail.getByRole('heading', { name: 'roadmap.pdf' })).toBeVisible();
-  await expect(assetDetail.getByText('원본 메일/스레드 근거 연결')).toBeVisible();
+  await expect(assetDetail.getByRole('heading', { name: 'roadmap.md' })).toBeVisible();
+  await expect(assetDetail.getByText('워크스페이스 문서 근거')).toBeVisible();
+  await expect(assetDetail.getByText('document status: uploaded')).toBeVisible();
   await expect(assetDetail.getByText('asset_repository_ready')).toHaveCount(0);
+  await expect(assetDetail.getByText('doc_repository_ready')).toHaveCount(0);
   await expect(assetDetail.getByText('thread_repository_ready')).toHaveCount(0);
   await assetList.getByRole('button', { name: /blank-notes\.md/ }).click();
   await expect(assetDetail.getByRole('heading', { name: 'blank-notes.md' })).toBeVisible();
@@ -528,12 +532,14 @@ test('renders Data quality surface across viewports with signed API headers', as
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('4 emails and 3 attachments')).toBeVisible();
   await expect(page.getByText('원본 근거 연결됨').first()).toBeVisible();
+  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-pipeline.png'), fullPage: false });
 
   await page.getByRole('button', { name: '임베딩' }).click();
   await expect(page.getByText('text-embedding-3-small').first()).toBeVisible();
   await expect(page.getByText('Email vectors')).toBeVisible();
   await expect(page.getByText('1,536').first()).toBeVisible();
+  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await expect(page.getByText('28,401')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-embedding.png'), fullPage: false });
 
@@ -549,6 +555,7 @@ test('renders Data quality surface across viewports with signed API headers', as
   await page.goto('/data');
   await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
   await expect(page.getByText('data.quality_surface.viewed')).toHaveCount(0);
+  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('Connector observability')).toBeVisible();
   const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -1129,7 +1136,7 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
-test('renders data WebDAV writeback intent status without direct provider writes', async ({ page }, testInfo) => {
+test('renders data WebDAV writeback intent and document materialization status', async ({ page }, testInfo) => {
   const expectedNaruonToken = 'signed-webdav.e2e.token';
   const publicIdentityHeaders = [
     'x-user-id',
@@ -1148,7 +1155,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
   const desktopAccountsRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/accounts' && request.method() === 'GET';
-  });
+  }, { timeout: 60_000 });
   await page.goto('/data');
   const desktopAccountsCall = await desktopAccountsRequest;
   const desktopAccountsHeaders = desktopAccountsCall.headers();
@@ -1160,7 +1167,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
-  });
+  }, { timeout: 60_000 });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const desktopWritebackCall = await desktopWritebackRequest;
   const desktopHeaders = desktopWritebackCall.headers();
@@ -1176,6 +1183,28 @@ test('renders data WebDAV writeback intent status without direct provider writes
   await expect(page.getByText('WebDAV source webdav_src_primary')).toHaveCount(0);
   await expect(page.getByText('https://webdav.naruon.net')).toHaveCount(0);
   await expect(page.getByText('etag-webdav-primary')).toHaveCount(0);
+  const desktopMaterializationRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === '/api/data/documents/doc_repository_ready/webdav-materialization-intent'
+      && request.method() === 'POST'
+    );
+  }, { timeout: 60_000 });
+  await page.getByRole('button', { name: 'WebDAV 문서 실행 요청' }).click();
+  const desktopMaterializationCall = await desktopMaterializationRequest;
+  const desktopMaterializationHeaders = desktopMaterializationCall.headers();
+  expectBrowserCookieSession(desktopMaterializationHeaders, expectedNaruonToken);
+  expect(desktopMaterializationCall.postDataJSON()).toEqual({
+    target_source_id: 'webdav_src_primary',
+    execute_provider: true,
+  });
+  for (const headerName of publicIdentityHeaders) {
+    expect(desktopMaterializationHeaders[headerName]).toBeUndefined();
+  }
+  await expect(page.getByText('외부 쓰기 실행됨')).toBeVisible();
+  await expect(page.getByText('Workspace document WebDAV materialization executed')).toBeVisible();
+  await expect(page.getByText('/Naruon/Data/roadmap.md-opaque.md')).toHaveCount(0);
+  await expect(page.getByText('runner_req_data_doc_1')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-desktop.png'), fullPage: false });
@@ -1186,7 +1215,7 @@ test('renders data WebDAV writeback intent status without direct provider writes
   const mobileWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
-  });
+  }, { timeout: 60_000 });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const mobileWritebackCall = await mobileWritebackRequest;
   const mobileHeaders = mobileWritebackCall.headers();

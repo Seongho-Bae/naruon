@@ -40,10 +40,11 @@
   encrypted blobs.
 - Email rows now have nullable `user_id` and `organization_id` owner keys, and
   email/search/network graph queries are scoped to the authenticated user plus
-  organization. Existing local databases receive the columns and null-row
-  default backfills through `backend/scripts/bootstrap_db.py`; production still
-  needs an audited mailbox-owner and organization migration/backfill before
-  multi-tenant data is mixed.
+  organization. Managed environments apply schema changes through
+  `backend/scripts/migrate_db.py`; `backend/scripts/bootstrap_db.py` remains a
+  local compatibility path for idempotent backfills. Production still needs an
+  audited mailbox-owner and organization migration/backfill before multi-tenant
+  data is mixed.
 - Email `message_id` uniqueness, fixture import upserts, and reply-thread lookup
   are scoped by `user_id` plus `organization_id` so reused RFC Message-ID values
   cannot cross tenant boundaries.

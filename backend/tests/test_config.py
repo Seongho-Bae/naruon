@@ -74,6 +74,27 @@ def test_database_url_loads_from_environment(monkeypatch):
     assert loaded_settings.DATABASE_URL == database_url
 
 
+def test_readonly_database_url_is_optional_and_loads_from_environment(monkeypatch):
+    _set_required_runtime_env(monkeypatch)
+
+    without_replica = _settings_without_env_file()
+
+    assert without_replica.READONLY_DATABASE_URL is None
+
+    replica_url = "postgresql+asyncpg://readonly:readonly@localhost:5433/test_db"
+    monkeypatch.setenv("READONLY_DATABASE_URL", replica_url)
+
+    with_replica = _settings_without_env_file()
+
+    assert with_replica.READONLY_DATABASE_URL == replica_url
+
+    monkeypatch.setenv("READONLY_DATABASE_URL", "")
+
+    blank_replica = _settings_without_env_file()
+
+    assert blank_replica.READONLY_DATABASE_URL is None
+
+
 def test_allowed_cors_origins_are_validated_and_normalized(monkeypatch):
     _set_required_runtime_env(monkeypatch)
     monkeypatch.setenv(

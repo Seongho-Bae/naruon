@@ -72,7 +72,14 @@ interface OperationalSignalsResponse {
     local_protocols: string[];
     last_heartbeat_at: string | null;
     last_disconnect_at: string | null;
-    queue_depth_state: 'not_reported';
+    queue_depth_state: 'clear' | 'backlog' | 'degraded';
+    queue_depth: {
+      pending_count: number;
+      running_count: number;
+      failed_count: number;
+      total_count: number;
+      next_retry_at: string | null;
+    };
     recent_events: ConnectorSignalEvent[];
   };
   signals: OperationalSignal[];
@@ -407,8 +414,15 @@ function getConnectorEventDetail(event: ConnectorSignalEvent) {
 
 function getOperationalSignalDetail(signal: OperationalSignal) {
   if (signal.signal_key === 'connector_heartbeat') return '서버가 활성 outbound runner 상태를 확인합니다.';
+  if (signal.signal_key === 'writeback_retry_queue') return '서버가 provider writeback 재시도 큐 상태를 집계합니다.';
   if (signal.signal_key === 'sync_lag') return '원본 connector 작업이 동기화 지연 신호를 기록하면 표시합니다.';
   return signal.detail ? '운영 신호 상태를 확인합니다.' : '상세 근거가 아직 기록되지 않았습니다.';
+}
+
+function getQueueDepthLabel(state: OperationalSignalsResponse['connector']['queue_depth_state']) {
+  if (state === 'degraded') return '조치 필요';
+  if (state === 'backlog') return '대기 중';
+  return '비어 있음';
 }
 
 function getProviderTypeLabel(providerType: string) {
@@ -1482,7 +1496,7 @@ export function SettingsLayout() {
                   ) : null}
                   {operationalSignals ? (
                     <div className="mt-5 space-y-5">
-                      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="rounded-xl border border-border bg-background p-3">
                           <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">연결 상태</dt>
                           <dd className="mt-1 text-sm font-bold text-foreground">{getConnectorStateLabel(operationalSignals.connector.connection_state)}</dd>
@@ -1498,6 +1512,14 @@ export function SettingsLayout() {
                         <div className="rounded-xl border border-border bg-background p-3">
                           <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">OTel traces</dt>
                           <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_traces_enabled ? '활성' : '미설정'}</dd>
+                        </div>
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">writeback queue</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{getQueueDepthLabel(operationalSignals.connector.queue_depth_state)}</dd>
+                          <dd className="mt-2 space-y-1 text-xs font-semibold text-muted-foreground">
+                            <span className="block">재시도 대기 {operationalSignals.connector.queue_depth.pending_count}건</span>
+                            <span className="block">진행 {operationalSignals.connector.queue_depth.running_count}건 · 실패 {operationalSignals.connector.queue_depth.failed_count}건</span>
+                          </dd>
                         </div>
                       </dl>
 

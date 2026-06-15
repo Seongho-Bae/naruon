@@ -55,11 +55,47 @@ now expose opaque `project_folders.folder_uid` values, scope listing by the
 signed-session `user_id` and `organization_id`, and keep sequential folder
 primary keys internal. `/dav` mutation methods fail closed until provider
 execution can enforce source, capability, credential, and ETag/If-Match checks.
-Real CalDAV/WebDAV mutation, ETag-aware WebDAV/Notes provider execution for
-synthesized knowledge, POP3 runtime sync, durable
-reply-tracking notifications, configurable SLA policy storage, and source-id
-filtered sender graph views remain episode work and must preserve this registry
-boundary.
+The Data workspace can create scoped workspace document rows through signed
+`POST /api/data/documents` and can request reparse, embedding regeneration
+intent, and HWP conversion intent for the selected opaque `document_id`; these
+actions update control-plane document status only and return
+`provider_write_executed=false`. Selected workspace documents can also request
+signed WebDAV materialization through
+`POST /api/data/documents/{document_id}/webdav-materialization-intent`: the
+backend re-reads the document from the signed `workspace_id`, derives the target
+path and Markdown content server-side, validates the selected opaque WebDAV
+`source_uid` through the scoped source registry, and dispatches `write_webdav`
+only when the user explicitly sets `execute_provider=true`.
+The Python connector now has local CalDAV/WebDAV PUT adapters that enforce
+configured opaque source ids, source writeback enablement, safe target paths, and
+`If-Match` before provider execution. The Calendar writeback intent endpoint and
+the WebDAV materialization endpoint can dispatch signed commands to an active
+outbound runner when the caller explicitly sets `execute_provider=true`; Calendar
+dispatch additionally fails closed before runner dispatch unless the selected
+source has If-Match evidence. Runner command dispatch, response success, timeout,
+connection failure, and adapter failure outcomes persist scoped
+`ConnectorSignalEvent` rows without storing provider credentials or command
+payloads. Transient writeback dispatch failures (`runner_not_connected`,
+`runner_response_timeout`, and `runner_dispatch_failed`) also enqueue scoped
+`provider_writeback_retry_items` rows with encrypted command payloads so a later
+worker can retry without treating Naruon as the provider source of truth. The
+backend starts a scoped retry worker that dispatches due retry items with retry
+enqueue disabled, marks successful provider writes as `succeeded`, reschedules
+retryable transient failures with exponential backoff, and marks exhausted
+items as `failed_exhausted`. Organization-admin observability reads surface only
+aggregate queue depth by state from `provider_writeback_retry_items`, not queued
+payloads, provider credentials, or retry item identifiers. The Calendar
+workspace now exposes an explicit ETag-guarded execution request control that
+sends `execute_provider=true` only for selected customer-owned sources and
+redacts runner/retry/audit identifiers from the browser UI. Self-sent knowledge
+tasks expose the same deliberate execution boundary for WebDAV/Notes
+materialization: users can create intent-only evidence or explicitly request
+connector execution, and the UI shows execution/retry state without exposing
+target paths, opaque source ids, runner ids, retry ids, or audit event names.
+Data workspace document materialization follows the same deliberate execution
+boundary for uploaded workspace documents. Configurable SLA policy storage and
+any remaining source-registry expansion remain episode work and must preserve
+this registry boundary.
 
 ## Policy and audit requirements
 

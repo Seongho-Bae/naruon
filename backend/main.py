@@ -20,6 +20,7 @@ from api.prompts import router as prompts_router
 from api.tasks import router as tasks_router
 from api.ontology import router as ontology_router
 from api.observability import router as observability_router
+from api.runner_ws import manager as runner_manager
 from api.runner_ws import router as runner_ws_router
 from api.dav import router as dav_router
 from api.accounts import router as accounts_router
@@ -32,9 +33,17 @@ from core.config import canonical_origin, settings
 from core.telemetry import setup_telemetry
 from core.version import get_release_version
 from services.imap_worker import ImapSyncWorker
+from services.pop3_worker import Pop3SyncWorker
+from services.provider_writeback_retry_service import ProviderWritebackRetryWorker
+from services.reply_sla_scheduler import ReplySlaScheduler
 from prometheus_fastapi_instrumentator import Instrumentator
 
 imap_worker = ImapSyncWorker()
+pop3_worker = Pop3SyncWorker()
+reply_sla_scheduler = ReplySlaScheduler()
+provider_writeback_retry_worker = ProviderWritebackRetryWorker(
+    runner_manager.dispatch_command,
+)
 
 DISABLE_WORKERS = os.environ.get("DISABLE_BACKGROUND_WORKERS") == "1"
 PRIVATE_API_DEPENDENCIES = [Depends(get_auth_context)]
@@ -46,8 +55,14 @@ async def lifespan(app: FastAPI):
     preload_oidc_jwks()
     if not DISABLE_WORKERS:
         await imap_worker.start()
+        await pop3_worker.start()
+        await reply_sla_scheduler.start()
+        await provider_writeback_retry_worker.start()
     yield
     if not DISABLE_WORKERS:
+        await provider_writeback_retry_worker.stop()
+        await reply_sla_scheduler.stop()
+        await pop3_worker.stop()
         await imap_worker.stop()
 
 
