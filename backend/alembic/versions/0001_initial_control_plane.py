@@ -5,8 +5,6 @@ Revises:
 Create Date: 2026-06-15 00:00:00.000000
 """
 
-from typing import Sequence, Union
-
 from alembic import op
 from sqlalchemy import text
 
@@ -15,8 +13,6 @@ from scripts.bootstrap_db import schema_backfill_sql
 
 revision = "0001_initial_control_plane"
 down_revision = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:

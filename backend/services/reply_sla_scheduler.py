@@ -46,7 +46,7 @@ class ReplySlaScheduler:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                logger.debug("ReplySlaScheduler cancellation acknowledged during shutdown.")
         logger.info("ReplySlaScheduler stopped.")
 
     async def _run_loop(self):

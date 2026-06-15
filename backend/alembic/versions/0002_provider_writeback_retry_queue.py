@@ -5,15 +5,11 @@ Revises: 0001_initial_control_plane
 Create Date: 2026-06-15 00:00:00.000000
 """
 
-from typing import Sequence, Union
-
 from alembic import op
 import sqlalchemy as sa
 
 revision = "0002_provider_retry_queue"
 down_revision = "0001_initial_control_plane"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:

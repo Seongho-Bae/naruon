@@ -66,7 +66,9 @@ class ProviderWritebackRetryWorker:
             try:
                 await self._task
             except asyncio.CancelledError:
-                pass
+                logger.debug(
+                    "ProviderWritebackRetryWorker cancellation acknowledged during shutdown."
+                )
         logger.info("ProviderWritebackRetryWorker stopped.")
 
     async def _run_loop(self):
