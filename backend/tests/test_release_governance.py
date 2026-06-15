@@ -7,6 +7,7 @@ workflow governance before a release branch can land.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -29,6 +30,34 @@ def test_root_version_exists_and_is_initial_semver_release() -> None:
     assert re.fullmatch(
         r"\d+\.\d+\.\d+", version
     ), f"VERSION is not valid SemVer: {version!r}"
+
+
+def test_release_version_sources_are_synchronized() -> None:
+    version = read_repo_text("VERSION").strip()
+    frontend_package = json.loads(read_repo_text("frontend/package.json"))
+    backend_main = read_repo_text("backend/main.py")
+    runtime_config = read_repo_text("backend/api/runtime_config.py")
+    dockerfile = read_repo_text("Dockerfile")
+
+    assert frontend_package["version"] == version
+    assert "version=get_release_version()" in backend_main
+    assert "version=get_release_version()" in runtime_config
+    assert "COPY VERSION /app/VERSION" in dockerfile
+    assert 'org.opencontainers.image.title="naruon"' in dockerfile
+    assert (
+        'org.opencontainers.image.source="https://github.com/Seongho-Bae/naruon"'
+        in dockerfile
+    )
+
+
+def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
+    requirements = read_repo_text("backend/requirements.txt")
+
+    assert "protobuf==6.33.6" in requirements
+    assert "setuptools==82.0.1" in requirements
+    assert "wheel==0.47.0" in requirements
+    assert "opentelemetry-api==1.41.1" in requirements
+    assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:

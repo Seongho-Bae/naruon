@@ -3,6 +3,7 @@
 [![Application CI](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml)
 [![Bandit Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml)
 [![Strix Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Seongho-Bae/naruon)
 
 Full-stack AI workspace with a FastAPI backend, Next.js frontend, vector search,
 AI summaries, hardened email threading, and relay/proxy contracts for external

@@ -30,6 +30,7 @@ from api.ai_hub import router as ai_hub_router
 from api.session import router as auth_session_router
 from core.config import canonical_origin, settings
 from core.telemetry import setup_telemetry
+from core.version import get_release_version
 from services.imap_worker import ImapSyncWorker
 from prometheus_fastapi_instrumentator import Instrumentator
 
@@ -52,7 +53,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Naruon Backend",
-    version="0.1.0",
+    version=get_release_version(),
     lifespan=lifespan,
 )
 
