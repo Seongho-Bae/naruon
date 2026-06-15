@@ -400,6 +400,36 @@
   deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
+- Release version bumps must keep `VERSION`, `CHANGELOG.md`,
+  `frontend/package.json`, FastAPI app metadata, runtime-config responses, and
+  Docker runtime packaging synchronized. The backend should read the release
+  version from `VERSION`; do not add a new hardcoded API version string.
+- Before opening a PR, new committers should run the focused tests that cover
+  the changed contract and include exact commands in the PR body. For release
+  and Docker changes, at minimum verify `python -m pytest
+  backend/tests/test_release_governance.py backend/tests/test_runtime_config_api.py
+  -q`, `corepack pnpm@11.5.3 --dir frontend test --runInBand` when frontend
+  behavior changes, and a Docker build of the affected image.
+- GHCR publishing evidence for the combined `naruon` image must include the
+  exact image name, tag, local image ID, push result, and registry verification
+  from GitHub Packages or an equivalent manifest/API query. Publish the package
+  with public visibility unless a repository policy explicitly says otherwise.
+  Do not treat a local tag as published evidence.
+- Docker image security inspection is part of release evidence. Use a current
+  container scanner such as Trivy or Grype against the exact pushed image tag
+  and treat high/critical actionable findings as blockers until fixed or
+  documented with precise non-applicability evidence.
+- Docker Compose and Podman live-E2E work must clean up after itself. Stop
+  stale `naruon*` containers, remove unused volumes/layers with
+  `podman system prune --all --volumes --force` when safe, and verify
+  `podman ps` has no stale Naruon services. If Podman reports broken storage
+  metadata such as missing overlay layers or `readlink ... overlay: invalid
+  argument`, run `podman system check --repair --force` before relying on
+  `podman system df` or additional image scans.
+- Keep contributor setup friction low: document any new required environment
+  variables, model tags, package-manager version pins, or live-E2E ports in the
+  same PR that introduces them, and avoid hidden local-only defaults that make
+  another committer's PR fail after checkout.
 
 ## Phase 10 development rules
 

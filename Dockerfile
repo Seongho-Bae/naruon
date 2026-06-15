@@ -19,6 +19,7 @@ RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy Backend
+COPY VERSION /app/VERSION
 COPY backend /app/
 
 RUN useradd --system --create-home --home-dir /home/appuser --shell /usr/sbin/nologin appuser \
@@ -48,6 +49,10 @@ RUN pnpm run build
 # Stage 3: Combined image (Python + Node.js)
 FROM backend-runtime
 USER root
+
+LABEL org.opencontainers.image.title="naruon" \
+      org.opencontainers.image.source="https://github.com/Seongho-Bae/naruon" \
+      org.opencontainers.image.description="Naruon combined FastAPI and Next.js runtime image"
 
 # Runtime Node is copied from the frontend builder so apt does not install a
 # distro Node package with noisy alternatives output.
