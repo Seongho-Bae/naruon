@@ -6,6 +6,7 @@ on:
       - "v*"
   pull_request:
     branches:
+      - develop
       - master
       - "release/**"
 
@@ -30,6 +31,12 @@ jobs:
         include:
           - component: backend
             image: ai_email_client-backend
+            dockerfile: Dockerfile
+            context: .
+            build_args: |
+              BUILDKIT_INLINE_CACHE=1
+          - component: naruon
+            image: naruon
             dockerfile: Dockerfile
             context: .
             build_args: |
@@ -75,6 +82,12 @@ jobs:
         include:
           - component: backend
             image: ai_email_client-backend
+            dockerfile: Dockerfile
+            context: .
+            build_args: |
+              BUILDKIT_INLINE_CACHE=1
+          - component: naruon
+            image: naruon
             dockerfile: Dockerfile
             context: .
             build_args: |
