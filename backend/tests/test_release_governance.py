@@ -138,6 +138,7 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
 
+    assert "sqlalchemy==2.0.50" in requirements
     assert "asyncpg==0.31.0" in requirements
     assert "tiktoken==0.13.0" in requirements
     assert "protobuf==6.33.6" in requirements
