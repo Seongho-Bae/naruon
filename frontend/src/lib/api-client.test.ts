@@ -47,7 +47,7 @@ describe("ApiClient", () => {
     expect(client.getCurrentUserId()).toBeNull();
   });
 
-  it("sends stored signed session tokens as bearer authorization", async () => {
+  it("does not read browser-readable session tokens for API authorization", async () => {
     localStorage.setItem("naruon_session_token", SIGNED_SESSION_TOKEN);
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
@@ -63,11 +63,11 @@ describe("ApiClient", () => {
       "/api/tasks/from-email",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({
-          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
-        }),
+        credentials: "same-origin",
       }),
     );
+    const [, requestInit] = fetchMock.mock.calls[0];
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
   });
 
   it("does not send client-controlled development identity headers", async () => {
@@ -163,7 +163,7 @@ describe("ApiClient", () => {
     expect((requestInit as RequestInit).headers).not.toHaveProperty("authorization");
   });
 
-  it("replaces caller-supplied Authorization with stored signed session bearer", async () => {
+  it("drops caller-supplied Authorization without replacing it from browser storage", async () => {
     localStorage.setItem("naruon_session_token", SIGNED_SESSION_TOKEN);
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
@@ -181,12 +181,10 @@ describe("ApiClient", () => {
     );
 
     const [, requestInit] = fetchMock.mock.calls[0];
-    expect((requestInit as RequestInit).headers).toMatchObject({
-      Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
-    });
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
   });
 
-  it("sends multipart form data with stored browser auth and without caller identity headers", async () => {
+  it("sends multipart form data without browser-readable auth or caller identity headers", async () => {
     localStorage.setItem("naruon_session_token", SIGNED_SESSION_TOKEN);
     const fetchMock = mockFetchResponse({ ok: true });
     vi.stubGlobal("fetch", fetchMock);
@@ -207,9 +205,9 @@ describe("ApiClient", () => {
     expect(requestInit?.method).toBe("POST");
     expect(requestInit?.body).toBe(formData);
     expect((requestInit as RequestInit).headers).toMatchObject({
-      Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
       "X-Trace-Id": "trace-456",
     });
+    expect((requestInit as RequestInit).headers).not.toHaveProperty("Authorization");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("Content-Type");
     expect((requestInit as RequestInit).headers).not.toHaveProperty("X-User-Id");
   });

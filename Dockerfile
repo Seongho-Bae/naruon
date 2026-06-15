@@ -9,7 +9,8 @@ ENV PYTHONPATH=/app
 # Install system dependencies.
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      gcc \
+      build-essential \
+      cargo \
       libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
