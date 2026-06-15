@@ -181,6 +181,11 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
     assert "push: true" in workflow
     assert "type=semver" in workflow
     assert "type=ref,event=branch" not in workflow
+    assert "deploy_preflight:" in workflow
+    assert "AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}" in workflow
+    assert "configured=false" in workflow
+    assert "skipping deploy workflow" in workflow
+    assert "needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'" in workflow
 
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:

@@ -82,6 +82,17 @@
   명시한 `ALLOWED_SMTP_HOSTS`/`ALLOWED_SMTP_PORTS` allowlist와 private IP 차단을
   통과한 pinned socket으로만 연결하도록 fail-closed 처리했습니다.
 
+## [0.14.3] - 2026-06-15
+
+### 수정
+- Seongho Bae (@seonghobae): Docker publish workflow가 tag release에서
+  GHCR 이미지 발행을 완료한 뒤 `AKS_KUBECONFIG` secret 부재만으로 전체 release
+  check를 실패시키지 않도록 AKS deploy preflight를 추가했습니다. kubeconfig
+  secret이 없으면 deploy workflow는 skip되고, secret이 구성된 환경에서만 실제
+  AKS 배포가 실행됩니다.
+- Seongho Bae (@seonghobae): GHCR `naruon` package가 repository-linked
+  workflow publish로 다시 생성되도록 release version을 `0.14.3`으로 상향했습니다.
+
 ## [0.14.2] - 2026-06-15
 
 ### 추가

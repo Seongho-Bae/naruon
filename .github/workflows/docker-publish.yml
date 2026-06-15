@@ -166,9 +166,35 @@ jobs:
             printf -- '- Digest: %s\n' "$IMAGE_DIGEST"
           } >> "$GITHUB_STEP_SUMMARY"
 
-  deploy_to_aks:
-    name: Call Deploy to AKS
+  deploy_preflight:
+    name: Detect AKS deploy configuration
     needs: publish_images
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      aks_kubeconfig_configured: ${{ steps.aks.outputs.configured }}
+    steps:
+      - name: Check AKS kubeconfig secret
+        id: aks
+        env:
+          AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}
+        run: |
+          if [ -n "$AKS_KUBECONFIG_CONTENT" ]; then
+            printf 'configured=true\n' >> "$GITHUB_OUTPUT"
+            printf 'AKS kubeconfig secret is configured; deployment will run.\n'
+          else
+            printf 'configured=false\n' >> "$GITHUB_OUTPUT"
+            printf 'AKS kubeconfig secret is not configured; skipping deploy workflow.\n'
+          fi
+
+  deploy_to_aks:
+    name: Call Deploy to AKS
+    needs:
+      - publish_images
+      - deploy_preflight
+    if: |
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'
     uses: ./.github/workflows/deploy.yml
     secrets: inherit
