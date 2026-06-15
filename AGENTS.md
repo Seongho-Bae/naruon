@@ -414,7 +414,13 @@
   exact image name, tag, local image ID, push result, and registry verification
   from GitHub Packages or an equivalent manifest/API query. Publish the package
   with public visibility unless a repository policy explicitly says otherwise.
-  Do not treat a local tag as published evidence.
+  Do not treat a local tag as published evidence. GitHub's REST Packages API and
+  GraphQL package mutations currently do not expose a supported package
+  visibility change operation for GHCR container packages; when API checks show
+  `visibility: private`, complete the public conversion through the logged-in
+  GitHub package settings UI (`Package settings` -> `Danger Zone` -> `Change
+  visibility`) and then verify anonymous pull/token access before declaring the
+  image public.
 - Docker image security inspection is part of release evidence. Use a current
   container scanner such as Trivy or Grype against the exact pushed image tag
   and treat high/critical actionable findings as blockers until fixed or
