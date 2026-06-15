@@ -10,3 +10,8 @@
 **Vulnerability:** Found `xml.etree.ElementTree.fromstring` being used to parse HTTP responses in `backend/tests/test_dav_api.py`.
 **Learning:** Using the standard library `xml.etree` module for parsing untrusted or external XML data exposes the application to XML External Entity (XXE) and XML bomb attacks (CWE-20). This was flagged by static analysis tools (Bandit B314).
 **Prevention:** Always use `defusedxml.ElementTree` instead of `xml.etree.ElementTree` when parsing XML to ensure protection against XML vulnerabilities. Ensure `defusedxml` is listed in `requirements.txt`.
+## 2024-06-13 - Strict CORS Configurations
+
+**Vulnerability:** Hardcoded local fallbacks (e.g., `localhost:3000`, `127.0.0.1:3000`) for CORS origins in FastAPI configuration (`backend/main.py`).
+**Learning:** Hardcoding relaxed CORS origins for development inside production initialization logic introduces a risk of overly permissive CORS behavior, particularly if the expected configuration variable (`ALLOWED_CORS_ORIGINS`) is accidentally left unset.
+**Prevention:** Strictly rely on environment variables for CORS configurations. Local development needs should be supplied via `.env` files rather than embedded as implicit defaults in the application entrypoint.
