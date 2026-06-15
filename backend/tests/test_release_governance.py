@@ -485,3 +485,17 @@ def test_coderabbit_approval_is_decoupled_from_github_checks() -> None:
     assert "enabled: false" in config
     assert "GitHub Checks integration stays disabled" in policy
     assert "GitHub Checks integration disabled" in agents
+
+
+def test_agents_records_ghcr_visibility_publication_runbook() -> None:
+    agents = read_repo_text("AGENTS.md")
+    normalized_agents = " ".join(agents.split())
+
+    assert "GHCR publishing evidence for the combined `naruon` image" in agents
+    assert "REST Packages API" in agents
+    assert "GraphQL package mutations" in agents
+    assert "visibility: private" in agents
+    assert "Package settings" in agents
+    assert "Danger Zone" in agents
+    assert "Change visibility" in normalized_agents
+    assert "anonymous pull/token access" in agents
