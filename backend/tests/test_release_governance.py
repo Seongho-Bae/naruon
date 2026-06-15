@@ -122,18 +122,24 @@ def test_backend_images_use_python_314_runtime() -> None:
     assert 'python-version: "3.12"' not in bandit_workflow
 
 
-def test_python_314_backend_image_includes_native_build_dependencies() -> None:
+def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
     dockerfile = read_repo_text("Dockerfile")
+    requirements = read_repo_text("backend/requirements.txt")
 
-    assert "build-essential" in dockerfile
-    assert "cargo" in dockerfile
-    assert "libpq-dev" in dockerfile
+    assert "PIP_ONLY_BINARY=:all:" in dockerfile
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
+    assert "build-essential" not in dockerfile
+    assert "cargo" not in dockerfile
+    assert "libpq-dev" not in dockerfile
     assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
 
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
 
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
     assert "protobuf==6.33.6" in requirements
     assert "setuptools==82.0.1" in requirements
     assert "wheel==0.47.0" in requirements

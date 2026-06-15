@@ -6,17 +6,9 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-# Install system dependencies.
-RUN DEBIAN_FRONTEND=noninteractive apt-get update \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-      build-essential \
-      cargo \
-      libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
 # Install Backend dependencies
 COPY backend/requirements.txt /app/requirements.txt
-RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 \
+RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ONLY_BINARY=:all: \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy Backend
