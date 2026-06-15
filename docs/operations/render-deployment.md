@@ -13,7 +13,7 @@ at its own Dockerfile. The Naruon repo ships two Dockerfiles on purpose:
 
 | Component | Dockerfile | Why split |
 |---|---|---|
-| Backend (FastAPI) | `./Dockerfile` | Python toolchain, Alembic `migrate_db.py` + `start_backend.py` entrypoint, scaling on CPU/IO. |
+| Backend (FastAPI) | `./Dockerfile` | Python 3.14 toolchain, Alembic `migrate_db.py` + `start_backend.py` entrypoint, scaling on CPU/IO. |
 | Frontend (Next.js) | `./frontend/Dockerfile` | Node 24 toolchain, Next.js build artifacts, scaling on memory. |
 
 This is the same split used by `docker-compose.yml` and `k8s/*.yaml`,

@@ -102,6 +102,26 @@ def test_container_images_use_node_24_runtime() -> None:
     assert "Node 22" not in render_deployment
 
 
+def test_backend_images_use_python_314_runtime() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    app_ci_workflow = read_repo_text(".github/workflows/app-ci.yml")
+    bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
+    render_deployment = read_repo_text("docs/operations/render-deployment.md")
+
+    assert "FROM python:3.14-slim AS backend-runtime" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
+    assert 'python-version: ["3.14"]' in app_ci_workflow
+    assert 'python-version: "3.14"' in bandit_workflow
+    assert "Python 3.14 toolchain" in render_deployment
+    assert "python:3.11" not in root_dockerfile
+    assert "python:3.11" not in docker_publish_workflow
+    assert '"3.11"' not in app_ci_workflow
+    assert '"3.12"' not in app_ci_workflow
+    assert 'python-version: "3.12"' not in bandit_workflow
+
+
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
 
@@ -262,7 +282,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
-    assert "FROM python:3.11-slim AS backend-runtime" in dockerfile
+    assert "FROM python:3.14-slim AS backend-runtime" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile

@@ -1,5 +1,5 @@
 # Stage 1: Backend runtime for local Compose and backend-only deployments
-FROM python:3.11-slim AS backend-runtime
+FROM python:3.14-slim AS backend-runtime
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -63,7 +63,7 @@ ARG OCI_IMAGE_REF_NAME=""
 ARG OCI_IMAGE_TITLE="naruon"
 ARG OCI_IMAGE_DESCRIPTION="Naruon combined FastAPI and Next.js runtime image"
 ARG OCI_IMAGE_BASE_DIGEST=""
-ARG OCI_IMAGE_BASE_NAME="docker.io/library/python:3.11-slim"
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/python:3.14-slim"
 
 LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
