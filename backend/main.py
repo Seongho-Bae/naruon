@@ -60,10 +60,13 @@ if settings.ENABLE_PROMETHEUS_METRICS:
         app, include_in_schema=False, should_gzip=True
     )
 
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
@@ -72,6 +75,7 @@ async def add_security_headers(request: Request, call_next):
             settings.SECURITY_CONTENT_SECURITY_POLICY
         )
     return response
+
 
 cors_origins = [
     origin.strip()
@@ -113,3 +117,9 @@ app.include_router(ai_hub_router, dependencies=PRIVATE_API_DEPENDENCIES)
 @app.get("/")
 def read_root() -> dict[str, str]:
     return {"status": "ok", "message": "AI Email Client API"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
