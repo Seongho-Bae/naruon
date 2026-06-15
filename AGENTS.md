@@ -120,11 +120,14 @@
   Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
-- Browser frontend writes to signed backend routes must carry the stored
-  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
-  public identity headers such as `X-User-Id`, `X-Organization-Id`,
-  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
-  tests/mocks must exercise the signed-session path.
+- Browser frontend writes to signed backend routes must use the HttpOnly
+  `naruon_session` cookie through the same-origin Next.js `/api/*` proxy, which
+  translates the server-readable cookie into backend `Authorization: Bearer`.
+  Browser code must not store bearer/session tokens in `localStorage` or
+  `sessionStorage`, and must not emit or forward public identity headers such as
+  `X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
+  or `X-Dev-Auth-Token`; tests/mocks must exercise the signed-session cookie
+  path.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
@@ -167,7 +170,7 @@
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
-  stored `naruon_session_token` bearer path and must not add public identity
+  HttpOnly `naruon_session` cookie proxy path and must not add public identity
   headers.
 - TenantConfig/provider account settings must be scoped by signed-session
   `user_id` and `organization_id`; do not query provider credentials or API keys

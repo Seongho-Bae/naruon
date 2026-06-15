@@ -55,7 +55,6 @@ async function installLiveSession(page: import('@playwright/test').Page): Promis
 
   await page.addInitScript((token) => {
     document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
-    window.localStorage.setItem('naruon_session_token', token);
   }, sessionToken);
   return sessionToken;
 }

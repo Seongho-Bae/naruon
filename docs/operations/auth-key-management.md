@@ -93,18 +93,20 @@
 - Authentication is not sufficient for privileged control-plane resources: LLM
   provider registry reads and writes require `platform_admin` or
   `organization_admin` signed role claims.
-- The browser API client sends the stored `naruon_session_token` as
-  `Authorization: Bearer` and strips public identity headers (`X-User-Id`,
-  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
-  `X-Dev-Auth-Token`) from caller-provided request headers so copied frontend
-  code cannot reintroduce the development-header trust boundary.
-- Caller-provided `Authorization` is also discarded by the browser API client;
-  only the stored `naruon_session_token` may populate the backend bearer session.
+- The browser API client uses same-origin credentials and strips public identity
+  headers (`X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`,
+  `X-User-Role`, `X-Dev-Auth-Token`) from caller-provided request headers so
+  copied frontend code cannot reintroduce the development-header trust boundary.
+- Caller-provided `Authorization` is also discarded by the browser API client.
+  Only the same-origin Next.js `/api/*` proxy may translate the HttpOnly
+  `naruon_session` cookie into a backend `Authorization: Bearer` session.
 - When `NEXT_PUBLIC_OIDC_ISSUER_URL` and `NEXT_PUBLIC_OIDC_CLIENT_ID` are set,
   the browser can start an Authorization Code + PKCE login against the configured
-  Keycloak/Casdoor issuer, complete `/auth/callback`, store the returned OIDC
-  `access_token` as `naruon_session_token`, and send that token on private API
-  calls. Public endpoint overrides may be supplied with
+  Keycloak/Casdoor issuer. The same-origin `/auth/oidc/*` server routes keep
+  PKCE verifier state in an HttpOnly transient cookie, exchange the callback
+  code server-side, verify the resulting token with the backend, and then install
+  only the HttpOnly `naruon_session` cookie for private API calls. Public
+  endpoint overrides may be supplied with
   `NEXT_PUBLIC_OIDC_AUTHORIZATION_ENDPOINT`, `NEXT_PUBLIC_OIDC_TOKEN_ENDPOINT`,
   `NEXT_PUBLIC_OIDC_END_SESSION_ENDPOINT`, `NEXT_PUBLIC_OIDC_REDIRECT_URI`, and
   `NEXT_PUBLIC_OIDC_SCOPE`; otherwise Keycloak's

@@ -18,10 +18,12 @@ export interface OidcLogoutOptions {
   navigate?: (url: string) => void;
 }
 
-const OIDC_STATE_KEY = 'naruon_oidc_state';
-const OIDC_VERIFIER_KEY = 'naruon_oidc_pkce_verifier';
-const OIDC_RETURN_TO_KEY = 'naruon_oidc_return_to';
 const DEFAULT_OIDC_SCOPE = 'openid profile email';
+const LEGACY_OIDC_STORAGE_KEYS = [
+  'naruon_oidc_state',
+  'naruon_oidc_pkce_verifier',
+  'naruon_oidc_return_to',
+];
 
 export class OidcSessionError extends Error {
   constructor(message: string) {
@@ -30,16 +32,36 @@ export class OidcSessionError extends Error {
   }
 }
 
-async function persistOidcSession(accessToken: string) {
-  const response = await fetch('/auth/session', {
+async function requestServerOidcLogin(returnTo: string) {
+  const response = await fetch('/auth/oidc/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'same-origin',
-    body: JSON.stringify({ access_token: accessToken }),
+    body: JSON.stringify({ return_to: returnTo }),
   });
   if (!response.ok) {
-    throw new OidcSessionError('OIDC session persistence failed');
+    throw new OidcSessionError('OIDC login initialization failed');
   }
+  const body = await response.json() as { authorization_url?: unknown };
+  const authorizationUrl = typeof body.authorization_url === 'string' ? body.authorization_url : '';
+  if (!authorizationUrl) {
+    throw new OidcSessionError('OIDC login response did not include an authorization URL');
+  }
+  return authorizationUrl;
+}
+
+async function completeServerOidcCallback(search: string) {
+  const response = await fetch('/auth/oidc/callback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({ search }),
+  });
+  if (!response.ok) {
+    throw new OidcSessionError('OIDC callback exchange failed');
+  }
+  const body = await response.json() as { return_to?: unknown };
+  return typeof body.return_to === 'string' && body.return_to ? body.return_to : '/';
 }
 
 async function clearPersistedOidcSession() {
@@ -94,13 +116,6 @@ function requireBrowserStorage() {
   }
 }
 
-function randomUrlSafeString(byteLength: number) {
-  requireBrowserStorage();
-  const bytes = new Uint8Array(byteLength);
-  window.crypto.getRandomValues(bytes);
-  return base64UrlEncode(bytes);
-}
-
 function base64UrlEncode(bytes: Uint8Array) {
   let binary = '';
   bytes.forEach((byte) => {
@@ -131,75 +146,32 @@ export async function buildOidcAuthorizationUrl(config: OidcBrowserConfig, state
 
 export async function startOidcLogin(options: OidcLoginOptions = {}) {
   requireBrowserStorage();
-  const config = getOidcBrowserConfig();
-  if (!config) {
+  if (!getOidcBrowserConfig()) {
     throw new OidcSessionError('OIDC browser configuration is missing');
   }
 
-  const state = randomUrlSafeString(32);
-  const verifier = randomUrlSafeString(64);
-  window.sessionStorage.setItem(OIDC_STATE_KEY, state);
-  window.sessionStorage.setItem(OIDC_VERIFIER_KEY, verifier);
-  window.sessionStorage.setItem(OIDC_RETURN_TO_KEY, options.returnTo ?? window.location.pathname);
-
-  const authorizationUrl = await buildOidcAuthorizationUrl(config, state, verifier);
+  const authorizationUrl = await requestServerOidcLogin(
+    options.returnTo ?? window.location.pathname,
+  );
   const navigate = options.navigate ?? ((url: string) => window.location.assign(url));
   navigate(authorizationUrl);
 }
 
 export async function completeOidcRedirect(search = window.location.search) {
   requireBrowserStorage();
-  const config = getOidcBrowserConfig();
-  if (!config) {
+  if (!getOidcBrowserConfig()) {
     throw new OidcSessionError('OIDC browser configuration is missing');
   }
 
-  const params = new URLSearchParams(search);
-  const providerError = params.get('error');
-  if (providerError) {
-    throw new OidcSessionError(providerError);
-  }
-
-  const code = params.get('code');
-  const state = params.get('state');
-  const expectedState = window.sessionStorage.getItem(OIDC_STATE_KEY);
-  const verifier = window.sessionStorage.getItem(OIDC_VERIFIER_KEY);
-  if (!code || !state || !expectedState || state !== expectedState || !verifier) {
-    throw new OidcSessionError('OIDC callback state is invalid');
-  }
-
-  const body = new URLSearchParams({
-    grant_type: 'authorization_code',
-    client_id: config.clientId,
-    code,
-    code_verifier: verifier,
-    redirect_uri: config.redirectUri,
-  });
-  const response = await fetch(config.tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  });
-  if (!response.ok) {
-    throw new OidcSessionError('OIDC token exchange failed');
-  }
-  const tokenBody = await response.json() as { access_token?: unknown };
-  const accessToken = typeof tokenBody.access_token === 'string' ? tokenBody.access_token.trim() : '';
-  if (!accessToken) {
-    throw new OidcSessionError('OIDC token response did not include an access token');
-  }
-
-  await persistOidcSession(accessToken);
-  const returnTo = window.sessionStorage.getItem(OIDC_RETURN_TO_KEY) || '/';
-  clearOidcTransientState();
+  const returnTo = await completeServerOidcCallback(search);
   return { returnTo };
 }
 
 export function clearOidcTransientState() {
   if (typeof window === 'undefined') return;
-  window.sessionStorage.removeItem(OIDC_STATE_KEY);
-  window.sessionStorage.removeItem(OIDC_VERIFIER_KEY);
-  window.sessionStorage.removeItem(OIDC_RETURN_TO_KEY);
+  LEGACY_OIDC_STORAGE_KEYS.forEach((key) => {
+    window.sessionStorage.removeItem(key);
+  });
 }
 
 export async function clearOidcSession(options: OidcLogoutOptions = {}) {

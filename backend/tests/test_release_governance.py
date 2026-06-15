@@ -15,6 +15,22 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+OCI_PREDEFINED_IMAGE_ANNOTATION_KEYS = {
+    "org.opencontainers.image.created",
+    "org.opencontainers.image.authors",
+    "org.opencontainers.image.url",
+    "org.opencontainers.image.documentation",
+    "org.opencontainers.image.source",
+    "org.opencontainers.image.version",
+    "org.opencontainers.image.revision",
+    "org.opencontainers.image.vendor",
+    "org.opencontainers.image.licenses",
+    "org.opencontainers.image.ref.name",
+    "org.opencontainers.image.title",
+    "org.opencontainers.image.description",
+    "org.opencontainers.image.base.digest",
+    "org.opencontainers.image.base.name",
+}
 
 
 def read_repo_text(relative_path: str) -> str:
@@ -43,16 +59,88 @@ def test_release_version_sources_are_synchronized() -> None:
     assert "version=get_release_version()" in backend_main
     assert "version=get_release_version()" in runtime_config
     assert "COPY VERSION /app/VERSION" in dockerfile
-    assert 'org.opencontainers.image.title="naruon"' in dockerfile
+    assert 'ARG OCI_IMAGE_TITLE="naruon"' in dockerfile
+    assert 'org.opencontainers.image.title="${OCI_IMAGE_TITLE}"' in dockerfile
     assert (
-        'org.opencontainers.image.source="https://github.com/Seongho-Bae/naruon"'
+        'ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"'
         in dockerfile
     )
+    assert (
+        'org.opencontainers.image.source="${OCI_IMAGE_SOURCE}"'
+        in dockerfile
+    )
+
+
+def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    frontend_dockerfile = read_repo_text("frontend/Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+
+    for annotation_key in OCI_PREDEFINED_IMAGE_ANNOTATION_KEYS:
+        assert annotation_key in root_dockerfile
+        assert annotation_key in frontend_dockerfile
+        assert annotation_key in docker_publish_workflow
+
+    assert "DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index" in docker_publish_workflow
+    assert "annotations: ${{ steps.meta.outputs.annotations }}" in docker_publish_workflow
+
+
+def test_container_images_use_node_24_runtime() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    frontend_dockerfile = read_repo_text("frontend/Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    render_deployment = read_repo_text("docs/operations/render-deployment.md")
+
+    assert "FROM node:24-slim AS frontend-builder" in root_dockerfile
+    assert "FROM node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in docker_publish_workflow
+    assert "Node 24 toolchain" in render_deployment
+    assert "node:22" not in root_dockerfile
+    assert "node:22" not in frontend_dockerfile
+    assert "node:22" not in docker_publish_workflow
+    assert "Node 22" not in render_deployment
+
+
+def test_backend_images_use_python_314_runtime() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    app_ci_workflow = read_repo_text(".github/workflows/app-ci.yml")
+    bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
+    render_deployment = read_repo_text("docs/operations/render-deployment.md")
+
+    assert "FROM python:3.14-slim AS backend-runtime" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
+    assert 'python-version: ["3.14"]' in app_ci_workflow
+    assert 'python-version: "3.14"' in bandit_workflow
+    assert "Python 3.14 toolchain" in render_deployment
+    assert "python:3.11" not in root_dockerfile
+    assert "python:3.11" not in docker_publish_workflow
+    assert '"3.11"' not in app_ci_workflow
+    assert '"3.12"' not in app_ci_workflow
+    assert 'python-version: "3.12"' not in bandit_workflow
+
+
+def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
+    dockerfile = read_repo_text("Dockerfile")
+    requirements = read_repo_text("backend/requirements.txt")
+
+    assert "PIP_ONLY_BINARY=:all:" in dockerfile
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
+    assert "build-essential" not in dockerfile
+    assert "cargo" not in dockerfile
+    assert "libpq-dev" not in dockerfile
+    assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
 
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
 
+    assert "sqlalchemy==2.0.50" in requirements
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
     assert "protobuf==6.33.6" in requirements
     assert "setuptools==82.0.1" in requirements
     assert "wheel==0.47.0" in requirements
@@ -210,7 +298,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
-    assert "FROM python:3.11-slim AS backend-runtime" in dockerfile
+    assert "FROM python:3.14-slim AS backend-runtime" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile
