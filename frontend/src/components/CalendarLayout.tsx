@@ -201,6 +201,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
                   disabled={isWritebackActionDisabled}
+                  title={isWritebackActionDisabled ? "원본 계정을 불러오거나 점검 중입니다" : "새 일정을 생성하는 intent를 점검합니다"}
                   className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   새 일정 intent 점검
@@ -209,6 +210,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
                   disabled={isWritebackActionDisabled}
+                  title={isWritebackActionDisabled ? "원본 계정을 불러오거나 점검 중입니다" : "기존 일정을 수정하는 ETag 업데이트 intent를 점검합니다"}
                   className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   ETag 업데이트 점검
@@ -227,6 +229,7 @@ export function CalendarLayout() {
                     disabled={!sourceWritable}
                     aria-pressed={sourceSelected}
                     onClick={() => setSelectedSourceId(source.source_id)}
+                    title={!sourceWritable ? "쓰기 권한이 없는 계정입니다" : `${source.provider} 선택`}
                     className={`rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
                       sourceSelected
                         ? 'border-primary bg-primary/10 shadow-sm'

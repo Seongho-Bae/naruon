@@ -375,6 +375,7 @@ export function DataLayout() {
                           type="button"
                           disabled={!account.writeback_enabled}
                           aria-pressed={accountSelected}
+                          title={!account.writeback_enabled ? "쓰기 권한이 없는 WebDAV 계정입니다" : `${account.display_label} 선택`}
                           onClick={() => setSelectedWebdavSourceId(account.source_id)}
                           className={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
                             accountSelected ? 'border-primary bg-primary/10' : 'border-transparent bg-secondary/50 hover:border-primary/40'
@@ -557,6 +558,7 @@ export function DataLayout() {
                     onClick={() => void requestWebdavWritebackIntent()}
                     disabled={isWritebackLoading || !canRequestWebdavWriteback}
                     aria-busy={isWebdavSourceLoading || isWritebackLoading}
+                    title={isWritebackLoading || !canRequestWebdavWriteback ? "WebDAV 원본 계정 정보를 불러오거나 점검 중입니다" : "WebDAV writeback intent를 승인 점검합니다"}
                     className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                   >
                     WebDAV intent 승인 점검
@@ -627,6 +629,7 @@ export function DataLayout() {
                     type="button"
                     onClick={() => void requestUniqueThreadIntent()}
                     disabled={isUniqueThreadLoading}
+                    title={isUniqueThreadLoading ? "중복 메일 thread intent를 점검 중입니다" : "중복 메일 thread intent를 점검합니다"}
                     className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
                   >
                     중복 메일 thread intent 점검
