@@ -1,4 +1,4 @@
-from email import policy
+from email import message_from_binary_file, message_from_bytes, policy
 from email.message import Message
 from pathlib import Path
 import datetime
@@ -119,7 +119,7 @@ def _extract_date(msg: Message) -> datetime.datetime:
     return parsed_date
 
 
-def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | None:
+def _extract_thread_id(msg: Message, message_id: str) -> str | None:
     thread_id = None
     references = msg.get("References")  # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
@@ -141,7 +141,7 @@ def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | Non
     return thread_id
 
 
-def _message_to_email_data(msg: email.message.Message) -> EmailData:
+def _message_to_email_data(msg: Message) -> EmailData:
     body, attachments = _extract_body_and_attachments(msg)
     parsed_date = _extract_date(msg)
     message_id = _sanitize_nul(msg.get("Message-ID", ""))
@@ -180,7 +180,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
     """
     try:
         with open(file_path, "rb") as f:
-            msg = email.message_from_binary_file(f, policy=policy.default)
+            msg = message_from_binary_file(f, policy=policy.default)
     except OSError as e:
         raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
 
@@ -190,7 +190,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
 def parse_eml_bytes(content: bytes) -> EmailData:
     """Parses EML bytes fetched from a provider."""
     try:
-        msg = email.message_from_bytes(content, policy=policy.default)
+        msg = message_from_bytes(content, policy=policy.default)
     except Exception as e:
         raise EmailParseError("Failed to parse provider email bytes") from e
 
