@@ -152,10 +152,19 @@ def test_production_settings_reject_repeated_auth_session_hmac_secret(monkeypatc
         _settings_without_env_file()
 
 
-def test_production_settings_reject_low_entropy_auth_session_hmac_secret(monkeypatch):
+@pytest.mark.parametrize(
+    "auth_session_hmac_secret",
+    [
+        "abcd" * 8,
+        "abcdefgh" * 4,
+    ],
+)
+def test_production_settings_reject_low_entropy_auth_session_hmac_secret(
+    monkeypatch, auth_session_hmac_secret
+):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///tmp/test.db")
     monkeypatch.setenv("RUNTIME_ENVIRONMENT", "production")
-    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", "abcd" * 8)
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", auth_session_hmac_secret)
 
     with pytest.raises(ValidationError, match="must have higher entropy"):
         _settings_without_env_file()
