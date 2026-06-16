@@ -21,10 +21,13 @@ def test_dav_rejects_missing_auth():
 
 def test_dav_route_uses_signed_session_dependency():
     for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == "/dav/{path:path}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
-            assert get_auth_context in dependencies
-            return
+        inner_routes = getattr(getattr(route, "original_router", None), "routes", [route])
+        for inner_route in inner_routes:
+            if isinstance(inner_route, APIRoute) and inner_route.path == "/dav/{path:path}":
+                router_dependencies = getattr(route, "dependencies", getattr(getattr(route, "include_context", None), "dependencies", []))
+                dependencies = {dependency.dependency for dependency in inner_route.dependencies + router_dependencies}
+                assert get_auth_context in dependencies
+                return
 
     raise AssertionError("DAV route is not registered")
 
