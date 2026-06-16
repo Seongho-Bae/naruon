@@ -46,3 +46,7 @@
 ## 2026-06-12 - defaultdict performance over setdefault inside loops
 **Learning:** Using `dict.setdefault(key, []).append(val)` inside a loop allocates an empty list `[]` on every single iteration, even if the key already exists. This overhead adds up. `collections.defaultdict(list)` only invokes the `list` factory when a key is missing, which is measurably faster (~10% performance gain) and results in cleaner code.
 **Action:** Always prefer `collections.defaultdict(list)` over `setdefault(key, [])` when populating a dictionary of lists in a tight loop.
+
+## 2025-06-15 - Optimize O(n) email threading dictionary lookups with defaultdict
+**Learning:** When organizing pre-sorted collections by groups, explicit dictionary membership and date tracking inside a tight loop creates unnecessary CPU overhead. Because SQL `ORDER BY` combined with Python sorting guarantees an oldest-to-newest ordering, tracking the 'most recent' item per group simplifies to blindly overwriting the dictionary key.
+**Action:** Use `collections.defaultdict` for tracking accumulators (`int`, `list`) and take advantage of implicit data ordering to eliminate branch conditions and explicit `.get()` checks in grouping loops.
