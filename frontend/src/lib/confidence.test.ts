@@ -20,8 +20,8 @@ describe('toConfidencePercent', () => {
 
   it('converts fraction values to percentages (0 to 1)', () => {
     expect(toConfidencePercent(0.5)).toBe(50);
-    expect(toConfidencePercent(0.856)).toBe(86); // Note: 0.856 * 100 = 85.6, then Math.round -> 86
-    expect(toConfidencePercent(1)).toBe(100); // 1 is ambiguous (could be 1% or 100%), but the implementation favors 100% since it multiplies by 100
+    expect(toConfidencePercent(0.856)).toBe(86); // 0.856 * 100 = 85.6, then Math.round -> 86
+    expect(toConfidencePercent(1)).toBe(100); // 1 falls within the 0-1 fraction range, so the implementation treats it as 100%
   });
 
   it('clamps values to the 0-100 range', () => {
