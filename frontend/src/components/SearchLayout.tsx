@@ -176,6 +176,7 @@ function SenderDagPanel({
               type="button"
               onClick={onCapture}
               disabled={captureStatus === "loading"}
+              aria-busy={captureStatus === "loading"}
               className="w-full rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-wait disabled:opacity-60 sm:w-auto inline-flex items-center justify-center"
             >
               {captureStatus === "loading" && (
@@ -505,6 +506,7 @@ export function SearchLayout() {
           <button
             type="submit"
             disabled={loading}
+            aria-busy={loading}
             className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-60 inline-flex items-center justify-center"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -613,6 +615,7 @@ export function SearchLayout() {
                       type="button"
                       onClick={captureSenderRelationship}
                       disabled={!canCaptureRelationship || captureStatus === "loading"}
+                      aria-busy={captureStatus === "loading"}
                       className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-xs font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                     >
                       {captureStatus === "loading" ? (

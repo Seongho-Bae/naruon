@@ -9,3 +9,7 @@
 ## 2026-06-08 - Accessible Search Inputs Across Layouts
 **Learning:** Search inputs placed in complex dashboard layouts frequently miss explicitly associated labels and IDs, relying only on placeholders or visual icons, which creates barriers for screen reader users navigating the page landmarks.
 **Action:** Always provide a visually hidden `<label>` explicitly tied to the input via `htmlFor` and `id`, and ensure any adjacent decorative search icons have `aria-hidden="true"`.
+
+## 2026-06-08 - Accessible Loading States for Buttons
+**Learning:** The native HTML `disabled` attribute inherently communicates the disabled state to screen readers and removes elements from the tab order. Adding `aria-disabled="true"` to a `disabled` button is redundant and can be flagged by accessibility linters. However, adding `aria-busy="true"` during an async operation correctly communicates to screen readers that the element is actively updating.
+**Action:** When adding accessible loading states to buttons, use `disabled={isLoading}` for state, add `aria-busy={isLoading}` for context, but avoid redundant `aria-disabled={isLoading}`.
