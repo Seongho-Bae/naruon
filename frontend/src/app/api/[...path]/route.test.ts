@@ -27,7 +27,7 @@ describe("/api runtime proxy route", () => {
         const headers = init?.headers as Headers;
         return Response.json({
           target_url: String(input),
-      auth_header: 'Bearer ' + SIGNED_SESSION_TOKEN,
+          auth_header: headers.get("authorization"),
           user_header: headers.get("x-user-id"),
           request_body: await new Response(init?.body).text(),
         });
@@ -53,7 +53,7 @@ describe("/api runtime proxy route", () => {
 
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
-      auth_header: 'Bearer ' + SIGNED_SESSION_TOKEN,
+      auth_header: "Bearer " + SIGNED_SESSION_TOKEN,
       user_header: null,
       request_body: '{"state":"open"}',
     });
