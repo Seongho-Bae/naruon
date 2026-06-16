@@ -1,12 +1,7 @@
 import pytest
 import openai
 from unittest.mock import patch, AsyncMock
-from services.embedding import (
-    STORAGE_EMBEDDING_DIMENSION,
-    chunk_text,
-    fit_embedding_vector,
-    generate_embeddings,
-)
+from services.embedding import chunk_text, generate_embeddings
 from services.exceptions import EmbeddingGenerationError
 
 
@@ -15,21 +10,6 @@ def test_chunk_text():
     chunks = chunk_text(text, chunk_size=50)
     assert len(chunks) > 1
     assert len(chunks[0]) <= 50
-
-
-def test_fit_embedding_vector_pads_embeddinggemma_dimension_to_storage_vector():
-    fitted = fit_embedding_vector([0.25] * 768)
-
-    assert len(fitted) == STORAGE_EMBEDDING_DIMENSION
-    assert fitted[:768] == [0.25] * 768
-    assert fitted[768:] == [0.0] * (STORAGE_EMBEDDING_DIMENSION - 768)
-
-
-def test_fit_embedding_vector_truncates_larger_provider_dimension():
-    fitted = fit_embedding_vector([0.5] * 3072)
-
-    assert len(fitted) == STORAGE_EMBEDDING_DIMENSION
-    assert fitted == [0.5] * STORAGE_EMBEDDING_DIMENSION
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,6 @@
 [![Application CI](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/app-ci.yml)
 [![Bandit Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/bandit.yml)
 [![Strix Security Scan](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml/badge.svg)](https://github.com/Seongho-Bae/naruon/actions/workflows/strix.yml)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/Seongho-Bae/naruon)
 
 Full-stack AI workspace with a FastAPI backend, Next.js frontend, vector search,
 AI summaries, hardened email threading, and relay/proxy contracts for external
@@ -42,17 +41,14 @@ mail/calendar/file systems.
 - PR automation is metadata-only and uses current-head robot-review evidence plus
   required checks. Human approval is not awaited by default under repo policy.
 - Strix PR/security evidence defaults to GitHub Models through
-  `STRIX_LLM=openai/gpt-5`, `STRIX_GITHUB_MODELS_TOKEN`, `models: read`,
-  `github.token`, and `LLM_API_BASE_FILE` pointing at a trusted file containing
+  `STRIX_LLM=openai/openai/gpt-4.1`, `models: read`, `github.token`, and
+  `LLM_API_BASE_FILE` pointing at a trusted file containing
   `https://models.github.ai/inference`. The workflow keeps that endpoint in a
-  trusted input file, tries the configured GPT-5-or-newer GitHub Models primary
-  first, and may fall back only to the explicit GitHub Models fallback list:
-  `deepseek/deepseek-r1-0528` and `deepseek/deepseek-v3-0324`. The workflow
-  passes the token only through the provider-scoped Strix child-process key path.
-  Legacy `STRIX_LLM` secrets do not override PR, push, or scheduled Strix
-  defaults. Vertex remains available only for manual `workflow_dispatch`
-  evidence when `strix_llm` explicitly selects
-  `vertex_ai/gemini-3.1-pro-preview-customtools` or
+  trusted input file and passes the token only through the
+  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets do
+  not override PR, push, or scheduled Strix defaults. Vertex remains available
+  only for manual `workflow_dispatch` evidence when `strix_llm` explicitly
+  selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
   `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; direct OpenAI
   GPT-5.4-or-newer remains supported only for manual `strix_llm` selections
   with `STRIX_OPENAI_API_KEY`. The workflow fails closed rather than using generic
@@ -79,18 +75,13 @@ mail/calendar/file systems.
   evidence for this security posture surface; enterprise OIDC/JWKS or an
   explicit server-side membership path must establish the workspace boundary.
 - Data quality is source-backed through signed `/api/data/quality-surface`.
-  The endpoint summarizes scoped repositories, workspace documents, recent
-  email-attachment file assets, ingestion inventory, embedding coverage,
-  quality checks, and connector evidence from existing rows, returns
-  `provider_write_executed=false`, and does not expose provider credentials,
-  raw usernames, server URLs, message bodies, raw message/thread ids, or
-  sequential ids. The Data workspace lets operators upload a signed-session
-  workspace document, request document reparse, embedding regeneration intent,
-  HWP conversion intent, and explicit WebDAV document materialization. The
-  materialization route re-reads the selected `document_id` from the signed
-  workspace, derives the provider path and Markdown content server-side, and
-  dispatches `write_webdav` only when the caller explicitly requests
-  `execute_provider=true`.
+  The endpoint summarizes scoped repositories, recent email-attachment file
+  assets, ingestion inventory, embedding coverage, quality checks, and connector
+  evidence from existing rows, returns `provider_write_executed=false`, and does
+  not expose provider credentials, raw usernames, server URLs, message bodies,
+  raw message/thread ids, or sequential ids. The Data workspace lets operators
+  select a source-linked attachment asset and inspect safe provenance fields
+  without turning Naruon into a file-storage source of truth.
 - Projects are source-backed through signed `/api/webdav/folders` and
   `/api/tasks`. The workspace derives project boundaries from customer-owned
   WebDAV folders, task progress from opaque public ticket ids, and labels
@@ -121,11 +112,8 @@ mail/calendar/file systems.
   same address now create one idempotent, source-linked `self_sent_knowledge`
   ticket task with a plain-text memo title. The Tasks workspace can request a
   signed WebDAV/Notes materialization intent for that task and shows the planned
-  customer-owned target with `provider_write_executed=false`; connector-side
-  WebDAV/CalDAV PUT adapters now enforce `If-Match`, and
-  `execute_provider=true` dispatches the signed materialization command to an
-  active outbound runner. Durable retry queues and extended execution audit
-  workflows remain future work.
+  customer-owned target with `provider_write_executed=false`; actual provider
+  mutation remains connector execution work.
 - **Pending reply dashboard**: the Today dashboard reads signed
   `/api/emails/pending-replies?limit=3` data and shows sent-mail reply waits in
   Home KPIs and judgment points. Pending replies are calculated from
@@ -196,17 +184,12 @@ threading proof path works offline.
 
 Backend settings read environment variables first, then `.env`, `../.env`, and
 `~/.env`. `DATABASE_URL`, `AUTH_SESSION_HMAC_SECRET`, and `ENCRYPTION_KEY` still
-have no code defaults; Compose and Kubernetes must inject them explicitly before
-runtime. `docker compose build backend frontend` is intentionally allowed to
-parse without local secrets because image builds do not need database or session
-credentials. `docker compose up` still fails closed inside the database/backend
-startup path when `POSTGRES_PASSWORD`, `AUTH_SESSION_HMAC_SECRET`, or
-`ENCRYPTION_KEY` are missing. For Compose, `./scripts/naruon_compose.sh` reads
-`${NARUON_ENV_FILE}` when set, otherwise uses `~/.env` if present, and falls back
-to the project `.env`. It passes that file to Docker Compose only as an
-interpolation source so the backend service receives the whitelisted variables
-in `docker-compose*.yml`, not every local secret present in `~/.env`. The
-backend image starts through
+have no code defaults; Compose and Kubernetes must inject them explicitly. For Compose,
+`./scripts/naruon_compose.sh` reads `${NARUON_ENV_FILE}` when set, otherwise
+uses `~/.env` if present, and falls back to the project `.env`. It passes that
+file to Docker Compose only as an interpolation source so the backend service
+receives the whitelisted variables in `docker-compose*.yml`, not every local
+secret present in `~/.env`. The backend image starts through
 `python scripts/start_backend.py`, which checks the same required settings before
 `uvicorn` imports the app. A direct `docker run` therefore still needs explicit
 environment injection through `--env`, an orchestrator secret, or a minimal
@@ -220,7 +203,7 @@ Backend:
 ```bash
 cd backend
 python3 -m pip install -r requirements.txt
-python3 scripts/migrate_db.py
+python3 scripts/bootstrap_db.py
 python3 -m pytest -q
 uvicorn main:app --reload
 ```
@@ -335,14 +318,13 @@ curl -s -X POST http://localhost:8000/api/tasks/from-email \
   -d "$TASK_BODY"
 
 # Request a customer-owned calendar writeback intent. This selects a trusted
-# server-side source and returns no provider secret. Provider execution is
-# explicit opt-in and requires If-Match/ETag evidence.
+# server-side source and returns no provider secret or direct write proof.
 curl -s http://localhost:8000/api/calendar/writeback-sources \
   -H "Authorization: Bearer $NARUON_DEV_BEARER"
 curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   -H 'content-type: application/json' \
-  -d '{"action":"update","summary":"담당자 확인 회의","target_source_id":"caldav-primary","execute_provider":true}'
+  -d '{"action":"create","summary":"담당자 확인 회의","target_source_id":"caldav-primary"}'
 
 # Review source-backed Security governance without exposing provider secrets.
 curl -s http://localhost:8000/api/security/access-surface \
@@ -353,12 +335,6 @@ curl -s http://localhost:8000/api/security/access-surface \
 curl -s http://localhost:8000/api/data/quality-surface \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
   | jq '{workspace_id, audit_event, repositories, quality_checks}'
-curl -s -X POST http://localhost:8000/api/data/documents \
-  -H "Authorization: Bearer $NARUON_DEV_BEARER" \
-  -H 'content-type: application/json' \
-  -d '{"document_name":"decision-note.md","document_type":"text/markdown","document_content":"# Decision note"}'
-curl -s -X POST http://localhost:8000/api/data/documents/doc_example/reparse \
-  -H "Authorization: Bearer $NARUON_DEV_BEARER"
 ```
 
 ## Error-message contract
@@ -406,12 +382,11 @@ decision-evidence logs, document
 repository/ingestion/embedding/quality queues, security dashboards and policy
 screens, and operational settings. Provider write execution and enterprise
 identity remain future connector/auth slices until source-backed integrations
-exist. Browser writes to signed backend routes use the HttpOnly
-`naruon_session` cookie; the same-origin Next.js `/api/*` proxy converts that
-server-readable cookie into the backend `Authorization: Bearer` session and
-strips public identity headers such as `X-User-Id` and `X-Organization-Id`,
-including group and dev-token variants, rather than forwarding development
-identity fallbacks.
+exist. Browser writes to signed backend routes use the stored
+`naruon_session_token` as an `Authorization: Bearer` session, and the frontend
+API client strips public identity headers such as `X-User-Id` and
+`X-Organization-Id`, including group and dev-token variants, rather than
+forwarding development identity fallbacks.
 Settings connected-account workflow reads and saves `/api/accounts/config`
 through the same signed-session path and scopes provider settings by the signed
 `user_id + organization_id` owner. It displays SMTP, IMAP, POP3, OAuth,
@@ -441,15 +416,10 @@ CalDAV account ids, and the Calendar workspace loads those rows through signed
 `/api/calendar/writeback-sources` before posting an opaque `target_source_id`.
 The workspace now presents those sources as explicit selectable writeback
 targets and shows the selected source ETag/capability state before intent
-creation. Provider execution is opt-in through `execute_provider=true`; the API
-dispatches a signed `write_caldav` command to an active outbound runner only
-after server-authoritative source selection and If-Match evidence are available.
+creation.
 The browser no longer claims `/api/calendar/sync` success from the mail-detail
-action path; direct browser provider writes stay deferred. Connector-side DAV
-adapters can execute ETag/If-Match-guarded PUTs, and the WebDAV
-materialization endpoint can dispatch signed commands to an active outbound
-runner. Durable queueing, retry, and broader UI dispatch controls remain
-connector workflow follow-ups.
+action path; direct provider writes stay deferred until connector execution can
+enforce ETag/If-Match and owner capability checks.
 WebDAV writeback and self-sent knowledge materialization use
 `webdav_accounts.source_uid` as the browser-visible source id, scope lookup by
 the signed session organization, honor persisted `writeback_enabled`
@@ -464,17 +434,9 @@ organization and expose opaque `project_folders.folder_uid` values instead of
 sequential `folder_id` values, and the `/dav` PUT skeleton fails closed until
 provider-backed source, capability, and ETag/If-Match checks exist.
 Data repository, ingestion, embedding, and quality status is loaded from signed
-`/api/data/quality-surface`. Workspace document uploads use signed
-`POST /api/data/documents`, while reparse, embedding-regeneration, and HWP
-conversion controls call the scoped document action endpoints and keep
-`provider_write_executed=false`. Workspace document WebDAV materialization uses
-signed `POST /api/data/documents/{document_id}/webdav-materialization-intent`
-with an opaque selected WebDAV `source_uid`; the backend derives the target path
-and content server-side and dispatches connector execution only on
-`execute_provider=true`. The UI must not reintroduce static ingestion logs, fake
-vector counts, unsupported embedding model names, fake quality totals, or inert
-permanent ready-soon controls; use source-backed rows or explicit pending
-states.
+`/api/data/quality-surface`. The UI must not reintroduce static ingestion logs,
+fake vector counts, unsupported embedding model names, or fake quality totals;
+use source-backed rows or explicit pending states.
 
 ## Operations and release docs
 

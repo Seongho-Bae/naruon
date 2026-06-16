@@ -43,7 +43,6 @@ type UniqueThreadIntentResponse = {
 
 type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 type EmailImportStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
-type DocumentActionStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 
 type DataSurfaceStatus = 'loading' | 'ready' | 'error';
 
@@ -58,7 +57,7 @@ type DataQualitySurfaceResponse = {
   provider_write_executed: boolean;
   repositories: Array<{
     source_id: string;
-    repository_type: 'webdav_account' | 'project_folder' | 'email_repository' | 'attachment_repository' | 'document_repository';
+    repository_type: 'webdav_account' | 'project_folder' | 'email_repository' | 'attachment_repository';
     display_name: string;
     object_count: number;
     writeback_enabled: boolean | null;
@@ -67,7 +66,7 @@ type DataQualitySurfaceResponse = {
   }>;
   repository_assets: Array<{
     asset_key: string;
-    asset_type: 'email_attachment' | 'workspace_document';
+    asset_type: 'email_attachment';
     display_name: string;
     source_label: string;
     state_code: RepositoryAssetState;
@@ -132,19 +131,6 @@ type EmailFileImportResponse = {
     reason_code?: string | null;
     attachment_count: number;
   }>;
-};
-
-type DataDocumentActionResponse = {
-  document_id: string;
-  workspace_id: string;
-  document_name: string;
-  document_type: string;
-  document_status: string;
-  content_chars: number;
-  provider_write_executed: boolean;
-  provenance: 'server-authoritative';
-  audit_event: string;
-  message: string;
 };
 
 const duplicateImportCandidates = [
@@ -219,20 +205,8 @@ function getWriteBoundaryLabel(providerWriteExecuted: boolean) {
 }
 
 function getAssetEvidenceLabel(asset: DataQualitySurfaceResponse['repository_assets'][number]) {
-  if (asset.asset_type === 'workspace_document') return '워크스페이스 문서 근거';
   if (asset.content_chars === 0) return '본문 추출 대기';
   return '원본 메일/스레드 근거 연결';
-}
-
-function getDocumentTypeForFile(file: File) {
-  const filename = file.name.toLowerCase();
-  if (filename.endsWith('.md') || filename.endsWith('.markdown')) return 'text/markdown';
-  if (filename.endsWith('.hwp')) return 'application/x-hwp';
-  return file.type || 'text/plain';
-}
-
-function isTextDocumentUploadType(documentType: string) {
-  return documentType.startsWith('text/');
 }
 
 function getSourceReadinessLabel(account: { writeback_enabled: boolean; etag?: string | null }) {
@@ -298,30 +272,9 @@ export function DataLayout() {
   const [emailImportStatus, setEmailImportStatus] = useState<EmailImportStatus>('idle');
   const [emailImportResult, setEmailImportResult] = useState<EmailFileImportResponse | null>(null);
   const [emailImportFiles, setEmailImportFiles] = useState<File[]>([]);
-  const [documentActionStatus, setDocumentActionStatus] = useState<DocumentActionStatus>('idle');
-  const [documentActionResult, setDocumentActionResult] = useState<DataDocumentActionResponse | null>(null);
-  const [documentUploadFiles, setDocumentUploadFiles] = useState<File[]>([]);
   const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
   const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
   const [selectedRepositoryAssetKey, setSelectedRepositoryAssetKey] = useState<string | null>(null);
-
-  const loadDataQualitySurface = useCallback(async (options?: { markLoading?: boolean }) => {
-    if (options?.markLoading) {
-      setDataSurfaceStatus('loading');
-    }
-    try {
-      const data = await apiClient.get<DataQualitySurfaceResponse>('/api/data/quality-surface');
-      if (!Array.isArray(data.repositories) || !Array.isArray(data.pipeline_stages)) {
-        throw new Error('Invalid data quality surface response');
-      }
-      setDataQualitySurface(data);
-      setDataSurfaceStatus('ready');
-    } catch (error: unknown) {
-      console.error('Data quality surface fetch error', getSafeErrorSummary(error));
-      setDataQualitySurface(null);
-      setDataSurfaceStatus('error');
-    }
-  }, []);
 
   useEffect(() => {
     apiClient.get<DataQualitySurfaceResponse>('/api/data/quality-surface')
@@ -434,94 +387,11 @@ export function DataLayout() {
     }
   }, [emailImportFiles]);
 
-  const handleDocumentFileChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setDocumentUploadFiles(Array.from(event.target.files ?? []));
-    setDocumentActionResult(null);
-    setDocumentActionStatus('idle');
-  }, []);
-
-  const requestDocumentUpload = useCallback(async () => {
-    const [file] = documentUploadFiles;
-    if (!file) {
-      setDocumentActionStatus('error');
-      return;
-    }
-
-    setDocumentActionStatus('loading');
-    setDocumentActionResult(null);
-    try {
-      const documentType = getDocumentTypeForFile(file);
-      if (!isTextDocumentUploadType(documentType)) {
-        setDocumentActionStatus('error');
-        return;
-      }
-      const documentContent = await file.text();
-      const result = await apiClient.post<DataDocumentActionResponse>(
-        '/api/data/documents',
-        {
-          document_name: file.name,
-          document_type: documentType,
-          document_content: documentContent,
-        },
-      );
-      setDocumentActionResult(result);
-      setDocumentActionStatus('success');
-      await loadDataQualitySurface({ markLoading: true });
-    } catch (error: unknown) {
-      const status = getApiErrorStatus(error);
-      setDocumentActionStatus(status === 401 || status === 403 ? 'auth' : 'error');
-    }
-  }, [documentUploadFiles, loadDataQualitySurface]);
-
-  const requestDocumentAction = useCallback(async (
-    action: 'reparse' | 'embedding-regeneration-intent' | 'hwp-conversion-intent' | 'webdav-materialization-intent',
-  ) => {
-    const asset = dataQualitySurface?.repository_assets.find((candidate) => (
-      candidate.asset_key === selectedRepositoryAssetKey
-    )) ?? dataQualitySurface?.repository_assets[0] ?? null;
-    if (!asset || asset.asset_type !== 'workspace_document') {
-      setDocumentActionStatus('error');
-      return;
-    }
-    const targetSourceId = webdavAccounts.find((account) => (
-      account.source_id === selectedWebdavSourceId && account.writeback_enabled
-    ))?.source_id ?? webdavAccounts.find((account) => account.writeback_enabled)?.source_id;
-    if (action === 'webdav-materialization-intent' && (webdavAccountStatus !== 'ready' || !targetSourceId)) {
-      setDocumentActionStatus('error');
-      return;
-    }
-
-    setDocumentActionStatus('loading');
-    setDocumentActionResult(null);
-    try {
-      const result = await apiClient.post<DataDocumentActionResponse>(
-        `/api/data/documents/${encodeURIComponent(asset.asset_key)}/${action}`,
-        action === 'webdav-materialization-intent'
-          ? { target_source_id: targetSourceId, execute_provider: true }
-          : {},
-      );
-      setDocumentActionResult(result);
-      setDocumentActionStatus('success');
-      await loadDataQualitySurface({ markLoading: true });
-    } catch (error: unknown) {
-      const status = getApiErrorStatus(error);
-      setDocumentActionStatus(status === 401 || status === 403 ? 'auth' : 'error');
-    }
-  }, [
-    dataQualitySurface,
-    loadDataQualitySurface,
-    selectedRepositoryAssetKey,
-    selectedWebdavSourceId,
-    webdavAccounts,
-    webdavAccountStatus,
-  ]);
-
   const isWritebackLoading = writebackStatus === 'loading';
   const isWebdavSourceLoading = webdavAccountStatus === 'loading';
   const canRequestWebdavWriteback = webdavAccountStatus === 'ready';
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
   const isEmailImportLoading = emailImportStatus === 'loading';
-  const isDocumentActionLoading = documentActionStatus === 'loading';
   const selectedWebdavAccount = webdavAccounts.find((account) => (
     account.source_id === selectedWebdavSourceId && account.writeback_enabled
   )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
@@ -534,9 +404,6 @@ export function DataLayout() {
   const selectedRepositoryAsset = repositoryAssets.find((asset) => asset.asset_key === selectedRepositoryAssetKey)
     ?? repositoryAssets[0]
     ?? null;
-  const selectedWorkspaceDocument = selectedRepositoryAsset?.asset_type === 'workspace_document'
-    ? selectedRepositoryAsset
-    : null;
 
   return (
     <div className="flex h-full min-w-0 min-h-0 bg-background text-foreground flex-col overflow-x-hidden">
@@ -617,39 +484,19 @@ export function DataLayout() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-2 flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
-                      <label className="inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary sm:w-fit">
-                        <FileText className="size-4" />
-                        문서 원본 선택
-                        <input
-                          type="file"
-                          accept=".txt,.md,.markdown,text/plain,text/markdown"
-                          className="sr-only"
-                          onChange={handleDocumentFileChange}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => void requestDocumentUpload()}
-                        disabled={isDocumentActionLoading || documentUploadFiles.length === 0}
-                        aria-busy={isDocumentActionLoading}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
-                      >
-                        <Upload className="size-4" />
-                        선택 문서 저장
-                      </button>
-                    </div>
-                    <div role="status" aria-live="polite" className="text-xs font-semibold text-muted-foreground">
-                      {documentActionStatus === 'idle' && documentUploadFiles.length === 0 && '텍스트, Markdown, HWP 원본을 워크스페이스 문서 근거로 저장합니다.'}
-                      {documentActionStatus === 'idle' && documentUploadFiles.length > 0 && `${documentUploadFiles[0]?.name ?? '문서'} 선택됨`}
-                      {documentActionStatus === 'loading' && '문서 작업을 처리하는 중입니다.'}
-                      {documentActionStatus === 'auth' && <span className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 문서 작업을 실행할 수 없습니다.</span>}
-                      {documentActionStatus === 'error' && <span className="font-bold text-red-700">문서 작업에 실패했습니다.</span>}
-                      {documentActionStatus === 'success' && documentActionResult && (
-                        <span className="text-foreground">
-                          {documentActionResult.document_name} · {documentActionResult.message} · {getWriteBoundaryLabel(documentActionResult.provider_write_executed)}
-                        </span>
-                      )}
+                    <div className="flex flex-wrap gap-2 justify-end">
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      문서 업로드 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      재파싱 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed">
+                      임베딩 재생성 (준비 중)
+                    </button>
+                    <button type="button" disabled className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary opacity-50 cursor-not-allowed">
+                      HWP 변환 (준비 중)
+                    </button>
                     </div>
                   </div>
                 </div>
@@ -803,47 +650,6 @@ export function DataLayout() {
                       {selectedRepositoryAsset.state_code === 'ready' ? '정상' : '점검 필요'}
                     </span>
                   </div>
-                  {selectedWorkspaceDocument && (
-                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => void requestDocumentAction('reparse')}
-                        disabled={isDocumentActionLoading}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
-                      >
-                        <RefreshCw className="size-4" />
-                        재파싱 실행
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void requestDocumentAction('embedding-regeneration-intent')}
-                        disabled={isDocumentActionLoading}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
-                      >
-                        <Database className="size-4" />
-                        임베딩 재생성 의도
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void requestDocumentAction('hwp-conversion-intent')}
-                        disabled={isDocumentActionLoading}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
-                      >
-                        <FileText className="size-4" />
-                        HWP 변환 의도
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void requestDocumentAction('webdav-materialization-intent')}
-                        disabled={isDocumentActionLoading || !selectedWebdavAccount || selectedWorkspaceDocument.state_code !== 'ready'}
-                        aria-busy={isDocumentActionLoading}
-                        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <Server className="size-4" />
-                        WebDAV 문서 실행 요청
-                      </button>
-                    </div>
-                  )}
                   <dl className="mt-5 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                       <dt className="font-black text-muted-foreground">근거 상태</dt>
@@ -1088,10 +894,10 @@ export function DataLayout() {
                         ></div>
                       </div>
                       <div className="mt-3 flex justify-end">
-                        <span className="inline-flex items-center gap-1 rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground">
+                        <button type="button" disabled className="rounded bg-secondary px-2 py-1 text-xs font-bold text-secondary-foreground opacity-50 cursor-not-allowed flex items-center gap-1">
                           <RefreshCw className="h-3 w-3" />
-                          {getWriteBoundaryLabel(stage.provider_write_executed)}
-                        </span>
+                          {stage.stage_key.includes('parse') ? '재파싱 (준비 중)' : '재실행 (준비 중)'}
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -1168,10 +974,10 @@ export function DataLayout() {
                         </div>
                       </dl>
                       <div className="mt-4 flex justify-end border-t border-border pt-3">
-                        <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary">
+                        <button type="button" disabled className="rounded bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary opacity-50 cursor-not-allowed flex items-center gap-1">
                           <RefreshCw className="h-3 w-3" />
-                          {getWriteBoundaryLabel(collection.provider_write_executed)}
-                        </span>
+                          임베딩 재생성 (준비 중)
+                        </button>
                       </div>
                     </article>
                   ))}

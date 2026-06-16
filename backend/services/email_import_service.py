@@ -5,7 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
 
-from sqlalchemy import bindparam, func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Attachment, Email
@@ -93,9 +93,7 @@ def _fallback_message_id(content: bytes) -> str:
 
 
 def _message_id_for(parsed: EmailData, content: bytes) -> str:
-    return normalize_message_id(parsed.get("message_id")) or _fallback_message_id(
-        content
-    )
+    return normalize_message_id(parsed.get("message_id")) or _fallback_message_id(content)
 
 
 def _email_fingerprint(parsed: EmailData, persisted_date: datetime.datetime) -> str:
@@ -165,13 +163,11 @@ async def _acquire_owner_import_quota_lock(
         "owner_key": f"{user_id}\x00{organization_id}",
     }
     await session.execute(
-        select(
-            func.pg_advisory_lock(
-                func.hashtext(bindparam("namespace_key")),
-                func.hashtext(bindparam("owner_key")),
-            )
-        ),
-        lock_params,
+        text(
+            "SELECT pg_advisory_lock("
+            "hashtext(:namespace_key), hashtext(:owner_key)"
+            ")"
+        ).bindparams(**lock_params)
     )
     return True
 
@@ -184,13 +180,11 @@ async def _release_owner_import_quota_lock(
         "owner_key": f"{user_id}\x00{organization_id}",
     }
     await session.execute(
-        select(
-            func.pg_advisory_unlock(
-                func.hashtext(bindparam("namespace_key")),
-                func.hashtext(bindparam("owner_key")),
-            )
-        ),
-        lock_params,
+        text(
+            "SELECT pg_advisory_unlock("
+            "hashtext(:namespace_key), hashtext(:owner_key)"
+            ")"
+        ).bindparams(**lock_params)
     )
 
 

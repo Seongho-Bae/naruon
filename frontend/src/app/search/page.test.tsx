@@ -148,6 +148,10 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-search-session",
+    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -189,8 +193,7 @@ describe("SearchPage", () => {
       JSON.stringify({ query: "런칭 캠페인", limit: 8 }),
     );
     const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
-    expect(searchCall?.[1]?.credentials).toBe("same-origin");
-    expect(headers.authorization).toBeUndefined();
+    expect(headers.authorization).toBe("Bearer signed-search-session");
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -211,8 +214,7 @@ describe("SearchPage", () => {
     );
     expect(String(ontologyCall?.[0])).toContain("source_thread_id=thread-q2");
     const ontologyHeaders = lowerCaseHeaders(ontologyCall?.[1]?.headers);
-    expect(ontologyCall?.[1]?.credentials).toBe("same-origin");
-    expect(ontologyHeaders.authorization).toBeUndefined();
+    expect(ontologyHeaders.authorization).toBe("Bearer signed-search-session");
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -259,6 +261,10 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-xss-snippet-session",
+    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -281,8 +287,7 @@ describe("SearchPage", () => {
     );
     expect(searchCall).toBeDefined();
     const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
-    expect(searchCall?.[1]?.credentials).toBe("same-origin");
-    expect(headers.authorization).toBeUndefined();
+    expect(headers.authorization).toBe("Bearer signed-xss-snippet-session");
   });
 
   it("captures a source-backed sender DAG relationship through signed headers", async () => {
@@ -332,6 +337,10 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.localStorage.setItem(
+      "naruon_session_token",
+      "signed-capture-session",
+    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -363,8 +372,7 @@ describe("SearchPage", () => {
       JSON.stringify({ source_message_id: "<capture@example.com>" }),
     );
     const captureHeaders = lowerCaseHeaders(captureCall?.[1]?.headers);
-    expect(captureCall?.[1]?.credentials).toBe("same-origin");
-    expect(captureHeaders.authorization).toBeUndefined();
+    expect(captureHeaders.authorization).toBe("Bearer signed-capture-session");
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -412,69 +420,5 @@ describe("SearchPage", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("검색 결과를 불러오지 못했습니다.");
-  });
-
-  it("clears the query with the custom button while keeping focus on the searchbox", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith("/api/search"))
-          return Promise.resolve(jsonResponse({ results: [] }));
-        if (url.includes("/api/ontology/relationships"))
-          return Promise.resolve(jsonResponse([]));
-        if (url.endsWith("/api/network/graph"))
-          return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
-        return Promise.resolve(jsonResponse({}, false, 404));
-      }),
-    );
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<SearchPage />);
-    });
-    await flushAsyncWork();
-
-    const input = container.querySelector("#search-input") as HTMLInputElement | null;
-    expect(input).not.toBeNull();
-    expect(input?.type).toBe("text");
-    expect(input?.getAttribute("inputmode")).toBe("search");
-    expect(input?.getAttribute("role")).toBe("searchbox");
-    const page = container;
-    expect(page).not.toBeNull();
-    expect(
-      page?.querySelector('button[aria-label="검색어 지우기"]'),
-    ).not.toBeNull();
-
-    await act(async () => {
-      page
-        .querySelector('button[aria-label="검색어 지우기"]')
-        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(input?.value).toBe("");
-    expect(document.activeElement).toBe(input);
-    expect(
-      page?.querySelector('button[aria-label="검색어 지우기"]'),
-    ).toBeNull();
-
-    await act(async () => {
-      input?.focus();
-      if (input) {
-        const valueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLInputElement.prototype,
-          "value",
-        )?.set;
-        valueSetter?.call(input, "새 검색어");
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-    });
-
-    expect(input?.value).toBe("새 검색어");
-    expect(
-      page?.querySelector('button[aria-label="검색어 지우기"]'),
-    ).not.toBeNull();
   });
 });

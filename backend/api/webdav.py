@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List
 
 from api.auth import get_auth_context, AuthContext
-from api.runner_ws import manager as runner_manager
 from db.session import get_db
 from services.webdav_service import webdav_service
 
@@ -50,7 +49,6 @@ class KnowledgeMaterializationIntentRequest(BaseModel):
 
     source_task_id: str
     target_source_id: str | None = None
-    execute_provider: bool = False
 
 class KnowledgeMaterializationIntentResponse(BaseModel):
     intent: str
@@ -67,10 +65,6 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     provenance: str
     provider_write_executed: bool
     audit_event: str
-    runner_request_id: str | None = None
-    provider_status: int | None = None
-    error_code: str | None = None
-    retry_item_uid: str | None = None
 
 @router.get("/accounts", response_model=List[WebdavAccountResponse])
 async def get_webdav_accounts(
@@ -138,57 +132,4 @@ async def get_knowledge_materialization_intent(
             422,
         )
         raise HTTPException(status_code=status_code, detail=result.get("message"))
-    if req.execute_provider:
-        dispatch_result = await runner_manager.dispatch_command(
-            auth_context.organization_id,
-            auth_context.workspace_id,
-            _knowledge_materialization_runner_command(result),
-        )
-        result = _merge_materialization_dispatch_result(result, dispatch_result)
     return KnowledgeMaterializationIntentResponse(**result)
-
-
-def _knowledge_materialization_runner_command(result: dict) -> dict[str, object]:
-    return {
-        "action": "write_webdav",
-        "account": result["source_id"],
-        "source_id": result["source_id"],
-        "target_path": result["target_path"],
-        "if_match": result.get("if_match"),
-        "content_type": "text/markdown; charset=utf-8",
-        "content": _knowledge_materialization_content(result),
-    }
-
-
-def _knowledge_materialization_content(result: dict) -> str:
-    task_id = str(result["task_id"])
-    lines = [
-        f"# {task_id}",
-        "",
-        f"- Source type: {result['source_type']}",
-        f"- Source email: {result.get('source_email_id') or 'unknown'}",
-        f"- Source thread: {result.get('source_thread_id') or 'unknown'}",
-        "",
-    ]
-    return "\n".join(lines)
-
-
-def _merge_materialization_dispatch_result(
-    intent_result: dict,
-    dispatch_result: dict,
-) -> dict:
-    result = dict(intent_result)
-    result["status"] = str(dispatch_result.get("status") or "error")
-    result["provider_write_executed"] = bool(
-        dispatch_result.get("provider_write_executed", False)
-    )
-    result["runner_request_id"] = dispatch_result.get("request_id")
-    result["provider_status"] = dispatch_result.get("provider_status")
-    result["error_code"] = dispatch_result.get("error_code")
-    result["retry_item_uid"] = dispatch_result.get("retry_item_uid")
-    result["audit_event"] = (
-        "webdav.self_sent_knowledge_write.executed"
-        if result["provider_write_executed"]
-        else "webdav.self_sent_knowledge_write.dispatch_failed"
-    )
-    return result

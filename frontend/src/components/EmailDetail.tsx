@@ -18,7 +18,6 @@ import {
   type ThreadEmailData,
 } from "@/lib/email-threading";
 import { toMailBodyText, toMailDisplayText } from "@/lib/mail-text";
-import { toConfidencePercent } from "@/lib/confidence";
 
 type EmailData = ThreadEmailData & {
   requires_reply?: boolean;
@@ -31,6 +30,15 @@ interface LlmData {
   confidence?: number;
 }
 
+function toConfidencePercent(confidence: number | undefined): number | undefined {
+  if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
+    return undefined;
+  }
+
+  const percent = confidence >= 0 && confidence <= 1 ? confidence * 100 : confidence;
+  return Math.round(Math.min(100, Math.max(0, percent)));
+}
+
 interface CreateTasksFromEmailResponse {
   created: number;
 }
@@ -38,11 +46,6 @@ interface CreateTasksFromEmailResponse {
 interface CalendarWritebackIntentResponse {
   target_source_id: string;
   protocol: string;
-  provider_write_executed?: boolean;
-  status?: string;
-  runner_request_id?: string | null;
-  provider_status?: number | null;
-  error_code?: string | null;
   provenance: {
     source_provider?: string;
   };

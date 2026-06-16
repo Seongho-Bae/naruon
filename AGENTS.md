@@ -72,19 +72,6 @@
   completed check run or status context failed, or the check rollup cannot be
   verified, the OpenCode review must request changes or explain the verification
   failure instead of approving.
-- When OpenCode requests changes because Strix or another GitHub Check failed,
-  it must access the failed check logs and annotations, cite the exact failure
-  phrase, map each actionable failure to a concrete repository `path:line`, and
-  provide root cause, fix direction, regression-test direction, and a
-  source-backed suggested diff. A review that only cites a workflow URL, check
-  name, or generic failure summary is not sufficient. If Strix output contains
-  multiple model vulnerability reports, include every model-reported
-  vulnerability separately with the model name, title, severity, endpoint, and
-  Code Locations/path:line evidence when present.
-- Strix logs may print the report's `Model ...` line after the title, endpoint,
-  and Code Locations block. Failed-check evidence parsers and OpenCode review
-  validators must attribute each vulnerability to that in-report model line, not
-  to a previous retry attempt such as a failed primary `openai/gpt-5` run.
 - OpenCode Agent PR reviews must be general-purpose and meticulous rather than
   narrowly scenario-specific. Configure the review prompt to use all relevant
   MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,
@@ -124,14 +111,11 @@
   Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
-- Browser frontend writes to signed backend routes must use the HttpOnly
-  `naruon_session` cookie through the same-origin Next.js `/api/*` proxy, which
-  translates the server-readable cookie into backend `Authorization: Bearer`.
-  Browser code must not store bearer/session tokens in `localStorage` or
-  `sessionStorage`, and must not emit or forward public identity headers such as
-  `X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
-  or `X-Dev-Auth-Token`; tests/mocks must exercise the signed-session cookie
-  path.
+- Browser frontend writes to signed backend routes must carry the stored
+  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
+  public identity headers such as `X-User-Id`, `X-Organization-Id`,
+  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
+  tests/mocks must exercise the signed-session path.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
@@ -174,7 +158,7 @@
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
-  HttpOnly `naruon_session` cookie proxy path and must not add public identity
+  stored `naruon_session_token` bearer path and must not add public identity
   headers.
 - TenantConfig/provider account settings must be scoped by signed-session
   `user_id` and `organization_id`; do not query provider credentials or API keys
@@ -407,42 +391,6 @@
   deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
-- Release version bumps must keep `VERSION`, `CHANGELOG.md`,
-  `frontend/package.json`, FastAPI app metadata, runtime-config responses, and
-  Docker runtime packaging synchronized. The backend should read the release
-  version from `VERSION`; do not add a new hardcoded API version string.
-- Before opening a PR, new committers should run the focused tests that cover
-  the changed contract and include exact commands in the PR body. For release
-  and Docker changes, at minimum verify `python -m pytest
-  backend/tests/test_release_governance.py backend/tests/test_runtime_config_api.py
-  -q`, `corepack pnpm@11.5.3 --dir frontend test --runInBand` when frontend
-  behavior changes, and a Docker build of the affected image.
-- GHCR publishing evidence for the combined `naruon` image must include the
-  exact image name, tag, local image ID, push result, and registry verification
-  from GitHub Packages or an equivalent manifest/API query. Publish the package
-  with public visibility unless a repository policy explicitly says otherwise.
-  Do not treat a local tag as published evidence. GitHub's REST Packages API and
-  GraphQL package mutations currently do not expose a supported package
-  visibility change operation for GHCR container packages; when API checks show
-  `visibility: private`, complete the public conversion through the logged-in
-  GitHub package settings UI (`Package settings` -> `Danger Zone` -> `Change
-  visibility`) and then verify anonymous pull/token access before declaring the
-  image public.
-- Docker image security inspection is part of release evidence. Use a current
-  container scanner such as Trivy or Grype against the exact pushed image tag
-  and treat high/critical actionable findings as blockers until fixed or
-  documented with precise non-applicability evidence.
-- Docker Compose and Podman live-E2E work must clean up after itself. Stop
-  stale `naruon*` containers, remove unused volumes/layers with
-  `podman system prune --all --volumes --force` when safe, and verify
-  `podman ps` has no stale Naruon services. If Podman reports broken storage
-  metadata such as missing overlay layers or `readlink ... overlay: invalid
-  argument`, run `podman system check --repair --force` before relying on
-  `podman system df` or additional image scans.
-- Keep contributor setup friction low: document any new required environment
-  variables, model tags, package-manager version pins, or live-E2E ports in the
-  same PR that introduces them, and avoid hidden local-only defaults that make
-  another committer's PR fail after checkout.
 
 ## Phase 10 development rules
 

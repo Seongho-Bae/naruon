@@ -1,9 +1,7 @@
-import logging
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 from db.models import TenantConfig
 from db.session import get_db
@@ -34,8 +32,6 @@ from services.email_client import (
 )
 
 router = APIRouter(prefix="/api/config")
-logger = logging.getLogger(__name__)
-
 
 @router.get("/global")
 async def get_global_config(
@@ -164,11 +160,7 @@ def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> Non
         if smtp_server is not None and smtp_port is not None:
             validate_smtp_destination(smtp_server, smtp_port)
     except ValueError as exc:
-        logger.warning(
-            "SMTP configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
-        raise HTTPException(status_code=400, detail="Invalid SMTP configuration") from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> None:
@@ -180,13 +172,9 @@ def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> Non
         elif imap_port is not None:
             validate_imap_port(imap_port)
     except ValueError as exc:
-        logger.warning(
-            "IMAP configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
         raise HTTPException(
             status_code=400,
-            detail="Invalid IMAP configuration",
+            detail=f"imap_server/imap_port validation failed: {exc}",
         ) from exc
 
 
@@ -199,13 +187,9 @@ def _validate_pop3_config(pop3_server: str | None, pop3_port: int | None) -> Non
         elif pop3_port is not None:
             validate_pop3_port(pop3_port)
     except ValueError as exc:
-        logger.warning(
-            "POP3 configuration validation failed",
-            extra={"error_type": type(exc).__name__},
-        )
         raise HTTPException(
             status_code=400,
-            detail="Invalid POP3 configuration",
+            detail=f"pop3_server/pop3_port validation failed: {exc}",
         ) from exc
 
 
@@ -276,23 +260,24 @@ async def create_or_update_config(
 
 @router.get("", response_model=TenantConfigResponse)
 async def get_config(
+    user_id: str,
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
     ensure_mailbox_config_self_access(
-        auth_context.user_id,
+        user_id,
         auth_context,
         MAILBOX_VIEW_FORBIDDEN,
     )
-    session_user_id = auth_context.user_id
+
     db_config = await get_scoped_tenant_config(
         db,
-        session_user_id,
+        auth_context.user_id,
         auth_context.organization_id,
     )
 
     if not db_config:
-        return TenantConfigResponse(user_id=session_user_id)
+        return TenantConfigResponse(user_id=user_id)
 
     response = TenantConfigResponse.model_validate(db_config)
 

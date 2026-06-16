@@ -41,15 +41,11 @@ class SelfHostedConnector:
         *,
         imap_fetch_handler: RunnerActionHandler | None = None,
         smtp_send_handler: RunnerActionHandler | None = None,
-        webdav_write_handler: RunnerActionHandler | None = None,
-        caldav_write_handler: RunnerActionHandler | None = None,
     ):
         self.target_ws_url = target_ws_url
         self.token = token
         self.imap_fetch_handler = imap_fetch_handler
         self.smtp_send_handler = smtp_send_handler
-        self.webdav_write_handler = webdav_write_handler
-        self.caldav_write_handler = caldav_write_handler
         self.connection = None
         self.is_connected = False
         
@@ -122,10 +118,6 @@ class SelfHostedConnector:
             await self._handle_fetch_imap(payload)
         elif action == "send_smtp":
             await self._handle_send_smtp(payload)
-        elif action == "write_webdav":
-            await self._handle_write_webdav(payload)
-        elif action == "write_caldav":
-            await self._handle_write_caldav(payload)
         else:
             logger.info("Unknown action received.")
             await self.send_response({
@@ -166,40 +158,6 @@ class SelfHostedConnector:
             protocol="SMTP",
             payload=payload,
             handler=self.smtp_send_handler,
-        )
-
-    async def _handle_write_webdav(self, payload: Dict[str, Any]):
-        if _get_account_name(payload) is None:
-            logger.error("WebDAV write instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "write_webdav",
-                "error": "missing account",
-            })
-            return
-        logger.info("Dispatching local WebDAV write adapter for configured account.")
-        await self._execute_local_adapter(
-            action="write_webdav",
-            protocol="WebDAV",
-            payload=payload,
-            handler=self.webdav_write_handler,
-        )
-
-    async def _handle_write_caldav(self, payload: Dict[str, Any]):
-        if _get_account_name(payload) is None:
-            logger.error("CalDAV write instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "write_caldav",
-                "error": "missing account",
-            })
-            return
-        logger.info("Dispatching local CalDAV write adapter for configured account.")
-        await self._execute_local_adapter(
-            action="write_caldav",
-            protocol="CalDAV",
-            payload=payload,
-            handler=self.caldav_write_handler,
         )
 
     async def _execute_local_adapter(

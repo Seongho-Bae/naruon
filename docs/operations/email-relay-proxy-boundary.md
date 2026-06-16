@@ -47,12 +47,6 @@
   connector, not by turning the SaaS backend into a public mail server.
 - The connector opens an outbound control-plane channel to `naruon.net` and uses
   local client adapters for IMAP, POP3, SMTP, CalDAV, CardDAV, and WebDAV.
-- The Python runner implementation includes `runner.local_mail_adapters`
-  handlers for IMAP fetch/import and SMTP send plus `runner.local_dav_adapters`
-  handlers for CalDAV/WebDAV PUT. These handlers use explicit account/source
-  configuration, enforce the relevant destination/source checks, and return
-  `provider_write_executed=true` only after a real SMTP send or DAV provider
-  write reports success.
 - The `/api/runner-config` manifest describes this production connector role, but
   GitHub self-hosted runners remain CI smoke infrastructure only.
 - Connector command handlers must not synthesize successful IMAP/SMTP results.

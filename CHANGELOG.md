@@ -82,39 +82,6 @@
   명시한 `ALLOWED_SMTP_HOSTS`/`ALLOWED_SMTP_PORTS` allowlist와 private IP 차단을
   통과한 pinned socket으로만 연결하도록 fail-closed 처리했습니다.
 
-## [0.14.3] - 2026-06-15
-
-### 수정
-- Seongho Bae (@seonghobae): Docker publish workflow가 tag release에서
-  GHCR 이미지 발행을 완료한 뒤 `AKS_KUBECONFIG` secret 부재만으로 전체 release
-  check를 실패시키지 않도록 AKS deploy preflight를 추가했습니다. kubeconfig
-  secret이 없으면 deploy workflow는 skip되고, secret이 구성된 환경에서만 실제
-  AKS 배포가 실행됩니다.
-- Seongho Bae (@seonghobae): GHCR `naruon` package가 repository-linked
-  workflow publish로 다시 생성되도록 release version을 `0.14.3`으로 상향했습니다.
-
-## [0.14.2] - 2026-06-15
-
-### 추가
-- Seongho Bae (@seonghobae): README 상단에 DeepWiki 진입 badge를 추가해
-  다른 커미터가 repository 문맥과 문서 질의를 더 쉽게 시작할 수 있게 했습니다.
-- Seongho Bae (@seonghobae): Docker/GHCR 발행, 이미지 보안 검사, stale
-  Podman 프로세스와 storage 정리, 새 커미터 PR 준비 기준을 `AGENTS.md` 운영
-  노하우로 고정했습니다.
-
-### 수정
-- Seongho Bae (@seonghobae): release source of truth를 `VERSION=0.14.2`로
-  상향하고 frontend package metadata, FastAPI app metadata, runtime-config
-  응답이 같은 VERSION 값을 읽도록 정렬했습니다. Docker runtime image에도
-  `VERSION`을 복사해 published image와 API version evidence가 분리되지 않게
-  했습니다.
-- Seongho Bae (@seonghobae): GHCR `naruon` image 보안 검사에서 확인된
-  Python runtime layer의 `jaraco.context`, `protobuf`, `wheel` high-severity
-  findings를 해소하기 위해 OpenTelemetry/protobuf/toolchain pins를 patched
-  버전으로 정렬했습니다.
-- Seongho Bae (@seonghobae): combined `naruon` image에 OCI source/title label을
-  추가해 GHCR package가 public repository와 연결된 증거를 갖도록 했습니다.
-
 ## [0.14.1] - 2026-05-13
 
 ### 수정

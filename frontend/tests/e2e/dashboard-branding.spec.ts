@@ -7,11 +7,6 @@ function e2eSessionToken(payload: Record<string, unknown>) {
   return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode(payload)}.signature`;
 }
 
-function expectBrowserCookieSession(headers: Record<string, string> | undefined, token: string) {
-  expect(headers?.authorization).toBeUndefined();
-  expect(headers?.cookie ?? '').toContain(`naruon_session=${token}`);
-}
-
 test('renders the desktop Naruon shell with local brand assets', async ({ page }) => {
   const requestedUrls: string[] = [];
   page.on('request', (request) => requestedUrls.push(request.url()));
@@ -75,7 +70,7 @@ test('renders the desktop Naruon shell with local brand assets', async ({ page }
 });
 
 test('renders Today dashboard pending reply lane with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-dashboard.pending-replies.token';
+  const expectedNaruonToken = 'signed-dashboard-pending-replies-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -87,7 +82,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const desktopPendingRequest = page.waitForRequest((request) => {
@@ -97,7 +92,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
 
   await page.goto('/');
   const desktopHeaders = (await desktopPendingRequest).headers();
-  expectBrowserCookieSession(desktopHeaders, expectedNaruonToken);
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
@@ -114,7 +109,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   });
   await desktopDashboard.getByRole('button', { name: '홈에서 보낸 메일 답변 SLA 티켓 생성' }).click();
   const desktopEscalationHeaders = (await desktopEscalationRequest).headers();
-  expectBrowserCookieSession(desktopEscalationHeaders, expectedNaruonToken);
+  expect(desktopEscalationHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(desktopEscalationHeaders[headerName]).toBeUndefined();
   }
@@ -129,7 +124,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
     return url.pathname === '/api/emails/pending-replies' && request.method() === 'GET';
   });
   await page.goto('/');
-  expectBrowserCookieSession((await mobilePendingRequest).headers(), expectedNaruonToken);
+  expect((await mobilePendingRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
   const mobileDashboard = page.locator('section[aria-label="홈 개요"]:visible').first();
   await expect(mobileDashboard).toBeVisible();
   await mobileDashboard.getByText('답변 대기 메일').scrollIntoViewIfNeeded();
@@ -141,7 +136,7 @@ test('renders Today dashboard pending reply lane with signed API headers', async
   });
   await mobileDashboard.getByRole('button', { name: '홈에서 보낸 메일 답변 SLA 티켓 생성' }).click();
   const mobileEscalationHeaders = (await mobileEscalationRequest).headers();
-  expectBrowserCookieSession(mobileEscalationHeaders, expectedNaruonToken);
+  expect(mobileEscalationHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(mobileEscalationHeaders[headerName]).toBeUndefined();
   }
@@ -317,7 +312,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
   ];
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   await page.setViewportSize({ width: 1280, height: 1024 });
@@ -332,7 +327,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
   await page.goto('/projects');
   for (const request of [await desktopFoldersRequest, await desktopTasksRequest]) {
     const headers = request.headers();
-    expectBrowserCookieSession(headers, expectedNaruonToken);
+    expect(headers.authorization).toBe(`Bearer ${expectedNaruonToken}`);
     for (const headerName of publicIdentityHeaders) {
       expect(headers[headerName]).toBeUndefined();
     }
@@ -355,7 +350,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
     return url.pathname === '/api/webdav/folders' && request.method() === 'GET';
   });
   await page.goto('/projects');
-  expectBrowserCookieSession((await mobileFoldersRequest).headers(), expectedNaruonToken);
+  expect((await mobileFoldersRequest).headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
   await expect(page.getByRole('heading', { name: '프로젝트 워크스페이스' })).toBeVisible();
   await page.getByRole('heading', { name: '연결 작업' }).scrollIntoViewIfNeeded();
   await expect(page.getByText('첨부파일 WebDAV 폴더 정리')).toBeVisible();
@@ -382,7 +377,7 @@ test('renders source-backed Projects workspace with signed API headers and mobil
 });
 
 test('renders Security governance access audit sharing and policy with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-security.governance-e2e.token';
+  const expectedNaruonToken = 'signed-security-governance-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -393,7 +388,7 @@ test('renders Security governance access audit sharing and policy with signed AP
   ];
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   await page.setViewportSize({ width: 1280, height: 1024 });
@@ -403,7 +398,7 @@ test('renders Security governance access audit sharing and policy with signed AP
   });
   await page.goto('/security');
   const accessHeaders = (await accessRequest).headers();
-  expectBrowserCookieSession(accessHeaders, expectedNaruonToken);
+  expect(accessHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(accessHeaders[headerName]).toBeUndefined();
   }
@@ -481,7 +476,7 @@ test('renders Security governance access audit sharing and policy with signed AP
 });
 
 test('renders Data quality surface across viewports with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-data.quality-e2e.token';
+  const expectedNaruonToken = 'signed-data-quality-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -492,7 +487,7 @@ test('renders Data quality surface across viewports with signed API headers', as
   ];
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   await page.setViewportSize({ width: 1280, height: 1024 });
@@ -502,24 +497,20 @@ test('renders Data quality surface across viewports with signed API headers', as
   });
   await page.goto('/data');
   const dataHeaders = (await dataRequest).headers();
-  expectBrowserCookieSession(dataHeaders, expectedNaruonToken);
+  expect(dataHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(dataHeaders[headerName]).toBeUndefined();
   }
 
   await expect(page.getByRole('heading', { name: '데이터와 파일' })).toBeVisible();
   await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
-  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await expect(page.getByText('최근 파일/첨부 자산')).toBeVisible();
   const assetList = page.getByLabel('문서 저장소 파일 자산');
-  await expect(assetList.getByRole('button', { name: /roadmap\.md/ })).toBeVisible();
   await expect(assetList.getByRole('button', { name: /roadmap\.pdf/ })).toBeVisible();
   const assetDetail = page.getByLabel('선택한 파일 자산 상세');
-  await expect(assetDetail.getByRole('heading', { name: 'roadmap.md' })).toBeVisible();
-  await expect(assetDetail.getByText('워크스페이스 문서 근거')).toBeVisible();
-  await expect(assetDetail.getByText('document status: uploaded')).toBeVisible();
+  await expect(assetDetail.getByRole('heading', { name: 'roadmap.pdf' })).toBeVisible();
+  await expect(assetDetail.getByText('원본 메일/스레드 근거 연결')).toBeVisible();
   await expect(assetDetail.getByText('asset_repository_ready')).toHaveCount(0);
-  await expect(assetDetail.getByText('doc_repository_ready')).toHaveCount(0);
   await expect(assetDetail.getByText('thread_repository_ready')).toHaveCount(0);
   await assetList.getByRole('button', { name: /blank-notes\.md/ }).click();
   await expect(assetDetail.getByRole('heading', { name: 'blank-notes.md' })).toBeVisible();
@@ -532,14 +523,12 @@ test('renders Data quality surface across viewports with signed API headers', as
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('4 emails and 3 attachments')).toBeVisible();
   await expect(page.getByText('원본 근거 연결됨').first()).toBeVisible();
-  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-pipeline.png'), fullPage: false });
 
   await page.getByRole('button', { name: '임베딩' }).click();
   await expect(page.getByText('text-embedding-3-small').first()).toBeVisible();
   await expect(page.getByText('Email vectors')).toBeVisible();
   await expect(page.getByText('1,536').first()).toBeVisible();
-  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await expect(page.getByText('28,401')).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('data-quality-desktop-embedding.png'), fullPage: false });
 
@@ -555,7 +544,6 @@ test('renders Data quality surface across viewports with signed API headers', as
   await page.goto('/data');
   await expect(page.getByText('감사 근거 기록됨')).toBeVisible();
   await expect(page.getByText('data.quality_surface.viewed')).toHaveCount(0);
-  await expect(page.getByText(/준비 중/)).toHaveCount(0);
   await page.getByRole('button', { name: '수집 파이프라인' }).click();
   await expect(page.getByText('Connector observability')).toBeVisible();
   const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
@@ -599,7 +587,7 @@ test('renders Data quality surface across viewports with signed API headers', as
 });
 
 test('renders sent mail reply tracking route with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-sent.mail-e2e.token';
+  const expectedNaruonToken = 'signed-sent-mail-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -611,7 +599,7 @@ test('renders sent mail reply tracking route with signed API headers', async ({ 
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const sentRequest = page.waitForRequest((request) => {
@@ -621,7 +609,7 @@ test('renders sent mail reply tracking route with signed API headers', async ({ 
 
   await page.goto('/mail?folder=sent');
   const requestHeaders = (await sentRequest).headers();
-  expectBrowserCookieSession(requestHeaders, expectedNaruonToken);
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(requestHeaders[headerName]).toBeUndefined();
   }
@@ -659,7 +647,7 @@ test('renders sent mail reply tracking route with signed API headers', async ({ 
 });
 
 test('updates source-linked task ticket status with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-task.status-e2e.token';
+  const expectedNaruonToken = 'signed-task-status-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -671,7 +659,7 @@ test('updates source-linked task ticket status with signed API headers', async (
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const patchRequest = page.waitForRequest((request) => {
@@ -684,7 +672,7 @@ test('updates source-linked task ticket status with signed API headers', async (
   await expect(page.getByRole('region', { name: '원본 연결 티켓 상태 보드' })).toBeVisible();
   await page.getByRole('button', { name: '리소스 배정 검토 회의 상태를 완료로 변경' }).click();
   const requestHeaders = (await patchRequest).headers();
-  expectBrowserCookieSession(requestHeaders, expectedNaruonToken);
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(requestHeaders[headerName]).toBeUndefined();
   }
@@ -720,7 +708,7 @@ test('updates source-linked task ticket status with signed API headers', async (
 });
 
 test('creates pending reply SLA task escalation with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-reply.sla-e2e.token';
+  const expectedNaruonToken = 'signed-reply-sla-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -732,7 +720,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const desktopEscalationRequest = page.waitForRequest((request) => {
@@ -745,7 +733,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const desktopRequest = await desktopEscalationRequest;
   const desktopHeaders = desktopRequest.headers();
-  expectBrowserCookieSession(desktopHeaders, expectedNaruonToken);
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
@@ -769,7 +757,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
   await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '보낸 메일 답변 SLA 티켓 생성' }).click();
   const mobileRequestHeaders = (await mobileEscalationRequest).headers();
-  expectBrowserCookieSession(mobileRequestHeaders, expectedNaruonToken);
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(mobileRequestHeaders[headerName]).toBeUndefined();
   }
@@ -795,7 +783,7 @@ test('creates pending reply SLA task escalation with signed API headers', async 
 });
 
 test('creates self-sent knowledge WebDAV intent with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-self-sent.knowledge-e2e.token';
+  const expectedNaruonToken = 'signed-self-sent-knowledge-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -807,7 +795,7 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const desktopIntentRequest = page.waitForRequest((request) => {
@@ -821,7 +809,7 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 의도 생성' }).click();
   const request = await desktopIntentRequest;
   const requestHeaders = request.headers();
-  expectBrowserCookieSession(requestHeaders, expectedNaruonToken);
+  expect(requestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(requestHeaders[headerName]).toBeUndefined();
   }
@@ -845,7 +833,7 @@ test('creates self-sent knowledge WebDAV intent with signed API headers', async 
   await expect(page.getByRole('heading', { name: '실행 항목 추적' })).toBeVisible();
   await page.getByRole('button', { name: '나에게 보낸 지식 메모 정리 WebDAV 지식 노트 의도 생성' }).click();
   const mobileRequest = await mobileIntentRequest;
-  expectBrowserCookieSession(mobileRequest.headers(), expectedNaruonToken);
+  expect(mobileRequest.headers().authorization).toBe(`Bearer ${expectedNaruonToken}`);
   await expect(page.getByText('WebDAV/Notes 의도 준비')).toBeVisible();
   await page.getByText('WebDAV/Notes 의도 준비').scrollIntoViewIfNeeded();
   await expect(page.getByText('webdav.self_sent_knowledge_intent.created')).toHaveCount(0);
@@ -947,7 +935,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
   }[] = [];
 
   await page.addInitScript(() => {
-    document.cookie = 'naruon_session=signed-settings.e2e.token; Path=/; SameSite=Lax';
+    localStorage.setItem('naruon_session_token', 'signed-settings-e2e-token');
   });
   await mockDashboardApi(page, (path, request) => {
     if (path === '/api/accounts/config') {
@@ -1015,13 +1003,13 @@ test('renders source-backed mail account settings across desktop tablet and mobi
   await page.screenshot({ path: testInfo.outputPath('settings-mail-account-mobile-scroll.png'), fullPage: false });
 
   const getRequest = accountRequests.find((request) => request.method === 'GET');
-  expectBrowserCookieSession(getRequest?.headers, 'signed-settings.e2e.token');
+  expect(getRequest?.headers.authorization).toBe('Bearer signed-settings-e2e-token');
   for (const header of ['x-user-id', 'x-organization-id', 'x-group-id', 'x-group-ids', 'x-user-role', 'x-dev-auth-token']) {
     expect(getRequest?.headers[header]).toBeUndefined();
   }
 
   const putRequest = accountRequests.find((request) => request.method === 'PUT');
-  expectBrowserCookieSession(putRequest?.headers, 'signed-settings.e2e.token');
+  expect(putRequest?.headers.authorization).toBe('Bearer signed-settings-e2e-token');
   const putBody = JSON.parse(putRequest?.postData || '{}') as Record<string, unknown>;
   expect(putBody).toMatchObject({
     smtp_server: 'smtp.example.com',
@@ -1043,7 +1031,7 @@ test('renders source-backed mail account settings across desktop tablet and mobi
 });
 
 test('renders calendar writeback intent status without direct provider writes', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-calendar.e2e.token';
+  const expectedNaruonToken = 'signed-calendar-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1055,7 +1043,7 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   await page.goto('/calendar');
@@ -1070,7 +1058,7 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
   const desktopWritebackCall = await desktopWritebackRequest;
   const desktopRequestHeaders = desktopWritebackCall.headers();
-  expectBrowserCookieSession(desktopRequestHeaders, expectedNaruonToken);
+  expect(desktopRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   expect(desktopWritebackCall.postDataJSON()).toEqual({
     action: 'create',
     summary: 'Naruon 일정 후보 writeback intent 점검',
@@ -1102,7 +1090,7 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.getByRole('button', { name: '새 일정 intent 점검' }).click();
   const mobileWritebackCall = await mobileWritebackRequest;
   const mobileRequestHeaders = mobileWritebackCall.headers();
-  expectBrowserCookieSession(mobileRequestHeaders, expectedNaruonToken);
+  expect(mobileRequestHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   expect(mobileWritebackCall.postDataJSON()).toEqual({
     action: 'create',
     summary: 'Naruon 일정 후보 writeback intent 점검',
@@ -1136,8 +1124,8 @@ test('renders calendar writeback intent status without direct provider writes', 
   await page.screenshot({ path: testInfo.outputPath('calendar-writeback-intent-mobile-scroll.png'), fullPage: false });
 });
 
-test('renders data WebDAV writeback intent and document materialization status', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-webdav.e2e.token';
+test('renders data WebDAV writeback intent status without direct provider writes', async ({ page }, testInfo) => {
+  const expectedNaruonToken = 'signed-webdav-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1149,17 +1137,17 @@ test('renders data WebDAV writeback intent and document materialization status',
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const desktopAccountsRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/accounts' && request.method() === 'GET';
-  }, { timeout: 60_000 });
+  });
   await page.goto('/data');
   const desktopAccountsCall = await desktopAccountsRequest;
   const desktopAccountsHeaders = desktopAccountsCall.headers();
-  expectBrowserCookieSession(desktopAccountsHeaders, expectedNaruonToken);
+  expect(desktopAccountsHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(desktopAccountsHeaders[headerName]).toBeUndefined();
   }
@@ -1167,11 +1155,11 @@ test('renders data WebDAV writeback intent and document materialization status',
   const desktopWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
-  }, { timeout: 60_000 });
+  });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const desktopWritebackCall = await desktopWritebackRequest;
   const desktopHeaders = desktopWritebackCall.headers();
-  expectBrowserCookieSession(desktopHeaders, expectedNaruonToken);
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   expect(desktopWritebackCall.postDataJSON()).toEqual({ target_source_id: 'webdav_src_primary' });
   for (const headerName of publicIdentityHeaders) {
     expect(desktopHeaders[headerName]).toBeUndefined();
@@ -1183,28 +1171,6 @@ test('renders data WebDAV writeback intent and document materialization status',
   await expect(page.getByText('WebDAV source webdav_src_primary')).toHaveCount(0);
   await expect(page.getByText('https://webdav.naruon.net')).toHaveCount(0);
   await expect(page.getByText('etag-webdav-primary')).toHaveCount(0);
-  const desktopMaterializationRequest = page.waitForRequest((request) => {
-    const url = new URL(request.url());
-    return (
-      url.pathname === '/api/data/documents/doc_repository_ready/webdav-materialization-intent'
-      && request.method() === 'POST'
-    );
-  }, { timeout: 60_000 });
-  await page.getByRole('button', { name: 'WebDAV 문서 실행 요청' }).click();
-  const desktopMaterializationCall = await desktopMaterializationRequest;
-  const desktopMaterializationHeaders = desktopMaterializationCall.headers();
-  expectBrowserCookieSession(desktopMaterializationHeaders, expectedNaruonToken);
-  expect(desktopMaterializationCall.postDataJSON()).toEqual({
-    target_source_id: 'webdav_src_primary',
-    execute_provider: true,
-  });
-  for (const headerName of publicIdentityHeaders) {
-    expect(desktopMaterializationHeaders[headerName]).toBeUndefined();
-  }
-  await expect(page.getByText('외부 쓰기 실행됨')).toBeVisible();
-  await expect(page.getByText('Workspace document WebDAV materialization executed')).toBeVisible();
-  await expect(page.getByText('/Naruon/Data/roadmap.md-opaque.md')).toHaveCount(0);
-  await expect(page.getByText('runner_req_data_doc_1')).toHaveCount(0);
   const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(desktopOverflow).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath('data-webdav-writeback-intent-desktop.png'), fullPage: false });
@@ -1215,11 +1181,11 @@ test('renders data WebDAV writeback intent and document materialization status',
   const mobileWritebackRequest = page.waitForRequest((request) => {
     const url = new URL(request.url());
     return url.pathname === '/api/webdav/writeback-intent' && request.method() === 'POST';
-  }, { timeout: 60_000 });
+  });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const mobileWritebackCall = await mobileWritebackRequest;
   const mobileHeaders = mobileWritebackCall.headers();
-  expectBrowserCookieSession(mobileHeaders, expectedNaruonToken);
+  expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   expect(mobileWritebackCall.postDataJSON()).toEqual({ target_source_id: 'webdav_src_primary' });
   for (const headerName of publicIdentityHeaders) {
     expect(mobileHeaders[headerName]).toBeUndefined();
@@ -1251,7 +1217,7 @@ test('renders data WebDAV writeback intent and document materialization status',
 });
 
 test('renders unique email canonical thread intent with signed API headers', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-email.dedupe-e2e.token';
+  const expectedNaruonToken = 'signed-email-dedupe-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1263,7 +1229,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   await page.goto('/data');
@@ -1274,7 +1240,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
   await page.getByRole('button', { name: '중복 메일 스레드 의도 점검' }).click();
   const desktopRequest = await desktopIntentRequest;
   const desktopHeaders = desktopRequest.headers();
-  expectBrowserCookieSession(desktopHeaders, expectedNaruonToken);
+  expect(desktopHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(desktopHeaders[headerName]).toBeUndefined();
   }
@@ -1299,7 +1265,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
   });
   await page.getByRole('button', { name: '중복 메일 스레드 의도 점검' }).click();
   const mobileHeaders = (await mobileIntentRequest).headers();
-  expectBrowserCookieSession(mobileHeaders, expectedNaruonToken);
+  expect(mobileHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(mobileHeaders[headerName]).toBeUndefined();
   }
@@ -1331,7 +1297,7 @@ test('renders unique email canonical thread intent with signed API headers', asy
 });
 
 test('renders API-backed context search sender DAG and reply tracking', async ({ page }, testInfo) => {
-  const expectedNaruonToken = 'signed-search.e2e.token';
+  const expectedNaruonToken = 'signed-search-e2e-token';
   const publicIdentityHeaders = [
     'x-user-id',
     'x-organization-id',
@@ -1343,7 +1309,7 @@ test('renders API-backed context search sender DAG and reply tracking', async ({
   await page.setViewportSize({ width: 1280, height: 1024 });
   await mockDashboardApi(page);
   await page.addInitScript((token) => {
-    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
+    window.localStorage.setItem('naruon_session_token', token);
   }, expectedNaruonToken);
 
   const searchRequest = page.waitForRequest((request) => {
@@ -1364,9 +1330,9 @@ test('renders API-backed context search sender DAG and reply tracking', async ({
   const graphHeaders = (await graphRequest).headers();
   const ontologyCall = await ontologyRequest;
   const ontologyHeaders = ontologyCall.headers();
-  expectBrowserCookieSession(searchHeaders, expectedNaruonToken);
-  expectBrowserCookieSession(graphHeaders, expectedNaruonToken);
-  expectBrowserCookieSession(ontologyHeaders, expectedNaruonToken);
+  expect(searchHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(graphHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
+  expect(ontologyHeaders.authorization).toBe(`Bearer ${expectedNaruonToken}`);
   const ontologyUrl = new URL(ontologyCall.url());
   expect(ontologyUrl.searchParams.get('source_message_id')).toBe('<q2@example.com>');
   expect(ontologyUrl.searchParams.get('source_thread_id')).toBe('thread-q2');

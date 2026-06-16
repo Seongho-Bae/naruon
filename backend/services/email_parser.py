@@ -141,7 +141,18 @@ def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | Non
     return thread_id
 
 
-def _message_to_email_data(msg: email.message.Message) -> EmailData:
+def parse_eml(file_path: str | Path) -> EmailData:
+    """Parses an EML file and extracts email metadata and body.
+
+    Raises:
+        EmailParseError: If there is an issue reading the file.
+    """
+    try:
+        with open(file_path, "rb") as f:
+            msg = email.message_from_binary_file(f, policy=policy.default)
+    except OSError as e:
+        raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
+
     body, attachments = _extract_body_and_attachments(msg)
     parsed_date = _extract_date(msg)
     message_id = _sanitize_nul(msg.get("Message-ID", ""))
@@ -170,28 +181,3 @@ def _message_to_email_data(msg: email.message.Message) -> EmailData:
         "body": _sanitize_display_text(body),
         "attachments": attachments,
     }
-
-
-def parse_eml(file_path: str | Path) -> EmailData:
-    """Parses an EML file and extracts email metadata and body.
-
-    Raises:
-        EmailParseError: If there is an issue reading the file.
-    """
-    try:
-        with open(file_path, "rb") as f:
-            msg = email.message_from_binary_file(f, policy=policy.default)
-    except OSError as e:
-        raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
-
-    return _message_to_email_data(msg)
-
-
-def parse_eml_bytes(content: bytes) -> EmailData:
-    """Parses EML bytes fetched from a provider."""
-    try:
-        msg = email.message_from_bytes(content, policy=policy.default)
-    except Exception as e:
-        raise EmailParseError("Failed to parse provider email bytes") from e
-
-    return _message_to_email_data(msg)

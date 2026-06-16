@@ -141,6 +141,7 @@ describe('AIHubPage', () => {
   });
 
   it('fetches the signed AI Hub surface and renders every operational tab', async () => {
+    localStorage.setItem('naruon_session_token', 'signed-session-token');
     const fetchMock = vi.fn(async () => jsonResponse(aiHubSurface));
     vi.stubGlobal('fetch', fetchMock);
     container = document.createElement('div');
@@ -155,9 +156,8 @@ describe('AIHubPage', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/ai-hub/surface',
       expect.objectContaining({
-        credentials: 'same-origin',
         headers: expect.objectContaining({
-          'Content-Type': 'application/json',
+          Authorization: 'Bearer signed-session-token',
         }),
       }),
     );
@@ -168,7 +168,6 @@ describe('AIHubPage', () => {
         ? Object.keys(sentHeaders)
         : [];
     const lowerHeaderNames = new Set(headerNames.map((name) => name.toLowerCase()));
-    expect(lowerHeaderNames.has('authorization')).toBe(false);
     for (const headerName of forbiddenIdentityHeaders) {
       expect(lowerHeaderNames.has(headerName)).toBe(false);
     }

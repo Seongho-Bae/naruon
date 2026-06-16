@@ -20,8 +20,8 @@ RUN set -eux; \
       sleep 1; \
     done; \
     if [ "${server_ready}" != "true" ]; then cat /tmp/ollama-build.log; exit 1; fi; \
-    ollama pull gemma4:e2b-it-qat; \
-    ollama list | grep -E '^gemma4:e2b-it-qat[[:space:]]'; \
+    ollama pull gemma4; \
+    ollama list | grep -E '^gemma4(:|[[:space:]])'; \
     kill "$server_pid"; \
     wait "$server_pid" 2>/dev/null || true; \
     chown -R ollama:ollama /usr/share/ollama/.ollama

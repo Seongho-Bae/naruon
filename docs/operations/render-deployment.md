@@ -13,8 +13,8 @@ at its own Dockerfile. The Naruon repo ships two Dockerfiles on purpose:
 
 | Component | Dockerfile | Why split |
 |---|---|---|
-| Backend (FastAPI) | `./Dockerfile` | Python 3.14 toolchain, Alembic `migrate_db.py` + `start_backend.py` entrypoint, scaling on CPU/IO. |
-| Frontend (Next.js) | `./frontend/Dockerfile` | Node 24 toolchain, Next.js build artifacts, scaling on memory. |
+| Backend (FastAPI) | `./Dockerfile` | Python toolchain, `bootstrap_db.py` + `start_backend.py` entrypoint, scaling on CPU/IO. |
+| Frontend (Next.js) | `./frontend/Dockerfile` | Node 22 toolchain, Next.js build artifacts, scaling on memory. |
 
 This is the same split used by `docker-compose.yml` and `k8s/*.yaml`,
 and it preserves the AGENTS.md boundary that the browser never holds
@@ -67,9 +67,8 @@ backend secrets.
    **Environment** tab.
 4. Confirm the sync. Render provisions `naruon-postgres` first, then
    builds `naruon-backend` and `naruon-frontend` in parallel.
-5. **pgvector extension.** The initial Alembic migration run by
-   `backend/scripts/migrate_db.py` executes `CREATE EXTENSION IF NOT EXISTS
-   vector`. If Render's
+5. **pgvector extension.** `backend/scripts/bootstrap_db.py` runs
+   `CREATE EXTENSION IF NOT EXISTS vector` on every boot. If Render's
    application role has the privilege, the first deploy enables the
    extension automatically and there is nothing else to do. If the
    first backend deploy fails with
@@ -80,9 +79,8 @@ backend secrets.
    ```sql
    CREATE EXTENSION IF NOT EXISTS vector;
    ```
-   and trigger a redeploy of `naruon-backend`. Subsequent migration runs
-   are a no-op for the extension because `CREATE EXTENSION IF NOT EXISTS
-   vector` is idempotent.
+   and trigger a redeploy of `naruon-backend`. The bootstrap script
+   becomes a no-op for the extension after that.
 
 ## Verifying the deploy
 

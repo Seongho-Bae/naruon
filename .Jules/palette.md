@@ -1,0 +1,14 @@
+## 2024-06-04 - Semantic Buttons for Task Interactions
+**Learning:** Interactive areas that trigger actions (like opening a task detail view or navigating to a source) should be semantic `<button>` elements rather than `<div>`s with `onClick` handlers. `div`s lack native keyboard accessibility, focus rings, and proper screen reader roles. Also, `aria-label`s should be context-aware (e.g., "접수 더보기" instead of just "더보기").
+**Action:** When creating new components that function as clickable cards or icon triggers, always wrap them in `<button type="button">` and ensure they have `focus-visible` styles and contextually descriptive `aria-label`s.
+
+## 2024-06-06 - Always Include Focus States for Custom Buttons
+**Learning:** Custom UI buttons without explicitly defined focus styles become invisible during keyboard navigation. This fundamentally breaks keyboard accessibility, leaving power users and screen reader users unable to track their current position on the page. In this application, several action and filter buttons lacked proper focus indicators despite having hover states.
+**Action:** Whenever creating or modifying custom interactive elements (like `<button>` or `<a>`), unconditionally add standard focus styles, such as `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40`.
+
+## 2026-06-11 - Adding Repository Badges and Communication Guidelines
+**Learning:** Organizing a repository with Issue/PR templates, CI badges, and a Code of Conduct creates an immediate impression of professionalism and hygiene, saving developers time on repetitive questions.
+**Action:** When setting up a new repository or performing repository hygiene, always ensure a base set of standard templates and CI badges are included.
+## 2024-05-19 - Adding Custom Clear Buttons to Search Inputs
+**Learning:** When creating custom clear buttons for `<input type="search">` fields to improve UX, the native WebKit clear button (the small 'x' that appears automatically in Chrome/Safari) must be explicitly hidden to prevent duplicate icons appearing side-by-side. Additionally, test files mocking icon libraries like `lucide-react` need to be updated with the new icon mock to prevent test failures.
+**Action:** Always add `[&::-webkit-search-cancel-button]:hidden` to Tailwind classes on search inputs with custom clear controls, and verify test mocks when adding new icons.

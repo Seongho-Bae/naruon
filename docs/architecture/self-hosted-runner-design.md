@@ -18,12 +18,8 @@ To connect to these private network mail servers without exposing them to the pu
 - Exposes organization-admin operational state through
   `/api/observability/operational-signals`, including connector registration,
   active outbound connection count, last in-process heartbeat, and APM
-  configuration. Persistent heartbeat and runner command outcome history now use
-  scoped `ConnectorSignalEvent` rows. Transient writeback dispatch failures are
-  persisted as encrypted `provider_writeback_retry_items`; the backend retry
-  worker processes due items with idempotent state transitions and exhaustion
-  handling. Organization-admin observability surfaces aggregate retry queue depth
-  by state without exposing payloads, provider credentials, or retry item ids.
+  configuration. Persistent heartbeat history and queue depth remain connector
+  execution work.
 
 ### 2. The Self-Hosted Runner (Customer Network)
 - Distributed as a lightweight Docker container.
@@ -31,10 +27,7 @@ To connect to these private network mail servers without exposing them to the pu
 - Authenticates with Naruon using a `Registration Token` mapped to the `organization_id` and `workspace_id`.
 - Periodically polls or maintains a persistent connection for tasks (e.g., "Send email", "Fetch new emails").
 - Executes private-network protocol commands only through configured local
-  adapters. The Python connector now provides explicit IMAP fetch/import and
-  SMTP send local adapter handlers plus ETag/If-Match-guarded CalDAV/WebDAV PUT
-  handlers that can be passed into `SelfHostedConnector`.
-  Missing protocol adapters must still return `adapter_not_configured` with
+  adapters. Missing IMAP/SMTP adapters must return `adapter_not_configured` with
   `provider_write_executed=false`; the runner must not create mock message ids,
   placeholder IMAP data, or other fake provider-success evidence.
 
@@ -44,10 +37,8 @@ To connect to these private network mail servers without exposing them to the pu
 - All credentials (IMAP/SMTP passwords) can either be stored securely on the Naruon SaaS (encrypted via Fernet) or injected locally into the runner via environment variables, depending on customer security posture.
 
 ## Implementation Steps
-1. Package the connector plus local adapter account registry as a `RunnerAgent`
-   CLI/container entrypoint.
+1. Create a `RunnerAgent` CLI application.
 2. Expose WebSocket or HTTP polling endpoints on the Naruon backend.
 3. Update `WorkspaceRunnerConfig` in `backend/db/models.py` to manage runner lifecycle.
-4. Persist connector heartbeat, command outcome, retry queue, retry worker, and
-   aggregate queue depth so the APM dashboard can move from in-process status to
-   durable operational history.
+4. Persist connector heartbeat and queue depth events so the APM dashboard can
+   move from in-process status to durable operational history.

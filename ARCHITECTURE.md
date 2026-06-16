@@ -95,19 +95,6 @@ Frontend calendar actions follow the same boundary: `EmailDetail` requests
 `/api/calendar/writeback-intent` per extracted execution item and reports source
 provenance, while legacy `/api/calendar/sync` remains fail-closed unless a
 trusted backend credential dependency supplies an authorized provider token.
-Calendar provider execution is explicit opt-in: `execute_provider=true` dispatches
-a signed `write_caldav` command to an active outbound runner only after
-server-authoritative source selection and If-Match evidence are available.
-The Data workspace follows the same control-plane boundary for uploaded
-workspace documents: `/api/data/documents` stores scoped document metadata and
-content in the signed `workspace_id`, while reparse, embedding regeneration, and
-HWP conversion endpoints update document status or intent metadata only and
-return `provider_write_executed=false`. WebDAV document materialization is a
-separate explicit execution path: the browser selects an opaque WebDAV
-`source_uid`, while `/api/data/documents/{document_id}/webdav-materialization-intent`
-re-reads the scoped document server-side, derives the provider target path and
-Markdown content, and dispatches `write_webdav` only when
-`execute_provider=true`.
 
 Authorization is RBAC plus ABAC with deny precedence. Data-region, consent,
 workspace, group, source capability, and customer-policy denies still override
@@ -120,12 +107,10 @@ does not bypass data-region or consent denies; see
 ## Local deployment boundary
 
 `docker-compose.yml` provides the blessed local stack: Postgres with pgvector,
-FastAPI backend, and Next.js frontend. Schema changes now have an Alembic
-history under `backend/alembic`, with `backend/scripts/migrate_db.py` applying
-`upgrade head` for managed environments. The legacy backend bootstrap script
-remains a local/dev compatibility path that creates the `vector` extension,
-metadata-defined tables for fresh local databases, and idempotent backfills for
-existing local databases.
+FastAPI backend, and Next.js frontend. The backend bootstrap script creates the
+`vector` extension, metadata-defined tables for fresh local databases, and
+idempotent threading-column backfills for existing local databases. There is no
+Alembic migration history in this repo yet.
 
 ## Send boundary
 
@@ -146,11 +131,7 @@ network targets or re-resolving DNS after validation.
 Private-network IMAP/SMTP/CalDAV/CardDAV/WebDAV access belongs behind the
 outbound-only self-hosted connector boundary. GitHub self-hosted runners can
 smoke-test internal mail connectivity, but production relay/proxy access should
-use a connector artifact and never imply inbound MX hosting. The Python
-connector now includes explicit IMAP fetch/import, SMTP send, and
-ETag/If-Match-guarded CalDAV/WebDAV PUT local adapter handlers for
-`SelfHostedConnector`; packaging, registration-token lifecycle, backend
-dispatch, and non-DAV protocol adapters remain separate connector delivery work.
+use a connector artifact and never imply inbound MX hosting.
 
 LLM provider `base_url` is also a server-side egress boundary, not an arbitrary
 URL field. Provider registry create/update paths are organization-admin scoped,
@@ -196,13 +177,8 @@ Release/deployment architecture is documented in
 `docs/operations/release-deployment-architecture.md`. Naruon is not an email
 server; the email boundary is a web client relay/proxy for member-configured
 SMTP/IMAP providers as documented in
-`docs/operations/email-relay-proxy-boundary.md`. PostgreSQL remains
-single-primary in the default local stack, while
-`docker-compose.postgres-ha.yml` and `scripts/postgres_ha_drill.sh` provide the
-physical-replication evaluation path. The 2026-06-15 drill verified
-`pg_basebackup`, replica recovery, marker replay, `vector` extension replay, and
-manual promotion; production automated HA still requires operator WAL
-archive/restore drills and failover-coordinator policy per
+`docs/operations/email-relay-proxy-boundary.md`. PostgreSQL is single-primary in
+the current repo and physical replication/WAL restore remain future work per
 `docs/operations/postgresql-physical-replication.md`.
 
 Authentication does not treat public `X-User-*`, `X-Organization-*`,
@@ -260,6 +236,5 @@ Calendar writeback intent selection is server-authoritative. The
 `/api/calendar/writeback-intent` request may specify an action and optional
 target source id, but it must not provide source ownership or capability records;
 `backend/api/calendar.py` obtains writeback sources through a FastAPI dependency
-that reads DB-backed `calendar_writeback_sources` records scoped to the
-authenticated user. Provider execution remains opt-in and fail-closed without an
-active outbound runner or If-Match/ETag evidence.
+that is empty by default until a connector/source registry supplies trusted
+records scoped to the authenticated user.

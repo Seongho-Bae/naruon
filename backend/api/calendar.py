@@ -1,7 +1,4 @@
 import asyncio
-import datetime
-import hashlib
-import logging
 from collections.abc import Sequence
 from typing import Literal
 
@@ -13,15 +10,12 @@ from api.auth import (
     AuthContext,
     get_auth_context,
 )
-from api.runner_ws import manager as runner_manager
 from db.models import CalendarWritebackSource
 from db.session import get_db
 from services.calendar_service import create_calendar_event, validate_calendar_todo_text
-from services.calendar_sync import CalendarTask, generate_ics_from_task
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 router = APIRouter(prefix="/api/calendar")
-logger = logging.getLogger(__name__)
 
 
 class SyncRequest(BaseModel):
@@ -47,7 +41,6 @@ class WritebackIntentRequest(BaseModel):
     action: Literal["create", "update"]
     summary: str
     target_source_id: str | None = None
-    execute_provider: bool = False
 
 
 class WritebackIntentResponse(BaseModel):
@@ -59,12 +52,6 @@ class WritebackIntentResponse(BaseModel):
     if_match: str | None
     provenance: dict[str, str]
     audit_event: str
-    provider_write_executed: bool = False
-    status: str = "intent_ready"
-    runner_request_id: str | None = None
-    provider_status: int | None = None
-    error_code: str | None = None
-    retry_item_uid: str | None = None
 
 
 CUSTOMER_OWNED_PROTOCOLS = {"caldav", "carddav", "webdav"}
@@ -214,92 +201,6 @@ def _authorize_targeted_writeback_source(
     return target_source
 
 
-def _calendar_writeback_uid(
-    request: WritebackIntentRequest,
-    auth_context: AuthContext,
-    target_source: WritebackSource,
-) -> str:
-    digest = hashlib.sha256(
-        "|".join(
-            [
-                auth_context.workspace_id,
-                auth_context.user_id,
-                target_source.source_id,
-                request.action,
-                request.summary,
-            ]
-        ).encode("utf-8")
-    ).hexdigest()
-    return f"caldav-writeback-{digest[:24]}"
-
-
-def _calendar_writeback_target_path(writeback_uid: str) -> str:
-    return f"/Naruon/Calendar/{writeback_uid}.ics"
-
-
-def _calendar_writeback_content(
-    request: WritebackIntentRequest,
-    auth_context: AuthContext,
-    target_source: WritebackSource,
-) -> tuple[str, str]:
-    now = datetime.datetime.now(datetime.timezone.utc)
-    writeback_uid = _calendar_writeback_uid(request, auth_context, target_source)
-    task = CalendarTask(
-        task_uid=writeback_uid,
-        title=request.summary,
-        status="needs_action",
-        created_at=now,
-        updated_at=now,
-    )
-    return writeback_uid, generate_ics_from_task(task)
-
-
-def _calendar_runner_command(
-    request: WritebackIntentRequest,
-    intent: WritebackIntentResponse,
-    auth_context: AuthContext,
-    target_source: WritebackSource,
-) -> dict[str, object]:
-    writeback_uid, content = _calendar_writeback_content(
-        request,
-        auth_context,
-        target_source,
-    )
-    return {
-        "action": "write_caldav",
-        "account": target_source.source_id,
-        "source_id": target_source.source_id,
-        "target_path": _calendar_writeback_target_path(writeback_uid),
-        "if_match": intent.if_match,
-        "content_type": "text/calendar; charset=utf-8",
-        "content": content,
-    }
-
-
-def _merge_calendar_dispatch_result(
-    intent: WritebackIntentResponse,
-    dispatch_result: dict,
-) -> WritebackIntentResponse:
-    provider_write_executed = bool(
-        dispatch_result.get("provider_write_executed", False)
-    )
-    return intent.model_copy(
-        update={
-            "status": str(dispatch_result.get("status") or "error"),
-            "provider_write_executed": provider_write_executed,
-            "runner_request_id": dispatch_result.get("request_id"),
-            "provider_status": dispatch_result.get("provider_status"),
-            "error_code": dispatch_result.get("error_code"),
-            "retry_item_uid": dispatch_result.get("retry_item_uid"),
-            "audit_event": (
-                "calendar.writeback.executed"
-                if provider_write_executed
-                else "calendar.writeback.dispatch_failed"
-            ),
-        }
-    )
-
-
 @router.post("/sync")
 async def sync_todos(
     request: SyncRequest,
@@ -315,14 +216,10 @@ async def sync_todos(
         coros = [create_calendar_event(safe_todo, user_token) for safe_todo in safe_todos]
         results = await asyncio.gather(*coros)
         return {"synced": len(results), "events": list(results)}
-    except UnsafeCalendarTodoError:
-        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
+    except UnsafeCalendarTodoError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except CalendarServiceError as e:
-        logger.warning(
-            "Calendar service error during sync_todos",
-            extra={"error_type": type(e).__name__},
-        )
-        raise HTTPException(status_code=500, detail="An internal server error occurred while communicating with the calendar service")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)
@@ -354,7 +251,7 @@ async def create_writeback_intent(
             status_code=409, detail="ETag is required for writeback updates"
         )
 
-    intent = WritebackIntentResponse(
+    return WritebackIntentResponse(
         workspace_id=auth_context.workspace_id,
         target_source_id=target_source.source_id,
         protocol=target_source.protocol,
@@ -368,17 +265,3 @@ async def create_writeback_intent(
         },
         audit_event="calendar.writeback_intent.created",
     )
-    if not request.execute_provider:
-        return intent
-    if intent.if_match is None:
-        raise HTTPException(
-            status_code=409,
-            detail="If-Match is required before provider write execution",
-        )
-
-    dispatch_result = await runner_manager.dispatch_command(
-        auth_context.organization_id,
-        auth_context.workspace_id,
-        _calendar_runner_command(request, intent, auth_context, target_source),
-    )
-    return _merge_calendar_dispatch_result(intent, dispatch_result)

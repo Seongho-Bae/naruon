@@ -2,6 +2,9 @@ import asyncio
 import datetime
 import unicodedata
 
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 from .exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 MAX_CALENDAR_TODO_LENGTH = 500
@@ -26,18 +29,6 @@ GOOGLE_OAUTH_REQUIRED_KEYS = {
     "refresh_token",
     "token_uri",
 }
-
-
-def build(*args, **kwargs):
-    from googleapiclient.discovery import build as google_calendar_build
-
-    return google_calendar_build(*args, **kwargs)
-
-
-def _google_credentials(validated_user_token: dict):
-    from google.oauth2.credentials import Credentials
-
-    return Credentials(**validated_user_token)
 
 
 def validate_calendar_todo_text(todo_text: str) -> str:
@@ -87,7 +78,7 @@ async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
     try:
         safe_todo_text = validate_calendar_todo_text(todo_text)
         validated_user_token = validate_google_user_token(user_token)
-        creds = _google_credentials(validated_user_token)
+        creds = Credentials(**validated_user_token)
         service = build("calendar", "v3", credentials=creds)
 
         now = datetime.datetime.now(datetime.timezone.utc)

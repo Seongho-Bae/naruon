@@ -19,11 +19,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from api import runner_ws
 from api.auth import AuthContext, get_auth_context, get_current_user
 from core.config import settings
-from db.models import (
-    ConnectorSignalEvent,
-    ProviderWritebackRetryItem,
-    WorkspaceRunnerConfig,
-)
+from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import get_db
 from main import app
 
@@ -85,16 +81,13 @@ class MockAsyncSession:
     def __init__(self):
         self.runner = None
         self.events = []
-        self.retry_items = []
         self.execute_calls = 0
 
     async def execute(self, query):
         self.execute_calls += 1
         if self.execute_calls == 1:
             return MockResult(self.runner)
-        if self.execute_calls == 2:
-            return MockResult(self.events)
-        return MockResult(self.retry_items)
+        return MockResult(self.events)
 
 
 @pytest.fixture(autouse=True)
@@ -261,14 +254,7 @@ def test_operational_signals_are_truthful_when_unconfigured(admin_client):
     assert data["connector"]["active_connection_count"] == 0
     assert data["connector"]["last_heartbeat_at"] is None
     assert data["connector"]["recent_events"] == []
-    assert data["connector"]["queue_depth_state"] == "clear"
-    assert data["connector"]["queue_depth"] == {
-        "pending_count": 0,
-        "running_count": 0,
-        "failed_count": 0,
-        "total_count": 0,
-        "next_retry_at": None,
-    }
+    assert data["connector"]["queue_depth_state"] == "not_reported"
     assert data["connector"]["control_plane_domain"] == "naruon.net"
     signals = {signal["signal_key"]: signal for signal in data["signals"]}
     assert signals["prometheus_metrics"]["state"] == "not_configured"
@@ -386,80 +372,6 @@ def test_operational_signals_include_durable_connector_history(admin_client, moc
             "observed_at": "2026-05-27T12:01:00Z",
         },
     ]
-
-
-def test_operational_signals_include_writeback_retry_queue_depth(admin_client, mock_db):
-    mock_db.runner = WorkspaceRunnerConfig(
-        organization_id="org-acme",
-        workspace_id="workspace-org-acme",
-        registration_token="nrn_registered-token",
-    )
-    mock_db.retry_items = [
-        ProviderWritebackRetryItem(
-            retry_item_uid="provider_retry_pending",
-            organization_id="org-acme",
-            workspace_id="workspace-org-acme",
-            source_uid="webdav_src_primary",
-            command_action="write_webdav",
-            command_payload_encrypted="{}",
-            retry_state="pending",
-            last_error_code="runner_not_connected",
-            runner_request_uid="runner_req_pending",
-            attempt_count=1,
-            next_retry_at=datetime(2026, 6, 15, 12, 5, tzinfo=timezone.utc),
-            created_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-        ),
-        ProviderWritebackRetryItem(
-            retry_item_uid="provider_retry_running",
-            organization_id="org-acme",
-            workspace_id="workspace-org-acme",
-            source_uid="calendar-primary",
-            command_action="write_caldav",
-            command_payload_encrypted="{}",
-            retry_state="running",
-            last_error_code="runner_response_timeout",
-            runner_request_uid="runner_req_running",
-            attempt_count=2,
-            next_retry_at=datetime(2026, 6, 15, 12, 6, tzinfo=timezone.utc),
-            created_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 6, 15, 12, 1, tzinfo=timezone.utc),
-        ),
-        ProviderWritebackRetryItem(
-            retry_item_uid="provider_retry_failed",
-            organization_id="org-acme",
-            workspace_id="workspace-org-acme",
-            source_uid="calendar-primary",
-            command_action="write_caldav",
-            command_payload_encrypted="{}",
-            retry_state="failed_exhausted",
-            last_error_code="retry_attempts_exhausted",
-            runner_request_uid="runner_req_failed",
-            attempt_count=3,
-            next_retry_at=datetime(2026, 6, 15, 12, 7, tzinfo=timezone.utc),
-            created_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 6, 15, 12, 2, tzinfo=timezone.utc),
-        ),
-    ]
-
-    response = admin_client.get("/api/observability/operational-signals")
-
-    assert response.status_code == 200
-    data = response.json()
-    assert data["connector"]["queue_depth_state"] == "degraded"
-    assert data["connector"]["queue_depth"] == {
-        "pending_count": 1,
-        "running_count": 1,
-        "failed_count": 1,
-        "total_count": 3,
-        "next_retry_at": "2026-06-15T12:05:00Z",
-    }
-    signals = {signal["signal_key"]: signal for signal in data["signals"]}
-    assert signals["writeback_retry_queue"]["state"] == "enabled"
-    assert signals["writeback_retry_queue"]["evidence_source"] == (
-        "provider_writeback_retry_items"
-    )
-    assert "3 queued" in signals["writeback_retry_queue"]["detail"]
 
 
 @pytest.mark.asyncio

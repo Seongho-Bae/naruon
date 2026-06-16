@@ -17,10 +17,9 @@ services:
       - "-c"
       - "hot_standby=on"
     ports:
-      - "${POSTGRES_HA_PRIMARY_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
       - pgdata_primary:/var/lib/postgresql/data
-      - ./scripts/postgres-ha/init-primary-replication.sh:/docker-entrypoint-initdb.d/010-replication-hba.sh:ro
 
   db-replica:
     image: pgvector/pgvector:pg16
@@ -34,15 +33,12 @@ services:
       bash -c "
       until pg_isready -h db-primary -p 5432; do sleep 1; done;
       if [ ! -s /var/lib/postgresql/data/PG_VERSION ]; then
-        chown -R postgres:postgres /var/lib/postgresql/data;
-        gosu postgres pg_basebackup -h db-primary -D /var/lib/postgresql/data -U ${POSTGRES_USER:-postgres} -vP -R -X stream -C -S replica_slot_1;
+        pg_basebackup -h db-primary -D /var/lib/postgresql/data -U ${POSTGRES_USER:-postgres} -vP -R -X stream -C -S replica_slot_1;
       fi;
-      chown -R postgres:postgres /var/lib/postgresql/data;
-      chmod 700 /var/lib/postgresql/data;
-      exec gosu postgres postgres
+      exec postgres
       "
     ports:
-      - "${POSTGRES_HA_REPLICA_PORT:-5433}:5432"
+      - "5433:5432"
     depends_on:
       - db-primary
     volumes:

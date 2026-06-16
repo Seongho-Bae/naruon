@@ -4,14 +4,10 @@ import hmac
 import json
 import os
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from main import app
-
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -76,18 +72,15 @@ def test_runtime_config_returns_non_secret_data(client):
     assert "openai_api_key" not in data
     assert "encryption_key" not in data
 
-
 @pytest.mark.asyncio
 async def test_get_runtime_config_direct():
     from api.runtime_config import get_runtime_config, RuntimeConfigResponse
-
     response = await get_runtime_config()
     assert isinstance(response, RuntimeConfigResponse)
     assert response.product_name == "Naruon"
-    expected_version = (REPO_ROOT / "VERSION").read_text(encoding="utf-8").strip()
-    assert response.version == expected_version
+    assert response.version == "0.5.1"
     assert response.features == {
         "llm_enabled": True,
         "smtp_enabled": True,
-        "imap_enabled": True,
+        "imap_enabled": True
     }

@@ -1,6 +1,7 @@
 import asyncio
+import zipfile
 from pathlib import Path
-from zipfile import BadZipFile, ZipFile, ZipInfo
+from zipfile import ZipInfo
 
 from .exceptions import (
     InvalidArchiveError,
@@ -69,7 +70,7 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
     extracted_paths = []
 
     try:
-        with ZipFile(zip_path, "r") as z:
+        with zipfile.ZipFile(zip_path, "r") as z:
             total_size = 0
             file_count = 0
 
@@ -98,7 +99,7 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
 
                 extracted_paths.append(target_path)
 
-    except (BadZipFile, FileNotFoundError) as e:
+    except (zipfile.BadZipFile, FileNotFoundError) as e:
         raise InvalidArchiveError(f"Failed to extract archive: {e}") from e
 
     return extracted_paths
