@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:22-slim
 
 ARG OCI_IMAGE_CREATED=""
 ARG OCI_IMAGE_AUTHORS="Seongho Bae"
@@ -13,7 +13,7 @@ ARG OCI_IMAGE_REF_NAME=""
 ARG OCI_IMAGE_TITLE="naruon frontend"
 ARG OCI_IMAGE_DESCRIPTION="Naruon Next.js frontend runtime image"
 ARG OCI_IMAGE_BASE_DIGEST=""
-ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:24-slim"
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:22-slim"
 
 LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
