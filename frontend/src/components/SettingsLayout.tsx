@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network, Plus, CheckCircle2 } from 'lucide-react';
+import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network, Plus, CheckCircle2, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 import type { SessionClaims } from '@/lib/session-cookie';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
@@ -1023,7 +1023,7 @@ export function SettingsLayout() {
                         <input id="commercial-api-key" type="password" value={commercialModelForm.apiKey} onChange={(event) => updateCommercialModelField('apiKey', event.target.value)} placeholder="저장 시에만 전송" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <button type="submit" disabled={commercialModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60">
-                        <Plus className="size-4" />
+                        {commercialModelSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
                         {commercialModelSaving ? '등록 중' : '상용 모델 추가'}
                       </button>
                     </div>
@@ -1072,7 +1072,7 @@ export function SettingsLayout() {
                         <input id="local-api-key" type="password" value={localModelForm.apiKey} onChange={(event) => updateLocalModelField('apiKey', event.target.value)} placeholder="필요한 경우에만 입력" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <button type="submit" disabled={localModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60">
-                        <Cpu className="size-4" />
+                        {localModelSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Cpu className="size-4" aria-hidden="true" />}
                         {localModelSaving ? '등록 중' : 'Gemma4 로컬 모델 등록'}
                       </button>
                     </div>
@@ -1139,7 +1139,7 @@ export function SettingsLayout() {
                       disabled={!selectedEmbeddingProvider || embeddingSaving}
                       className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
                     >
-                      <Network className="size-4" />
+                      {embeddingSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Network className="size-4" aria-hidden="true" />}
                       {embeddingSaving ? '저장 중' : '임베딩 모델 저장'}
                     </button>
                   </div>
@@ -1282,8 +1282,9 @@ export function SettingsLayout() {
                       disabled={accountSaving || !accountReady}
                       aria-disabled={accountSaving || !accountReady}
                       title={accountSaving ? "저장 중입니다" : !accountReady ? "입력값이 부족합니다" : "계정 설정 저장"}
-                      className="rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
+                      {accountSaving && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
                       {accountSaving ? '저장 중' : '계정 설정 저장'}
                     </button>
                   </div>
