@@ -50,6 +50,25 @@ This is a byte-backed email.\x00"""
     assert "\x00" not in parsed["body"]
 
 
+def test_parse_eml_bytes_multipart_html_fallback():
+    eml_content = b"""Message-ID: <multi-bytes@test.com>
+From: multi@test.com
+To: recipient@test.com
+Subject: Multipart HTML Bytes
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+Content-Type: multipart/alternative; boundary="boundary-string"
+
+--boundary-string
+Content-Type: text/html; charset="utf-8"
+
+<p>This is HTML content</p>
+--boundary-string--"""
+
+    parsed = parse_eml_bytes(eml_content)
+
+    assert parsed["body"] == "This is HTML content"
+
+
 def test_parse_eml_multipart_html_fallback():
     eml_content = b"""Message-ID: <multi@test.com>
 From: multi@test.com

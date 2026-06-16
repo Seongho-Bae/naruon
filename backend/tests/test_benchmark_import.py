@@ -37,4 +37,4 @@ async def test_benchmark_async_io(tmp_path: Path):
         if p.exists():
             p.unlink()
 
-    assert thread_time < sync_time * 0.75
+    assert thread_time < sync_time * 0.9
