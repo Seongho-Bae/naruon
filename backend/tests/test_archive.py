@@ -3,7 +3,7 @@ import zipfile
 import pytest
 import asyncio
 
-from services.archive import extract_backup, extract_backup_async
+from services.archive import extract_backup, extract_backup_async, MAX_EXTRACT_SIZE
 from services.exceptions import (
     InvalidArchiveError,
     ArchiveSizeExceededError,
@@ -46,9 +46,7 @@ def test_extract_backup_bad_zip_file(tmp_path):
 
 
 def test_extract_backup_size_exceeded(tmp_path, monkeypatch):
-    import services.archive
-
-    monkeypatch.setattr(services.archive, "MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
+    monkeypatch.setattr("services.archive.MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
 
     zip_path = tmp_path / "test.zip"
     with zipfile.ZipFile(zip_path, "w") as z:
