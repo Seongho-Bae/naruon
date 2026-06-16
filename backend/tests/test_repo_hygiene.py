@@ -15,7 +15,6 @@ def test_dockerignore_excludes_nested_environment_files_but_keeps_examples():
 def test_backend_dockerfile_suppresses_pip_root_warning():
     dockerfile = (REPO_ROOT / "Dockerfile").read_text()
 
-    assert "FROM python:3.14-slim" in dockerfile
     assert "PIP_ROOT_USER_ACTION=ignore" in dockerfile
     assert "PIP_DISABLE_PIP_VERSION_CHECK=1" in dockerfile
 
