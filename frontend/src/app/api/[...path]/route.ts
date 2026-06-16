@@ -34,6 +34,7 @@ const ALLOWED_BACKEND_QUERY_PARAMS = new Set([
   "source_message_id",
   "source_thread_id",
 ]);
+const SAFE_HTTP_METHODS = new Set(["GET", "HEAD"]);
 const MAX_QUERY_PARAM_COUNT = 12;
 const MAX_QUERY_PARAM_VALUE_LENGTH = 2048;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
@@ -99,10 +100,31 @@ function safeBackendQuery(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
+function hasBearerAuthorization(request: NextRequest): boolean {
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  const [scheme, token] = authorization.split(/\s+/, 2);
+  return scheme?.toLowerCase() === "bearer" && Boolean(token?.trim());
+}
+
 async function proxyApiRequest(
   request: NextRequest,
   context: ApiRouteContext,
 ): Promise<NextResponse> {
+  if (!SAFE_HTTP_METHODS.has(request.method.toUpperCase()) && !hasBearerAuthorization(request)) {
+    return NextResponse.json(
+      {
+        error_code: "missing_bearer_session",
+        message: "Authentication required",
+      },
+      {
+        status: 401,
+        headers: {
+          "Referrer-Policy": "no-referrer",
+        },
+      },
+    );
+  }
+
   const params = await context.params;
   const path = params.path ?? [];
   const target = backendApiBaseUrl();

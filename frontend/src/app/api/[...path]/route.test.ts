@@ -114,4 +114,32 @@ describe("/api runtime proxy route", () => {
         "https://api.naruon.net/api/ontology/relationships?source_message_id=%3Cabc%40example.com%3E&source_thread_id=thread%2Fone",
     });
   });
+
+  it("rejects unsigned unsafe requests before proxying", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/login",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: "credential=placeholder",
+      },
+    );
+
+    const response = await POST(request, {
+      params: Promise.resolve({ path: ["login"] }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "missing_bearer_session",
+      message: "Authentication required",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
