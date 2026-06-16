@@ -440,22 +440,23 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
+    "permitted_role",
+    ("system_admin", "platform_admin", "tenant_admin", "organization_admin", "group_admin", "member"),
 )
-def test_tenant_config_get_returns_own_config_for_admin(client, admin_role):
-    # GET /api/config no longer accepts a user_id parameter and always returns
-    # the authenticated session user's own config, regardless of role.
+def test_tenant_config_get_returns_own_config_for_permitted_role(client, permitted_role):
+    # GET /api/config enforces RBAC through ensure_mailbox_config_self_access and
+    # always returns the authenticated session user's own config (no user_id parameter).
     response = client.get(
         "/api/config",
         headers={
-            "X-User-Id": "admin",
-            "X-User-Role": admin_role,
+            "X-User-Id": "session-user",
+            "X-User-Role": permitted_role,
             "X-Organization-Id": "org-acme",
         },
     )
 
     assert response.status_code == 200
-    assert response.json()["user_id"] == "admin"
+    assert response.json()["user_id"] == "session-user"
 
 
 @pytest.mark.parametrize(

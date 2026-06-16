@@ -279,6 +279,11 @@ async def get_config(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    ensure_mailbox_config_self_access(
+        auth_context.user_id,
+        auth_context,
+        MAILBOX_VIEW_FORBIDDEN,
+    )
     session_user_id = auth_context.user_id
     db_config = await get_scoped_tenant_config(
         db,
