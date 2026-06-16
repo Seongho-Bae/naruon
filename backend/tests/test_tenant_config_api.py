@@ -443,8 +443,8 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
     "admin_role", ("system_admin", "platform_admin", "tenant_admin")
 )
 def test_tenant_config_get_returns_own_config_for_admin(client, admin_role):
-    # GET /api/config always scopes to the authenticated session user_id.
-    # Admins may not pass a different user_id to read another user's config.
+    # GET /api/config no longer accepts a user_id parameter and always returns
+    # the authenticated session user's own config, regardless of role.
     response = client.get(
         "/api/config",
         headers={
