@@ -26,6 +26,16 @@ workspace_client = TestClient(
 )
 
 
+def _server_owned_google_credentials() -> dict[str, str]:
+    return {
+        "token": "server-owned-token",
+        "refresh_token": "server-owned-refresh-token",
+        "client_id": "server-owned-client-id",
+        "client_secret": "server-owned-client-secret",
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }
+
+
 @pytest.fixture
 def writeback_source_override():
     def apply(sources: list[WritebackSource]) -> None:
@@ -106,7 +116,8 @@ def _calendar_writeback_source(
 def test_calendar_sync_endpoint_success(mock_create, calendar_user_token_override):
     # Setup mock
     mock_create.return_value = {"id": "123", "summary": "Test todo"}
-    calendar_user_token_override({"token": "server-owned"})
+    user_token = _server_owned_google_credentials()
+    calendar_user_token_override(user_token)
 
     response = client.post(
         "/api/calendar/sync",
@@ -118,7 +129,7 @@ def test_calendar_sync_endpoint_success(mock_create, calendar_user_token_overrid
         "synced": 1,
         "events": [{"id": "123", "summary": "Test todo"}],
     }
-    mock_create.assert_called_once_with("Test todo", {"token": "server-owned"})
+    mock_create.assert_called_once_with("Test todo", user_token)
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
@@ -138,9 +149,10 @@ def test_calendar_sync_rejects_client_supplied_user_token(mock_create):
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
 def test_calendar_sync_uses_server_authoritative_calendar_credentials(mock_create):
     mock_create.return_value = {"id": "123", "summary": "Test todo"}
+    user_token = _server_owned_google_credentials()
 
     async def token_override():
-        return {"token": "server-owned"}
+        return user_token
 
     app.dependency_overrides[calendar_api.get_calendar_user_token] = token_override
     try:
@@ -153,21 +165,24 @@ def test_calendar_sync_uses_server_authoritative_calendar_credentials(mock_creat
         "synced": 1,
         "events": [{"id": "123", "summary": "Test todo"}],
     }
-    mock_create.assert_called_once_with("Test todo", {"token": "server-owned"})
+    mock_create.assert_called_once_with("Test todo", user_token)
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override):
+def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override, caplog):
     mock_create.side_effect = CalendarServiceError("Mocked error")
-    calendar_user_token_override({"token": "server-owned"})
+    calendar_user_token_override(_server_owned_google_credentials())
 
-    response = client.post(
-        "/api/calendar/sync",
-        json={"todos": ["Test todo"]},
-    )
+    with caplog.at_level("WARNING", logger="api.calendar"):
+        response = client.post(
+            "/api/calendar/sync",
+            json={"todos": ["Test todo"]},
+        )
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "Mocked error"}
+    assert response.json() == {"detail": "An internal server error occurred while communicating with the calendar service"}
+    assert "Calendar service error during sync_todos" in caplog.text
+    assert "Mocked error" not in caplog.text
 
 
 @pytest.mark.parametrize(
@@ -183,12 +198,12 @@ def test_calendar_sync_rejects_unsafe_todo_text_before_writeback(
     calendar_user_token_override,
     unsafe_todo,
 ):
-    calendar_user_token_override({"token": "server-owned"})
+    calendar_user_token_override(_server_owned_google_credentials())
 
     response = client.post("/api/calendar/sync", json={"todos": [unsafe_todo]})
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Unsafe calendar todo text"}
+    assert response.json() == {"detail": "Invalid or unsafe calendar todo text"}
     mock_create.assert_not_called()
 
 
@@ -198,7 +213,7 @@ def test_calendar_sync_rejects_mixed_batch_before_any_writeback(
     calendar_user_token_override,
 ):
     mock_create.return_value = {"id": "created-before-rejection"}
-    calendar_user_token_override({"token": "server-owned"})
+    calendar_user_token_override(_server_owned_google_credentials())
 
     response = client.post(
         "/api/calendar/sync",
@@ -206,7 +221,7 @@ def test_calendar_sync_rejects_mixed_batch_before_any_writeback(
     )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Unsafe calendar todo text"}
+    assert response.json() == {"detail": "Invalid or unsafe calendar todo text"}
     mock_create.assert_not_called()
 
 
@@ -256,7 +271,190 @@ def test_calendar_writeback_intent_uses_customer_owned_caldav_account(
             "source_protocol": "caldav",
         },
         "audit_event": "calendar.writeback_intent.created",
+        "provider_write_executed": False,
+        "status": "intent_ready",
+        "runner_request_id": None,
+        "provider_status": None,
+        "error_code": None,
+        "retry_item_uid": None,
     }
+
+
+def test_calendar_writeback_intent_does_not_dispatch_runner_by_default(
+    writeback_source_override,
+    monkeypatch,
+):
+    dispatch_mock = AsyncMock()
+    monkeypatch.setattr(calendar_api.runner_manager, "dispatch_command", dispatch_mock)
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={"action": "update", "summary": "Launch review"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["provider_write_executed"] is False
+    assert response.json()["status"] == "intent_ready"
+    dispatch_mock.assert_not_called()
+
+
+def test_calendar_writeback_execute_provider_dispatches_caldav_runner_command(
+    writeback_source_override,
+    monkeypatch,
+):
+    dispatch_mock = AsyncMock(
+        return_value={
+            "status": "success",
+            "request_id": "runner_req_calendar_1",
+            "provider_write_executed": True,
+            "provider_status": 204,
+        }
+    )
+    monkeypatch.setattr(calendar_api.runner_manager, "dispatch_command", dispatch_mock)
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "update",
+            "summary": "Launch review",
+            "target_source_id": "calendar-primary",
+            "execute_provider": True,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "success"
+    assert data["provider_write_executed"] is True
+    assert data["runner_request_id"] == "runner_req_calendar_1"
+    assert data["provider_status"] == 204
+    assert data["audit_event"] == "calendar.writeback.executed"
+    assert data["retry_item_uid"] is None
+    dispatch_mock.assert_awaited_once()
+    organization_id, workspace_id, command = dispatch_mock.await_args.args
+    assert organization_id == "org-acme"
+    assert workspace_id == "workspace-org-acme"
+    assert command["action"] == "write_caldav"
+    assert command["account"] == "calendar-primary"
+    assert command["source_id"] == "calendar-primary"
+    assert command["if_match"] == "abc123"
+    assert command["content_type"] == "text/calendar; charset=utf-8"
+    assert command["target_path"].startswith("/Naruon/Calendar/")
+    assert command["target_path"].endswith(".ics")
+    assert "BEGIN:VCALENDAR" in command["content"]
+    assert "SUMMARY:Launch review" in command["content"]
+
+
+def test_calendar_writeback_execute_provider_returns_retry_item_for_transient_failure(
+    writeback_source_override,
+    monkeypatch,
+):
+    dispatch_mock = AsyncMock(
+        return_value={
+            "status": "error",
+            "error_code": "runner_not_connected",
+            "provider_write_executed": False,
+            "retry_item_uid": "provider_retry_calendar_1",
+        }
+    )
+    monkeypatch.setattr(calendar_api.runner_manager, "dispatch_command", dispatch_mock)
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "update",
+            "summary": "Launch review",
+            "target_source_id": "calendar-primary",
+            "execute_provider": True,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["provider_write_executed"] is False
+    assert data["error_code"] == "runner_not_connected"
+    assert data["retry_item_uid"] == "provider_retry_calendar_1"
+
+
+def test_calendar_writeback_execute_provider_requires_if_match_before_dispatch(
+    writeback_source_override,
+    monkeypatch,
+):
+    dispatch_mock = AsyncMock()
+    monkeypatch.setattr(calendar_api.runner_manager, "dispatch_command", dispatch_mock)
+    writeback_source_override(
+        [
+            WritebackSource(
+                source_id="calendar-primary",
+                provider="fastmail",
+                protocol="caldav",
+                owner_id="testuser",
+                organization_id="org-acme",
+                capabilities=["read", "write", "etag"],
+                writeback_enabled=True,
+                etag="abc123",
+            )
+        ]
+    )
+
+    response = workspace_client.post(
+        "/api/calendar/writeback-intent",
+        json={
+            "action": "create",
+            "summary": "Launch review",
+            "target_source_id": "calendar-primary",
+            "execute_provider": True,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "If-Match is required before provider write execution"
+    }
+    dispatch_mock.assert_not_called()
 
 
 def test_calendar_writeback_sources_endpoint_lists_authoritative_sources(

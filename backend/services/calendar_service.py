@@ -2,9 +2,6 @@ import asyncio
 import datetime
 import unicodedata
 
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-
 from .exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 MAX_CALENDAR_TODO_LENGTH = 500
@@ -23,6 +20,24 @@ GOOGLE_OAUTH_ALLOWED_KEYS = {
     "token_uri",
     "universe_domain",
 }
+GOOGLE_OAUTH_REQUIRED_KEYS = {
+    "client_id",
+    "client_secret",
+    "refresh_token",
+    "token_uri",
+}
+
+
+def build(*args, **kwargs):
+    from googleapiclient.discovery import build as google_calendar_build
+
+    return google_calendar_build(*args, **kwargs)
+
+
+def _google_credentials(validated_user_token: dict):
+    from google.oauth2.credentials import Credentials
+
+    return Credentials(**validated_user_token)
 
 
 def validate_calendar_todo_text(todo_text: str) -> str:
@@ -46,8 +61,22 @@ def validate_google_user_token(user_token: dict) -> dict:
     if unexpected_keys:
         raise CalendarServiceError("Invalid calendar credentials")
 
+    missing_required_keys = {
+        key
+        for key in GOOGLE_OAUTH_REQUIRED_KEYS
+        if not isinstance(user_token.get(key), str) or not user_token[key].strip()
+    }
+    if missing_required_keys:
+        raise CalendarServiceError("Invalid calendar credentials")
+
     token_uri = user_token.get("token_uri")
-    if token_uri is not None and token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
+    if token_uri != GOOGLE_OAUTH_ENDPOINT_URL:
+        raise CalendarServiceError("Invalid calendar credentials")
+
+    access_token = user_token.get("token")
+    if access_token is not None and (
+        not isinstance(access_token, str) or not access_token.strip()
+    ):
         raise CalendarServiceError("Invalid calendar credentials")
 
     return dict(user_token)
@@ -58,7 +87,7 @@ async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
     try:
         safe_todo_text = validate_calendar_todo_text(todo_text)
         validated_user_token = validate_google_user_token(user_token)
-        creds = Credentials(**validated_user_token)
+        creds = _google_credentials(validated_user_token)
         service = build("calendar", "v3", credentials=creds)
 
         now = datetime.datetime.now(datetime.timezone.utc)

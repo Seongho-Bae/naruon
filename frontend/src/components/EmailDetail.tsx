@@ -46,6 +46,11 @@ interface CreateTasksFromEmailResponse {
 interface CalendarWritebackIntentResponse {
   target_source_id: string;
   protocol: string;
+  provider_write_executed?: boolean;
+  status?: string;
+  runner_request_id?: string | null;
+  provider_status?: number | null;
+  error_code?: string | null;
   provenance: {
     source_provider?: string;
   };

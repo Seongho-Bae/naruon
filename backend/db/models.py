@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -187,6 +188,67 @@ class ConnectorSignalEvent(Base):
             "organization_id",
             "workspace_id",
             "observed_at",
+        ),
+    )
+
+
+class ProviderWritebackRetryItem(Base):
+    __tablename__ = "provider_writeback_retry_items"
+
+    retry_item_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"provider_retry_{uuid.uuid4().hex}",
+    )
+    organization_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    source_uid: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    command_action: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    command_payload_encrypted: Mapped[str] = mapped_column(
+        EncryptedString,
+        nullable=False,
+    )
+    retry_state: Mapped[str] = mapped_column(
+        String,
+        index=True,
+        default="pending",
+        nullable=False,
+    )
+    last_error_code: Mapped[str] = mapped_column(String, index=True, nullable=False)
+    runner_request_uid: Mapped[str | None] = mapped_column(
+        String,
+        index=True,
+        nullable=True,
+    )
+    attempt_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    next_retry_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        index=True,
+        nullable=False,
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    __table_args__ = (
+        Index(
+            "ix_provider_writeback_retry_items_scope_state",
+            "organization_id",
+            "workspace_id",
+            "retry_state",
+            "next_retry_at",
+        ),
+        Index(
+            "ix_provider_writeback_retry_items_source_action",
+            "source_uid",
+            "command_action",
         ),
     )
 

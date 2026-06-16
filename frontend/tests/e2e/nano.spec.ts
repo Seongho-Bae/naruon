@@ -27,7 +27,7 @@ function encodeJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-function signLiveSession(): string {
+function signLiveSession(expiresInSeconds = 300): string {
   const secret = process.env.LIVE_E2E_SESSION_SECRET;
   if (!secret) {
     throw new Error('LIVE_E2E_SESSION_SECRET is required for live model nano E2E.');
@@ -36,7 +36,7 @@ function signLiveSession(): string {
   const header = encodeJson({ alg: 'HS256', typ: 'JWT' });
   const payload = encodeJson({
     ...liveSessionPayload,
-    exp: Math.floor(Date.now() / 1000) + 300,
+    exp: Math.floor(Date.now() / 1000) + expiresInSeconds,
   });
   const signature = crypto
     .createHmac('sha256', secret)
@@ -46,8 +46,12 @@ function signLiveSession(): string {
   return `${header}.${payload}.${signature}`;
 }
 
+function liveSessionCookie(token: string): string {
+  return `naruon_session=${token}`;
+}
+
 test('nano test: verify user requested features', async ({ page }) => {
-  const sessionToken = 'signed-nano-session';
+  const sessionToken = 'signed.nano.session';
   const providerRequestHeaders: Record<string, string>[] = [];
   await mockDashboardApi(page, (path, request) => {
     if (path === '/api/llm-providers' && request.method() === 'GET') {
@@ -55,7 +59,7 @@ test('nano test: verify user requested features', async ({ page }) => {
     }
   });
   await page.addInitScript((token) => {
-    window.localStorage.setItem('naruon_session_token', token);
+    document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
   }, sessionToken);
 
   // 1. Check AI Model Settings
@@ -67,7 +71,8 @@ test('nano test: verify user requested features', async ({ page }) => {
 
   await expect.poll(() => providerRequestHeaders.length).toBeGreaterThan(0);
   const headers = providerRequestHeaders.at(-1) ?? {};
-  expect(headers.authorization).toBe(`Bearer ${sessionToken}`);
+  expect(headers.authorization).toBeUndefined();
+  expect(headers.cookie).toContain(`naruon_session=${sessionToken}`);
   for (const headerName of publicIdentityHeaders) {
     expect(headers[headerName]).toBeUndefined();
   }
@@ -82,17 +87,18 @@ test('nano test: verify user requested features', async ({ page }) => {
   await expect(page.getByRole('button', { name: '선택 파일 반입' })).toBeVisible();
 });
 
-test('nano live model: ollama gemma4 chat and embedding search complete', async ({ request }) => {
+test('nano live model: ollama gemma4 e2b chat and embedding search complete', async ({ request }) => {
+  test.setTimeout(600_000);
   test.skip(
     process.env.RUN_LIVE_MODEL_E2E !== '1' || !process.env.LIVE_BASE_URL,
     'Requires live Docker Compose stack with Ollama Gemma4 models.',
   );
 
-  const token = signLiveSession();
-  const authorization = `Bearer ${token}`;
+  const token = signLiveSession(1_200);
+  const cookie = liveSessionCookie(token);
 
   const draftResponse = await request.post('/api/llm/draft', {
-    headers: { Authorization: authorization },
+    headers: { Cookie: cookie },
     data: {
       email_body: 'Live Gemma4 verification request from Naruon E2E.',
       instruction: 'Reply with one concise Korean sentence confirming receipt.',
@@ -104,7 +110,7 @@ test('nano live model: ollama gemma4 chat and embedding search complete', async 
   expect(String(draftBody.draft ?? '').trim().length).toBeGreaterThan(0);
 
   const searchResponse = await request.post('/api/search', {
-    headers: { Authorization: authorization },
+    headers: { Cookie: cookie },
     data: { query: 'Live E2E Release', limit: 3 },
     timeout: 600_000,
   });

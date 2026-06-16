@@ -7,11 +7,30 @@ workflow governance before a release branch can land.
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+OCI_PREDEFINED_IMAGE_ANNOTATION_KEYS = {
+    "org.opencontainers.image.created",
+    "org.opencontainers.image.authors",
+    "org.opencontainers.image.url",
+    "org.opencontainers.image.documentation",
+    "org.opencontainers.image.source",
+    "org.opencontainers.image.version",
+    "org.opencontainers.image.revision",
+    "org.opencontainers.image.vendor",
+    "org.opencontainers.image.licenses",
+    "org.opencontainers.image.ref.name",
+    "org.opencontainers.image.title",
+    "org.opencontainers.image.description",
+    "org.opencontainers.image.base.digest",
+    "org.opencontainers.image.base.name",
+}
 
 
 def read_repo_text(relative_path: str) -> str:
@@ -27,6 +46,106 @@ def test_root_version_exists_and_is_initial_semver_release() -> None:
     assert re.fullmatch(
         r"\d+\.\d+\.\d+", version
     ), f"VERSION is not valid SemVer: {version!r}"
+
+
+def test_release_version_sources_are_synchronized() -> None:
+    version = read_repo_text("VERSION").strip()
+    frontend_package = json.loads(read_repo_text("frontend/package.json"))
+    backend_main = read_repo_text("backend/main.py")
+    runtime_config = read_repo_text("backend/api/runtime_config.py")
+    dockerfile = read_repo_text("Dockerfile")
+
+    assert frontend_package["version"] == version
+    assert "version=get_release_version()" in backend_main
+    assert "version=get_release_version()" in runtime_config
+    assert "COPY VERSION /app/VERSION" in dockerfile
+    assert 'ARG OCI_IMAGE_TITLE="naruon"' in dockerfile
+    assert 'org.opencontainers.image.title="${OCI_IMAGE_TITLE}"' in dockerfile
+    assert (
+        'ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"'
+        in dockerfile
+    )
+    assert (
+        'org.opencontainers.image.source="${OCI_IMAGE_SOURCE}"'
+        in dockerfile
+    )
+
+
+def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    frontend_dockerfile = read_repo_text("frontend/Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+
+    for annotation_key in OCI_PREDEFINED_IMAGE_ANNOTATION_KEYS:
+        assert annotation_key in root_dockerfile
+        assert annotation_key in frontend_dockerfile
+        assert annotation_key in docker_publish_workflow
+
+    assert "DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index" in docker_publish_workflow
+    assert "annotations: ${{ steps.meta.outputs.annotations }}" in docker_publish_workflow
+
+
+def test_container_images_use_node_24_runtime() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    frontend_dockerfile = read_repo_text("frontend/Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    render_deployment = read_repo_text("docs/operations/render-deployment.md")
+
+    assert "FROM node:24-slim AS frontend-builder" in root_dockerfile
+    assert "FROM node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in docker_publish_workflow
+    assert "Node 24 toolchain" in render_deployment
+    assert "node:22" not in root_dockerfile
+    assert "node:22" not in frontend_dockerfile
+    assert "node:22" not in docker_publish_workflow
+    assert "Node 22" not in render_deployment
+
+
+def test_backend_images_use_python_314_runtime() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    app_ci_workflow = read_repo_text(".github/workflows/app-ci.yml")
+    bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
+    render_deployment = read_repo_text("docs/operations/render-deployment.md")
+
+    assert "FROM python:3.14-slim AS backend-runtime" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in root_dockerfile
+    assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
+    assert 'python-version: ["3.14"]' in app_ci_workflow
+    assert 'python-version: "3.14"' in bandit_workflow
+    assert "Python 3.14 toolchain" in render_deployment
+    assert "python:3.11" not in root_dockerfile
+    assert "python:3.11" not in docker_publish_workflow
+    assert '"3.11"' not in app_ci_workflow
+    assert '"3.12"' not in app_ci_workflow
+    assert 'python-version: "3.12"' not in bandit_workflow
+
+
+def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
+    dockerfile = read_repo_text("Dockerfile")
+    requirements = read_repo_text("backend/requirements.txt")
+
+    assert "PIP_ONLY_BINARY=:all:" in dockerfile
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
+    assert "build-essential" not in dockerfile
+    assert "cargo" not in dockerfile
+    assert "libpq-dev" not in dockerfile
+    assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
+
+
+def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
+    requirements = read_repo_text("backend/requirements.txt")
+
+    assert "sqlalchemy==2.0.50" in requirements
+    assert "asyncpg==0.31.0" in requirements
+    assert "tiktoken==0.13.0" in requirements
+    assert "protobuf==6.33.6" in requirements
+    assert "setuptools==82.0.1" in requirements
+    assert "wheel==0.47.0" in requirements
+    assert "opentelemetry-api==1.41.1" in requirements
+    assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
@@ -139,19 +258,29 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
         == 2
     )
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
+    pull_request_block = workflow.split("pull_request:", 1)[1].split("permissions:", 1)[0]
     assert "tags:" in push_block
     assert "branches:" not in push_block
+    assert "develop" in pull_request_block
     assert "ai_email_client-backend" in workflow
     assert "ai_email_client-frontend" in workflow
+    assert workflow.count("image: naruon") == 2
     assert "push: false" in workflow
     assert "push: true" in workflow
     assert "type=semver" in workflow
     assert "type=ref,event=branch" not in workflow
+    assert "deploy_preflight:" in workflow
+    assert "AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}" in workflow
+    assert "configured=false" in workflow
+    assert "skipping deploy workflow" in workflow
+    assert "needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'" in workflow
 
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     dockerfile = read_repo_text("frontend/Dockerfile")
+    package_json = read_repo_text("frontend/package.json")
 
+    assert '"packageManager": "pnpm@11.5.3"' in package_json
     assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
         "RUN pnpm run build"
     )
@@ -169,7 +298,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
-    assert "FROM python:3.11-slim AS backend-runtime" in dockerfile
+    assert "FROM python:3.14-slim AS backend-runtime" in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile
@@ -182,7 +311,19 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "secrets.token_hex" not in dockerfile
     assert "ENV DATABASE_URL=" not in dockerfile
     assert '"/app/scripts/docker_entrypoint.sh"' in dockerfile
-    assert "RUN chmod +x /app/scripts/docker_entrypoint.sh" in dockerfile
+    assert (
+        "RUN chmod +x /app/scripts/docker_entrypoint.sh \\\n"
+        "    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh"
+        in dockerfile
+    )
+    assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
+    backend_cmd = (
+        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    )
+    assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
+    assert dockerfile.rfind("USER appuser") < dockerfile.find(
+        'CMD ["/app/scripts/docker_entrypoint.sh"]'
+    )
     assert "COPY scripts/start_combined.sh" not in dockerfile
     assert "RUN echo '#!/bin/bash" not in dockerfile
     assert "uvicorn" not in dockerfile.split("CMD", 1)[1]
@@ -193,13 +334,79 @@ def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> N
 
     assert "for var in DATABASE_URL AUTH_SESSION_HMAC_SECRET ENCRYPTION_KEY" in start_script
     assert "Fernet.generate_key()" in start_script
-    assert "database bootstrap failed" in start_script
+    assert "validate_auth_session_hmac_secret_value" in start_script
+    assert "AUTH_SESSION_HMAC_SECRET is invalid" in start_script
+    assert "database migration failed" in start_script
     assert "Backend and frontend will not start." in start_script
     assert "Starting backend (uvicorn :8000)" in start_script
     assert "Starting frontend (next start :3000)" in start_script
     assert 'wait -n "$backend_pid" "$frontend_pid"' in start_script
     assert "Backend (:8000) exited with code" in start_script
     assert "Frontend (:3000) exited with code" in start_script
+
+
+def test_deepwiki_qna_gap_execution_tracker_covers_requested_scope() -> None:
+    tracker = read_repo_text("docs/development/deepwiki-qna-gap-execution-track.md")
+
+    required_items = {
+        "dav-propfind-db-backed",
+        "alembic-migrations",
+        "oidc-production-multi-user",
+        "self-hosted-connector-adapters",
+        "caldav-webdav-provider-write",
+        "ready-soon-ui-removal",
+        "postgresql-ha-physical-replication",
+        "pop3-runtime-sync",
+        "reply-sla-scheduler",
+        "data-workspace-documents",
+        "connector-apm-history",
+        "sender-dag-source-filtering",
+    }
+    for item in required_items:
+        assert item in tracker
+
+    required_evidence = [
+        "backend/api/dav.py",
+        "backend/tests/test_dav_api.py",
+        "backend/alembic/versions/0001_initial_control_plane.py",
+        "backend/api/auth.py",
+        "backend/runner/local_mail_adapters.py",
+        "backend/runner/local_dav_adapters.py",
+        "backend/api/calendar.py",
+        "backend/api/webdav.py",
+        "backend/api/observability.py",
+        "backend/services/provider_writeback_retry_service.py",
+        "backend/main.py",
+        "backend/alembic/versions/0002_provider_writeback_retry_queue.py",
+        "backend/tests/test_provider_writeback_retry_service.py",
+        "backend/tests/test_observability_api.py",
+        "backend/tests/test_main.py",
+        "frontend/src/components/CalendarLayout.tsx",
+        "frontend/src/app/calendar/page.test.tsx",
+        "frontend/src/components/TasksLayout.tsx",
+        "frontend/src/app/tasks/page.test.tsx",
+        "frontend/src/components/DataLayout.tsx",
+        "frontend/src/components/SettingsLayout.tsx",
+        "frontend/src/components/SettingsLayout.test.tsx",
+        "docs/operations/postgresql-physical-replication.md",
+        "docs/operations/postgresql-ha-drill-20260615.md",
+        "scripts/postgres_ha_drill.sh",
+        "scripts/postgres-ha/init-primary-replication.sh",
+        "backend/tests/test_infra_evaluations.py",
+        "backend/core/config.py",
+        "backend/db/session.py",
+        "backend/tests/test_db_session.py",
+        "backend/services/pop3_worker.py",
+        "backend/services/reply_sla_scheduler.py",
+        "backend/api/data.py",
+        "backend/api/observability.py",
+        "backend/api/ontology.py",
+    ]
+    for evidence_path in required_evidence:
+        assert evidence_path in tracker
+
+    assert "remaining_executable_goal" in tracker
+    assert "verification_command" in tracker
 
 
 def test_backend_compose_commands_use_startup_preflight() -> None:
@@ -209,16 +416,59 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     backend_block = compose.split("  backend:", 1)[1].split("  frontend:", 1)[0]
     assert "target: backend-runtime" in backend_block
     assert 'DEBUG: "false"' in backend_block
-    assert 'DEBUG: "true"' not in backend_block
-    assert "python scripts/bootstrap_db.py && python scripts/start_backend.py" in compose
+    assert "DEBUG: true" not in backend_block
+    assert (
+        "DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD}@db:5432/ai_email"
+        in backend_block
+    )
+    assert "READONLY_DATABASE_URL: ${READONLY_DATABASE_URL:-}" in backend_block
+    assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in backend_block
+    assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in backend_block
+    assert "- AUTH_SESSION_HMAC_SECRET" not in backend_block
+    assert "- ENCRYPTION_KEY" not in backend_block
+    assert "python scripts/migrate_db.py && python scripts/start_backend.py" in compose
     assert '"scripts/start_backend.py"' in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
+    assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose
+    assert "postgresql+asyncpg://" not in live_e2e_compose
+    assert '"127.0.0.1:18080:8080"' in live_e2e_compose
     assert 'OLLAMA_NO_CLOUD: "true"' in compose
     assert 'OLLAMA_NO_CLOUD: "true"' in live_e2e_compose
     assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
-    assert "OPENAI_MODEL: gemma4" in live_e2e_compose
+    assert "OPENAI_MODEL: gemma4:e2b-it-qat" in live_e2e_compose
     assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
-    assert "proxy_read_timeout 600s" in read_repo_text("tests/live/nginx.conf")
+    live_backend_block = live_e2e_compose.split("  backend:", 1)[1].split(
+        "  frontend:", 1
+    )[0]
+    assert "ALLOWED_CORS_ORIGINS: http://127.0.0.1:18080" in live_backend_block
+    live_frontend_block = live_e2e_compose.split("  frontend:", 1)[1].split(
+        "  nginx:", 1
+    )[0]
+    assert "NEXT_PUBLIC_API_URL: http://127.0.0.1:18080" in live_frontend_block
+    assert "BACKEND_INTERNAL_URL: http://backend:8000" in live_frontend_block
+    assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"' in live_frontend_block
+    assert "TRUSTED_FRONTEND_ORIGINS: http://127.0.0.1:18080" in live_frontend_block
+    live_nginx = read_repo_text("tests/live/nginx.conf")
+    assert "proxy_read_timeout 600s" in live_nginx
+    assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in live_nginx
+    assert 'add_header X-Content-Type-Options "nosniff" always;' in live_nginx
+    assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
+    assert "upstream live_backend" not in live_nginx
+    api_location = live_nginx.split("    location /api/ {", 1)[1].split("    }", 1)[0]
+    root_location = live_nginx.split("    location / {", 1)[1].split("    }", 1)[0]
+    for location in (api_location, root_location):
+        assert "proxy_set_header Host $http_host;" in location
+        assert "proxy_set_header X-Forwarded-Host $http_host;" in location
+        assert "proxy_set_header X-Real-IP $remote_addr;" in location
+        assert (
+            "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+            in location
+        )
+        assert "proxy_set_header X-Forwarded-Proto $scheme;" in location
+        assert "proxy_set_header Upgrade $http_upgrade;" in location
+        assert 'proxy_set_header Connection "upgrade";' in location
+    assert "proxy_pass http://live_frontend;" in api_location
+    assert "proxy_pass http://live_backend;" not in api_location
 
 
 def test_compose_log_scanner_exists_for_warning_policy() -> None:
@@ -229,6 +479,31 @@ def test_compose_log_scanner_exists_for_warning_policy() -> None:
     assert "unexpected_count" in scanner
     assert "Use --ui/--no-ui" in scanner
     assert "or deprecated --webui/--no-webui" in scanner
+
+
+def test_compose_log_scanner_allows_nginx_stderr_startup_notices() -> None:
+    nginx_startup_lines = "\n".join(
+        [
+            '2026/06/13 06:25:27 [notice] 1#1: using the "epoll" event method',
+            "2026/06/13 06:25:27 [notice] 1#1: nginx/1.27.5",
+            "2026/06/13 06:25:27 [notice] 1#1: built by gcc 14.2.0 (Alpine 14.2.0)",
+            "2026/06/13 06:25:27 [notice] 1#1: OS: Linux 6.19.7-200.fc43.aarch64",
+            "2026/06/13 06:25:27 [notice] 1#1: getrlimit(RLIMIT_NOFILE): 524288:524288",
+            "2026/06/13 06:25:27 [notice] 1#1: start worker processes",
+            "2026/06/13 06:25:27 [notice] 1#1: start worker process 16",
+        ]
+    )
+
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/check_compose_logs.py")],
+        input=nginx_startup_lines,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "PASS compose log policy: allowed_count=7" in result.stdout
 
 
 def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> (
@@ -269,6 +544,378 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
         in gate_script
     )
     assert "ignore::UserWarning" not in workflow
+
+
+def test_strix_workflow_validates_vertex_credentials_before_export() -> None:
+    workflow = read_repo_text(".github/workflows/strix.yml")
+
+    assert "credentials_path.read_text(encoding=\"utf-8\")" in workflow
+    assert "object_pairs_hook=reject_duplicate_json_keys" in workflow
+    assert "raise ValueError(\"duplicate credential key\")" in workflow
+    assert (
+        "except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):"
+        in workflow
+    )
+    assert (
+        "GCP_SA_KEY must be valid service account JSON for Vertex AI Strix scans."
+        in workflow
+    )
+    assert "if not isinstance(credentials, dict):" in workflow
+    assert "GCP_SA_KEY must be a JSON object for Vertex AI Strix scans." in workflow
+    assert "json.loads(credentials_path.read_text())" not in workflow
+
+
+def test_opencode_review_fallbacks_do_not_emit_successful_error_annotations() -> None:
+    workflow = read_repo_text(".github/workflows/opencode-review.yml")
+
+    assert "continue-on-error: true" not in workflow
+    assert 'printf \'review_status=%s\\n\' "$1" >>"$GITHUB_OUTPUT"' in workflow
+    assert "record_review_status \"failed\"" in workflow
+    assert "record_review_status \"success\"" in workflow
+    assert "steps.opencode_review_primary.outputs.review_status != 'success'" in workflow
+    assert (
+        "steps.opencode_review_primary.outputs.review_status == 'success'"
+        in workflow
+    )
+    assert "steps.opencode_review_primary.outcome" not in workflow
+    assert "steps.opencode_review_fallback.outcome" not in workflow
+    assert "steps.opencode_review_second_fallback.outcome" not in workflow
+
+
+def test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct(
+    tmp_path: Path,
+) -> None:
+    agents = read_repo_text("AGENTS.md")
+    repo_root = tmp_path / "repo"
+    auth_file = repo_root / "backend" / "app" / "auth.py"
+    page_file = repo_root / "frontend" / "src" / "app" / "page.tsx"
+    workflow_file = repo_root / ".github" / "workflows" / "strix.yml"
+    auth_file.parent.mkdir(parents=True)
+    page_file.parent.mkdir(parents=True)
+    workflow_file.parent.mkdir(parents=True)
+    auth_file.write_text("\n".join(f"# auth line {line}" for line in range(1, 180)))
+    page_file.write_text("\n".join(f"// page line {line}" for line in range(1, 80)))
+    workflow_file.write_text("STRIX_FALLBACK_MODELS: deepseek/deepseek-r1-0528\n")
+
+    evidence_file = tmp_path / "failed-check-evidence.md"
+    failed_checks_file = tmp_path / "failed-checks.md"
+    failed_checks_file.write_text("- Strix Security Scan/strix: FAILURE\n")
+    evidence_file.write_text(
+        """
+# Failed GitHub Check Evidence
+
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1 (log lines 100-210)
+
+```text
+Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
+│  Vulnerability Report                                                        │
+│  Title: Authentication Bypass via X-Dev-User Header                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /api/me                                                           │
+│  Method: GET                                                                 │
+│  Code Locations                                                              │
+│    Location 1: backend/app/auth.py:132-135                                   │
+│  Model deepseek/deepseek-r1-0528                                             │
+│  Vulnerabilities 1                                                           │
+```
+
+### Strix vulnerability report window 2 (log lines 220-340)
+
+```text
+Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
+│  Vulnerability Report                                                        │
+│  Title: Frontend Security Issues: XSS and Insecure Data Handling             │
+│  Severity: HIGH                                                              │
+│  Endpoint: /                                                                 │
+│  Method: GET                                                                 │
+│  Code Locations                                                              │
+│    Location 1: frontend/src/app/page.tsx:8-12                                │
+│  Model deepseek/deepseek-v3-0324                                             │
+│  Vulnerabilities 1                                                           │
+```
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fallback = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
+            str(evidence_file),
+            str(repo_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert (
+        "Strix report from deepseek/deepseek-r1-0528: "
+        "Authentication Bypass via X-Dev-User Header"
+    ) in fallback.stdout
+    assert (
+        "Strix report from deepseek/deepseek-v3-0324: "
+        "Frontend Security Issues: XSS and Insecure Data Handling"
+    ) in fallback.stdout
+    assert (
+        "Strix report from openai/gpt-5: Authentication Bypass"
+        not in fallback.stdout
+    )
+    assert fallback.stdout.count("Strix report from deepseek/") == 2
+    normalized_agents = " ".join(agents.split())
+    assert "Strix logs may print the report's `Model ...` line after" in agents
+    assert "not to a previous retry attempt" in normalized_agents
+
+    good_control_file = tmp_path / "good-control.json"
+    good_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with two fallback model reports.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from deepseek/deepseek-r1-0528",
+                        "problem": (
+                            "Strix Security Scan/strix reported "
+                            "Authentication Bypass via X-Dev-User Header. "
+                            "Severity: CRITICAL. Endpoint: /api/me. Method: GET. "
+                            "Code location backend/app/auth.py:132-135."
+                        ),
+                        "root_cause": "deepseek/deepseek-r1-0528 report evidence",
+                        "fix_direction": "Remove X-Dev-User trust from this line.",
+                        "regression_test_direction": "Cover /api/me auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    },
+                    {
+                        "path": "frontend/src/app/page.tsx",
+                        "line": 8,
+                        "severity": "HIGH",
+                        "title": "Strix report from deepseek/deepseek-v3-0324",
+                        "problem": (
+                            "Strix Security Scan/strix reported Frontend Security "
+                            "Issues: XSS and Insecure Data Handling. Severity: HIGH. "
+                            "Endpoint: /. Method: GET. Code location "
+                            "frontend/src/app/page.tsx:8-12."
+                        ),
+                        "root_cause": "deepseek/deepseek-v3-0324 report evidence",
+                        "fix_direction": "Patch the frontend render boundary.",
+                        "regression_test_direction": "Cover escaped page output.",
+                        "suggested_diff": "- old\n+ new",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    good_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(good_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert good_validation.returncode == 0, good_validation.stderr
+
+    collapsed_control_file = tmp_path / "collapsed-control.json"
+    collapsed_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with two fallback model reports.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix reports from deepseek/deepseek-r1-0528 and deepseek/deepseek-v3-0324",
+                        "problem": (
+                            "Authentication Bypass via X-Dev-User Header; "
+                            "Frontend Security Issues: XSS and Insecure Data Handling. "
+                            "Severity: CRITICAL HIGH. Endpoints: /api/me and /. "
+                            "Method: GET. Locations: backend/app/auth.py:132-135 "
+                            "and frontend/src/app/page.tsx:8-12."
+                        ),
+                        "root_cause": "Collapsed both Strix model reports into one finding.",
+                        "fix_direction": "Patch both reported locations.",
+                        "regression_test_direction": "Cover both reports.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    collapsed_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(collapsed_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert collapsed_validation.returncode == 4
+    assert "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" in collapsed_validation.stdout
+
+
+def test_opencode_strix_failed_check_review_model_before_title_attributed_correctly(
+    tmp_path: Path,
+) -> None:
+    """Model line appearing before Title inside a report window must override
+    a prior failed-model mention from the same window header.
+
+    This complements test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct
+    which covers Model appearing *after* code locations.  Together the two tests
+    ensure both orderings (Model-before-Title and Model-after-Code-Locations) are
+    handled correctly regardless of a prior 'Strix run failed for model' line in
+    the same window.
+    """
+    repo_root = tmp_path / "repo"
+    auth_file = repo_root / "backend" / "app" / "auth.py"
+    auth_file.parent.mkdir(parents=True)
+    auth_file.write_text("\n".join(f"# auth line {line}" for line in range(1, 180)))
+
+    evidence_file = tmp_path / "failed-check-evidence.md"
+    failed_checks_file = tmp_path / "failed-checks.md"
+    failed_checks_file.write_text("- Strix Security Scan/strix: FAILURE\n")
+    evidence_file.write_text(
+        """
+# Failed GitHub Check Evidence
+
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1 (log lines 100-210)
+
+```text
+Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
+│  Model deepseek/deepseek-r1-0528                                            │
+│  Vulnerability Report                                                       │
+│  Title: Auth Bypass via Header                                              │
+│  Severity: CRITICAL                                                         │
+│  Endpoint: /api/me                                                          │
+│  Method: GET                                                                │
+│  Code Locations                                                             │
+│    Location 1: backend/app/auth.py:132-135                                  │
+│  Vulnerabilities 1                                                          │
+```
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fallback = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
+            str(evidence_file),
+            str(repo_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert (
+        "Strix report from deepseek/deepseek-r1-0528: Auth Bypass via Header"
+    ) in fallback.stdout
+    assert "openai/gpt-5" not in fallback.stdout
+
+    good_control_file = tmp_path / "good-control.json"
+    good_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with deepseek fallback report.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from deepseek/deepseek-r1-0528",
+                        "problem": (
+                            "Strix Security Scan/strix reported "
+                            "Auth Bypass via Header. "
+                            "Severity: CRITICAL. Endpoint: /api/me. Method: GET. "
+                            "Code location backend/app/auth.py:132-135."
+                        ),
+                        "root_cause": "deepseek/deepseek-r1-0528 report evidence",
+                        "fix_direction": "Remove the bypass.",
+                        "regression_test_direction": "Cover auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    good_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(good_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert good_validation.returncode == 0, good_validation.stderr
+
+    wrong_attribution_file = tmp_path / "wrong-control.json"
+    wrong_attribution_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from openai/gpt-5",
+                        "problem": (
+                            "Strix Security Scan/strix reported Auth Bypass via Header. "
+                            "Severity: CRITICAL."
+                        ),
+                        "root_cause": "openai/gpt-5 report evidence",
+                        "fix_direction": "Remove the bypass.",
+                        "regression_test_direction": "Cover auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    wrong_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(wrong_attribution_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert wrong_validation.returncode == 4
+    assert "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" in wrong_validation.stdout
 
 
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
@@ -333,3 +980,17 @@ def test_coderabbit_approval_is_decoupled_from_github_checks() -> None:
     assert "enabled: false" in config
     assert "GitHub Checks integration stays disabled" in policy
     assert "GitHub Checks integration disabled" in agents
+
+
+def test_agents_records_ghcr_visibility_publication_runbook() -> None:
+    agents = read_repo_text("AGENTS.md")
+    normalized_agents = " ".join(agents.split())
+
+    assert "GHCR publishing evidence for the combined `naruon` image" in agents
+    assert "REST Packages API" in agents
+    assert "GraphQL package mutations" in agents
+    assert "visibility: private" in agents
+    assert "Package settings" in agents
+    assert "Danger Zone" in agents
+    assert "Change visibility" in normalized_agents
+    assert "anonymous pull/token access" in agents

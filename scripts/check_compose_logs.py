@@ -31,7 +31,8 @@ ALLOWLIST: tuple[AllowedLogPattern, ...] = (
         version="1.27.x-alpine",
         rationale="Nginx emits notice-level worker startup lines before serving traffic.",
         pattern=re.compile(
-            r"nginx.*\[notice\].*(using the .* event method|nginx/|built by gcc|"
+            r"(?:nginx.*)?\[notice\]\s+\d+#\d+:\s+"
+            r"(using the .* event method|nginx/|built by gcc|"
             r"OS:|getrlimit\(RLIMIT_NOFILE\)|start worker processes|"
             r"start worker process \d+)",
             re.IGNORECASE,

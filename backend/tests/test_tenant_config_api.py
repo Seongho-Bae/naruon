@@ -123,7 +123,6 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
 
     get_response = client.get(
         "/api/config",
-        params={"user_id": "test_user"},
         headers={"X-User-Id": "test_user"},
     )
     assert get_response.status_code == 200
@@ -207,14 +206,17 @@ def test_validate_mail_config_update_revalidates_existing_mail_hosts(monkeypatch
     ]
 
 
-def test_validate_mail_config_update_rejects_unsafe_partial_override():
+def test_validate_mail_config_update_rejects_unsafe_partial_override(caplog):
     from api.tenant_config import validate_mail_config_update
 
-    with pytest.raises(HTTPException) as exc_info:
-        validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
+    with caplog.at_level("WARNING", logger="api.tenant_config"):
+        with pytest.raises(HTTPException) as exc_info:
+            validate_mail_config_update({"imap_server": "127.0.0.1"}, None)
 
     assert exc_info.value.status_code == 400
-    assert "imap_server/imap_port validation failed" in exc_info.value.detail
+    assert exc_info.value.detail == "Invalid IMAP configuration"
+    assert "IMAP configuration validation failed" in caplog.text
+    assert "127.0.0.1" not in caplog.text
 
 
 def test_legacy_tenant_config_endpoint_keeps_organization_scope(
@@ -250,12 +252,10 @@ def test_legacy_tenant_config_endpoint_keeps_organization_scope(
 
     acme_get = client.get(
         "/api/config",
-        params={"user_id": "shared_user"},
         headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-acme"},
     )
     rival_get = client.get(
         "/api/config",
-        params={"user_id": "shared_user"},
         headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-rival"},
     )
 
@@ -265,28 +265,6 @@ def test_legacy_tenant_config_endpoint_keeps_organization_scope(
     assert rival_get.json()["smtp_server"] == "smtp.other.com"
     assert ("shared_user", "org-acme") in mock_db.objects
     assert ("shared_user", "org-rival") in mock_db.objects
-
-
-@pytest.mark.parametrize(
-    "admin_role", ("system_admin", "platform_admin", "tenant_admin")
-)
-def test_tenant_config_post_stays_user_owned_even_for_admin_headers(
-    client, admin_role
-):
-    response = client.post(
-        "/api/config",
-        json={"user_id": "member-user", "smtp_server": "smtp.example.com"},
-        headers={
-            "X-User-Id": "admin",
-            "X-User-Role": admin_role,
-            "X-Organization-Id": "org-acme",
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Mailbox settings are personal and can only be managed by the authenticated user"
-    }
 
 
 def test_tenant_config_rejects_private_smtp_host(client):
@@ -301,7 +279,7 @@ def test_tenant_config_rejects_private_smtp_host(client):
     )
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_metadata_smtp_host(client):
@@ -316,7 +294,7 @@ def test_tenant_config_rejects_metadata_smtp_host(client):
     )
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
@@ -336,7 +314,7 @@ def test_tenant_config_rejects_unsafe_smtp_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "SMTP port is not allowed" in response.json()["detail"]
+    assert "Invalid SMTP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_private_pop3_host(client):
@@ -351,7 +329,7 @@ def test_tenant_config_rejects_private_pop3_host(client):
     )
 
     assert response.status_code == 400
-    assert "pop3_server" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_private_imap_host(client):
@@ -366,7 +344,7 @@ def test_tenant_config_rejects_private_imap_host(client):
     )
 
     assert response.status_code == 400
-    assert "imap_server" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
@@ -386,7 +364,7 @@ def test_tenant_config_rejects_unallowlisted_imap_host(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "imap_server" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
@@ -406,7 +384,7 @@ def test_tenant_config_rejects_unallowlisted_pop3_host(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "pop3_server" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
@@ -432,7 +410,7 @@ def test_tenant_config_rejects_unsafe_imap_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "imap_port" in response.json()["detail"]
+    assert "Invalid IMAP configuration" in response.json()["detail"]
 
 
 def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
@@ -458,16 +436,36 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
     )
 
     assert response.status_code == 400
-    assert "pop3_port" in response.json()["detail"]
+    assert "Invalid POP3 configuration" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "permitted_role",
+    ("system_admin", "platform_admin", "tenant_admin", "organization_admin", "group_admin", "member"),
+)
+def test_tenant_config_get_returns_own_config_for_permitted_role(client, permitted_role):
+    # GET /api/config enforces RBAC through ensure_mailbox_config_self_access and
+    # always returns the authenticated session user's own config (no user_id parameter).
+    response = client.get(
+        "/api/config",
+        headers={
+            "X-User-Id": "session-user",
+            "X-User-Role": permitted_role,
+            "X-Organization-Id": "org-acme",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "session-user"
 
 
 @pytest.mark.parametrize(
     "admin_role", ("system_admin", "platform_admin", "tenant_admin")
 )
-def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
-    response = client.get(
+def test_tenant_config_post_rejects_cross_user_admin_access(client, admin_role):
+    response = client.post(
         "/api/config",
-        params={"user_id": "member-user"},
+        json={"user_id": "member-user"},
         headers={
             "X-User-Id": "admin",
             "X-User-Role": admin_role,
@@ -477,7 +475,7 @@ def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
 
     assert response.status_code == 403
     assert response.json() == {
-        "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
+        "detail": "Mailbox settings are personal and can only be managed by the authenticated user"
     }
 
 
@@ -587,7 +585,7 @@ async def test_create_read_pop3_postgres_smoke(monkeypatch):
                     },
                 )
                 get_response = await real_client.get(
-                    "/api/config", params={"user_id": user_id}
+                    "/api/config",
                 )
         finally:
             if previous_db_override is None:

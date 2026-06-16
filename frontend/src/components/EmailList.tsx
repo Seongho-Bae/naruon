@@ -169,6 +169,7 @@ export function EmailList({
         emptyTitle: '검색 결과가 없습니다',
         emptyBody: '검색어를 바꾸거나 메일 동기화 상태를 확인하세요.',
       };
+  const searchBusy = isSearching || loading;
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col border-r border-border/80 bg-card/95">
@@ -233,9 +234,9 @@ export function EmailList({
               </button>
             )}
           </div>
-          <Button type="submit" disabled={isSearching || loading} className="h-10 rounded-xl px-4">
-            {isSearching && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {isSearching ? "검색 중" : "검색"}
+          <Button type="submit" disabled={searchBusy} className="h-10 rounded-xl px-4">
+            {searchBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
+            {searchBusy ? "검색 중" : "검색"}
           </Button>
         </form>
       </div>

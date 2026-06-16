@@ -15,12 +15,14 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+import api.data as data_api
 from api.auth import get_auth_context, get_current_user
 from core.config import settings
 from db.models import (
     Attachment,
     Base,
     ConnectorSignalEvent,
+    Document,
     Email,
     ProjectFolder,
     WebdavAccount,
@@ -44,18 +46,81 @@ class MockResult:
     def scalar_one(self):
         return self.obj
 
+    def scalar_one_or_none(self):
+        return self.obj
+
 
 class MockAsyncSession:
     def __init__(self, results):
         self.results = results
+        self.documents: list[Document] = []
         self.queries = []
         self.execute_calls = 0
 
     async def execute(self, query):
         self.queries.append(query)
+        rendered_query = str(query)
+        if (
+            "webdav_accounts.source_uid" in rendered_query
+            and "webdav_accounts.account_id" not in rendered_query
+        ):
+            result = self.results[self.execute_calls]
+            self.execute_calls += 1
+            return MockResult(
+                [
+                    (
+                        account.source_uid,
+                        account.writeback_enabled,
+                        account.etag_value,
+                    )
+                    for account in result
+                ]
+            )
+        if "FROM documents" in rendered_query:
+            compiled = query.compile()
+            params = compiled.params
+            document_id = next(
+                (
+                    value
+                    for key, value in params.items()
+                    if key.startswith("document_id")
+                ),
+                None,
+            )
+            workspace_id = next(
+                (
+                    value
+                    for key, value in params.items()
+                    if key.startswith("workspace_id")
+                ),
+                None,
+            )
+            rows = [
+                document
+                for document in self.documents
+                if (document_id is None or document.document_id == document_id)
+                and (workspace_id is None or document.workspace_id == workspace_id)
+            ]
+            if "ORDER BY" in rendered_query:
+                return MockResult(rows)
+            return MockResult(rows[0] if rows else None)
         result = self.results[self.execute_calls]
         self.execute_calls += 1
         return MockResult(result)
+
+    def add(self, obj):
+        if isinstance(obj, Document):
+            if not obj.document_id:
+                obj.document_id = f"doc_mock_{len(self.documents) + 1}"
+            if not obj.created_at:
+                obj.created_at = _now()
+            self.documents.append(obj)
+
+    async def commit(self):
+        pass
+
+    async def refresh(self, obj):
+        pass
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -108,6 +173,7 @@ def _webdav_account(source_uid: str) -> WebdavAccount:
         username="files@example.com",
         credentials_encrypted="credential secret",
         writeback_enabled=True,
+        etag_value="etag-webdav-primary",
         created_at=_now(),
     )
 
@@ -224,6 +290,7 @@ def test_data_quality_surface_returns_source_backed_counts_without_secrets(mock_
     assert {source["source_id"] for source in data["repositories"]} == {
         "email_repository",
         "attachment_repository",
+        "document_repository",
         "webdav_src_primary",
         "webdav_folder_roadmap",
     }
@@ -326,6 +393,292 @@ def test_member_data_quality_queries_are_owner_scoped(mock_db):
     assert "webdav_accounts.workspace_id = :workspace_id_1" in rendered_queries
     assert "project_folders.user_id = :user_id_1" in rendered_queries
     assert "emails.user_id = :user_id_1" in rendered_queries
+
+
+def test_data_quality_surface_includes_workspace_document_assets(mock_db):
+    mock_db.documents.extend(
+        [
+            Document(
+                document_id="doc_owned",
+                workspace_id="workspace-org-acme",
+                document_name="<b>roadmap.md</b>",
+                document_type="text/markdown",
+                document_content="# Roadmap",
+                document_status="uploaded",
+                created_at=_now(),
+            ),
+            Document(
+                document_id="doc_rival",
+                workspace_id="workspace-rival",
+                document_name="rival.md",
+                document_type="text/markdown",
+                document_content="rival",
+                document_status="uploaded",
+                created_at=_now(),
+            ),
+        ]
+    )
+    token = _signed_session_token(_valid_session_payload())
+    client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
+    try:
+        response = client.get("/api/data/quality-surface")
+    finally:
+        client.close()
+        _restore_overrides(previous_secret, original_overrides)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    repositories_by_type = {
+        repository["repository_type"]: repository
+        for repository in data["repositories"]
+    }
+    assert repositories_by_type["document_repository"] == {
+        "source_id": "document_repository",
+        "repository_type": "document_repository",
+        "display_name": "Scoped document repository",
+        "object_count": 1,
+        "writeback_enabled": None,
+        "evidence_source": "documents",
+        "provider_write_executed": False,
+    }
+    document_assets = [
+        asset
+        for asset in data["repository_assets"]
+        if asset["asset_type"] == "workspace_document"
+    ]
+    assert document_assets == [
+        {
+            "asset_key": "doc_owned",
+            "asset_type": "workspace_document",
+            "display_name": "broadmap.md/b",
+            "source_label": "Workspace document",
+            "state_code": "ready",
+            "detail_text": "document status: uploaded",
+            "content_chars": 9,
+            "captured_at": "2026-05-28T05:45:00Z",
+            "evidence_source": "documents.document_status",
+            "thread_key": "workspace_document",
+            "provider_write_executed": False,
+        }
+    ]
+    assert "doc_rival" not in response.text
+
+
+def test_data_document_upload_creates_workspace_scoped_document(mock_db):
+    token = _signed_session_token(_valid_session_payload(sub="member"))
+    client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
+    try:
+        response = client.post(
+            "/api/data/documents",
+            json={
+                "document_name": "<b>roadmap.md</b>",
+                "document_type": "text/markdown",
+                "document_content": "# Roadmap\nPhase 10",
+            },
+        )
+    finally:
+        client.close()
+        _restore_overrides(previous_secret, original_overrides)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data == {
+        "document_id": "doc_mock_1",
+        "workspace_id": "workspace-org-acme",
+            "document_name": "broadmap.md/b",
+        "document_type": "text/markdown",
+        "document_status": "uploaded",
+        "content_chars": 18,
+        "provider_write_executed": False,
+        "provenance": "server-authoritative",
+        "audit_event": "data.document.uploaded",
+        "message": "Document stored in the signed workspace scope.",
+    }
+    stored_document = mock_db.documents[0]
+    assert stored_document.workspace_id == "workspace-org-acme"
+    assert stored_document.document_content == "# Roadmap\nPhase 10"
+
+
+def test_data_document_actions_are_workspace_scoped_and_intent_only(mock_db):
+    document = Document(
+        document_id="doc_owned",
+        workspace_id="workspace-org-acme",
+        document_name="source.hwp",
+        document_type="application/x-hwp",
+        document_content="opaque hwp extraction placeholder",
+        document_status="uploaded",
+        created_at=_now(),
+    )
+    rival_document = Document(
+        document_id="doc_rival",
+        workspace_id="workspace-rival",
+        document_name="rival.md",
+        document_type="text/markdown",
+        document_content="rival",
+        document_status="uploaded",
+        created_at=_now(),
+    )
+    mock_db.documents.extend([document, rival_document])
+    token = _signed_session_token(_valid_session_payload())
+    client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
+    try:
+        reparse_response = client.post("/api/data/documents/doc_owned/reparse")
+        embedding_response = client.post(
+            "/api/data/documents/doc_owned/embedding-regeneration-intent"
+        )
+        hwp_response = client.post(
+            "/api/data/documents/doc_owned/hwp-conversion-intent"
+        )
+        rival_response = client.post("/api/data/documents/doc_rival/reparse")
+    finally:
+        client.close()
+        _restore_overrides(previous_secret, original_overrides)
+
+    assert reparse_response.status_code == 200, reparse_response.text
+    assert reparse_response.json()["document_status"] == "parsed"
+    assert reparse_response.json()["provider_write_executed"] is False
+    assert reparse_response.json()["audit_event"] == "data.document.reparsed"
+
+    assert embedding_response.status_code == 200, embedding_response.text
+    embedding_data = embedding_response.json()
+    assert embedding_data["document_status"] == "embedding_pending"
+    assert embedding_data["provider_write_executed"] is False
+    assert embedding_data["audit_event"] == "data.document.embedding_regeneration_intent"
+
+    assert hwp_response.status_code == 200, hwp_response.text
+    hwp_data = hwp_response.json()
+    assert hwp_data["document_status"] == "hwp_conversion_pending"
+    assert hwp_data["provider_write_executed"] is False
+    assert hwp_data["audit_event"] == "data.document.hwp_conversion_intent"
+
+    assert rival_response.status_code == 404
+    assert "doc_rival" not in rival_response.text
+
+
+def test_data_document_webdav_materialization_executes_source_backed_write(
+    mock_db,
+    monkeypatch,
+):
+    mock_db.documents.append(
+        Document(
+            document_id="doc_owned",
+            workspace_id="workspace-org-acme",
+            document_name="../<b>roadmap.md</b>",
+            document_type="text/markdown",
+            document_content="# Roadmap\nPhase 10",
+            document_status="uploaded",
+            created_at=_now(),
+        )
+    )
+    dispatched: list[tuple[str | None, str, dict[str, object]]] = []
+
+    async def fake_dispatch_command(
+        organization_id: str | None,
+        workspace_id: str,
+        command: dict[str, object],
+    ) -> dict[str, object]:
+        dispatched.append((organization_id, workspace_id, command))
+        return {
+            "status": "completed",
+            "request_id": "runner_req_data_doc_1",
+            "provider_status": 201,
+            "provider_write_executed": True,
+        }
+
+    monkeypatch.setattr(data_api.runner_manager, "dispatch_command", fake_dispatch_command)
+    token = _signed_session_token(_valid_session_payload())
+    client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
+    try:
+        response = client.post(
+            "/api/data/documents/doc_owned/webdav-materialization-intent",
+            json={
+                "target_source_id": "webdav_src_primary",
+                "execute_provider": True,
+            },
+        )
+    finally:
+        client.close()
+        _restore_overrides(previous_secret, original_overrides)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body == {
+        "intent": "document_webdav_materialization",
+        "status": "completed",
+        "document_id": "doc_owned",
+        "workspace_id": "workspace-org-acme",
+        "document_name": "broadmap.md-b",
+        "document_type": "text/markdown",
+        "source_id": "webdav_src_primary",
+        "target_label": "WebDAV source webdav_src_primary",
+        "target_path": "/Naruon/Data/broadmap.md-b-d5fe4e8b.md",
+        "requires_if_match": True,
+        "if_match": "etag-webdav-primary",
+        "provenance": "server-authoritative",
+        "provider_write_executed": True,
+        "audit_event": "data.document.webdav_materialization.executed",
+        "runner_request_id": "runner_req_data_doc_1",
+        "provider_status": 201,
+        "error_code": None,
+        "retry_item_uid": None,
+        "message": "Workspace document WebDAV materialization executed by the connector.",
+    }
+    assert dispatched == [
+        (
+            "org-acme",
+            "workspace-org-acme",
+            {
+                "action": "write_webdav",
+                "account": "webdav_src_primary",
+                "source_id": "webdav_src_primary",
+                "target_path": "/Naruon/Data/broadmap.md-b-d5fe4e8b.md",
+                "if_match": "etag-webdav-primary",
+                "content_type": "text/markdown; charset=utf-8",
+                "content": "# Roadmap\nPhase 10",
+            },
+        )
+    ]
+    serialized = response.text
+    for forbidden in (
+        "../",
+        "<b>",
+        "server_url",
+        "username",
+        "credentials_encrypted",
+        "credential secret",
+        "account_id",
+    ):
+        assert forbidden not in serialized
+
+
+def test_data_document_webdav_materialization_rejects_empty_document(mock_db):
+    mock_db.documents.append(
+        Document(
+            document_id="doc_empty",
+            workspace_id="workspace-org-acme",
+            document_name="empty.md",
+            document_type="text/markdown",
+            document_content="   ",
+            document_status="uploaded",
+            created_at=_now(),
+        )
+    )
+    token = _signed_session_token(_valid_session_payload())
+    client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
+    try:
+        response = client.post(
+            "/api/data/documents/doc_empty/webdav-materialization-intent",
+            json={
+                "target_source_id": "webdav_src_primary",
+                "execute_provider": True,
+            },
+        )
+    finally:
+        client.close()
+        _restore_overrides(previous_secret, original_overrides)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Workspace document has no materializable content."
 
 
 @pytest.mark.asyncio

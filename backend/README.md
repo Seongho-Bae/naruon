@@ -7,7 +7,7 @@ threaded email APIs.
 
 ```bash
 python3 -m pip install -r requirements.txt
-python3 scripts/bootstrap_db.py
+python3 scripts/migrate_db.py
 python3 -m pytest -q
 uvicorn main:app --reload
 ```
@@ -46,16 +46,43 @@ path does not need network access.
 - `POST /api/emails/send` accepts `in_reply_to` and `references` and returns
   either real send status or explicit simulation status.
 
-## Schema bootstrap and backfill
+## Calendar writeback endpoints
 
-`python3 scripts/bootstrap_db.py` creates the `vector` extension, runs
-`Base.metadata.create_all` for fresh local databases, and applies idempotent
-`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements for the email owner key
-(`user_id`) and threading columns (`thread_id`, `in_reply_to`, `references`,
-`reply_to`) plus the owner/thread indexes. Existing email rows that predate
-threading should then be backfilled by reprocessing imported `.eml` files or by
-assigning `thread_id` with `services.threading_service.assign_thread_id` in
-chronological order.
+- `GET /api/calendar/writeback-sources` returns signed-session scoped opaque
+  CalDAV source registry rows.
+- `POST /api/calendar/writeback-intent` returns intent metadata by default.
+  `execute_provider=true` dispatches `write_caldav` to the active outbound
+  runner only after source ownership, write capability, and If-Match evidence
+  are available; otherwise it fails closed without claiming provider success.
+
+## Data workspace endpoints
+
+- `GET /api/data/quality-surface` returns signed-session scoped repository,
+  document, ingestion, embedding, quality, and connector evidence without raw
+  provider secrets or message/thread identifiers.
+- `POST /api/data/documents` stores a workspace document row under the signed
+  `workspace_id` and returns an opaque `document_id`.
+- `POST /api/data/documents/{document_id}/reparse`,
+  `/embedding-regeneration-intent`, and `/hwp-conversion-intent` re-check the
+  signed workspace scope, update document status, and return
+  `provider_write_executed=false` until provider-backed execution is explicitly
+  in scope.
+
+## Schema migration, bootstrap, and backfill
+
+`python3 scripts/migrate_db.py` applies the Alembic history under
+`backend/alembic` and is the managed-environment schema path. The initial
+baseline revision creates the `vector` extension, materializes the current model
+metadata, and runs the same idempotent backfill SQL used by local bootstrap.
+
+`python3 scripts/bootstrap_db.py` remains a local/dev compatibility path. It
+creates the `vector` extension, runs `Base.metadata.create_all` for fresh local
+databases, and applies idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+statements for the email owner key (`user_id`) and threading columns
+(`thread_id`, `in_reply_to`, `references`, `reply_to`) plus the owner/thread
+indexes. Existing email rows that predate threading should then be backfilled by
+reprocessing imported `.eml` files or by assigning `thread_id` with
+`services.threading_service.assign_thread_id` in chronological order.
 
 For existing local databases, the bootstrap stamps null `emails.user_id` values
 with `NARUON_IMPORT_USER_ID` or `default` so local rows remain visible through

@@ -539,6 +539,103 @@ def test_webdav_writeback_intent_fails_closed_without_eligibility():
 
 
 @pytest.mark.asyncio
+async def test_knowledge_materialization_execute_provider_dispatches_runner(
+    monkeypatch,
+    auth_client,
+):
+    dispatched_commands: list[dict[str, object]] = []
+
+    async def fake_dispatch_command(
+        organization_id,
+        workspace_id,
+        command,
+        *,
+        timeout_seconds=30,
+    ):
+        assert organization_id == "org-acme"
+        assert workspace_id == "workspace-org-acme"
+        dispatched_commands.append(command)
+        return {
+            "request_id": "runner_req_webdav_1",
+            "status": "success",
+            "provider_write_executed": True,
+            "provider_status": 204,
+            "etag": "etag-after-write",
+        }
+
+    monkeypatch.setattr("api.webdav.runner_manager.dispatch_command", fake_dispatch_command)
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={
+            "source_task_id": "task-self-knowledge",
+            "target_source_id": "webdav_src_demo_primary",
+            "execute_provider": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert body["provider_write_executed"] is True
+    assert body["provider_status"] == 204
+    assert body["runner_request_id"] == "runner_req_webdav_1"
+    assert body["retry_item_uid"] is None
+    assert body["if_match"] == "etag-webdav-demo-primary"
+
+    assert len(dispatched_commands) == 1
+    command = dispatched_commands[0]
+    assert command["action"] == "write_webdav"
+    assert command["account"] == "webdav_src_demo_primary"
+    assert command["source_id"] == "webdav_src_demo_primary"
+    assert command["target_path"] == "/Naruon/Notes/task-self-knowledge.md"
+    assert command["if_match"] == "etag-webdav-demo-primary"
+    assert command["content_type"] == "text/markdown; charset=utf-8"
+    assert "task-self-knowledge" in command["content"]
+    assert "server_url" not in command
+
+
+@pytest.mark.asyncio
+async def test_knowledge_materialization_execute_provider_returns_retry_item(
+    monkeypatch,
+    auth_client,
+):
+    async def fake_dispatch_command(
+        organization_id,
+        workspace_id,
+        command,
+        *,
+        timeout_seconds=30,
+    ):
+        assert organization_id == "org-acme"
+        assert workspace_id == "workspace-org-acme"
+        assert command["action"] == "write_webdav"
+        return {
+            "status": "error",
+            "error_code": "runner_response_timeout",
+            "provider_write_executed": False,
+            "retry_item_uid": "provider_retry_webdav_1",
+        }
+
+    monkeypatch.setattr("api.webdav.runner_manager.dispatch_command", fake_dispatch_command)
+
+    response = auth_client.post(
+        "/api/webdav/knowledge-materialization-intent",
+        json={
+            "source_task_id": "task-self-knowledge",
+            "target_source_id": "webdav_src_demo_primary",
+            "execute_provider": True,
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["provider_write_executed"] is False
+    assert body["error_code"] == "runner_response_timeout"
+    assert body["retry_item_uid"] == "provider_retry_webdav_1"
+
+
+@pytest.mark.asyncio
 async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     source_uid = f"webdav_src_{uuid.uuid4().hex[:24]}"
     user_id = f"webdav-smoke-{uuid.uuid4().hex[:12]}"
