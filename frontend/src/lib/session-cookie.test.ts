@@ -8,15 +8,6 @@ import {
   SESSION_COOKIE_MAX_AGE_SECONDS,
 } from "./session-cookie";
 
-const TOKEN_SEGMENT_LENGTH = 1000;
-const TOKEN_SEPARATOR_LENGTH = 1;
-const MAX_TOKEN_THIRD_SEGMENT_LENGTH =
-  4096 -
-  TOKEN_SEGMENT_LENGTH -
-  TOKEN_SEPARATOR_LENGTH -
-  TOKEN_SEGMENT_LENGTH -
-  TOKEN_SEPARATOR_LENGTH;
-
 describe("normalizeSessionToken", () => {
   it("accepts compact JWT-shaped bearer session tokens", () => {
     expect(normalizeSessionToken(" header.payload.signature ")).toBe(
@@ -29,9 +20,12 @@ describe("normalizeSessionToken", () => {
 
   describe("rejects invalid types", () => {
     it("rejects non-string values", () => {
-      for (const value of [null, undefined, 123, {}, [], true] as unknown[]) {
-        expect(normalizeSessionToken(value)).toBeNull();
-      }
+      expect(normalizeSessionToken(null)).toBeNull();
+      expect(normalizeSessionToken(undefined)).toBeNull();
+      expect(normalizeSessionToken(123)).toBeNull();
+      expect(normalizeSessionToken({})).toBeNull();
+      expect(normalizeSessionToken([])).toBeNull();
+      expect(normalizeSessionToken(true)).toBeNull();
     });
   });
 
@@ -48,22 +42,12 @@ describe("normalizeSessionToken", () => {
 
   describe("enforces maximum length", () => {
     it("accepts valid token exactly 4096 characters long", () => {
-      const token4096 =
-        "a".repeat(TOKEN_SEGMENT_LENGTH) +
-        "." +
-        "b".repeat(TOKEN_SEGMENT_LENGTH) +
-        "." +
-        "c".repeat(MAX_TOKEN_THIRD_SEGMENT_LENGTH);
+      const token4096 = "a".repeat(1000) + "." + "b".repeat(1000) + "." + "c".repeat(2094);
       expect(normalizeSessionToken(token4096)).toBe(token4096);
     });
 
     it("rejects token exceeding 4096 characters", () => {
-      const token4097 =
-        "a".repeat(TOKEN_SEGMENT_LENGTH) +
-        "." +
-        "b".repeat(TOKEN_SEGMENT_LENGTH) +
-        "." +
-        "c".repeat(MAX_TOKEN_THIRD_SEGMENT_LENGTH + 1);
+      const token4097 = "a".repeat(1000) + "." + "b".repeat(1000) + "." + "c".repeat(2095);
       expect(normalizeSessionToken(token4097)).toBeNull();
     });
   });

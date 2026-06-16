@@ -301,7 +301,7 @@ const SearchResultItemComponent = memo(function SearchResultItemComponent({
 
 export function SearchLayout() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
   const [activeFilter, setActiveFilter] = useState<ResultFilter>("all");
   const [results, setResults] = useState<SearchResultItem[]>([]);
@@ -506,8 +506,8 @@ export function SearchLayout() {
               aria-hidden="true"
             />
             <input
-              ref={inputRef}
               id="search-input"
+              ref={searchInputRef}
               type="text"
               inputMode="search"
               role="searchbox"
@@ -522,9 +522,9 @@ export function SearchLayout() {
                 type="button"
                 onClick={() => {
                   setQuery("");
-                  inputRef.current?.focus();
+                  searchInputRef.current?.focus();
                 }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 aria-label="검색어 지우기"
               >
                 <X className="size-4" aria-hidden="true" />
