@@ -123,7 +123,6 @@ def test_tenant_config_endpoint(client, mock_db, monkeypatch):
 
     get_response = client.get(
         "/api/config",
-        params={"user_id": "test_user"},
         headers={"X-User-Id": "test_user"},
     )
     assert get_response.status_code == 200
@@ -253,12 +252,10 @@ def test_legacy_tenant_config_endpoint_keeps_organization_scope(
 
     acme_get = client.get(
         "/api/config",
-        params={"user_id": "shared_user"},
         headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-acme"},
     )
     rival_get = client.get(
         "/api/config",
-        params={"user_id": "shared_user"},
         headers={"X-User-Id": "shared_user", "X-Organization-Id": "org-rival"},
     )
 
@@ -445,10 +442,11 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
 @pytest.mark.parametrize(
     "admin_role", ("system_admin", "platform_admin", "tenant_admin")
 )
-def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
+def test_tenant_config_get_returns_own_config_for_admin(client, admin_role):
+    # GET /api/config always scopes to the authenticated session user_id.
+    # Admins may not pass a different user_id to read another user's config.
     response = client.get(
         "/api/config",
-        params={"user_id": "member-user"},
         headers={
             "X-User-Id": "admin",
             "X-User-Role": admin_role,
@@ -456,20 +454,8 @@ def test_tenant_config_get_rejects_cross_user_admin_access(client, admin_role):
         },
     )
 
-    assert response.status_code == 403
-    assert response.json() == {
-        "detail": "Mailbox settings are personal and can only be viewed by the authenticated user"
-    }
-
-
-def test_tenant_config_get_rejects_sql_shaped_user_id(client):
-    response = client.get(
-        "/api/config",
-        params={"user_id": "member-user' OR '1'='1"},
-        headers={"X-User-Id": "member-user' OR '1'='1"},
-    )
-
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["user_id"] == "admin"
 
 
 @pytest.mark.parametrize(
@@ -598,7 +584,7 @@ async def test_create_read_pop3_postgres_smoke(monkeypatch):
                     },
                 )
                 get_response = await real_client.get(
-                    "/api/config", params={"user_id": user_id}
+                    "/api/config",
                 )
         finally:
             if previous_db_override is None:
