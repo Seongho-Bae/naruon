@@ -290,10 +290,10 @@ def _read_eml_bytes(eml_path: Path) -> bytes:
     if no_follow_flag is None:
         raise EmailParseError("Failed to read email file")
 
-    secure_read_flags = os.O_RDONLY | no_follow_flag
+    open_flags = os.O_RDONLY | no_follow_flag
     file_descriptor_transferred = False
     try:
-        file_descriptor = os.open(eml_path, secure_read_flags)
+        file_descriptor = os.open(eml_path, open_flags)
     except OSError as exc:
         raise EmailParseError("Failed to read email file") from exc
 
