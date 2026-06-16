@@ -35,6 +35,7 @@ def db_session():
     TenantConfig.__table__.create(engine)
     with Session(engine) as session:
         yield session
+    engine.dispose()
 
 
 def test_tenant_config_model_exists():

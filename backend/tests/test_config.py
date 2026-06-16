@@ -152,6 +152,15 @@ def test_production_settings_reject_repeated_auth_session_hmac_secret(monkeypatc
         _settings_without_env_file()
 
 
+def test_production_settings_reject_low_entropy_auth_session_hmac_secret(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///tmp/test.db")
+    monkeypatch.setenv("RUNTIME_ENVIRONMENT", "production")
+    monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", "abcd" * 8)
+
+    with pytest.raises(ValidationError, match="must have higher entropy"):
+        _settings_without_env_file()
+
+
 def test_settings_reject_public_auth_session_hmac_fixture(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL", "postgresql+asyncpg://test:test@localhost:5432/test_db"
