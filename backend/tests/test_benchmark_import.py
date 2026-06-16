@@ -28,5 +28,5 @@ async def test_benchmark_async_io(tmp_path: Path):
     await asyncio.gather(*[task_to_thread() for _ in range(50)])
     thread_time = time.perf_counter() - start
 
-    assert sync_time >= 0.4
+    assert sync_time > thread_time * 2
     assert thread_time < sync_time
