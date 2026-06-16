@@ -1,4 +1,3 @@
-from db.models import TenantConfig
 from services.tenant_config_scope import tenant_config_owner_filters
 
 def test_tenant_config_owner_filters_with_org():
