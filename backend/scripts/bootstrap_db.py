@@ -420,9 +420,9 @@ def schema_backfill_sql() -> list[Executable]:
     return statements
 
 
-def _execute_statements(conn: Connection, statements: Sequence[Executable]) -> None:
-    for statement in statements:
-        conn.execute(statement)
+def _execute_statements(conn: Connection, sqla_executables: Sequence[Executable]) -> None:
+    for executable_obj in sqla_executables:
+        conn.execute(executable_obj)
 
 
 async def bootstrap_db() -> None:
