@@ -38,6 +38,7 @@ const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MAX_QUERY_PARAM_COUNT = 12;
 const MAX_QUERY_PARAM_VALUE_LENGTH = 2048;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+const TOKEN_WHITESPACE_PATTERN = /\s/;
 
 type ApiRouteContext = {
   params: Promise<{ path?: string[] }> | { path?: string[] };
@@ -106,16 +107,17 @@ function hasBearerAuthorizationHeader(request: NextRequest): boolean {
     return false;
   }
   const token = authorization.slice("Bearer ".length);
-  return token.length > 0 && !/\s/.test(token);
+  return token.length > 0 && !TOKEN_WHITESPACE_PATTERN.test(token);
 }
 
 async function proxyApiRequest(
   request: NextRequest,
   context: ApiRouteContext,
 ): Promise<NextResponse> {
-  if (!SAFE_HTTP_METHODS.has(request.method.toUpperCase()) && !hasBearerAuthorizationHeader(request)) {
+  const method = request.method;
+  if (!SAFE_HTTP_METHODS.has(method) && !hasBearerAuthorizationHeader(request)) {
     console.warn("Rejected unsigned unsafe API proxy request", {
-      method: request.method,
+      method,
       route: "/api/[...path]",
     });
     return NextResponse.json(

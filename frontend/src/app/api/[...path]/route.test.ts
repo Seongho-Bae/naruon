@@ -119,7 +119,7 @@ describe("/api runtime proxy route", () => {
   it("rejects unsigned unsafe requests before proxying", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const consoleWarnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const consoleWarnMock = vi.spyOn(console, "warn").mockImplementation(vi.fn());
 
     const request = new NextRequest(
       "https://frontend.naruon.net/api/login",
