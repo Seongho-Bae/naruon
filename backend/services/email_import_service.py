@@ -288,7 +288,7 @@ async def _import_single_eml(
 def _read_eml_bytes(eml_path: Path) -> bytes:
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if no_follow_flag is None:
-        raise EmailParseError("Failed to read email file")
+        raise EmailParseError("Email file read protection unavailable on this platform")
 
     open_flags = os.O_RDONLY | no_follow_flag
     file_descriptor_transferred = False
@@ -312,15 +312,6 @@ def _read_eml_bytes(eml_path: Path) -> bytes:
             os.close(file_descriptor)
 
 
-def _is_regular_eml_path(path: Path) -> bool:
-    if path.suffix.lower() != ".eml":
-        return False
-    try:
-        return stat.S_ISREG(path.lstat().st_mode)
-    except OSError:
-        return False
-
-
 async def _eml_paths_for_upload(
     *,
     upload: EmailImportUpload,
@@ -342,7 +333,7 @@ async def _eml_paths_for_upload(
     except ArchiveError:
         return [], "archive_extract_failed"
 
-    eml_paths = [path for path in extracted_paths if _is_regular_eml_path(path)]
+    eml_paths = [path for path in extracted_paths if path.suffix.lower() == ".eml"]
     if not eml_paths:
         return [], "archive_contains_no_eml"
     if len(eml_paths) > MAX_IMPORT_EML_FILES:
