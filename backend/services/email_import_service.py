@@ -288,7 +288,9 @@ async def _import_single_eml(
 def _read_eml_bytes(eml_path: Path) -> bytes:
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if no_follow_flag is None:
-        raise EmailParseError("Email file read protection unavailable on this platform")
+        raise EmailParseError(
+            "Email import requires O_NOFOLLOW support (unavailable on this platform)"
+        )
 
     open_flags = os.O_RDONLY | no_follow_flag
     file_descriptor_transferred = False
@@ -333,6 +335,7 @@ async def _eml_paths_for_upload(
     except ArchiveError:
         return [], "archive_extract_failed"
 
+    # _read_eml_bytes() performs the final no-follow regular-file validation.
     eml_paths = [path for path in extracted_paths if path.suffix.lower() == ".eml"]
     if not eml_paths:
         return [], "archive_contains_no_eml"
