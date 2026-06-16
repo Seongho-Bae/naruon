@@ -28,7 +28,10 @@ on:
         type: string
 
 concurrency:
-  group: strix-${{ github.repository }}
+  # Scope per PR for pull_request_target and manual PR dispatch so multiple
+  # PRs can run concurrently without displacing each other from the queue.
+  # push/schedule/workflow_dispatch without a PR number share a per-ref slot.
+  group: strix-${{ github.repository }}-${{ github.event_name == 'pull_request_target' && github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
   # cancel-in-progress deliberately disabled: an attacker could force-push
   # a benign commit to cancel an in-progress scan of a malicious commit.
   cancel-in-progress: false
