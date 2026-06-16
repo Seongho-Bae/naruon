@@ -12,7 +12,11 @@ from api.auth import AuthContext, get_auth_context, is_admin_role, is_tenant_adm
 from api.runner_config import _connector_manifest
 from api.runner_ws import manager as runner_connection_manager
 from core.config import settings
-from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
+from db.models import (
+    ConnectorSignalEvent,
+    ProviderWritebackRetryItem,
+    WorkspaceRunnerConfig,
+)
 from db.session import get_db
 
 router = APIRouter(prefix="/api/observability", tags=["observability"])
@@ -25,6 +29,7 @@ SignalState = Literal[
     "registration_configured",
     "not_registered",
 ]
+QueueDepthState = Literal["clear", "backlog", "degraded"]
 
 
 class TelemetryRuntime(BaseModel):
@@ -42,6 +47,14 @@ class ConnectorSignalEventResponse(BaseModel):
     observed_at: str
 
 
+class ProviderWritebackQueueDepth(BaseModel):
+    pending_count: int
+    running_count: int
+    failed_count: int
+    total_count: int
+    next_retry_at: str | None
+
+
 class ConnectorOperationalState(BaseModel):
     workspace_id: str
     registration_state: Literal["registration_configured", "not_registered"]
@@ -53,7 +66,8 @@ class ConnectorOperationalState(BaseModel):
     local_protocols: list[str]
     last_heartbeat_at: str | None
     last_disconnect_at: str | None
-    queue_depth_state: Literal["not_reported"]
+    queue_depth_state: QueueDepthState
+    queue_depth: ProviderWritebackQueueDepth
     recent_events: list[ConnectorSignalEventResponse]
 
 
@@ -170,6 +184,51 @@ async def _get_connector_signal_events(
     ]
 
 
+async def _get_writeback_retry_items(
+    db: AsyncSession,
+    organization_id: str,
+    workspace_id: str,
+) -> list[ProviderWritebackRetryItem]:
+    result = await db.execute(
+        select(ProviderWritebackRetryItem).where(
+            ProviderWritebackRetryItem.organization_id == organization_id,
+            ProviderWritebackRetryItem.workspace_id == workspace_id,
+        )
+    )
+    return list(result.scalars().all())
+
+
+def _queue_depth(
+    retry_items: list[ProviderWritebackRetryItem],
+) -> tuple[QueueDepthState, ProviderWritebackQueueDepth]:
+    pending_items = [item for item in retry_items if item.retry_state == "pending"]
+    running_items = [item for item in retry_items if item.retry_state == "running"]
+    failed_items = [
+        item for item in retry_items if item.retry_state.startswith("failed")
+    ]
+    next_retry_candidates = sorted(
+        item.next_retry_at for item in pending_items if item.next_retry_at is not None
+    )
+    total_count = len(pending_items) + len(running_items) + len(failed_items)
+    if failed_items:
+        state: QueueDepthState = "degraded"
+    elif pending_items or running_items:
+        state = "backlog"
+    else:
+        state = "clear"
+    return state, ProviderWritebackQueueDepth(
+        pending_count=len(pending_items),
+        running_count=len(running_items),
+        failed_count=len(failed_items),
+        total_count=total_count,
+        next_retry_at=(
+            _datetime_to_utc_iso(next_retry_candidates[0])
+            if next_retry_candidates
+            else None
+        ),
+    )
+
+
 def _telemetry_runtime() -> TelemetryRuntime:
     otel_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     otel_endpoint_configured = bool(otel_endpoint and otel_endpoint.strip())
@@ -186,6 +245,7 @@ def _connector_state(
     workspace_id: str,
     config: WorkspaceRunnerConfig | None,
     recent_events: list[ConnectorSignalEventResponse],
+    retry_items: list[ProviderWritebackRetryItem],
 ) -> ConnectorOperationalState:
     manifest = _connector_manifest()
     connection_snapshot = runner_connection_manager.snapshot(
@@ -202,6 +262,7 @@ def _connector_state(
         if config is not None and bool(config.registration_token)
         else "not_registered"
     )
+    queue_depth_state, queue_depth = _queue_depth(retry_items)
     return ConnectorOperationalState(
         workspace_id=config.workspace_id if config is not None else workspace_id,
         registration_state=registration_state,
@@ -217,7 +278,8 @@ def _connector_state(
         ),
         last_disconnect_at=connection_snapshot.last_disconnect_at
         or _latest_event_time(recent_events, "connector_heartbeat", {"disconnected"}),
-        queue_depth_state="not_reported",
+        queue_depth_state=queue_depth_state,
+        queue_depth=queue_depth,
         recent_events=recent_events,
     )
 
@@ -252,6 +314,15 @@ def _operational_signals(
             state="enabled" if connector.connection_state == "connected" else connector.registration_state,
             evidence_source="runner WebSocket manager and workspace_runner_configs.registration_token",
             detail="Live heartbeat uses active outbound runner sockets and durable connector_signal_events history.",
+        ),
+        OperationalSignal(
+            signal_key="writeback_retry_queue",
+            display_name="Writeback retry queue",
+            state="enabled",
+            evidence_source="provider_writeback_retry_items",
+            detail=(
+                f"{connector.queue_depth.total_count} queued writeback retry items are tracked by state."
+            ),
         ),
         OperationalSignal(
             signal_key="sync_lag",
@@ -305,8 +376,19 @@ async def get_operational_signals(
     recent_events = await _get_connector_signal_events(
         db, organization_id, connector_workspace_id
     )
+    retry_items = await _get_writeback_retry_items(
+        db,
+        organization_id,
+        connector_workspace_id,
+    )
     telemetry = _telemetry_runtime()
-    connector = _connector_state(organization_id, workspace_id, config, recent_events)
+    connector = _connector_state(
+        organization_id,
+        workspace_id,
+        config,
+        recent_events,
+        retry_items,
+    )
     return OperationalSignalsResponse(
         workspace_id=connector.workspace_id,
         audit_event="observability.operational_signals.viewed",

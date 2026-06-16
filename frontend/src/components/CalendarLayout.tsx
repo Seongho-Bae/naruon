@@ -15,6 +15,12 @@ type CalendarWritebackIntentResponse = {
   if_match: string | null;
   provenance: Record<string, string>;
   audit_event: string;
+  provider_write_executed: boolean;
+  status: string;
+  runner_request_id: string | null;
+  provider_status: number | null;
+  error_code: string | null;
+  retry_item_uid?: string | null;
 };
 
 type CalendarWritebackSource = {
@@ -29,6 +35,66 @@ type CalendarWritebackSource = {
 };
 
 type WritebackStatus = 'idle' | 'loading' | 'success' | 'no_source' | 'conflict' | 'auth' | 'error';
+
+const calendarDefinitions = [
+  { id: 'personal', name: '김나루 (나)', colorClass: 'bg-primary' },
+  { id: 'pm-team', name: 'Naruon PM 팀', colorClass: 'bg-red-500' },
+  { id: 'product-team', name: '제품 개발팀', colorClass: 'bg-green-500' },
+  { id: 'marketing', name: '마케팅팀', colorClass: 'bg-purple-500' },
+  { id: 'company', name: '회사 공용', colorClass: 'bg-indigo-500' },
+  { id: 'holiday', name: '공휴일', colorClass: 'bg-slate-400' },
+];
+
+const calendarMonthEvents = [
+  {
+    id: 'product-review',
+    calendarId: 'product-team',
+    dayIndex: 15,
+    time: '10:00',
+    title: '제품 리뷰',
+    source: '제품 개발팀',
+    description: '제품 개발팀 일정 원본의 리뷰 일정입니다.',
+    monthClassName: 'bg-green-100 text-green-700',
+    dotClassName: 'bg-green-500',
+    badgeClassName: 'bg-green-100 text-green-700',
+    badgeLabel: '팀 일정',
+    duration: '1시간',
+    location: '회의실 B (3층)',
+  },
+  {
+    id: 'launch-meeting',
+    calendarId: 'pm-team',
+    dayIndex: 22,
+    time: '09:30',
+    title: '출시 회의',
+    source: 'Naruon PM 팀',
+    description: 'Naruon 2.0 출시 준비 및 일정 공유',
+    monthClassName: 'bg-orange-100 text-orange-700',
+    dotClassName: 'bg-orange-500',
+    badgeClassName: 'bg-orange-100 text-orange-700',
+    badgeLabel: '중요',
+    duration: '1시간 30분',
+    location: '회의실 A (4층)',
+  },
+];
+
+const calendarWeekEvents = [
+  { id: 'week-product-review', calendarId: 'product-team', day: '월', title: '제품 리뷰', source: '제품 개발팀' },
+  { id: 'week-partner-meeting', calendarId: 'personal', day: '화', title: '파트너 미팅 후보', source: '김나루 (나)' },
+  { id: 'week-resource-review', calendarId: 'company', day: '수', title: '리소스 배정 검토', source: '회사 공용' },
+  { id: 'week-launch-meeting', calendarId: 'pm-team', day: '목', title: '출시 회의', source: 'Naruon PM 팀' },
+  { id: 'week-marketing-kickoff', calendarId: 'marketing', day: '금', title: '마케팅 캠페인 오프', source: '마케팅팀' },
+];
+
+const calendarCandidateEvents = [
+  { id: 'candidate-partner', calendarId: 'personal', title: '파트너 미팅 일정 확정', source: '김나루 (나)', mode: '새 일정 반영 의도' },
+  { id: 'candidate-launch', calendarId: 'pm-team', title: '출시 회의 시간 변경', source: 'Naruon PM 팀', mode: '충돌 검사 후 변경 의도' },
+  { id: 'candidate-company', calendarId: 'company', title: '개인 메일에서 발견된 회사 일정', source: '회사 공용', mode: '원본 재지정 검토' },
+];
+
+function buildInitialCalendarVisibility() {
+  return Object.fromEntries(calendarDefinitions.map((calendar) => [calendar.id, true]));
+}
 
 function isCustomerOwnedWritableSource(source: CalendarWritebackSource) {
   return source.writeback_enabled
@@ -78,6 +144,19 @@ function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_
   return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
 }
 
+function getProviderExecutionLabel(result: CalendarWritebackIntentResponse) {
+  if (result.provider_write_executed) return '외부 원본 쓰기 완료';
+  if (result.retry_item_uid || result.status === 'queued') return '커넥터 실행 요청 접수';
+  if (result.error_code) return '커넥터 실행 실패';
+  return '의도만 기록';
+}
+
+function getProviderRetryLabel(result: CalendarWritebackIntentResponse) {
+  if (result.retry_item_uid || result.status === 'queued') return '재시도 대기';
+  if (result.provider_write_executed) return '재시도 없음';
+  return '실행 요청 없음';
+}
+
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
   if (typeof shapedError?.status === 'number') return shapedError.status;
@@ -92,6 +171,36 @@ export function CalendarLayout() {
   const [writebackSources, setWritebackSources] = useState<CalendarWritebackSource[]>([]);
   const [sourceLoadStatus, setSourceLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const [calendarVisibility, setCalendarVisibility] = useState<Record<string, boolean>>(() => buildInitialCalendarVisibility());
+
+  const visibleCalendarIds = useMemo(() => {
+    return new Set(
+      calendarDefinitions
+        .filter((calendar) => calendarVisibility[calendar.id] ?? false)
+        .map((calendar) => calendar.id),
+    );
+  }, [calendarVisibility]);
+
+  const visibleMonthEvents = useMemo(
+    () => calendarMonthEvents.filter((event) => visibleCalendarIds.has(event.calendarId)),
+    [visibleCalendarIds],
+  );
+  const visibleWeekEvents = useMemo(
+    () => calendarWeekEvents.filter((event) => visibleCalendarIds.has(event.calendarId)),
+    [visibleCalendarIds],
+  );
+  const visibleCandidateEvents = useMemo(
+    () => calendarCandidateEvents.filter((event) => visibleCalendarIds.has(event.calendarId)),
+    [visibleCalendarIds],
+  );
+  const selectedDetailEvent = visibleMonthEvents.find((event) => event.id === 'launch-meeting') ?? visibleMonthEvents[0] ?? null;
+
+  const toggleCalendarVisibility = useCallback((calendarId: string) => {
+    setCalendarVisibility((currentVisibility) => ({
+      ...currentVisibility,
+      [calendarId]: !(currentVisibility[calendarId] ?? false),
+    }));
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,7 +230,7 @@ export function CalendarLayout() {
   }, [selectedSourceId, writebackSources]);
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
-  const requestWritebackIntent = useCallback(async (action: 'create' | 'update') => {
+  const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -141,6 +250,7 @@ export function CalendarLayout() {
           ? 'Naruon 일정 후보 writeback intent 점검'
           : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
         ...(selectedWritebackSource ? { target_source_id: selectedWritebackSource.source_id } : {}),
+        ...(executeProvider ? { execute_provider: true } : {}),
       });
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -160,6 +270,7 @@ export function CalendarLayout() {
 
   const isWritebackLoading = writebackStatus === 'loading';
   const isWritebackActionDisabled = isWritebackLoading || !isSourceRegistryReady;
+  const isProviderExecutionDisabled = isWritebackActionDisabled || !selectedWritebackSource?.etag;
 
   return (
     <div className="flex h-full min-h-0 bg-background text-foreground">
@@ -174,17 +285,19 @@ export function CalendarLayout() {
             <h2 className="text-xs font-bold text-muted-foreground">캘린더 목록</h2>
           </div>
           <ul className="space-y-3">
-            {[
-              { name: '김나루 (나)', color: 'bg-primary' },
-              { name: 'Naruon PM 팀', color: 'bg-red-500' },
-              { name: '제품 개발팀', color: 'bg-green-500' },
-              { name: '마케팅팀', color: 'bg-purple-500' },
-              { name: '회사 공용', color: 'bg-indigo-500' },
-              { name: '공휴일', color: 'bg-slate-400' },
-            ].map((cal) => (
-              <li key={cal.name} className="flex items-center gap-3 text-sm">
-                <input type="checkbox" defaultChecked className={`size-4 rounded border-border text-primary focus:ring-primary`} style={{ accentColor: cal.color }} />
-                <span className="font-medium text-foreground">{cal.name}</span>
+            {calendarDefinitions.map((cal) => (
+              <li key={cal.name} className="text-sm">
+                <label className="flex cursor-pointer items-center gap-3 group">
+                  <input
+                    type="checkbox"
+                    checked={calendarVisibility[cal.id] ?? false}
+                    onChange={() => toggleCalendarVisibility(cal.id)}
+                    className="size-4 cursor-pointer rounded border-border text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                    aria-label={`${cal.name} 캘린더 표시 토글`}
+                  />
+                  <span className={`size-3 rounded-full ${cal.colorClass}`} aria-hidden="true" />
+                  <span className="font-medium text-foreground transition-colors group-hover:text-primary">{cal.name}</span>
+                </label>
               </li>
             ))}
           </ul>
@@ -211,8 +324,9 @@ export function CalendarLayout() {
               {['월간 캘린더', '주간 캘린더', '일정 상세', '회의 조율', '일정 후보'].map((mode) => (
                 <button type="button"
                   key={mode}
+                  aria-pressed={viewMode === mode}
                   onClick={() => setViewMode(mode as '월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보')}
-                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
+                  className={`shrink-0 px-4 py-1.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1 focus-visible:ring-offset-background ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-secondary'}`}
                 >
                   {mode}
                 </button>
@@ -252,6 +366,14 @@ export function CalendarLayout() {
                   className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   ETag 업데이트 점검
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void requestWritebackIntent('update', true)}
+                  disabled={isProviderExecutionDisabled}
+                  className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                >
+                  ETag 실행 요청
                 </button>
               </div>
             </div>
@@ -349,6 +471,14 @@ export function CalendarLayout() {
                     <dt className="font-black text-muted-foreground">감사 근거</dt>
                     <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
                   </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">커넥터 실행</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">재시도 상태</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
+                  </div>
                 </dl>
               )}
             </div>
@@ -361,21 +491,19 @@ export function CalendarLayout() {
               </div>
               <div className="grid grid-cols-7 grid-rows-5 flex-1 divide-x divide-y divide-border">
                 {/* Simulated Grid Cells */}
-                {Array.from({ length: 35 }).map((_, i) => (
-                  <div key={i} className="min-h-[84px] p-2 sm:min-h-[100px]">
-                    <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
-                    {i === 15 && (
-                      <div className="mt-1 rounded bg-green-100 px-1.5 py-1 text-[10px] font-semibold leading-tight text-green-700 sm:px-2 sm:text-xs">
-                        10:00<span className="hidden sm:inline"> 제품 리뷰</span>
-                      </div>
-                    )}
-                    {i === 22 && (
-                      <div className="mt-1 rounded bg-orange-100 px-1.5 py-1 text-[10px] font-semibold leading-tight text-orange-700 sm:px-2 sm:text-xs">
-                        09:30<span className="hidden sm:inline"> 출시 회의</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                {Array.from({ length: 35 }).map((_, i) => {
+                  const dayEvents = visibleMonthEvents.filter((event) => event.dayIndex === i);
+                  return (
+                    <div key={i} className="min-h-[84px] p-2 sm:min-h-[100px]">
+                      <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
+                      {dayEvents.map((event) => (
+                        <div key={event.id} className={`mt-1 rounded px-1.5 py-1 text-[10px] font-semibold leading-tight sm:px-2 sm:text-xs ${event.monthClassName}`}>
+                          {event.time}<span className="hidden sm:inline"> {event.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -383,29 +511,28 @@ export function CalendarLayout() {
             <section aria-label="주간 캘린더" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <h3 className="text-lg font-bold">주간 캘린더</h3>
               <div className="mt-4 grid gap-3 md:grid-cols-5">
-                {[
-                  ['월', '제품 리뷰', '고객 일정 원본'],
-                  ['화', '파트너 미팅 후보', '영업 일정 원본'],
-                  ['수', '리소스 배정 검토', '팀 일정 원본'],
-                  ['목', '출시 회의', '고객 일정 원본'],
-                  ['금', '마케팅 캠페인 오프', '마케팅 일정 원본'],
-                ].map(([day, title, source]) => (
-                  <article key={day} className="rounded-xl border border-border bg-background p-4">
-                    <p className="text-xs font-black text-primary">{day}</p>
-                    <h4 className="mt-2 text-sm font-bold">{title}</h4>
-                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{source}</p>
+                {visibleWeekEvents.map((event) => (
+                  <article key={event.id} className="rounded-xl border border-border bg-background p-4">
+                    <p className="text-xs font-black text-primary">{event.day}</p>
+                    <h4 className="mt-2 text-sm font-bold">{event.title}</h4>
+                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{event.source}</p>
                   </article>
                 ))}
+                {visibleWeekEvents.length === 0 && (
+                  <p className="rounded-xl border border-border bg-background p-4 text-sm font-bold text-muted-foreground">
+                    표시 중인 캘린더 일정이 없습니다.
+                  </p>
+                )}
               </div>
             </section>
           )}
           {viewMode === '일정 상세' && (
             <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-lg font-bold">출시 회의 상세</h3>
+              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} 상세` : '일정 상세'}</h3>
               <dl className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
-                  <dd className="mt-2 text-sm font-bold">고객 일정 원본 · 충돌 토큰 확인</dd>
+                  <dd className="mt-2 text-sm font-bold">{selectedDetailEvent ? `${selectedDetailEvent.source} · 충돌 토큰 확인` : '표시 중인 원본 없음'}</dd>
                 </div>
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">충돌 제어</dt>
@@ -448,17 +575,18 @@ export function CalendarLayout() {
             <section aria-label="일정 후보" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <h3 className="text-lg font-bold">일정 후보</h3>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                {[
-                  ['파트너 미팅 일정 확정', '고객 일정 원본', '새 일정 반영 의도'],
-                  ['출시 회의 시간 변경', '팀 일정 원본', '충돌 검사 후 변경 의도'],
-                  ['개인 메일에서 발견된 회사 일정', '회사 일정 원본', '원본 재지정 검토'],
-                ].map(([title, source, mode]) => (
-                  <article key={title} className="rounded-xl border border-border bg-background p-4">
-                    <h4 className="text-sm font-bold">{title}</h4>
-                    <p className="mt-2 text-xs text-muted-foreground">{source}</p>
-                    <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{mode}</p>
+                {visibleCandidateEvents.map((event) => (
+                  <article key={event.id} className="rounded-xl border border-border bg-background p-4">
+                    <h4 className="text-sm font-bold">{event.title}</h4>
+                    <p className="mt-2 text-xs text-muted-foreground">{event.source}</p>
+                    <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{event.mode}</p>
                   </article>
                 ))}
+                {visibleCandidateEvents.length === 0 && (
+                  <p className="rounded-xl border border-border bg-background p-4 text-sm font-bold text-muted-foreground">
+                    표시 중인 캘린더 후보가 없습니다.
+                  </p>
+                )}
               </div>
             </section>
           )}
@@ -469,7 +597,9 @@ export function CalendarLayout() {
       <aside className="w-[340px] shrink-0 flex-col overflow-y-auto border-l border-border bg-card p-5 hidden xl:flex">
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
-            <span className="rounded-md bg-orange-100 px-2 py-1 text-xs font-bold text-orange-700">★ 중요</span>
+            <span className={`rounded-md px-2 py-1 text-xs font-bold ${selectedDetailEvent?.badgeClassName ?? 'bg-secondary text-muted-foreground'}`}>
+              {selectedDetailEvent ? `★ ${selectedDetailEvent.badgeLabel}` : '선택 없음'}
+            </span>
             <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
           </div>
           <div className="flex items-center gap-2">
@@ -479,24 +609,24 @@ export function CalendarLayout() {
         
         <div className="mt-6">
           <div className="flex items-center gap-3">
-            <div className="size-4 rounded-full bg-orange-500"></div>
-            <h2 className="text-xl font-bold">출시 회의 (Naruon 2.0)</h2>
+            <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
+            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">Naruon 2.0 출시 준비 및 일정 공유</p>
+          <p className="mt-2 text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
         </div>
 
         <div className="mt-6 space-y-5">
           <div className="flex gap-3">
             <Clock className="size-5 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-sm font-semibold">2026.05.23 (목) 09:30 - 11:00</p>
-              <p className="text-xs text-muted-foreground">1시간 30분</p>
+              <p className="text-sm font-semibold">2026.05.23 (목) {selectedDetailEvent?.time ?? '--:--'} - 11:00</p>
+              <p className="text-xs text-muted-foreground">{selectedDetailEvent?.duration ?? '일정 없음'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-center">
             <Video className="size-5 text-muted-foreground shrink-0" />
-            <p className="text-sm font-semibold">회의실 A (4층)</p>
-            <button type="button" className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
+            <p className="text-sm font-semibold">{selectedDetailEvent?.location ?? '장소 없음'}</p>
+            <button type="button" aria-label={`${selectedDetailEvent?.location ?? '장소'} 위치 보기`} className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
           </div>
           <div className="flex gap-3 items-start">
             <Users className="size-5 text-muted-foreground shrink-0" />
@@ -514,7 +644,7 @@ export function CalendarLayout() {
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-sm font-semibold mb-1">설명</p>
-              <p className="text-sm text-muted-foreground">Naruon 2.0 출시 전 최종 점검 및 공유, 각 파트별 일정 및 역할 확인.</p>
+              <p className="text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '표시할 일정 설명이 없습니다.'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-start">
@@ -536,9 +666,9 @@ export function CalendarLayout() {
         </div>
 
         <div className="mt-8 flex gap-3">
-          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
-          <button type="button" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
-          <button type="button" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
+          <button type="button" aria-label="출시 회의 일정 삭제" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">삭제</button>
+          <button type="button" aria-label="출시 회의 일정 복사" className="flex-1 rounded-lg border border-border bg-background py-2 text-sm font-bold shadow-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">복사</button>
+          <button type="button" aria-label="출시 회의 일정 수정" className="flex-1 rounded-lg bg-primary py-2 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">수정</button>
         </div>
       </aside>
     </div>

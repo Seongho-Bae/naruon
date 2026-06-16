@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from db.models import LLMProvider
 from main import app
 from db.session import get_db
+from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -206,7 +207,37 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
-def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
+def test_search_falls_back_to_full_text_when_embedding_provider_fails(
+    mock_generate_embeddings,
+):
+    mock_generate_embeddings.side_effect = EmbeddingGenerationError(
+        "Failed to generate embeddings: invalid provider key"
+    )
+    session = CapturingMockSession()
+
+    async def override_scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_scoped_db
+    try:
+        with TestClient(
+            app,
+            headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+        ) as client:
+            response = client.post("/api/search", json={"query": "test query"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["results"]) == 1
+    query_text = str(session.statements[-1]).lower()
+    assert "ts_rank_cd" in query_text
+    assert "<=>" not in query_text
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
+def test_search_pads_local_embedding_dimension_for_vector_search(
     mock_generate_embeddings,
 ):
     mock_generate_embeddings.return_value = [[0.1] * 768]
@@ -228,4 +259,4 @@ def test_search_falls_back_to_text_rank_when_embedding_dimension_mismatches(
     assert response.status_code == 200
     query_text = str(session.statements[-1]).lower()
     assert "ts_rank_cd" in query_text
-    assert "<=>" not in query_text
+    assert "<=>" in query_text

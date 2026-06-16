@@ -1211,6 +1211,7 @@ EOF
 	if [ "$needs_deployment_context" -eq 1 ]; then
 		cat <<'EOF'
 Dockerfile
+backend/scripts/docker_entrypoint.sh
 frontend/Dockerfile
 frontend/package.json
 frontend/package-lock.json

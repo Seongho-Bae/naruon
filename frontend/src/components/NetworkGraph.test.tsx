@@ -95,6 +95,39 @@ describe("NetworkGraph", () => {
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
   });
 
+  it("escapes graph labels before passing them to vis-network while keeping React text plain", async () => {
+    const maliciousLabel = '<img src=x onerror="globalThis.__xss = true">';
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [{ id: "n1", label: maliciousLabel, title: "Node" }],
+          edges: [{ from: "n1", to: "n1" }],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+    await flushAsyncWork();
+
+    expect(Network).toHaveBeenCalledTimes(1);
+    const networkData = vi.mocked(Network).mock.calls[0]?.[1];
+    const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
+
+    expect(nodes[0]?.label).toBe(
+      '&lt;img src=x onerror=&quot;globalThis.__xss = true&quot;&gt;',
+    );
+    expect(nodes[0]?.label).not.toContain("<img");
+    expect(container.innerHTML).not.toContain("<img");
+    expect(container.textContent).toContain(maliciousLabel);
+  });
+
   it("renders a Korean text fallback for graph relationships", async () => {
     const fetchMock = vi.fn(() =>
       Promise.resolve(
@@ -178,11 +211,22 @@ describe("NetworkGraph", () => {
     expect(resizeObserverCallback).not.toBeNull();
     expect(fitMock).toHaveBeenCalledTimes(0);
 
-    await act(async () => {
-      resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
-      await Promise.resolve();
-    });
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        resizeObserverCallback?.([] as ResizeObserverEntry[], {} as ResizeObserver);
+        vi.advanceTimersByTime(49);
+      });
 
-    expect(fitMock).toHaveBeenCalledTimes(1);
+      expect(fitMock).toHaveBeenCalledTimes(0);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      expect(fitMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

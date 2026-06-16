@@ -148,10 +148,6 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
-    window.localStorage.setItem(
-      "naruon_session_token",
-      "signed-search-session",
-    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -193,7 +189,8 @@ describe("SearchPage", () => {
       JSON.stringify({ query: "런칭 캠페인", limit: 8 }),
     );
     const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
-    expect(headers.authorization).toBe("Bearer signed-search-session");
+    expect(searchCall?.[1]?.credentials).toBe("same-origin");
+    expect(headers.authorization).toBeUndefined();
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -214,7 +211,8 @@ describe("SearchPage", () => {
     );
     expect(String(ontologyCall?.[0])).toContain("source_thread_id=thread-q2");
     const ontologyHeaders = lowerCaseHeaders(ontologyCall?.[1]?.headers);
-    expect(ontologyHeaders.authorization).toBe("Bearer signed-search-session");
+    expect(ontologyCall?.[1]?.credentials).toBe("same-origin");
+    expect(ontologyHeaders.authorization).toBeUndefined();
     for (const headerName of [
       "x-user-id",
       "x-organization-id",
@@ -261,10 +259,6 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
-    window.localStorage.setItem(
-      "naruon_session_token",
-      "signed-xss-snippet-session",
-    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -287,7 +281,8 @@ describe("SearchPage", () => {
     );
     expect(searchCall).toBeDefined();
     const headers = lowerCaseHeaders(searchCall?.[1]?.headers);
-    expect(headers.authorization).toBe("Bearer signed-xss-snippet-session");
+    expect(searchCall?.[1]?.credentials).toBe("same-origin");
+    expect(headers.authorization).toBeUndefined();
   });
 
   it("captures a source-backed sender DAG relationship through signed headers", async () => {
@@ -337,10 +332,6 @@ describe("SearchPage", () => {
       return Promise.resolve(jsonResponse({}, false, 404));
     });
     vi.stubGlobal("fetch", fetchMock);
-    window.localStorage.setItem(
-      "naruon_session_token",
-      "signed-capture-session",
-    );
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -372,7 +363,8 @@ describe("SearchPage", () => {
       JSON.stringify({ source_message_id: "<capture@example.com>" }),
     );
     const captureHeaders = lowerCaseHeaders(captureCall?.[1]?.headers);
-    expect(captureHeaders.authorization).toBe("Bearer signed-capture-session");
+    expect(captureCall?.[1]?.credentials).toBe("same-origin");
+    expect(captureHeaders.authorization).toBeUndefined();
     for (const headerName of [
       "x-user-id",
       "x-organization-id",

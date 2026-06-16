@@ -1,4 +1,34 @@
-FROM node:22-slim
+FROM node:24-slim
+
+ARG OCI_IMAGE_CREATED=""
+ARG OCI_IMAGE_AUTHORS="Seongho Bae"
+ARG OCI_IMAGE_URL="https://github.com/Seongho-Bae/naruon"
+ARG OCI_IMAGE_DOCUMENTATION="https://github.com/Seongho-Bae/naruon#readme"
+ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"
+ARG OCI_IMAGE_VERSION="0.14.3"
+ARG OCI_IMAGE_REVISION=""
+ARG OCI_IMAGE_VENDOR="Seongho-Bae"
+ARG OCI_IMAGE_LICENSES="LicenseRef-Naruon-Proprietary"
+ARG OCI_IMAGE_REF_NAME=""
+ARG OCI_IMAGE_TITLE="naruon frontend"
+ARG OCI_IMAGE_DESCRIPTION="Naruon Next.js frontend runtime image"
+ARG OCI_IMAGE_BASE_DIGEST=""
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:24-slim"
+
+LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
+      org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
+      org.opencontainers.image.url="${OCI_IMAGE_URL}" \
+      org.opencontainers.image.documentation="${OCI_IMAGE_DOCUMENTATION}" \
+      org.opencontainers.image.source="${OCI_IMAGE_SOURCE}" \
+      org.opencontainers.image.version="${OCI_IMAGE_VERSION}" \
+      org.opencontainers.image.revision="${OCI_IMAGE_REVISION}" \
+      org.opencontainers.image.vendor="${OCI_IMAGE_VENDOR}" \
+      org.opencontainers.image.licenses="${OCI_IMAGE_LICENSES}" \
+      org.opencontainers.image.ref.name="${OCI_IMAGE_REF_NAME}" \
+      org.opencontainers.image.title="${OCI_IMAGE_TITLE}" \
+      org.opencontainers.image.description="${OCI_IMAGE_DESCRIPTION}" \
+      org.opencontainers.image.base.digest="${OCI_IMAGE_BASE_DIGEST}" \
+      org.opencontainers.image.base.name="${OCI_IMAGE_BASE_NAME}"
 
 WORKDIR /app
 

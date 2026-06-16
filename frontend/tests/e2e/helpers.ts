@@ -269,7 +269,14 @@ const operationalSignals = {
     local_protocols: ['imap', 'pop3', 'smtp', 'caldav', 'carddav', 'webdav'],
     last_heartbeat_at: '2026-05-27T12:00:00Z',
     last_disconnect_at: null,
-    queue_depth_state: 'not_reported',
+    queue_depth_state: 'degraded',
+    queue_depth: {
+      pending_count: 2,
+      running_count: 1,
+      failed_count: 1,
+      total_count: 4,
+      next_retry_at: '2026-06-15T12:05:00Z',
+    },
     recent_events: [
       {
         event_uid: 'connector_evt_heartbeat',
@@ -294,6 +301,14 @@ const operationalSignals = {
       state: 'enabled',
       evidence_source: 'runner WebSocket manager',
       detail: 'Live heartbeat uses active outbound runner sockets.',
+      provider_write_executed: false,
+    },
+    {
+      signal_key: 'writeback_retry_queue',
+      display_name: 'Writeback retry queue',
+      state: 'enabled',
+      evidence_source: 'provider_writeback_retry_items',
+      detail: '4 queued writeback retry items are tracked by state.',
       provider_write_executed: false,
     },
     {
@@ -489,6 +504,15 @@ const dataQualitySurface = {
       provider_write_executed: false,
     },
     {
+      source_id: 'document_repository',
+      repository_type: 'document_repository',
+      display_name: 'Scoped document repository',
+      object_count: 1,
+      writeback_enabled: null,
+      evidence_source: 'documents',
+      provider_write_executed: false,
+    },
+    {
       source_id: 'webdav_src_primary',
       repository_type: 'webdav_account',
       display_name: 'Customer WebDAV account',
@@ -508,6 +532,19 @@ const dataQualitySurface = {
 	    },
 	  ],
 	  repository_assets: [
+	    {
+	      asset_key: 'doc_repository_ready',
+	      asset_type: 'workspace_document',
+	      display_name: 'roadmap.md',
+	      source_label: 'Workspace document',
+	      state_code: 'ready',
+	      detail_text: 'document status: uploaded',
+	      content_chars: 128,
+	      captured_at: '2026-05-28T05:46:00Z',
+	      evidence_source: 'documents.document_status',
+	      thread_key: 'workspace_document',
+	      provider_write_executed: false,
+	    },
 	    {
 	      asset_key: 'asset_repository_ready',
 	      asset_type: 'email_attachment',
@@ -696,7 +733,7 @@ const llmProviders = [
     name: 'Local Gemma4',
     provider_type: 'ollama',
     base_url: 'http://ollama:11434/v1',
-    model_identifier: 'gemma4',
+    model_identifier: 'gemma4:e2b-it-qat',
     embedding_model: 'embeddinggemma',
     is_active: true,
     configured: true,
@@ -785,6 +822,34 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
 
     if (path === '/api/data/quality-surface' && request.method() === 'GET') {
       await fulfillJson(route, dataQualitySurface);
+      return;
+    }
+
+    if (
+      path === '/api/data/documents/doc_repository_ready/webdav-materialization-intent'
+      && request.method() === 'POST'
+    ) {
+      await fulfillJson(route, {
+        intent: 'document_webdav_materialization',
+        status: 'completed',
+        document_id: 'doc_repository_ready',
+        workspace_id: 'workspace-org-acme',
+        document_name: 'roadmap.md',
+        document_type: 'text/markdown',
+        source_id: 'webdav_src_primary',
+        target_label: '운영 문서 원본',
+        target_path: '/Naruon/Data/roadmap.md-opaque.md',
+        requires_if_match: true,
+        if_match: 'etag-webdav-primary',
+        provenance: 'server-authoritative',
+        provider_write_executed: true,
+        audit_event: 'data.document.webdav_materialization.executed',
+        runner_request_id: 'runner_req_data_doc_1',
+        provider_status: 201,
+        error_code: null,
+        retry_item_uid: null,
+        message: 'Workspace document WebDAV materialization executed by the connector.',
+      });
       return;
     }
 

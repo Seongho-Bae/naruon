@@ -284,11 +284,14 @@ async def get_emails(
             if message_is_from_user(email, user_addresses):
                 has_sent_message[group_key] = True
 
-    visible_groups = [
-        email
-        for group_key, email in grouped.items()
-        if folder != "sent" or has_sent_message.get(group_key, False)
-    ]
+    if is_sent_folder:
+        visible_groups = [
+            email
+            for group_key, email in grouped.items()
+            if has_sent_message.get(group_key, False)
+        ]
+    else:
+        visible_groups = list(grouped.values())
     sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
 
     items = []
@@ -391,12 +394,15 @@ def _build_email_lookup_dicts(
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
         for lookup_value in _email_message_lookup_values(email_row):
-            by_message_id.setdefault(lookup_value, email_row)
+            if lookup_value not in by_message_id:
+                by_message_id[lookup_value] = email_row
         row_fingerprint = email_strong_fingerprint(email_row)
         if row_fingerprint:
-            by_fingerprint.setdefault(row_fingerprint, email_row)
+            if row_fingerprint not in by_fingerprint:
+                by_fingerprint[row_fingerprint] = email_row
         if email_row.fingerprint:
-            by_fingerprint.setdefault(email_row.fingerprint, email_row)
+            if email_row.fingerprint not in by_fingerprint:
+                by_fingerprint[email_row.fingerprint] = email_row
     return by_message_id, by_fingerprint
 
 
@@ -569,7 +575,6 @@ async def get_email_thread(
         .order_by(Email.date.asc())
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
     if not emails:
         raise HTTPException(status_code=404, detail="Thread not found")
 
@@ -624,7 +629,11 @@ async def send_email_endpoint(
                     ),
                 ) from exc
             if isinstance(exc, ValueError):
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                logger.warning(
+                    "Email send rejected invalid SMTP configuration",
+                    extra={"error_type": type(exc).__name__},
+                )
+                raise HTTPException(status_code=400, detail="Invalid email configuration") from exc
             raise
 
         message_params = EmailMessageParams(
