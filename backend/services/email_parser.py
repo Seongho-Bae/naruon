@@ -1,5 +1,5 @@
-import email
 from email import policy
+from email.message import Message
 from pathlib import Path
 import datetime
 from email.utils import formataddr, getaddresses
@@ -50,7 +50,7 @@ def _sanitize_address_display_text(text: str) -> str:
     return _sanitize_display_text(text)
 
 
-def _process_multipart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
+def _process_multipart_body(msg: Message) -> tuple[str, str, list[dict]]:
     plain_body = ""
     html_body = ""
     attachments = []
@@ -82,7 +82,7 @@ def _process_multipart_body(msg: email.message.Message) -> tuple[str, str, list[
     return plain_body, html_body, attachments
 
 
-def _process_singlepart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
+def _process_singlepart_body(msg: Message) -> tuple[str, str, list[dict]]:
     plain_body = ""
     html_body = ""
     content_type = msg.get_content_type()
@@ -95,7 +95,7 @@ def _process_singlepart_body(msg: email.message.Message) -> tuple[str, str, list
     return plain_body, html_body, []
 
 
-def _extract_body_and_attachments(msg: email.message.Message) -> tuple[str, list[dict]]:
+def _extract_body_and_attachments(msg: Message) -> tuple[str, list[dict]]:
     if msg.is_multipart():
         plain_body, html_body, attachments = _process_multipart_body(msg)
     else:
@@ -105,7 +105,7 @@ def _extract_body_and_attachments(msg: email.message.Message) -> tuple[str, list
     return body, attachments
 
 
-def _extract_date(msg: email.message.Message) -> datetime.datetime:
+def _extract_date(msg: Message) -> datetime.datetime:
     date_header = msg.get("Date")
     parsed_date = None
     if date_header:
