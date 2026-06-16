@@ -40,11 +40,8 @@ class DraftRequest(BaseModel):
 
 
 def _render_draft_reply_prompt(request: DraftRequest) -> str:
-    instruction_json = json.dumps(
-        {"instruction": request.instruction},
-        ensure_ascii=False,
-    )
-    email_json = json.dumps({"email_body": request.email_body}, ensure_ascii=False)
+    instruction_json = json.dumps({"instruction": request.instruction})
+    email_json = json.dumps({"email_body": request.email_body})
     return (
         "Draft a professional email reply using the provided instruction as "
         "tone/style guidance and the email body as source context.\n"
