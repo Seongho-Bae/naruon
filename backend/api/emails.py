@@ -1,4 +1,3 @@
-from collections import defaultdict
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
@@ -261,20 +260,25 @@ async def get_emails(
     emails = sorted(emails, key=lambda item: item.date)
 
     grouped = {}
-    # ⚡ Bolt: Use defaultdict to avoid redundant membership checks and dictionary access overhead.
-    # Also removed the date comparison since emails are pre-sorted oldest to newest.
-    reply_counts = defaultdict(int)
-    thread_messages = defaultdict(list)
+    reply_counts = {}
+    thread_messages = {}
     has_sent_message = {}
 
-    is_sent_folder = folder == "sent"
+    is_sent_folder = (folder == "sent")
 
     for email in emails:
         group_key = canonical_thread_key(email)
 
-        thread_messages[group_key].append(email)
-        reply_counts[group_key] += 1
-        grouped[group_key] = email
+        thread_list = thread_messages.get(group_key)
+        if thread_list is not None:
+            thread_list.append(email)
+            reply_counts[group_key] += 1
+            if email.date > grouped[group_key].date:
+                grouped[group_key] = email
+        else:
+            thread_messages[group_key] = [email]
+            grouped[group_key] = email
+            reply_counts[group_key] = 1
 
         if is_sent_folder and group_key not in has_sent_message:
             if message_is_from_user(email, user_addresses):
@@ -494,10 +498,6 @@ async def import_email_files(
 
     uploads: list[EmailImportUpload] = []
     for upload in files:
-        normalized_filename = upload.filename.lower().strip() if upload.filename else ""
-        if not upload.filename or not (normalized_filename.endswith(".eml") or normalized_filename.endswith(".zip") or normalized_filename.endswith(".mbox")):
-            raise HTTPException(status_code=400, detail="invalid_file_type")
-
         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
         if len(content) > MAX_IMPORT_UPLOAD_BYTES:
             raise HTTPException(status_code=413, detail="file_too_large")
@@ -633,9 +633,7 @@ async def send_email_endpoint(
                     "Email send rejected invalid SMTP configuration",
                     extra={"error_type": type(exc).__name__},
                 )
-                raise HTTPException(
-                    status_code=400, detail="Invalid email configuration"
-                ) from exc
+                raise HTTPException(status_code=400, detail="Invalid email configuration") from exc
             raise
 
         message_params = EmailMessageParams(

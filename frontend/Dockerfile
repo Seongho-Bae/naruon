@@ -65,5 +65,4 @@ USER node
 
 EXPOSE 3000
 
-# Render injects $PORT at runtime
-CMD sh -c "exec ./node_modules/.bin/next start --hostname 0.0.0.0 --port ${PORT:-3000}"
+CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]

@@ -18,7 +18,6 @@ import {
   type ThreadEmailData,
 } from "@/lib/email-threading";
 import { toMailBodyText, toMailDisplayText } from "@/lib/mail-text";
-import { toConfidencePercent } from "@/lib/confidence";
 
 type EmailData = ThreadEmailData & {
   requires_reply?: boolean;
@@ -29,6 +28,15 @@ interface LlmData {
   todos: string[];
   provenance?: string;
   confidence?: number;
+}
+
+function toConfidencePercent(confidence: number | undefined): number | undefined {
+  if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
+    return undefined;
+  }
+
+  const percent = confidence >= 0 && confidence <= 1 ? confidence * 100 : confidence;
+  return Math.round(Math.min(100, Math.max(0, percent)));
 }
 
 interface CreateTasksFromEmailResponse {
