@@ -93,7 +93,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
-	assert_file_contains "$workflow_file" 'group: strix-${{ github.repository }}' "strix workflow serializes scans per repository for GitHub Models quota"
+	assert_file_contains "$workflow_file" 'group: strix-${{ github.event.pull_request.number || github.ref }}' "strix workflow serializes scans per PR or branch for GitHub Models quota"
 	assert_file_contains "$workflow_file" "cancel-in-progress: false" "strix workflow never cancels in-progress security evidence"
 	assert_file_contains "$workflow_file" "models: read" "strix workflow grants only the GitHub Models read permission needed for Strix"
 	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
@@ -2812,7 +2812,7 @@ EOS
 		mkdir -p "$repo_root_dir/.github/workflows" "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
 		echo 'name: OpenCode Review' >"$repo_root_dir/.github/workflows/opencode-review.yml"
 		cat >"$repo_root_dir/Dockerfile" <<'EOS'
-FROM python:3.14-slim AS backend-runtime
+FROM python:3.11-slim AS backend-runtime
 WORKDIR /app
 COPY backend /app/
 FROM backend-runtime

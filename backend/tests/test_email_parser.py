@@ -4,7 +4,7 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-from services.email_parser import parse_eml, _sanitize_nul
+from services.email_parser import parse_eml, parse_eml_bytes, _sanitize_nul
 from services.exceptions import EmailParseError
 
 
@@ -28,6 +28,25 @@ This is a test email.\x00"""
         assert parsed["subject"] == "HelloWorld"  # NUL removed
         assert "This is a test email." in parsed["body"]
         assert "\x00" not in parsed["body"]
+    finally:
+        os.unlink(temp_path)
+
+
+def test_parse_eml_bytes_matches_file_parser():
+    eml_content = b"""Message-ID: <bytes@test.com>
+From: bytes@test.com
+To: recipient@test.com
+Subject: Bytes parser
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+
+This is a bytes parser test."""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        assert parse_eml_bytes(eml_content) == parse_eml(temp_path)
     finally:
         os.unlink(temp_path)
 
@@ -131,7 +150,7 @@ Content-Disposition: attachment; filename="<img src=x onerror=alert(1)>.txt"
 
     try:
         parsed = parse_eml(temp_path)
-        assert parsed["file_attachments"] == [{"filename": ".txt", "content": "report"}]
+        assert parsed["attachments"] == [{"filename": ".txt", "content": "report"}]
     finally:
         os.unlink(temp_path)
 

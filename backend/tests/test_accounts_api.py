@@ -295,7 +295,7 @@ def test_accounts_config_enforces_current_user_self_access_policy(monkeypatch):
         )
 
     monkeypatch.setattr(
-        "api.auth_accounts.ensure_mailbox_config_self_access", record_self_access
+        "api.accounts.ensure_mailbox_config_self_access", record_self_access
     )
     payload = _valid_session_payload(sub="mailbox-owner", org="org-acme")
 
