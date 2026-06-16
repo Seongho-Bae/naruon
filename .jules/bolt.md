@@ -46,3 +46,7 @@
 ## 2026-06-12 - defaultdict performance over setdefault inside loops
 **Learning:** Using `dict.setdefault(key, []).append(val)` inside a loop allocates an empty list `[]` on every single iteration, even if the key already exists. This overhead adds up. `collections.defaultdict(list)` only invokes the `list` factory when a key is missing, which is measurably faster (~10% performance gain) and results in cleaner code.
 **Action:** Always prefer `collections.defaultdict(list)` over `setdefault(key, [])` when populating a dictionary of lists in a tight loop.
+
+## 2024-05-18 - Optimized `extract_emails` string operations inside network loops
+**Learning:** Repetitive allocations and method calls (like `.lower()`) on individual elements within loops can dramatically slow down code. Profiling revealed that looping over list comprehensions calling `.lower()` and repeatedly looking up `dict.get` or `set.add` methods introduced large overhead. Pre-calling `.lower()` on the target strings *before* running regex and substituting `get` with cached method pointers produced ~10% speed improvements.
+**Action:** Always pre-allocate/lower string payloads outside tight loops, cache method references before the loop, and use fast bulk primitives (e.g. `set.update()` over `for e in ls: s.add(e)`).
