@@ -442,19 +442,39 @@ describe("SearchPage", () => {
     expect(input?.type).toBe("text");
     expect(input?.getAttribute("inputmode")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
-
-    input?.focus();
-
-    const clearButton = container.querySelector(
-      'button[aria-label="검색어 지우기"]',
-    ) as HTMLButtonElement | null;
-    expect(clearButton).not.toBeNull();
+    const page = container;
+    expect(page).not.toBeNull();
+    expect(
+      page?.querySelector('button[aria-label="검색어 지우기"]'),
+    ).not.toBeNull();
 
     await act(async () => {
-      clearButton?.click();
+      page
+        .querySelector('button[aria-label="검색어 지우기"]')
+        ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(input?.value).toBe("");
     expect(document.activeElement).toBe(input);
+    expect(
+      page?.querySelector('button[aria-label="검색어 지우기"]'),
+    ).toBeNull();
+
+    await act(async () => {
+      input?.focus();
+      if (input) {
+        const valueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value",
+        )?.set;
+        valueSetter?.call(input, "새 검색어");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    expect(input?.value).toBe("새 검색어");
+    expect(
+      page?.querySelector('button[aria-label="검색어 지우기"]'),
+    ).not.toBeNull();
   });
 });
