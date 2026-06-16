@@ -63,3 +63,4 @@ async def test_import_single_eml_rejects_symlink(tmp_path):
 
     assert result.status == "failed"
     assert result.reason_code == "parse_failed"
+    session.execute.assert_not_called()
