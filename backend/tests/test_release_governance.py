@@ -76,6 +76,8 @@ def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
 def test_bandit_security_scan_does_not_continue_on_error() -> None:
     workflow = read_repo_text(".github/workflows/bandit.yml")
 
+    assert 'python-version: "3.14"' in workflow
+    assert 'python-version: "3.12"' not in workflow
     assert "continue-on-error: true" not in workflow
 
 
@@ -95,6 +97,8 @@ def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushe
     assert "permissions:\n  contents: read" in workflow
     assert "concurrency:" in workflow
     assert "${{ github.event.pull_request.number || github.ref }}" in workflow
+    assert 'python-version: "3.14"' in workflow
+    assert 'python-version: "3.12"' not in workflow
     assert "uses: actions/checkout@v" not in workflow
     assert "uses: actions/setup-python@v" not in workflow
     assert "uses: actions/setup-node@v" not in workflow
