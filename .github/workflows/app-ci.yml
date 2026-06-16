@@ -64,29 +64,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
+
+      - name: Install pnpm
+        run: corepack enable pnpm
+
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Install frontend dependencies
-        run: cd frontend && npm ci
+        run: cd frontend && pnpm install --frozen-lockfile
 
       - name: Run frontend tests
-        run: cd frontend && npm test
+        run: cd frontend && pnpm test
 
       - name: Run frontend lint
-        run: cd frontend && npm run lint
+        run: cd frontend && pnpm run lint
 
       - name: Cache Next.js build
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: frontend/.next/cache
-          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-${{ hashFiles('frontend/**/*.js', 'frontend/**/*.jsx', 'frontend/**/*.ts', 'frontend/**/*.tsx') }}
           restore-keys: |
-            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/package-lock.json') }}-
+            ${{ runner.os }}-nextjs-${{ hashFiles('frontend/pnpm-lock.yaml') }}-
 
       - name: Build frontend
         env:
@@ -97,4 +101,4 @@ jobs:
           DISABLE_POSTCSS_WORKERS: "true"
         run: |
           rm -f ~/package-lock.json
-          cd frontend && npm run build
+          cd frontend && pnpm run build

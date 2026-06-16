@@ -1,10 +1,15 @@
+import datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, Mock
-import datetime
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 from services import email_import_service
-from services.email_import_service import _safe_item_filename, _safe_upload_filename
+from services.email_import_service import (
+    _import_single_eml,
+    _safe_item_filename,
+    _safe_upload_filename,
+)
 
 @pytest.mark.parametrize(
     "input_name,expected",
@@ -42,7 +47,7 @@ def test_safe_upload_filename(input_name, expected):
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert _safe_item_filename(upload_name, eml_path) == expected
 
-
+@pytest.mark.asyncio
 @pytest.mark.asyncio
 async def test_import_single_eml_offloads_read_and_byte_parse(tmp_path, monkeypatch):
     eml_path = tmp_path / "message.eml"
@@ -105,3 +110,24 @@ async def test_import_single_eml_offloads_read_and_byte_parse(tmp_path, monkeypa
     assert to_thread_calls[1][1] == (expected_content,)
     session.add.assert_called_once()
     session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_import_single_eml_rejects_symlink(tmp_path):
+    target_path = tmp_path / "target.txt"
+    target_path.write_text("not an eml")
+    symlink_path = tmp_path / "message.eml"
+    symlink_path.symlink_to(target_path)
+    session = AsyncMock(spec=AsyncSession)
+
+    result = await _import_single_eml(
+        session,
+        eml_path=symlink_path,
+        display_filename="message.eml",
+        user_id="user-1",
+        organization_id="org-1",
+    )
+
+    assert result.status == "failed"
+    assert result.reason_code == "parse_failed"
+    session.execute.assert_not_called()
