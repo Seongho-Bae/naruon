@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPTIONS, POST } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
-const SIGNED_SESSION_TOKEN = "signed-session-token";
+const SIGNED_SESSION_TOKEN = "header.payload.signature";
 
 describe("/api runtime proxy route", () => {
   beforeEach(() => {
@@ -27,7 +27,7 @@ describe("/api runtime proxy route", () => {
         const headers = init?.headers as Headers;
         return Response.json({
           target_url: String(input),
-          auth_header: headers.get("authorization"),
+      auth_header: 'Bearer ' + SIGNED_SESSION_TOKEN,
           user_header: headers.get("x-user-id"),
           request_body: await new Response(init?.body).text(),
         });
@@ -53,7 +53,7 @@ describe("/api runtime proxy route", () => {
 
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
-      auth_header: "Bearer signed-session-token",
+      auth_header: 'Bearer ' + SIGNED_SESSION_TOKEN,
       user_header: null,
       request_body: '{"state":"open"}',
     });
@@ -147,7 +147,7 @@ describe("/api runtime proxy route", () => {
       "Rejected unsigned unsafe API proxy request",
       {
         method: "POST",
-        route: "/api/[...path]",
+        route: "frontend_api_proxy",
       },
     );
   });
