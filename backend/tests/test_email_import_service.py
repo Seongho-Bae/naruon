@@ -1,6 +1,10 @@
 import pytest
 from pathlib import Path
-from services.email_import_service import _safe_item_filename, _safe_upload_filename
+from services.email_import_service import (
+    _import_single_eml,
+    _safe_item_filename,
+    _safe_upload_filename,
+)
 
 @pytest.mark.parametrize(
     "input_name,expected",
@@ -37,3 +41,22 @@ def test_safe_upload_filename(input_name, expected):
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert _safe_item_filename(upload_name, eml_path) == expected
+
+
+@pytest.mark.asyncio
+async def test_import_single_eml_rejects_symlink(tmp_path):
+    target_path = tmp_path / "target.txt"
+    target_path.write_text("not an eml")
+    symlink_path = tmp_path / "message.eml"
+    symlink_path.symlink_to(target_path)
+
+    result = await _import_single_eml(
+        object(),
+        eml_path=symlink_path,
+        display_filename="message.eml",
+        user_id="user-1",
+        organization_id="org-1",
+    )
+
+    assert result.status == "failed"
+    assert result.reason_code == "parse_failed"

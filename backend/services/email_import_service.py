@@ -1,5 +1,7 @@
 import datetime
 import hashlib
+import os
+import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -11,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Attachment, Email
 from services.archive import extract_backup_async
 from services.email_dedupe_service import strong_email_fingerprint
-from services.email_parser import EmailData, parse_eml
+from services.email_parser import EmailData, parse_eml_bytes
 from services.exceptions import ArchiveError, EmailParseError
 from services.threading_service import (
     assign_thread_id,
@@ -202,9 +204,9 @@ async def _import_single_eml(
     user_id: str,
     organization_id: str,
 ) -> EmailImportItemResult:
-    content = eml_path.read_bytes()
     try:
-        parsed = parse_eml(eml_path)
+        content = _read_eml_bytes(eml_path)
+        parsed = parse_eml_bytes(content)
     except EmailParseError:
         return EmailImportItemResult(
             filename=display_filename,
@@ -283,6 +285,27 @@ async def _import_single_eml(
     )
 
 
+def _read_eml_bytes(eml_path: Path) -> bytes:
+    open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        file_descriptor = os.open(eml_path, open_flags)
+    except OSError as exc:
+        raise EmailParseError(f"Failed to read file {eml_path}: {exc}") from exc
+
+    try:
+        file_stat = os.fstat(file_descriptor)
+        if not stat.S_ISREG(file_stat.st_mode):
+            raise EmailParseError(f"Failed to read file {eml_path}: not a regular file")
+        with os.fdopen(file_descriptor, "rb") as file_handle:
+            file_descriptor = -1
+            return file_handle.read()
+    except OSError as exc:
+        raise EmailParseError(f"Failed to read file {eml_path}: {exc}") from exc
+    finally:
+        if file_descriptor >= 0:
+            os.close(file_descriptor)
+
+
 async def _eml_paths_for_upload(
     *,
     upload: EmailImportUpload,
@@ -307,7 +330,7 @@ async def _eml_paths_for_upload(
     eml_paths = [
         path
         for path in extracted_paths
-        if path.is_file() and path.suffix.lower() == ".eml"
+        if path.suffix.lower() == ".eml"
     ]
     if not eml_paths:
         return [], "archive_contains_no_eml"
