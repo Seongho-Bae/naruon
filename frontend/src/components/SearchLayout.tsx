@@ -1,7 +1,7 @@
 "use client";
 
 import type { FormEvent } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   CalendarDays,
@@ -14,6 +14,7 @@ import {
   Network,
   Search,
   Sparkles,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -243,6 +244,7 @@ function SenderDagPanel({
 export function SearchLayout() {
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [submittedQuery, setSubmittedQuery] = useState(DEFAULT_QUERY);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [activeFilter, setActiveFilter] = useState<ResultFilter>("all");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [activeResultId, setActiveResultId] = useState<number | null>(null);
@@ -493,14 +495,28 @@ export function SearchLayout() {
               aria-hidden="true"
             />
             <input
+              ref={inputRef}
               id="search-input"
               type="search"
               aria-label="맥락 검색어 입력"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..."
-              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-4 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
+              className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10 [&::-webkit-search-cancel-button]:hidden"
             />
+            {query && (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                aria-label="검색어 지우기"
+              >
+                <X className="size-4" aria-hidden="true" />
+              </button>
+            )}
           </div>
           <button
             type="submit"

@@ -9,3 +9,6 @@
 ## 2026-06-11 - Adding Repository Badges and Communication Guidelines
 **Learning:** Organizing a repository with Issue/PR templates, CI badges, and a Code of Conduct creates an immediate impression of professionalism and hygiene, saving developers time on repetitive questions.
 **Action:** When setting up a new repository or performing repository hygiene, always ensure a base set of standard templates and CI badges are included.
+## 2024-05-19 - Adding Custom Clear Buttons to Search Inputs
+**Learning:** When creating custom clear buttons for `<input type="search">` fields to improve UX, the native WebKit clear button (the small 'x' that appears automatically in Chrome/Safari) must be explicitly hidden to prevent duplicate icons appearing side-by-side. Additionally, test files mocking icon libraries like `lucide-react` need to be updated with the new icon mock to prevent test failures.
+**Action:** Always add `[&::-webkit-search-cancel-button]:hidden` to Tailwind classes on search inputs with custom clear controls, and verify test mocks when adding new icons.
