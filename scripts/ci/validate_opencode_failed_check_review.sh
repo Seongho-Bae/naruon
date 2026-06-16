@@ -20,32 +20,28 @@ if [ ! -s "$FAILED_CHECKS_FILE" ]; then
 fi
 
 review_text="$(
-  python3 - "$CONTROL_JSON_FILE" <<'PY'
-from __future__ import annotations
-
-import json
-import sys
-from pathlib import Path
-
-
-control = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-parts: list[str] = [control.get("summary") or "", control.get("reason") or ""]
-for finding in control.get("findings") or []:
-    parts.extend(
-        [
-            str(finding.get("path") or ""),
-            str(finding.get("line") or ""),
-            str(finding.get("severity") or ""),
-            str(finding.get("title") or ""),
-            str(finding.get("problem") or ""),
-            str(finding.get("root_cause") or ""),
-            str(finding.get("fix_direction") or ""),
-            str(finding.get("regression_test_direction") or ""),
-            str(finding.get("suggested_diff") or ""),
-        ]
-    )
-print("\n".join(parts))
-PY
+  jq -r '
+    [
+      (.summary // ""),
+      (.reason // ""),
+      (
+        .findings[]?
+        | [
+            (.path // ""),
+            ((.line // "") | tostring),
+            (.severity // ""),
+            (.title // ""),
+            (.problem // ""),
+            (.root_cause // ""),
+            (.fix_direction // ""),
+            (.regression_test_direction // ""),
+            (.suggested_diff // "")
+          ]
+        | join("\n")
+      )
+    ]
+    | join("\n")
+  ' "$CONTROL_JSON_FILE"
 )"
 
 contains_review_text() {
@@ -133,37 +129,23 @@ extract_strix_report_model_markers() {
 }
 
 count_strix_review_findings() {
-  python3 - "$CONTROL_JSON_FILE" <<'PY'
-from __future__ import annotations
-
-import json
-import re
-import sys
-from pathlib import Path
-
-
-control = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-pattern = re.compile(
-    r"strix|github[-_]models/|deepseek/|openai/gpt-|vertex_ai/|Vulnerability Report",
-    re.IGNORECASE,
-)
-count = 0
-for finding in control.get("findings") or []:
-    text = "\n".join(
-        str(finding.get(key) or "")
-        for key in (
-            "title",
-            "problem",
-            "root_cause",
-            "fix_direction",
-            "regression_test_direction",
-            "suggested_diff",
-        )
-    )
-    if pattern.search(text):
-        count += 1
-print(count)
-PY
+  jq -r '
+    [
+      (.findings // [])[]
+      | [
+          .title,
+          .problem,
+          .root_cause,
+          .fix_direction,
+          .regression_test_direction,
+          .suggested_diff
+        ]
+        | map(. // "")
+        | join("\n")
+      | select(test("strix|github[-_]models/|deepseek/|openai/gpt-|vertex_ai/|Vulnerability Report"; "i"))
+    ]
+    | length
+  ' "$CONTROL_JSON_FILE"
 }
 
 validate_distinct_strix_report_findings() {

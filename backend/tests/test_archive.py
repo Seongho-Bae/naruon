@@ -3,7 +3,6 @@ import zipfile
 import pytest
 import asyncio
 
-import services.archive as archive
 from services.archive import extract_backup, extract_backup_async
 from services.exceptions import (
     InvalidArchiveError,
@@ -47,7 +46,7 @@ def test_extract_backup_bad_zip_file(tmp_path):
 
 
 def test_extract_backup_size_exceeded(tmp_path, monkeypatch):
-    monkeypatch.setattr(archive, "MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
+    monkeypatch.setattr("services.archive.MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
 
     zip_path = tmp_path / "test.zip"
     with zipfile.ZipFile(zip_path, "w") as z:
@@ -113,7 +112,7 @@ def test_extract_backup_rejects_preexisting_symlink_escape(tmp_path):
 
 
 def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
-    monkeypatch.setattr(archive, "MAX_FILE_COUNT", 2)
+    monkeypatch.setattr("services.archive.MAX_FILE_COUNT", 2)
 
     zip_path = tmp_path / "test_count.zip"
     with zipfile.ZipFile(zip_path, "w") as z:

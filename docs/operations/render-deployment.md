@@ -60,14 +60,7 @@ backend secrets.
 2. In the Render dashboard choose **New → Blueprint** and select the
    `naruon` repo. Render parses `render.yaml` and lists the resources
    it will create.
-3. Render wires `DATABASE_URL` from the managed Postgres service and
-   auto-generates `AUTH_SESSION_HMAC_SECRET` for the backend. It prompts
-   for any `sync: false` values. Provide them now:
-   * `ENCRYPTION_KEY` — a valid Fernet key for backend credential
-     encryption. Generate one locally with:
-     ```bash
-     python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-     ```
+3. Render prompts for any `sync: false` values. Provide them now:
    * `OPENAI_API_KEY` — your real key, or a placeholder if running
      without OpenAI features.
    You will be able to update or rotate these later from the service's
@@ -133,13 +126,6 @@ Remove the variable when you want IMAP sync to run.
   backend refuses to boot with
   `AUTH_SESSION_HMAC_SECRET must not contain placeholder terms`.
   Delete the variable in the dashboard and redeploy to regenerate.
-* `ENCRYPTION_KEY` is not auto-generated because the combined backend +
-  frontend image validates that it is a Fernet key before startup.
-  Generate a replacement with:
-  ```bash
-  python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-  ```
-  then update the backend service's **Environment** tab and redeploy.
 * `OPENAI_API_KEY` and any other `sync: false` value: edit in the
   service's **Environment** tab. The Blueprint never overrides
   user-supplied secret values on subsequent syncs.

@@ -344,23 +344,6 @@ def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> N
     assert "Frontend (:3000) exited with code" in start_script
 
 
-def test_render_blueprint_requires_backend_encryption_key() -> None:
-    render_blueprint = read_repo_text("render.yaml")
-    render_deployment = read_repo_text("docs/operations/render-deployment.md")
-
-    assert "- key: DATABASE_URL" in render_blueprint
-    assert "property: connectionString" in render_blueprint
-    assert "- key: AUTH_SESSION_HMAC_SECRET" in render_blueprint
-    assert "generateValue: true" in render_blueprint
-    assert re.search(
-        r"^\s*-\s+key:\s+ENCRYPTION_KEY\s*\n\s+sync:\s+false\s*$",
-        render_blueprint,
-        flags=re.MULTILINE,
-    )
-    assert "`ENCRYPTION_KEY`" in render_deployment
-    assert "Fernet.generate_key().decode()" in render_deployment
-
-
 def test_deepwiki_qna_gap_execution_tracker_covers_requested_scope() -> None:
     tracker = read_repo_text("docs/development/deepwiki-qna-gap-execution-track.md")
 

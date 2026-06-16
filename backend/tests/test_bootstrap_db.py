@@ -33,35 +33,35 @@ def _execute_schema_backfill(sync_conn):
 def test_schema_backfill_adds_email_columns(monkeypatch):
     statements = _get_schema_statements(monkeypatch)
     assert any(
-        "alter table emails add column if not exists reply_to" in statement
+        "alter table email_records add column if not exists reply_to" in statement
         for statement in statements
     )
     assert any(
-        "alter table emails add column if not exists user_id" in statement
+        "alter table email_records add column if not exists user_id" in statement
         for statement in statements
     )
     assert any(
-        "alter table emails add column if not exists organization_id" in statement
+        "alter table email_records add column if not exists organization_id" in statement
         for statement in statements
     )
     assert any(
-        "alter table emails add column if not exists thread_id" in statement
+        "alter table email_records add column if not exists thread_id" in statement
         for statement in statements
     )
     assert any(
-        "alter table emails add column if not exists in_reply_to" in statement
+        "alter table email_records add column if not exists in_reply_to" in statement
         for statement in statements
     )
     assert any(
-        'alter table emails add column if not exists "references"' in statement
+        'alter table email_records add column if not exists "references"' in statement
         for statement in statements
     )
-    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update emails set organization_id" in statement for statement in statements
+        "update email_records set organization_id" in statement for statement in statements
     )
     assert any(
-        "existing emails require explicit non-default" in statement
+        "existing email_records require explicit non-default" in statement
         for statement in statements
     )
 
@@ -96,32 +96,32 @@ def test_schema_backfill_adds_sender_relationship_columns_and_indexes(monkeypatc
 def test_schema_backfill_adds_email_indexes(monkeypatch):
     statements = _get_schema_statements(monkeypatch)
     assert any(
-        "create index if not exists ix_emails_user_id" in statement
+        "create index if not exists ix_email_records_user_id" in statement
         for statement in statements
     )
     assert any(
-        "create index if not exists ix_emails_organization_id" in statement
+        "create index if not exists ix_email_records_organization_id" in statement
         for statement in statements
     )
     assert any(
-        "drop index if exists ix_emails_message_id" in statement
+        "drop index if exists ix_email_records_message_id" in statement
         for statement in statements
     )
     assert any(
-        "create index if not exists ix_emails_message_id" in statement
+        "create index if not exists ix_email_records_message_id" in statement
         and "unique" not in statement
         for statement in statements
     )
     assert any(
-        "create unique index if not exists uq_emails_owner_message_id" in statement
+        "create unique index if not exists uq_email_records_owner_message_id" in statement
         for statement in statements
     )
     assert any(
-        "create index if not exists ix_emails_thread_id" in statement
+        "create index if not exists ix_email_records_thread_id" in statement
         for statement in statements
     )
     assert any(
-        "create index if not exists ix_emails_date" in statement
+        "create index if not exists ix_email_records_date" in statement
         for statement in statements
     )
 
@@ -345,13 +345,13 @@ def test_schema_backfill_uses_only_explicit_non_default_owner_ids(monkeypatch):
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
     assert any(
-        "update emails" in statement
+        "update email_records" in statement
         and "set user_id" in statement
         and "organization_id = :organization_id" in statement
         and "where user_id is null and organization_id is null" in statement
         for statement in statements
     )
-    assert sum("update emails" in statement for statement in statements) == 1
+    assert sum("update email_records" in statement for statement in statements) == 1
     assert any(
         "update llm_providers" in statement
         and "set user_id" in statement
@@ -380,7 +380,7 @@ def test_schema_backfill_stops_partially_owned_legacy_rows(monkeypatch):
         for statement in statements
     )
     assert any(
-        "existing emails require explicit non-default" in statement
+        "existing email_records require explicit non-default" in statement
         for statement in statements
     )
 
@@ -391,9 +391,9 @@ def test_schema_backfill_rejects_default_owner_ids(monkeypatch):
 
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
-    assert not any("update emails set user_id" in statement for statement in statements)
+    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update emails set organization_id" in statement for statement in statements
+        "update email_records set organization_id" in statement for statement in statements
     )
 
 
