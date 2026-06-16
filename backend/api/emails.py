@@ -494,7 +494,8 @@ async def import_email_files(
 
     uploads: list[EmailImportUpload] = []
     for upload in files:
-        if not upload.filename or not (upload.filename.endswith(".eml") or upload.filename.endswith(".zip") or upload.filename.endswith(".mbox")):
+        normalized_filename = upload.filename.lower().strip() if upload.filename else ""
+        if not upload.filename or not (normalized_filename.endswith(".eml") or normalized_filename.endswith(".zip") or normalized_filename.endswith(".mbox")):
             raise HTTPException(status_code=400, detail="invalid_file_type")
 
         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
