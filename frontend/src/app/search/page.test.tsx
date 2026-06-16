@@ -413,4 +413,48 @@ describe("SearchPage", () => {
 
     expect(container.textContent).toContain("검색 결과를 불러오지 못했습니다.");
   });
+
+  it("clears the query with the custom button while keeping focus on the searchbox", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/api/search"))
+          return Promise.resolve(jsonResponse({ results: [] }));
+        if (url.includes("/api/ontology/relationships"))
+          return Promise.resolve(jsonResponse([]));
+        if (url.endsWith("/api/network/graph"))
+          return Promise.resolve(jsonResponse({ nodes: [], edges: [] }));
+        return Promise.resolve(jsonResponse({}, false, 404));
+      }),
+    );
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<SearchPage />);
+    });
+    await flushAsyncWork();
+
+    const input = container.querySelector("#search-input") as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+    expect(input?.type).toBe("text");
+    expect(input?.getAttribute("inputmode")).toBe("search");
+    expect(input?.getAttribute("role")).toBe("searchbox");
+
+    input?.focus();
+
+    const clearButton = container.querySelector(
+      'button[aria-label="검색어 지우기"]',
+    ) as HTMLButtonElement | null;
+    expect(clearButton).not.toBeNull();
+
+    await act(async () => {
+      clearButton?.click();
+    });
+
+    expect(input?.value).toBe("");
+    expect(document.activeElement).toBe(input);
+  });
 });
