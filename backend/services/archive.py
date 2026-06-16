@@ -1,5 +1,4 @@
 import asyncio
-import zipfile
 from pathlib import Path
 from zipfile import ZipInfo
 
