@@ -7,7 +7,6 @@ Create Date: 2026-06-15 00:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.schema import DDL
 
 revision = "0002_provider_retry_queue"
 down_revision = "0001_initial_control_plane"
@@ -41,8 +40,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     for index_name in reversed(_provider_writeback_retry_index_names()):
-        connection.execute(DDL(f"DROP INDEX IF EXISTS {index_name}"))
-    connection.execute(DDL("DROP TABLE IF EXISTS provider_writeback_retry_items"))
+        connection.execute(sa.text(f"DROP INDEX IF EXISTS {index_name}"))
+    connection.execute(sa.text("DROP TABLE IF EXISTS provider_writeback_retry_items"))
 
 
 def _provider_writeback_retry_index_names() -> list[str]:

@@ -1,6 +1,10 @@
 import pytest
 from db.models import LLMProvider
-from services.llm_provider_readiness import is_llm_provider_configured, llm_provider_model_label
+from services.llm_provider_readiness import (
+    is_llm_provider_configured,
+    llm_provider_model_label,
+)
+
 
 @pytest.mark.parametrize(
     "api_key, provider_type, base_url, model_identifier, expected",
@@ -28,13 +32,15 @@ from services.llm_provider_readiness import is_llm_provider_configured, llm_prov
         # Provider type edge cases (whitespace, casing)
         (None, " OLLAMA ", "http://url", "model", True),
         (None, " Vllm ", "http://url", "model", True),
-        (None, "unknown-local", "http://url", "model", False), # Not in LOCAL_PROVIDER_TYPES
+        (None, "unknown-local", "http://url", "model", False),  # Not in LOCAL_PROVIDER_TYPES
 
         # API key provided for local (should just return True fast)
         ("api-key-for-local", "ollama", None, None, True),
     ]
 )
-def test_is_llm_provider_configured(api_key, provider_type, base_url, model_identifier, expected):
+def test_is_llm_provider_configured(
+    api_key, provider_type, base_url, model_identifier, expected
+):
     provider = LLMProvider(
         user_id="user1",
         organization_id="org1",
@@ -45,6 +51,7 @@ def test_is_llm_provider_configured(api_key, provider_type, base_url, model_iden
         api_key=api_key,
     )
     assert is_llm_provider_configured(provider) == expected
+
 
 @pytest.mark.parametrize(
     "provider_type, model_identifier, expected",
