@@ -347,16 +347,15 @@ def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> N
 def test_render_blueprint_requires_backend_encryption_key() -> None:
     render_blueprint = read_repo_text("render.yaml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
-    encryption_key_block = render_blueprint.split("- key: ENCRYPTION_KEY", 1)[1].split(
-        "- key: DEBUG", 1
-    )[0]
 
     assert "- key: DATABASE_URL" in render_blueprint
     assert "property: connectionString" in render_blueprint
     assert "- key: AUTH_SESSION_HMAC_SECRET" in render_blueprint
     assert "generateValue: true" in render_blueprint
-    assert "- key: ENCRYPTION_KEY" in render_blueprint
-    assert "sync: false" in encryption_key_block
+    assert re.search(
+        r"(?m)^ {6}- key: ENCRYPTION_KEY\n {8}sync: false$",
+        render_blueprint,
+    )
     assert "`ENCRYPTION_KEY`" in render_deployment
     assert "Fernet.generate_key().decode()" in render_deployment
 
