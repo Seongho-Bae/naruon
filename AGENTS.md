@@ -81,6 +81,10 @@
   multiple model vulnerability reports, include every model-reported
   vulnerability separately with the model name, title, severity, endpoint, and
   Code Locations/path:line evidence when present.
+- Strix logs may print the report's `Model ...` line after the title, endpoint,
+  and Code Locations block. Failed-check evidence parsers and OpenCode review
+  validators must attribute each vulnerability to that in-report model line, not
+  to a previous retry attempt such as a failed primary `openai/gpt-5` run.
 - OpenCode Agent PR reviews must be general-purpose and meticulous rather than
   narrowly scenario-specific. Configure the review prompt to use all relevant
   MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,

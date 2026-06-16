@@ -93,7 +93,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
-	assert_file_contains "$workflow_file" 'group: strix-${{ github.repository }}' "strix workflow serializes scans per repository for GitHub Models quota"
+	assert_file_contains "$workflow_file" 'group: strix-${{ github.event.pull_request.number || github.ref }}' "strix workflow serializes scans per PR or branch for GitHub Models quota"
 	assert_file_contains "$workflow_file" "cancel-in-progress: false" "strix workflow never cancels in-progress security evidence"
 	assert_file_contains "$workflow_file" "models: read" "strix workflow grants only the GitHub Models read permission needed for Strix"
 	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
@@ -454,7 +454,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
-	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github(?:_|-)models" "failed-check review validator extracts both github_models and github-models model prefixes"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_report_model_markers" "failed-check review validator extracts model markers from Strix vulnerability report windows"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "(?:model|for model)[[:space:]]+" "failed-check review validator reads both Model and for model lines inside Strix reports"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Self-test Strix gate script" "failed-check review validator requires Strix failed step evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github.event.inputs.strix_llm" "failed-check review validator requires exact Strix missing assertion evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_required_markers" "failed-check review validator extracts Strix report titles and locations"
