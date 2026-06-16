@@ -38,6 +38,7 @@ class EncryptionKeyRing:
 
 def validate_auth_session_hmac_secret_value(secret: str) -> None:
     secret_bytes = secret.encode("utf-8")
+    secret_length = len(secret_bytes)
     if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
         raise ValueError(
             "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"
@@ -49,8 +50,10 @@ def validate_auth_session_hmac_secret_value(secret: str) -> None:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not use a public fixture value")
     if any(term in normalized_secret for term in _LOW_ENTROPY_PLACEHOLDER_TERMS):
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
+    # Block repeated low-variance patterns that still satisfy the length floor
+    # while preserving structured but sufficiently varied operator secrets.
     entropy_bits_per_byte = -sum(
-        (count / len(secret_bytes)) * math.log2(count / len(secret_bytes))
+        (count / secret_length) * math.log2(count / secret_length)
         for count in Counter(secret_bytes).values()
     )
     if entropy_bits_per_byte <= 3.5:
