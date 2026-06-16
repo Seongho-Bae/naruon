@@ -126,7 +126,7 @@ async def update_tenant_config(
             organization_id=auth_ctx.organization_id,
         )
         db.add(config)
-        
+
     from api.tenant_config import SECRET_FIELDS
     update_dict = update_data.model_dump(exclude_unset=True)
     validate_mail_config_update(update_dict, config)
@@ -134,7 +134,7 @@ async def update_tenant_config(
         if key in SECRET_FIELDS and value == "********":
             continue
         setattr(config, key, value)
-        
+
     await db.commit()
     await db.refresh(config)
 
