@@ -111,6 +111,10 @@ async function proxyApiRequest(
   context: ApiRouteContext,
 ): Promise<NextResponse> {
   if (!SAFE_HTTP_METHODS.has(request.method.toUpperCase()) && !hasBearerAuthorizationHeader(request)) {
+    console.warn("Rejected unsigned unsafe API proxy request", {
+      method: request.method,
+      path: request.nextUrl.pathname,
+    });
     return NextResponse.json(
       {
         error_code: "missing_bearer_session",
@@ -188,6 +192,10 @@ export async function PUT(request: NextRequest, context: ApiRouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: ApiRouteContext) {
+  return proxyApiRequest(request, context);
+}
+
+export async function OPTIONS(request: NextRequest, context: ApiRouteContext) {
   return proxyApiRequest(request, context);
 }
 

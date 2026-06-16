@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { POST } from "./route";
+import { OPTIONS, POST } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
 const SIGNED_SESSION_TOKEN = "signed-session-token";
@@ -118,6 +118,7 @@ describe("/api runtime proxy route", () => {
   it("rejects unsigned unsafe requests before proxying", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
+    const consoleWarnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const request = new NextRequest(
       "https://frontend.naruon.net/api/login",
@@ -141,5 +142,37 @@ describe("/api runtime proxy route", () => {
       message: "Authentication required",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(consoleWarnMock).toHaveBeenCalledWith(
+      "Rejected unsigned unsafe API proxy request",
+      {
+        method: "POST",
+        path: "/api/login",
+      },
+    );
+  });
+
+  it("allows unsigned OPTIONS preflight requests to reach the backend proxy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: URL | RequestInfo, init?: RequestInit) =>
+        Response.json({
+          target_url: String(input),
+          method: init?.method,
+        }),
+      ),
+    );
+
+    const request = new NextRequest("https://frontend.naruon.net/api/tasks", {
+      method: "OPTIONS",
+    });
+
+    const response = await OPTIONS(request, {
+      params: Promise.resolve({ path: ["tasks"] }),
+    });
+
+    await expect(response.json()).resolves.toEqual({
+      target_url: "https://api.naruon.net/api/tasks",
+      method: "OPTIONS",
+    });
   });
 });
