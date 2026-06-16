@@ -365,7 +365,7 @@ jobs:
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
+        if: ${{ always() && steps.gate.outputs.enabled == 'true' }}
         env:
           PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
         run: |
@@ -391,7 +391,7 @@ jobs:
           fi
 
       - name: Upload Strix reports artifact
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
+        if: ${{ always() && steps.gate.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: strix-reports

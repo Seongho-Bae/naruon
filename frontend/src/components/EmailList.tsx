@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, memo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, memo } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -123,6 +123,7 @@ export function EmailList({
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchEmails = useCallback(async (query = "") => {
     setLoading(true);
@@ -214,6 +215,7 @@ export function EmailList({
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               id="email-search"
+              ref={searchInputRef}
               aria-label="메일 검색"
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
@@ -226,6 +228,7 @@ export function EmailList({
                 onClick={() => {
                   setSearchQuery("");
                   void fetchEmails("");
+                  searchInputRef.current?.focus();
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
                 aria-label="검색어 지우기"
