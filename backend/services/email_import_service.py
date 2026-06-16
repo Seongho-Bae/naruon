@@ -1,7 +1,5 @@
 import datetime
 import hashlib
-import os
-import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -204,8 +202,8 @@ async def _import_single_eml(
     user_id: str,
     organization_id: str,
 ) -> EmailImportItemResult:
+    content = eml_path.read_bytes()
     try:
-        content = _read_eml_bytes(eml_path)
         parsed = parse_eml_bytes(content)
     except EmailParseError:
         return EmailImportItemResult(
@@ -285,42 +283,6 @@ async def _import_single_eml(
     )
 
 
-def _read_eml_bytes(eml_path: Path) -> bytes:
-    no_follow_flag = getattr(os, "O_NOFOLLOW", None)
-    if no_follow_flag is None:
-        raise EmailParseError("Failed to read email file")
-
-    open_flags = os.O_RDONLY | no_follow_flag
-    file_descriptor_transferred = False
-    try:
-        file_descriptor = os.open(eml_path, open_flags)
-    except OSError as exc:
-        raise EmailParseError("Failed to read email file") from exc
-
-    try:
-        file_stat = os.fstat(file_descriptor)
-        if not stat.S_ISREG(file_stat.st_mode):
-            raise EmailParseError("Failed to read email file")
-        file_handle = os.fdopen(file_descriptor, "rb")
-        file_descriptor_transferred = True
-        with file_handle:
-            return file_handle.read()
-    except OSError as exc:
-        raise EmailParseError("Failed to read email file") from exc
-    finally:
-        if not file_descriptor_transferred:
-            os.close(file_descriptor)
-
-
-def _is_regular_eml_path(path: Path) -> bool:
-    if path.suffix.lower() != ".eml":
-        return False
-    try:
-        return stat.S_ISREG(path.lstat().st_mode)
-    except OSError:
-        return False
-
-
 async def _eml_paths_for_upload(
     *,
     upload: EmailImportUpload,
@@ -342,7 +304,11 @@ async def _eml_paths_for_upload(
     except ArchiveError:
         return [], "archive_extract_failed"
 
-    eml_paths = [path for path in extracted_paths if _is_regular_eml_path(path)]
+    eml_paths = [
+        path
+        for path in extracted_paths
+        if path.is_file() and path.suffix.lower() == ".eml"
+    ]
     if not eml_paths:
         return [], "archive_contains_no_eml"
     if len(eml_paths) > MAX_IMPORT_EML_FILES:
