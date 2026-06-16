@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime, timezone
 
 from services.email_dedupe_service import (
