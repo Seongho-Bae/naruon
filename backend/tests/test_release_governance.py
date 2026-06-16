@@ -353,7 +353,7 @@ def test_render_blueprint_requires_backend_encryption_key() -> None:
     assert "- key: AUTH_SESSION_HMAC_SECRET" in render_blueprint
     assert "generateValue: true" in render_blueprint
     assert re.search(
-        r"(?m)^ {6}- key: ENCRYPTION_KEY\n {8}sync: false$",
+        r"(?m)^\s*-\s+key:\s+ENCRYPTION_KEY\s*\n\s+sync:\s+false\s*$",
         render_blueprint,
     )
     assert "`ENCRYPTION_KEY`" in render_deployment
