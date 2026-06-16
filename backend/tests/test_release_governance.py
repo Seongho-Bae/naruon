@@ -512,7 +512,11 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
-    assert 'group: strix-${{ github.repository }}' in workflow
+    assert (
+        "group: strix-${{ github.repository }}-${{ github.event_name == "
+        "'pull_request_target' && format('pr-{0}', github.event.pull_request.number) "
+        "|| github.ref }}"
+    ) in workflow
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
