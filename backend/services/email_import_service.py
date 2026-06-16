@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import Attachment, Email
 from services.archive import extract_backup_async
 from services.email_dedupe_service import strong_email_fingerprint
-from services.email_parser import EmailData, parse_eml
+from services.email_parser import EmailData, parse_eml_bytes
 from services.exceptions import ArchiveError, EmailParseError
 from services.threading_service import (
     assign_thread_id,
@@ -205,7 +205,7 @@ async def _import_single_eml(
 ) -> EmailImportItemResult:
     content = await asyncio.to_thread(eml_path.read_bytes)
     try:
-        parsed = parse_eml(eml_path)
+        parsed = parse_eml_bytes(content)
     except EmailParseError:
         return EmailImportItemResult(
             filename=display_filename,
@@ -256,8 +256,8 @@ async def _import_single_eml(
     )
 
     attachment_count = 0
-    for attachment in parsed.get("file_attachments", []):
-        email_obj.file_attachments.append(
+    for attachment in parsed.get("attachments", []):
+        email_obj.attachments.append(
             Attachment(
                 filename=str(attachment.get("filename") or "attachment.txt"),
                 content=str(attachment.get("content") or ""),

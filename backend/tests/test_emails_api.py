@@ -115,7 +115,7 @@ class MockSession:
 
     async def scalar(self, query):
         query_text = compiled_query_text(query)
-        if "count(" in query_text and "email_items" in query_text:
+        if "count(" in query_text and "emails" in query_text:
             return len(self.items)
         return self.tenant_config
 
@@ -306,7 +306,7 @@ def override_get_db(db_session):
 async def test_get_emails(client: AsyncClient, db_session):
     response = await client.get("/api/emails?limit=10")
     assert response.status_code == 200
-    assert "email_items" in response.json()
+    assert "emails" in response.json()
 
 
 @pytest.mark.asyncio
@@ -321,7 +321,7 @@ async def test_get_emails_returns_ui_safe_display_fields(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    item = response.json()["email_items"][0]
+    item = response.json()["emails"][0]
     assert item["subject"] == "Quarter plan"
     assert item["sender"] == '"" <sender@example.com>'
     assert item["reply_to"] == '"" <reply@example.com>'
@@ -372,7 +372,7 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     response = await client.get("/api/emails?limit=2")
 
     assert response.status_code == 200
-    data = response.json()["email_items"]
+    data = response.json()["emails"]
     assert [item["thread_id"] for item in data] == ["hot-thread", "second-thread"]
     assert data[0]["reply_count"] == 6
 
@@ -433,7 +433,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    data = response.json()["email_items"]
+    data = response.json()["emails"]
     assert len(data) == 1
     assert data[0]["thread_id"] == "root@example.com"
     assert data[0]["reply_count"] == 2
@@ -475,7 +475,7 @@ async def test_get_emails_marks_self_sent_and_pending_reply_threads(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
     assert by_thread["waiting-thread"]["requires_reply"] is True
     assert by_thread["waiting-thread"]["is_self_sent"] is False
     assert by_thread["note-thread"]["is_self_sent"] is True
@@ -529,7 +529,7 @@ async def test_get_emails_sent_folder_returns_user_sent_threads_only(
     response = await client.get("/api/emails?folder=sent&limit=10")
 
     assert response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
     assert set(by_thread) == {"sent-waiting-thread", "sent-note-thread"}
     assert by_thread["sent-waiting-thread"]["requires_reply"] is True
     assert by_thread["sent-note-thread"]["is_self_sent"] is True
@@ -1252,13 +1252,13 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
         await engine.dispose()
 
     assert inbox_response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in inbox_response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in inbox_response.json()["emails"]}
     assert by_thread["waiting-smoke-thread"]["requires_reply"] is True
     assert by_thread["note-smoke-thread"]["is_self_sent"] is True
     assert by_thread["answered-smoke-thread"]["requires_reply"] is False
 
     assert pending_response.status_code == 200
-    pending_threads = {item["thread_id"] for item in pending_response.json()["email_items"]}
+    pending_threads = {item["thread_id"] for item in pending_response.json()["emails"]}
     assert pending_threads == {"waiting-smoke-thread"}
 
 
@@ -1687,12 +1687,12 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     response = await client.get("/api/emails/pending-replies")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["email_items"]) == 1
-    assert data["email_items"][0]["sender"] == '"" <testuser@example.com>'
-    assert data["email_items"][0]["subject"] == "Did you get this?"
-    assert data["email_items"][0]["snippet"] == "Please reply when you can."
-    assert data["email_items"][0]["thread_id"] == "thread3"
-    assert data["email_items"][0]["requires_reply"] is True
+    assert len(data["emails"]) == 1
+    assert data["emails"][0]["sender"] == '"" <testuser@example.com>'
+    assert data["emails"][0]["subject"] == "Did you get this?"
+    assert data["emails"][0]["snippet"] == "Please reply when you can."
+    assert data["emails"][0]["thread_id"] == "thread3"
+    assert data["emails"][0]["requires_reply"] is True
 
 
 def test_email_owner_filters():

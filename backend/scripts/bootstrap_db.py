@@ -24,12 +24,12 @@ def _explicit_email_backfill_owner_ids() -> tuple[str | None, str | None]:
 
 def _get_add_columns_statements() -> list[Executable]:
     return [
-        text("ALTER TABLE email_items " "ADD COLUMN IF NOT EXISTS thread_id varchar"),
-        text("ALTER TABLE email_items " "ADD COLUMN IF NOT EXISTS user_id varchar"),
-        text("ALTER TABLE email_items " "ADD COLUMN IF NOT EXISTS organization_id varchar"),
-        text("ALTER TABLE email_items " "ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
-        text("ALTER TABLE email_items " 'ADD COLUMN IF NOT EXISTS "references" varchar'),
-        text("ALTER TABLE email_items " "ADD COLUMN IF NOT EXISTS reply_to varchar"),
+        text("ALTER TABLE emails " "ADD COLUMN IF NOT EXISTS thread_id varchar"),
+        text("ALTER TABLE emails " "ADD COLUMN IF NOT EXISTS user_id varchar"),
+        text("ALTER TABLE emails " "ADD COLUMN IF NOT EXISTS organization_id varchar"),
+        text("ALTER TABLE emails " "ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
+        text("ALTER TABLE emails " 'ADD COLUMN IF NOT EXISTS "references" varchar'),
+        text("ALTER TABLE emails " "ADD COLUMN IF NOT EXISTS reply_to varchar"),
         text("ALTER TABLE llm_providers " "ADD COLUMN IF NOT EXISTS user_id varchar"),
         text(
             "ALTER TABLE llm_providers "
@@ -240,7 +240,7 @@ def _get_update_project_folders_statements() -> list[Executable]:
 
 def _get_drop_constraints_and_indexes_statements() -> list[Executable]:
     return [
-        text("ALTER TABLE email_items " "DROP CONSTRAINT IF EXISTS emails_message_id_key"),
+        text("ALTER TABLE emails " "DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(
             "ALTER TABLE tenant_configs "
             "DROP CONSTRAINT IF EXISTS tenant_configs_user_id_key"
@@ -284,7 +284,7 @@ def _get_backfill_statements(
 ) -> list[Executable]:
     return [
         text(
-            "UPDATE email_items "
+            "UPDATE emails "
             "SET user_id = :user_id, "
             "organization_id = :organization_id "
             "WHERE user_id IS NULL AND organization_id IS NULL"
@@ -326,7 +326,7 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "DO $$ "
             "BEGIN "
             "IF EXISTS ("
-            "SELECT 1 FROM email_items "
+            "SELECT 1 FROM emails "
             "WHERE user_id IS NULL OR organization_id IS NULL"
             ") THEN "
             "RAISE EXCEPTION "
@@ -336,8 +336,8 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "END IF; "
             "END $$"
         ),
-        text("ALTER TABLE email_items ALTER COLUMN user_id SET NOT NULL"),
-        text("ALTER TABLE email_items " "ALTER COLUMN organization_id SET NOT NULL"),
+        text("ALTER TABLE emails ALTER COLUMN user_id SET NOT NULL"),
+        text("ALTER TABLE emails " "ALTER COLUMN organization_id SET NOT NULL"),
         text(
             "DO $$ "
             "BEGIN "
@@ -363,7 +363,7 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "ON llm_providers (organization_id, name)"
         ),
         text("CREATE INDEX IF NOT EXISTS ix_emails_thread_id " "ON emails (thread_id)"),
-        text("CREATE INDEX IF NOT EXISTS ix_emails_date ON email_items (date)"),
+        text("CREATE INDEX IF NOT EXISTS ix_emails_date ON emails (date)"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS "
             "uq_sender_relationships_scope_source "

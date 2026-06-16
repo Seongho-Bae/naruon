@@ -15,7 +15,7 @@ from services.tenant_config_scope import (
     new_scoped_tenant_config,
 )
 
-router = APIRouter(prefix="/api/accounts", tags=["auth_accounts"])
+router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 
 MAILBOX_ACCOUNT_SETTINGS_FORBIDDEN = (
     "Mailbox account settings require a scoped user session"

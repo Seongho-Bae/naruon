@@ -82,11 +82,11 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         thread_id=thread_id,
     )
 
-    for att in parsed.get("file_attachments", []):
+    for att in parsed.get("attachments", []):
         att_text = att["content"] if att["content"].strip() else "Empty attachment"
         try:
             att_emb = await generate_fixture_embedding(att_text)
-            email_obj.file_attachments.append(
+            email_obj.attachments.append(
                 Attachment(
                     filename=att["filename"],
                     content=att["content"],
@@ -104,7 +104,7 @@ async def import_eml_file(session, eml_file: Path) -> bool:
         logger.error(f"Failed to commit {eml_file}: {e}")
         return False
     logger.info(
-        f"Imported {eml_file.name} with {len(parsed.get('file_attachments', []))} attachments."
+        f"Imported {eml_file.name} with {len(parsed.get('attachments', []))} attachments."
     )
     return True
 
