@@ -1,10 +1,14 @@
 import datetime
-import secrets
+import hashlib
 from unittest.mock import patch, AsyncMock
 
 import pytest
 from scripts.import_fixtures import process_zip_file
 import import_fixtures
+
+
+def _test_openai_api_key() -> str:
+    return hashlib.sha256(b"naruon-test-openai-api-key").hexdigest()
 
 
 @pytest.mark.asyncio
@@ -202,7 +206,7 @@ async def test_root_importer_handles_empty_embedding_provider_response(
         "body": "Body",
         "attachments": [],
     }
-    monkeypatch.setenv("OPENAI_API_KEY", secrets.token_urlsafe(24))
+    monkeypatch.setenv("OPENAI_API_KEY", _test_openai_api_key())
     session = MockSession()
 
     with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(

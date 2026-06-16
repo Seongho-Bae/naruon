@@ -205,7 +205,7 @@ async def _import_single_eml(
 ) -> EmailImportItemResult:
     content = await asyncio.to_thread(eml_path.read_bytes)
     try:
-        parsed = parse_eml_bytes(content)
+        parsed = await asyncio.to_thread(parse_eml_bytes, content)
     except EmailParseError:
         return EmailImportItemResult(
             filename=display_filename,

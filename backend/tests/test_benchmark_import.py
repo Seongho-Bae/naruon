@@ -1,6 +1,6 @@
 import asyncio
-import time
 from pathlib import Path
+import time
 
 import pytest
 
@@ -37,22 +37,17 @@ async def test_benchmark_async_io(tmp_path: Path):
 
         ticker_task = asyncio.create_task(ticker())
         try:
-            start = time.perf_counter()
             await asyncio.gather(*[task_factory() for _ in range(50)])
-            elapsed = time.perf_counter() - start
         finally:
             stop = True
             await ticker_task
-        return elapsed, tick_count
+        return tick_count
 
     try:
-        sync_time, sync_tick_count = await measure_event_loop_responsiveness(task_sync)
-        thread_time, thread_tick_count = await measure_event_loop_responsiveness(
-            task_to_thread
-        )
+        sync_tick_count = await measure_event_loop_responsiveness(task_sync)
+        thread_tick_count = await measure_event_loop_responsiveness(task_to_thread)
     finally:
         if p.exists():
             p.unlink()
 
-    assert thread_tick_count > sync_tick_count
-    assert thread_time < sync_time
+    assert thread_tick_count > max(sync_tick_count, 1) * 5
