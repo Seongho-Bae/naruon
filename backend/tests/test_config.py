@@ -157,6 +157,7 @@ def test_production_settings_reject_repeated_auth_session_hmac_secret(monkeypatc
     [
         "abcd" * 8,
         "abcdefgh" * 4,
+        "qwertyuiop" * 4,
     ],
 )
 def test_production_settings_reject_low_entropy_auth_session_hmac_secret(
