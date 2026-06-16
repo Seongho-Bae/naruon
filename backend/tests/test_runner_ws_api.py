@@ -175,7 +175,7 @@ def test_runner_ws_rejects_missing_auth():
 
 def test_runner_ws_route_uses_signed_session_dependency():
     for route in app.routes:
-        if type(route).__name__ != "_IncludedRouter":
+        if not hasattr(route, "original_router") or not hasattr(route, "include_context"):
             continue
         dependencies = {
             dependency.dependency for dependency in route.include_context.dependencies
