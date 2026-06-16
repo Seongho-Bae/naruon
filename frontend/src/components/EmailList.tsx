@@ -216,11 +216,12 @@ export function EmailList({
             <Input
               id="email-search"
               ref={searchInputRef}
+              type="search"
               aria-label="메일 검색"
               placeholder="메일, 사람, 키워드 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
+              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02] [&::-webkit-search-cancel-button]:hidden"
             />
             {searchQuery && (
               <button
