@@ -10,7 +10,7 @@ sqlalchemy==2.0.41
 greenlet==3.2.4
 asyncpg==0.31.0
 pgvector==0.2.4
-pytest-asyncio
+pytest-asyncio==1.4.0
 openai==1.12.0
 langchain-text-splitters==1.1.2
 tiktoken==0.12.0
