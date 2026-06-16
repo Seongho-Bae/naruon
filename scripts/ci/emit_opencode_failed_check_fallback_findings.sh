@@ -201,8 +201,8 @@ extract_strix_reports() {
 		if ($line =~ m{(?:^|[[:space:]])Model[[:space:]]+((?:github[-_]models|openai|deepseek|vertex_ai)/[A-Za-z0-9._/-]+)}i ||
 			$line =~ m{Strix run failed for model '\''([^'\'']+)'\''}) {
 			$current_model = $1;
-			$window_model ||= $1 if $in_window;
-			$report_model = $1 if defined $title && length $title;
+			$window_model = $1 if $in_window;
+			$report_model = $1 if $in_window && defined $title && length $title;
 		}
 		next unless $in_window;
 		if (defined $continuation_field && length $continuation_field) {
@@ -224,7 +224,7 @@ extract_strix_reports() {
 		if ($line =~ /^Title:[[:space:]]+(.+)/i) {
 			finish_report();
 			$title = $1;
-			$report_model = $window_model || $current_model || "";
+			$report_model = $window_model || "";
 			$continuation_field = "title";
 			next;
 		}
