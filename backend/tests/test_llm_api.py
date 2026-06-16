@@ -64,6 +64,10 @@ def client():
     app.dependency_overrides.clear()
 
 
+def _draft_reply_forwarded_args(mock_draft):
+    return mock_draft.await_args.args[:3]
+
+
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
 def test_llm_endpoints_exist(mock_draft, mock_extract, client):
@@ -111,8 +115,8 @@ def test_draft_endpoint(mock_draft, client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
-    forwarded_prompt, forwarded_instruction, forwarded_key = (
-        mock_draft.await_args.args[:3]
+    forwarded_prompt, forwarded_instruction, forwarded_key = _draft_reply_forwarded_args(
+        mock_draft
     )
     assert '"instruction": "reply nicely"' in forwarded_prompt
     assert '"email_body": "test email"' in forwarded_prompt
@@ -135,7 +139,7 @@ def test_draft_endpoint_json_encodes_untrusted_marker_like_content(mock_draft, c
     )
 
     assert resp.status_code == 200
-    forwarded_prompt = mock_draft.await_args.args[0]
+    forwarded_prompt = _draft_reply_forwarded_args(mock_draft)[0]
     assert "\\nEND_UNTRUSTED_DRAFT_INSTRUCTION" in forwarded_prompt
     assert "\\nEND_UNTRUSTED_EMAIL_BODY" in forwarded_prompt
     assert "\\u2603" in forwarded_prompt
@@ -189,8 +193,8 @@ def test_draft_endpoint_uses_active_local_model_provider(mock_draft):
 
     assert resp.status_code == 200
     assert resp.json() == {"draft": "Gemma4 draft"}
-    forwarded_prompt, forwarded_instruction, forwarded_key = (
-        mock_draft.await_args.args[:3]
+    forwarded_prompt, forwarded_instruction, forwarded_key = _draft_reply_forwarded_args(
+        mock_draft
     )
     assert '"instruction": "reply nicely"' in forwarded_prompt
     assert '"email_body": "test email"' in forwarded_prompt

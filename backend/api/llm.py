@@ -16,6 +16,8 @@ from services.llm_provider_selection import resolve_runtime_llm_provider
 
 router = APIRouter(prefix="/api/llm")
 
+# Keep these bounds aligned with existing API payload sizes so the draft/summarize
+# routes accept realistic email content while still rejecting oversized prompt input.
 LLM_EMAIL_BODY_MAX_CHARS = 20_000
 LLM_DRAFT_INSTRUCTION_MAX_CHARS = 2_000
 LLM_DRAFT_SYSTEM_INSTRUCTION = (
@@ -40,6 +42,7 @@ class DraftRequest(BaseModel):
 
 
 def _render_draft_reply_prompt(request: DraftRequest) -> str:
+    """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""
     instruction_json = json.dumps({"instruction": request.instruction})
     email_json = json.dumps({"email_body": request.email_body})
     return (
