@@ -1,10 +1,10 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { OPTIONS, POST } from "./route";
+import { POST } from "./route";
 
 const ORIGINAL_ENV = { ...process.env };
-const SIGNED_SESSION_TOKEN = "header.payload.signature";
+const SIGNED_SESSION_TOKEN = "signed-session-token";
 
 describe("/api runtime proxy route", () => {
   beforeEach(() => {
@@ -14,7 +14,6 @@ describe("/api runtime proxy route", () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     process.env = { ...ORIGINAL_ENV };
@@ -53,7 +52,7 @@ describe("/api runtime proxy route", () => {
 
     await expect(response.json()).resolves.toEqual({
       target_url: "https://api.naruon.net/api/tasks?limit=1",
-      auth_header: "Bearer " + SIGNED_SESSION_TOKEN,
+      auth_header: "Bearer signed-session-token",
       user_header: null,
       request_body: '{"state":"open"}',
     });
@@ -113,67 +112,6 @@ describe("/api runtime proxy route", () => {
     await expect(response.json()).resolves.toEqual({
       target_url:
         "https://api.naruon.net/api/ontology/relationships?source_message_id=%3Cabc%40example.com%3E&source_thread_id=thread%2Fone",
-    });
-  });
-
-  it("rejects unsigned unsafe requests before proxying", async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    const consoleWarnMock = vi.spyOn(console, "warn").mockImplementation(vi.fn());
-
-    const request = new NextRequest(
-      "https://frontend.naruon.net/api/login",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: "credential=placeholder",
-      },
-    );
-
-    const response = await POST(request, {
-      params: Promise.resolve({ path: ["login"] }),
-    });
-
-    expect(response.status).toBe(401);
-    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
-    await expect(response.json()).resolves.toEqual({
-      error_code: "missing_bearer_session",
-      message: "Authentication required",
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(consoleWarnMock).toHaveBeenCalledWith(
-      "Rejected unsigned unsafe API proxy request",
-      {
-        method: "POST",
-        route: "frontend_api_proxy",
-      },
-    );
-  });
-
-  it("allows unsigned OPTIONS preflight requests to reach the backend proxy", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: URL | RequestInfo, init?: RequestInit) =>
-        Response.json({
-          target_url: String(input),
-          method: init?.method,
-        }),
-      ),
-    );
-
-    const request = new NextRequest("https://frontend.naruon.net/api/tasks", {
-      method: "OPTIONS",
-    });
-
-    const response = await OPTIONS(request, {
-      params: Promise.resolve({ path: ["tasks"] }),
-    });
-
-    await expect(response.json()).resolves.toEqual({
-      target_url: "https://api.naruon.net/api/tasks",
-      method: "OPTIONS",
     });
   });
 });

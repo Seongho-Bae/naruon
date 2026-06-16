@@ -34,12 +34,9 @@ const ALLOWED_BACKEND_QUERY_PARAMS = new Set([
   "source_message_id",
   "source_thread_id",
 ]);
-const SAFE_HTTP_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const MAX_QUERY_PARAM_COUNT = 12;
 const MAX_QUERY_PARAM_VALUE_LENGTH = 2048;
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
-const TOKEN_WHITESPACE_PATTERN = /\s/;
-const JWT_BEARER_TOKEN_PATTERN = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 type ApiRouteContext = {
   params: Promise<{ path?: string[] }> | { path?: string[] };
@@ -102,43 +99,10 @@ function safeBackendQuery(searchParams: URLSearchParams): string {
   return query ? `?${query}` : "";
 }
 
-function hasBearerAuthorizationHeader(request: NextRequest): boolean {
-  const authorization = request.headers.get("authorization")?.trim() ?? "";
-  if (!authorization.startsWith("Bearer ")) {
-    return false;
-  }
-  const token = authorization.slice("Bearer ".length);
-  return (
-    token.length > 0 &&
-    !TOKEN_WHITESPACE_PATTERN.test(token) &&
-    JWT_BEARER_TOKEN_PATTERN.test(token)
-  );
-}
-
 async function proxyApiRequest(
   request: NextRequest,
   context: ApiRouteContext,
 ): Promise<NextResponse> {
-  const method = request.method;
-  if (!SAFE_HTTP_METHODS.has(method) && !hasBearerAuthorizationHeader(request)) {
-    console.warn("Rejected unsigned unsafe API proxy request", {
-      method,
-      route: "frontend_api_proxy",
-    });
-    return NextResponse.json(
-      {
-        error_code: "missing_bearer_session",
-        message: "Authentication required",
-      },
-      {
-        status: 401,
-        headers: {
-          "Referrer-Policy": "no-referrer",
-        },
-      },
-    );
-  }
-
   const params = await context.params;
   const path = params.path ?? [];
   const target = backendApiBaseUrl();
@@ -202,10 +166,6 @@ export async function PUT(request: NextRequest, context: ApiRouteContext) {
 }
 
 export async function PATCH(request: NextRequest, context: ApiRouteContext) {
-  return proxyApiRequest(request, context);
-}
-
-export async function OPTIONS(request: NextRequest, context: ApiRouteContext) {
   return proxyApiRequest(request, context);
 }
 
