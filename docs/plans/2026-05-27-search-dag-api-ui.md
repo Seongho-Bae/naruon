@@ -36,7 +36,7 @@ new provider write path or a new database object.
 
 1. Search API wiring
    - Call `apiClient.post('/api/search', { query, limit: 8 })`.
-   - Preserve the HttpOnly cookie-backed `/api/*` proxy session.
+   - Preserve the stored `naruon_session_token` as `Authorization: Bearer`.
    - Do not emit public identity headers.
    - Render loading, empty, error, and success states.
 

@@ -28,9 +28,9 @@ linked to the originating email/thread and continues to expose only the opaque
   scope. The endpoint accepts `status` and/or `priority`, rejects empty payloads,
   returns 404 for tasks outside the authenticated tenant, and never exposes
   sequential database ids.
-- Add `apiClient.patch` so browser writes keep the HttpOnly cookie-backed proxy
-  session and continue stripping browser `Authorization` plus public identity
-  headers.
+- Add `apiClient.patch` so browser writes keep the stored
+  `naruon_session_token` as `Authorization: Bearer` and continue stripping
+  public identity headers.
 - Update `/tasks` so actual API ticket cards expose status transition buttons
   for `open`, `in_progress`, `blocked`, and `done`; counts update from the
   server response.

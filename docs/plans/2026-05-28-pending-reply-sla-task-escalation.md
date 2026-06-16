@@ -31,9 +31,8 @@ workspace SLA threshold into source-linked `reply_sla` tasks.
    sent-mail message, using `blocked` and `urgent` for escalated work.
 4. Keep generated task titles plain text and replace active HTML-like subjects
    with a safe fallback label.
-5. Add Home and Tasks workspace controls that call the endpoint through the
-   HttpOnly cookie-backed `/api/*` proxy session and show the updated
-   board/status.
+5. Add Home and Tasks workspace controls that call the endpoint with the stored
+   `naruon_session_token` bearer session and show the updated board/status.
 6. Verify desktop and mobile screenshots, horizontal overflow, and mobile scroll.
 
 ## Verification Targets

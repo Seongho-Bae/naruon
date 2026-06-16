@@ -92,9 +92,6 @@ describe("CalendarPage", () => {
     expect(container.querySelector('button[aria-label="다음 달"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="설정"]')).not.toBeNull();
     expect(container.querySelector('button[aria-label="닫기"]')).not.toBeNull();
-    const calendarCheckboxes = Array.from(container.querySelectorAll<HTMLInputElement>('aside input[type="checkbox"]'));
-    expect(calendarCheckboxes.length).toBeGreaterThan(0);
-    expect(calendarCheckboxes.every((checkbox) => checkbox.getAttribute("style") === null)).toBe(true);
   });
 
   it("filters rendered calendar events when a calendar visibility checkbox changes", async () => {

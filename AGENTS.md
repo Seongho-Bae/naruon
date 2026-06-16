@@ -13,14 +13,20 @@
   single files if that makes real repo modules look missing.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
-- Strix Security Scan uses GitHub Models by default through `github.token`,
-  `models: read`, `STRIX_LLM=openai/openai/gpt-4.1`, and
+- Strix Security Scan uses GitHub Models by default through
+  `STRIX_GITHUB_MODELS_TOKEN`, `STRIX_LLM=openai/gpt-5`, and
   `LLM_API_BASE_FILE` pointing at a trusted file containing
-  `https://models.github.ai/inference`. Keep the GitHub Models endpoint in a
-  trusted input file and pass the token only through the
-  provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets must
-  not override PR, push, or scheduled Strix defaults. Vertex remains available
-  only for manual `workflow_dispatch` evidence when the `strix_llm` input
+  `https://models.github.ai/inference`; GitHub Models scans must try the
+  configured GPT-5-or-newer model first and may fall back to the explicit
+  workflow fallback list, currently `deepseek/deepseek-r1-0528` and
+  `deepseek/deepseek-v3-0324`, when GitHub Models provider capacity or model
+  availability blocks the primary run. Do not use GPT-4.1 or weaker GitHub
+  Models fallbacks for Strix or OpenCode PR review evidence. Keep the
+  GitHub Models endpoint in a trusted input file and pass the token only through
+  the provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets
+  must not override PR, push, or scheduled Strix defaults. Vertex remains
+  available only for manual
+  `workflow_dispatch` evidence when the `strix_llm` input
   explicitly selects `vertex_ai/gemini-3.1-pro-preview-customtools` or
   `vertex_ai/gemini-2.5-flash` with `GCP_SA_KEY`; expose Google/Vertex
   credentials only for Vertex provider mode. Direct OpenAI GPT-5.4-or-newer
@@ -62,6 +68,30 @@
 - Missing current-head CodeRabbit evidence is a wait state until bounded polling
   or authoritative skip/review evidence resolves it; do not post a hard blocker
   only because the current head has not been reviewed yet.
+- OpenCode Agent approvals must be gated on current-head GitHub Checks. If a
+  completed check run or status context failed, or the check rollup cannot be
+  verified, the OpenCode review must request changes or explain the verification
+  failure instead of approving.
+- When OpenCode requests changes because Strix or another GitHub Check failed,
+  it must access the failed check logs and annotations, cite the exact failure
+  phrase, map each actionable failure to a concrete repository `path:line`, and
+  provide root cause, fix direction, regression-test direction, and a
+  source-backed suggested diff. A review that only cites a workflow URL, check
+  name, or generic failure summary is not sufficient. If Strix output contains
+  multiple model vulnerability reports, include every model-reported
+  vulnerability separately with the model name, title, severity, endpoint, and
+  Code Locations/path:line evidence when present.
+- OpenCode Agent PR reviews must be general-purpose and meticulous rather than
+  narrowly scenario-specific. Configure the review prompt to use all relevant
+  MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,
+  Context7 for current library/API behavior, and web search only for bounded
+  external lookups. The agent may directly read changed files and focused hunks
+  in read-only mode when MCP evidence is insufficient, but must not edit files
+  or execute project code during the review.
+- OpenCode `Review Overview` comments are durable gate evidence. Publish them
+  through an idempotent marker such as `<!-- opencode-review-overview -->` and
+  update the existing comment instead of deleting it after approval, failed
+  checks, or check-rollup lookup failures.
 - Keep CodeRabbit `request_changes_workflow` enabled for robot approval, but
   keep CodeRabbit GitHub Checks integration disabled. GitHub Actions are already
   evaluated by required checks and PR Governance; letting CodeRabbit also gate
@@ -91,14 +121,13 @@
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
 - Browser frontend writes to signed backend routes must use the HttpOnly
-  `naruon_session` cookie set by `/auth/session`; the Next.js `/api/*` proxy
-  reads that cookie server-side and forwards `Authorization: Bearer` to the
-  backend. Browser code must not persist bearer tokens in localStorage or
-  sessionStorage, must not attach bearer `Authorization` directly, and must not
-  emit or forward public identity headers such as `X-User-Id`,
-  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or
-  `X-Dev-Auth-Token`; tests/mocks must exercise the cookie-backed
-  signed-session path.
+  `naruon_session` cookie through the same-origin Next.js `/api/*` proxy, which
+  translates the server-readable cookie into backend `Authorization: Bearer`.
+  Browser code must not store bearer/session tokens in `localStorage` or
+  `sessionStorage`, and must not emit or forward public identity headers such as
+  `X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
+  or `X-Dev-Auth-Token`; tests/mocks must exercise the signed-session cookie
+  path.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
@@ -141,19 +170,13 @@
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
-  HttpOnly cookie-backed signed-session path through the Next.js proxy and must
-  not add browser `Authorization` or public identity headers.
+  HttpOnly `naruon_session` cookie proxy path and must not add public identity
+  headers.
 - TenantConfig/provider account settings must be scoped by signed-session
   `user_id` and `organization_id`; do not query provider credentials or API keys
   by `user_id` only. Frontend Settings onboarding must use bearer-session API
   calls for account config, CalDAV/WebDAV source readiness, and runner token
   rotation, and mocks must not reintroduce public identity headers.
-- Secret-field encryption must support operator key rotation. New encrypted
-  values must be tagged with the active opaque `ENCRYPTION_KEY_ID`, decrypted
-  through the active key plus explicit decrypt-only `ENCRYPTION_PREVIOUS_KEYS`,
-  and remain compatible with legacy untagged Fernet ciphertext during rotation.
-  Do not reintroduce a single-key-only `EncryptedString` path, hard-coded Fernet
-  keys, SHA/passphrase derivation, or ciphertext fallback on decrypt failure.
 - Self-service mailbox configuration routes must enforce owner-required
   RBAC/ABAC through `services.access_policy`; system/platform admins may not use
   user-facing `/api/config` routes to read or mutate another user's mailbox
@@ -361,6 +384,15 @@
 
 ## Development environment and tooling defaults
 
+- If CodeGraph is not initialized for this repository, agents may run
+  `codegraph init -i` autonomously without asking first; keep generated
+  `.codegraph/` and `.cursor/rules/codegraph.mdc` artifacts local unless a
+  future repository policy explicitly says to commit them. OpenCode PR review
+  uses the project `opencode.jsonc` MCP servers for CodeGraph, DeepWiki,
+  Context7, and web search. It must initialize CodeGraph before review so
+  structural findings cite graph-backed evidence instead of relying only on grep
+  or raw file reads; use Context7 for current library docs, DeepWiki for
+  repository documentation, and web search only for bounded external lookups.
 - StepSecurity `harden-runner` will trigger false-positive `suspicious_file_access` lockouts on Next.js build and dev server executions (e.g., `router_init.js` checksum matches). Configure `disable-file-monitoring: true` in the `harden-runner` step rather than disabling the workflow or using `continue-on-error`.
 - Next.js 15+ Turbopack resolves workspace roots by scanning upward for `package-lock.json`. Do not create or leave a `package-lock.json` in the user's home directory (`~/`), as it will cause Turbopack to spawn infinite background worker node processes attempting to compile the entire home directory.
 - `pydantic-settings` strictly rejects unexpected environment variables by default. When sharing a common `.env` file between frontend and backend services, you must explicitly set `extra="ignore"` in the `SettingsConfigDict` to prevent fatal startup crashes.
@@ -371,10 +403,42 @@
   deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
-- Tailwind v4 scans source text and can emit CSS for class-looking strings in
-  tests. Keep test paths excluded with `@source not` in `globals.css`, and do
-  not place hostile arbitrary utility payloads such as URL/style injection
-  examples as static class-looking strings in source or tests.
+- Release version bumps must keep `VERSION`, `CHANGELOG.md`,
+  `frontend/package.json`, FastAPI app metadata, runtime-config responses, and
+  Docker runtime packaging synchronized. The backend should read the release
+  version from `VERSION`; do not add a new hardcoded API version string.
+- Before opening a PR, new committers should run the focused tests that cover
+  the changed contract and include exact commands in the PR body. For release
+  and Docker changes, at minimum verify `python -m pytest
+  backend/tests/test_release_governance.py backend/tests/test_runtime_config_api.py
+  -q`, `corepack pnpm@11.5.3 --dir frontend test --runInBand` when frontend
+  behavior changes, and a Docker build of the affected image.
+- GHCR publishing evidence for the combined `naruon` image must include the
+  exact image name, tag, local image ID, push result, and registry verification
+  from GitHub Packages or an equivalent manifest/API query. Publish the package
+  with public visibility unless a repository policy explicitly says otherwise.
+  Do not treat a local tag as published evidence. GitHub's REST Packages API and
+  GraphQL package mutations currently do not expose a supported package
+  visibility change operation for GHCR container packages; when API checks show
+  `visibility: private`, complete the public conversion through the logged-in
+  GitHub package settings UI (`Package settings` -> `Danger Zone` -> `Change
+  visibility`) and then verify anonymous pull/token access before declaring the
+  image public.
+- Docker image security inspection is part of release evidence. Use a current
+  container scanner such as Trivy or Grype against the exact pushed image tag
+  and treat high/critical actionable findings as blockers until fixed or
+  documented with precise non-applicability evidence.
+- Docker Compose and Podman live-E2E work must clean up after itself. Stop
+  stale `naruon*` containers, remove unused volumes/layers with
+  `podman system prune --all --volumes --force` when safe, and verify
+  `podman ps` has no stale Naruon services. If Podman reports broken storage
+  metadata such as missing overlay layers or `readlink ... overlay: invalid
+  argument`, run `podman system check --repair --force` before relying on
+  `podman system df` or additional image scans.
+- Keep contributor setup friction low: document any new required environment
+  variables, model tags, package-manager version pins, or live-E2E ports in the
+  same PR that introduces them, and avoid hidden local-only defaults that make
+  another committer's PR fail after checkout.
 
 ## Phase 10 development rules
 

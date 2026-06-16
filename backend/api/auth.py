@@ -1,5 +1,4 @@
-import http.client
-import datetime
+from http.client import HTTPSConnection
 import hashlib
 import json
 import logging
@@ -12,10 +11,8 @@ from typing import Annotated, Any, Literal, cast
 from urllib.parse import urlsplit
 
 import jwt
-from asyncpg import Connection, connect as asyncpg_connect
 from jwt import PyJWKClient
-from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from fastapi import Depends, Header, HTTPException
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 from core.url_validation import (
@@ -29,7 +26,7 @@ OIDC_JWKS_TIMEOUT_SECONDS = 5
 OIDC_JWKS_MAX_RESPONSE_BYTES = 1024 * 1024
 
 
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+class _PinnedHTTPSConnection(HTTPSConnection):
     def __init__(
         self,
         address: str,
@@ -136,7 +133,7 @@ RoleName = Literal[
     "group_admin",
     "member",
 ]
-SessionVerifier = Literal["hmac", "oidc", "override"]
+SessionVerifier = Literal["hmac", "oidc", "override", "server"]
 ALLOWED_ROLES: set[str] = {
     "system_admin",
     "tenant_admin",
@@ -152,9 +149,16 @@ SESSION_ISSUER = "naruon-control-plane"
 SESSION_AUDIENCE = "naruon-api"
 SESSION_SIGNING_ALGORITHM = "HS256"
 OIDC_SIGNING_ALGORITHM = "RS256"
+SESSION_ALLOWED_ALGORITHMS = (SESSION_SIGNING_ALGORITHM,)
+OIDC_ALLOWED_ALGORITHMS = (OIDC_SIGNING_ALGORITHM,)
+JWT_DECODE_REQUIRED_CLAIMS = ("exp", "iss", "aud")
 MIN_SESSION_SECRET_BYTES = 32
-
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+MAX_SIGNED_SESSION_EXPIRATION_SECONDS = 12 * 60 * 60
+MAX_SIGNED_SESSION_CLOCK_SKEW_SECONDS = 60
+SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
+SESSION_AUTH_RATE_LIMIT_MAX_FAILURES = 10
+SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS = 4096
+_session_auth_failure_buckets: dict[str, tuple[int, float]] = {}
 
 
 @dataclass(frozen=True)
@@ -167,19 +171,7 @@ class AuthContext:
     session_verifier: SessionVerifier = field(default="override", compare=False)
 
 
-class LogoutResponse(BaseModel):
-    revoked: bool
-
-
-class SessionResponse(BaseModel):
-    user_id: str
-    organization_id: str | None
-    workspace_id: str
-
-
 def ensure_organization_access(auth_context: AuthContext, organization_id: str) -> None:
-    if is_system_admin_role(auth_context.role):
-        return
     if auth_context.organization_id != organization_id:
         raise HTTPException(
             status_code=403, detail="Resource belongs to a different organization"
@@ -201,7 +193,7 @@ def is_admin_role(role: str) -> bool:
 async def get_auth_context(
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ) -> AuthContext:
-    return await build_persistent_auth_context(authorization)
+    return build_auth_context(authorization=authorization)
 
 
 def build_auth_context(authorization: str | None = None) -> AuthContext:
@@ -215,15 +207,6 @@ def build_auth_context(authorization: str | None = None) -> AuthContext:
     use explicit FastAPI dependency overrides.
     """
     payload, session_verifier = _verify_signed_session_payload(authorization)
-    return _auth_context_from_session_payload(payload, session_verifier)
-
-
-async def build_persistent_auth_context(
-    authorization: str | None,
-) -> AuthContext:
-    token = _extract_bearer_token(authorization)
-    payload, session_verifier = _verify_signed_session_token(token)
-    await _reject_persistently_revoked_session_token(token)
     return _auth_context_from_session_payload(payload, session_verifier)
 
 
@@ -245,22 +228,46 @@ def preload_oidc_jwks() -> None:
         logger.exception("OIDC JWKS preload failed; requests will fail closed.")
 
 
-def _cached_oidc_signing_key_from_jwt(token: str) -> Any:
-    if not _cached_oidc_signing_keys:
-        raise _authentication_error()
+def _oidc_unverified_header(token: str) -> dict[str, Any]:
     try:
         header = jwt.get_unverified_header(token)
     except Exception:
         raise _authentication_error() from None
     _reject_unsupported_critical_headers(header)
-    if header.get("alg") != OIDC_SIGNING_ALGORITHM:
+    if header.get("alg") not in OIDC_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     key_id = header.get("kid")
     if not isinstance(key_id, str) or not key_id.strip():
         raise _authentication_error()
+    return header
+
+
+def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
+    if not _cached_oidc_signing_keys:
+        raise _authentication_error()
+    header = _oidc_unverified_header(token)
+    key_id = header["kid"].strip()
+
     for signing_key in _cached_oidc_signing_keys:
-        if getattr(signing_key, "key_id", None) == key_id:
-            return signing_key
+        try:
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=OIDC_ALLOWED_ALGORITHMS,
+                audience=settings.OIDC_CLIENT_ID,
+                issuer=settings.OIDC_ISSUER_URL,
+                options={
+                    "require": JWT_DECODE_REQUIRED_CLAIMS,
+                    "verify_signature": True,
+                },
+            )
+        except jwt.PyJWTError:
+            continue
+        if getattr(signing_key, "key_id", None) != key_id:
+            raise _authentication_error()
+        if not isinstance(payload, dict):
+            raise _authentication_error()
+        return payload
     raise _authentication_error()
 
 
@@ -273,11 +280,14 @@ def _session_secret_bytes() -> bytes:
     configured = settings.AUTH_SESSION_HMAC_SECRET
     if configured is None:
         raise _authentication_error()
-    secret = configured.get_secret_value().encode("utf-8")
+    secret_value = configured.get_secret_value()
+    if not secret_value:
+        raise _authentication_error()
+    secret = secret_value.encode("utf-8")
     if len(secret) < MIN_SESSION_SECRET_BYTES:
         raise _authentication_error()
     try:
-        validate_auth_session_hmac_secret_value(configured.get_secret_value())
+        validate_auth_session_hmac_secret_value(secret_value)
     except ValueError:
         raise _authentication_error() from None
     return secret
@@ -292,152 +302,92 @@ def _extract_bearer_token(authorization: str | None) -> str:
     return token.strip()
 
 
-def _session_token_fingerprint(token: str) -> str:
+def _session_auth_failure_key(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def _utc_now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.timezone.utc)
+def _prune_session_auth_failure_buckets(now: float) -> None:
+    expired_keys = [
+        key
+        for key, (_failure_count, reset_at) in _session_auth_failure_buckets.items()
+        if reset_at <= now
+    ]
+    for key in expired_keys:
+        _session_auth_failure_buckets.pop(key, None)
 
 
-def _as_aware_utc(value: datetime.datetime) -> datetime.datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=datetime.timezone.utc)
-    return value.astimezone(datetime.timezone.utc)
-
-
-def _session_expiration_datetime(payload: dict[str, Any]) -> datetime.datetime:
-    return datetime.datetime.fromtimestamp(
-        _session_expires_at(payload), datetime.timezone.utc
-    )
-
-
-def _revocation_database_url() -> str:
-    database_url = str(settings.DATABASE_URL)
-    if database_url.startswith("postgresql+asyncpg://"):
-        return "postgresql://" + database_url[len("postgresql+asyncpg://") :]
-    if database_url.startswith("postgres+asyncpg://"):
-        return "postgres://" + database_url[len("postgres+asyncpg://") :]
-    return database_url
-
-
-async def revoke_session_token(
-    token: str,
-    expires_at: datetime.datetime,
-    *,
-    user_id: str,
-    organization_id: str | None,
-    workspace_id: str,
-) -> None:
-    now = _utc_now()
-    normalized_expires_at = _as_aware_utc(expires_at)
-    if normalized_expires_at <= now:
+def _ensure_session_auth_failure_bucket_capacity(key: str) -> None:
+    if (
+        key in _session_auth_failure_buckets
+        or len(_session_auth_failure_buckets) < SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS
+    ):
         return
-    fingerprint = _session_token_fingerprint(token)
-
-    connection: Connection | None = None
-    try:
-        connection = await asyncpg_connect(_revocation_database_url(), timeout=5)
-        await connection.execute(
-            "DELETE FROM revoked_session_tokens WHERE expires_at <= $1",
-            now,
-        )
-        await connection.execute(
-            """
-            INSERT INTO revoked_session_tokens (
-                token_fingerprint,
-                user_id,
-                organization_id,
-                workspace_id,
-                expires_at,
-                revoked_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (token_fingerprint) DO UPDATE SET
-                user_id = EXCLUDED.user_id,
-                organization_id = EXCLUDED.organization_id,
-                workspace_id = EXCLUDED.workspace_id,
-                expires_at = EXCLUDED.expires_at,
-                revoked_at = EXCLUDED.revoked_at
-            """,
-            fingerprint,
-            user_id,
-            organization_id,
-            workspace_id,
-            normalized_expires_at,
-            now,
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        raise _authentication_error() from None
-    finally:
-        if connection is not None:
-            await connection.close()
+    _session_auth_failure_buckets.pop(next(iter(_session_auth_failure_buckets)), None)
 
 
-async def _reject_persistently_revoked_session_token(token: str) -> None:
-    connection: Connection | None = None
-    try:
-        connection = await asyncpg_connect(_revocation_database_url(), timeout=5)
-        is_revoked = await connection.fetchval(
-            """
-            SELECT TRUE
-            FROM revoked_session_tokens
-            WHERE token_fingerprint = $1 AND expires_at > $2
-            LIMIT 1
-            """,
-            _session_token_fingerprint(token),
-            _utc_now(),
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        raise _authentication_error() from None
-    finally:
-        if connection is not None:
-            await connection.close()
-    if is_revoked:
+def _reject_if_session_auth_rate_limited(token: str) -> None:
+    now = time.monotonic()
+    _prune_session_auth_failure_buckets(now)
+    key = _session_auth_failure_key(token)
+    failure_count, _reset_at = _session_auth_failure_buckets.get(
+        key,
+        (0, now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS),
+    )
+    if failure_count >= SESSION_AUTH_RATE_LIMIT_MAX_FAILURES:
         raise _authentication_error()
+
+
+def _record_session_auth_failure(token: str) -> None:
+    now = time.monotonic()
+    _prune_session_auth_failure_buckets(now)
+    key = _session_auth_failure_key(token)
+    _ensure_session_auth_failure_bucket_capacity(key)
+    failure_count, reset_at = _session_auth_failure_buckets.get(
+        key,
+        (0, now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS),
+    )
+    if reset_at <= now:
+        failure_count = 0
+        reset_at = now + SESSION_AUTH_RATE_LIMIT_WINDOW_SECONDS
+    _session_auth_failure_buckets[key] = (failure_count + 1, reset_at)
+
+
+def _clear_session_auth_failures(token: str) -> None:
+    _session_auth_failure_buckets.pop(_session_auth_failure_key(token), None)
 
 
 def _verify_signed_session_payload(
     authorization: str | None,
 ) -> tuple[dict[str, Any], SessionVerifier]:
     token = _extract_bearer_token(authorization)
-    return _verify_signed_session_token(token)
+    _reject_if_session_auth_rate_limited(token)
+
+    try:
+        payload, session_verifier = _verify_signed_session_token(token)
+    except HTTPException:
+        _record_session_auth_failure(token)
+        raise
+    _clear_session_auth_failures(token)
+    return payload, session_verifier
 
 
 def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
+    # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
-        return _verify_oidc_session_token(token)
-    return _verify_hmac_session_token(token)
+        if jwks_client is None:
+            raise _authentication_error()
+        try:
+            payload = _decode_cached_oidc_session_payload(token)
+            _reject_signed_session_system_admin_payload(payload)
+            return payload, "oidc"
+        except Exception:
+            raise _authentication_error() from None
 
-
-def _verify_oidc_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
-    if jwks_client is None:
-        raise _authentication_error()
-    try:
-        signing_key = _cached_oidc_signing_key_from_jwt(token)
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=[OIDC_SIGNING_ALGORITHM],
-            audience=settings.OIDC_CLIENT_ID,
-            issuer=settings.OIDC_ISSUER_URL,
-        )
-        _reject_signed_session_system_admin_payload(payload)
-        return payload, "oidc"
-    except Exception:
-        raise _authentication_error() from None
-
-
-def _verify_hmac_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
     try:
         header = jwt.get_unverified_header(token)
     except jwt.PyJWTError:
         raise _authentication_error() from None
-    if header.get("alg") != SESSION_SIGNING_ALGORITHM:
+    if header.get("alg") not in SESSION_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)
 
@@ -445,9 +395,13 @@ def _verify_hmac_session_token(token: str) -> tuple[dict[str, Any], SessionVerif
         payload = jwt.decode(
             token,
             _session_secret_bytes(),
-            algorithms=[SESSION_SIGNING_ALGORITHM],
+            algorithms=SESSION_ALLOWED_ALGORITHMS,
             audience=SESSION_AUDIENCE,
             issuer=SESSION_ISSUER,
+            options={
+                "require": JWT_DECODE_REQUIRED_CLAIMS,
+                "verify_signature": True,
+            },
         )
     except jwt.PyJWTError:
         raise _authentication_error()
@@ -464,6 +418,8 @@ def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None
     # SaaS control-plane roles require explicit server-side assignment, not
     # externally supplied HMAC or enterprise OIDC session claims.
     if role_claim in SYSTEM_ADMIN_ROLES:
+        raise _authentication_error()
+    if role_claim in TENANT_ADMIN_ROLES:
         raise _authentication_error()
 
 
@@ -497,41 +453,51 @@ def _tuple_string_claim(payload: dict[str, Any], name: str) -> tuple[str, ...]:
     return tuple(normalized)
 
 
-def _session_expires_at(payload: dict[str, Any]) -> float:
-    expires_at = payload.get("exp")
-    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
-        raise _authentication_error()
-    if not math.isfinite(expires_at):
-        raise _authentication_error()
-    return float(expires_at)
-
-
-def _validate_session_metadata(
-    payload: dict[str, Any], session_verifier: SessionVerifier
-) -> None:
-    if session_verifier == "hmac":
+def _validate_session_metadata(payload: dict[str, Any]) -> None:
+    # If OIDC is configured, the issuer/audience might be verified by jwt.decode
+    if not settings.OIDC_ISSUER_URL:
         if payload.get("ver") != 1:
             raise _authentication_error()
         if payload.get("iss") != SESSION_ISSUER:
             raise _authentication_error()
         if payload.get("aud") != SESSION_AUDIENCE:
             raise _authentication_error()
-    elif session_verifier != "oidc":
+    expires_at = payload.get("exp")
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
         raise _authentication_error()
-    if _session_expires_at(payload) <= time.time():
+    if not math.isfinite(expires_at):
         raise _authentication_error()
+    now = time.time()
+    if expires_at <= now:
+        raise _authentication_error()
+    if expires_at > now + MAX_SIGNED_SESSION_EXPIRATION_SECONDS:
+        raise _authentication_error()
+    issued_at = payload.get("iat")
+    if issued_at is not None:
+        if isinstance(issued_at, bool) or not isinstance(issued_at, (int, float)):
+            raise _authentication_error()
+        if not math.isfinite(issued_at):
+            raise _authentication_error()
+        if issued_at > now + MAX_SIGNED_SESSION_CLOCK_SKEW_SECONDS:
+            raise _authentication_error()
+        if expires_at <= issued_at:
+            raise _authentication_error()
+        if expires_at - issued_at > MAX_SIGNED_SESSION_EXPIRATION_SECONDS:
+            raise _authentication_error()
 
 
 def _auth_context_from_session_payload(
     payload: dict[str, Any], session_verifier: SessionVerifier
 ) -> AuthContext:
-    _validate_session_metadata(payload, session_verifier)
+    _validate_session_metadata(payload)
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
     role = cast(RoleName, role_value)
+    if role in TENANT_ADMIN_ROLES and session_verifier not in ("server", "override"):
+        raise _authentication_error()
     organization_id = _optional_string_claim(payload, "org")
-    if not is_system_admin_role(role) and organization_id is None:
+    if organization_id is None:
         raise _authentication_error()
     return AuthContext(
         user_id=_required_string_claim(payload, "sub"),
@@ -559,31 +525,3 @@ async def get_current_user_role(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> str:
     return auth_context.role
-
-
-@router.get("/session", response_model=SessionResponse)
-async def current_session(
-    auth_context: AuthContext = Depends(get_auth_context),
-) -> SessionResponse:
-    return SessionResponse(
-        user_id=auth_context.user_id,
-        organization_id=auth_context.organization_id,
-        workspace_id=auth_context.workspace_id,
-    )
-
-
-@router.post("/logout", response_model=LogoutResponse)
-async def logout_current_session(
-    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
-) -> LogoutResponse:
-    token = _extract_bearer_token(authorization)
-    payload, session_verifier = _verify_signed_session_token(token)
-    auth_context = _auth_context_from_session_payload(payload, session_verifier)
-    await revoke_session_token(
-        token,
-        _session_expiration_datetime(payload),
-        user_id=auth_context.user_id,
-        organization_id=auth_context.organization_id,
-        workspace_id=auth_context.workspace_id,
-    )
-    return LogoutResponse(revoked=True)

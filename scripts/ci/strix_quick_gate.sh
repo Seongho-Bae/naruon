@@ -47,8 +47,6 @@ REPO_NAME="${REPO_ROOT##*/}"
 # from masking scan incompleteness — a successful strix run (exit 0) ignores
 # this flag because the scan itself produced a complete result set.
 INFRA_ERROR_DETECTED=0
-LAST_ATTEMPT_INFRA_ERROR_DETECTED=0
-INFRA_ERROR_WITH_FINDINGS_DETECTED=0
 ZERO_FINDINGS_REPORTED=0
 PR_FINDINGS_DECISION="not_applicable"
 CHANGED_FILES=()
@@ -522,6 +520,18 @@ is_preexisting_report_dir() {
 is_github_models_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
+	deepseek/* | meta/* | mistral-ai/*)
+		return 0
+		;;
+	*)
+		return 1
+		;;
+	esac
+}
+
+is_github_models_api_compatible_model() {
+	case "$1" in
+	openai/openai/* | github_models/* | \
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	deepseek/* | meta/* | mistral-ai/*)
 		return 0
@@ -949,7 +959,7 @@ authoritative_sca_checks_passed_for_pr_head() {
 		return 1
 	fi
 
-	local head_sha pr_number repository workflow_runs_json verification_result
+	local head_sha pr_number repository gh_token workflow_runs_json verification_result
 	if ! head_sha="$(load_pull_request_head_sha)"; then
 		echo "Unable to determine pull request head SHA for authoritative SCA verification; failing closed." >&2
 		return 1
@@ -965,12 +975,13 @@ authoritative_sca_checks_passed_for_pr_head() {
 		return 1
 	fi
 
-	if [ -z "$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")" ]; then
+	gh_token="$(trim_whitespace "${GH_TOKEN:-${GITHUB_TOKEN:-}}")"
+	if [ -z "$gh_token" ]; then
 		echo "GitHub token is required for authoritative SCA verification; failing closed." >&2
 		return 1
 	fi
 
-	if ! workflow_runs_json="$(gh api \
+	if ! workflow_runs_json="$(GH_TOKEN="$gh_token" gh api \
 		-H "Accept: application/vnd.github+json" \
 		"repos/$repository/actions/runs?head_sha=$head_sha&event=pull_request&per_page=100")"; then
 		echo "Unable to query authoritative SCA workflow runs for this pull request head; failing closed." >&2
@@ -1200,6 +1211,7 @@ EOF
 	if [ "$needs_deployment_context" -eq 1 ]; then
 		cat <<'EOF'
 Dockerfile
+backend/scripts/docker_entrypoint.sh
 frontend/Dockerfile
 frontend/package.json
 frontend/package-lock.json
@@ -1389,6 +1401,87 @@ PY
 	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
 }
 
+build_pull_request_head_tree_scope_dir() {
+	local scope_dir
+	scope_dir="$(mktemp -d "${TMPDIR:-/tmp}/strix-pr-scope.XXXXXX")"
+	scope_dir="$({ CDPATH='' && cd -P -- "$scope_dir" && pwd -P; })"
+	PULL_REQUEST_SCOPE_DIRS+=("$scope_dir")
+
+	local head_sha
+	head_sha="$(trim_whitespace "${PR_HEAD_SHA:-}")"
+	if [ -z "$head_sha" ] || ! is_valid_git_commit_sha "$head_sha"; then
+		echo "ERROR: pull request head commit SHA is invalid; failing closed." >&2
+		return 2
+	fi
+	if ! git rev-parse --verify --quiet "$head_sha^{commit}" >/dev/null; then
+		echo "ERROR: pull request head commit could not be read; failing closed: $head_sha" >&2
+		return 2
+	fi
+
+	local tree_output
+	if ! tree_output="$(git ls-tree -r --full-tree "$head_sha")"; then
+		echo "ERROR: pull request head tree could not be read; failing closed." >&2
+		return 2
+	fi
+
+	local copied_file_count=0
+	local metadata relative_path mode object_type object_hash dst_path tmp_dst
+	while IFS=$'\t' read -r metadata relative_path; do
+		[ -n "$metadata" ] || continue
+		# shellcheck disable=SC2086 # metadata is exactly git ls-tree's mode/type/object tuple.
+		read -r mode object_type object_hash <<<"$metadata"
+		if [ "$object_type" != "blob" ]; then
+			echo "ERROR: pull request head tree entry is not a blob; failing closed: $relative_path" >&2
+			return 2
+		fi
+		case "$mode" in
+		100644 | 100755)
+			;;
+		*)
+			echo "ERROR: pull request head tree entry has unsupported mode $mode; failing closed: $relative_path" >&2
+			return 2
+			;;
+		esac
+		relative_path="$(normalize_changed_file_path "$relative_path")" || {
+			echo "ERROR: pull request head tree path is unsafe: $relative_path" >&2
+			return 2
+		}
+		dst_path="$(
+			python3 - "$scope_dir" "$relative_path" <<'PY'
+from pathlib import Path
+import sys
+
+scope_root = Path(sys.argv[1]).resolve(strict=True)
+relative_path = Path(sys.argv[2])
+dst_path = scope_root / relative_path
+print(dst_path)
+PY
+		)"
+		mkdir -p -- "$(dirname -- "$dst_path")"
+		tmp_dst="$(mktemp "$(dirname -- "$dst_path")/.pr-head.XXXXXX")" || return 2
+		if ! git cat-file blob "$object_hash" >"$tmp_dst"; then
+			rm -f -- "$tmp_dst"
+			echo "ERROR: pull request head blob could not be copied; failing closed: $relative_path" >&2
+			return 2
+		fi
+		if ! mv -- "$tmp_dst" "$dst_path"; then
+			rm -f -- "$tmp_dst"
+			return 2
+		fi
+		# PR-head files are scanner input data in privileged workflows. Preserve
+		# blob content only; never preserve executable bits from untrusted heads.
+		chmod 644 "$dst_path" || return 2
+		copied_file_count=$((copied_file_count + 1))
+	done <<<"$tree_output"
+
+	if [ "$copied_file_count" -eq 0 ]; then
+		echo "ERROR: pull request head tree contains no regular files to scan; failing closed." >&2
+		return 2
+	fi
+
+	LAST_PULL_REQUEST_SCOPE_DIR="$scope_dir"
+}
+
 prepare_pull_request_scan_scope() {
 	if ! is_pull_request_event; then
 		return 0
@@ -1467,11 +1560,11 @@ PY
 	if [ "$STRIX_DISABLE_PR_SCOPING" = "1" ]; then
 		if pull_request_head_blob_required; then
 			local build_scope_rc=0
-			build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+			build_pull_request_head_tree_scope_dir || build_scope_rc=$?
 			if [ "$build_scope_rc" -eq 0 ]; then
 				TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 				TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-				printf "Using bounded PR-head blob scope for pull request_target Strix scan with %s scannable changed file(s).\n" "$total_files" >&2
+				printf "Using full PR-head blob scope for pull request_target Strix scan; %s scannable changed file(s) retained for findings attribution.\n" "$total_files" >&2
 				return 0
 			fi
 			return 2
@@ -1497,14 +1590,22 @@ PY
 		return 0
 	fi
 	local build_scope_rc=0
-	build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+	if pull_request_head_blob_required; then
+		build_pull_request_head_tree_scope_dir || build_scope_rc=$?
+	else
+		build_pull_request_scope_dir "${CHANGED_FILES[@]}" || build_scope_rc=$?
+	fi
 	if [ "$build_scope_rc" -ne 0 ]; then
 		return 2
 	fi
 	TARGET_PATH="$LAST_PULL_REQUEST_SCOPE_DIR"
 	TARGET_PATH_IS_INTERNAL_PR_SCOPE=1
-	printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
-	printf ".\n" >&2
+	if pull_request_head_blob_required; then
+		printf "Materialized full PR-head scope for Strix scan; %s scannable changed file(s) retained for findings attribution.\n" "$total_files" >&2
+	else
+		printf "Scoped pull request Strix scan to %s changed file(s)" "$total_files" >&2
+		printf ".\n" >&2
+	fi
 	return 0
 }
 
@@ -1760,10 +1861,6 @@ evaluate_pull_request_findings() {
 		if [ "$rank" -ge "$threshold_rank" ]; then
 			mapfile -t vulnerability_locations < <(extract_vulnerability_locations "$STRIX_LOG")
 			if [ "${#vulnerability_locations[@]}" -eq 0 ]; then
-				if vulnerability_file_is_retryable_model_inconsistency "$STRIX_LOG"; then
-					PR_FINDINGS_DECISION="retry_model_inconsistency"
-					return 1
-				fi
 				PR_FINDINGS_DECISION="block_unmapped"
 				echo "Unable to map Strix findings to changed files; failing closed for pull request." >&2
 				return 1
@@ -1871,6 +1968,28 @@ fallback_models_config_name_for_model() {
 	printf '%s\n' "STRIX_FALLBACK_MODELS"
 }
 
+has_distinct_fallback_model_for_model() {
+	local model="$1"
+	local fallback_models_raw
+	fallback_models_raw="$(fallback_models_raw_for_model "$model")"
+	fallback_models_raw="${fallback_models_raw//$'\r'/ }"
+	fallback_models_raw="${fallback_models_raw//$'\n'/ }"
+
+	local fallback_models=()
+	read -r -a fallback_models <<<"$fallback_models_raw"
+
+	local candidate_raw
+	local candidate
+	for candidate_raw in "${fallback_models[@]}"; do
+		candidate="$(normalize_model "$candidate_raw")"
+		if [ -n "$candidate" ] && [ "$candidate" != "$model" ]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
 resolved_llm_api_base_for_model() {
 	local model="$1"
 
@@ -1906,7 +2025,7 @@ resolved_llm_api_base_for_model() {
 		echo "ERROR: LLM_API_BASE must be an https URL when configured." >&2
 		return 2
 	fi
-	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_model "$model"; then
+	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_api_compatible_model "$model"; then
 		echo "ERROR: LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix." >&2
 		return 2
 	fi
@@ -1925,7 +2044,6 @@ run_strix_once() {
 	local llm_api_base_value
 	local resolved_target_path
 	local timeout_seconds="$STRIX_PROCESS_TIMEOUT_SECONDS"
-	LAST_ATTEMPT_INFRA_ERROR_DETECTED=0
 	if [ "$STRIX_TOTAL_TIMEOUT_SECONDS" -gt 0 ]; then
 		local remaining_budget
 		remaining_budget="$(remaining_total_budget)"
@@ -2101,10 +2219,6 @@ PY
 
 	if has_detected_infrastructure_error; then
 		INFRA_ERROR_DETECTED=1
-		LAST_ATTEMPT_INFRA_ERROR_DETECTED=1
-		if has_any_reported_severity_markers; then
-			INFRA_ERROR_WITH_FINDINGS_DETECTED=1
-		fi
 		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
 			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2
 			return 1
@@ -2134,7 +2248,8 @@ is_llm_api_connection_error() {
 	fi
 
 	if grep -Eiq 'litellm(\.exceptions)?\.InternalServerError' "$STRIX_LOG" &&
-		grep -Eiq 'OpenAIException[[:space:]]*-[[:space:]]*Connection error' "$STRIX_LOG" &&
+		grep -Eiq 'OpenAIException' "$STRIX_LOG" &&
+		grep -Eiq 'Connection error' "$STRIX_LOG" &&
 		grep -Eiq '(openai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG"; then
 		return 0
 	fi
@@ -2146,15 +2261,6 @@ is_llm_service_unavailable_error() {
 	if grep -Eiq 'litellm(\.exceptions)?\.ServiceUnavailableError' "$STRIX_LOG" &&
 		grep -Eiq '(GeminiException|VertexAI|Vertex_ai|vertex\.ai|openai|anthropic|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
 		grep -Eiq '("status"[[:space:]]*:[[:space:]]*"UNAVAILABLE"|(^|[^0-9])503([^0-9]|$)|high demand|Service Unavailable)' "$STRIX_LOG"; then
-		return 0
-	fi
-
-	return 1
-}
-
-is_llm_budget_limit_error() {
-	if grep -Eiq '(litellm|DeepseekException|OpenAIException|GitHub Models|models\.github\.ai|LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
-		grep -Eiq '(account has reached its budget limit|budget limit|usage limit|insufficient quota|quota exceeded|billing hard limit)' "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2264,6 +2370,15 @@ is_vertex_not_found_error() {
 	return 1
 }
 
+is_github_models_unavailable_model_error() {
+	if grep -Eiq 'Unavailable model:[[:space:]]*[^[:space:]]+' "$STRIX_LOG" &&
+		grep -Eiq '(litellm\.BadRequestError|OpenAIException|LLM CONNECTION FAILED|Could not establish connection to the language model|models\.github\.ai|GitHub Models|openai)' "$STRIX_LOG"; then
+		return 0
+	fi
+
+	return 1
+}
+
 is_rate_limit_error() {
 	if grep -Fq 'RateLimitError' "$STRIX_LOG"; then
 		return 0
@@ -2277,21 +2392,6 @@ is_rate_limit_error() {
 	# target-application rate-limit responses as LLM provider errors.
 	if grep -Eq '(^|[^0-9])429([^0-9]|$)' "$STRIX_LOG" &&
 		grep -Eiq '(litellm|RateLimitError|VertexAI|Vertex_ai|vertex\.ai|openai|anthropic)' "$STRIX_LOG"; then
-		return 0
-	fi
-
-	return 1
-}
-
-is_github_models_unavailable_model_error() {
-	local model="$1"
-
-	if [ -n "$model" ] && ! is_github_models_model "$model"; then
-		return 1
-	fi
-
-	if grep -Fq 'Unavailable model' "$STRIX_LOG" &&
-		grep -Eiq '(litellm\.BadRequestError|OpenAIException|GitHub Models|models\.github\.ai)' "$STRIX_LOG"; then
 		return 0
 	fi
 
@@ -2387,10 +2487,6 @@ has_detected_infrastructure_error() {
 		return 0
 	fi
 
-	if is_github_models_unavailable_model_error ""; then
-		return 0
-	fi
-
 	if is_midstream_fallback_error; then
 		return 0
 	fi
@@ -2400,10 +2496,6 @@ has_detected_infrastructure_error() {
 	fi
 
 	if is_llm_service_unavailable_error; then
-		return 0
-	fi
-
-	if is_llm_budget_limit_error; then
 		return 0
 	fi
 
@@ -2507,18 +2599,23 @@ has_only_below_threshold_vulnerabilities() {
 		done
 	done
 
-	update_max_severity_from_stream "$STRIX_LOG"
+	if [ "$found_any_vuln_file" -eq 0 ]; then
+		update_max_severity_from_stream "$STRIX_LOG"
+	fi
 
 	if [ "$saw_any_severity" -eq 0 ]; then
 		return 1
 	fi
 
-	# Guard against incomplete scans due to infrastructure errors. The current
-	# attempt's infrastructure signal must always fail closed. Earlier provider
-	# failures only poison below-threshold handling when they produced severity
-	# markers, because a later fallback can complete a clean scan after a primary
-	# model availability failure with no findings.
-	if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] || [ "$INFRA_ERROR_WITH_FINDINGS_DETECTED" -eq 1 ]; then
+	# Guard against incomplete scans due to infrastructure errors.
+	# Use the sticky INFRA_ERROR_DETECTED flag instead of re-reading
+	# STRIX_LOG, because STRIX_LOG is overwritten per-attempt.  If an
+	# earlier attempt hit an infrastructure error (timeout, rate-limit,
+	# transport failure) and produced a partial report that now sits in
+	# the reports directory, the *current* STRIX_LOG may show a different
+	# failure — or even success — but the partial report's low-severity
+	# findings must not be treated as a clean scan result.
+	if [ "$INFRA_ERROR_DETECTED" -eq 1 ]; then
 		echo "Below-threshold findings detected, but infrastructure errors occurred during this pipeline run; refusing bypass due to potentially incomplete scan." >&2
 		return 1
 	fi
@@ -2653,8 +2750,6 @@ vulnerability_file_has_absent_endpoint_finding() {
 			#   STRIX_REPORTS_DIR — strix output itself (would always match).
 			#       Both the full path and basename are excluded so that
 			#       nested paths like "reports/strix_runs" are also caught.
-			#       Some Strix builds still write scope-local strix_runs/
-			#       despite STRIX_REPORTS_DIR, so exclude that literal too.
 			#   .git             — VCS internals
 			#   node_modules     — JS/TS dependencies (may contain API strings)
 			#   vendor           — Go/PHP vendored deps
@@ -2670,7 +2765,6 @@ vulnerability_file_has_absent_endpoint_finding() {
 			if grep -r -Fq \
 				--exclude-dir="$STRIX_REPORTS_DIR" \
 				--exclude-dir="$(basename "$STRIX_REPORTS_DIR")" \
-				--exclude-dir="strix_runs" \
 				--exclude-dir=".git" \
 				--exclude-dir="node_modules" \
 				--exclude-dir="vendor" \
@@ -2825,149 +2919,12 @@ vulnerability_file_has_hallucinated_source_claim() {
 	return 1
 }
 
-vulnerability_file_has_unreferenced_dependency_claim() {
-	local vuln_file="$1"
-	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
-		return 1
-	fi
-
-	local resolved_target_root=""
-	resolved_target_root="$(resolve_current_target_path "$TARGET_PATH" 2>/dev/null || true)"
-
-	python3 - "$vuln_file" "${resolved_target_root:-$REPO_ROOT}" "$REPO_ROOT" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-report_path = Path(sys.argv[1])
-target_root = Path(sys.argv[2]).resolve(strict=False)
-repo_root = Path(sys.argv[3]).resolve(strict=False)
-text = report_path.read_text(encoding="utf-8", errors="replace")
-
-package_names = {
-    match.group(1).lower().replace("_", "-").replace(".", "-")
-    for match in re.finditer(
-        r"\b(?:library|package)\s+['`\"]([A-Za-z0-9_.-]+)['`\"]",
-        text,
-        re.IGNORECASE,
-    )
-}
-if not package_names:
-    raise SystemExit(1)
-
-has_placeholder_cve = re.search(r"\bCVE-\d{4}-X{2,}\b", text, re.IGNORECASE)
-has_missing_evidence = re.search(
-    r"(exact code paths.*not provided|without more details|lack of details|PoC (?:Code|Description)\s+Not available)",
-    text,
-    re.IGNORECASE | re.DOTALL,
-)
-has_code_location = re.search(
-    r"\b(Code Locations?|Location\s+\d+\s*:)\b|Target:\s*(?:/workspace/)?[^\n]*\.[A-Za-z0-9_]+",
-    text,
-    re.IGNORECASE,
-)
-if has_code_location or not (has_placeholder_cve or has_missing_evidence):
-    raise SystemExit(1)
-
-manifest_names = (
-    "requirements.txt",
-    "pyproject.toml",
-    "poetry.lock",
-    "uv.lock",
-    "Pipfile",
-    "Pipfile.lock",
-    "package.json",
-    "package-lock.json",
-    "pnpm-lock.yaml",
-    "yarn.lock",
-)
-manifest_globs = ("requirements-*.txt",)
-
-def normalize_name(value: str) -> str:
-    return value.lower().replace("_", "-").replace(".", "-")
-
-def direct_requirement_names(manifest_text: str) -> set[str]:
-    names: set[str] = set()
-    for raw_line in manifest_text.splitlines():
-        line = raw_line.split("#", 1)[0].strip()
-        if not line or line.startswith(("-", "--")):
-            continue
-        match = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^\]]+\])?\s*(?:[<>=!~]=?|$)", line)
-        if match:
-            names.add(normalize_name(match.group(1)))
-    return names
-
-search_roots = []
-for base in (target_root, repo_root):
-    search_roots.append(base)
-    for child in ("backend", "frontend", "src"):
-        search_roots.append(base / child)
-
-manifest_paths: list[Path] = []
-seen_paths: set[Path] = set()
-for root in search_roots:
-    if not root.is_dir() or root.is_symlink():
-        continue
-    for manifest_name in manifest_names:
-        candidate = root / manifest_name
-        if candidate not in seen_paths:
-            seen_paths.add(candidate)
-            manifest_paths.append(candidate)
-    for manifest_glob in manifest_globs:
-        for candidate in root.glob(manifest_glob):
-            if candidate not in seen_paths:
-                seen_paths.add(candidate)
-                manifest_paths.append(candidate)
-
-for manifest_path in manifest_paths:
-    if not manifest_path.is_file() or manifest_path.is_symlink():
-        continue
-    try:
-        manifest_text = manifest_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        continue
-    normalized_text = normalize_name(manifest_text)
-    direct_names = direct_requirement_names(manifest_text)
-    if package_names & direct_names:
-        raise SystemExit(1)
-    for package_name in package_names:
-        if re.search(rf'["\']{re.escape(package_name)}["\']', normalized_text):
-            raise SystemExit(1)
-
-raise SystemExit(0)
-PY
-}
-
-vulnerability_file_has_incomplete_codebase_assessment() {
-	local vuln_file="$1"
-	if ! is_pull_request_event; then
-		return 1
-	fi
-	if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
-		return 1
-	fi
-
-	if grep -Eiq '(Limited Security Assessment Due to Incomplete Codebase|assessment .*limited due to missing implementation files|incomplete codebase)' "$vuln_file" &&
-		grep -Eiq '(Endpoint:[[:space:]]*Entire codebase|Target:[[:space:]]*/workspace/strix-pr-scope|missing implementation files|missing code and dependencies)' "$vuln_file"; then
-		echo "Detected Strix PR-scope incomplete-codebase assessment; treating as retryable model inconsistency." >&2
-		return 0
-	fi
-
-	return 1
-}
-
 vulnerability_file_is_retryable_model_inconsistency() {
 	local vuln_file="$1"
 	if vulnerability_file_has_absent_endpoint_finding "$vuln_file"; then
 		return 0
 	fi
 	if vulnerability_file_has_hallucinated_source_claim "$vuln_file"; then
-		return 0
-	fi
-	if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
-		return 0
-	fi
-	if vulnerability_file_has_incomplete_codebase_assessment "$vuln_file"; then
 		return 0
 	fi
 	return 1
@@ -2989,26 +2946,6 @@ is_hallucinated_source_claim_finding() {
 	return 1
 }
 
-is_unreferenced_dependency_claim_finding() {
-	local latest_report_dir
-	if latest_report_dir="$(latest_strix_report_dir)"; then
-		local vuln_file
-		for vuln_file in "$latest_report_dir"/vulnerabilities/*.md; do
-			if vulnerability_file_has_unreferenced_dependency_claim "$vuln_file"; then
-				echo "Detected Strix dependency report for a package absent from target manifests; treating as retryable model inconsistency." >&2
-				return 0
-			fi
-		done
-	fi
-
-	if vulnerability_file_has_unreferenced_dependency_claim "$STRIX_LOG"; then
-		echo "Detected Strix dependency report for a package absent from target manifests; treating as retryable model inconsistency." >&2
-		return 0
-	fi
-
-	return 1
-}
-
 is_model_retryable_error() {
 	local model="$1"
 
@@ -3016,7 +2953,7 @@ is_model_retryable_error() {
 		return 0
 	fi
 
-	if is_github_models_unavailable_model_error "$model"; then
+	if is_github_models_api_compatible_model "$model" && is_github_models_unavailable_model_error; then
 		return 0
 	fi
 
@@ -3043,10 +2980,6 @@ is_model_retryable_error() {
 		return 0
 	fi
 
-	if is_llm_budget_limit_error; then
-		return 0
-	fi
-
 	if [ "$PR_FINDINGS_DECISION" = "retry_model_inconsistency" ]; then
 		return 0
 	fi
@@ -3063,10 +2996,6 @@ is_model_retryable_error() {
 		return 0
 	fi
 
-	if is_unreferenced_dependency_claim_finding; then
-		return 0
-	fi
-
 	return 1
 }
 
@@ -3077,14 +3006,20 @@ run_current_target_scan() {
 	local primary_scan_rc=0
 	run_strix_with_transient_retry "$PRIMARY_MODEL" || primary_scan_rc=$?
 	if [ "$primary_scan_rc" -eq 0 ]; then
-		if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-			echo "Strix scan had provider infrastructure or failure-signal output before success; failing closed." >&2
-			return 1
-		fi
 		return 0
 	fi
 	if [ "$primary_scan_rc" -eq 2 ]; then
 		return 2
+	fi
+
+	local strict_primary_provider_fallback=0
+	if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+		if is_model_retryable_error "$PRIMARY_MODEL" && has_distinct_fallback_model_for_model "$PRIMARY_MODEL"; then
+			strict_primary_provider_fallback=1
+		else
+			echo "Strix scan failed after provider infrastructure or failure-signal output; failing closed." >&2
+			return 1
+		fi
 	fi
 
 	if has_only_below_threshold_vulnerabilities; then
@@ -3092,7 +3027,9 @@ run_current_target_scan() {
 	fi
 
 	if evaluate_pull_request_findings; then
-		return 0
+		if [ "$strict_primary_provider_fallback" -eq 0 ]; then
+			return 0
+		fi
 	fi
 
 	case "$PR_FINDINGS_DECISION" in
@@ -3100,10 +3037,6 @@ run_current_target_scan() {
 		return 1
 		;;
 	esac
-
-	if provider_signal_fail_closed_enabled && should_fail_pull_request_infra_zero_findings; then
-		return 1
-	fi
 
 	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
@@ -3137,10 +3070,6 @@ run_current_target_scan() {
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
-			if [ "$LAST_ATTEMPT_INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
-				echo "Strix fallback scan had provider infrastructure or failure-signal output; failing closed." >&2
-				return 1
-			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
@@ -3148,12 +3077,19 @@ run_current_target_scan() {
 			return 2
 		fi
 
+		local strict_fallback_provider_signal=0
+		if [ "$INFRA_ERROR_DETECTED" -eq 1 ] && provider_signal_fail_closed_enabled; then
+			strict_fallback_provider_signal=1
+		fi
+
 		if has_only_below_threshold_vulnerabilities; then
 			return 0
 		fi
 
 		if evaluate_pull_request_findings; then
-			return 0
+			if [ "$strict_fallback_provider_signal" -eq 0 ]; then
+				return 0
+			fi
 		fi
 
 		case "$PR_FINDINGS_DECISION" in
@@ -3162,8 +3098,12 @@ run_current_target_scan() {
 			;;
 		esac
 
-		if should_fail_pull_request_infra_zero_findings; then
-			return 1
+		if [ "$strict_fallback_provider_signal" -eq 1 ]; then
+			if is_model_retryable_error "$candidate"; then
+				continue
+			fi
+			echo "Strix fallback model '$candidate' emitted provider infrastructure or failure-signal output; trying next configured fallback if available." >&2
+			continue
 		fi
 
 		if ! is_model_retryable_error "$candidate"; then

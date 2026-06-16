@@ -49,12 +49,18 @@ describe("/auth/session route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
-      method: "POST",
-      body: JSON.stringify({ access_token: token }),
-    }));
+    const response = await POST(
+      new NextRequest("https://app.naruon.net/auth/session", {
+        method: "POST",
+        headers: {
+          Cookie: "naruon_session=attacker-fixed-session",
+        },
+        body: JSON.stringify({ access_token: token }),
+      }),
+    );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({
       authenticated: true,
       claims: {
@@ -68,7 +74,43 @@ describe("/auth/session route", () => {
     expect(setCookie).toContain("HttpOnly");
     expect(setCookie).toContain("Secure");
     expect(setCookie).toContain("SameSite=lax");
+    expect(setCookie).toContain("Max-Age=43200");
     expect(setCookie).not.toContain("access_token");
+    expect(setCookie).not.toContain("attacker-fixed-session");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores a session when browser origin matches the forwarded host", async () => {
+    const token = signedFixtureToken({
+      sub: "user-1",
+      org: "org-acme",
+      workspace: "workspace-acme",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    const fetchMock = vi.fn(async () => verifiedSessionResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new NextRequest("http://internal-frontend:3000/auth/session", {
+        method: "POST",
+        headers: {
+          Host: "127.0.0.1:3000",
+          Origin: "http://127.0.0.1:3000",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ access_token: token }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      authenticated: true,
+      claims: {
+        userId: "user-1",
+        organizationId: "org-acme",
+        workspaceId: "workspace-acme",
+      },
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -102,6 +144,7 @@ describe("/auth/session route", () => {
         workspaceId: "workspace-beta",
       },
     });
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("set-cookie")).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -130,12 +173,128 @@ describe("/auth/session route", () => {
     expect(response.headers.get("set-cookie")).toBeNull();
   });
 
+  it.each([
+    [
+      "user",
+      {
+        organization_id: "org-acme",
+        workspace_id: "workspace-acme",
+      },
+    ],
+    [
+      "organization",
+      {
+        user_id: "user-1",
+        workspace_id: "workspace-acme",
+      },
+    ],
+    [
+      "workspace",
+      {
+        user_id: "user-1",
+        organization_id: "org-acme",
+      },
+    ],
+  ])("rejects backend session responses without %s scope", async (_scope, body) => {
+    const token = signedFixtureToken({
+      sub: "user-1",
+      org: "org-acme",
+      workspace: "workspace-acme",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body)));
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_session_token",
+    });
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("rejects non-JWT session token formats before backend verification", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: "<script>alert(1)</script>" }),
+    }));
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "invalid_session_token",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rate limits repeated session verification attempts before backend fanout", async () => {
+    const token = signedFixtureToken({
+      sub: "rate-limited-user",
+      org: "org-acme",
+      workspace: "workspace-acme",
+      exp: Math.floor(Date.now() / 1000) + 300,
+    });
+    const fetchMock = vi.fn(async () => verifiedSessionResponse());
+    vi.stubGlobal("fetch", fetchMock);
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+        method: "POST",
+        body: JSON.stringify({ access_token: token }),
+      }));
+
+      expect(response.status).toBe(200);
+    }
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("retry-after")).toMatch(/^[1-9][0-9]*$/);
+    await expect(response.json()).resolves.toEqual({
+      error_code: "session_verification_rate_limited",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+  });
+
+  it("rejects cross-site session persistence before backend verification", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      headers: {
+        Origin: "https://evil.example",
+      },
+      body: JSON.stringify({ access_token: "attacker.jwt.token" }),
+    }));
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    await expect(response.json()).resolves.toEqual({
+      error_code: "csrf_origin_rejected",
+      message: "Cross-site session updates are not allowed",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("expires the session cookie on logout", async () => {
     const response = await DELETE(new NextRequest("https://app.naruon.net/auth/session", {
       method: "DELETE",
     }));
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
     const setCookie = response.headers.get("set-cookie") ?? "";
     expect(setCookie).toContain("naruon_session=");
     expect(setCookie).toContain("Max-Age=0");

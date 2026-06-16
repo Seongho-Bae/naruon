@@ -2,12 +2,6 @@
 @import "tw-animate-css";
 @import "./shadcn-tailwind.css";
 
-/* Test fixtures may contain hostile class-like text; never emit CSS from them. */
-@source not "../**/*.test.ts";
-@source not "../**/*.test.tsx";
-@source not "../test";
-@source not "../../tests";
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

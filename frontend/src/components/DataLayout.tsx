@@ -3,7 +3,6 @@
 import { useCallback, useState, useEffect, type ChangeEvent } from 'react';
 import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server, Upload } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
-import { boundedPercentStyle, formatBoundedPercent } from '@/lib/safe-style';
 
 type WebdavWritebackIntentResponse = {
   intent: string;
@@ -579,7 +578,7 @@ export function DataLayout() {
                   <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                     <div
                       className="h-full bg-blue-500 transition-all"
-                      style={boundedPercentStyle(embeddingStage?.progress_percent)}
+                      style={{ width: `${embeddingStage?.progress_percent ?? 0}%` }}
                     ></div>
                   </div>
                   <div className="mt-4 grid gap-3">
@@ -1079,13 +1078,13 @@ export function DataLayout() {
                           <p className="mt-1 text-xs font-semibold text-muted-foreground">원본 근거 연결됨</p>
                         </div>
                         <span className={`w-fit shrink-0 rounded-full px-2 py-1 text-xs font-bold ${getSurfaceStatusClass(stage.status_code)}`}>
-                          {getSurfaceStatusLabel(stage.status_code)} · {formatBoundedPercent(stage.progress_percent)}
+                          {getSurfaceStatusLabel(stage.status_code)} · {stage.progress_percent}%
                         </span>
                       </div>
                       <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
                         <div
                           className="h-full bg-primary transition-all"
-                          style={boundedPercentStyle(stage.progress_percent)}
+                          style={{ width: `${stage.progress_percent}%` }}
                         ></div>
                       </div>
                       <div className="mt-3 flex justify-end">
