@@ -83,6 +83,11 @@ def test_schema_backfill_adds_threading_columns_for_existing_tables(monkeypatch)
         for statement in statements
     )
     assert any(
+        "create index if not exists ix_emails_owner_date" in statement
+        and "user_id, organization_id, date" in statement
+        for statement in statements
+    )
+    assert any(
         "drop index if exists ix_emails_message_id" in statement
         for statement in statements
     )
