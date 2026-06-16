@@ -14,6 +14,7 @@ describe("/api runtime proxy route", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
     process.env = { ...ORIGINAL_ENV };
@@ -146,7 +147,7 @@ describe("/api runtime proxy route", () => {
       "Rejected unsigned unsafe API proxy request",
       {
         method: "POST",
-        path: "/api/login",
+        route: "/api/[...path]",
       },
     );
   });

@@ -102,8 +102,11 @@ function safeBackendQuery(searchParams: URLSearchParams): string {
 
 function hasBearerAuthorizationHeader(request: NextRequest): boolean {
   const authorization = request.headers.get("authorization")?.trim() ?? "";
-  const [scheme, token] = authorization.split(/\s+/, 2);
-  return scheme?.toLowerCase() === "bearer" && Boolean(token?.trim());
+  if (!authorization.startsWith("Bearer ")) {
+    return false;
+  }
+  const token = authorization.slice("Bearer ".length);
+  return token.length > 0 && !/\s/.test(token);
 }
 
 async function proxyApiRequest(
@@ -113,7 +116,7 @@ async function proxyApiRequest(
   if (!SAFE_HTTP_METHODS.has(request.method.toUpperCase()) && !hasBearerAuthorizationHeader(request)) {
     console.warn("Rejected unsigned unsafe API proxy request", {
       method: request.method,
-      path: request.nextUrl.pathname,
+      route: "/api/[...path]",
     });
     return NextResponse.json(
       {
