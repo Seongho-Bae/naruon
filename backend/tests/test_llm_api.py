@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
+from api import llm
 from db.models import LLMProvider
 from main import app
 from db.session import get_db
@@ -110,6 +111,15 @@ def test_draft_endpoint(mock_draft, client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
+    forwarded_prompt, forwarded_instruction, forwarded_key = (
+        mock_draft.await_args.args[:3]
+    )
+    assert '"instruction": "reply nicely"' in forwarded_prompt
+    assert '"email_body": "test email"' in forwarded_prompt
+    assert "UNTRUSTED_DRAFT_INSTRUCTION_JSON" in forwarded_prompt
+    assert "UNTRUSTED_EMAIL_BODY_JSON" in forwarded_prompt
+    assert forwarded_instruction == llm.LLM_DRAFT_SYSTEM_INSTRUCTION
+    assert forwarded_key == "test-key"
 
 
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
@@ -152,13 +162,17 @@ def test_draft_endpoint_uses_active_local_model_provider(mock_draft):
 
     assert resp.status_code == 200
     assert resp.json() == {"draft": "Gemma4 draft"}
-    mock_draft.assert_awaited_once_with(
-        "test email",
-        "reply nicely",
-        LOCAL_PROVIDER_API_KEY,
-        base_url="http://ollama:11434/v1",
-        model="gemma4",
+    forwarded_prompt, forwarded_instruction, forwarded_key = (
+        mock_draft.await_args.args[:3]
     )
+    assert '"instruction": "reply nicely"' in forwarded_prompt
+    assert '"email_body": "test email"' in forwarded_prompt
+    assert forwarded_instruction == llm.LLM_DRAFT_SYSTEM_INSTRUCTION
+    assert forwarded_key == LOCAL_PROVIDER_API_KEY
+    assert mock_draft.await_args.kwargs == {
+        "base_url": "http://ollama:11434/v1",
+        "model": "gemma4",
+    }
 
 
 def test_llm_endpoints_preserve_missing_key_400():
