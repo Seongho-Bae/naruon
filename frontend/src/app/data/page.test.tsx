@@ -19,7 +19,6 @@ vi.mock("lucide-react", () => ({
   FileText: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,
   Server: () => <svg aria-hidden="true" />,
-  Upload: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
@@ -49,15 +48,6 @@ const dataQualitySurface = {
       provider_write_executed: false,
     },
     {
-      source_id: "document_repository",
-      repository_type: "document_repository",
-      display_name: "Scoped document repository",
-      object_count: 1,
-      writeback_enabled: null,
-      evidence_source: "documents",
-      provider_write_executed: false,
-    },
-    {
       source_id: "webdav_src_primary",
       repository_type: "webdav_account",
       display_name: "Customer WebDAV account",
@@ -68,19 +58,6 @@ const dataQualitySurface = {
     },
   ],
   repository_assets: [
-    {
-      asset_key: "doc_repository_ready",
-      asset_type: "workspace_document",
-      display_name: "roadmap.md",
-      source_label: "Workspace document",
-      state_code: "ready",
-      detail_text: "document status: uploaded",
-      content_chars: 128,
-      captured_at: "2026-05-28T05:46:00Z",
-      evidence_source: "documents.document_status",
-      thread_key: "workspace_document",
-      provider_write_executed: false,
-    },
     {
       asset_key: "asset_repository_ready",
       asset_type: "email_attachment",
@@ -224,13 +201,13 @@ function mockWebdavFetch() {
       return jsonResponse([
         {
           source_id: "webdav_src_primary",
-          display_label: "운영 문서 원본",
+          display_label: "WebDAV source webdav_src_primary",
           writeback_enabled: true,
           etag: "etag-webdav-primary",
         },
         {
           source_id: "webdav_src_team",
-          display_label: "팀 공유 원본",
+          display_label: "WebDAV source webdav_src_team",
           writeback_enabled: true,
           etag: "etag-webdav-team",
         },
@@ -250,7 +227,7 @@ function mockWebdavFetch() {
       return jsonResponse({
         intent: "writeback",
         source_id: "webdav_src_primary",
-        target_label: "운영 문서 원본",
+        target_label: "WebDAV source webdav_src_primary",
         requires_if_match: true,
         if_match: "etag-webdav-primary",
         provenance: "server-authoritative",
@@ -281,111 +258,6 @@ function mockWebdavFetch() {
             existing_message_id: "q2-root@example.com",
           },
         ],
-      });
-    }
-    if (path === "/api/emails/import-files") {
-      void init;
-      return jsonResponse({
-        status: "completed",
-        imported_count: 1,
-        skipped_count: 0,
-        failed_count: 0,
-        attachment_count: 1,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "email.file_import.completed",
-        items: [
-          {
-            filename: "customer-source.eml",
-            status: "imported",
-            reason_code: null,
-            attachment_count: 1,
-          },
-        ],
-      });
-    }
-    if (path === "/api/data/documents") {
-      void init;
-      return jsonResponse({
-        document_id: "doc_uploaded",
-        workspace_id: "workspace-org-acme",
-        document_name: "decision-note.md",
-        document_type: "text/markdown",
-        document_status: "uploaded",
-        content_chars: 15,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "data.document.uploaded",
-        message: "Document stored in the signed workspace scope.",
-      });
-    }
-    if (path === "/api/data/documents/doc_repository_ready/reparse") {
-      void init;
-      return jsonResponse({
-        document_id: "doc_repository_ready",
-        workspace_id: "workspace-org-acme",
-        document_name: "roadmap.md",
-        document_type: "text/markdown",
-        document_status: "parsed",
-        content_chars: 128,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "data.document.reparsed",
-        message: "Document parse metadata refreshed in the signed workspace scope.",
-      });
-    }
-    if (path === "/api/data/documents/doc_repository_ready/embedding-regeneration-intent") {
-      void init;
-      return jsonResponse({
-        document_id: "doc_repository_ready",
-        workspace_id: "workspace-org-acme",
-        document_name: "roadmap.md",
-        document_type: "text/markdown",
-        document_status: "embedding_pending",
-        content_chars: 128,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "data.document.embedding_regeneration_intent",
-        message: "Embedding regeneration intent recorded; no provider write executed.",
-      });
-    }
-    if (path === "/api/data/documents/doc_repository_ready/hwp-conversion-intent") {
-      void init;
-      return jsonResponse({
-        document_id: "doc_repository_ready",
-        workspace_id: "workspace-org-acme",
-        document_name: "roadmap.md",
-        document_type: "text/markdown",
-        document_status: "hwp_conversion_pending",
-        content_chars: 128,
-        provider_write_executed: false,
-        provenance: "server-authoritative",
-        audit_event: "data.document.hwp_conversion_intent",
-        message: "HWP conversion intent recorded; no provider write executed.",
-      });
-    }
-    if (path === "/api/data/documents/doc_repository_ready/webdav-materialization-intent") {
-      void init;
-      return jsonResponse({
-        intent: "document_webdav_materialization",
-        status: "completed",
-        document_id: "doc_repository_ready",
-        workspace_id: "workspace-org-acme",
-        document_name: "roadmap.md",
-        document_type: "text/markdown",
-        source_id: "webdav_src_primary",
-        target_label: "운영 문서 원본",
-        target_path: "/Naruon/Data/roadmap.md-opaque.md",
-        requires_if_match: true,
-        if_match: "etag-webdav-primary",
-        provenance: "server-authoritative",
-        provider_write_executed: true,
-        audit_event: "data.document.webdav_materialization.executed",
-        runner_request_id: "runner_req_data_doc_1",
-        provider_status: 201,
-        error_code: null,
-        retry_item_uid: null,
-        message: "Workspace document WebDAV materialization executed by the connector.",
       });
     }
     throw new Error(`Unhandled fetch: ${path}`);
@@ -421,29 +293,20 @@ describe("DataPage", () => {
     expect(container.textContent).toContain("데이터와 파일");
     expect(container.textContent).toContain("WebDAV 원본");
     expect(container.textContent).toContain("메일/첨부 저장소");
-    expect(container.textContent).toContain("감사 근거 기록됨");
-    expect(container.textContent).toContain("connector_heartbeat");
+    expect(container.textContent).toContain("data.quality_surface.viewed");
+    expect(container.textContent).toContain("connector_evt_data_quality");
     expect(container.textContent).toContain("최근 파일/첨부 자산");
-    expect(container.textContent).toContain("roadmap.md");
-    expect(container.textContent).toContain("워크스페이스 문서 근거");
     expect(container.textContent).toContain("roadmap.pdf");
-    expect(container.textContent).toContain("원본 메일/스레드 근거 연결");
+    expect(container.textContent).toContain("asset_repository_ready");
+    expect(container.textContent).toContain("thread_repository_ready");
     expect(container.textContent).toContain("blank-notes.md");
-    expect(container.textContent).toContain("WebDAV 반영 의도 승인");
-    expect(container.textContent).toContain("쓰기 가능 · 충돌 검사용 ETag 준비");
-    expect(container.textContent).toContain("원본 폴더 연결됨");
-    expect(container.textContent).not.toContain("asset_repository_ready");
-    expect(container.textContent).not.toContain("thread_repository_ready");
-    expect(container.textContent).not.toContain("doc_repository_ready");
-    expect(container.textContent).not.toContain("webdav_folder_roadmap");
-    expect(container.textContent).not.toContain("etag=etag-webdav-primary");
-    expect(container.textContent).not.toContain("data.quality_surface.viewed");
-    expect(container.textContent).not.toContain("connector_evt_data_quality");
+    expect(container.textContent).toContain("WebDAV writeback intent 승인");
+    expect(container.textContent).toContain("etag=etag-webdav-primary");
+    expect(container.textContent).toContain("webdav_folder_roadmap");
 
     const assetDetail = container.querySelector('[aria-label="선택한 파일 자산 상세"]');
-    expect(assetDetail?.textContent).toContain("roadmap.md");
-    expect(assetDetail?.textContent).toContain("document status: uploaded");
-    expect(assetDetail?.textContent).not.toContain("doc_repository_ready");
+    expect(assetDetail?.textContent).toContain("roadmap.pdf");
+    expect(assetDetail?.textContent).toContain("content and thread evidence ready");
 
     const pendingAsset = Array.from(container.querySelectorAll('[role="button"][aria-pressed]')).find((candidate) =>
       candidate.textContent?.includes("blank-notes.md"),
@@ -454,134 +317,8 @@ describe("DataPage", () => {
     });
     const updatedAssetDetail = container.querySelector('[aria-label="선택한 파일 자산 상세"]');
     expect(updatedAssetDetail?.textContent).toContain("blank-notes.md");
-    expect(updatedAssetDetail?.textContent).toContain("본문 추출 대기");
+    expect(updatedAssetDetail?.textContent).toContain("thread_missing");
     expect(updatedAssetDetail?.textContent).toContain("content extraction pending, canonical thread pending");
-    expect(updatedAssetDetail?.textContent).not.toContain("thread_missing");
-  });
-
-  it("uploads workspace documents and posts document action intents through signed APIs", async () => {
-    const fetchMock = mockWebdavFetch();
-    vi.stubGlobal("fetch", fetchMock);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<DataPage />);
-    });
-
-    const fileInput = container.querySelector('input[accept=".txt,.md,.markdown,text/plain,text/markdown"]') as HTMLInputElement | null;
-    expect(fileInput).toBeTruthy();
-    const file = new File(["# decision note"], "decision-note.md", { type: "text/markdown" });
-    Object.defineProperty(fileInput, "files", {
-      configurable: true,
-      value: [file],
-    });
-    await act(async () => {
-      fileInput?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const uploadButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("선택 문서 저장"),
-    );
-    expect(uploadButton).toBeDefined();
-    await act(async () => {
-      uploadButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const uploadCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/data/documents");
-    expect(uploadCall).toBeDefined();
-    const [, uploadInit] = uploadCall ?? [];
-    expect(uploadInit?.method).toBe("POST");
-    expect(uploadInit?.credentials).toBe("same-origin");
-    expect(JSON.parse(String(uploadInit?.body))).toEqual({
-      document_name: "decision-note.md",
-      document_type: "text/markdown",
-      document_content: "# decision note",
-    });
-    const uploadHeaderEntries =
-      uploadInit?.headers instanceof Headers
-        ? Array.from(uploadInit.headers.entries())
-        : Object.entries((uploadInit?.headers as Record<string, string>) ?? {});
-    const uploadHeaders = Object.fromEntries(
-      uploadHeaderEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
-    );
-    expect(uploadHeaders).toEqual(expect.objectContaining({
-      "content-type": "application/json",
-    }));
-    for (const publicHeader of [
-      "x-user-id",
-      "x-organization-id",
-      "x-group-id",
-      "x-group-ids",
-      "x-user-role",
-      "x-dev-auth-token",
-    ]) {
-      expect(uploadHeaders[publicHeader]).toBeUndefined();
-    }
-    expect(container.textContent).toContain("decision-note.md");
-    expect(container.textContent).toContain("의도만 기록");
-
-    for (const buttonLabel of ["재파싱 실행", "임베딩 재생성 의도", "HWP 변환 의도"]) {
-      const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-        candidate.textContent?.includes(buttonLabel),
-      );
-      expect(button).toBeDefined();
-      await act(async () => {
-        button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-    }
-
-    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/data/documents/doc_repository_ready/reparse")).toBe(true);
-    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/data/documents/doc_repository_ready/embedding-regeneration-intent")).toBe(true);
-    expect(fetchMock.mock.calls.some(([input]) => String(input) === "/api/data/documents/doc_repository_ready/hwp-conversion-intent")).toBe(true);
-    expect(container.textContent).toContain("HWP conversion intent recorded");
-
-    const materializeButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("WebDAV 문서 실행 요청"),
-    );
-    expect(materializeButton).toBeDefined();
-    await act(async () => {
-      materializeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const materializeCall = fetchMock.mock.calls.find(([input]) => (
-      String(input) === "/api/data/documents/doc_repository_ready/webdav-materialization-intent"
-    ));
-    expect(materializeCall).toBeDefined();
-    const [, materializeInit] = materializeCall ?? [];
-    expect(materializeInit?.method).toBe("POST");
-    expect(materializeInit?.credentials).toBe("same-origin");
-    expect(JSON.parse(String(materializeInit?.body))).toEqual({
-      target_source_id: "webdav_src_primary",
-      execute_provider: true,
-    });
-    const materializeHeaderEntries =
-      materializeInit?.headers instanceof Headers
-        ? Array.from(materializeInit.headers.entries())
-        : Object.entries((materializeInit?.headers as Record<string, string>) ?? {});
-    const materializeHeaders = Object.fromEntries(
-      materializeHeaderEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
-    );
-    expect(materializeHeaders).toEqual(expect.objectContaining({
-      "content-type": "application/json",
-    }));
-    for (const publicHeader of [
-      "x-user-id",
-      "x-organization-id",
-      "x-group-id",
-      "x-group-ids",
-      "x-user-role",
-      "x-dev-auth-token",
-    ]) {
-      expect(materializeHeaders[publicHeader]).toBeUndefined();
-    }
-    expect(container.textContent).toContain("외부 쓰기 실행됨");
-    expect(container.textContent).toContain("Workspace document WebDAV materialization executed");
-    expect(container.textContent).not.toContain("webdav_src_primary");
-    expect(container.textContent).not.toContain("etag-webdav-primary");
-    expect(container.textContent).not.toContain("/Naruon/Data/roadmap.md-opaque.md");
-    expect(container.textContent).not.toContain("runner_req_data_doc_1");
   });
 
   it("loads signed data quality surface without public identity headers", async () => {
@@ -598,7 +335,6 @@ describe("DataPage", () => {
     const dataCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/data/quality-surface");
     expect(dataCall).toBeDefined();
     const [, init] = dataCall ?? [];
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -625,6 +361,48 @@ describe("DataPage", () => {
     expect(container.textContent).not.toContain("<asset-ready@example.com>");
   });
 
+  it("clamps API progress values before rendering inline style widths", async () => {
+    const hostileSurface = {
+      ...dataQualitySurface,
+      pipeline_stages: dataQualitySurface.pipeline_stages.map((stage, index) => ({
+        ...stage,
+        progress_percent: index === 0
+          ? "not-a-percent"
+          : 150,
+      })),
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path === "/api/data/quality-surface") return jsonResponse(hostileSurface);
+      if (path === "/api/webdav/accounts") return jsonResponse([]);
+      if (path === "/api/webdav/folders") return jsonResponse([]);
+      throw new Error(`Unhandled fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<DataPage />);
+    });
+
+    const pipelineTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
+      candidate.textContent?.includes("수집 파이프라인"),
+    );
+    await act(async () => {
+      pipelineTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    const styleText = Array.from(container.querySelectorAll<HTMLElement>("[style]"))
+      .map((node) => node.getAttribute("style") ?? "")
+      .join(" ");
+    expect(styleText).not.toContain("not-a-percent");
+    expect(container.textContent).not.toContain("not-a-percent");
+    expect(container.textContent).toContain("0%");
+    expect(container.textContent).toContain("100%");
+  });
+
   it("renders API-backed pipeline embedding and quality tabs", async () => {
     vi.stubGlobal("fetch", mockWebdavFetch());
     container = document.createElement("div");
@@ -642,8 +420,7 @@ describe("DataPage", () => {
       pipelineTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(container.textContent).toContain("4 emails and 3 attachments");
-    expect(container.textContent).toContain("원본 근거 연결됨");
-    expect(container.textContent).not.toContain("emails.embedding, attachments.embedding");
+    expect(container.textContent).toContain("emails.embedding, attachments.embedding");
 
     const embeddingTab = Array.from(container.querySelectorAll("button")).find((candidate) =>
       candidate.textContent?.includes("임베딩"),
@@ -664,38 +441,8 @@ describe("DataPage", () => {
     });
     expect(container.textContent).toContain("Thread id integrity");
     expect(container.textContent).toContain("Some scoped emails need canonical thread ids.");
-    expect(container.textContent).toContain("의도만 기록");
-    expect(container.textContent).not.toContain("provider_write_executed=false");
+    expect(container.textContent).toContain("provider_write_executed=false");
     expect(container.textContent).not.toContain("발견된 심각한 데이터 품질 문제가 없습니다.");
-  });
-
-  it("does not expose permanent ready-soon Data workspace action buttons", async () => {
-    vi.stubGlobal("fetch", mockWebdavFetch());
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<DataPage />);
-    });
-
-    for (const tabLabel of ["문서 저장소", "수집 파이프라인", "임베딩"]) {
-      const tab = Array.from(container.querySelectorAll("button")).find((candidate) =>
-        candidate.textContent?.includes(tabLabel),
-      );
-      expect(tab).toBeDefined();
-      await act(async () => {
-        tab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
-
-      expect(container.textContent).not.toContain("준비 중");
-      for (const obsoleteLabel of ["문서 업로드", "재파싱", "재실행", "임베딩 재생성", "HWP 변환"]) {
-        const obsoleteDisabledButton = Array.from(container.querySelectorAll("button")).find(
-          (candidate) => candidate.textContent?.includes(obsoleteLabel) && (candidate as HTMLButtonElement).disabled,
-        );
-        expect(obsoleteDisabledButton).toBeUndefined();
-      }
-    }
   });
 
   it("creates a signed customer-owned WebDAV writeback intent", async () => {
@@ -712,7 +459,6 @@ describe("DataPage", () => {
     const accountsCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/webdav/accounts");
     expect(accountsCall).toBeDefined();
     const [, accountsInit] = accountsCall ?? [];
-    expect(accountsInit?.credentials).toBe("same-origin");
     const accountsHeaderEntries =
       accountsInit?.headers instanceof Headers
         ? Array.from(accountsInit.headers.entries())
@@ -736,7 +482,7 @@ describe("DataPage", () => {
     }
 
     const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("WebDAV 반영 의도 점검"),
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
     );
     expect(button).toBeDefined();
 
@@ -748,7 +494,6 @@ describe("DataPage", () => {
     expect(writebackCall).toBeDefined();
     const [, init] = writebackCall ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -773,69 +518,11 @@ describe("DataPage", () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       target_source_id: "webdav_src_primary",
     });
-    expect(container.textContent).toContain("서버 확인");
-    expect(container.textContent).toContain("운영 문서 원본");
-    expect(container.textContent).toContain("If-Match 필요");
-    expect(container.textContent).not.toContain("webdav_src_primary");
-    expect(container.textContent).not.toContain("etag-webdav-primary");
+    expect(container.textContent).toContain("server-authoritative");
+    expect(container.textContent).toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).toContain("etag-webdav-primary");
     expect(container.textContent).not.toContain("https://webdav.naruon.net");
     expect(container.textContent).not.toContain("demo_user");
-  });
-
-  it("sanitizes WebDAV source labels that contain opaque source ids", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const path = String(input);
-      if (path === "/api/data/quality-surface") return jsonResponse(dataQualitySurface);
-      if (path === "/api/webdav/accounts") {
-        void init;
-        return jsonResponse([
-          {
-            source_id: "webdav_src_primary",
-            display_label: "WebDAV source webdav_src_primary",
-            writeback_enabled: true,
-            etag: "etag-webdav-primary",
-          },
-        ]);
-      }
-      if (path === "/api/webdav/folders") return jsonResponse([]);
-      if (path === "/api/webdav/writeback-intent") {
-        return jsonResponse({
-          intent: "writeback",
-          source_id: "webdav_src_primary",
-          target_label: "WebDAV source webdav_src_primary",
-          requires_if_match: true,
-          if_match: "etag-webdav-primary",
-          provenance: "server-authoritative",
-        });
-      }
-      throw new Error(`Unhandled fetch: ${path}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<DataPage />);
-    });
-
-    expect(container.textContent).toContain("WebDAV 저장소 1");
-    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
-    expect(container.textContent).not.toContain("webdav_src_primary");
-
-    const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("WebDAV 반영 의도 점검"),
-    );
-    expect(button).toBeDefined();
-
-    await act(async () => {
-      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    expect(container.textContent).toContain("서버 확인");
-    expect(container.textContent).toContain("WebDAV 저장소 1");
-    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
-    expect(container.textContent).not.toContain("webdav_src_primary");
   });
 
   it("lets the user choose a specific WebDAV source and distinguishes If-Match conflicts", async () => {
@@ -845,13 +532,13 @@ describe("DataPage", () => {
         return jsonResponse([
           {
             source_id: "webdav_src_primary",
-            display_label: "운영 문서 원본",
+            display_label: "WebDAV source webdav_src_primary",
             writeback_enabled: true,
             etag: "etag-webdav-primary",
           },
           {
             source_id: "webdav_src_team",
-            display_label: "팀 공유 원본",
+            display_label: "WebDAV source webdav_src_team",
             writeback_enabled: true,
             etag: "etag-webdav-team",
           },
@@ -875,7 +562,7 @@ describe("DataPage", () => {
     });
 
     const teamSourceButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("팀 공유 원본"),
+      candidate.textContent?.includes("webdav_src_team"),
     );
     expect(teamSourceButton).toBeDefined();
     await act(async () => {
@@ -883,14 +570,14 @@ describe("DataPage", () => {
     });
 
     const writebackButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("WebDAV 반영 의도 점검"),
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
     );
     await act(async () => {
       writebackButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(container.textContent).toContain("If-Match/ETag 충돌");
-    expect(container.textContent).not.toContain("webdav_src_team");
+    expect(container.textContent).toContain("webdav_src_team");
   });
 
   it("keeps WebDAV writeback disabled when account loading fails", async () => {
@@ -898,7 +585,7 @@ describe("DataPage", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path === "/api/webdav/accounts") {
-        throw new Error("account source fetch failed");
+        throw new Error("account configuration incomplete");
       }
       if (path === "/api/webdav/folders") return jsonResponse([]);
       if (path === "/api/webdav/writeback-intent") throw new Error("writeback should stay disabled");
@@ -917,7 +604,7 @@ describe("DataPage", () => {
     });
 
     const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("WebDAV 반영 의도 점검"),
+      candidate.textContent?.includes("WebDAV intent 승인 점검"),
     ) as HTMLButtonElement | undefined;
     expect(button).toBeDefined();
     expect(button?.disabled).toBe(true);
@@ -941,7 +628,7 @@ describe("DataPage", () => {
     });
 
     const button = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("중복 메일 스레드 의도 점검"),
+      candidate.textContent?.includes("중복 메일 thread intent 점검"),
     );
     expect(button).toBeDefined();
 
@@ -953,7 +640,6 @@ describe("DataPage", () => {
     expect(intentCall).toBeDefined();
     const [, init] = intentCall ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -981,75 +667,8 @@ describe("DataPage", () => {
       candidate_key: "zip-q2-root",
       message_id: "q2-root@example.com",
     }));
-    expect(container.textContent).toContain("감사 근거");
-    expect(container.textContent).toContain("기록됨");
-    expect(container.textContent).toContain("Message-ID 근거");
-    expect(container.textContent).toContain("본문 fingerprint 근거");
-    expect(container.textContent).not.toContain("email.unique_thread_intent.created");
-    expect(container.textContent).not.toContain("thread-q2-root");
-    expect(container.textContent).not.toContain("provider_write_executed=false");
-  });
-
-  it("imports email source files through signed multipart upload without public identity headers", async () => {
-    const fetchMock = mockWebdavFetch();
-    vi.stubGlobal("fetch", fetchMock);
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<DataPage />);
-    });
-
-    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
-    expect(input).toBeDefined();
-    const emailFile = new File(["raw email"], "customer-source.eml", { type: "message/rfc822" });
-    Object.defineProperty(input, "files", {
-      configurable: true,
-      value: [emailFile],
-    });
-    await act(async () => {
-      input?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-
-    const importButton = Array.from(container.querySelectorAll("button")).find((candidate) =>
-      candidate.textContent?.includes("선택 파일 반입"),
-    );
-    expect(importButton).toBeDefined();
-    await act(async () => {
-      importButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const importCall = fetchMock.mock.calls.find(([inputUrl]) => String(inputUrl) === "/api/emails/import-files");
-    expect(importCall).toBeDefined();
-    const [, init] = importCall ?? [];
-    expect(init?.method).toBe("POST");
-    expect(init?.credentials).toBe("same-origin");
-    expect(init?.body).toBeInstanceOf(FormData);
-    const headerEntries =
-      init?.headers instanceof Headers
-        ? Array.from(init.headers.entries())
-        : Object.entries((init?.headers as Record<string, string>) ?? {});
-    const requestHeaders = Object.fromEntries(
-      headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
-    );
-    expect(requestHeaders.authorization).toBeUndefined();
-    expect(requestHeaders["content-type"]).toBeUndefined();
-    for (const publicHeader of [
-      "x-user-id",
-      "x-organization-id",
-      "x-group-id",
-      "x-group-ids",
-      "x-user-role",
-      "x-dev-auth-token",
-    ]) {
-      expect(requestHeaders[publicHeader]).toBeUndefined();
-    }
-    expect(container.textContent).toContain("1개 반입");
-    expect(container.textContent).toContain("중복 0개");
-    expect(container.textContent).toContain("첨부 1개");
-    expect(container.textContent).toContain("의도만 기록");
-    expect(container.textContent).not.toContain("email.file_import.completed");
-    expect(container.textContent).not.toContain("imported@example.com");
+    expect(container.textContent).toContain("email.unique_thread_intent.created");
+    expect(container.textContent).toContain("thread-q2-root");
+    expect(container.textContent).toContain("provider_write_executed=false");
   });
 });

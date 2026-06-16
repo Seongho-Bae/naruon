@@ -233,6 +233,36 @@ describe('AIHubPage', () => {
     await flushAsyncWork();
   });
 
+  it('clamps source metric scores before rendering inline style widths', async () => {
+    const hostileSurface = {
+      ...aiHubSurface,
+      evaluation_metrics: [
+        {
+          ...aiHubSurface.evaluation_metrics[0],
+          score_value: 'not-a-percent' as unknown as number,
+        },
+      ],
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(hostileSurface)));
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<AIHubPage />);
+    });
+    await flushAsyncWork();
+
+    clickButton(container, '평가');
+    const styleText = Array.from(container.querySelectorAll<HTMLElement>('[style]'))
+      .map((node) => node.getAttribute('style') ?? '')
+      .join(' ');
+    expect(styleText).not.toContain('not-a-percent');
+    expect(container.textContent).not.toContain('not-a-percent');
+    expect(container.textContent).toContain('Provider 준비도');
+    expect(container.textContent).toContain('0');
+  });
+
   it('renders a retryable error state when the source surface fails', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: 'Internal Server Error' }, false)));

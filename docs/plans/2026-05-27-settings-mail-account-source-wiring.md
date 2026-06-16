@@ -10,7 +10,7 @@ SMTP, IMAP, POP3, and OAuth configuration with masked secrets.
 
 - Replace static Google/iCloud cards with source-backed protocol status cards.
 - Load `/api/accounts/config` through the shared browser `apiClient` so the
-  stored `naruon_session_token` is sent as `Authorization: Bearer`.
+  HttpOnly cookie-backed proxy session is used.
 - Keep public identity headers such as `X-User-Id`, `X-Organization-Id`, and
   dev-token variants out of frontend mocks and requests.
 - Render SMTP, IMAP, POP3, and OAuth fields in one responsive form.

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CheckCircle2, Clock, FolderOpen, ListChecks, Search, User } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
+import { boundedPercentStyle } from '@/lib/safe-style';
 import { toSafeReactText } from '@/lib/safe-text';
 
 type ProjectViewMode = '프로젝트 상세' | '마일스톤' | '의사결정 로그';
@@ -72,6 +73,26 @@ const priorityLabel: Record<TaskPriority, string> = {
   normal: '보통',
   low: '낮음',
 };
+
+function normalizeTaskStatus(value: unknown): TaskStatus {
+  return typeof value === 'string' && value in taskStatusLabel
+    ? (value as TaskStatus)
+    : 'open';
+}
+
+function normalizeTaskPriority(value: unknown): TaskPriority {
+  return typeof value === 'string' && value in priorityLabel
+    ? (value as TaskPriority)
+    : 'normal';
+}
+
+function normalizeTicketTask(task: TicketTask): TicketTask {
+  return {
+    ...task,
+    status: normalizeTaskStatus(task.status),
+    priority: normalizeTaskPriority(task.priority),
+  };
+}
 
 function safeText(value: string | null | undefined, fallback = '') {
   return toSafeReactText(value, fallback).trim() || fallback;
@@ -213,13 +234,14 @@ export function ProjectsLayout() {
     };
   }, []);
 
+  const normalizedTasks = useMemo(() => tasks.map(normalizeTicketTask), [tasks]);
   const authorizedFolders = useMemo(
     () => folders.filter((folder) => isAuthorizedToViewProject(folder, projectScope)),
     [folders, projectScope],
   );
-  const projects = useMemo(() => buildProjects(authorizedFolders, tasks), [authorizedFolders, tasks]);
+  const projects = useMemo(() => buildProjects(authorizedFolders, normalizedTasks), [authorizedFolders, normalizedTasks]);
   const activeProject = projects.find((project) => project.id === selectedProjectId) ?? projects[0];
-  const projectTasks = tasks;
+  const projectTasks = normalizedTasks;
   const openCount = countByStatus(projectTasks, 'open');
   const inProgressCount = countByStatus(projectTasks, 'in_progress');
   const blockedCount = countByStatus(projectTasks, 'blocked');
@@ -262,7 +284,7 @@ export function ProjectsLayout() {
               <h3 className="mt-1 line-clamp-2 font-bold text-sm text-foreground">{project.title}</h3>
               <div className="mt-3 flex items-center gap-2">
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-border">
-                  <div className={`h-full ${project.progress === 100 ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${project.progress}%` }} />
+                  <div className={`h-full ${project.progress === 100 ? 'bg-emerald-500' : 'bg-primary'}`} style={boundedPercentStyle(project.progress)} />
                 </div>
                 <span className="text-xs font-semibold text-muted-foreground">{project.progress}%</span>
               </div>
@@ -443,7 +465,7 @@ export function ProjectsLayout() {
                   <dt className="mb-1 font-semibold text-muted-foreground">진행률</dt>
                   <dd className="flex items-center gap-3">
                     <div className="h-2 flex-1 overflow-hidden rounded-full bg-border">
-                      <div className="h-full bg-primary" style={{ width: `${activeProject.progress}%` }} />
+                      <div className="h-full bg-primary" style={boundedPercentStyle(activeProject.progress)} />
                     </div>
                     <span className="font-mono text-xs font-bold">{activeProject.progress}%</span>
                   </dd>

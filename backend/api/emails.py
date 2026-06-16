@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
 from db.session import get_db
@@ -6,12 +6,7 @@ from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
 from typing import Literal
-from services.email_client import (
-    EmailMessageParams,
-    SmtpConfig,
-    send_email,
-    validate_smtp_destination,
-)
+from services.email_client import EmailMessageParams, SmtpConfig, send_email, validate_smtp_destination
 from services.reply_tracking_service import (
     check_missing_replies,
     configured_email_addresses,
@@ -25,14 +20,6 @@ from services.email_dedupe_service import (
     candidate_message_lookup_values,
     candidate_strong_fingerprint,
     email_strong_fingerprint,
-)
-from services.email_import_service import (
-    EmailImportQuotaExceeded,
-    MAX_IMPORT_UPLOAD_BYTES,
-    MAX_IMPORT_UPLOADS,
-    EmailImportItemStatus,
-    EmailImportUpload,
-    import_email_uploads,
 )
 from services.text_safety import strip_html_markup
 import logging
@@ -196,7 +183,9 @@ class UniqueThreadCandidateRequest(BaseModel):
 
 
 class UniqueThreadIntentRequest(BaseModel):
-    candidates: list[UniqueThreadCandidateRequest] = Field(min_length=1, max_length=20)
+    candidates: list[UniqueThreadCandidateRequest] = Field(
+        min_length=1, max_length=20
+    )
 
 
 class UniqueThreadUpdate(BaseModel):
@@ -215,25 +204,6 @@ class UniqueThreadIntentResponse(BaseModel):
     provenance: Literal["server-authoritative"]
     provider_write_executed: bool
     audit_event: Literal["email.unique_thread_intent.created"]
-
-
-class EmailFileImportItem(BaseModel):
-    filename: str
-    status: EmailImportItemStatus
-    reason_code: str | None = None
-    attachment_count: int = 0
-
-
-class EmailFileImportResponse(BaseModel):
-    status: Literal["completed"]
-    imported_count: int
-    skipped_count: int
-    failed_count: int
-    attachment_count: int
-    items: list[EmailFileImportItem]
-    provenance: Literal["server-authoritative"]
-    provider_write_executed: bool
-    audit_event: Literal["email.file_import.completed"]
 
 
 @router.get("", response_model=dict[str, list[EmailListItem]])
@@ -257,42 +227,34 @@ async def get_emails(
         .limit(candidate_window)
     )
     emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    # Optimization: emails are already ordered by date DESC from the DB.
+    # We preserve this order to group effectively without doing O(N log N) sorts in Python.
 
     grouped = {}
     reply_counts = {}
     thread_messages = {}
     has_sent_message = {}
-
-    is_sent_folder = (folder == "sent")
-
     for email in emails:
         group_key = canonical_thread_key(email)
+        thread_messages.setdefault(group_key, []).append(email)
 
-        thread_list = thread_messages.get(group_key)
-        if thread_list is not None:
-            thread_list.append(email)
-            reply_counts[group_key] += 1
-            if email.date > grouped[group_key].date:
-                grouped[group_key] = email
-        else:
-            thread_messages[group_key] = [email]
-            grouped[group_key] = email
-            reply_counts[group_key] = 1
-
-        if is_sent_folder and group_key not in has_sent_message:
+        # Optimization: track if there is a self-sent message for "sent" folder tracking
+        if folder == "sent" and not has_sent_message.get(group_key, False):
             if message_is_from_user(email, user_addresses):
                 has_sent_message[group_key] = True
 
-    if is_sent_folder:
-        visible_groups = [
-            email
-            for group_key, email in grouped.items()
-            if has_sent_message.get(group_key, False)
-        ]
-    else:
-        visible_groups = list(grouped.values())
-    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
+        if group_key not in grouped:
+            grouped[group_key] = email
+            reply_counts[group_key] = 1
+        else:
+            reply_counts[group_key] += 1
+
+    visible_groups = [
+        email
+        for group_key, email in grouped.items()
+        if folder != "sent" or has_sent_message.get(group_key, False)
+    ]
+    sorted_groups = visible_groups[:limit]
 
     items = []
     for email in sorted_groups:
@@ -334,33 +296,16 @@ async def get_pending_replies(
     return {"emails": items}
 
 
-def _extract_candidate_lookups(
-    candidates: list[EmailDedupeCandidate],
-) -> tuple[set[str], set[str], dict[str, set[str]], dict[str, str | None]]:
+
+def _extract_candidate_lookups(candidates: list[EmailDedupeCandidate]) -> tuple[set[str], set[str]]:
     message_lookup_values: set[str] = set()
     fingerprint_values: set[str] = set()
-
-    # ⚡ Bolt: Cache expensive lookup generation and SHA-256 fingerprinting
-    # Mapping by candidate_key to prevent redundant processing in downstream dedupe logic
-    candidate_lookups: dict[str, set[str]] = {}
-    candidate_fingerprints: dict[str, str | None] = {}
-
     for candidate in candidates:
-        lookups = candidate_message_lookup_values(candidate)
-        candidate_lookups[candidate.candidate_key] = lookups
-        message_lookup_values.update(lookups)
-
+        message_lookup_values.update(candidate_message_lookup_values(candidate))
         candidate_fingerprint = candidate_strong_fingerprint(candidate)
-        candidate_fingerprints[candidate.candidate_key] = candidate_fingerprint
         if candidate_fingerprint:
             fingerprint_values.add(candidate_fingerprint)
-
-    return (
-        message_lookup_values,
-        fingerprint_values,
-        candidate_lookups,
-        candidate_fingerprints,
-    )
+    return message_lookup_values, fingerprint_values
 
 
 async def _fetch_existing_emails_for_candidates(
@@ -394,15 +339,12 @@ def _build_email_lookup_dicts(
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
         for lookup_value in _email_message_lookup_values(email_row):
-            if lookup_value not in by_message_id:
-                by_message_id[lookup_value] = email_row
+            by_message_id.setdefault(lookup_value, email_row)
         row_fingerprint = email_strong_fingerprint(email_row)
         if row_fingerprint:
-            if row_fingerprint not in by_fingerprint:
-                by_fingerprint[row_fingerprint] = email_row
+            by_fingerprint.setdefault(row_fingerprint, email_row)
         if email_row.fingerprint:
-            if email_row.fingerprint not in by_fingerprint:
-                by_fingerprint[email_row.fingerprint] = email_row
+            by_fingerprint.setdefault(email_row.fingerprint, email_row)
     return by_message_id, by_fingerprint
 
 
@@ -410,8 +352,6 @@ def _find_matches_for_candidates(
     candidates: list[EmailDedupeCandidate],
     by_message_id: dict[str, Email],
     by_fingerprint: dict[str, Email],
-    candidate_lookups: dict[str, set[str]],
-    candidate_fingerprints: dict[str, str | None],
 ) -> list[UniqueThreadUpdate]:
     updates: list[UniqueThreadUpdate] = []
     for candidate in candidates:
@@ -419,7 +359,7 @@ def _find_matches_for_candidates(
         match_reason: Literal["message_id", "fingerprint"] | None = None
         dedupe_key: str | None = None
 
-        for lookup_value in candidate_lookups.get(candidate.candidate_key, set()):
+        for lookup_value in candidate_message_lookup_values(candidate):
             if lookup_value in by_message_id:
                 matched_email = by_message_id[lookup_value]
                 match_reason = "message_id"
@@ -427,7 +367,7 @@ def _find_matches_for_candidates(
                 break
 
         if matched_email is None:
-            candidate_fingerprint = candidate_fingerprints.get(candidate.candidate_key)
+            candidate_fingerprint = candidate_strong_fingerprint(candidate)
             if candidate_fingerprint and candidate_fingerprint in by_fingerprint:
                 matched_email = by_fingerprint[candidate_fingerprint]
                 match_reason = "fingerprint"
@@ -456,23 +396,12 @@ async def create_unique_thread_intent(
     auth_context: AuthContext = Depends(get_auth_context),
 ):
     candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
-    (
-        message_lookup_values,
-        fingerprint_values,
-        candidate_lookups,
-        candidate_fingerprints,
-    ) = _extract_candidate_lookups(candidates)
+    message_lookup_values, fingerprint_values = _extract_candidate_lookups(candidates)
     existing_emails = await _fetch_existing_emails_for_candidates(
         db, auth_context, message_lookup_values, fingerprint_values
     )
     by_message_id, by_fingerprint = _build_email_lookup_dicts(existing_emails)
-    updates = _find_matches_for_candidates(
-        candidates,
-        by_message_id,
-        by_fingerprint,
-        candidate_lookups,
-        candidate_fingerprints,
-    )
+    updates = _find_matches_for_candidates(candidates, by_message_id, by_fingerprint)
 
     return UniqueThreadIntentResponse(
         status="intent_ready",
@@ -482,61 +411,6 @@ async def create_unique_thread_intent(
         provenance="server-authoritative",
         provider_write_executed=False,
         audit_event="email.unique_thread_intent.created",
-    )
-
-
-@router.post("/import-files", response_model=EmailFileImportResponse)
-async def import_email_files(
-    files: list[UploadFile] = File(...),
-    db: AsyncSession = Depends(get_db),
-    auth_context: AuthContext = Depends(get_auth_context),
-):
-    if auth_context.organization_id is None:
-        raise HTTPException(status_code=403, detail="organization_required")
-    if len(files) > MAX_IMPORT_UPLOADS:
-        raise HTTPException(status_code=422, detail="too_many_files")
-
-    uploads: list[EmailImportUpload] = []
-    for upload in files:
-        content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
-        if len(content) > MAX_IMPORT_UPLOAD_BYTES:
-            raise HTTPException(status_code=413, detail="file_too_large")
-        uploads.append(
-            EmailImportUpload(
-                filename=upload.filename or "upload",
-                content=content,
-            )
-        )
-
-    try:
-        import_result = await import_email_uploads(
-            db,
-            uploads=uploads,
-            user_id=auth_context.user_id,
-            organization_id=auth_context.organization_id,
-        )
-    except EmailImportQuotaExceeded as exc:
-        raise HTTPException(
-            status_code=429, detail="email_import_quota_exceeded"
-        ) from exc
-    return EmailFileImportResponse(
-        status="completed",
-        imported_count=import_result.imported_count,
-        skipped_count=import_result.skipped_count,
-        failed_count=import_result.failed_count,
-        attachment_count=import_result.attachment_count,
-        items=[
-            EmailFileImportItem(
-                filename=item.filename,
-                status=item.status,
-                reason_code=item.reason_code,
-                attachment_count=item.attachment_count,
-            )
-            for item in import_result.items
-        ],
-        provenance="server-authoritative",
-        provider_write_executed=False,
-        audit_event="email.file_import.completed",
     )
 
 
@@ -629,11 +503,7 @@ async def send_email_endpoint(
                     ),
                 ) from exc
             if isinstance(exc, ValueError):
-                logger.warning(
-                    "Email send rejected invalid SMTP configuration",
-                    extra={"error_type": type(exc).__name__},
-                )
-                raise HTTPException(status_code=400, detail="Invalid email configuration") from exc
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
             raise
 
         message_params = EmailMessageParams(

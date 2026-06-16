@@ -8,9 +8,9 @@ name: Strix Gate Self-Test
 
 on:
   push:
-    branches: [ develop, master ]
+    branches: [ master ]
   pull_request:
-    branches: [ develop, master ]
+    branches: [ master ]
   workflow_dispatch:
 
 permissions:

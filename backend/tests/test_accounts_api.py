@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
-from api.tenant_config import MAILBOX_MANAGE_FORBIDDEN, MAILBOX_VIEW_FORBIDDEN
 from core.config import settings
 from db.session import get_db
 from main import app
@@ -44,10 +43,11 @@ class MockResult:
         return self.config
 
 class MockSession:
-    def __init__(self):
+    def __init__(self, forced_config=None):
         self.configs = {}
         self.commits = 0
         self.execute_calls = 0
+        self.forced_config = forced_config
 
     def _query_key(self, stmt):
         params = dict(stmt.compile().params)
@@ -57,6 +57,8 @@ class MockSession:
 
     async def execute(self, stmt):
         self.execute_calls += 1
+        if self.forced_config is not None:
+            return MockResult(self.forced_config)
         return MockResult(self.configs.get(self._query_key(stmt)))
 
     def add(self, obj):
@@ -280,55 +282,32 @@ def test_accounts_config_preserves_scoped_signed_member_session():
     assert session.execute_calls == 1
 
 
-def test_accounts_config_enforces_current_user_self_access_policy(monkeypatch):
-    session = MockSession()
-    calls = []
-
-    def record_self_access(target_user_id, auth_ctx, forbidden_detail):
-        calls.append(
-            (
-                target_user_id,
-                auth_ctx.user_id,
-                auth_ctx.organization_id,
-                forbidden_detail,
-            )
-        )
-
-    monkeypatch.setattr(
-        "api.accounts.ensure_mailbox_config_self_access", record_self_access
-    )
-    payload = _valid_session_payload(sub="mailbox-owner", org="org-acme")
-
-    read_response = _request_with_signed_session(
+def test_accounts_config_rejects_mismatched_persisted_owner_on_read():
+    session = MockSession(forced_config=MockTenantConfig("other-user", "org-acme"))
+    response = _request_with_signed_session(
         "GET",
         "/api/accounts/config",
         session,
-        payload,
+        _valid_session_payload(),
     )
-    write_response = _request_with_signed_session(
+
+    assert response.status_code == 403
+    assert session.execute_calls == 1
+
+
+def test_accounts_config_rejects_mismatched_persisted_owner_on_write():
+    session = MockSession(forced_config=MockTenantConfig("other-user", "org-acme"))
+    response = _request_with_signed_session(
         "PUT",
         "/api/accounts/config",
         session,
-        payload,
-        {},
+        _valid_session_payload(),
+        {"smtp_server": "smtp.example.com", "smtp_port": 587},
     )
 
-    assert read_response.status_code == 200
-    assert write_response.status_code == 200
-    assert calls == [
-        (
-            "mailbox-owner",
-            "mailbox-owner",
-            "org-acme",
-            MAILBOX_VIEW_FORBIDDEN,
-        ),
-        (
-            "mailbox-owner",
-            "mailbox-owner",
-            "org-acme",
-            MAILBOX_MANAGE_FORBIDDEN,
-        ),
-    ]
+    assert response.status_code == 403
+    assert session.execute_calls == 1
+    assert session.commits == 0
 
 
 def test_accounts_config_rejects_private_imap_host(client: TestClient):
@@ -338,7 +317,7 @@ def test_accounts_config_rejects_private_imap_host(client: TestClient):
     )
 
     assert response.status_code == 400
-    assert "Invalid IMAP configuration" in response.json()["detail"]
+    assert "imap_server" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_private_pop3_host(client: TestClient):
@@ -348,7 +327,7 @@ def test_accounts_config_rejects_private_pop3_host(client: TestClient):
     )
 
     assert response.status_code == 400
-    assert "Invalid POP3 configuration" in response.json()["detail"]
+    assert "pop3_server" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_unsafe_imap_port(client: TestClient, monkeypatch):
@@ -369,7 +348,7 @@ def test_accounts_config_rejects_unsafe_imap_port(client: TestClient, monkeypatc
     )
 
     assert response.status_code == 400
-    assert "Invalid IMAP configuration" in response.json()["detail"]
+    assert "imap_port" in response.json()["detail"]
 
 
 def test_accounts_config_rejects_unsafe_pop3_port(client: TestClient, monkeypatch):
@@ -387,4 +366,4 @@ def test_accounts_config_rejects_unsafe_pop3_port(client: TestClient, monkeypatc
     )
 
     assert response.status_code == 400
-    assert "Invalid POP3 configuration" in response.json()["detail"]
+    assert "pop3_port" in response.json()["detail"]

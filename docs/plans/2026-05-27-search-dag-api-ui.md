@@ -36,7 +36,7 @@ new provider write path or a new database object.
 
 1. Search API wiring
    - Call `apiClient.post('/api/search', { query, limit: 8 })`.
-   - Preserve the stored `naruon_session_token` as `Authorization: Bearer`.
+   - Preserve the HttpOnly cookie-backed `/api/*` proxy session.
    - Do not emit public identity headers.
    - Render loading, empty, error, and success states.
 
@@ -59,4 +59,3 @@ new provider write path or a new database object.
 - `cd frontend && npm run typecheck`
 - `cd frontend && npm run build`
 - `cd frontend && LIVE_BASE_URL=http://127.0.0.1:<port> npx playwright test tests/e2e/dashboard-branding.spec.ts --project=desktop -g "context search"`
-

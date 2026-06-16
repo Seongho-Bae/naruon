@@ -34,17 +34,22 @@
 - `backend/db/models.py` no longer contains a fallback Fernet key or SHA256
   passphrase-derivation path. Secret-field encryption now requires an explicit
   valid Fernet `ENCRYPTION_KEY` in every runtime mode, including `DEBUG=true`.
-  Decryption failures return `None` instead of ciphertext; user-facing routes
-  that touch encrypted fields should return the existing operator-facing
-  missing-key or unavailable-secret error rather than fallback encryption or raw
-  encrypted blobs.
+  `ENCRYPTION_KEY_ID` labels the active key, and `ENCRYPTION_PREVIOUS_KEYS`
+  accepts comma-separated `key_id=fernet_key` entries for decrypt-only retired
+  keys during rotation. New ciphertext is stored as
+  `fernet:v1:{key_id}:{ciphertext}` so the backend can decrypt records written
+  by an older active key after the operator promotes a new key. Existing
+  unprefixed Fernet ciphertext is still readable by trying the active key and
+  previous keys. Decryption failures return `None` instead of ciphertext;
+  user-facing routes that touch encrypted fields should return the existing
+  operator-facing missing-key or unavailable-secret error rather than fallback
+  encryption or raw encrypted blobs.
 - Email rows now have nullable `user_id` and `organization_id` owner keys, and
   email/search/network graph queries are scoped to the authenticated user plus
-  organization. Managed environments apply schema changes through
-  `backend/scripts/migrate_db.py`; `backend/scripts/bootstrap_db.py` remains a
-  local compatibility path for idempotent backfills. Production still needs an
-  audited mailbox-owner and organization migration/backfill before multi-tenant
-  data is mixed.
+  organization. Existing local databases receive the columns and null-row
+  default backfills through `backend/scripts/bootstrap_db.py`; production still
+  needs an audited mailbox-owner and organization migration/backfill before
+  multi-tenant data is mixed.
 - Email `message_id` uniqueness, fixture import upserts, and reply-thread lookup
   are scoped by `user_id` plus `organization_id` so reused RFC Message-ID values
   cannot cross tenant boundaries.
@@ -62,8 +67,9 @@
 - Keycloak and Casdoor should be evaluated as OIDC providers before production
   multi-user access is claimed. The HMAC session envelope is a narrow internal
   bridge, not the final external IdP integration.
-- Production still needs key rotation runbooks and separate secret scopes for
-  `AUTH_SESSION_HMAC_SECRET`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
+- Production still needs operator-owned rotation schedules, KMS/secret-manager
+  storage, and separate secret scopes for `AUTH_SESSION_HMAC_SECRET`,
+  `ENCRYPTION_KEY`, OpenAI, SMTP/IMAP, OAuth, and CI tokens.
 
 ## Universal RBAC/ABAC contract
 
@@ -93,20 +99,23 @@
 - Authentication is not sufficient for privileged control-plane resources: LLM
   provider registry reads and writes require `platform_admin` or
   `organization_admin` signed role claims.
-- The browser API client uses same-origin credentials and strips public identity
-  headers (`X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`,
-  `X-User-Role`, `X-Dev-Auth-Token`) from caller-provided request headers so
-  copied frontend code cannot reintroduce the development-header trust boundary.
-- Caller-provided `Authorization` is also discarded by the browser API client.
-  Only the same-origin Next.js `/api/*` proxy may translate the HttpOnly
-  `naruon_session` cookie into a backend `Authorization: Bearer` session.
+- The browser OIDC callback posts the returned access token once to
+  `/auth/session`, which sets the HttpOnly, Secure, SameSite=Lax
+  `naruon_session` cookie. Browser code must not store bearer tokens in
+  localStorage or sessionStorage.
+- The browser API client strips public identity headers (`X-User-Id`,
+  `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
+  `X-Dev-Auth-Token`) and caller-provided `Authorization` headers from requests
+  so copied frontend code cannot reintroduce the development-header trust
+  boundary or shadow the session.
+- The Next.js `/api/*` proxy is the only browser-facing path that may read the
+  `naruon_session` cookie and forward `Authorization: Bearer` to the backend.
 - When `NEXT_PUBLIC_OIDC_ISSUER_URL` and `NEXT_PUBLIC_OIDC_CLIENT_ID` are set,
   the browser can start an Authorization Code + PKCE login against the configured
-  Keycloak/Casdoor issuer. The same-origin `/auth/oidc/*` server routes keep
-  PKCE verifier state in an HttpOnly transient cookie, exchange the callback
-  code server-side, verify the resulting token with the backend, and then install
-  only the HttpOnly `naruon_session` cookie for private API calls. Public
-  endpoint overrides may be supplied with
+  Keycloak/Casdoor issuer, complete `/auth/callback`, exchange the returned OIDC
+  `access_token` for the HttpOnly `/auth/session` cookie, and use the
+  cookie-backed Next.js proxy for private API calls. Public endpoint overrides
+  may be supplied with
   `NEXT_PUBLIC_OIDC_AUTHORIZATION_ENDPOINT`, `NEXT_PUBLIC_OIDC_TOKEN_ENDPOINT`,
   `NEXT_PUBLIC_OIDC_END_SESSION_ENDPOINT`, `NEXT_PUBLIC_OIDC_REDIRECT_URI`, and
   `NEXT_PUBLIC_OIDC_SCOPE`; otherwise Keycloak's

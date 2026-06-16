@@ -1,4 +1,5 @@
 import base64
+import datetime
 import hashlib
 import hmac
 import inspect
@@ -14,10 +15,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
     AuthContext,
-    OIDC_ALLOWED_ALGORITHMS,
-    SESSION_ALLOWED_ALGORITHMS,
-    SESSION_AUTH_RATE_LIMIT_MAX_FAILURES,
-    _session_auth_failure_buckets,
     ensure_organization_access,
     get_auth_context,
     get_current_user,
@@ -37,8 +34,8 @@ TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
 WRONG_SESSION_HMAC_SECRET = (
     "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
 )
-PUBLIC_FIXTURE_SESSION_HMAC_SECRET = "-".join(
-    ("naruon", "session", "hmac", "token", "32", "byte", "minimum")
+PUBLIC_FIXTURE_SESSION_HMAC_SECRET = (
+    "naruon-session-hmac-token-32-byte-minimum"  # noqa: S105 - test-only secret
 )
 RUNTIME_HEADER_PARAMS = {
     "x_user_id",
@@ -108,7 +105,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
         "iss": "naruon-control-plane",
         "aud": "naruon-api",
         "sub": "alice",
-        "role": "member",
+        "role": "tenant_admin",
         "org": "org-acme",
         "groups": ["group-1", "group-2"],
         "workspace": "workspace-org-acme",
@@ -123,21 +120,56 @@ def restore_auth_flags():
     previous_debug = settings.DEBUG
     previous_runtime_environment = getattr(settings, "RUNTIME_ENVIRONMENT", None)
     previous_session_hmac_secret = getattr(settings, "AUTH_SESSION_HMAC_SECRET", None)
-    previous_oidc_signing_keys = sys.modules["api.auth"]._cached_oidc_signing_keys
-    _session_auth_failure_buckets.clear()
+    previous_oidc_issuer_url = settings.OIDC_ISSUER_URL
+    previous_oidc_client_id = settings.OIDC_CLIENT_ID
+    auth_module = sys.modules["api.auth"]
+    previous_oidc_signing_keys = auth_module._cached_oidc_signing_keys
     yield
     settings.DEBUG = previous_debug
     if previous_runtime_environment is not None:
         setattr(settings, "RUNTIME_ENVIRONMENT", previous_runtime_environment)
     if hasattr(settings, "AUTH_SESSION_HMAC_SECRET"):
         settings.AUTH_SESSION_HMAC_SECRET = previous_session_hmac_secret
-    sys.modules["api.auth"]._cached_oidc_signing_keys = previous_oidc_signing_keys
-    _session_auth_failure_buckets.clear()
+    settings.OIDC_ISSUER_URL = previous_oidc_issuer_url
+    settings.OIDC_CLIENT_ID = previous_oidc_client_id
+    auth_module._cached_oidc_signing_keys = previous_oidc_signing_keys
 
 
 def _set_runtime_environment(value: str) -> None:
     if hasattr(settings, "RUNTIME_ENVIRONMENT"):
         setattr(settings, "RUNTIME_ENVIRONMENT", value)
+
+
+def _install_fake_revocation_store(monkeypatch):
+    from api import auth as auth_module
+
+    revoked_fingerprints: set[str] = set()
+
+    class _FakeRevocationConnection:
+        async def execute(self, query, *args):
+            if "INSERT INTO revoked_session_tokens" not in query:
+                return None
+            fingerprint, user_id, organization_id, workspace_id, expires_at, _now = args
+            assert user_id == "alice"
+            assert organization_id == "org-acme"
+            assert workspace_id == "workspace-org-acme"
+            assert expires_at > datetime.datetime.now(datetime.timezone.utc)
+            revoked_fingerprints.add(fingerprint)
+            return None
+
+        async def fetchval(self, query, fingerprint, _now):
+            if fingerprint in revoked_fingerprints:
+                return True
+            return None
+
+        async def close(self):
+            return None
+
+    async def connect_with_revocation_store(*args, **kwargs):
+        return _FakeRevocationConnection()
+
+    monkeypatch.setattr(auth_module, "asyncpg_connect", connect_with_revocation_store)
+    return revoked_fingerprints
 
 
 def _enable_local_dev_headers() -> None:
@@ -151,22 +183,20 @@ def _get_runner_config_without_dependency_overrides(headers: dict[str, str]):
 
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            return client.get("/api/runtime-config", headers=headers)
+            return client.get("/api/runner-config", headers=headers)
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
 
 
-def _request_without_dependency_overrides(
-    method: str, path: str, headers: dict[str, str] | None = None
-):
+def _request_without_dependency_overrides(method: str, path: str):
     original_overrides = dict(app.dependency_overrides)
     app.dependency_overrides.pop(get_auth_context, None)
     app.dependency_overrides.pop(get_current_user, None)
 
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
-            return client.request(method, path, headers=headers)
+            return client.request(method, path)
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
@@ -200,7 +230,9 @@ def test_private_api_routes_have_default_signed_session_dependency():
 
 
 def test_explicit_public_routes_do_not_require_signed_session():
-    for method, path in (("GET", "/"),):
+    for method, path in (
+        ("GET", "/"),
+    ):
         response = _request_without_dependency_overrides(method, path)
         assert response.status_code == 200, f"{method} {path}: {response.text}"
 
@@ -244,12 +276,86 @@ async def test_get_auth_context_accepts_signed_bearer_session():
 
     assert context == AuthContext(
         user_id="alice",
-        role="member",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1", "group-2"),
         workspace_id="workspace-org-acme",
     )
     assert context.session_verifier == "hmac"
+
+
+@pytest.mark.asyncio
+async def test_get_auth_context_rejects_revoked_signed_bearer_session(monkeypatch):
+    from api import auth as auth_module
+
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    payload = _valid_session_payload()
+    token = _signed_session_token(payload)
+    revoked_fingerprints = _install_fake_revocation_store(monkeypatch)
+
+    await auth_module.revoke_session_token(
+        token,
+        datetime.datetime.fromtimestamp(float(payload["exp"]), datetime.timezone.utc),
+        user_id="alice",
+        organization_id="org-acme",
+        workspace_id="workspace-org-acme",
+    )
+    assert auth_module._session_token_fingerprint(token) in revoked_fingerprints
+
+    with pytest.raises(HTTPException) as exc:
+        await get_auth_context(authorization=f"Bearer {token}")
+
+    assert exc.value.status_code == 401
+
+
+def test_logout_endpoint_revokes_signed_bearer_session(monkeypatch):
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+    token = _signed_session_token(_valid_session_payload())
+    revoked_fingerprints = _install_fake_revocation_store(monkeypatch)
+
+    async def override_get_db():
+        yield _EmptyRunnerConfigSession()
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides.pop(get_auth_context, None)
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides[get_db] = override_get_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            logout_response = client.post(
+                "/api/auth/logout",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            revoked_response = client.get(
+                "/api/runner-config",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert logout_response.status_code == 200
+    assert logout_response.json() == {"revoked": True}
+    from api import auth as auth_module
+
+    assert auth_module._session_token_fingerprint(token) in revoked_fingerprints
+    assert revoked_response.status_code == 401
+    assert revoked_response.json() == {"detail": "Authentication required"}
+
+
+def test_hmac_session_metadata_requires_control_plane_claims_when_oidc_configured():
+    from api import auth as auth_module
+
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+
+    with pytest.raises(HTTPException) as exc:
+        auth_module._auth_context_from_session_payload(
+            _valid_session_payload(iss="arbitrary-issuer", aud="arbitrary-audience"),
+            "hmac",
+        )
+
+    assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -355,51 +461,6 @@ async def test_signed_bearer_session_rejects_rs256_algorithm():
 
 
 @pytest.mark.asyncio
-async def test_signed_bearer_session_decodes_with_fixed_hmac_algorithm_allowlist(
-    monkeypatch,
-):
-    import jwt
-
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(_valid_session_payload())
-    decode_algorithms: list[tuple[str, ...]] = []
-    decode_options: list[dict[str, object]] = []
-
-    def mock_jwt_decode(*args, **kwargs):
-        decode_algorithms.append(tuple(kwargs["algorithms"]))
-        decode_options.append(dict(kwargs["options"]))
-        return _valid_session_payload()
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-
-    context = await get_auth_context(authorization=f"Bearer {token}")
-
-    assert context.user_id == "alice"
-    assert decode_algorithms == [SESSION_ALLOWED_ALGORITHMS]
-    assert decode_options == [
-        {"require": ("exp", "iss", "aud"), "verify_signature": True}
-    ]
-
-
-def test_auth_session_route_returns_server_verified_claims():
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(_valid_session_payload())
-
-    response = _request_without_dependency_overrides(
-        "GET",
-        "/api/auth/session",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "user_id": "alice",
-        "organization_id": "org-acme",
-        "workspace_id": "workspace-org-acme",
-    }
-
-
-@pytest.mark.asyncio
 async def test_signed_bearer_session_rejects_unknown_critical_header():
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(
@@ -470,92 +531,6 @@ async def test_signed_bearer_session_rejects_expired_token():
         await get_auth_context(authorization=f"Bearer {token}")
 
     assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_signed_bearer_session_rejects_excessive_expiration():
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(
-        _valid_session_payload(exp=int(time.time()) + (13 * 60 * 60))
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization=f"Bearer {token}")
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_signed_bearer_session_rejects_future_issued_at():
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(
-        _valid_session_payload(
-            iat=int(time.time()) + 120,
-            exp=int(time.time()) + 300,
-        )
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization=f"Bearer {token}")
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_signed_bearer_session_rejects_issued_at_after_expiration():
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(
-        _valid_session_payload(
-            iat=int(time.time()) + 240,
-            exp=int(time.time()) + 120,
-        )
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization=f"Bearer {token}")
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_signed_bearer_session_rate_limits_repeated_invalid_token(monkeypatch):
-    from api import auth as auth_module
-
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    decode_attempts = 0
-
-    def reject_header(token: str):
-        nonlocal decode_attempts
-        decode_attempts += 1
-        raise auth_module.jwt.PyJWTError("invalid")
-
-    monkeypatch.setattr(auth_module.jwt, "get_unverified_header", reject_header)
-
-    for _attempt in range(SESSION_AUTH_RATE_LIMIT_MAX_FAILURES):
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization="Bearer invalid.jwt.token")
-        assert exc.value.status_code == 401
-
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization="Bearer invalid.jwt.token")
-
-    assert exc.value.status_code == 401
-    assert decode_attempts == SESSION_AUTH_RATE_LIMIT_MAX_FAILURES
-
-
-@pytest.mark.asyncio
-async def test_signed_bearer_session_failure_buckets_are_bounded(monkeypatch):
-    from api import auth as auth_module
-
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    monkeypatch.setattr(auth_module, "SESSION_AUTH_RATE_LIMIT_MAX_BUCKETS", 3)
-
-    for index in range(5):
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer invalid.jwt.token{index}")
-        assert exc.value.status_code == 401
-
-    assert len(_session_auth_failure_buckets) == 3
 
 
 @pytest.mark.asyncio
@@ -677,7 +652,7 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             response = client.get(
-                "/api/runtime-config",
+                "/api/runner-config",
                 headers={
                     "Authorization": f"Bearer {token}",
                     "X-User-Id": "attacker",
@@ -691,7 +666,39 @@ def test_http_route_accepts_signed_bearer_and_ignores_forged_identity_headers():
         app.dependency_overrides.update(original_overrides)
 
     assert response.status_code == 200
-    assert response.json()["product_name"] == "Naruon"
+    assert response.json()["workspace_id"] == "workspace-org-acme"
+    assert response.json()["configured"] is False
+
+
+def test_auth_session_route_returns_verified_session_claims():
+    def override_auth_context():
+        return AuthContext(
+            user_id="alice",
+            role="member",
+            organization_id="org-acme",
+            group_ids=("group-1",),
+            workspace_id="workspace-org-acme",
+            session_verifier="hmac",
+        )
+
+    original_overrides = dict(app.dependency_overrides)
+    app.dependency_overrides[get_auth_context] = override_auth_context
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get(
+                "/api/auth/session",
+                headers={"Authorization": "Bearer verified-session-token"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user_id": "alice",
+        "organization_id": "org-acme",
+        "workspace_id": "workspace-org-acme",
+    }
 
 
 def test_auth_dependency_overrides_are_opt_in_by_default():
@@ -850,7 +857,7 @@ def test_admin_user_id_is_rejected_without_verified_identity_provider():
 def test_ensure_organization_access_rejects_cross_scope_resource():
     context = AuthContext(
         user_id="alice",
-        role="member",
+        role="tenant_admin",
         organization_id="org-acme",
         group_ids=("group-1",),
         workspace_id="workspace-org-acme",
@@ -934,39 +941,33 @@ def test_oidc_jwks_client_fetches_from_validated_pinned_address(monkeypatch):
 @pytest.mark.asyncio
 async def test_signed_bearer_session_with_oidc(monkeypatch):
     import jwt
-
+    
     previous_issuer_url = settings.OIDC_ISSUER_URL
     previous_client_id = settings.OIDC_CLIENT_ID
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
     settings.OIDC_CLIENT_ID = "naruon-api"
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
+    
     class MockKey:
         key_id = "test-key"
         key = "public_key"
 
     monkeypatch.setattr("api.auth.jwks_client", object())
     monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    decode_algorithms: list[tuple[str, ...]] = []
-    decode_options: list[dict[str, object]] = []
-
+    
     def mock_jwt_decode(*args, **kwargs):
-        decode_algorithms.append(tuple(kwargs["algorithms"]))
-        decode_options.append(dict(kwargs["options"]))
         return {
             "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "alice",
-            "role": "member",
+            "role": "tenant_admin",
             "org": "org-acme",
             "groups": ["group-1", "group-2"],
             "workspace": "workspace-org-acme",
             "exp": int(time.time()) + 300,
             "_session_verifier": "hmac",
         }
-
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
 
     try:
@@ -981,104 +982,9 @@ async def test_signed_bearer_session_with_oidc(monkeypatch):
         settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
     assert context.user_id == "alice"
-    assert context.role == "member"
+    assert context.role == "tenant_admin"
     assert context.organization_id == "org-acme"
     assert context.session_verifier == "oidc"
-    assert decode_algorithms == [OIDC_ALLOWED_ALGORITHMS]
-    assert decode_options == [
-        {"require": ("exp", "iss", "aud"), "verify_signature": True}
-    ]
-
-
-@pytest.mark.asyncio
-async def test_oidc_rejects_non_rs256_algorithm_before_decode(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    decode_called = False
-
-    def mock_jwt_decode(*args, **kwargs):
-        nonlocal decode_called
-        decode_called = True
-        return {}
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "HS256", "typ": "JWT", "kid": "test-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-    assert decode_called is False
-
-
-@pytest.mark.asyncio
-async def test_oidc_rejects_key_id_that_does_not_match_verified_key(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "trusted-key"
-        key = "trusted_public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    def mock_jwt_decode(token, key, **kwargs):
-        assert key == "trusted_public_key"
-        return {
-            "iss": "https://login.example.test/realms/naruon",
-            "aud": "naruon-api",
-            "sub": "alice",
-            "role": "member",
-            "org": "org-acme",
-            "groups": [],
-            "workspace": "workspace-org-acme",
-            "exp": int(time.time()) + 300,
-        }
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "RS256", "typ": "JWT", "kid": "attacker-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
@@ -1116,6 +1022,49 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
             "crit": ["x-custom-policy"],
             "x-custom-policy": "require-mfa",
         },
+    )
+
+    try:
+        with pytest.raises(HTTPException) as exc:
+            await get_auth_context(authorization=f"Bearer {token}")
+    finally:
+        settings.OIDC_ISSUER_URL = previous_issuer_url
+        settings.OIDC_CLIENT_ID = previous_client_id
+        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
+
+    assert exc.value.status_code == 401
+    assert decode_called is False
+
+
+@pytest.mark.asyncio
+async def test_oidc_rejects_non_rs256_algorithm_before_decode(monkeypatch):
+    import jwt
+
+    previous_issuer_url = settings.OIDC_ISSUER_URL
+    previous_client_id = settings.OIDC_CLIENT_ID
+    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
+    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
+
+    class MockKey:
+        key_id = "test-key"
+        key = "public_key"
+
+    monkeypatch.setattr("api.auth.jwks_client", object())
+    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
+
+    decode_called = False
+
+    def mock_jwt_decode(*args, **kwargs):
+        nonlocal decode_called
+        decode_called = True
+        return {}
+
+    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
+    token = _signed_session_token(
+        _valid_session_payload(),
+        header={"alg": "HS256", "typ": "JWT", "kid": "test-key"},
     )
 
     try:

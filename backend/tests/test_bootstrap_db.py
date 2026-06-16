@@ -11,6 +11,7 @@ from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
     ProjectFolder,
+    RevokedSessionToken,
     SecurityAuditEvent,
     SenderRelationship,
     TenantConfig,
@@ -534,6 +535,23 @@ def test_security_audit_event_model_uses_two_word_names():
     assert all("_" in column_name for column_name in column_names)
     assert "ix_security_audit_events_scope_time" in index_names
     assert "ix_security_audit_events_actor_scope" in index_names
+
+
+def test_revoked_session_token_model_uses_persistent_scope_names():
+    assert RevokedSessionToken.__tablename__ == "revoked_session_tokens"
+    column_names = {column.name for column in RevokedSessionToken.__table__.columns}
+    index_names = {index.name for index in RevokedSessionToken.__table__.indexes}
+
+    assert column_names == {
+        "token_fingerprint",
+        "user_id",
+        "organization_id",
+        "workspace_id",
+        "expires_at",
+        "revoked_at",
+    }
+    assert all("_" in column_name for column_name in column_names)
+    assert "ix_revoked_session_tokens_scope_expiry" in index_names
 
 
 def test_schema_backfill_creates_connector_signal_events():
