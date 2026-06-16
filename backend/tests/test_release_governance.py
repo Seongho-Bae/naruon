@@ -678,6 +678,145 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
     assert "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" in collapsed_validation.stdout
 
 
+def test_opencode_strix_failed_check_review_model_before_title_attributed_correctly(
+    tmp_path: Path,
+) -> None:
+    """Model line appearing before Title inside a report window must override
+    a prior failed-model mention from the same window header."""
+    repo_root = tmp_path / "repo"
+    auth_file = repo_root / "backend" / "app" / "auth.py"
+    auth_file.parent.mkdir(parents=True)
+    auth_file.write_text("\n".join(f"# auth line {line}" for line in range(1, 180)))
+
+    evidence_file = tmp_path / "failed-check-evidence.md"
+    failed_checks_file = tmp_path / "failed-checks.md"
+    failed_checks_file.write_text("- Strix Security Scan/strix: FAILURE\n")
+    evidence_file.write_text(
+        """
+# Failed GitHub Check Evidence
+
+## Failed check: Strix Security Scan/strix
+
+### Strix vulnerability report window 1 (log lines 100-210)
+
+```text
+Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
+│  Model deepseek/deepseek-r1-0528                                            │
+│  Vulnerability Report                                                       │
+│  Title: Auth Bypass via Header                                              │
+│  Severity: CRITICAL                                                         │
+│  Endpoint: /api/me                                                          │
+│  Method: GET                                                                │
+│  Code Locations                                                             │
+│    Location 1: backend/app/auth.py:132-135                                  │
+│  Vulnerabilities 1                                                          │
+```
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fallback = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
+            str(evidence_file),
+            str(repo_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert (
+        "Strix report from deepseek/deepseek-r1-0528: Auth Bypass via Header"
+    ) in fallback.stdout
+    assert "openai/gpt-5" not in fallback.stdout
+
+    good_control_file = tmp_path / "good-control.json"
+    good_control_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed with deepseek fallback report.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from deepseek/deepseek-r1-0528",
+                        "problem": (
+                            "Strix Security Scan/strix reported "
+                            "Auth Bypass via Header. "
+                            "Severity: CRITICAL. Endpoint: /api/me. Method: GET. "
+                            "Code location backend/app/auth.py:132-135."
+                        ),
+                        "root_cause": "deepseek/deepseek-r1-0528 report evidence",
+                        "fix_direction": "Remove the bypass.",
+                        "regression_test_direction": "Cover auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    good_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(good_control_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert good_validation.returncode == 0, good_validation.stderr
+
+    wrong_attribution_file = tmp_path / "wrong-control.json"
+    wrong_attribution_file.write_text(
+        json.dumps(
+            {
+                "summary": "Strix failed.",
+                "reason": "Strix Security Scan failed",
+                "findings": [
+                    {
+                        "path": "backend/app/auth.py",
+                        "line": 132,
+                        "severity": "CRITICAL",
+                        "title": "Strix report from openai/gpt-5",
+                        "problem": (
+                            "Strix Security Scan/strix reported Auth Bypass via Header. "
+                            "Severity: CRITICAL."
+                        ),
+                        "root_cause": "openai/gpt-5 report evidence",
+                        "fix_direction": "Remove the bypass.",
+                        "regression_test_direction": "Cover auth bypass.",
+                        "suggested_diff": "- old\n+ new",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    wrong_validation = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
+            str(wrong_attribution_file),
+            str(failed_checks_file),
+            str(evidence_file),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert wrong_validation.returncode == 4
+    assert "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" in wrong_validation.stdout
+
+
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (
     None
 ):
