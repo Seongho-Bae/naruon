@@ -2812,7 +2812,7 @@ EOS
 		mkdir -p "$repo_root_dir/.github/workflows" "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
 		echo 'name: OpenCode Review' >"$repo_root_dir/.github/workflows/opencode-review.yml"
 		cat >"$repo_root_dir/Dockerfile" <<'EOS'
-FROM python:3.11-slim AS backend-runtime
+FROM python:3.14-slim AS backend-runtime
 WORKDIR /app
 COPY backend /app/
 FROM backend-runtime

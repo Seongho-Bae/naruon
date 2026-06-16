@@ -254,7 +254,7 @@ class ProviderWritebackRetryItem(Base):
 
 
 class Organization(Base):
-    __tablename__ = "organizations"
+    __tablename__ = "organization_entities"
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     name: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -272,7 +272,7 @@ class OrganizationGroup(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True)
     organization_id: Mapped[str] = mapped_column(
-        ForeignKey("organizations.id"), index=True
+        ForeignKey("organization_entities.id"), index=True
     )
     name: Mapped[str | None] = mapped_column(String, nullable=True)
 
@@ -289,7 +289,7 @@ class ScopedRoleAssignment(Base):
     user_id: Mapped[str] = mapped_column(String, index=True)
     role: Mapped[str] = mapped_column(String, index=True)
     organization_id: Mapped[str | None] = mapped_column(
-        ForeignKey("organizations.id"), nullable=True, index=True
+        ForeignKey("organization_entities.id"), nullable=True, index=True
     )
     group_id: Mapped[str | None] = mapped_column(
         ForeignKey("organization_groups.id"), nullable=True, index=True
@@ -323,7 +323,7 @@ class PromptTemplate(Base):
     )
 
 class Email(Base):
-    __tablename__ = "emails"
+    __tablename__ = "email_items"
     __table_args__ = (
         UniqueConstraint(
             "user_id",
@@ -352,7 +352,7 @@ class Email(Base):
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
     body: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
-    attachments: Mapped[list["Attachment"]] = relationship(
+    file_attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
     ticket_tasks: Mapped[list["TicketTask"]] = relationship(
@@ -380,7 +380,7 @@ class TicketTask(Base):
     )
     source_type: Mapped[str] = mapped_column(String, default="email", index=True)
     related_email_id: Mapped[int | None] = mapped_column(
-        "email_id", ForeignKey("emails.id"), nullable=True, index=True
+        "email_id", ForeignKey("email_items.id"), nullable=True, index=True
     )
     related_thread_id: Mapped[str | None] = mapped_column(
         "thread_id", String, nullable=True, index=True
@@ -413,15 +413,15 @@ Index(
 
 
 class Attachment(Base):
-    __tablename__ = "attachments"
+    __tablename__ = "file_attachments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email_id: Mapped[int] = mapped_column(ForeignKey("emails.id"))
+    email_id: Mapped[int] = mapped_column(ForeignKey("email_items.id"))
     filename: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
 
-    email: Mapped["Email"] = relationship(back_populates="attachments")
+    email: Mapped["Email"] = relationship(back_populates="file_attachments")
 
 
 class TenantConfig(Base):
@@ -629,7 +629,7 @@ class ProjectFolder(Base):
 
 
 class Workspace(Base):
-    __tablename__ = "workspaces"
+    __tablename__ = "workspace_entities"
 
     workspace_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"workspace_{uuid.uuid4().hex}")
     workspace_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -640,7 +640,7 @@ class Workspace(Base):
     )
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "user_entities"
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"user_{uuid.uuid4().hex}")
     user_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -652,7 +652,7 @@ class User(Base):
     )
 
 class Account(Base):
-    __tablename__ = "accounts"
+    __tablename__ = "auth_accounts"
 
     account_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"account_{uuid.uuid4().hex}")
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.user_id"), index=True, nullable=False)
@@ -728,7 +728,7 @@ class EmailThreadEdge(Base):
     )
 
 class Document(Base):
-    __tablename__ = "documents"
+    __tablename__ = "document_entities"
 
     document_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"doc_{uuid.uuid4().hex}")
     workspace_id: Mapped[str] = mapped_column(String, ForeignKey("workspaces.workspace_id"), index=True, nullable=False)

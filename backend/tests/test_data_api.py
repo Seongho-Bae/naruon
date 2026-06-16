@@ -438,7 +438,7 @@ def test_data_quality_surface_includes_workspace_document_assets(mock_db):
         "display_name": "Scoped document repository",
         "object_count": 1,
         "writeback_enabled": None,
-        "evidence_source": "documents",
+        "evidence_source": "document_entities",
         "provider_write_executed": False,
     }
     document_assets = [
