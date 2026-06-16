@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 
 
-def create_test_eml_file(tmp_path: Path) -> Path:
+def _create_test_eml_file(tmp_path: Path) -> Path:
     p = tmp_path / "test_mock.eml"
     p.write_bytes(b"From: a@b.com\nTo: b@c.com\nSubject: Test\n\nBody\n" * 1000)
     return p
 
 @pytest.mark.asyncio
 async def test_benchmark_async_io(tmp_path: Path):
-    p = create_test_eml_file(tmp_path)
+    p = _create_test_eml_file(tmp_path)
 
     def read_sync():
         time.sleep(0.01)  # simulate slow I/O
