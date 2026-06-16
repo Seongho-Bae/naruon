@@ -1,7 +1,6 @@
 import asyncio
 import zipfile
 from pathlib import Path
-from zipfile import ZipInfo
 
 from .exceptions import (
     InvalidArchiveError,
@@ -15,11 +14,11 @@ ZIP_UNIX_FILE_TYPE_MASK = 0o170000
 ZIP_UNIX_SYMLINK_TYPE = 0o120000
 
 
-def _is_zipinfo_symlink(info: ZipInfo) -> bool:
+def _is_zipinfo_symlink(info: zipfile.ZipInfo) -> bool:
     return (info.external_attr >> 16) & ZIP_UNIX_FILE_TYPE_MASK == ZIP_UNIX_SYMLINK_TYPE
 
 
-def _resolve_safe_archive_member(output_dir: Path, info: ZipInfo) -> Path:
+def _resolve_safe_archive_member(output_dir: Path, info: zipfile.ZipInfo) -> Path:
     normalized_name = info.filename.replace("\\", "/")
     if (
         not normalized_name
