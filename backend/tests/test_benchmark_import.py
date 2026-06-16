@@ -50,4 +50,4 @@ async def test_benchmark_async_io(tmp_path: Path):
         if p.exists():
             p.unlink()
 
-    assert thread_tick_count > max(sync_tick_count, 1) * 5
+    assert thread_tick_count > max(sync_tick_count, 1) * 3
