@@ -175,18 +175,21 @@ def test_runner_ws_rejects_missing_auth():
 
 def test_runner_ws_route_uses_signed_session_dependency():
     for route in app.routes:
-        if not hasattr(route, "original_router") or not hasattr(route, "include_context"):
+        original_router = getattr(route, "original_router", None)
+        if original_router is None:
             continue
-        dependencies = {
-            dependency.dependency for dependency in route.include_context.dependencies
-        }
-        if get_auth_context not in dependencies:
-            continue
-        for inner_route in route.original_router.routes:
+        for inner_route in original_router.routes:
             if (
                 isinstance(inner_route, APIWebSocketRoute)
                 and inner_route.path == "/ws/runner/{token}"
             ):
+                include_context = getattr(route, "include_context", None)
+                assert include_context is not None
+                dependencies = {
+                    dependency.dependency
+                    for dependency in include_context.dependencies
+                }
+                assert get_auth_context in dependencies
                 return
 
     raise AssertionError("Runner WebSocket route is not registered")
