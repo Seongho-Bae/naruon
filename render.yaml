@@ -8,8 +8,9 @@
 #
 # AGENTS.md constraints preserved:
 #   * backend boots via `python scripts/start_backend.py` (no direct uvicorn).
-#   * DATABASE_URL and AUTH_SESSION_HMAC_SECRET are injected from Render
-#     (fromDatabase / generateValue) — no code defaults, no .env mounts.
+#   * DATABASE_URL is injected from Render's managed Postgres, and
+#     AUTH_SESSION_HMAC_SECRET / ENCRYPTION_KEY are supplied by Render-managed
+#     environment variables — no code defaults, no .env mounts.
 #   * frontend talks to backend through the same-origin `/api/*` rewrite,
 #     so no public identity headers cross the browser boundary.
 #
@@ -57,6 +58,8 @@ services:
           property: connectionString
       - key: AUTH_SESSION_HMAC_SECRET
         generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
       - key: DEBUG
         value: "false"
       # Secret-bearing variables are prompted on first Blueprint sync and
