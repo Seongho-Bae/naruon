@@ -10,6 +10,7 @@ def setup_mock_eml(path: Path) -> Path:
     p.write_bytes(b"From: a@b.com\nTo: b@c.com\nSubject: Test\n\nBody\n" * 1000)
     return p
 
+
 @pytest.mark.asyncio
 async def test_benchmark_async_io(tmp_path: Path):
     p = setup_mock_eml(tmp_path / "test_mock.eml")
