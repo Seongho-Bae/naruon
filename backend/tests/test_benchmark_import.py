@@ -40,7 +40,7 @@ async def test_benchmark_async_io(tmp_path: Path):
             await asyncio.gather(*[task_factory() for _ in range(50)])
         finally:
             stop = True
-            await ticker_task
+            _ = await ticker_task
         return tick_count
 
     try:
