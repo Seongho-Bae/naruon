@@ -168,8 +168,12 @@ async def create_reply_sla_escalations(
     return _reply_sla_response(escalation_result)
 
 
-def _build_task_query(auth_context: AuthContext):
-    return (
+@router.get("", response_model=list[TicketTaskResponse])
+async def list_ticket_tasks(
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> list[TicketTaskResponse]:
+    result = await db.execute(
         select(TicketTask, Email.message_id)
         .outerjoin(
             Email,
@@ -183,15 +187,7 @@ def _build_task_query(auth_context: AuthContext):
             TicketTask.user_id == auth_context.user_id,
             TicketTask.organization_id == auth_context.organization_id,
         )
-    )
-
-@router.get("", response_model=list[TicketTaskResponse])
-async def list_ticket_tasks(
-    db: AsyncSession = Depends(get_db),
-    auth_context: AuthContext = Depends(get_auth_context),
-) -> list[TicketTaskResponse]:
-    result = await db.execute(
-        _build_task_query(auth_context).order_by(TicketTask.updated_at.desc())
+        .order_by(TicketTask.updated_at.desc())
     )
     return [
         _task_response(task, source_email_id) for task, source_email_id in result.all()
@@ -211,7 +207,20 @@ async def update_ticket_task(
         )
 
     result = await db.execute(
-        _build_task_query(auth_context).where(TicketTask.task_uid == task_uid)
+        select(TicketTask, Email.message_id)
+        .outerjoin(
+            Email,
+            and_(
+                TicketTask.related_email_id == Email.id,
+                Email.user_id == auth_context.user_id,
+                Email.organization_id == auth_context.organization_id,
+            ),
+        )
+        .where(
+            TicketTask.task_uid == task_uid,
+            TicketTask.user_id == auth_context.user_id,
+            TicketTask.organization_id == auth_context.organization_id,
+        )
     )
     row = result.one_or_none()
     if row is None:
@@ -229,20 +238,20 @@ async def update_ticket_task(
     return _task_response(task, source_email_id)
 
 
-def _validate_execution_items(items: list[str]) -> list[str]:
-    normalized_items = _normalize_execution_items(items)
-    if not normalized_items:
+@router.post("/from-email", response_model=CreateTasksFromEmailResponse)
+async def create_tasks_from_email(
+    request: CreateTasksFromEmailRequest,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> CreateTasksFromEmailResponse:
+    items = _normalize_execution_items(request.items)
+    if not items:
         raise HTTPException(
             status_code=422, detail="At least one execution item is required"
         )
-    if len(normalized_items) > 50:
+    if len(items) > 50:
         raise HTTPException(status_code=422, detail="Too many execution items")
-    return normalized_items
 
-
-async def _fetch_source_email(
-    db: AsyncSession, request: CreateTasksFromEmailRequest, auth_context: AuthContext
-) -> Email:
     email_result = await db.execute(
         select(Email).where(
             Email.message_id == request.source_email_id,
@@ -253,17 +262,6 @@ async def _fetch_source_email(
     email = email_result.scalar_one_or_none()
     if email is None or not _email_matches_auth(email, auth_context):
         raise HTTPException(status_code=404, detail="Source email not found")
-    return email
-
-
-@router.post("/from-email", response_model=CreateTasksFromEmailResponse)
-async def create_tasks_from_email(
-    request: CreateTasksFromEmailRequest,
-    db: AsyncSession = Depends(get_db),
-    auth_context: AuthContext = Depends(get_auth_context),
-) -> CreateTasksFromEmailResponse:
-    items = _validate_execution_items(request.items)
-    email = await _fetch_source_email(db, request, auth_context)
 
     thread_id = canonical_thread_key(email) or request.thread_id
     tasks = [

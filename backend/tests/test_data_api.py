@@ -53,7 +53,7 @@ class MockResult:
 class MockAsyncSession:
     def __init__(self, results):
         self.results = results
-        self.documents: list[Document] = []
+        self.document_entities: list[Document] = []
         self.queries = []
         self.execute_calls = 0
 
@@ -97,7 +97,7 @@ class MockAsyncSession:
             )
             rows = [
                 document
-                for document in self.documents
+                for document in self.document_entities
                 if (document_id is None or document.document_id == document_id)
                 and (workspace_id is None or document.workspace_id == workspace_id)
             ]
@@ -111,10 +111,10 @@ class MockAsyncSession:
     def add(self, obj):
         if isinstance(obj, Document):
             if not obj.document_id:
-                obj.document_id = f"doc_mock_{len(self.documents) + 1}"
+                obj.document_id = f"doc_mock_{len(self.document_entities) + 1}"
             if not obj.created_at:
                 obj.created_at = _now()
-            self.documents.append(obj)
+            self.document_entities.append(obj)
 
     async def commit(self):
         pass
@@ -396,7 +396,7 @@ def test_member_data_quality_queries_are_owner_scoped(mock_db):
 
 
 def test_data_quality_surface_includes_workspace_document_assets(mock_db):
-    mock_db.documents.extend(
+    mock_db.document_entities.extend(
         [
             Document(
                 document_id="doc_owned",
@@ -438,7 +438,7 @@ def test_data_quality_surface_includes_workspace_document_assets(mock_db):
         "display_name": "Scoped document repository",
         "object_count": 1,
         "writeback_enabled": None,
-        "evidence_source": "documents",
+        "evidence_source": "document_entities",
         "provider_write_executed": False,
     }
     document_assets = [
@@ -494,7 +494,7 @@ def test_data_document_upload_creates_workspace_scoped_document(mock_db):
         "audit_event": "data.document.uploaded",
         "message": "Document stored in the signed workspace scope.",
     }
-    stored_document = mock_db.documents[0]
+    stored_document = mock_db.document_entities[0]
     assert stored_document.workspace_id == "workspace-org-acme"
     assert stored_document.document_content == "# Roadmap\nPhase 10"
 
@@ -518,7 +518,7 @@ def test_data_document_actions_are_workspace_scoped_and_intent_only(mock_db):
         document_status="uploaded",
         created_at=_now(),
     )
-    mock_db.documents.extend([document, rival_document])
+    mock_db.document_entities.extend([document, rival_document])
     token = _signed_session_token(_valid_session_payload())
     client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
     try:
@@ -559,7 +559,7 @@ def test_data_document_webdav_materialization_executes_source_backed_write(
     mock_db,
     monkeypatch,
 ):
-    mock_db.documents.append(
+    mock_db.document_entities.append(
         Document(
             document_id="doc_owned",
             workspace_id="workspace-org-acme",
@@ -652,7 +652,7 @@ def test_data_document_webdav_materialization_executes_source_backed_write(
 
 
 def test_data_document_webdav_materialization_rejects_empty_document(mock_db):
-    mock_db.documents.append(
+    mock_db.document_entities.append(
         Document(
             document_id="doc_empty",
             workspace_id="workspace-org-acme",

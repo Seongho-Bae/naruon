@@ -74,7 +74,9 @@ def _is_allowlisted_local_provider_host(hostname: str) -> bool:
     )
 
 
-def _format_normalized_netloc(hostname: str, port: int, *, explicit_port: bool) -> str:
+def _format_normalized_netloc(
+    hostname: str, port: int, *, explicit_port: bool
+) -> str:
     host_part = f"[{hostname}]" if ":" in hostname else hostname
     if not explicit_port:
         return host_part
@@ -139,9 +141,7 @@ def _resolve_all_global_addresses(hostname: str, port: int) -> tuple[str, ...]:
     return tuple(addresses)
 
 
-async def _resolve_all_global_addresses_async(
-    hostname: str, port: int
-) -> tuple[str, ...]:
+async def _resolve_all_global_addresses_async(hostname: str, port: int) -> tuple[str, ...]:
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_resolve_all_global_addresses, hostname, port),
@@ -222,11 +222,7 @@ def _normalize_llm_provider_base_url(value: str | None):
     netloc = _format_normalized_netloc(
         hostname, port, explicit_port=parsed.port is not None
     )
-    return (
-        urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", "", "")),
-        hostname,
-        port,
-    )
+    return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "", "", "")), hostname, port
 
 
 def validate_llm_provider_base_url_details(
@@ -272,8 +268,7 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
         # Re-validate each address; pass the hostname so Docker-container names
         # in ALLOWED_LLM_BASE_URL_HOSTS are accepted.
         self._addresses = tuple(
-            _validate_global_address(address, hostname=hostname)
-            for address in addresses
+            _validate_global_address(address, hostname=hostname) for address in addresses
         )
         self._backend = AutoBackend()
 
@@ -294,53 +289,18 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             socket_options=socket_options,
         )
 
-    def _verify_host_port(self, host: str | bytes, port: int) -> None:
-        host_text = host.decode("ascii") if isinstance(host, bytes) else str(host)
-        normalized_host = host_text.lower().rstrip(".")
-        if normalized_host != self._hostname or int(port) != self._port:
-            raise OSError("LLM provider base URL host changed after validation")
-
-    async def _cancel_and_wait_tasks(self, tasks: set) -> None:
-        for task in tasks:
-            task.cancel()
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def _wait_for_first_successful_stream(self, tasks: set):
-        last_error: Exception | None = None
-        while tasks:
-            done, tasks_remaining = await asyncio.wait(
-                tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-            tasks.clear()
-            tasks.update(tasks_remaining)
-
-            successful_stream = None
-            for task in done:
-                try:
-                    stream = task.result()
-                except Exception as exc:  # pragma: no cover - backend-specific
-                    last_error = exc
-                    continue
-
-                if successful_stream is None:
-                    successful_stream = stream
-                else:
-                    await stream.aclose()
-
-            if successful_stream is not None:
-                return successful_stream, last_error
-        return None, last_error
-
     async def connect_tcp(
         self,
-        host: str | bytes,
+        host: str,
         port: int,
         timeout: float | None = None,
         local_address: str | None = None,
         socket_options=None,
     ):
-        self._verify_host_port(host, port)
+        host_text = host.decode("ascii") if isinstance(host, bytes) else str(host)
+        normalized_host = host_text.lower().rstrip(".")
+        if normalized_host != self._hostname or int(port) != self._port:
+            raise OSError("LLM provider base URL host changed after validation")
 
         tasks = {
             asyncio.create_task(
@@ -354,16 +314,38 @@ class _PinnedLLMProviderNetworkBackend(httpcore.AsyncNetworkBackend):
             )
             for address in self._addresses
         }
-
+        last_error: Exception | None = None
+        successful_stream = None
         try:
-            (
-                successful_stream,
-                last_error,
-            ) = await self._wait_for_first_successful_stream(tasks)
-            if successful_stream is not None:
-                return successful_stream
+            while tasks:
+                done, tasks = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in done:
+                    try:
+                        stream = task.result()
+                    except Exception as exc:  # pragma: no cover - backend-specific
+                        last_error = exc
+                        continue
+
+                    if successful_stream is None:
+                        successful_stream = stream
+                    else:
+                        await stream.aclose()
+
+                if successful_stream is not None:
+                    pending_tasks = tasks
+                    tasks = set()
+                    for pending_task in pending_tasks:
+                        pending_task.cancel()
+                    if pending_tasks:
+                        await asyncio.gather(*pending_tasks, return_exceptions=True)
+                    return successful_stream
         finally:
-            await self._cancel_and_wait_tasks(tasks)
+            for task in tasks:
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
         if last_error is not None:
             raise last_error

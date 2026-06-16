@@ -57,178 +57,6 @@ def _email_date_utc(email: Email) -> datetime.datetime:
     return message_date
 
 
-async def _fetch_existing_tasks_by_email(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    email_ids: list[int]
-) -> dict[int, TicketTask]:
-    result = await db.execute(
-        select(TicketTask)
-        .where(
-            TicketTask.user_id == user_id,
-            TicketTask.organization_id == organization_id,
-            TicketTask.related_email_id.in_(email_ids),
-            TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
-        )
-        .order_by(TicketTask.updated_at.desc())
-    )
-    tasks_by_email = {}
-    for task in result.scalars().all():
-        if task.related_email_id not in tasks_by_email:
-            tasks_by_email[task.related_email_id] = task
-    return tasks_by_email
-
-
-def _update_task_for_escalation(
-    task: TicketTask, email: Email, now: datetime.datetime
-) -> None:
-    if task.status != "done":
-        task.title = _reply_sla_task_title(email)
-        task.status = "blocked"
-        task.priority = "urgent"
-        task.related_thread_id = canonical_reply_sla_thread_key(email)
-        task.updated_at = now
-
-
-def _create_task_for_escalation(
-    user_id: str, organization_id: str | None, email: Email
-) -> TicketTask:
-    return TicketTask(
-        user_id=user_id,
-        organization_id=organization_id,
-        title=_reply_sla_task_title(email),
-        status="blocked",
-        priority="urgent",
-        source_type=REPLY_SLA_SOURCE_TYPE,
-        related_email_id=email.id,
-        related_thread_id=canonical_reply_sla_thread_key(email),
-    )
-
-
-async def _refresh_escalated_tasks(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    email_ids: list[int],
-    escalated_tasks: list[tuple[TicketTask, str | None]]
-) -> None:
-    refreshed_tasks_by_email = await _fetch_existing_tasks_by_email(
-        db, user_id, organization_id, email_ids
-    )
-    for i, (task, message_id) in enumerate(escalated_tasks):
-        refreshed_task = refreshed_tasks_by_email.get(task.related_email_id)
-        if refreshed_task is not None:
-            escalated_tasks[i] = (refreshed_task, message_id)
-
-
-async def _process_bulk_escalation(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    overdue_replies: list[Email],
-    now: datetime.datetime,
-) -> tuple[int, list[tuple[TicketTask, str | None]]]:
-    email_ids = [email.id for email in overdue_replies]
-    existing_tasks_by_email = await _fetch_existing_tasks_by_email(
-        db, user_id, organization_id, email_ids
-    )
-
-    created_count = 0
-    escalated_tasks: list[tuple[TicketTask, str | None]] = []
-
-    for email in overdue_replies:
-        if email.id in existing_tasks_by_email:
-            task = existing_tasks_by_email[email.id]
-            _update_task_for_escalation(task, email, now)
-            escalated_tasks.append((task, email.message_id))
-        else:
-            task = _create_task_for_escalation(user_id, organization_id, email)
-            db.add(task)
-            created_count += 1
-            escalated_tasks.append((task, email.message_id))
-
-    if created_count > 0 or any(
-        email.id in existing_tasks_by_email for email in overdue_replies
-    ):
-        await db.commit()
-
-        if created_count > 0:
-            await _refresh_escalated_tasks(
-                db, user_id, organization_id, email_ids, escalated_tasks
-            )
-
-    return created_count, escalated_tasks
-
-
-async def _process_fallback_escalation(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    overdue_replies: list[Email],
-    now: datetime.datetime,
-) -> tuple[int, list[tuple[TicketTask, str | None]]]:
-    email_ids = [email.id for email in overdue_replies]
-    existing_tasks_by_email = await _fetch_existing_tasks_by_email(
-        db, user_id, organization_id, email_ids
-    )
-
-    created_count = 0
-    escalated_tasks: list[tuple[TicketTask, str | None]] = []
-
-    fallback_entries: list[tuple[Email, TicketTask | None]] = []
-    conflicted_email_ids: list[int] = []
-
-    for email in overdue_replies:
-        if email.id in existing_tasks_by_email:
-            task = existing_tasks_by_email[email.id]
-            _update_task_for_escalation(task, email, now)
-        else:
-            task = _create_task_for_escalation(user_id, organization_id, email)
-            try:
-                async with db.begin_nested():
-                    db.add(task)
-                    await db.flush()
-                created_count += 1
-            except IntegrityError:
-                conflicted_email_ids.append(email.id)
-                task = None
-        fallback_entries.append((email, task))
-
-    if conflicted_email_ids:
-        conflicted_tasks_by_email = await _fetch_existing_tasks_by_email(
-            db, user_id, organization_id, conflicted_email_ids
-        )
-
-        for index, (email, task) in enumerate(fallback_entries):
-            if task is not None or email.id not in conflicted_email_ids:
-                continue
-            task = conflicted_tasks_by_email.get(email.id)
-            if task is None:
-                raise ReplySlaTaskConflict(
-                    "reply_sla_task_conflict: "
-                    f"user_id={user_id!r} organization_id={organization_id!r} "
-                    f"scoped_email_key={email.id!r}"
-                ) from None
-
-            _update_task_for_escalation(task, email, now)
-            fallback_entries[index] = (email, task)
-
-    escalated_tasks.extend(
-        (task, email.message_id)
-        for email, task in fallback_entries
-        if task is not None
-    )
-
-    if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):
-        await db.commit()
-        await _refresh_escalated_tasks(
-            db, user_id, organization_id, email_ids, escalated_tasks
-        )
-
-    return created_count, escalated_tasks
-
-
 async def create_reply_sla_escalation_tasks(
     db: AsyncSession,
     *,
@@ -257,15 +85,191 @@ async def create_reply_sla_escalation_tasks(
             tasks=[],
         )
 
-    try:
-        created_count, escalated_tasks = await _process_bulk_escalation(
-            db, user_id, organization_id, overdue_replies, now
+    email_ids = [email.id for email in overdue_replies]
+
+    existing_result = await db.execute(
+        select(TicketTask)
+        .where(
+            TicketTask.user_id == user_id,
+            TicketTask.organization_id == organization_id,
+            TicketTask.related_email_id.in_(email_ids),
+            TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
         )
+        .order_by(TicketTask.updated_at.desc())
+    )
+
+    existing_tasks_by_email = {}
+    for task in existing_result.scalars().all():
+        if task.related_email_id not in existing_tasks_by_email:
+            existing_tasks_by_email[task.related_email_id] = task
+
+    created_count = 0
+    escalated_tasks: list[tuple[TicketTask, str | None]] = []
+
+    for email in overdue_replies:
+        if email.id in existing_tasks_by_email:
+            task = existing_tasks_by_email[email.id]
+            if task.status != "done":
+                task.title = _reply_sla_task_title(email)
+                task.status = "blocked"
+                task.priority = "urgent"
+                task.related_thread_id = canonical_reply_sla_thread_key(email)
+                task.updated_at = now
+            escalated_tasks.append((task, email.message_id))
+        else:
+            task = TicketTask(
+                user_id=user_id,
+                organization_id=organization_id,
+                title=_reply_sla_task_title(email),
+                status="blocked",
+                priority="urgent",
+                source_type=REPLY_SLA_SOURCE_TYPE,
+                related_email_id=email.id,
+                related_thread_id=canonical_reply_sla_thread_key(email),
+            )
+            db.add(task)
+            created_count += 1
+            escalated_tasks.append((task, email.message_id))
+
+    try:
+        if created_count > 0 or any(
+            email.id in existing_tasks_by_email for email in overdue_replies
+        ):
+            await db.commit()
+
+            if created_count > 0:
+                refreshed_result = await db.execute(
+                    select(TicketTask)
+                    .where(
+                        TicketTask.user_id == user_id,
+                        TicketTask.organization_id == organization_id,
+                        TicketTask.related_email_id.in_(email_ids),
+                        TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+                    )
+                    .order_by(TicketTask.updated_at.desc())
+                )
+                refreshed_tasks_by_email = {
+                    t.related_email_id: t for t in refreshed_result.scalars().all()
+                }
+
+                for i, (task, message_id) in enumerate(escalated_tasks):
+                    refreshed_task = refreshed_tasks_by_email.get(task.related_email_id)
+                    if refreshed_task is not None:
+                        escalated_tasks[i] = (refreshed_task, message_id)
     except IntegrityError:
         await db.rollback()
-        created_count, escalated_tasks = await _process_fallback_escalation(
-            db, user_id, organization_id, overdue_replies, now
+        created_count = 0
+        escalated_tasks.clear()
+
+        existing_result = await db.execute(
+            select(TicketTask)
+            .where(
+                TicketTask.user_id == user_id,
+                TicketTask.organization_id == organization_id,
+                TicketTask.related_email_id.in_(email_ids),
+                TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+            )
+            .order_by(TicketTask.updated_at.desc())
         )
+        existing_tasks_by_email_fallback = {}
+        for task in existing_result.scalars().all():
+            if task.related_email_id not in existing_tasks_by_email_fallback:
+                existing_tasks_by_email_fallback[task.related_email_id] = task
+
+        fallback_entries: list[tuple[Email, TicketTask | None]] = []
+        conflicted_email_ids: list[int] = []
+        for email in overdue_replies:
+            if email.id in existing_tasks_by_email_fallback:
+                task = existing_tasks_by_email_fallback[email.id]
+                if task.status != "done":
+                    task.title = _reply_sla_task_title(email)
+                    task.status = "blocked"
+                    task.priority = "urgent"
+                    task.related_thread_id = canonical_reply_sla_thread_key(email)
+                    task.updated_at = now
+            else:
+                task = TicketTask(
+                    user_id=user_id,
+                    organization_id=organization_id,
+                    title=_reply_sla_task_title(email),
+                    status="blocked",
+                    priority="urgent",
+                    source_type=REPLY_SLA_SOURCE_TYPE,
+                    related_email_id=email.id,
+                    related_thread_id=canonical_reply_sla_thread_key(email),
+                )
+                try:
+                    async with db.begin_nested():
+                        db.add(task)
+                        await db.flush()
+                    created_count += 1
+                except IntegrityError:
+                    conflicted_email_ids.append(email.id)
+                    task = None
+            fallback_entries.append((email, task))
+
+        if conflicted_email_ids:
+            conflicted_result = await db.execute(
+                select(TicketTask)
+                .where(
+                    TicketTask.user_id == user_id,
+                    TicketTask.organization_id == organization_id,
+                    TicketTask.related_email_id.in_(conflicted_email_ids),
+                    TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+                )
+                .order_by(TicketTask.updated_at.desc())
+            )
+            conflicted_tasks_by_email = {}
+            for task in conflicted_result.scalars().all():
+                if task.related_email_id not in conflicted_tasks_by_email:
+                    conflicted_tasks_by_email[task.related_email_id] = task
+
+            for index, (email, task) in enumerate(fallback_entries):
+                if task is not None or email.id not in conflicted_email_ids:
+                    continue
+                task = conflicted_tasks_by_email.get(email.id)
+                if task is None:
+                    raise ReplySlaTaskConflict(
+                        "reply_sla_task_conflict: "
+                        f"user_id={user_id!r} organization_id={organization_id!r} "
+                        f"scoped_email_key={email.id!r}"
+                    ) from None
+
+                if task.status != "done":
+                    task.title = _reply_sla_task_title(email)
+                    task.status = "blocked"
+                    task.priority = "urgent"
+                    task.related_thread_id = canonical_reply_sla_thread_key(email)
+                    task.updated_at = now
+                fallback_entries[index] = (email, task)
+
+        escalated_tasks.extend(
+            (task, email.message_id)
+            for email, task in fallback_entries
+            if task is not None
+        )
+
+        if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):
+            await db.commit()
+
+            refreshed_result = await db.execute(
+                select(TicketTask)
+                .where(
+                    TicketTask.user_id == user_id,
+                    TicketTask.organization_id == organization_id,
+                    TicketTask.related_email_id.in_(email_ids),
+                    TicketTask.source_type == REPLY_SLA_SOURCE_TYPE,
+                )
+                .order_by(TicketTask.updated_at.desc())
+            )
+            refreshed_tasks_by_email = {
+                t.related_email_id: t for t in refreshed_result.scalars().all()
+            }
+
+            for i, (task, message_id) in enumerate(escalated_tasks):
+                refreshed_task = refreshed_tasks_by_email.get(task.related_email_id)
+                if refreshed_task is not None:
+                    escalated_tasks[i] = (refreshed_task, message_id)
 
     return ReplySlaEscalationResult(
         evaluated=len(pending_replies),

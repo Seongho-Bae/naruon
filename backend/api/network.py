@@ -62,30 +62,24 @@ async def get_network_graph(
     nodes_set = set()
     edges_dict = {}  # (sender, recipient) -> weight
 
-    nodes_add = nodes_set.add
-    edges_get = edges_dict.get
-    findall = EMAIL_PATTERN.findall
-
     for row in rows:
         sender_str = row[0]
         recipients_str = row[1]
 
-        sender_email = None
-        if sender_str:
-            senders = findall(sender_str.lower())
-            if senders:
-                sender_email = senders[0]
-                nodes_add(sender_email)
+        senders = extract_emails(sender_str)
+        recipients = extract_emails(recipients_str)
 
-        if recipients_str:
-            recipients = findall(recipients_str.lower())
-            if recipients:
-                nodes_set.update(recipients)
-                if sender_email:
-                    for rec_email in recipients:
-                        if sender_email != rec_email:
-                            edge_key = (sender_email, rec_email)
-                            edges_dict[edge_key] = edges_get(edge_key, 0) + 1
+        sender_email = senders[0].lower() if senders else None
+
+        if sender_email:
+            nodes_set.add(sender_email)
+
+        for rec in recipients:
+            rec_email = rec.lower()
+            nodes_set.add(rec_email)
+            if sender_email and sender_email != rec_email:
+                edge_key = (sender_email, rec_email)
+                edges_dict[edge_key] = edges_dict.get(edge_key, 0) + 1
 
     nodes = [Node(id=email, label=email) for email in nodes_set]
     edges = [
