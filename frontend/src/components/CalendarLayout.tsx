@@ -606,7 +606,7 @@ export function CalendarLayout() {
             <Button type="button" variant="ghost" size="icon-sm" aria-label="닫기" className="rounded-md"><X className="size-4" aria-hidden="true" /></Button>
           </div>
         </div>
-        
+
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
