@@ -2,8 +2,11 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
-from services.email_import_service import _safe_item_filename, _safe_upload_filename
-from services.email_import_service import _import_single_eml
+from services.email_import_service import (
+    _import_single_eml,
+    _safe_item_filename,
+    _safe_upload_filename,
+)
 
 @pytest.mark.parametrize(
     "input_name,expected",
