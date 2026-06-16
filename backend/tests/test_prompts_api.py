@@ -377,7 +377,7 @@ def test_prompt_test_rejects_abusive_preview_inputs(auth_client, payload):
 async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_base_url(
     monkeypatch,
 ):
-    import api.prompts as prompts_module
+    from api.prompts import execute_prompt_with_llm
 
     monkeypatch.setattr(
         settings, "ALLOWED_LLM_BASE_URL_HOSTS", "llm-gateway.example.com"
@@ -404,7 +404,7 @@ async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_ba
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
         mock_async_openai.return_value = mock_client
 
-        result = await prompts_module.execute_prompt_with_llm(
+        result = await execute_prompt_with_llm(
             "Summarize this",
             "test-key",
             base_url="https://llm-gateway.example.com/v1",
