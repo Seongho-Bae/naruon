@@ -6,6 +6,10 @@ from services.email_import_service import (
     _safe_upload_filename,
 )
 
+
+class DummySession:
+    pass
+
 @pytest.mark.parametrize(
     "input_name,expected",
     [
@@ -51,7 +55,7 @@ async def test_import_single_eml_rejects_symlink(tmp_path):
     symlink_path.symlink_to(target_path)
 
     result = await _import_single_eml(
-        object(),
+        DummySession(),
         eml_path=symlink_path,
         display_filename="message.eml",
         user_id="user-1",

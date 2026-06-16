@@ -288,7 +288,9 @@ async def _import_single_eml(
 def _read_eml_bytes(eml_path: Path) -> bytes:
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if no_follow_flag is None:
-        raise EmailParseError(f"Failed to read file {eml_path}: symlink-safe reads unsupported")
+        raise EmailParseError(
+            f"Failed to read file {eml_path}: symlink-safe file operations not supported on this platform"
+        )
 
     open_flags = os.O_RDONLY | no_follow_flag
     try:
@@ -300,9 +302,9 @@ def _read_eml_bytes(eml_path: Path) -> bytes:
         file_stat = os.fstat(file_descriptor)
         if not stat.S_ISREG(file_stat.st_mode):
             raise EmailParseError(f"Failed to read file {eml_path}: not a regular file")
-        with os.fdopen(file_descriptor, "rb") as file_handle:
-            # Mark as handed off so the finally block does not double-close it.
-            file_descriptor = -1
+        file_handle = os.fdopen(file_descriptor, "rb")
+        file_descriptor = -1
+        with file_handle:
             return file_handle.read()
     except OSError as exc:
         raise EmailParseError(f"Failed to read file {eml_path}: {exc}") from exc
