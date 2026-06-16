@@ -29,7 +29,3 @@
 ## 2026-06-13 - Use type=text for Custom Search Inputs
 **Learning:** When implementing a custom clear button for search inputs, using `type="search"` causes WebKit browsers to display a native clear button, resulting in double buttons. While CSS `::-webkit-search-cancel-button` tricks exist, they can be unreliable across environments.
 **Action:** Use `<input type="text" inputMode="search" role="searchbox">`. This prevents the native clear button from rendering while perfectly preserving screen reader semantics and triggering the mobile search keyboard.
-
-## 2025-02-05 - Search clear action keyboard focus flow
-**Learning:** When users click a "clear search" icon button to empty an input field, screen readers and keyboard navigation can lose their place in the DOM structure.
-**Action:** Always capture a `useRef` to the `<Input>` and explicitly call `ref.current?.focus()` inside the clear button's `onClick` handler to preserve interaction flow.

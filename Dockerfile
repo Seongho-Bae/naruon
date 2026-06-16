@@ -40,9 +40,8 @@ ENV DISABLE_POSTCSS_WORKERS=true
 RUN pnpm run build
 
 # Stage 3: Combined image (Python + Node.js)
-# backend-runtime ends with USER appuser (non-root). Stage 3 inherits that
-# non-root context, so no root elevation is needed here.
 FROM backend-runtime
+USER root
 
 ARG OCI_IMAGE_CREATED=""
 ARG OCI_IMAGE_AUTHORS="Seongho Bae"
@@ -74,26 +73,25 @@ LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.base.digest="${OCI_IMAGE_BASE_DIGEST}" \
       org.opencontainers.image.base.name="${OCI_IMAGE_BASE_NAME}"
 
-# Runtime Node is copied into an app-owned directory so that no root elevation
-# is required. /app is owned by appuser (set in stage 1) so appuser can write
-# here directly.
-RUN mkdir -p /app/bin
-COPY --from=frontend-builder --chown=appuser:appuser /usr/local/bin/node /app/bin/node
-ENV PATH=/app/bin:$PATH
+# Runtime Node is copied from the frontend builder so apt does not install a
+# distro Node package with noisy alternatives output.
+COPY --from=frontend-builder /usr/local/bin/node /usr/local/bin/node
 
-# Copy Frontend runtime artifacts as appuser to avoid privilege escalation.
-COPY --from=frontend-builder --chown=appuser:appuser /app/.next /app/frontend/.next
-COPY --from=frontend-builder --chown=appuser:appuser /app/public /app/frontend/public
-COPY --from=frontend-builder --chown=appuser:appuser /app/node_modules /app/frontend/node_modules
-COPY --from=frontend-builder --chown=appuser:appuser /app/package.json /app/frontend/package.json
-COPY --from=frontend-builder --chown=appuser:appuser /app/next.config.ts /app/frontend/next.config.ts
+# Copy Frontend runtime artifacts
+COPY --from=frontend-builder /app/.next /app/frontend/.next
+COPY --from=frontend-builder /app/public /app/frontend/public
+COPY --from=frontend-builder /app/node_modules /app/frontend/node_modules
+COPY --from=frontend-builder /app/package.json /app/frontend/package.json
+COPY --from=frontend-builder /app/next.config.ts /app/frontend/next.config.ts
 
 # Startup is handled by scripts/docker_entrypoint.sh (copied with the backend in
 # stage 1). It validates required configuration (DATABASE_URL,
 # AUTH_SESSION_HMAC_SECRET, and a valid Fernet ENCRYPTION_KEY — never generated
 # at runtime), then starts backend and frontend together and reports which
 # service exits. Secrets must be supplied by the operator or orchestrator.
-RUN chmod +x /app/scripts/docker_entrypoint.sh
+RUN chmod +x /app/scripts/docker_entrypoint.sh \
+    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh
+USER appuser
 
 # Environment variables for Frontend proxying inside the combined image
 ENV NEXT_PUBLIC_API_URL=http://localhost:8000

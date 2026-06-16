@@ -1,7 +1,7 @@
 import logging
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,10 @@ from services.email_client import (
 
 router = APIRouter(prefix="/api/config")
 logger = logging.getLogger(__name__)
+CONFIG_USER_ID_PATTERN = r"^[A-Za-z0-9._:@|+=-]+$"
+TenantConfigUserIdParam = Annotated[
+    str, Query(min_length=1, max_length=256, pattern=CONFIG_USER_ID_PATTERN)
+]
 
 
 @router.get("/global")
@@ -276,14 +280,16 @@ async def create_or_update_config(
 
 @router.get("", response_model=TenantConfigResponse)
 async def get_config(
+    user_id: TenantConfigUserIdParam,
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
     ensure_mailbox_config_self_access(
-        auth_context.user_id,
+        user_id,
         auth_context,
         MAILBOX_VIEW_FORBIDDEN,
     )
+
     session_user_id = auth_context.user_id
     db_config = await get_scoped_tenant_config(
         db,
