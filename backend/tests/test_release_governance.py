@@ -200,7 +200,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     assert "ENV POSTCSS_WORKERS=1" in dockerfile
     assert "ENV DISABLE_POSTCSS_WORKERS=true" in dockerfile
     assert (
-        'CMD sh -c "./node_modules/.bin/next start --hostname 0.0.0.0 --port ${PORT:-3000}"'
+        'CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]'
         in dockerfile
     )
     assert "pnpm run start" not in dockerfile
