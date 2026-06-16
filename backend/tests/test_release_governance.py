@@ -288,7 +288,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     assert "ENV POSTCSS_WORKERS=1" in dockerfile
     assert "ENV DISABLE_POSTCSS_WORKERS=true" in dockerfile
     assert (
-        'CMD ["./node_modules/.bin/next", "start", "--hostname", "0.0.0.0", "--port", "3000"]'
+        'CMD sh -c "exec ./node_modules/.bin/next start --hostname 0.0.0.0 --port ${PORT:-3000}"'
         in dockerfile
     )
     assert "pnpm run start" not in dockerfile
@@ -304,18 +304,17 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "pnpm install --frozen-lockfile" in dockerfile
     assert "pnpm run build" in dockerfile
     assert "FROM backend-runtime" in dockerfile
-    assert "COPY --from=frontend-builder /usr/local/bin/node" in dockerfile
+    # Node binary is copied into /app/bin (owned by appuser) to avoid USER root.
+    assert "COPY --from=frontend-builder --chown=appuser:appuser /usr/local/bin/node /app/bin/node" in dockerfile
+    assert "ENV PATH=/app/bin:$PATH" in dockerfile
+    assert "USER root" not in dockerfile
     assert "nodejs" not in dockerfile
     assert "ENV PYTHONDONTWRITEBYTECODE 1" not in dockerfile
     assert "ENV PYTHONUNBUFFERED 1" not in dockerfile
     assert "secrets.token_hex" not in dockerfile
     assert "ENV DATABASE_URL=" not in dockerfile
     assert '"/app/scripts/docker_entrypoint.sh"' in dockerfile
-    assert (
-        "RUN chmod +x /app/scripts/docker_entrypoint.sh \\\n"
-        "    && chown -R appuser:appuser /app/frontend /app/scripts/docker_entrypoint.sh"
-        in dockerfile
-    )
+    assert "RUN chmod +x /app/scripts/docker_entrypoint.sh" in dockerfile
     assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
     backend_cmd = (
         'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'

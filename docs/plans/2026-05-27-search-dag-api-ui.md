@@ -59,4 +59,3 @@ new provider write path or a new database object.
 - `cd frontend && npm run typecheck`
 - `cd frontend && npm run build`
 - `cd frontend && LIVE_BASE_URL=http://127.0.0.1:<port> npx playwright test tests/e2e/dashboard-branding.spec.ts --project=desktop -g "context search"`
-

@@ -350,7 +350,7 @@ jobs:
           VERTEXAI_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
           VERTEX_LOCATION: ${{ secrets.VERTEX_LOCATION || 'us-central1' }}
           STRIX_TARGET_PATH: ${{ (github.event_name == 'pull_request_target' || github.event.inputs.pr_number != '') && '__PR_SCOPE__' || './' }}
-          STRIX_SOURCE_DIRS: .
+          STRIX_SOURCE_DIRS: ". backend frontend"
           STRIX_REASONING_EFFORT: low
           STRIX_LLM_MAX_RETRIES: 1
           STRIX_TRANSIENT_RETRY_PER_MODEL: 5
@@ -379,7 +379,7 @@ jobs:
           bash "$TRUSTED_STRIX_GATE"
 
       - name: Collect Strix reports for artifact upload
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
+        if: ${{ always() && steps.gate.outputs.enabled == 'true' }}
         env:
           PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
         run: |
@@ -405,7 +405,7 @@ jobs:
           fi
 
       - name: Upload Strix reports artifact
-        if: ${{ always() && !cancelled() && steps.gate.outputs.enabled == 'true' }}
+        if: ${{ always() && steps.gate.outputs.enabled == 'true' }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: strix-reports
