@@ -1,4 +1,6 @@
+from collections import Counter
 from dataclasses import dataclass
+import math
 import re
 
 from cryptography.fernet import Fernet
@@ -47,6 +49,14 @@ def validate_auth_session_hmac_secret_value(secret: str) -> None:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not use a public fixture value")
     if any(term in normalized_secret for term in _LOW_ENTROPY_PLACEHOLDER_TERMS):
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
+    entropy_bits_per_byte = -sum(
+        (count / len(secret_bytes)) * math.log2(count / len(secret_bytes))
+        for count in Counter(secret_bytes).values()
+    )
+    if entropy_bits_per_byte < 3:
+        raise ValueError(
+            "AUTH_SESSION_HMAC_SECRET must have higher entropy and avoid simple patterns"
+        )
 
 
 def validate_encryption_key_id(setting_name: str, key_id: str) -> str:
