@@ -46,3 +46,7 @@
 ## 2026-06-12 - defaultdict performance over setdefault inside loops
 **Learning:** Using `dict.setdefault(key, []).append(val)` inside a loop allocates an empty list `[]` on every single iteration, even if the key already exists. This overhead adds up. `collections.defaultdict(list)` only invokes the `list` factory when a key is missing, which is measurably faster (~10% performance gain) and results in cleaner code.
 **Action:** Always prefer `collections.defaultdict(list)` over `setdefault(key, [])` when populating a dictionary of lists in a tight loop.
+
+## 2024-05-18 - [asyncio.to_thread for Sync I/O in Async Context]
+**Learning:** Found a synchronous file read (`eml_path.read_bytes()`) inside an asynchronous `_import_single_eml` function. This would block the event loop in Python, preventing concurrent handling of other asynchronous tasks.
+**Action:** Replaced the synchronous read with `await asyncio.to_thread(eml_path.read_bytes)`. This offloads the blocking I/O operation to a separate thread, freeing up the event loop to continue execution, reducing total blocking time substantially.

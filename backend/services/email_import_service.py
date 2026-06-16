@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import hashlib
 from dataclasses import dataclass, field
@@ -202,7 +203,7 @@ async def _import_single_eml(
     user_id: str,
     organization_id: str,
 ) -> EmailImportItemResult:
-    content = eml_path.read_bytes()
+    content = await asyncio.to_thread(eml_path.read_bytes)
     try:
         parsed = parse_eml(eml_path)
     except EmailParseError:
