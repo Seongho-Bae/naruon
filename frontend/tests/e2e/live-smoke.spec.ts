@@ -55,7 +55,6 @@ async function installLiveSession(page: import('@playwright/test').Page): Promis
 
   await page.addInitScript((token) => {
     document.cookie = `naruon_session=${token}; Path=/; SameSite=Lax`;
-    window.localStorage.setItem('naruon_session_token', token);
   }, sessionToken);
   return sessionToken;
 }
@@ -90,7 +89,7 @@ test('live dashboard renders seeded inbox through real HTTP', async ({ page }) =
 test('live data workspace reaches backend-backed WebDAV and document APIs without 503', async ({
   page,
 }) => {
-  const sessionToken = await installLiveSession(page);
+  await installLiveSession(page);
 
   const failedResponses: string[] = [];
   page.on('response', (response) => {
@@ -126,10 +125,8 @@ test('live data workspace reaches backend-backed WebDAV and document APIs withou
   });
   await page.getByRole('button', { name: 'WebDAV 반영 의도 점검' }).click();
   const webdavIntentResponse = await intentResponse;
-  expect(webdavIntentResponse.status()).toBeLessThan(500);
-  expect(webdavIntentResponse.request().headers().authorization).toBe(
-    `Bearer ${sessionToken}`,
-  );
+  expect(webdavIntentResponse.status()).toBeLessThan(400);
+  expect(webdavIntentResponse.request().headers().authorization).toBeUndefined();
 
   const materializationResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -141,10 +138,10 @@ test('live data workspace reaches backend-backed WebDAV and document APIs withou
     .getByRole('button', { name: 'WebDAV 문서 실행 요청' })
     .click();
   const webdavMaterializationResponse = await materializationResponse;
-  expect(webdavMaterializationResponse.status()).toBeLessThan(500);
-  expect(webdavMaterializationResponse.request().headers().authorization).toBe(
-    `Bearer ${sessionToken}`,
-  );
+  expect(webdavMaterializationResponse.status()).toBeLessThan(400);
+  expect(
+    webdavMaterializationResponse.request().headers().authorization
+  ).toBeUndefined();
 
   expect(failedResponses).toEqual([]);
 });
