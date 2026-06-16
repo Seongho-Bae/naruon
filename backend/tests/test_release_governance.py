@@ -682,7 +682,14 @@ def test_opencode_strix_failed_check_review_model_before_title_attributed_correc
     tmp_path: Path,
 ) -> None:
     """Model line appearing before Title inside a report window must override
-    a prior failed-model mention from the same window header."""
+    a prior failed-model mention from the same window header.
+
+    This complements test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct
+    which covers Model appearing *after* code locations.  Together the two tests
+    ensure both orderings (Model-before-Title and Model-after-Code-Locations) are
+    handled correctly regardless of a prior 'Strix run failed for model' line in
+    the same window.
+    """
     repo_root = tmp_path / "repo"
     auth_file = repo_root / "backend" / "app" / "auth.py"
     auth_file.parent.mkdir(parents=True)
