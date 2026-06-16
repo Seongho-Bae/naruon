@@ -11,13 +11,15 @@ import sqlalchemy as sa
 revision = "0002_provider_retry_queue"
 down_revision = "0001_initial_control_plane"
 
+_RETRY_ITEMS_TABLE = "provider_writeback_retry_items"
+
 
 def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    if not inspector.has_table("provider_writeback_retry_items"):
+    if not inspector.has_table(_RETRY_ITEMS_TABLE):
         op.create_table(
-            "provider_writeback_retry_items",
+            _RETRY_ITEMS_TABLE,
             sa.Column("retry_item_uid", sa.String(), nullable=False),
             sa.Column("organization_id", sa.String(), nullable=False),
             sa.Column("workspace_id", sa.String(), nullable=False),
@@ -33,73 +35,125 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.PrimaryKeyConstraint("retry_item_uid"),
         )
-    for statement in _provider_writeback_retry_index_sql():
-        connection.execute(sa.text(statement))
+    _create_indexes(if_not_exists=True)
 
 
 def downgrade() -> None:
-    connection = op.get_bind()
-    for index_name in reversed(_provider_writeback_retry_index_names()):
-        connection.execute(sa.text(f"DROP INDEX IF EXISTS {index_name}"))
-    connection.execute(sa.text("DROP TABLE IF EXISTS provider_writeback_retry_items"))
+    _drop_indexes(if_exists=True)
+    op.drop_table(_RETRY_ITEMS_TABLE, if_exists=True)
 
 
-def _provider_writeback_retry_index_names() -> list[str]:
-    return [
+def _create_indexes(*, if_not_exists: bool = False) -> None:
+    op.create_index(
         "ix_provider_writeback_retry_items_scope_state",
+        _RETRY_ITEMS_TABLE,
+        ["organization_id", "workspace_id", "retry_state", "next_retry_at"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_source_action",
+        _RETRY_ITEMS_TABLE,
+        ["source_uid", "command_action"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_organization_id",
+        _RETRY_ITEMS_TABLE,
+        ["organization_id"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_workspace_id",
+        _RETRY_ITEMS_TABLE,
+        ["workspace_id"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_source_uid",
+        _RETRY_ITEMS_TABLE,
+        ["source_uid"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_command_action",
+        _RETRY_ITEMS_TABLE,
+        ["command_action"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_retry_state",
+        _RETRY_ITEMS_TABLE,
+        ["retry_state"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_last_error_code",
+        _RETRY_ITEMS_TABLE,
+        ["last_error_code"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_runner_request_uid",
+        _RETRY_ITEMS_TABLE,
+        ["runner_request_uid"],
+        if_not_exists=if_not_exists,
+    )
+    op.create_index(
         "ix_provider_writeback_retry_items_next_retry_at",
-    ]
+        _RETRY_ITEMS_TABLE,
+        ["next_retry_at"],
+        if_not_exists=if_not_exists,
+    )
 
 
-def _provider_writeback_retry_index_sql() -> list[str]:
-    return [
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_scope_state
-        ON provider_writeback_retry_items
-        (organization_id, workspace_id, retry_state, next_retry_at)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_source_action
-        ON provider_writeback_retry_items (source_uid, command_action)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_organization_id
-        ON provider_writeback_retry_items (organization_id)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_workspace_id
-        ON provider_writeback_retry_items (workspace_id)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_source_uid
-        ON provider_writeback_retry_items (source_uid)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_command_action
-        ON provider_writeback_retry_items (command_action)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_retry_state
-        ON provider_writeback_retry_items (retry_state)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_last_error_code
-        ON provider_writeback_retry_items (last_error_code)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_runner_request_uid
-        ON provider_writeback_retry_items (runner_request_uid)
-        """,
-        """
-        CREATE INDEX IF NOT EXISTS ix_provider_writeback_retry_items_next_retry_at
-        ON provider_writeback_retry_items (next_retry_at)
-        """,
-    ]
+def _drop_indexes(*, if_exists: bool = False) -> None:
+    op.drop_index(
+        "ix_provider_writeback_retry_items_next_retry_at",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_runner_request_uid",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_last_error_code",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_retry_state",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_command_action",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_source_uid",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_workspace_id",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_organization_id",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_source_action",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
+    op.drop_index(
+        "ix_provider_writeback_retry_items_scope_state",
+        table_name=_RETRY_ITEMS_TABLE,
+        if_exists=if_exists,
+    )
