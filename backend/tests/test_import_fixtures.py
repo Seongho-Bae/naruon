@@ -1,14 +1,8 @@
-import datetime
-import hashlib
-from unittest.mock import patch, AsyncMock
-
 import pytest
+import datetime
+from unittest.mock import patch, AsyncMock
 from scripts.import_fixtures import process_zip_file
 import import_fixtures
-
-
-def _derive_test_api_key_hash() -> str:
-    return hashlib.sha256(b"naruon-test-openai-api-key").hexdigest()
 
 
 @pytest.mark.asyncio
@@ -52,7 +46,7 @@ async def test_root_importer_persists_canonical_thread_id(tmp_path):
         "references": "<root@example.com> <parent@example.com>",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "attachments": [],
+        "file_attachments": [],
     }
     session = MockSession()
 
@@ -101,7 +95,7 @@ async def test_root_importer_duplicate_check_is_scoped_to_owner(tmp_path):
         "subject": "Duplicate scope",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "attachments": [],
+        "file_attachments": [],
     }
     session = MockSession()
 
@@ -158,7 +152,7 @@ async def test_root_importer_uses_local_embedding_without_openai_key(
         "subject": "Root",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "attachments": [],
+        "file_attachments": [],
     }
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     session = MockSession()
@@ -204,9 +198,9 @@ async def test_root_importer_handles_empty_embedding_provider_response(
         "subject": "Empty embedding",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "attachments": [],
+        "file_attachments": [],
     }
-    monkeypatch.setenv("OPENAI_API_KEY", _derive_test_api_key_hash())
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     session = MockSession()
 
     with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(
@@ -255,7 +249,7 @@ async def test_root_importer_rolls_back_and_returns_false_on_commit_failure(tmp_
         "subject": "Commit failure",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "attachments": [],
+        "file_attachments": [],
     }
     session = MockSession()
 

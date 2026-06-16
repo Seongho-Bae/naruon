@@ -64,7 +64,7 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
 
 class MockTaskSession:
     def __init__(self) -> None:
-        self.emails: dict[int, Email] = {}
+        self.email_items: dict[int, Email] = {}
         self.tasks: list[TicketTask] = []
         self.tenant_config: TenantConfig | None = TenantConfig(
             user_id="alice",
@@ -74,7 +74,7 @@ class MockTaskSession:
 
     async def get(self, model, primary_key):
         if model is Email:
-            return self.emails.get(primary_key)
+            return self.email_items.get(primary_key)
         return None
 
     async def execute(self, stmt):
@@ -129,7 +129,7 @@ class MockTaskSession:
             return MockResult(
                 [
                     email
-                    for email in self.emails.values()
+                    for email in self.email_items.values()
                     if (source_email_id is None or email.message_id == source_email_id)
                     and (user_id is None or email.user_id == user_id)
                     and (
@@ -160,7 +160,7 @@ class MockTaskSession:
             def source_message_id(task: TicketTask) -> str | None:
                 if task.related_email_id is None:
                     return None
-                source_email = self.emails.get(task.related_email_id)
+                source_email = self.email_items.get(task.related_email_id)
                 if source_email is None:
                     return None
                 if scoped_email_join and (
@@ -262,7 +262,7 @@ def override_get_db():
     app.dependency_overrides[get_db] = lambda: mock_session
     yield
     app.dependency_overrides.pop(get_db, None)
-    mock_session.emails = {}
+    mock_session.email_items = {}
     mock_session.tasks = []
     mock_session.tenant_config = TenantConfig(
         user_id="alice",
@@ -339,7 +339,7 @@ async def test_mock_task_session_related_email_in_ignores_unrelated_int_params()
 
 
 def test_create_ticket_tasks_accepts_signed_bearer_session():
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
     app.dependency_overrides.pop(get_auth_context, None)
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
@@ -384,7 +384,7 @@ def test_reply_sla_escalation_rejects_invalid_policy_payload(auth_client):
 
 def test_reply_sla_escalation_accepts_signed_bearer_session():
     now = datetime.datetime.now(datetime.timezone.utc)
-    mock_session.emails[21] = make_email(
+    mock_session.email_items[21] = make_email(
         email_id=21,
         message_id="<sent-sla-signed@example.com>",
         thread_id="<thread-sla-signed>",
@@ -422,7 +422,7 @@ def test_reply_sla_escalation_accepts_signed_bearer_session():
 
 def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
     now = datetime.datetime.now(datetime.timezone.utc)
-    mock_session.emails[21] = make_email(
+    mock_session.email_items[21] = make_email(
         email_id=21,
         message_id="<sent-sla@example.com>",
         thread_id="<thread-sla>",
@@ -432,7 +432,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
         body="Please reply by Friday.",
         date=now - datetime.timedelta(days=3),
     )
-    mock_session.emails[22] = make_email(
+    mock_session.email_items[22] = make_email(
         email_id=22,
         message_id="<sent-recent@example.com>",
         thread_id="thread-recent",
@@ -442,7 +442,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
         body="Please reply when you can.",
         date=now - datetime.timedelta(hours=2),
     )
-    mock_session.emails[23] = make_email(
+    mock_session.email_items[23] = make_email(
         email_id=23,
         message_id="<sent-answered@example.com>",
         thread_id="<thread-answered>",
@@ -452,7 +452,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
         body="Please reply when you can.",
         date=now - datetime.timedelta(days=3),
     )
-    mock_session.emails[24] = make_email(
+    mock_session.email_items[24] = make_email(
         email_id=24,
         message_id="<reply-answered@example.com>",
         thread_id="thread-answered",
@@ -462,7 +462,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
         body="Confirmed.",
         date=now - datetime.timedelta(days=2),
     )
-    mock_session.emails[25] = make_email(
+    mock_session.email_items[25] = make_email(
         email_id=25,
         message_id="<self-note@example.com>",
         thread_id="thread-self",
@@ -502,7 +502,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
 def test_reply_sla_escalation_is_idempotent_for_existing_task(auth_client):
     now = datetime.datetime.now(datetime.timezone.utc)
     previous_update = now - datetime.timedelta(days=1)
-    mock_session.emails[31] = make_email(
+    mock_session.email_items[31] = make_email(
         email_id=31,
         message_id="<existing-sla@example.com>",
         thread_id="<thread-existing-sla>",
@@ -570,7 +570,7 @@ def test_reply_sla_escalation_conflict_returns_machine_readable_detail(auth_clie
 
     conflict_session = ConflictTaskSession()
     now = datetime.datetime.now(datetime.timezone.utc)
-    conflict_session.emails[41] = make_email(
+    conflict_session.email_items[41] = make_email(
         email_id=41,
         message_id="<conflict-sla@example.com>",
         thread_id="<thread-conflict-sla>",
@@ -659,7 +659,7 @@ def test_reply_sla_escalation_bulk_fetches_nested_conflicts(auth_client):
     racing_session = RacingTaskSession()
     now = datetime.datetime.now(datetime.timezone.utc)
     for email_id in (51, 52):
-        racing_session.emails[email_id] = make_email(
+        racing_session.email_items[email_id] = make_email(
             email_id=email_id,
             message_id=f"<raced-sla-{email_id}@example.com>",
             thread_id=f"<thread-raced-sla-{email_id}>",
@@ -806,7 +806,7 @@ async def test_reply_sla_escalation_real_postgres_smoke():
 
 def test_list_ticket_tasks_does_not_leak_cross_tenant_source_email(auth_client):
     now = datetime.datetime.now(datetime.timezone.utc)
-    mock_session.emails[99] = make_email(
+    mock_session.email_items[99] = make_email(
         email_id=99,
         user_id="bob",
         organization_id="org-rival",
@@ -840,7 +840,7 @@ def test_list_ticket_tasks_does_not_leak_cross_tenant_source_email(auth_client):
 
 def test_update_ticket_task_status_uses_opaque_id_and_keeps_source(auth_client):
     now = datetime.datetime.now(datetime.timezone.utc)
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
     mock_session.tasks.append(
         TicketTask(
             id=1,
@@ -976,7 +976,7 @@ def test_ticket_task_model_declares_reply_sla_unique_index():
 
 
 def test_create_ticket_tasks_from_email_links_source_email_and_thread(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1006,7 +1006,7 @@ def test_create_ticket_tasks_from_email_links_source_email_and_thread(auth_clien
 
 
 def test_create_ticket_tasks_sanitizes_nul_bytes_from_execution_items(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1024,7 +1024,7 @@ def test_create_ticket_tasks_sanitizes_nul_bytes_from_execution_items(auth_clien
 
 
 def test_create_ticket_tasks_rejects_html_execution_item_titles(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1057,7 +1057,7 @@ def test_create_ticket_tasks_rejects_html_execution_item_titles(auth_client):
 def test_create_ticket_tasks_rejects_encoded_and_malformed_html_titles(
     auth_client, payload
 ):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1074,7 +1074,7 @@ def test_create_ticket_tasks_rejects_encoded_and_malformed_html_titles(
 
 
 def test_create_ticket_tasks_allows_plain_comparison_text(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1090,7 +1090,7 @@ def test_create_ticket_tasks_allows_plain_comparison_text(auth_client):
 
 
 def test_create_ticket_tasks_allows_plain_alphabetic_comparison_text(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",
@@ -1106,7 +1106,7 @@ def test_create_ticket_tasks_allows_plain_alphabetic_comparison_text(auth_client
 
 
 def test_create_ticket_tasks_rejects_email_owned_by_another_member(auth_client):
-    mock_session.emails[99] = make_email(
+    mock_session.email_items[99] = make_email(
         email_id=99,
         user_id="bob",
         organization_id="org-acme",
@@ -1128,7 +1128,7 @@ def test_create_ticket_tasks_rejects_email_owned_by_another_member(auth_client):
 
 
 def test_create_ticket_tasks_rejects_empty_execution_items(auth_client):
-    mock_session.emails[14] = make_email()
+    mock_session.email_items[14] = make_email()
 
     response = auth_client.post(
         "/api/tasks/from-email",

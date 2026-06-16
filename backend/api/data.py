@@ -446,7 +446,7 @@ def _repository_summaries(
             display_name="Scoped email archive",
             object_count=email_count,
             writeback_enabled=None,
-            evidence_source="emails",
+            evidence_source="email_items",
             provider_write_executed=False,
         ),
         DataRepositorySummary(
@@ -455,7 +455,7 @@ def _repository_summaries(
             display_name="Scoped attachment archive",
             object_count=attachment_count,
             writeback_enabled=None,
-            evidence_source="attachments",
+            evidence_source="file_attachments",
             provider_write_executed=False,
         ),
         DataRepositorySummary(
@@ -464,7 +464,7 @@ def _repository_summaries(
             display_name="Scoped document repository",
             object_count=document_count,
             writeback_enabled=None,
-            evidence_source="documents",
+            evidence_source="document_entities",
             provider_write_executed=False,
         ),
     ]

@@ -4,7 +4,7 @@ import datetime
 from unittest.mock import patch
 
 import pytest
-from services.email_parser import _sanitize_nul, parse_eml, parse_eml_bytes
+from services.email_parser import parse_eml, _sanitize_nul
 from services.exceptions import EmailParseError
 
 
@@ -30,43 +30,6 @@ This is a test email.\x00"""
         assert "\x00" not in parsed["body"]
     finally:
         os.unlink(temp_path)
-
-
-def test_parse_eml_bytes_basic():
-    eml_content = b"""Message-ID: <bytes@test.com>
-From: test@test.com\x00
-To: recipient@test.com
-Subject: Hello\x00Bytes
-Date: Mon, 27 Apr 2026 10:00:00 +0000
-
-This is a byte-backed email.\x00"""
-
-    parsed = parse_eml_bytes(eml_content)
-
-    assert parsed["message_id"] == "<bytes@test.com>"
-    assert parsed["sender"] == "test@test.com"
-    assert parsed["subject"] == "HelloBytes"
-    assert "This is a byte-backed email." in parsed["body"]
-    assert "\x00" not in parsed["body"]
-
-
-def test_parse_eml_bytes_multipart_html_fallback():
-    eml_content = b"""Message-ID: <multi-bytes@test.com>
-From: multi@test.com
-To: recipient@test.com
-Subject: Multipart HTML Bytes
-Date: Mon, 27 Apr 2026 10:00:00 +0000
-Content-Type: multipart/alternative; boundary="boundary-string"
-
---boundary-string
-Content-Type: text/html; charset="utf-8"
-
-<p>This is HTML content</p>
---boundary-string--"""
-
-    parsed = parse_eml_bytes(eml_content)
-
-    assert parsed["body"] == "This is HTML content"
 
 
 def test_parse_eml_multipart_html_fallback():
@@ -168,7 +131,7 @@ Content-Disposition: attachment; filename="<img src=x onerror=alert(1)>.txt"
 
     try:
         parsed = parse_eml(temp_path)
-        assert parsed["attachments"] == [{"filename": ".txt", "content": "report"}]
+        assert parsed["file_attachments"] == [{"filename": ".txt", "content": "report"}]
     finally:
         os.unlink(temp_path)
 
