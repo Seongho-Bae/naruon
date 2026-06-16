@@ -286,7 +286,11 @@ async def _import_single_eml(
 
 
 def _read_eml_bytes(eml_path: Path) -> bytes:
-    open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    no_follow_flag = getattr(os, "O_NOFOLLOW", None)
+    if no_follow_flag is None:
+        raise EmailParseError(f"Failed to read file {eml_path}: symlink-safe reads unsupported")
+
+    open_flags = os.O_RDONLY | no_follow_flag
     try:
         file_descriptor = os.open(eml_path, open_flags)
     except OSError as exc:
@@ -297,6 +301,7 @@ def _read_eml_bytes(eml_path: Path) -> bytes:
         if not stat.S_ISREG(file_stat.st_mode):
             raise EmailParseError(f"Failed to read file {eml_path}: not a regular file")
         with os.fdopen(file_descriptor, "rb") as file_handle:
+            # Mark as handed off so the finally block does not double-close it.
             file_descriptor = -1
             return file_handle.read()
     except OSError as exc:
@@ -304,6 +309,15 @@ def _read_eml_bytes(eml_path: Path) -> bytes:
     finally:
         if file_descriptor >= 0:
             os.close(file_descriptor)
+
+
+def _is_regular_eml_path(path: Path) -> bool:
+    if path.suffix.lower() != ".eml":
+        return False
+    try:
+        return stat.S_ISREG(path.lstat().st_mode)
+    except OSError:
+        return False
 
 
 async def _eml_paths_for_upload(
@@ -327,11 +341,7 @@ async def _eml_paths_for_upload(
     except ArchiveError:
         return [], "archive_extract_failed"
 
-    eml_paths = [
-        path
-        for path in extracted_paths
-        if path.suffix.lower() == ".eml"
-    ]
+    eml_paths = [path for path in extracted_paths if _is_regular_eml_path(path)]
     if not eml_paths:
         return [], "archive_contains_no_eml"
     if len(eml_paths) > MAX_IMPORT_EML_FILES:
