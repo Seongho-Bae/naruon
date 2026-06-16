@@ -7,7 +7,7 @@ from scripts.import_fixtures import process_zip_file
 import import_fixtures
 
 
-def _test_openai_api_key() -> str:
+def _derive_test_api_key_hash() -> str:
     return hashlib.sha256(b"naruon-test-openai-api-key").hexdigest()
 
 
@@ -206,7 +206,7 @@ async def test_root_importer_handles_empty_embedding_provider_response(
         "body": "Body",
         "attachments": [],
     }
-    monkeypatch.setenv("OPENAI_API_KEY", _test_openai_api_key())
+    monkeypatch.setenv("OPENAI_API_KEY", _derive_test_api_key_hash())
     session = MockSession()
 
     with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(
