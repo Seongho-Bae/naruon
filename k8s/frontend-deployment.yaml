@@ -23,7 +23,7 @@ spec:
         ports:
         - containerPort: 3000
         env:
-        - name: BACKEND_INTERNAL_URL
-          value: "http://backend:8000"
-        - name: ALLOW_DOCKER_BACKEND_INTERNAL_URL
-          value: "1"
+          - name: BACKEND_INTERNAL_URL
+            value: "http://backend:8000"
+          - name: ALLOW_DOCKER_BACKEND_INTERNAL_URL
+            value: "1"
