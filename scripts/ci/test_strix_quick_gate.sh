@@ -356,6 +356,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Do not include analysis, planning, tool-call narration, placeholders, or prose before the sentinel." "opencode review prompt forbids reasoning text before the control sentinel"
 	assert_file_contains "$workflow_file" "OpenCode output did not include a valid control conclusion." "opencode review model steps fail when output lacks a parseable control conclusion"
 	assert_file_contains "$workflow_file" 'bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"' "opencode review model steps validate the control block before publishing"
+	assert_file_contains "$workflow_file" 'if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then' "opencode review model steps try the direct approval gate before Python normalization"
 	assert_file_contains "$workflow_file" "normalize_opencode_output" "opencode review model steps normalize model control output"
 	assert_file_contains "$workflow_file" "opencode_review_normalize_output.py" "opencode review model steps normalize transcript-embedded JSON output"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" "decoder.raw_decode" "opencode review normalizer scans transcript text for JSON objects"
