@@ -10,3 +10,7 @@
 **Vulnerability:** Found `xml.etree.ElementTree.fromstring` being used to parse HTTP responses in `backend/tests/test_dav_api.py`.
 **Learning:** Using the standard library `xml.etree` module for parsing untrusted or external XML data exposes the application to XML External Entity (XXE) and XML bomb attacks (CWE-20). This was flagged by static analysis tools (Bandit B314).
 **Prevention:** Always use `defusedxml.ElementTree` instead of `xml.etree.ElementTree` when parsing XML to ensure protection against XML vulnerabilities. Ensure `defusedxml` is listed in `requirements.txt`.
+## 2024-06-16 - Insufficient HMAC Secret Entropy
+**Vulnerability:** The application accepted short or low-entropy strings for the JWT `AUTH_SESSION_HMAC_SECRET`, leaving tokens vulnerable to offline brute-force and forgery attacks.
+**Learning:** Checking string length (e.g., >= 32 bytes) is insufficient to prevent weak secrets if the string lacks cryptographic entropy (e.g., using repeated characters or simple dictionary words like "password").
+**Prevention:** In addition to length checks, validate cryptographic secrets using Shannon entropy or a dedicated key derivation/validation library during application startup to ensure they are randomly generated and secure.

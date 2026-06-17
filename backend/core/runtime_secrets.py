@@ -1,6 +1,4 @@
-from collections import Counter
 from dataclasses import dataclass
-import math
 import re
 
 from cryptography.fernet import Fernet
@@ -36,30 +34,40 @@ class EncryptionKeyRing:
         return None
 
 
+import math
+
+def _calculate_entropy(secret: str) -> float:
+    if not secret:
+        return 0.0
+    char_counts = {}
+    for char in secret:
+        char_counts[char] = char_counts.get(char, 0) + 1
+    entropy = 0.0
+    length = len(secret)
+    for count in char_counts.values():
+        probability = count / length
+        entropy -= probability * math.log2(probability)
+    return entropy
+
+
 def validate_auth_session_hmac_secret_value(secret: str) -> None:
     secret_bytes = secret.encode("utf-8")
-    secret_length = len(secret_bytes)
     if len(secret_bytes) < MIN_AUTH_SESSION_HMAC_SECRET_BYTES:
         raise ValueError(
             "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"
         )
     if len(set(secret)) == 1:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not be a repeated character")
+
+    entropy = _calculate_entropy(secret)
+    if entropy < 3.0:
+        raise ValueError("AUTH_SESSION_HMAC_SECRET lacks sufficient entropy. Please use a cryptographically secure random string.")
+
     normalized_secret = secret.lower()
     if normalized_secret in _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS:
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not use a public fixture value")
     if any(term in normalized_secret for term in _LOW_ENTROPY_PLACEHOLDER_TERMS):
         raise ValueError("AUTH_SESSION_HMAC_SECRET must not contain placeholder terms")
-    # Block repeated low-variance patterns that still satisfy the length floor
-    # while preserving structured but sufficiently varied operator secrets.
-    entropy_bits_per_byte = -sum(
-        (count / secret_length) * math.log2(count / secret_length)
-        for count in Counter(secret_bytes).values()
-    )
-    if entropy_bits_per_byte <= 3.5:
-        raise ValueError(
-            "AUTH_SESSION_HMAC_SECRET must have higher entropy and avoid simple patterns"
-        )
 
 
 def validate_encryption_key_id(setting_name: str, key_id: str) -> str:
