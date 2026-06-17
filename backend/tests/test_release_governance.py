@@ -213,7 +213,8 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
     for workflow in (scorecard_workflow, trivy_workflow):
         assert "pull_request:" in workflow
         assert "push:" in workflow
-        assert "branches: [ develop ]" in workflow
+        assert "- develop" in workflow
+        assert "- master" in workflow
         assert "security-events: write" in workflow
         assert "continue-on-error: true" not in workflow
         assert (
