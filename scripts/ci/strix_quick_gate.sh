@@ -1134,8 +1134,10 @@ pull_request_scope_context_files() {
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 		case "$normalized_changed_file" in
-		backend/*.py)
-			needs_backend_python=1
+		backend/*)
+			if [[ "$normalized_changed_file" =~ ^backend/.+\.py$ ]]; then
+				needs_backend_python=1
+			fi
 			;;
 		# The app shell, email components, threading URL builder, and API client can
 		# shape frontend email retrieval flows; include backend auth context with them.

@@ -169,6 +169,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PNPM_CONFIG_IGNORE_SCRIPTS"] = "true"' "strix gate child process disables pnpm lifecycle scripts"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["YARN_ENABLE_SCRIPTS"] = "false"' "strix gate child process disables yarn lifecycle scripts"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix gate child env narrowly filters the known third-party Pydantic serializer warning"
+	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" =~ ^backend/.+\.py$ ]]' "strix gate detects nested backend Python files for PR-scoped import context"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
@@ -189,7 +190,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
 	assert_file_contains "$workflow_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
-	assert_file_contains "$workflow_file" 'github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)' "strix workflow preserves manual GitHub Models DeepSeek routing for gate-controlled OpenAI-compatible execution"
+	assert_file_not_contains "$workflow_file" 'github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)' "strix workflow keeps DeepSeek GitHub Models restricted to fallback-only routing"
 	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix for OpenAI GPT model names before passing model names to LiteLLM"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
@@ -214,9 +215,7 @@ assert_strix_gpt54_model_guard_semantics() {
 		;;
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-	openai/deepseek/deepseek-r1-0528 | openai/deepseek/deepseek-v3-0324 | \
 	github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
-	github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324 | \
 	gpt-5.[4-9]* | gpt-5.[1-9][0-9]* | gpt-[6-9]* | gpt-[1-9][0-9]* | \
 	openai-direct/gpt-5.[4-9]* | openai-direct/gpt-5.[1-9][0-9]* | openai-direct/gpt-[6-9]* | openai-direct/gpt-[1-9][0-9]* | \
 	vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
@@ -259,8 +258,17 @@ assert_strix_gpt54_model_guard_cases() {
 	if ! assert_strix_gpt54_model_guard_semantics "openai/openai/gpt-5.4"; then
 		record_failure "strix guard must accept GitHub Models openai/openai/gpt-5.4"
 	fi
-	if ! assert_strix_gpt54_model_guard_semantics "openai/deepseek/deepseek-r1-0528"; then
-		record_failure "strix guard must accept OpenAI-compatible GitHub Models DeepSeek fallback names"
+	if assert_strix_gpt54_model_guard_semantics "openai/deepseek/deepseek-r1-0528"; then
+		record_failure "strix guard must reject direct DeepSeek R1 primary selection"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "openai/deepseek/deepseek-v3-0324"; then
+		record_failure "strix guard must reject direct DeepSeek V3 primary selection"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "github_models/deepseek/deepseek-r1-0528"; then
+		record_failure "strix guard must reject manual GitHub Models DeepSeek R1 primary selection"
+	fi
+	if assert_strix_gpt54_model_guard_semantics "github_models/deepseek/deepseek-v3-0324"; then
+		record_failure "strix guard must reject manual GitHub Models DeepSeek V3 primary selection"
 	fi
 	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-3.1-pro-preview-customtools"; then
 		record_failure "strix guard must accept the organization-approved Vertex preview model"
