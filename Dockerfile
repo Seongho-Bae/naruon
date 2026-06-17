@@ -31,9 +31,6 @@ RUN corepack enable pnpm
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.pnpmfile.cjs ./
 RUN pnpm install --frozen-lockfile
 COPY frontend ./
-# Pass dummy URL for build if needed
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV POSTCSS_WORKERS=1
 ENV DISABLE_POSTCSS_WORKERS=true
@@ -95,8 +92,9 @@ COPY --from=frontend-builder --chown=appuser:appuser /app/next.config.ts /app/fr
 # service exits. Secrets must be supplied by the operator or orchestrator.
 RUN chmod +x /app/scripts/docker_entrypoint.sh
 
-# Environment variables for Frontend proxying inside the combined image
-ENV NEXT_PUBLIC_API_URL=http://localhost:8000
+# Environment variables for Frontend proxying inside the combined image.
+# Browser code uses same-origin /api/*; only the server-side route handler needs
+# the internal backend URL at runtime.
 ENV BACKEND_INTERNAL_URL=http://127.0.0.1:8000
 ENV ALLOW_DOCKER_BACKEND_INTERNAL_URL=1
 

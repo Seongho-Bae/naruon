@@ -12,7 +12,7 @@ npm run build
 npm run dev
 ```
 
-Open <http://localhost:3000>. The app expects the backend at `NEXT_PUBLIC_API_URL`, defaulting to <http://localhost:8000>.
+Open <http://localhost:3000>. Browser requests use same-origin `/api/*`; server-side route handlers read `BACKEND_INTERNAL_URL` at runtime.
 
 ## Threading UI contract
 

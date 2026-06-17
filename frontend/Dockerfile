@@ -1,4 +1,4 @@
-FROM node:22-slim
+FROM node:24-slim
 
 ARG OCI_IMAGE_CREATED=""
 ARG OCI_IMAGE_AUTHORS="Seongho Bae"
@@ -13,7 +13,7 @@ ARG OCI_IMAGE_REF_NAME=""
 ARG OCI_IMAGE_TITLE="naruon frontend"
 ARG OCI_IMAGE_DESCRIPTION="Naruon Next.js frontend runtime image"
 ARG OCI_IMAGE_BASE_DIGEST=""
-ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:22-slim"
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:24-slim"
 
 LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
@@ -50,10 +50,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # and reaches the backend through the same-origin /api/* route handler.
 # BACKEND_INTERNAL_URL is intentionally runtime-only so published images
 # are not permanently wired to one deployment environment.
-# NEXT_PUBLIC_API_URL is kept for backwards compatibility with callers that
-# explicitly construct a base URL; new code should rely on the route handler.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ENV POSTCSS_WORKERS=1
 ENV DISABLE_POSTCSS_WORKERS=true

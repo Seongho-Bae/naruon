@@ -33,3 +33,7 @@
 ## 2025-02-05 - Search clear action keyboard focus flow
 **Learning:** When users click a "clear search" icon button to empty an input field, screen readers and keyboard navigation can lose their place in the DOM structure.
 **Action:** Always capture a `useRef` to the `<Input>` and explicitly call `ref.current?.focus()` inside the clear button's `onClick` handler to preserve interaction flow.
+
+## 2025-02-28 - Add Loader2 spinner to async buttons in SettingsLayout.tsx
+**Learning:** Providing explicit visual feedback, such as a spinning loader, during asynchronous save operations prevents users from wondering if their click registered and improves perceived performance.
+**Action:** Always map loading states such as `isSaving` or `isLoading` to explicit UI indicators like the `Loader2` icon with `animate-spin` inside submit buttons, rather than only changing button text or disabling the button.
