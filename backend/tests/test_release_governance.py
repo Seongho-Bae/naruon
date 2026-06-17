@@ -222,14 +222,24 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         )
 
     assert (
-        "ossf/scorecard-action@99c09fe975337306107572b4fdf4db224cf8e2f2 # v2.4.3"
+        "ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3"
         in scorecard_workflow
+    )
+    assert "permissions:\n  contents: read\n\njobs:" in scorecard_workflow
+    assert "permissions:\n  contents: read\n\njobs:" in trivy_workflow
+    assert (
+        "    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      security-events: write"
+        in scorecard_workflow
+    )
+    assert (
+        "    permissions:\n      contents: read\n      security-events: write"
+        in trivy_workflow
     )
     assert "results_format: sarif" in scorecard_workflow
     assert "category: scorecard" in scorecard_workflow
 
     assert (
-        "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0"
+        "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0"
         in trivy_workflow
     )
     assert "format: sarif" in trivy_workflow
@@ -245,6 +255,10 @@ def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
     assert "Context7 for current library/API docs" in workflow
     assert "web_search for bounded external lookups" in workflow
     assert "If a configured MCP source is unavailable or not applicable" in workflow
+    assert "Lead with findings ordered by severity" in workflow
+    assert "Distinguish blocking findings from important suggestions and nits" in workflow
+    assert "request changes only for actionable blockers" in workflow.lower()
+    assert "regression test direction" in workflow
     assert '"codegraph"' in workflow
     assert '"deepwiki"' in workflow
     assert '"context7"' in workflow

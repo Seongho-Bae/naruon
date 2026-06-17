@@ -269,6 +269,9 @@ jobs:
           Cover security boundaries, data isolation, workflow contracts, tests, user-facing behavior, and
           regression risk. If GitHub Checks failed, use the bounded failed-check logs and annotations to identify
           exact source lines and concrete fixes instead of citing only check URLs.
+          Lead with findings ordered by severity. Distinguish blocking issues from important suggestions and nits,
+          and request changes only for actionable blockers with clear problem, root cause, fix direction, and
+          regression test direction. Put any brief summary after the findings, not before them.
           When Strix shows multiple model vulnerability reports, include every model-reported vulnerability
           in the review findings instead of collapsing to the first model or highest severity; preserve each
           report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present.
@@ -287,8 +290,10 @@ jobs:
           Prioritize real bugs, security/privacy regressions, broken workflow contracts, missing tests, and
           user-visible behavior changes. Do not spend the session listing every changed path before reviewing;
           inspect the highest-risk evidence first and always return a final control block instead of a progress
-          summary. If failed GitHub Check evidence is present, diagnose each actionable failure from the logs
-          and annotations, then map it to exact file lines in the local source or diff with concrete fixes.
+          summary. Lead with findings ordered by severity, separate blocking findings from important suggestions
+          and nits, and request changes only for actionable blockers with clear fix and regression-test direction.
+          If failed GitHub Check evidence is present, diagnose each actionable failure from the logs and
+          annotations, then map it to exact file lines in the local source or diff with concrete fixes.
           When Strix evidence contains multiple model reports, preserve each model's vulnerabilities as
           separate evidence-backed findings.
           Each Strix model report needs its own finding; do not combine duplicate titles or matching
@@ -471,6 +476,7 @@ jobs:
           cat >"$prompt_file" <<EOF
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
           If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
@@ -580,6 +586,7 @@ jobs:
           cat >"$prompt_file" <<EOF
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
           If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
@@ -689,6 +696,7 @@ jobs:
           cat >"$prompt_file" <<EOF
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
           If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
