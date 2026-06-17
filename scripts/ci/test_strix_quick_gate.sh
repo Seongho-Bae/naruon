@@ -372,7 +372,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "OpenCode comment gate result: %s (exit %s)" "opencode review publish step logs invalid control output status"
 	assert_file_contains "$workflow_file" "OpenCode publish gate rejected the selected model output; failing this check instead of posting a stale review." "opencode review publish step fails closed when normalized evidence is invalid"
 	assert_file_contains "$workflow_file" 'normalized_comment_json="$(mktemp)"' "opencode review publish step creates a normalized control payload file"
-	assert_file_contains "$workflow_file" '"$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$review_output_file"' "opencode review publish step re-normalizes the selected successful model output"
+	assert_file_contains "$workflow_file" '"$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$clean_output"' "opencode review publish step re-normalizes the ANSI-stripped selected model output"
 	assert_file_contains "$workflow_file" "Selected successful OpenCode output did not include a valid control conclusion." "opencode review publish step refuses stale success status when the selected output is invalid"
 	assert_file_contains "$workflow_file" "exit 4" "opencode review publish step fails closed on invalid selected successful output"
 	assert_file_contains "$workflow_file" 'opencode_review_approve_gate.sh "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$comment_body_file" "$normalized_comment_json"' "opencode review publish step extracts normalized control JSON"

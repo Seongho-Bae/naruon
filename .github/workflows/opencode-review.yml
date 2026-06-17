@@ -872,14 +872,14 @@ jobs:
           }
           trap cleanup_publish_files EXIT
 
+          perl -pe 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$review_output_file" >"$clean_output"
           if ! python3 scripts/ci/opencode_review_normalize_output.py \
-            "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$review_output_file"; then
+            "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$clean_output"; then
             echo "Selected successful OpenCode output did not include a valid control conclusion."
-            cat "$review_output_file"
+            cat "$clean_output"
             exit 4
           fi
 
-          perl -pe 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$review_output_file" >"$clean_output"
           sentinel="<!-- opencode-review-gate head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT} -->"
           awk -v sentinel="$sentinel" '
             index($0, sentinel) { found=1 }
