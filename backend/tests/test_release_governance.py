@@ -264,6 +264,14 @@ def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
     assert "Distinguish blocking findings from important suggestions and nits" in workflow
     assert "request changes only for actionable blockers" in workflow.lower()
     assert "regression test direction" in workflow
+    assert "OpenCode-owned review structure compatible with Copilot Review" in workflow
+    assert "CodeRabbitAI's severity-ordered, actionable finding format" in workflow
+    assert "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer" in workflow
+    assert "## Pull request overview" in workflow
+    assert "## Findings" in workflow
+    assert "No blocking findings." in workflow
+    assert "Keep raw tool logs out of the main review body" in workflow
+    assert "<summary>Failed check evidence for line-specific fixes</summary>" in workflow
     assert '"codegraph"' in workflow
     assert '"deepwiki"' in workflow
     assert '"context7"' in workflow
@@ -606,6 +614,10 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     )
     assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
     assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
+    assert (
+        "github_models/deepseek/deepseek-r1-0528 "
+        "github_models/deepseek/deepseek-v3-0324"
+    ) in workflow
     assert (
         "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
         in workflow
