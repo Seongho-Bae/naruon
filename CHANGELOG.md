@@ -9,6 +9,10 @@
   image가 특정 production backend에 고정되지 않습니다.
 
 ### 수정
+- Seongho Bae (@seonghobae): Strix CI requirements를 `strix-agent==1.0.4`,
+  `cryptography==49.0.0`, `python-multipart==0.0.31` 조합으로 올려 GitHub
+  Security Quality의 남은 Dependabot alert를 해소하고, release governance
+  테스트를 현재 PR별 Strix concurrency 계약과 다시 동기화했습니다.
 - Seongho Bae (@seonghobae): frontend `/api/*` runtime proxy가
   `BACKEND_INTERNAL_URL`을 검증 없이 수용해 SSRF 표면이 될 수 있다는 Strix
   지적을 fail-closed 가드로 해소했습니다. 명시적 값은 HTTPS와 글로벌 호스트만

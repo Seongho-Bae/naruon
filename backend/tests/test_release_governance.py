@@ -137,6 +137,7 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
+    strix_ci_requirements = read_repo_text("requirements-strix-ci.txt")
 
     assert "sqlalchemy==2.0.50" in requirements
     assert "asyncpg==0.31.0" in requirements
@@ -146,6 +147,9 @@ def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None
     assert "wheel==0.47.0" in requirements
     assert "opentelemetry-api==1.41.1" in requirements
     assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
+    assert "strix-agent==1.0.4" in strix_ci_requirements
+    assert "cryptography==49.0.0" in strix_ci_requirements
+    assert "python-multipart==0.0.31" in strix_ci_requirements
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
@@ -511,7 +515,7 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
-    assert 'group: strix-${{ github.repository }}' in workflow
+    assert 'group: strix-${{ github.event.pull_request.number || github.ref }}' in workflow
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
