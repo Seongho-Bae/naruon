@@ -215,6 +215,10 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         assert "push:" in workflow
         assert "- develop" in workflow
         assert "- master" in workflow
+        assert (
+            "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6"
+            in workflow
+        )
         assert "security-events: write" in workflow
         assert "continue-on-error: true" not in workflow
         assert (
