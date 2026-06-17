@@ -264,6 +264,12 @@ def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
     assert "Distinguish blocking findings from important suggestions and nits" in workflow
     assert "request changes only for actionable blockers" in workflow.lower()
     assert "regression test direction" in workflow
+    assert "Copilot Review's concise pull request overview" in workflow
+    assert "CodeRabbitAI's severity-ordered actionable finding format" in workflow
+    assert "## Pull request overview" in workflow
+    assert "## Findings" in workflow
+    assert "No blocking findings." in workflow
+    assert "raw tool logs out of the human-readable review body" in workflow
     assert '"codegraph"' in workflow
     assert '"deepwiki"' in workflow
     assert '"context7"' in workflow
