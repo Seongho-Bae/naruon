@@ -206,6 +206,51 @@ def test_bandit_security_scan_does_not_continue_on_error() -> None:
     assert "continue-on-error: true" not in workflow
 
 
+def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> None:
+    scorecard_workflow = read_repo_text(".github/workflows/scorecard.yml")
+    trivy_workflow = read_repo_text(".github/workflows/trivy.yml")
+
+    for workflow in (scorecard_workflow, trivy_workflow):
+        assert "pull_request:" in workflow
+        assert "push:" in workflow
+        assert "branches: [ develop ]" in workflow
+        assert "security-events: write" in workflow
+        assert "continue-on-error: true" not in workflow
+        assert (
+            "github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4"
+            in workflow
+        )
+
+    assert (
+        "ossf/scorecard-action@99c09fe975337306107572b4fdf4db224cf8e2f2 # v2.4.3"
+        in scorecard_workflow
+    )
+    assert "results_format: sarif" in scorecard_workflow
+    assert "category: scorecard" in scorecard_workflow
+
+    assert (
+        "aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0"
+        in trivy_workflow
+    )
+    assert "format: sarif" in trivy_workflow
+    assert "category: trivy" in trivy_workflow
+
+
+def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
+    workflow = read_repo_text(".github/workflows/opencode-review.yml")
+
+    assert "Actively consult the configured MCP evidence sources" in workflow
+    assert "actively consult CodeGraph MCP" in workflow
+    assert "DeepWiki for repo docs" in workflow
+    assert "Context7 for current library/API docs" in workflow
+    assert "web_search for bounded external lookups" in workflow
+    assert "If a configured MCP source is unavailable or not applicable" in workflow
+    assert '"codegraph"' in workflow
+    assert '"deepwiki"' in workflow
+    assert '"context7"' in workflow
+    assert '"web_search"' in workflow
+
+
 def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> (
     None
 ):
