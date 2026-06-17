@@ -998,6 +998,62 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_failed_check_fallback_does_not_anchor_unmapped_strix_reports_to_workflow() {
+	local tmp_dir
+	local fixture_repo
+	local evidence_file
+	local output_file
+	tmp_dir="$(mktemp -d)"
+	fixture_repo="$tmp_dir/repo"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	mkdir -p "$fixture_repo/.github/workflows" "$fixture_repo/scripts/ci"
+	cat >"$fixture_repo/.github/workflows/strix.yml" <<'EOF'
+name: Strix Security Scan
+jobs:
+  strix:
+    steps:
+      - name: Run Strix
+        env:
+          STRIX_FALLBACK_MODELS: github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324
+EOF
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	Below-threshold findings detected, but infrastructure errors occurred during this pipeline run; refusing bypass due to potentially incomplete scan.
+strix	Run Strix (quick)	Unable to map Strix findings to changed files; failing closed for pull request.
+```
+
+### Strix vulnerability report window 1
+
+│  Vulnerability Report                                                        │
+│  Title: Insecure Direct Object Reference (IDOR) in User Profile API          │
+│  Severity: MEDIUM                                                            │
+│  Target: /workspace/strix-pr-scope.mVhTAV/backend                            │
+│  Code Locations                                                              │
+│    Location 1: backend/api/users.py:45-52                                    │
+│  Model github_models/deepseek/deepseek-v3-0324                               │
+│  Vulnerabilities 1                                                           │
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$fixture_repo" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback reports incomplete Strix evidence for unmapped report"
+	assert_file_contains "$output_file" "did not map to an existing repository file" "fallback explains unmapped Strix report"
+	assert_file_contains "$output_file" "Insecure Direct Object Reference (IDOR) in User Profile API" "fallback preserves unmapped report title as diagnostic evidence"
+	assert_file_not_contains "$output_file" "Strix report from github_models/deepseek/deepseek-v3-0324" "fallback does not convert unmapped report into source finding"
+	assert_file_not_contains "$output_file" "Inspect and patch .github/workflows/strix.yml" "fallback does not anchor unmapped report to workflow line"
+	assert_file_not_contains "$output_file" "backend/api/users.py:45" "fallback does not cite nonexistent source path as actionable line"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_internal_pr_scope_targets() {
 	local target_log_file="$1"
 	local repo_root_dir="$2"
@@ -5436,6 +5492,8 @@ assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 assert_opencode_failed_check_fallback_emits_each_strix_report
 
 assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape
+
+assert_opencode_failed_check_fallback_does_not_anchor_unmapped_strix_reports_to_workflow
 
 run_pull_request_target_head_scope_case \
 	"pull-request-target-modified-file-uses-head-blob" \

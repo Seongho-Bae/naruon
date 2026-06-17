@@ -10,6 +10,8 @@ EVIDENCE_FILE="$1"
 REPO_ROOT="${2:-${GITHUB_WORKSPACE:-$PWD}}"
 finding_index=0
 tmp_files=()
+unmapped_strix_reports_file="$(mktemp)"
+tmp_files+=("$unmapped_strix_reports_file")
 
 cleanup() {
 	rm -f "${tmp_files[@]}"
@@ -328,9 +330,8 @@ emit_strix_report_findings() {
 		mapped="$(derive_location_from_report "$title" "$endpoint" "$target" "$location")"
 		IFS=$'\t' read -r path line source_detail <<<"$mapped"
 		if [ "$path" = "unknown" ]; then
-			path=".github/workflows/strix.yml"
-			line="$(first_existing_line "$path" 'STRIX_FAIL_ON_MIN_SEVERITY|STRIX_FALLBACK_MODELS')"
-			source_detail="$source_detail; fallback anchored to Strix workflow because the report omitted a repository Code Location"
+			printf '%s\t%s\t%s\t%s\n' "$model" "$title" "${severity:-UNKNOWN}" "$source_detail" >>"$unmapped_strix_reports_file"
+			continue
 		fi
 
 		finding_index=$((finding_index + 1))
@@ -362,10 +363,19 @@ emit_strix_provider_failure_finding() {
 	finding_index=$((finding_index + 1))
 	if grep -Fq "Strix vulnerability report window" "$strix_evidence_file"; then
 		printf '### %s. HIGH %s:%s - Strix provider signal left current-head security evidence incomplete\n' "$finding_index" "$path" "$line"
-		printf -- '- Problem: Strix produced one or more vulnerability report windows, then the failed log still reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal.\n'
-		printf -- '- Root cause: The scanner evidence is incomplete even after model reports were emitted; OpenCode must include every model report above and must not approve until a clean current-head Strix run or equivalent manual evidence exists.\n'
+		if [ -s "$unmapped_strix_reports_file" ]; then
+			printf -- '- Problem: Strix produced one or more vulnerability report windows that did not map to an existing repository file, then the failed log reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal. Unmapped reports: '
+			awk -F '\t' '{
+				printf "%s%s reported \"%s\" (%s; %s)", sep, $1, $2, $3, $4
+				sep = "; "
+			}' "$unmapped_strix_reports_file"
+			printf '.\n'
+		else
+			printf -- '- Problem: Strix produced one or more vulnerability report windows, then the failed log still reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal.\n'
+		fi
+		printf -- '- Root cause: The scanner evidence is incomplete even after model reports were emitted; unmapped or provider-failed Strix reports are scanner evidence blockers, not source-backed code review findings. OpenCode must not anchor a report to an unrelated workflow line unless the report includes a mappable repository Code Location.\n'
 		printf -- '- Fix: Re-run Strix after GitHub Models capacity recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep %s:%s aligned with the approved fallback model list.\n' "$path" "$line"
-		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports so partial reports cannot be downgraded to approval.\n\n'
+		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports, including unmapped/nonexistent Code Locations, so partial reports cannot be downgraded to approval or converted into hallucinated source fixes.\n\n'
 	else
 		printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
 		printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, budget-limit output for the DeepSeek fallbacks, and Configured model and fallback models were unavailable.\n'
