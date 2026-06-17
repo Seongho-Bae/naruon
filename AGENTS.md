@@ -8,6 +8,11 @@
 - Security scanners are required gates. Do not use `continue-on-error: true` to
   hide Bandit, Strix, CodeQL, or dependency findings; preserve artifacts with
   explicit `if: ${{ always() }}` upload steps when needed.
+- Repository rulesets that require code-scanning tools such as Scorecard or
+  Trivy must have matching PR and default-branch workflows that upload those
+  tools' SARIF results. If merge is blocked with "Code scanning is waiting for
+  results from Scorecard" or another ruleset-required tool, restore the missing
+  SARIF workflow and rerun it instead of bypassing or weakening the ruleset.
 - PR-scoped Strix scans must include trusted import context for changed backend
   Python entrypoints; do not scan `backend/main.py` or routers as isolated
   single files if that makes real repo modules look missing.
