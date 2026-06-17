@@ -1134,7 +1134,7 @@ pull_request_scope_context_files() {
 	for changed_file in "$@"; do
 		normalized_changed_file="$(normalize_changed_file_path "$changed_file")" || return 2
 		case "$normalized_changed_file" in
-		backend/*.py | backend/*/*.py | backend/*/*/*.py | backend/*/*/*/*.py)
+		backend/*.py)
 			needs_backend_python=1
 			;;
 		# The app shell, email components, threading URL builder, and API client can
