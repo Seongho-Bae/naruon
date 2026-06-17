@@ -537,10 +537,6 @@ jobs:
           normalize_opencode_output() {
             local output_file="$1"
 
-            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
-              return 0
-            fi
-
             if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
               "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
               bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
@@ -647,10 +643,6 @@ jobs:
           normalize_opencode_output() {
             local output_file="$1"
 
-            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
-              return 0
-            fi
-
             if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
               "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
               bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null
@@ -756,10 +748,6 @@ jobs:
           fi
           normalize_opencode_output() {
             local output_file="$1"
-
-            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
-              return 0
-            fi
 
             if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
               "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
@@ -909,6 +897,9 @@ jobs:
               cat "$normalized_comment_json"
               printf -- '-->\n'
             } >"$comment_body_file"
+          else
+            echo "OpenCode publish gate rejected the selected model output; failing this check instead of posting a stale review."
+            exit "$gate_status"
           fi
 
           {
@@ -1258,10 +1249,6 @@ jobs:
 
           normalize_opencode_output() {
             local output_file="$1"
-
-            if bash "$GITHUB_WORKSPACE/scripts/ci/opencode_review_approve_gate.sh" "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file" >/dev/null; then
-              return 0
-            fi
 
             if python3 "$GITHUB_WORKSPACE/scripts/ci/opencode_review_normalize_output.py" \
               "$HEAD_SHA" "$RUN_ID" "$RUN_ATTEMPT" "$output_file"; then
