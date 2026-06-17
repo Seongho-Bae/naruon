@@ -23,11 +23,16 @@
   `LLM_API_BASE_FILE` pointing at a trusted file containing
   `https://models.github.ai/inference`; GitHub Models scans must try the
   configured GPT-5-or-newer model first and may fall back to the explicit
-  workflow fallback list, currently `deepseek/deepseek-r1-0528` and
-  `deepseek/deepseek-v3-0324`, when GitHub Models provider capacity or model
-  availability blocks the primary run. Do not use GPT-4.1 or weaker GitHub
-  Models fallbacks for Strix or OpenCode PR review evidence. Keep the
-  GitHub Models endpoint in a trusted input file and pass the token only through
+  workflow fallback list, currently
+  `github_models/deepseek/deepseek-r1-0528` and
+  `github_models/deepseek/deepseek-v3-0324`, when GitHub Models provider
+  capacity or model availability blocks the primary run. The Strix gate must
+  route these fallback names through the GitHub Models endpoint with
+  OpenAI-compatible child model names such as
+  `openai/deepseek/deepseek-r1-0528`, not the public DeepSeek API. Do not use
+  GPT-4.1 or weaker GitHub Models fallbacks for Strix or OpenCode PR review
+  evidence. Keep the GitHub Models endpoint in a trusted input file and pass
+  the token only through
   the provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets
   must not override PR, push, or scheduled Strix defaults. Vertex remains
   available only for manual

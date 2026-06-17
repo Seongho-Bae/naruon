@@ -477,7 +477,7 @@ jobs:
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -587,7 +587,7 @@ jobs:
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -697,7 +697,7 @@ jobs:
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence is present, treat it as a blocker until diagnosed. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -1364,7 +1364,7 @@ jobs:
             local runs_json
 
             runs_json="$(mktemp)"
-            if ! gh api -X GET "repos/${GH_REPOSITORY}/actions/workflows/strix.yml/runs?event=pull_request_target&per_page=30" >"$runs_json"; then
+            if ! gh api -X GET "repos/${GH_REPOSITORY}/actions/workflows/strix.yml/runs?per_page=50" >"$runs_json"; then
               rm -f "$runs_json"
               return 1
             fi
@@ -1372,12 +1372,23 @@ jobs:
             case "$mode" in
               failed)
                 jq -r --arg head_sha "$HEAD_SHA" '
-                  (.workflow_runs // [])
+                  (.workflow_runs // []) as $runs
+                  | ([
+                      $runs[]
+                      | select((.head_sha // "") == $head_sha)
+                      | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
+                      | select((.status // "") == "completed")
+                      | select((.conclusion // "" | ascii_downcase) == "success")
+                      | (.id // 0)
+                    ] | max // 0) as $newest_success_run_id
+                  | $runs
                   | map(
                       select((.head_sha // "") == $head_sha)
-                      | select((.event // "") == "pull_request_target")
+                      | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") == "completed")
                       | select((.conclusion // "" | ascii_upcase) as $c | ["FAILURE","TIMED_OUT","ACTION_REQUIRED","CANCELLED","STARTUP_FAILURE"] | index($c))
+                      | select(((.event // "") == "workflow_dispatch" and (.conclusion // "" | ascii_downcase) == "cancelled") | not)
+                      | select((.id // 0) > $newest_success_run_id)
                       | "- Strix Security Scan/strix workflow run: " + (.conclusion // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
                     )
                   | .[]
@@ -1385,11 +1396,21 @@ jobs:
                 ;;
               pending)
                 jq -r --arg head_sha "$HEAD_SHA" '
-                  (.workflow_runs // [])
+                  (.workflow_runs // []) as $runs
+                  | ([
+                      $runs[]
+                      | select((.head_sha // "") == $head_sha)
+                      | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
+                      | select((.status // "") == "completed")
+                      | select((.conclusion // "" | ascii_downcase) == "success")
+                      | (.id // 0)
+                    ] | max // 0) as $newest_success_run_id
+                  | $runs
                   | map(
                       select((.head_sha // "") == $head_sha)
-                      | select((.event // "") == "pull_request_target")
+                      | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") != "completed")
+                      | select((.id // 0) > $newest_success_run_id)
                       | "- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
                     )
                   | .[]

@@ -520,6 +520,7 @@ is_preexisting_report_dir() {
 is_github_models_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
+	openai/deepseek/* | openai/meta/* | openai/mistral-ai/* | \
 	deepseek/* | meta/* | mistral-ai/*)
 		return 0
 		;;
@@ -533,6 +534,7 @@ is_github_models_api_compatible_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
 	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
+	openai/deepseek/* | openai/meta/* | openai/mistral-ai/* | \
 	deepseek/* | meta/* | mistral-ai/*)
 		return 0
 		;;
@@ -2032,6 +2034,30 @@ resolved_llm_api_base_for_model() {
 	printf '%s\n' "$llm_api_base_value"
 }
 
+child_model_for_api_base() {
+	local model="$1"
+	local llm_api_base_value="$2"
+
+	if [ -n "$llm_api_base_value" ] && is_github_models_api_base "$llm_api_base_value"; then
+		case "$model" in
+		github_models/openai/*)
+			printf '%s\n' "${model#github_models/}"
+			return 0
+			;;
+		github_models/*)
+			printf 'openai/%s\n' "${model#github_models/}"
+			return 0
+			;;
+		deepseek/* | meta/* | mistral-ai/*)
+			printf 'openai/%s\n' "$model"
+			return 0
+			;;
+		esac
+	fi
+
+	printf '%s\n' "$model"
+}
+
 ## Run a single strix invocation against TARGET_PATH with the given model.
 ## Builds a child-only environment so secrets and model routing do not leak
 ## through the parent shell process.
@@ -2042,6 +2068,7 @@ run_strix_once() {
 	local model="$1"
 	local rc
 	local llm_api_base_value
+	local child_model
 	local resolved_target_path
 	local timeout_seconds="$STRIX_PROCESS_TIMEOUT_SECONDS"
 	if [ "$STRIX_TOTAL_TIMEOUT_SECONDS" -gt 0 ]; then
@@ -2058,6 +2085,7 @@ run_strix_once() {
 	if ! llm_api_base_value="$(resolved_llm_api_base_for_model "$model")"; then
 		return 2
 	fi
+	child_model="$(child_model_for_api_base "$model" "$llm_api_base_value")"
 	if ! resolved_target_path="$(resolve_current_target_path "$TARGET_PATH")"; then
 		return 1
 	fi
@@ -2069,7 +2097,7 @@ run_strix_once() {
 	fi
 	set -o pipefail
 	set +e
-	STRIX_CHILD_MODEL="$model" \
+	STRIX_CHILD_MODEL="$child_model" \
 		STRIX_CHILD_LLM_API_KEY="$child_llm_api_key" \
 		STRIX_CHILD_LLM_API_BASE="$llm_api_base_value" \
 		STRIX_CHILD_REPORTS_DIR="$ACTIVE_REPORTS_DIR" \
