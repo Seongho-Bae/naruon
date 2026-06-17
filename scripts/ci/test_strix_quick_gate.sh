@@ -457,6 +457,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Superseded failed checks are diagnostic history, not active blockers." "opencode review prompt does not request changes for superseded check history"
 	assert_file_contains "$workflow_file" "failed_check_evidence_has_active_failures" "opencode approval distinguishes active failed checks from superseded diagnostic history"
 	assert_file_contains "$workflow_file" "failed-check evidence showed only superseded failures; continuing approval" "opencode approval does not request changes when failed rollup entries are superseded by successful current-head evidence"
+	assert_file_contains "$workflow_file" "active_failed_checks=false" "opencode failed-outcome path does not treat superseded failed checks as active blockers"
+	assert_file_contains "$workflow_file" "preserving model REQUEST_CHANGES" "opencode request-changes path preserves source-backed model findings when failed checks are only superseded history"
 	assert_file_contains "$workflow_file" "include every model-reported vulnerability as a separate evidence-backed finding" "opencode review prompt requires all Strix model findings"
 	assert_file_contains "$workflow_file" "Multiple Strix model reports must not be collapsed" "opencode review prompt prevents collapsing multiple Strix model reports"
 	assert_file_contains "$workflow_file" "One Strix model vulnerability report requires one distinct finding" "opencode review prompt requires one finding per Strix model report"

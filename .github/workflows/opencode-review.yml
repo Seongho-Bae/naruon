@@ -1662,6 +1662,7 @@ jobs:
             failed_checks_file="$(mktemp)"
             failed_check_evidence_file="$(mktemp)"
             failed_check_review_body_file="$(mktemp)"
+            active_failed_checks=false
             # shellcheck disable=SC2329
             cleanup_failed_outcome_files() {
               rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
@@ -1671,20 +1672,31 @@ jobs:
               if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                 printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
               fi
-              if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
-                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+
+              if failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
+                active_failed_checks=true
+                if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                else
+                  build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                fi
               else
-                build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
-                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; continuing non-check failure handling for head `%s`.\n' "$HEAD_SHA"
               fi
+            fi
+
+            if [ "$active_failed_checks" = "true" ]; then
+              echo "::endgroup::"
+              exit 0
+            fi
+
+            pending_checks_file="$(mktemp)"
+            if collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
+              build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
+              create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
             else
-              pending_checks_file="$(mktemp)"
-              if collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
-                build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
-                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
-              else
-                request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
-              fi
+              request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
             fi
             echo "::endgroup::"
             exit 0
@@ -1854,7 +1866,11 @@ jobs:
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
-                if scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
+                if ! failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
+                  printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; preserving model REQUEST_CHANGES for head `%s`.\n' "$HEAD_SHA"
+                  format_request_changes_body "$control_json" "$failed_check_review_body_file"
+                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                elif scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
                   format_request_changes_body "$control_json" "$failed_check_review_body_file"
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                 elif run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
