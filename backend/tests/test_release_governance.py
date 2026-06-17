@@ -137,7 +137,6 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
-    strix_ci_requirements = read_repo_text("requirements-strix-ci.txt")
 
     assert "sqlalchemy==2.0.50" in requirements
     assert "asyncpg==0.31.0" in requirements
@@ -147,6 +146,11 @@ def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None
     assert "wheel==0.47.0" in requirements
     assert "opentelemetry-api==1.41.1" in requirements
     assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
+
+
+def test_strix_ci_requirements_use_security_quality_clean_pins() -> None:
+    strix_ci_requirements = read_repo_text("requirements-strix-ci.txt")
+
     assert "strix-agent==1.0.4" in strix_ci_requirements
     assert "cryptography==49.0.0" in strix_ci_requirements
     assert "python-multipart==0.0.31" in strix_ci_requirements
