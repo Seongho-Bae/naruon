@@ -1269,6 +1269,19 @@ jobs:
             } >"$body_file"
           }
 
+          failed_check_evidence_has_active_failures() {
+            local evidence_file="$1"
+
+            if [ ! -s "$evidence_file" ]; then
+              return 0
+            fi
+            if grep -Fq "No completed failed GitHub Checks were present when evidence was collected." "$evidence_file"; then
+              return 1
+            fi
+
+            return 0
+          }
+
           normalize_opencode_output() {
             local output_file="$1"
 
@@ -1800,14 +1813,18 @@ jobs:
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
-                if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                if ! failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
+                  printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; continuing approval for head `%s`.\n' "$HEAD_SHA"
+                elif run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                  echo "::endgroup::"
+                  exit 0
                 else
                   build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                  echo "::endgroup::"
+                  exit 0
                 fi
-                echo "::endgroup::"
-                exit 0
               fi
               summary="$(jq -r '.summary' "$control_json")"
               reason="$(jq -r '.reason' "$control_json")"
