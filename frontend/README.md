@@ -12,7 +12,7 @@ npm run build
 npm run dev
 ```
 
-Open <http://localhost:3000>. Browser requests use same-origin `/api/*`; server-side route handlers read `BACKEND_INTERNAL_URL` at runtime.
+Open <http://localhost:3000>. Browser requests use same-origin `/api/*`; in local development the server route handler defaults to `http://127.0.0.1:8000`, while production deployments must set `BACKEND_INTERNAL_URL` at runtime.
 
 ## Threading UI contract
 

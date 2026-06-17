@@ -280,12 +280,16 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     root_dockerfile = read_repo_text("Dockerfile")
     dockerfile = read_repo_text("frontend/Dockerfile")
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    frontend_deployment = read_repo_text("k8s/frontend-deployment.yaml")
     package_json = read_repo_text("frontend/package.json")
 
     assert '"packageManager": "pnpm@11.5.3"' in package_json
     assert "NEXT_PUBLIC_API_URL" not in root_dockerfile
     assert "NEXT_PUBLIC_API_URL" not in dockerfile
     assert "NEXT_PUBLIC_API_URL" not in docker_publish_workflow
+    assert "NEXT_PUBLIC_API_URL" not in frontend_deployment
+    assert "BACKEND_INTERNAL_URL" in frontend_deployment
+    assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL' in frontend_deployment
     assert "BACKEND_INTERNAL_URL" in dockerfile
     assert dockerfile.index("BACKEND_INTERNAL_URL is intentionally runtime-only") < (
         dockerfile.index("RUN pnpm run build")
