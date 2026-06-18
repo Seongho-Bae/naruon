@@ -370,7 +370,7 @@ emit_strix_provider_failure_finding() {
 	local path=".github/workflows/strix.yml"
 	local line="1"
 
-	if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|budget limit|Configured model and fallback models were unavailable|provider infrastructure|Below-threshold findings detected|Unable to map Strix findings" "$strix_evidence_file"; then
+	if ! grep -Eq "LLM CONNECTION FAILED|RateLimitError|Too many requests|HTTPStatusError|401 Unauthorized|api\\.deepseek\\.com|Authentication Fails|DeepseekException|budget limit|Configured model and fallback models were unavailable|provider infrastructure|Below-threshold findings detected|Unable to map Strix findings" "$strix_evidence_file"; then
 		return 0
 	fi
 

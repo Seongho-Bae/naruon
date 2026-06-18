@@ -973,6 +973,38 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_failed_check_fallback_handles_deepseek_auth_only_signal() {
+	local tmp_dir
+	local evidence_file
+	local output_file
+	tmp_dir="$(mktemp -d)"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	httpx.HTTPStatusError: Client error '401 Unauthorized' for url 'https://api.deepseek.com/beta/chat/completions'
+strix	Run Strix (quick)	litellm.BadRequestError: DeepseekException - {"error":{"message":"Authentication Fails, Your api key is invalid"}}
+```
+
+No Strix vulnerability report windows were detected in the failed log.
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$REPO_ROOT" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix provider quota blocked current-head security evidence" "fallback treats DeepSeek auth-only logs as provider blockers"
+	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves DeepSeek auth-only endpoint evidence"
+	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves DeepSeek auth-only failure evidence"
+	assert_file_contains "$output_file" "Suggested edit: \`.github/workflows/strix.yml" "fallback gives suggested edit for DeepSeek auth-only provider routing"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape() {
 	local tmp_dir
 	local fixture_repo
@@ -5605,6 +5637,8 @@ assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 assert_opencode_failed_check_fallback_emits_each_strix_report
 
 assert_opencode_failed_check_fallback_does_not_treat_no_report_summary_as_report
+
+assert_opencode_failed_check_fallback_handles_deepseek_auth_only_signal
 
 assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape
 
