@@ -2029,7 +2029,7 @@ resolved_llm_api_base_for_model() {
 		return 2
 	fi
 	if is_github_models_api_base "$llm_api_base_value" && ! is_github_models_api_compatible_model "$model"; then
-		echo "ERROR: LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix." >&2
+		echo "ERROR: LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models-compatible model." >&2
 		return 2
 	fi
 	printf '%s\n' "$llm_api_base_value"

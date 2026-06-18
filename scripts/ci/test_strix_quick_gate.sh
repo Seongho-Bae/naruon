@@ -8077,7 +8077,7 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"openai/o4-mini" \
 	"" \
 	"2" \
-	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models model prefix" \
+	"LLM_API_BASE may route through GitHub Models only when STRIX_LLM uses a GitHub Models-compatible model" \
 	"0" \
 	"" \
 	"" \
