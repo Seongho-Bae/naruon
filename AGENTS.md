@@ -262,6 +262,18 @@
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into
   production examples.
+- Screenshot and browser-capture helper scripts must build navigation targets
+  from a fixed localhost origin and an explicit route allowlist before calling
+  Playwright `page.goto`; do not concatenate raw route or URL strings, and log
+  capture failures with fixed message templates plus sanitized fields.
+- Alembic migrations must use structured Alembic/SQLAlchemy operation APIs such
+  as `op.create_index` and `op.drop_index` for schema objects. Do not build DDL
+  with `sa.text(f"...")` or interpolated identifier strings, even when the
+  current identifiers are static.
+- Infrastructure Docker Compose services must inherit the repo hardening
+  contract: `no-new-privileges:true`, `read_only: true`, read-only config
+  mounts, and explicit `tmpfs` entries for the few runtime paths that must be
+  writable.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and

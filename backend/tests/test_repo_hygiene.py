@@ -79,18 +79,45 @@ def test_backend_requirements_pin_ruff_for_deterministic_ci():
     assert "ruff==0.15.16" in requirements
 
 
-def test_traefik_compose_services_disable_privilege_escalation():
-    expected_next_service = {
-        "docker-compose.infra.yml": "  prometheus:",
-        "docker-compose.gateway.yml": "  keycloak:",
-    }
+def test_compose_gateway_services_disable_privilege_escalation():
+    compose = (REPO_ROOT / "docker-compose.gateway.yml").read_text()
+    traefik_block = compose.split("  traefik:", 1)[1].split("  keycloak:", 1)[0]
 
-    for compose_name, next_service in expected_next_service.items():
-        compose = (REPO_ROOT / compose_name).read_text()
-        traefik_block = compose.split("  traefik:", 1)[1].split(next_service, 1)[0]
+    assert "security_opt:" in traefik_block
+    assert "- no-new-privileges:true" in traefik_block
 
-        assert "security_opt:" in traefik_block
-        assert "- no-new-privileges:true" in traefik_block
+
+def test_infra_compose_services_use_read_only_hardening_anchor():
+    compose = (REPO_ROOT / "docker-compose.infra.yml").read_text()
+
+    assert "x-service-hardening: &service-hardening" in compose
+    assert "security_opt:" in compose
+    assert "- no-new-privileges:true" in compose
+    assert "read_only: true" in compose
+
+    for service in (
+        "traefik",
+        "prometheus",
+        "grafana",
+        "loki",
+        "tempo",
+        "otel-collector",
+        "keycloak",
+    ):
+        assert f"  {service}:\n    <<: *service-hardening" in compose
+
+
+def test_screenshot_utility_allows_only_local_static_routes():
+    screenshot_script = (REPO_ROOT / "frontend" / "screenshot.cjs").read_text()
+
+    assert "SCREENSHOT_ORIGIN = 'http://127.0.0.1:3000'" in screenshot_script
+    assert "const ALLOWED_ROUTES = new Set(SCREENSHOT_ROUTES);" in screenshot_script
+    assert "ALLOWED_ROUTES.has(route)" in screenshot_script
+    assert "new URL(route, SCREENSHOT_ORIGIN)" in screenshot_script
+    assert "url.origin !== SCREENSHOT_ORIGIN" in screenshot_script
+    assert "console.error('Failed to capture route'" in screenshot_script
+    assert "http://localhost:3000${route}" not in screenshot_script
+    assert "console.error(`Failed to capture ${route}:`" not in screenshot_script
 
 
 def test_compose_externalizes_postgres_credentials():
