@@ -2688,6 +2688,9 @@ has_blocking_vulnerability_reports() {
 			if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
 				continue
 			fi
+			if vulnerability_file_is_retryable_model_inconsistency "$vuln_file"; then
+				continue
+			fi
 
 			rank="$(extract_first_severity_rank "$vuln_file")"
 			if [ "$rank" -lt 0 ] || [ "$rank" -ge "$threshold_rank" ]; then
@@ -2702,6 +2705,7 @@ has_blocking_vulnerability_reports() {
 fail_reported_vulnerabilities_before_fallback_success() {
 	if has_blocking_vulnerability_reports; then
 		echo "Strix model reported threshold vulnerabilities before fallback success; failing closed so every model-reported vulnerability is reviewed." >&2
+		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 0
 	fi
 	return 1
