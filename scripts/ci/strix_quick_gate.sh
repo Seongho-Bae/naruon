@@ -523,6 +523,7 @@ is_preexisting_report_dir() {
 is_github_models_model() {
 	case "$1" in
 	openai/openai/* | github_models/* | \
+	openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
 	openai/deepseek/* | openai/meta/* | openai/mistral-ai/* | \
 	deepseek/* | meta/* | mistral-ai/*)
 		return 0
@@ -2064,6 +2065,13 @@ child_model_for_api_base() {
 			;;
 		esac
 	fi
+
+	case "$model" in
+	openai_direct/*)
+		printf 'openai/%s\n' "${model#openai_direct/}"
+		return 0
+		;;
+	esac
 
 	printf '%s\n' "$model"
 }

@@ -196,6 +196,7 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
 	assert_file_not_contains "$workflow_file" 'github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)' "strix workflow keeps DeepSeek GitHub Models restricted to fallback-only routing"
 	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix for OpenAI GPT model names before passing model names to LiteLLM"
+	assert_file_contains "$workflow_file" "openai_direct/%s" "strix workflow keeps manual direct OpenAI scans distinct from GitHub Models openai/gpt-* routing"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
 	assert_file_not_contains "$workflow_file" "openai/gpt-5-*" "strix workflow must not accept older GPT-5 variants when GPT-5.4 is required"
 	assert_file_contains "$workflow_file" "openai/gpt-5-mini* | openai/gpt-5-nano*" "strix workflow rejects mini and nano GPT-5 variants for security evidence"
@@ -530,6 +531,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper exited non-zero; using inline fallback." "opencode failed-check fallback handles helper failures without aborting under set -e"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "emit_strix_report_findings" "failed-check fallback emits every Strix vulnerability report as a separate finding"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider signal left current-head security evidence incomplete" "failed-check fallback does not claim reports are absent after Strix emitted vulnerabilities"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider failure blocked current-head security evidence" "failed-check fallback does not label non-quota provider routing/auth failures as quota"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider quota blocked current-head security evidence" "failed-check fallback avoids misleading quota-only provider blocker title"
 	assert_file_contains "$workflow_file" "- Root cause:" "opencode review request-changes body includes root cause per finding"
 	assert_file_contains "$workflow_file" "- Regression test:" "opencode review request-changes body includes regression test direction per finding"
 	assert_file_contains "$workflow_file" "- Suggested diff:" "opencode review request-changes body includes suggested diff per finding"
@@ -977,7 +980,7 @@ EOF
 	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
 		"$evidence_file" "$REPO_ROOT" >"$output_file"
 
-	assert_file_contains "$output_file" "Strix provider quota blocked current-head security evidence" "fallback treats no-report summary as provider blocker"
+	assert_file_contains "$output_file" "Strix provider failure blocked current-head security evidence" "fallback treats no-report summary as provider blocker"
 	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves direct DeepSeek endpoint failure evidence"
 	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves direct DeepSeek authentication failure evidence"
 	assert_file_contains "$output_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "fallback gives exact GitHub Models fallback list"
@@ -1012,7 +1015,7 @@ EOF
 	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
 		"$evidence_file" "$REPO_ROOT" >"$output_file"
 
-	assert_file_contains "$output_file" "Strix provider quota blocked current-head security evidence" "fallback treats DeepSeek auth-only logs as provider blockers"
+	assert_file_contains "$output_file" "Strix provider failure blocked current-head security evidence" "fallback treats DeepSeek auth-only logs as provider blockers"
 	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves DeepSeek auth-only endpoint evidence"
 	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves DeepSeek auth-only failure evidence"
 	assert_file_contains "$output_file" "Suggested edit: \`.github/workflows/strix.yml" "fallback gives suggested edit for DeepSeek auth-only provider routing"
@@ -8165,8 +8168,19 @@ run_gate_case "github-models-api-base-rejected-for-direct-openai" \
 	"openai" \
 	"https://models.github.ai/inference"
 
+run_gate_case "github-models-openai-gpt-requires-api-base" \
+	"openai/gpt-5" \
+	"" \
+	"2" \
+	"GitHub Models Strix scans require LLM_API_BASE_FILE" \
+	"0" \
+	"" \
+	"" \
+	"openai" \
+	""
+
 run_gate_case "direct-openai-gpt-does-not-require-github-models-api-base" \
-	"openai/gpt-5.4" \
+	"openai_direct/gpt-5.4" \
 	"" \
 	"0" \
 	"scan ok" \

@@ -399,7 +399,7 @@ emit_strix_provider_failure_finding() {
 		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports, including unmapped/nonexistent Code Locations, so partial reports cannot be downgraded to approval or converted into hallucinated source fixes.\n\n'
 		printf -- '- Suggested edit: do not change unrelated source lines for unmapped reports; first obtain a clean Strix rerun or a report with a repository Code Location, while keeping `%s:%s` on the approved GitHub Models fallback route.\n\n' "$path" "$line"
 	else
-		printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
+		printf '### %s. HIGH %s:%s - Strix provider failure blocked current-head security evidence\n' "$finding_index" "$path" "$line"
 		if grep -Eq "api\\.deepseek\\.com|401 Unauthorized|Authentication Fails|DeepseekException" "$strix_evidence_file"; then
 			printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported `RateLimitError` / `Too many requests` for the primary `openai/gpt-5` attempt, then fallback attempts reached direct DeepSeek (`api.deepseek.com`) and failed with `401 Unauthorized` or `Authentication Fails`, ending with `Configured model and fallback models were unavailable`.\n'
 			printf -- '- Root cause: The fallback model names were not routed through the GitHub Models endpoint for this failed PR check, so a GitHub Models token was used against direct DeepSeek instead of `https://models.github.ai/inference`; no Strix Vulnerability Report window was produced.\n'

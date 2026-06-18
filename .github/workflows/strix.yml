@@ -301,10 +301,10 @@ jobs:
               printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
             openai-direct/gpt-*)
-              printf 'openai/%s' "${strix_model#openai-direct/}" > "$strix_llm_file"
+              printf 'openai_direct/%s' "${strix_model#openai-direct/}" > "$strix_llm_file"
               ;;
             gpt-*)
-              printf 'openai/%s' "$strix_model" > "$strix_llm_file"
+              printf 'openai_direct/%s' "$strix_model" > "$strix_llm_file"
               ;;
             vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               printf '%s' "$strix_model" > "$strix_llm_file"
