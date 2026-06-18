@@ -336,11 +336,40 @@ async def _generate_import_embeddings(
     except (EmbeddingGenerationError, ValueError) as exc:
         logger.warning(
             "Email import embedding generation failed; falling back to zero vectors "
-            "for imported content: error_type=%s text_count=%s",
+            "for failed imported content after item-level retry: "
+            "error_type=%s text_count=%s",
             type(exc).__name__,
             len(texts),
         )
-        return [_zero_embedding() for _ in texts]
+        recovered: list[list[float]] = []
+        for index, text in enumerate(texts):
+            try:
+                single_embedding = await generate_embeddings(
+                    [text],
+                    embedding_provider.api_key,
+                    base_url=embedding_provider.base_url,
+                    model=embedding_provider.embedding_model,
+                )
+                if not single_embedding:
+                    recovered.append(_zero_embedding())
+                    continue
+                recovered.append(
+                    fit_embedding_vector(single_embedding[0], EMBEDDING_DIMENSION)
+                )
+            except (
+                EmbeddingGenerationError,
+                ValueError,
+                TypeError,
+                IndexError,
+            ) as item_exc:
+                logger.warning(
+                    "Email import embedding item retry failed; falling back to zero "
+                    "vector for imported content: error_type=%s embedding_index=%s",
+                    type(item_exc).__name__,
+                    index,
+                )
+                recovered.append(_zero_embedding())
+        return recovered
 
     fitted: list[list[float]] = []
     for index in range(len(texts)):

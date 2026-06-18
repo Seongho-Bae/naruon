@@ -103,3 +103,38 @@ async def test_generate_import_embeddings_logs_non_secret_provider_fallback(capl
     assert "secret-provider-token" not in caplog.text
     assert "ollama" not in caplog.text
     assert "embeddinggemma" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_generate_import_embeddings_recovers_valid_items_after_batch_failure():
+    provider = EmailImportEmbeddingProvider(
+        api_key="secret-provider-token",
+        base_url="http://ollama:11434/v1",
+        embedding_model="embeddinggemma",
+    )
+
+    with patch(
+        "services.email_import_service.generate_embeddings",
+        new_callable=AsyncMock,
+    ) as mock_generate_embeddings:
+        mock_generate_embeddings.side_effect = [
+            EmbeddingGenerationError("batch failed"),
+            [[0.25] * EMBEDDING_DIMENSION],
+            EmbeddingGenerationError("single item failed"),
+            [[0.75] * (EMBEDDING_DIMENSION // 2)],
+        ]
+
+        embeddings = await _generate_import_embeddings(
+            ["body", "bad attachment", "good attachment"],
+            embedding_provider=provider,
+        )
+
+    assert mock_generate_embeddings.await_count == 4
+    assert mock_generate_embeddings.await_args_list[1].args[0] == ["body"]
+    assert mock_generate_embeddings.await_args_list[2].args[0] == ["bad attachment"]
+    assert mock_generate_embeddings.await_args_list[3].args[0] == ["good attachment"]
+    assert embeddings[0] == [0.25] * EMBEDDING_DIMENSION
+    assert embeddings[1] == [0.0] * EMBEDDING_DIMENSION
+    assert embeddings[2] == [0.75] * (EMBEDDING_DIMENSION // 2) + [0.0] * (
+        EMBEDDING_DIMENSION // 2
+    )
