@@ -27,8 +27,7 @@ ensure_frontend_dependencies() {
   log "reconciling frontend dependencies with pnpm lockfile"
   (
     cd "${REPO_ROOT}/frontend"
-    corepack enable pnpm
-    pnpm install --frozen-lockfile
+    corepack pnpm install --frozen-lockfile
   )
 }
 

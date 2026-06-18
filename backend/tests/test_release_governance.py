@@ -40,6 +40,13 @@ def read_repo_text(relative_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def assert_dockerfile_stage_from(dockerfile: str, image: str, stage_alias: str) -> None:
+    pattern = rf"^FROM {re.escape(image)}@sha256:[0-9a-f]{{64}} AS {re.escape(stage_alias)}$"
+    assert re.search(pattern, dockerfile, flags=re.MULTILINE), (
+        f"missing pinned {image} stage alias {stage_alias}"
+    )
+
+
 def test_root_version_exists_and_is_initial_semver_release() -> None:
     version = read_repo_text("VERSION").strip()
 
@@ -91,8 +98,7 @@ def test_container_images_use_node_24_runtime() -> None:
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert "FROM node:24-slim@sha256:" in root_dockerfile
-    assert " AS frontend-builder" in root_dockerfile
+    assert_dockerfile_stage_from(root_dockerfile, "node:24-slim", "frontend-builder")
     assert "FROM node:24-slim@sha256:" in frontend_dockerfile
     assert "docker.io/library/node:24-slim" in frontend_dockerfile
     assert "docker.io/library/node:24-slim" in docker_publish_workflow
@@ -110,8 +116,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert "FROM python:3.14-slim@sha256:" in root_dockerfile
-    assert " AS backend-runtime" in root_dockerfile
+    assert_dockerfile_stage_from(root_dockerfile, "python:3.14-slim", "backend-runtime")
     assert "docker.io/library/python:3.14-slim" in root_dockerfile
     assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
     assert 'python-version: ["3.14"]' in app_ci_workflow
@@ -373,8 +378,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
-    assert "FROM python:3.14-slim@sha256:" in dockerfile
-    assert " AS backend-runtime" in dockerfile
+    assert_dockerfile_stage_from(dockerfile, "python:3.14-slim", "backend-runtime")
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile
