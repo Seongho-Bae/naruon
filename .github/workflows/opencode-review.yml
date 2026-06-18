@@ -8,6 +8,9 @@ concurrency:
   group: opencode-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   opencode-review:
     if: >-

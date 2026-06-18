@@ -24,13 +24,12 @@ run_backend_checks() {
 }
 
 ensure_frontend_dependencies() {
-  if [[ ! -d "${REPO_ROOT}/frontend/node_modules" ]]; then
-    log "frontend dependencies missing; running npm install"
-    (
-      cd "${REPO_ROOT}/frontend"
-      npm install
-    )
-  fi
+  log "reconciling frontend dependencies with pnpm lockfile"
+  (
+    cd "${REPO_ROOT}/frontend"
+    corepack enable pnpm
+    pnpm install --frozen-lockfile
+  )
 }
 
 run_frontend_checks() {
