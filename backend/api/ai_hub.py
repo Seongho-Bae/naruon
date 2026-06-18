@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import hashlib
 
@@ -319,9 +320,11 @@ async def get_ai_hub_surface(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> AiHubSurfaceResponse:
-    prompts = await _list_prompts(db, auth_context)
-    providers = await _list_providers(db, auth_context)
-    audit_events = await _list_audit_events(db, auth_context)
+    prompts, providers, audit_events = await asyncio.gather(
+        _list_prompts(db, auth_context),
+        _list_providers(db, auth_context),
+        _list_audit_events(db, auth_context),
+    )
 
     prompt_cards = [_prompt_card(prompt) for prompt in prompts]
     active_provider_count = sum(

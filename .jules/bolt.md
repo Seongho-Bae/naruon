@@ -43,3 +43,7 @@
 ## 2026-06-10 - Optimize redundant dictionary lookups in tight loops
  **Learning:** Using `dict.setdefault` and multiple `dict.get` or `key in dict` checks inside tight loops significantly impacts performance due to repeated dictionary lookups and unnecessary list allocations. Caching dictionary lookups (e.g., using a single `dict.get(key)`) and conditionally handling the logic based on the result is much more performant.
  **Action:** When aggregating or grouping items in a loop, avoid `setdefault`. Instead, check if the key exists using a single `.get()`, and perform initialization/updates conditionally. Additionally, hoist loop-invariant checks (e.g., `folder == "sent"`) outside the loop to avoid redundant evaluations.
+
+## 2026-06-12 - Asyncio gather over sequential awaits
+**Learning:** In the `get_ai_hub_surface` endpoint, `_list_prompts`, `_list_providers`, and `_list_audit_events` were executed sequentially using `await`. Since these are independent database queries, executing them sequentially incurs unnecessary overhead and latency.
+**Action:** Use `asyncio.gather` to execute independent async database queries concurrently. This reduces the overall execution time to the duration of the longest query, significantly improving API response times.
