@@ -1,12 +1,20 @@
-import pytest
+import logging
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.exceptions import EmbeddingGenerationError
 from services.email_import_service import (
+    EMBEDDING_DIMENSION,
+    EmailImportEmbeddingProvider,
+    _generate_import_embeddings,
     _import_single_eml,
     _safe_item_filename,
     _safe_upload_filename,
 )
+
 
 @pytest.mark.parametrize(
     "input_name,expected",
@@ -64,3 +72,34 @@ async def test_import_single_eml_rejects_symlink(tmp_path):
     assert result.status == "failed"
     assert result.reason_code == "parse_failed"
     session.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_generate_import_embeddings_logs_non_secret_provider_fallback(caplog):
+    provider = EmailImportEmbeddingProvider(
+        api_key="secret-provider-token",
+        base_url="http://ollama:11434/v1",
+        embedding_model="embeddinggemma",
+    )
+    caplog.set_level(logging.WARNING, logger="services.email_import_service")
+
+    with patch(
+        "services.email_import_service.generate_embeddings",
+        new_callable=AsyncMock,
+    ) as mock_generate_embeddings:
+        mock_generate_embeddings.side_effect = EmbeddingGenerationError(
+            "secret-provider-token unavailable at http://ollama:11434/v1"
+        )
+
+        embeddings = await _generate_import_embeddings(
+            ["Provider body"],
+            embedding_provider=provider,
+        )
+
+    assert embeddings == [[0.0] * EMBEDDING_DIMENSION]
+    assert "Email import embedding generation failed" in caplog.text
+    assert "error_type=EmbeddingGenerationError" in caplog.text
+    assert "text_count=1" in caplog.text
+    assert "secret-provider-token" not in caplog.text
+    assert "ollama" not in caplog.text
+    assert "embeddinggemma" not in caplog.text

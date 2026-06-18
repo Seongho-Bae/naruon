@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+## [0.14.4] - 2026-06-18
+
+### 추가
+- Seongho Bae (@seonghobae): signed email import pipeline이 `.eml`, `.zip`에
+  더해 `.mbox` mailbox export를 받아 source-linked email record로 가져오도록
+  확장하고, 가져온 email body와 attachment content embedding을 조직의 active
+  provider `embedding_model`(local runtime 기본 `embeddinggemma`)로 생성해 저장
+  차원에 맞춰 보정하도록 했습니다.
+
+### 수정
+- Seongho Bae (@seonghobae): OpenCode Agent가 실패한 Strix/GitHub Checks를
+  승인 전 직접 조회하고, failed log/annotation에서 확인한 각 line별 수정사항과
+  Strix multi-model vulnerability report를 리뷰에 모두 포함하도록 release
+  governance self-test와 workflow 계약을 동기화했습니다.
+
 ### 추가
 - Seongho Bae (@seonghobae): Render.com Blueprint(`render.yaml`)와
   `docs/operations/render-deployment.md` runbook을 추가해 frontend와 backend를

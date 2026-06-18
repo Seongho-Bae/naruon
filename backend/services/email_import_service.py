@@ -1,6 +1,7 @@
 import datetime
 from email import policy as email_policy
 import hashlib
+import logging
 import mailbox
 import os
 import stat
@@ -35,6 +36,7 @@ MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_IMPORT_EML_FILES = 100
 MAX_IMPORT_EMAILS_PER_OWNER = 1000
 EMAIL_IMPORT_QUOTA_LOCK_NAMESPACE = "naruon-email-import-quota"
+logger = logging.getLogger(__name__)
 
 EmailImportItemStatus = Literal["imported", "skipped_duplicate", "failed"]
 
@@ -331,7 +333,13 @@ async def _generate_import_embeddings(
             base_url=embedding_provider.base_url,
             model=embedding_provider.embedding_model,
         )
-    except (EmbeddingGenerationError, ValueError):
+    except (EmbeddingGenerationError, ValueError) as exc:
+        logger.warning(
+            "Email import embedding generation failed; falling back to zero vectors "
+            "for imported content: error_type=%s text_count=%s",
+            type(exc).__name__,
+            len(texts),
+        )
         return [_zero_embedding() for _ in texts]
 
     fitted: list[list[float]] = []
@@ -343,7 +351,13 @@ async def _generate_import_embeddings(
             fitted.append(
                 fit_embedding_vector(provider_embeddings[index], EMBEDDING_DIMENSION)
             )
-        except ValueError:
+        except ValueError as exc:
+            logger.warning(
+                "Email import embedding fit failed; falling back to zero vector "
+                "for imported content: error_type=%s embedding_index=%s",
+                type(exc).__name__,
+                index,
+            )
             fitted.append(_zero_embedding())
     return fitted
 
