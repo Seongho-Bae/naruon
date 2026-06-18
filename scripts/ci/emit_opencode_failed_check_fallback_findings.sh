@@ -335,7 +335,7 @@ emit_strix_report_findings() {
 	local line
 	local source_detail
 
-	if ! grep -Eq "^### Strix vulnerability report window\\b" "$strix_evidence_file"; then
+	if ! grep -Eq "^### Strix vulnerability report window([[:space:]]|$)" "$strix_evidence_file"; then
 		return 0
 	fi
 
@@ -382,7 +382,7 @@ emit_strix_provider_failure_finding() {
 	fi
 
 	finding_index=$((finding_index + 1))
-	if grep -Eq "^### Strix vulnerability report window\\b" "$strix_evidence_file"; then
+	if grep -Eq "^### Strix vulnerability report window([[:space:]]|$)" "$strix_evidence_file"; then
 		printf '### %s. HIGH %s:%s - Strix provider signal left current-head security evidence incomplete\n' "$finding_index" "$path" "$line"
 		if [ -s "$unmapped_strix_reports_file" ]; then
 			printf -- '- Problem: Strix produced one or more vulnerability report windows that did not map to an existing repository file, then the failed log reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal. Unmapped reports: '

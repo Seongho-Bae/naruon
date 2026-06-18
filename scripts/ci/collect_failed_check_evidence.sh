@@ -389,7 +389,11 @@ done <"$failed_contexts"
 	fi
 
 	if [ ! -s "$active_failed_contexts" ]; then
-		printf 'No completed failed GitHub Checks were present when evidence was collected.\n'
+		if [ -s "$superseded_failed_contexts" ]; then
+			printf 'No active failed GitHub Checks remained after superseded checks were classified.\n'
+		else
+			printf 'No completed failed GitHub Checks were present when evidence was collected.\n'
+		fi
 		exit 0
 	fi
 
