@@ -11,6 +11,8 @@ router = APIRouter(prefix="/dav", tags=["dav"])
 
 
 def _dav_path_owner_user_id(path: str) -> str | None:
+    if ".." in path.split("/"):
+        return None
     normalized_path = path.strip("/")
     if not normalized_path:
         return None
