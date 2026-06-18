@@ -88,6 +88,7 @@ assert_strix_pr_scope_includes_deployment_context() {
 	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
 	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
+	assert_file_contains "$GATE_SCRIPT" "scripts/ci/test_*.sh" "strix gate excludes large CI self-test harnesses from PR scan targets"
 }
 
 assert_strix_workflow_pr_trigger_hardened() {
@@ -7256,6 +7257,27 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
+
+run_gate_case "pr-ci-test-harness-only-skip" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"No scannable changed files in pull request; skipping Strix quick scan." \
+	"0" \
+	"" \
+	"" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"scripts/ci/test_strix_quick_gate.sh"
 
 run_gate_case "pr-deployment-scope-entrypoint-context" \
 	"openai/gpt-4o-mini" \

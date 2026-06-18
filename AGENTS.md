@@ -16,6 +16,10 @@
 - PR-scoped Strix scans must include trusted import context for changed backend
   Python entrypoints; do not scan `backend/main.py` or routers as isolated
   single files if that makes real repo modules look missing.
+- PR-scoped Strix scans should include changed scanner/workflow/gate code but
+  exclude large CI self-test harnesses such as `scripts/ci/test_*.sh` from the
+  scanner target. Those harnesses remain covered by Strix self-tests; scanning
+  them as source can exhaust model context before security evidence finalizes.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan uses GitHub Models by default through
