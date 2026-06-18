@@ -477,7 +477,7 @@ jobs:
           Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful manual workflow_dispatch run is supplemental evidence only; it must not cancel or hide a failed PR statusCheckRollup context. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -587,7 +587,7 @@ jobs:
           GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful manual workflow_dispatch run is supplemental evidence only; it must not cancel or hide a failed PR statusCheckRollup context. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -697,7 +697,7 @@ jobs:
           GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction; put brief summary context after findings.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. Superseded failed checks are diagnostic history, not active blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful manual workflow_dispatch run is supplemental evidence only; it must not cancel or hide a failed PR statusCheckRollup context. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -1269,19 +1269,6 @@ jobs:
             } >"$body_file"
           }
 
-          failed_check_evidence_has_active_failures() {
-            local evidence_file="$1"
-
-            if [ ! -s "$evidence_file" ]; then
-              return 0
-            fi
-            if grep -Fq "No completed failed GitHub Checks were present when evidence was collected." "$evidence_file"; then
-              return 1
-            fi
-
-            return 0
-          }
-
           normalize_opencode_output() {
             local output_file="$1"
 
@@ -1662,7 +1649,6 @@ jobs:
             failed_checks_file="$(mktemp)"
             failed_check_evidence_file="$(mktemp)"
             failed_check_review_body_file="$(mktemp)"
-            active_failed_checks=false
             # shellcheck disable=SC2329
             cleanup_failed_outcome_files() {
               rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
@@ -1673,20 +1659,12 @@ jobs:
                 printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
               fi
 
-              if failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
-                active_failed_checks=true
-                if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
-                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
-                else
-                  build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
-                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
-                fi
+              if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               else
-                printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; continuing non-check failure handling for head `%s`.\n' "$HEAD_SHA"
+                build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               fi
-            fi
-
-            if [ "$active_failed_checks" = "true" ]; then
               echo "::endgroup::"
               exit 0
             fi
@@ -1825,9 +1803,7 @@ jobs:
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
-                if ! failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
-                  printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; continuing approval for head `%s`.\n' "$HEAD_SHA"
-                elif run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                   echo "::endgroup::"
                   exit 0
@@ -1866,11 +1842,7 @@ jobs:
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
-                if ! failed_check_evidence_has_active_failures "$failed_check_evidence_file"; then
-                  printf 'GitHub Checks rollup included failed contexts, but failed-check evidence showed only superseded failures; preserving model REQUEST_CHANGES for head `%s`.\n' "$HEAD_SHA"
-                  format_request_changes_body "$control_json" "$failed_check_review_body_file"
-                  create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
-                elif scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
+                if scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
                   format_request_changes_body "$control_json" "$failed_check_review_body_file"
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                 elif run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then

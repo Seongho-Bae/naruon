@@ -52,6 +52,10 @@ emit_failure_signal_summary() {
 		/LLM CONNECTION FAILED/ ||
 		/RateLimitError/ ||
 		/Too many requests/ ||
+		/HTTPStatusError/ ||
+		/401 Unauthorized/ ||
+		/api\.deepseek\.com/ ||
+		/Authentication Fails/ ||
 		/budget limit/ ||
 		/Configured model and fallback models were unavailable/ ||
 		/provider infrastructure/ ||
@@ -96,6 +100,10 @@ emit_strix_vulnerability_evidence() {
 		/LLM CONNECTION FAILED/ ||
 		/RateLimitError/ ||
 		/Too many requests/ ||
+		/HTTPStatusError/ ||
+		/401 Unauthorized/ ||
+		/api\.deepseek\.com/ ||
+		/Authentication Fails/ ||
 		/budget limit/ ||
 		/Configured model and fallback models were unavailable/ ||
 		/Below-threshold findings detected/ ||
@@ -176,10 +184,8 @@ owner="${GH_REPOSITORY%%/*}"
 repo="${GH_REPOSITORY#*/}"
 failed_contexts="$(mktemp)"
 workflow_run_contexts="$(mktemp)"
-successful_workflow_run_contexts="$(mktemp)"
 active_failed_contexts="$(mktemp)"
-superseded_contexts="$(mktemp)"
-tmp_files=("$failed_contexts" "$workflow_run_contexts" "$successful_workflow_run_contexts" "$active_failed_contexts" "$superseded_contexts")
+tmp_files=("$failed_contexts" "$workflow_run_contexts" "$active_failed_contexts")
 cleanup() {
 	rm -f "${tmp_files[@]}"
 }
@@ -281,26 +287,6 @@ gh api graphql \
 		| @tsv
 	' >"$workflow_run_contexts"
 
-	env HEAD_SHA="$HEAD_SHA" gh run list \
-		--repo "$GH_REPOSITORY" \
-		--commit "$HEAD_SHA" \
-		--limit 100 \
-		--json databaseId,workflowName,status,conclusion,url,event,headSha \
-		--jq '
-			.[]
-			| select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
-			| select((.headSha // "") == env.HEAD_SHA)
-			| select((.status // "") == "completed")
-			| select((.conclusion // "" | ascii_downcase) == "success")
-			| [
-				(if (.workflowName // "") != "" then .workflowName else "workflow run" end),
-				(.conclusion // "unknown"),
-				(.url // ""),
-				((.databaseId // "") | tostring)
-			]
-			| @tsv
-		' >"$successful_workflow_run_contexts"
-
 while IFS=$'\t' read -r kind label conclusion details_url run_id check_run_id; do
 	if [ -z "$run_id" ]; then
 		continue
@@ -312,33 +298,6 @@ while IFS=$'\t' read -r kind label conclusion details_url run_id check_run_id; d
 done <"$workflow_run_contexts"
 
 while IFS=$'\t' read -r kind label conclusion details_url run_id check_run_id; do
-	if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
-		printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$kind" "$label" "$conclusion" "$details_url" "$run_id" "$check_run_id" >>"$active_failed_contexts"
-		continue
-	fi
-
-	failed_workflow="$label"
-	if [[ "$failed_workflow" == */* ]]; then
-		failed_workflow="${failed_workflow%%/*}"
-	fi
-
-	superseding_success="$(
-		awk -F '\t' -v failed_workflow="$failed_workflow" -v failed_run_id="$run_id" '
-			$1 == failed_workflow && $4 ~ /^[0-9]+$/ && $4 > failed_run_id {
-				print
-				exit
-			}
-		' "$successful_workflow_run_contexts"
-	)"
-
-	if [ -n "$superseding_success" ]; then
-		IFS=$'\t' read -r success_workflow _success_conclusion success_url success_run_id <<<"$superseding_success"
-		printf '%s\037%s\037%s\037%s\037%s\037%s\037%s\n' \
-			"$label" "$run_id" "$conclusion" "$details_url" "$success_workflow" "$success_run_id" "$success_url" >>"$superseded_contexts"
-		: "$kind" "$check_run_id" "$_success_conclusion"
-		continue
-	fi
-
 	printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$kind" "$label" "$conclusion" "$details_url" "$run_id" "$check_run_id" >>"$active_failed_contexts"
 done <"$failed_contexts"
 
@@ -354,19 +313,6 @@ done <"$failed_contexts"
 	printf -- '- Do not request changes with only a GitHub Actions URL or a generic check name.\n\n'
 	printf -- '- When Strix logs contain multiple `Vulnerability Report` or `Model ... Vulnerabilities ...` sections, include every model-reported vulnerability in the review evidence and findings, including model name, title, severity, endpoint, and Code Locations/path:line evidence when present.\n'
 	printf -- '- Create one OpenCode finding per Strix model vulnerability report; do not satisfy two model reports with one combined finding, even when titles or locations match.\n\n'
-
-	if [ -s "$superseded_contexts" ]; then
-		printf '## Superseded failed checks\n\n'
-		printf 'The failed checks below were followed by a newer successful workflow run on the same head SHA. They are retained as diagnostic history but are not active repair blockers.\n\n'
-		while IFS=$'\037' read -r label run_id conclusion details_url success_workflow success_run_id success_url; do
-			printf -- '- Failed `%s` run `%s` (%s) was superseded by successful `%s` run `%s`: %s\n' \
-				"$label" "$run_id" "$conclusion" "$success_workflow" "$success_run_id" "$success_url"
-			if [ -n "$details_url" ]; then
-				printf '  Failed run URL: %s\n' "$details_url"
-			fi
-		done <"$superseded_contexts"
-		printf '\n'
-	fi
 
 	if [ ! -s "$active_failed_contexts" ]; then
 		printf 'No completed failed GitHub Checks were present when evidence was collected.\n'

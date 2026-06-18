@@ -417,7 +417,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'select((.headSha // "") == env.HEAD_SHA)' "failed-check evidence only appends current-head workflow runs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'select((.workflowName // "") == "Strix Security Scan" or (.workflowName // "") == "Strix")' "failed-check evidence only appends Strix workflow runs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" 'awk -F '"'"'\t'"'"' -v run_id="$run_id"' "failed-check evidence avoids duplicate workflow-run evidence when statusCheckRollup already includes the run"
-	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" '[[ ! "$run_id" =~ ^[0-9]+$ ]]' "failed-check evidence never supersedes status contexts that have no workflow run id"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" '[[ ! "$run_id" =~ ^[0-9]+$ ]]' "failed-check evidence no longer suppresses failed contexts as superseded"
 	assert_file_contains "$workflow_file" 'wait_for_peer_github_checks "$pending_checks_file"' "opencode approval gates approval on pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" 'OpenCode Agent could not approve because GitHub Checks were still pending before approval.' "opencode approval requests changes when peer checks remain pending"
 	assert_file_contains "$workflow_file" 'select((.status // "") != "COMPLETED")' "opencode approval treats incomplete check runs as approval blockers"
@@ -462,11 +462,12 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Create one OpenCode finding per Strix model vulnerability report" "failed-check evidence contract requires one finding per Strix model report"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "model name, title, severity, endpoint, and Code Locations/path:line evidence" "failed-check evidence collector names required Strix report fields"
 	assert_file_contains "$workflow_file" "If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed." "opencode review prompt forces active failed-check diagnosis"
-	assert_file_contains "$workflow_file" "Superseded failed checks are diagnostic history, not active blockers." "opencode review prompt does not request changes for superseded check history"
-	assert_file_contains "$workflow_file" "failed_check_evidence_has_active_failures" "opencode approval distinguishes active failed checks from superseded diagnostic history"
-	assert_file_contains "$workflow_file" "failed-check evidence showed only superseded failures; continuing approval" "opencode approval does not request changes when failed rollup entries are superseded by successful current-head evidence"
-	assert_file_contains "$workflow_file" "active_failed_checks=false" "opencode failed-outcome path does not treat superseded failed checks as active blockers"
-	assert_file_contains "$workflow_file" "preserving model REQUEST_CHANGES" "opencode request-changes path preserves source-backed model findings when failed checks are only superseded history"
+	assert_file_contains "$workflow_file" "A successful manual workflow_dispatch run is supplemental evidence only; it must not cancel or hide a failed PR statusCheckRollup context." "opencode review prompt forbids hiding failed PR rollup contexts behind manual evidence"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Superseded failed checks" "failed-check evidence must not remove failed PR rollup contexts as superseded"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "successful_workflow_run_contexts" "failed-check evidence must not compare manual successes to suppress active PR failures"
+	assert_file_not_contains "$workflow_file" "failed_check_evidence_has_active_failures" "opencode approval must treat collected failed rollup contexts as blockers"
+	assert_file_not_contains "$workflow_file" "failed-check evidence showed only superseded failures" "opencode approval must not continue approval after failed PR rollup contexts"
+	assert_file_not_contains "$workflow_file" "preserving model REQUEST_CHANGES" "opencode request-changes path must validate failed-check findings when failed rollup contexts exist"
 	assert_file_contains "$workflow_file" "include every model-reported vulnerability as a separate evidence-backed finding" "opencode review prompt requires all Strix model findings"
 	assert_file_contains "$workflow_file" "Multiple Strix model reports must not be collapsed" "opencode review prompt prevents collapsing multiple Strix model reports"
 	assert_file_contains "$workflow_file" "One Strix model vulnerability report requires one distinct finding" "opencode review prompt requires one finding per Strix model report"
@@ -930,6 +931,42 @@ EOF
 	assert_file_contains "$output_file" "frontend/next.config.ts:10" "fallback derives a concrete CSP hardening line"
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback still reports provider failure after vulnerability reports"
 	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not contradict preserved Strix report windows"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_failed_check_fallback_does_not_treat_no_report_summary_as_report() {
+	local tmp_dir
+	local evidence_file
+	local output_file
+	tmp_dir="$(mktemp -d)"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	openai.RateLimitError: Too many requests.
+strix	Run Strix (quick)	httpx.HTTPStatusError: Client error '401 Unauthorized' for url 'https://api.deepseek.com/beta/chat/completions'
+strix	Run Strix (quick)	litellm.BadRequestError: DeepseekException - {"error":{"message":"Authentication Fails, Your api key is invalid"}}
+strix	Run Strix (quick)	Configured model and fallback models were unavailable.
+```
+
+No Strix vulnerability report windows were detected in the failed log.
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$REPO_ROOT" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix provider quota blocked current-head security evidence" "fallback treats no-report summary as provider blocker"
+	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves direct DeepSeek endpoint failure evidence"
+	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves direct DeepSeek authentication failure evidence"
+	assert_file_contains "$output_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "fallback gives exact GitHub Models fallback list"
+	assert_file_not_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback does not invent vulnerability report windows from a no-report summary"
+	assert_file_not_contains "$output_file" "after vulnerability reports" "fallback does not contradict no-report evidence"
 
 	rm -rf "$tmp_dir"
 }
@@ -5562,6 +5599,8 @@ assert_opencode_review_gate_rejects_non_source_backed_findings
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
 assert_opencode_failed_check_fallback_emits_each_strix_report
+
+assert_opencode_failed_check_fallback_does_not_treat_no_report_summary_as_report
 
 assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape
 

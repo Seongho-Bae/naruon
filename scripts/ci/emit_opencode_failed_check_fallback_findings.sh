@@ -333,7 +333,7 @@ emit_strix_report_findings() {
 	local line
 	local source_detail
 
-	if ! grep -Fq "Strix vulnerability report window" "$strix_evidence_file"; then
+	if ! grep -Eq "^### Strix vulnerability report window\\b" "$strix_evidence_file"; then
 		return 0
 	fi
 
@@ -379,7 +379,7 @@ emit_strix_provider_failure_finding() {
 	fi
 
 	finding_index=$((finding_index + 1))
-	if grep -Fq "Strix vulnerability report window" "$strix_evidence_file"; then
+	if grep -Eq "^### Strix vulnerability report window\\b" "$strix_evidence_file"; then
 		printf '### %s. HIGH %s:%s - Strix provider signal left current-head security evidence incomplete\n' "$finding_index" "$path" "$line"
 		if [ -s "$unmapped_strix_reports_file" ]; then
 			printf -- '- Problem: Strix produced one or more vulnerability report windows that did not map to an existing repository file, then the failed log reported provider infrastructure/failure-signal output such as LLM CONNECTION FAILED, RateLimitError, budget-limit, "Below-threshold findings detected", "Unable to map Strix findings", or fallback provider signal. Unmapped reports: '
@@ -396,9 +396,15 @@ emit_strix_provider_failure_finding() {
 		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports, including unmapped/nonexistent Code Locations, so partial reports cannot be downgraded to approval or converted into hallucinated source fixes.\n\n'
 	else
 		printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
-		printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, budget-limit output for the DeepSeek fallbacks, and Configured model and fallback models were unavailable.\n'
-		printf -- '- Root cause: The configured GitHub Models primary/fallback provider capacity or budget was exhausted for this run; no Strix Vulnerability Report window was produced, so there is no application source line to patch from this evidence.\n'
-		printf -- '- Fix: Do not approve from this failed scan. Re-run Strix after GitHub Models quota recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep the configured fallback line at %s:%s aligned with the approved model list.\n' "$path" "$line"
+		if grep -Eq "api\\.deepseek\\.com|401 Unauthorized|Authentication Fails|DeepseekException" "$strix_evidence_file"; then
+			printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported `RateLimitError` / `Too many requests` for the primary `openai/gpt-5` attempt, then fallback attempts reached direct DeepSeek (`api.deepseek.com`) and failed with `401 Unauthorized` or `Authentication Fails`, ending with `Configured model and fallback models were unavailable`.\n'
+			printf -- '- Root cause: The fallback model names were not routed through the GitHub Models endpoint for this failed PR check, so a GitHub Models token was used against direct DeepSeek instead of `https://models.github.ai/inference`; no Strix Vulnerability Report window was produced.\n'
+			printf -- '- Fix: Do not approve from this failed scan. Keep %s:%s using the GitHub Models-qualified fallback list (`github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324`) and keep the Strix gate mapping those values to `openai/deepseek/...` for the GitHub Models API base, then rerun the failed PR Strix check.\n' "$path" "$line"
+		else
+			printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, provider/budget output for fallback models, and Configured model and fallback models were unavailable.\n'
+			printf -- '- Root cause: The configured GitHub Models primary/fallback provider capacity or provider route failed for this run; no Strix Vulnerability Report window was produced, so there is no application source line to patch from this evidence.\n'
+			printf -- '- Fix: Do not approve from this failed scan. Re-run Strix after GitHub Models capacity recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep the configured fallback line at %s:%s aligned with the approved model list.\n' "$path" "$line"
+		fi
 		printf -- '- Regression test: Keep the failed-check evidence collector preserving RateLimitError, budget-limit, provider infrastructure, and unavailable-model lines so OpenCode reviews can distinguish external provider blockers from code vulnerabilities.\n\n'
 	fi
 }
