@@ -309,12 +309,14 @@ emit_known_missing_string_finding() {
 		printf -- '- Root cause: The failed check is executing trusted-base workflow material, so this exact line must exist in the trusted workflow/test contract before the check can pass.\n'
 		printf -- '- Fix: Keep or add the current-head line at "%s:%s" so trusted-base Strix/OpenCode evidence contains "%s".\n' "$path" "$line" "$needle"
 		printf -- '- Regression test: Keep scripts/ci/test_strix_quick_gate.sh assertions covering this exact string.\n\n'
+		printf -- '- Suggested edit: ensure `%s:%s` contains the literal `%s`; if the line was removed from trusted-base material, restore it exactly before approving.\n\n' "$path" "$line" "$needle"
 	else
 		printf '### %s. HIGH unknown:1 - %s\n' "$finding_index" "$title"
 		printf -- '- Problem: Strix failed because the trusted self-test log reported missing "%s".\n' "$needle"
 		printf -- '- Root cause: No current-head line containing this exact string was found in the expected workflow/test files.\n'
 		printf -- '- Fix: Add the exact string "%s" to the relevant workflow or test contract line.\n' "$needle"
 		printf -- '- Regression test: Add a static assertion for this exact string.\n\n'
+		printf -- '- Suggested edit: add a concrete source line containing `%s` to the matching workflow or CI test file, then rerun Strix self-tests.\n\n' "$needle"
 	fi
 }
 
@@ -358,6 +360,7 @@ emit_strix_report_findings() {
 		printf -- '- Root cause: The failed Strix evidence contains a distinct model vulnerability report, so OpenCode must not collapse it into provider-quota or generic check-failure text.\n'
 		printf -- '- Fix: Inspect and patch %s:%s for this exact report before approval; apply the remediation described by Strix for "%s" and keep the review finding tied to this line.\n' "$path" "$line" "$title"
 		printf -- '- Regression test: Add or update coverage that exercises the reported endpoint/path and proves the %s finding cannot recur.\n\n' "${severity:-Strix}"
+		printf -- '- Suggested edit: change `%s:%s` for the `%s` report from model `%s`; preserve the exact endpoint `%s`, method `%s`, and Code Location evidence `%s` in the OpenCode review finding.\n\n' "$path" "$line" "$title" "$model" "${endpoint:-N/A}" "${method:-N/A}" "$source_detail"
 	done <"$reports_file"
 }
 
@@ -394,16 +397,19 @@ emit_strix_provider_failure_finding() {
 		printf -- '- Root cause: The scanner evidence is incomplete even after model reports were emitted; unmapped or provider-failed Strix reports are scanner evidence blockers, not source-backed code review findings. OpenCode must not anchor a report to an unrelated workflow line unless the report includes a mappable repository Code Location.\n'
 		printf -- '- Fix: Re-run Strix after GitHub Models capacity recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep %s:%s aligned with the approved fallback model list.\n' "$path" "$line"
 		printf -- '- Regression test: Keep failed-check evidence and validation covering provider-signal failures after vulnerability reports, including unmapped/nonexistent Code Locations, so partial reports cannot be downgraded to approval or converted into hallucinated source fixes.\n\n'
+		printf -- '- Suggested edit: do not change unrelated source lines for unmapped reports; first obtain a clean Strix rerun or a report with a repository Code Location, while keeping `%s:%s` on the approved GitHub Models fallback route.\n\n' "$path" "$line"
 	else
 		printf '### %s. HIGH %s:%s - Strix provider quota blocked current-head security evidence\n' "$finding_index" "$path" "$line"
 		if grep -Eq "api\\.deepseek\\.com|401 Unauthorized|Authentication Fails|DeepseekException" "$strix_evidence_file"; then
 			printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported `RateLimitError` / `Too many requests` for the primary `openai/gpt-5` attempt, then fallback attempts reached direct DeepSeek (`api.deepseek.com`) and failed with `401 Unauthorized` or `Authentication Fails`, ending with `Configured model and fallback models were unavailable`.\n'
 			printf -- '- Root cause: The fallback model names were not routed through the GitHub Models endpoint for this failed PR check, so a GitHub Models token was used against direct DeepSeek instead of `https://models.github.ai/inference`; no Strix Vulnerability Report window was produced.\n'
 			printf -- '- Fix: Do not approve from this failed scan. Keep %s:%s using the GitHub Models-qualified fallback list (`github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324`) and keep the Strix gate mapping those values to `openai/deepseek/...` for the GitHub Models API base, then rerun the failed PR Strix check.\n' "$path" "$line"
+			printf -- '- Suggested edit: `%s:%s` must use `STRIX_FALLBACK_MODELS: ${{ steps.gate.outputs.provider_mode == '\''github_models'\'' && '\''github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324'\'' || '\'''\'' }}` instead of unqualified `deepseek/...` values that route to `api.deepseek.com`.\n' "$path" "$line"
 		else
 			printf -- '- Problem: Strix failed before producing vulnerability reports. The failed log reported LLM CONNECTION FAILED, RateLimitError or Too many requests for the primary model, provider/budget output for fallback models, and Configured model and fallback models were unavailable.\n'
 			printf -- '- Root cause: The configured GitHub Models primary/fallback provider capacity or provider route failed for this run; no Strix Vulnerability Report window was produced, so there is no application source line to patch from this evidence.\n'
 			printf -- '- Fix: Do not approve from this failed scan. Re-run Strix after GitHub Models capacity recovers or run an explicitly configured manual provider evidence scan with valid credentials; keep the configured fallback line at %s:%s aligned with the approved model list.\n' "$path" "$line"
+			printf -- '- Suggested edit: keep `%s:%s` on the approved GitHub Models fallback list and rerun the current-head Strix check; there is no application source patch until Strix emits a vulnerability Code Location.\n' "$path" "$line"
 		fi
 		printf -- '- Regression test: Keep the failed-check evidence collector preserving RateLimitError, budget-limit, provider infrastructure, and unavailable-model lines so OpenCode reviews can distinguish external provider blockers from code vulnerabilities.\n\n'
 	fi
@@ -434,6 +440,7 @@ emit_strix_cancelled_without_log_finding() {
 	printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This is a workflow execution/queue state, not an application vulnerability finding, so OpenCode must not invent a source-code fix.\n'
 	printf -- '- Fix: Do not approve from this cancelled run. Re-run the current-head Strix Security Scan after stale runs complete or are cancelled, then review the resulting job log; keep the workflow concurrency line at %s:%s so stale runs do not silently replace current-head evidence.\n' "$path" "$line"
 	printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log so reviewers see that the blocker is missing scanner evidence.\n\n'
+	printf -- '- Suggested edit: preserve `%s:%s` with `cancel-in-progress: false`, cancel only superseded non-current-head runs when needed, and rerun current-head Strix until logs exist.\n\n' "$path" "$line"
 }
 
 strix_evidence_file="$(mktemp)"

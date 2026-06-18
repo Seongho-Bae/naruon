@@ -929,6 +929,7 @@ EOF
 	assert_file_contains "$output_file" "frontend/src/app/prompt-studio/page.tsx:29" "fallback maps second report to exact source line"
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Missing Content Security Policy in Next.js Frontend" "fallback includes report from second model"
 	assert_file_contains "$output_file" "frontend/next.config.ts:10" "fallback derives a concrete CSP hardening line"
+	assert_file_contains "$output_file" "Suggested edit: change \`frontend/next.config.ts:10\`" "fallback provides a concrete suggested edit for model reports"
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback still reports provider failure after vulnerability reports"
 	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not contradict preserved Strix report windows"
 
@@ -965,6 +966,7 @@ EOF
 	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves direct DeepSeek endpoint failure evidence"
 	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves direct DeepSeek authentication failure evidence"
 	assert_file_contains "$output_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "fallback gives exact GitHub Models fallback list"
+	assert_file_contains "$output_file" "Suggested edit: \`.github/workflows/strix.yml" "fallback gives a line-specific suggested edit for provider routing"
 	assert_file_not_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback does not invent vulnerability report windows from a no-report summary"
 	assert_file_not_contains "$output_file" "after vulnerability reports" "fallback does not contradict no-report evidence"
 
@@ -1040,6 +1042,7 @@ EOF
 	assert_file_contains "$output_file" "Endpoint: /api/me. Method: GET" "fallback preserves pg-erd-cloud endpoint and method"
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Frontend Security Issues: XSS, Hardcoded Credentials, and Insecure Data Handling" "fallback preserves wrapped pg-erd-cloud frontend title"
 	assert_file_contains "$output_file" "frontend/next.config.ts:3" "fallback anchors locationless frontend report to a concrete frontend hardening line"
+	assert_file_contains "$output_file" "Suggested edit: change \`frontend/next.config.ts:3\`" "fallback provides pg-erd-cloud frontend suggested edit"
 	assert_file_contains "$output_file" "Unable to map Strix findings" "fallback preserves failed Strix mapping signal"
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback reports incomplete Strix evidence after model findings"
 	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not erase model findings after provider signals"
@@ -1102,6 +1105,7 @@ EOF
 	assert_file_contains "$output_file" "Strix report from openai/deepseek/deepseek-r1-0528: SQL Injection Vulnerability in Database Script" "fallback includes split-location Strix report"
 	assert_file_contains "$output_file" "backend/alembic/versions/0002_provider_writeback_retry_queue.py:43" "fallback maps split Code Locations path to exact line"
 	assert_file_contains "$output_file" "Code location evidence: backend/alembic/versions/0002_provider_writeback_retry_queue.py:43" "fallback preserves split Code Locations evidence"
+	assert_file_contains "$output_file" "Suggested edit: change \`backend/alembic/versions/0002_provider_writeback_retry_queue.py:43\`" "fallback gives suggested edit for split Code Locations"
 	assert_file_not_contains "$output_file" "Strix report did not include a mappable Code Location" "fallback does not misclassify split Code Locations as unmapped"
 
 	rm -rf "$tmp_dir"
