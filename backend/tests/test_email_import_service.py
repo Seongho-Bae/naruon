@@ -25,6 +25,9 @@ from services.email_import_service import (
         ("/some/path/file.zip", "file.zip"),
         ("  spaced.zip  ", "spaced.zip"),
         ("/", "upload"),
+        (".", "upload"),
+        ("..", "upload"),
+        ("/tmp/..", "upload"),
     ]
 )
 def test_safe_upload_filename(input_name, expected):
@@ -98,6 +101,7 @@ async def test_generate_import_embeddings_logs_non_secret_provider_fallback(capl
 
     assert embeddings == [[0.0] * EMBEDDING_DIMENSION]
     assert "Email import embedding generation failed" in caplog.text
+    assert "retrying imported content item by item" in caplog.text
     assert "error_type=EmbeddingGenerationError" in caplog.text
     assert "text_count=1" in caplog.text
     assert "secret-provider-token" not in caplog.text

@@ -87,6 +87,8 @@ class EmailImportResult:
 
 def _safe_upload_filename(filename: str) -> str:
     name = Path(filename or "upload").name.strip()
+    if name in {".", ".."}:
+        return "upload"
     return name or "upload"
 
 
@@ -335,8 +337,8 @@ async def _generate_import_embeddings(
         )
     except (EmbeddingGenerationError, ValueError) as exc:
         logger.warning(
-            "Email import embedding generation failed; falling back to zero vectors "
-            "for failed imported content after item-level retry: "
+            "Email import embedding generation failed; retrying imported content "
+            "item by item before zero-vector fallback: "
             "error_type=%s text_count=%s",
             type(exc).__name__,
             len(texts),
