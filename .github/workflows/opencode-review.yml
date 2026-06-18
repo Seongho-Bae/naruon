@@ -1364,7 +1364,12 @@ jobs:
             local runs_json
 
             runs_json="$(mktemp)"
-            if ! gh api -X GET "repos/${GH_REPOSITORY}/actions/workflows/strix.yml/runs?per_page=50" >"$runs_json"; then
+            if ! env HEAD_SHA="$HEAD_SHA" gh run list \
+              --repo "$GH_REPOSITORY" \
+              --workflow strix.yml \
+              --commit "$HEAD_SHA" \
+              --limit 200 \
+              --json databaseId,workflowName,status,conclusion,url,event,headSha >"$runs_json"; then
               rm -f "$runs_json"
               return 1
             fi
@@ -1372,46 +1377,46 @@ jobs:
             case "$mode" in
               failed)
                 jq -r --arg head_sha "$HEAD_SHA" '
-                  (.workflow_runs // []) as $runs
+                  (. // []) as $runs
                   | ([
                       $runs[]
-                      | select((.head_sha // "") == $head_sha)
+                      | select((.headSha // .head_sha // "") == $head_sha)
                       | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") == "completed")
                       | select((.conclusion // "" | ascii_downcase) == "success")
-                      | (.id // 0)
+                      | (.databaseId // .id // 0)
                     ] | max // 0) as $newest_success_run_id
                   | $runs
                   | map(
-                      select((.head_sha // "") == $head_sha)
+                      select((.headSha // .head_sha // "") == $head_sha)
                       | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") == "completed")
                       | select((.conclusion // "" | ascii_upcase) as $c | ["FAILURE","TIMED_OUT","ACTION_REQUIRED","CANCELLED","STARTUP_FAILURE"] | index($c))
                       | select(((.event // "") == "workflow_dispatch" and (.conclusion // "" | ascii_downcase) == "cancelled") | not)
-                      | select((.id // 0) > $newest_success_run_id)
-                      | "- Strix Security Scan/strix workflow run: " + (.conclusion // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
+                      | select((.databaseId // .id // 0) > $newest_success_run_id)
+                      | "- Strix Security Scan/strix workflow run: " + (.conclusion // "unknown") + (if (.url // .html_url // "") != "" then " (" + (.url // .html_url) + ")" else "" end)
                     )
                   | .[]
                 ' "$runs_json" >"$output_file"
                 ;;
               pending)
                 jq -r --arg head_sha "$HEAD_SHA" '
-                  (.workflow_runs // []) as $runs
+                  (. // []) as $runs
                   | ([
                       $runs[]
-                      | select((.head_sha // "") == $head_sha)
+                      | select((.headSha // .head_sha // "") == $head_sha)
                       | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") == "completed")
                       | select((.conclusion // "" | ascii_downcase) == "success")
-                      | (.id // 0)
+                      | (.databaseId // .id // 0)
                     ] | max // 0) as $newest_success_run_id
                   | $runs
                   | map(
-                      select((.head_sha // "") == $head_sha)
+                      select((.headSha // .head_sha // "") == $head_sha)
                       | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") != "completed")
-                      | select((.id // 0) > $newest_success_run_id)
-                      | "- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.html_url // "") != "" then " (" + .html_url + ")" else "" end)
+                      | select((.databaseId // .id // 0) > $newest_success_run_id)
+                      | "- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.url // .html_url // "") != "" then " (" + (.url // .html_url) + ")" else "" end)
                     )
                   | .[]
                 ' "$runs_json" >"$output_file"
@@ -1429,14 +1434,12 @@ jobs:
             gh api -X GET "repos/${GH_REPOSITORY}/commits/${HEAD_SHA}/status" \
               --jq '
                 (.statuses // [])
-                | map(
-                    select((.context // "") == "strix")
-                    | select((.state // "" | ascii_downcase) == "success")
-                    | select((.description // "") | contains("Manual workflow_dispatch Strix evidence passed"))
-                    | select((.target_url // "") | test("/actions/runs/[0-9]+"))
-                  )
+                | map(select((.context // "") == "strix"))
                 | sort_by(.created_at // "")
                 | last // empty
+                | select((.state // "" | ascii_downcase) == "success")
+                | select((.description // "") | contains("Manual workflow_dispatch Strix evidence passed"))
+                | select((.target_url // "") | test("/actions/runs/[0-9]+"))
                 | .target_url
               '
           }

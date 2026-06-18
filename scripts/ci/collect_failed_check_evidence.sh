@@ -317,11 +317,18 @@ if ! gh api -X GET "repos/${GH_REPOSITORY}/commits/${HEAD_SHA}/status" \
 	--jq '
 		(.statuses // [])
 		| map(
+			select((.context // "") != "")
+			| . + {__context_key: (.context // "" | ascii_downcase)}
+		)
+		| sort_by(.__context_key, (.created_at // ""))
+		| group_by(.__context_key)
+		| map(last)
+		| map(
 			select((.state // "" | ascii_downcase) == "success")
 			| select((.description // "") | contains("Manual workflow_dispatch Strix evidence passed"))
 			| select((.target_url // "") | test("/actions/runs/[0-9]+"))
 			| [
-				(.context // ""),
+				(.__context_key // ""),
 				(.target_url // ""),
 				(.description // "")
 			]
