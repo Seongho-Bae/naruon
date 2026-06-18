@@ -30,6 +30,7 @@ LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.base.digest="${OCI_IMAGE_BASE_DIGEST}" \
       org.opencontainers.image.base.name="${OCI_IMAGE_BASE_NAME}"
 
+RUN mkdir -p /app
 WORKDIR /app
 
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
