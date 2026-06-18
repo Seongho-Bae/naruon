@@ -219,6 +219,10 @@
   roles. Platform-wide operators require the OIDC/JWKS path or a separately
   audited support flow so compromise of an HMAC session secret cannot mint
   platform administrator claims.
+- `AUTH_SESSION_HMAC_SECRET` validation must enforce byte length, distinct
+  character count, character-class diversity, placeholder/public-fixture
+  rejection, and an explicit estimated entropy floor; keep runtime-secret tests
+  aligned so long low-entropy strings cannot pass by length alone.
 - Reply-wait task escalation must reuse the server-authoritative pending reply
   path, create or update source-linked `reply_sla` ticket tasks by opaque task
   id, and sanitize generated task titles from email subjects before persistence.
