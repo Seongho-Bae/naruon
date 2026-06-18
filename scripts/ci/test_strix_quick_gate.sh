@@ -332,6 +332,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
 	assert_file_contains "$workflow_file" "general-purpose and meticulous" "opencode review prompt requires a general-purpose meticulous review"
 	assert_file_contains "$workflow_file" "actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups" "opencode review prompt directs the agent to use all configured MCP sources"
+	assert_file_contains "$workflow_file" "Structural exploration is mandatory for every PR" "opencode review prompt makes structural exploration mandatory"
+	assert_file_contains "$workflow_file" "Never state that structural exploration, structural analysis, or structural review is not required or unnecessary" "opencode review prompt forbids dismissing structural review"
+	assert_file_contains "$workflow_file" "If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve" "opencode review prompt blocks approval without structural evidence"
 	assert_file_contains "$workflow_file" "Inspect changed files and focused hunks directly when MCP evidence is insufficient." "opencode review allows focused direct source inspection when MCP evidence is insufficient"
 	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
 	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
@@ -610,6 +613,51 @@ EOF
 	assert_file_contains "$comment_body_file" '"result":"APPROVE"' "opencode publish sanitizer keeps normalized approval JSON"
 	assert_file_not_contains "$comment_body_file" "But that is not meticulous." "opencode publish sanitizer drops trailing model prose"
 	assert_file_not_contains "$comment_body_file" "We should request changes." "opencode publish sanitizer drops contradictory trailing model prose"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_missing_structural_exploration_approval() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found, but structural exploration was not possible.","summary":"This docs-only PR does not require structural review and the evidence was truncated.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects approvals that admit missing structural exploration"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for missing structural exploration"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found, but structural exploration was not possible.","summary":"This docs-only PR does not require structural review and the evidence was truncated.","findings":[]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects approvals that admit missing structural exploration"
+	assert_equals "NO_CONCLUSION" "$gate_result" "missing structural exploration rejection gate result"
 
 	rm -rf "$tmp_dir"
 }
@@ -5416,6 +5464,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback
 assert_opencode_review_normalizer_accepts_transcript_json
 
 assert_opencode_review_publish_body_discards_trailing_model_prose
+
+assert_opencode_review_gate_rejects_missing_structural_exploration_approval
 
 assert_opencode_review_gate_rejects_line_zero_findings
 
