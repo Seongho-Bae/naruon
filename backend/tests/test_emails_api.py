@@ -16,10 +16,10 @@ from pydantic import SecretStr
 
 from api.auth import get_auth_context as auth_get_auth_context
 from core.config import settings
-from db.models import Email
+from db.models import Email, LLMProvider
 from main import app
 import datetime
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from services.email_service import generate_email_fingerprint
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -80,14 +80,21 @@ class MockTenantConfig:
         self.smtp_port = 587
         self.smtp_username = "testuser"
         self.smtp_password = None
+        self.openai_api_key = None
 
 
 _DEFAULT_TENANT_CONFIG = object()
 
 
 class MockSession:
-    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
+    def __init__(
+        self,
+        items,
+        tenant_config=_DEFAULT_TENANT_CONFIG,
+        llm_providers=None,
+    ):
         self.items = items
+        self.llm_providers = list(llm_providers or [])
         self.tenant_config = (
             MockTenantConfig()
             if tenant_config is _DEFAULT_TENANT_CONFIG
@@ -108,14 +115,20 @@ class MockSession:
             def scalar_one_or_none(self):
                 return self.rows[0] if self.rows else None
 
-        if "tenant_configs" in compiled_query_text(query):
+            def first(self):
+                return self.rows[0] if self.rows else None
+
+        query_text = compiled_query_text(query)
+        if "llm_providers" in query_text:
+            return MockResult(self.llm_providers)
+        if "tenant_configs" in query_text:
             rows = [] if self.tenant_config is None else [self.tenant_config]
             return MockResult(rows)
         return MockResult(self.items)
 
     async def scalar(self, query):
         query_text = compiled_query_text(query)
-        if "count(" in query_text and "emails" in query_text:
+        if "count(" in query_text and "email_records" in query_text:
             return len(self.items)
         return self.tenant_config
 
@@ -172,8 +185,17 @@ class ScalarQueryCapturingSession(MockSession):
 
 
 class ImportRecordingSession(MockSession):
-    def __init__(self, items, tenant_config=_DEFAULT_TENANT_CONFIG):
-        super().__init__(items, tenant_config=tenant_config)
+    def __init__(
+        self,
+        items,
+        tenant_config=_DEFAULT_TENANT_CONFIG,
+        llm_providers=None,
+    ):
+        super().__init__(
+            items,
+            tenant_config=tenant_config,
+            llm_providers=llm_providers,
+        )
         self.added = []
         self.queries = []
         self.query_params = []
@@ -221,8 +243,8 @@ def assert_query_is_owner_scoped(query) -> None:
     query_text = compiled_query_text(query)
     query_params = compiled_query_params(query)
 
-    assert "emails.user_id = :user_id_1" in query_text
-    assert "emails.organization_id = :organization_id_1" in query_text
+    assert "email_records.user_id = :user_id_1" in query_text
+    assert "email_records.organization_id = :organization_id_1" in query_text
     assert query_params["user_id_1"] == "testuser"
     assert query_params["organization_id_1"] == "org-acme"
 
@@ -268,6 +290,19 @@ def _zip_with_eml_bytes(filename: str, eml_bytes: bytes) -> bytes:
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr(filename, eml_bytes)
+    return buffer.getvalue()
+
+
+def _mbox_with_eml_bytes(*messages: bytes) -> bytes:
+    buffer = io.BytesIO()
+    for index, message in enumerate(messages, start=1):
+        buffer.write(
+            f"From sender-{index}@example.com Thu Jun 11 10:00:00 2026\n".encode(
+                "ascii"
+            )
+        )
+        buffer.write(message.replace(b"\r\n", b"\n"))
+        buffer.write(b"\n")
     return buffer.getvalue()
 
 
@@ -866,6 +901,110 @@ async def test_import_email_files_extracts_eml_from_zip(client: AsyncClient):
     assert session.added[0].message_id == "zip-source@example.com"
 
 
+@pytest.mark.asyncio
+async def test_import_email_files_extracts_eml_from_mbox(client: AsyncClient):
+    from db.session import get_db
+
+    session = ImportRecordingSession([])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        response = await client.post(
+            "/api/emails/import-files",
+            files=[
+                (
+                    "files",
+                    (
+                        "mailbox-export.mbox",
+                        _mbox_with_eml_bytes(
+                            _sample_eml_bytes(
+                                message_id="<mbox-source@example.com>",
+                                subject="MBOX source",
+                            )
+                        ),
+                        "application/mbox",
+                    ),
+                )
+            ],
+            headers={"X-Organization-Id": "org-acme"},
+        )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["imported_count"] == 1
+    assert data["failed_count"] == 0
+    assert data["items"][0]["filename"] == "mailbox-export.mbox:message_000001.eml"
+    assert session.added[0].message_id == "mbox-source@example.com"
+    assert session.added[0].subject == "MBOX source"
+
+
+@pytest.mark.asyncio
+async def test_import_email_files_uses_active_provider_embedding_model(
+    client: AsyncClient,
+):
+    from db.session import get_db
+
+    provider = LLMProvider(
+        id=31,
+        organization_id="org-acme",
+        name="Local Gemma4",
+        provider_type="ollama",
+        base_url="http://ollama:11434/v1",
+        model_identifier="gemma4:e2b-it-qat",
+        embedding_model="embeddinggemma",
+        is_active=True,
+    )
+    session = ImportRecordingSession([], llm_providers=[provider])
+    previous_db_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = lambda: session
+    try:
+        with patch(
+            "services.email_import_service.generate_embeddings",
+            new_callable=AsyncMock,
+        ) as mock_generate_embeddings:
+            mock_generate_embeddings.return_value = [[0.25] * 768]
+            response = await client.post(
+                "/api/emails/import-files",
+                files=[
+                    (
+                        "files",
+                        (
+                            "provider-source.eml",
+                            _sample_eml_bytes(
+                                message_id="<provider-source@example.com>",
+                                body="Provider embedding body",
+                            ),
+                            "message/rfc822",
+                        ),
+                    )
+                ],
+                headers={"X-Organization-Id": "org-acme"},
+            )
+    finally:
+        if previous_db_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_db_override
+
+    assert response.status_code == 200
+    assert response.json()["imported_count"] == 1
+    mock_generate_embeddings.assert_awaited_once_with(
+        ["Provider embedding body"],
+        "local-provider",
+        base_url="http://ollama:11434/v1",
+        model="embeddinggemma",
+    )
+    added_email = session.added[0]
+    assert len(added_email.embedding) == 1536
+    assert added_email.embedding[:768] == [0.25] * 768
+    assert added_email.embedding[768:] == [0.0] * 768
+
+
 def test_import_email_files_accepts_signed_bearer_session(db_session):
     from db.session import get_db
 
@@ -939,7 +1078,13 @@ async def test_import_email_files_duplicate_query_is_owner_scoped(
 
     assert response.status_code == 200
     assert session.queries
-    assert_query_is_owner_scoped(session.queries[0])
+    email_queries = [
+        query
+        for query in session.queries
+        if "from email_records" in compiled_query_text(query)
+    ]
+    assert email_queries
+    assert_query_is_owner_scoped(email_queries[0])
 
 
 @pytest.mark.asyncio
@@ -1712,11 +1857,11 @@ def test_email_owner_filters():
     assert len(filters1) == 2
     assert (
         str(filters1[0].compile(compile_kwargs={"literal_binds": True}))
-        == "emails.user_id = 'user-123'"
+        == "email_records.user_id = 'user-123'"
     )
     assert (
         str(filters1[1].compile(compile_kwargs={"literal_binds": True}))
-        == "emails.organization_id = 'org-456'"
+        == "email_records.organization_id = 'org-456'"
     )
 
     # Test with None organization_id
@@ -1732,9 +1877,9 @@ def test_email_owner_filters():
     assert len(filters2) == 2
     assert (
         str(filters2[0].compile(compile_kwargs={"literal_binds": True}))
-        == "emails.user_id = 'user-123'"
+        == "email_records.user_id = 'user-123'"
     )
     assert (
         str(filters2[1].compile(compile_kwargs={"literal_binds": True}))
-        == "emails.organization_id IS NULL"
+        == "email_records.organization_id IS NULL"
     )

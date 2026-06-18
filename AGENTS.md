@@ -183,6 +183,15 @@
   responses must sanitize stored subject/body/snippet/address display fields
   before returning them. Preserve message/thread identifiers separately from
   UI-safe subject/body, address, and attachment display text.
+- Email file import must keep frontend file pickers, `/api/emails/import-files`,
+  and `services.email_import_service` in the same source-backed contract:
+  supported uploads are `.eml`, `.zip`, and `.mbox`; imported email and
+  attachment vectors must use the active organization LLM provider's
+  `embedding_model` and `base_url` when configured, fit provider vector
+  dimensions to storage, and fall back to zero vectors only when provider
+  embedding generation is unavailable. Tests must cover the local
+  `embeddinggemma` path so Data workspace imports do not silently bypass the
+  selected embedding model.
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the

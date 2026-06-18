@@ -164,11 +164,11 @@ def test_search_reply_counts_group_by_coalesced_thread_key():
     subquery = build_reply_counts_subquery()
     sql = str(subquery.select()).lower()
 
-    assert "coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
-    assert "nullif(btrim(btrim(emails.message_id)" in sql
-    assert "coalesce(emails.thread_id, emails.message_id)" not in sql
-    assert "count(emails.id)" in sql
-    assert "group by coalesce(nullif(btrim(btrim(emails.thread_id)" in sql
+    assert "coalesce(nullif(btrim(btrim(email_records.thread_id)" in sql
+    assert "nullif(btrim(btrim(email_records.message_id)" in sql
+    assert "coalesce(email_records.thread_id, email_records.message_id)" not in sql
+    assert "count(email_records.id)" in sql
+    assert "group by coalesce(nullif(btrim(btrim(email_records.thread_id)" in sql
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
@@ -191,8 +191,8 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
 
     assert response.status_code == 200
     query_text = str(session.statements[-1]).lower()
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
+    assert "email_records.user_id" in query_text
+    assert "email_records.organization_id" in query_text
     query_params = session.statements[-1].compile().params
     user_scope_params = {
         value for key, value in query_params.items() if key.startswith("user_id")

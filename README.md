@@ -252,6 +252,10 @@ runner. Raise those values only with explicit build evidence.
   `Reply-To` headers.
 - Importers persist the canonical service-assigned `thread_id`; they do not
   recompute their own thread IDs.
+- Signed email file imports accept `.eml`, `.zip`, and `.mbox` uploads through
+  `/api/emails/import-files`; imported email and attachment vectors use the
+  active organization embedding model such as local `embeddinggemma` when an
+  LLM provider is configured.
 - Duplicate ZIP/forward candidates can be checked through signed
   `/api/emails/unique-thread-intent`. The intent uses normalized Message-ID and
   strong body fingerprint matches, returns canonical thread metadata, and does
