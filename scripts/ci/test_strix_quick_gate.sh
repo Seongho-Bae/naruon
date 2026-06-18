@@ -1736,22 +1736,27 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	github-models-fallback-provider-signal-tries-next)
+	github-models-fallback-provider-signal-tries-next | github-models-fallback-vulnerability-before-next-success-blocks)
 		case "${STRIX_LLM:-}" in
 		openai/gpt-5)
 			echo "LLM CONNECTION FAILED"
 			echo "Could not establish connection to the language model."
-			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			echo "Error: litellm.RateLimitError: RateLimitError: OpenAIException - Too many requests."
 			exit 1
 			;;
 		openai/deepseek/deepseek-r1-0528)
-			mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities"
-			cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities/vuln-0001.md" <<'EOS'
+			if [ "${FAKE_STRIX_SCENARIO:?}" = "github-models-fallback-vulnerability-before-next-success-blocks" ]; then
+				mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities"
+				cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-provider-signal/vulnerabilities/vuln-0001.md" <<'EOS'
 Severity: CRITICAL
 Location 1:
 sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/service/impl/SysUserServiceImpl.java:5
 EOS
-			echo "Warning: fallback model emitted provider failure-signal output"
+			else
+				echo "LLM CONNECTION FAILED"
+				echo "Could not establish connection to the language model."
+				echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: deepseek-r1-0528"
+			fi
 			exit 2
 			;;
 		openai/deepseek/deepseek-v3-0324)
@@ -6128,6 +6133,36 @@ run_gate_case "github-models-fallback-provider-signal-tries-next" \
 	"3" \
 	"openai/gpt-5|openai/deepseek/deepseek-r1-0528|openai/deepseek/deepseek-v3-0324" \
 	"https://models.github.ai/inference|https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
+	"1"
+
+run_gate_case "github-models-fallback-vulnerability-before-next-success-blocks" \
+	"openai/gpt-5" \
+	"" \
+	"1" \
+	"Strix model reported threshold vulnerabilities before fallback success; failing closed so every model-reported vulnerability is reviewed." \
+	"2" \
+	"openai/gpt-5|openai/deepseek/deepseek-r1-0528" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference" \
 	"" \

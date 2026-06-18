@@ -2666,6 +2666,47 @@ has_only_below_threshold_vulnerabilities() {
 	return 1
 }
 
+has_blocking_vulnerability_reports() {
+	local threshold_rank
+	threshold_rank="$(severity_rank "$STRIX_FAIL_ON_MIN_SEVERITY")"
+
+	local run_dir vulnerabilities_dir vuln_file rank
+	for run_dir in "$STRIX_REPORTS_DIR"/*; do
+		if [ ! -d "$run_dir" ] || [ -L "$run_dir" ]; then
+			continue
+		fi
+		if is_preexisting_report_dir "$run_dir"; then
+			continue
+		fi
+
+		vulnerabilities_dir="$run_dir/vulnerabilities"
+		if [ ! -d "$vulnerabilities_dir" ] || [ -L "$vulnerabilities_dir" ]; then
+			continue
+		fi
+
+		for vuln_file in "$vulnerabilities_dir"/*.md; do
+			if [ ! -f "$vuln_file" ] || [ -L "$vuln_file" ]; then
+				continue
+			fi
+
+			rank="$(extract_first_severity_rank "$vuln_file")"
+			if [ "$rank" -lt 0 ] || [ "$rank" -ge "$threshold_rank" ]; then
+				return 0
+			fi
+		done
+	done
+
+	return 1
+}
+
+fail_reported_vulnerabilities_before_fallback_success() {
+	if has_blocking_vulnerability_reports; then
+		echo "Strix model reported threshold vulnerabilities before fallback success; failing closed so every model-reported vulnerability is reviewed." >&2
+		return 0
+	fi
+	return 1
+}
+
 has_any_reported_severity_markers() {
 	local run_dir
 	for run_dir in "$STRIX_REPORTS_DIR"/*; do
@@ -3076,6 +3117,10 @@ run_current_target_scan() {
 		;;
 	esac
 
+	if [ "$strict_primary_provider_fallback" -eq 1 ] && fail_reported_vulnerabilities_before_fallback_success; then
+		return 1
+	fi
+
 	if ! is_model_retryable_error "$PRIMARY_MODEL"; then
 		echo "Strix quick scan failed with a non-recoverable error." >&2
 		return 1
@@ -3108,6 +3153,9 @@ run_current_target_scan() {
 		run_strix_with_transient_retry "$candidate" || fallback_scan_rc=$?
 		local fallback_elapsed=$(( $(date +%s) - fallback_start_epoch ))
 		if [ "$fallback_scan_rc" -eq 0 ]; then
+			if fail_reported_vulnerabilities_before_fallback_success; then
+				return 1
+			fi
 			echo "Strix quick scan succeeded with fallback model '$candidate' in ${fallback_elapsed}s." >&2
 			return 0
 		fi
@@ -3135,6 +3183,10 @@ run_current_target_scan() {
 			return 1
 			;;
 		esac
+
+		if fail_reported_vulnerabilities_before_fallback_success; then
+			return 1
+		fi
 
 		if [ "$strict_fallback_provider_signal" -eq 1 ]; then
 			if is_model_retryable_error "$candidate"; then
