@@ -176,6 +176,8 @@ extract_strix_reports() {
 				location => $location,
 			};
 			($report_model, $title, $severity, $endpoint, $method, $target, $location) = ("", "", "", "", "", "", "");
+			$in_code_locations = 0;
+			$expect_location_value = 0;
 		}
 		sub finish_window {
 			finish_report();
@@ -223,6 +225,12 @@ extract_strix_reports() {
 				$continuation_field = "";
 			}
 		}
+		if (($in_code_locations || $expect_location_value) &&
+			$line =~ m{((?:/workspace/[^[:space:]]+|/tmp/strix-pr-scope\.[^[:space:]]+|backend/[^[:space:]]+|frontend/[^[:space:]]+|\.github/[^[:space:]]+|scripts/[^[:space:]]+):[0-9]+(?:-[0-9]+)?)}i) {
+			$location ||= $1;
+			$expect_location_value = 0;
+			next;
+		}
 		if ($line =~ /^Title:[[:space:]]+(.+)/i) {
 			finish_report();
 			$title = $1;
@@ -249,8 +257,18 @@ extract_strix_reports() {
 			$continuation_field = "target";
 			next;
 		}
+		if ($line =~ /^Code Locations\b/i) {
+			$in_code_locations = 1;
+			next;
+		}
+		if ($line =~ /^Location[[:space:]]+[0-9]+:[[:space:]]*$/i) {
+			$expect_location_value = 1;
+			next;
+		}
 		if ($line =~ /(?:Code[[:space:]]+)?Location(?:s)?(?:[[:space:]]+[0-9]+)?[[:space:]]*:[[:space:]]*(.+?:[0-9]+(?:-[0-9]+)?)/i) {
 			$location ||= $1;
+			$in_code_locations = 0;
+			$expect_location_value = 0;
 			next;
 		}
 		END {

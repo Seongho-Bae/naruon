@@ -1010,6 +1010,66 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_failed_check_fallback_handles_split_code_location_lines() {
+	local tmp_dir
+	local fixture_repo
+	local evidence_file
+	local output_file
+	local migration_file
+	tmp_dir="$(mktemp -d)"
+	fixture_repo="$tmp_dir/repo"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+	migration_file="$fixture_repo/backend/alembic/versions/0002_provider_writeback_retry_queue.py"
+
+	mkdir -p "$(dirname "$migration_file")"
+	for line_number in $(seq 1 80); do
+		if [ "$line_number" -eq 43 ]; then
+			printf '\tlegacy_index_execution_placeholder(statement)\n'
+		else
+			printf '# migration fixture line %s\n' "$line_number"
+		fi
+	done >"$migration_file"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+### Failed log signal summary
+
+```text
+strix	Run Strix (quick)	Strix fallback model 'github_models/deepseek/deepseek-r1-0528' emitted provider infrastructure or failure-signal output; trying next configured fallback if available.
+strix	Run Strix (quick)	Strix reported zero vulnerabilities before provider infrastructure failure; failing closed because provider infrastructure failures are not clean scan evidence.
+```
+
+### Strix vulnerability report window 1
+
+│  Vulnerability Report                                                        │
+│  Title: SQL Injection Vulnerability in Database Script                       │
+│  Severity: HIGH                                                              │
+│  Target:                                                                     │
+│  /workspace/strix-pr-scope.e0AHf4/backend/alembic/versions/0002_provider_wr  │
+│  iteback_retry_queue.py                                                      │
+│  Code Locations                                                              │
+│                                                                              │
+│    Location 1:                                                               │
+│  backend/alembic/versions/0002_provider_writeback_retry_queue.py:43          │
+│    Vulnerable code location                                                  │
+│    legacy_index_execution_placeholder(statement)                             │
+│  Model openai/deepseek/deepseek-r1-0528                                      │
+│  Vulnerabilities 1                                                           │
+EOF
+
+	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$fixture_repo" >"$output_file"
+
+	assert_file_contains "$output_file" "Strix report from openai/deepseek/deepseek-r1-0528: SQL Injection Vulnerability in Database Script" "fallback includes split-location Strix report"
+	assert_file_contains "$output_file" "backend/alembic/versions/0002_provider_writeback_retry_queue.py:43" "fallback maps split Code Locations path to exact line"
+	assert_file_contains "$output_file" "Code location evidence: backend/alembic/versions/0002_provider_writeback_retry_queue.py:43" "fallback preserves split Code Locations evidence"
+	assert_file_not_contains "$output_file" "Strix report did not include a mappable Code Location" "fallback does not misclassify split Code Locations as unmapped"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_opencode_failed_check_fallback_does_not_anchor_unmapped_strix_reports_to_workflow() {
 	local tmp_dir
 	local fixture_repo
@@ -5504,6 +5564,8 @@ assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 assert_opencode_failed_check_fallback_emits_each_strix_report
 
 assert_opencode_failed_check_fallback_handles_pg_erd_cloud_strix_log_shape
+
+assert_opencode_failed_check_fallback_handles_split_code_location_lines
 
 assert_opencode_failed_check_fallback_does_not_anchor_unmapped_strix_reports_to_workflow
 
