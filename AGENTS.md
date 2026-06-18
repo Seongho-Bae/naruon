@@ -55,12 +55,14 @@
   do not carry stale timeout-signal strings. Keep PR-scope process budgets large
   enough for Strix to finalize reports after the scanner emits completion
   events; a wrapper timeout after `vulnerability_count: 0` is still failed
-  evidence, not a pass. PR evidence must present the full PR-head scope to
-  Strix in one scanner invocation; do not split changed files into separate
-  scanner runs because that breaks Strix's required whole-context contract. Keep
-  architecture docs and reusable Strix gate tests aligned with this rule so
-  stale Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or
-  generic-key examples cannot re-enter copied workflow guidance.
+  evidence, not a pass. PR evidence must present the full scannable changed-file
+  set from the PR head, plus allowlisted trusted context files, to Strix in one
+  scanner invocation; do not split changed files into separate scanner runs or
+  copy the entire PR-head repository tree by default because either breaks
+  Strix's required whole-context and bounded-input contract. Keep architecture
+  docs and reusable Strix gate tests aligned with this rule so stale
+  Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or generic-key
+  examples cannot re-enter copied workflow guidance.
 - HMAC fallback sessions are local/control-plane compatibility credentials, not
   authoritative workspace-membership evidence. Sensitive tenant security posture
   surfaces must require OIDC/JWKS-backed membership or an explicit dependency

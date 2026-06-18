@@ -170,6 +170,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$GATE_SCRIPT" 'child_env["YARN_ENABLE_SCRIPTS"] = "false"' "strix gate child process disables yarn lifecycle scripts"
 	assert_file_contains "$GATE_SCRIPT" 'child_env["PYTHONWARNINGS"] = "ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' "strix gate child env narrowly filters the known third-party Pydantic serializer warning"
 	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" =~ ^backend/.+\.py$ ]]' "strix gate detects nested backend Python files for PR-scoped import context"
+	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" == scripts/ci/test_*.sh || "$normalized_changed_file" == scripts/ci/*_test.sh ]]' "strix gate excludes large CI test harness scripts from model scan input"
+	assert_file_contains "$GATE_SCRIPT" "Materialized PR-head changed-file scope for Strix scan" "strix gate avoids copying the full PR head tree into privileged scan targets by default"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
@@ -3342,18 +3344,25 @@ if [ -x "$scoped_file" ]; then
 	exit 64
 fi
 unchanged_file="$target_path/${FAKE_STRIX_EXPECTED_UNCHANGED_FILE:?}"
-if [ ! -f "$unchanged_file" ]; then
-	echo "Error: full PR head scoped file missing ($unchanged_file)" >&2
-	exit 65
-fi
-if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_UNCHANGED_CONTENT:?}" "$unchanged_file"; then
-	echo "Error: full PR head scoped file did not contain head-tree content" >&2
-	cat -- "$unchanged_file" >&2
-	exit 66
-fi
-if [ -x "$unchanged_file" ]; then
-	echo "Error: full PR head scoped file must be copied as non-executable data" >&2
-	exit 67
+if [ "${FAKE_STRIX_EXPECT_FULL_HEAD_SCOPE:-0}" = "1" ]; then
+	if [ ! -f "$unchanged_file" ]; then
+		echo "Error: full PR head scoped file missing ($unchanged_file)" >&2
+		exit 65
+	fi
+	if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_UNCHANGED_CONTENT:?}" "$unchanged_file"; then
+		echo "Error: full PR head scoped file did not contain head-tree content" >&2
+		cat -- "$unchanged_file" >&2
+		exit 66
+	fi
+	if [ -x "$unchanged_file" ]; then
+		echo "Error: full PR head scoped file must be copied as non-executable data" >&2
+		exit 67
+	fi
+else
+	if [ -e "$unchanged_file" ]; then
+		echo "Error: unrelated PR head file leaked into bounded scope ($unchanged_file)" >&2
+		exit 68
+	fi
 fi
 echo "scan ok with PR head content"
 EOF
@@ -3413,6 +3422,7 @@ EOF
 			FAKE_STRIX_UNEXPECTED_BASE_CONTENT="$unexpected_base_content" \
 			FAKE_STRIX_EXPECTED_UNCHANGED_FILE="docs/full-scope-context.md" \
 			FAKE_STRIX_EXPECTED_UNCHANGED_CONTENT="HEAD_FULL_SCOPE_CONTEXT_SHOULD_BE_SCANNED" \
+			FAKE_STRIX_EXPECT_FULL_HEAD_SCOPE="$disable_pr_scoping" \
 			STRIX_DISABLE_PR_SCOPING="$disable_pr_scoping" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
@@ -3550,7 +3560,7 @@ EOS
 	rm -rf "$tmp_dir"
 }
 
-run_pull_request_target_full_head_context_scope_case() {
+run_pull_request_target_bounded_head_context_scope_case() {
 	local tmp_dir
 	tmp_dir="$(mktemp -d)"
 	local bin_dir="$tmp_dir/bin"
@@ -3587,21 +3597,12 @@ if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTENT:?}" "$changed_file"; then
 	cat -- "$changed_file" >&2
 	exit 65
 fi
-if ! grep -Fq -- "${FAKE_STRIX_EXPECTED_HEAD_CONTEXT:?}" "$context_file"; then
-	echo "Error: full PR head backend context content missing" >&2
+if [ -e "$context_file" ]; then
+	echo "Error: unrelated PR head backend context leaked into bounded scope" >&2
 	cat -- "$context_file" >&2
 	exit 66
 fi
-if [ -x "$context_file" ]; then
-	echo "Error: full PR head backend context file must be copied as non-executable data" >&2
-	exit 67
-fi
-if grep -Fq -- "${FAKE_STRIX_UNEXPECTED_BASE_CONTEXT:?}" "$context_file"; then
-	echo "Error: full PR head context leaked trusted base content" >&2
-	cat -- "$context_file" >&2
-	exit 68
-fi
-echo "scan ok with full PR head backend context"
+echo "scan ok with bounded PR head backend context"
 EOF
 	chmod +x "$fake_strix"
 	printf '%s' 'gemini/test-model' >"$strix_llm_file"
@@ -3657,8 +3658,8 @@ EOF
 	local rc=$?
 	set -e
 
-	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-full-head-scope exit code"
-	assert_file_contains "$output_log" "scan ok with full PR head backend context" "case=pull-request-target-backend-context-uses-full-head-scope output"
+	assert_equals "0" "$rc" "case=pull-request-target-backend-context-uses-bounded-head-scope exit code"
+	assert_file_contains "$output_log" "scan ok with bounded PR head backend context" "case=pull-request-target-backend-context-uses-bounded-head-scope output"
 
 	rm -rf "$tmp_dir"
 }
@@ -4105,68 +4106,68 @@ if [ ! -f "$target_path/backend/services/threading_service.py" ]; then
 	echo "Error: threading backend context missing from frontend email PR scope" >&2
 	exit 78
 fi
-if ! grep -Fq -- 'HEAD_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/emails.py"; then
-	echo "Error: email API backend context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/emails.py"; then
+	echo "Error: email API trusted backend context did not use base content" >&2
 	cat -- "$target_path/backend/api/emails.py" >&2
 	exit 79
 fi
-if grep -Fq -- 'BASE_EMAIL_API_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/emails.py"; then
-	echo "Error: email API backend context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_EMAIL_API_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/emails.py"; then
+	echo "Error: email API trusted backend context leaked PR-head content" >&2
 	cat -- "$target_path/backend/api/emails.py" >&2
 	exit 87
 fi
-if ! grep -Fq -- 'HEAD_AUTH_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/auth.py"; then
-	echo "Error: auth backend context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_AUTH_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/api/auth.py"; then
+	echo "Error: auth trusted backend context did not use base content" >&2
 	cat -- "$target_path/backend/api/auth.py" >&2
 	exit 82
 fi
-if grep -Fq -- 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/auth.py"; then
-	echo "Error: auth backend context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/api/auth.py"; then
+	echo "Error: auth trusted backend context leaked PR-head content" >&2
 	cat -- "$target_path/backend/api/auth.py" >&2
 	exit 88
 fi
-if ! grep -Fq -- 'HEAD_EMAIL_MODEL_SHOULD_BE_SCANNED' "$target_path/backend/db/models.py"; then
-	echo "Error: email model backend context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_EMAIL_MODEL_SHOULD_BE_SCANNED' "$target_path/backend/db/models.py"; then
+	echo "Error: email model trusted backend context did not use base content" >&2
 	cat -- "$target_path/backend/db/models.py" >&2
 	exit 83
 fi
-if grep -Fq -- 'BASE_EMAIL_MODEL_SHOULD_NOT_BE_SCANNED' "$target_path/backend/db/models.py"; then
-	echo "Error: email model backend context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_EMAIL_MODEL_SHOULD_NOT_BE_SCANNED' "$target_path/backend/db/models.py"; then
+	echo "Error: email model trusted backend context leaked PR-head content" >&2
 	cat -- "$target_path/backend/db/models.py" >&2
 	exit 89
 fi
-if ! grep -Fq -- 'HEAD_CONFIG_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/core/config.py"; then
-	echo "Error: backend config context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_CONFIG_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/core/config.py"; then
+	echo "Error: backend config trusted context did not use base content" >&2
 	cat -- "$target_path/backend/core/config.py" >&2
 	exit 84
 fi
-if grep -Fq -- 'BASE_CONFIG_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/core/config.py"; then
-	echo "Error: backend config context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_CONFIG_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/core/config.py"; then
+	echo "Error: backend config trusted context leaked PR-head content" >&2
 	cat -- "$target_path/backend/core/config.py" >&2
 	exit 90
 fi
-if ! grep -Fq -- 'HEAD_ROUTER_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/main.py"; then
-	echo "Error: backend router registration context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_ROUTER_CONTEXT_SHOULD_BE_SCANNED' "$target_path/backend/main.py"; then
+	echo "Error: backend router registration trusted context did not use base content" >&2
 	cat -- "$target_path/backend/main.py" >&2
 	exit 85
 fi
-if grep -Fq -- 'BASE_ROUTER_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/main.py"; then
-	echo "Error: backend router registration context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_ROUTER_CONTEXT_SHOULD_NOT_BE_SCANNED' "$target_path/backend/main.py"; then
+	echo "Error: backend router registration trusted context leaked PR-head content" >&2
 	cat -- "$target_path/backend/main.py" >&2
 	exit 91
 fi
-if ! grep -Fq -- 'HEAD_THREADING_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
-	echo "Error: threading backend context did not use PR head content" >&2
+if ! grep -Fq -- 'BASE_THREADING_SERVICE_SHOULD_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
+	echo "Error: threading trusted backend context did not use base content" >&2
 	cat -- "$target_path/backend/services/threading_service.py" >&2
 	exit 86
 fi
-if grep -Fq -- 'BASE_THREADING_SERVICE_SHOULD_NOT_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
-	echo "Error: threading backend context leaked trusted base content" >&2
+if grep -Fq -- 'HEAD_THREADING_SERVICE_SHOULD_NOT_BE_SCANNED' "$target_path/backend/services/threading_service.py"; then
+	echo "Error: threading trusted backend context leaked PR-head content" >&2
 	cat -- "$target_path/backend/services/threading_service.py" >&2
 	exit 92
 fi
 
-echo "scan ok with frontend email backend authorization context"
+echo "scan ok with frontend email trusted backend authorization context"
 EOF
 	chmod +x "$fake_strix"
 	printf '%s' 'gemini/test-model' >"$strix_llm_file"
@@ -4179,12 +4180,12 @@ EOF
 		git config user.email 'strix-test@example.invalid'
 		mkdir -p "$(dirname -- "$changed_file")" backend/api backend/core backend/db backend/services
 		printf '%s\n' 'BASE_FRONTEND_EMAIL_FLOW_SHOULD_NOT_BE_SCANNED' >"$changed_file"
-		printf '%s\n' 'BASE_EMAIL_API_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
-		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
-		printf '%s\n' 'BASE_CONFIG_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/core/config.py
-		printf '%s\n' 'BASE_EMAIL_MODEL_SHOULD_NOT_BE_SCANNED' >backend/db/models.py
-		printf '%s\n' 'BASE_ROUTER_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/main.py
-		printf '%s\n' 'BASE_THREADING_SERVICE_SHOULD_NOT_BE_SCANNED' >backend/services/threading_service.py
+		printf '%s\n' 'BASE_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' >backend/api/emails.py
+		printf '%s\n' 'BASE_AUTH_CONTEXT_SHOULD_BE_SCANNED' >backend/api/auth.py
+		printf '%s\n' 'BASE_CONFIG_CONTEXT_SHOULD_BE_SCANNED' >backend/core/config.py
+		printf '%s\n' 'BASE_EMAIL_MODEL_SHOULD_BE_SCANNED' >backend/db/models.py
+		printf '%s\n' 'BASE_ROUTER_CONTEXT_SHOULD_BE_SCANNED' >backend/main.py
+		printf '%s\n' 'BASE_THREADING_SERVICE_SHOULD_BE_SCANNED' >backend/services/threading_service.py
 		git add .
 		git commit -qm 'base commit'
 	)
@@ -4193,12 +4194,12 @@ EOF
 	(
 	cd "$repo_root_dir"
 	printf '%s\n' 'HEAD_FRONTEND_EMAIL_FLOW_SHOULD_BE_SCANNED' >"$changed_file"
-	printf '%s\n' 'HEAD_EMAIL_API_CONTEXT_SHOULD_BE_SCANNED' >backend/api/emails.py
-	printf '%s\n' 'HEAD_AUTH_CONTEXT_SHOULD_BE_SCANNED' >backend/api/auth.py
-	printf '%s\n' 'HEAD_CONFIG_CONTEXT_SHOULD_BE_SCANNED' >backend/core/config.py
-	printf '%s\n' 'HEAD_EMAIL_MODEL_SHOULD_BE_SCANNED' >backend/db/models.py
-	printf '%s\n' 'HEAD_ROUTER_CONTEXT_SHOULD_BE_SCANNED' >backend/main.py
-	printf '%s\n' 'HEAD_THREADING_SERVICE_SHOULD_BE_SCANNED' >backend/services/threading_service.py
+	printf '%s\n' 'HEAD_EMAIL_API_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/api/emails.py
+	printf '%s\n' 'HEAD_AUTH_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/api/auth.py
+	printf '%s\n' 'HEAD_CONFIG_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/core/config.py
+	printf '%s\n' 'HEAD_EMAIL_MODEL_SHOULD_NOT_BE_SCANNED' >backend/db/models.py
+	printf '%s\n' 'HEAD_ROUTER_CONTEXT_SHOULD_NOT_BE_SCANNED' >backend/main.py
+	printf '%s\n' 'HEAD_THREADING_SERVICE_SHOULD_NOT_BE_SCANNED' >backend/services/threading_service.py
 	git add .
 	git commit -qm 'head commit'
 	)
@@ -4228,7 +4229,7 @@ EOF
 	set -e
 
 	assert_equals "0" "$rc" "case=$case_name exit code"
-	assert_file_contains "$output_log" "scan ok with frontend email backend authorization context" "case=$case_name output"
+	assert_file_contains "$output_log" "scan ok with frontend email trusted backend authorization context" "case=$case_name output"
 
 	rm -rf "$tmp_dir"
 }
@@ -4335,11 +4336,11 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case() {
 	local fake_git_fail_command="$5"
 	local disable_pr_scoping="${6-0}"
 	local expected_exit="1"
-	if [ "$fake_git_fail_command" = "ls-tree" ] || [ "$fake_git_fail_command" = "cat-file" ] || [ "$fake_git_fail_command" = "diff" ] || [ "$disable_pr_scoping" = "1" ]; then
+	if [ "$fake_git_fail_command" = "show" ] || [ "$fake_git_fail_command" = "cat-file" ] || [ "$fake_git_fail_command" = "diff" ] || [ "$disable_pr_scoping" = "1" ]; then
 		expected_exit="2"
 	fi
 	local expected_message="pull request changed file could not be read from PR head; failing closed"
-	if [ "$fake_git_fail_command" = "cat-file" ]; then
+	if [ "$disable_pr_scoping" = "1" ] && [ "$fake_git_fail_command" = "cat-file" ]; then
 		expected_message="pull request head blob could not be copied; failing closed"
 	fi
 	if [ "$fake_git_fail_command" = "diff" ]; then
@@ -5714,7 +5715,7 @@ run_pull_request_target_head_scope_case \
 	"HEAD_NESTED_CONTENT_SHOULD_BE_SCANNED" \
 	"1"
 
-run_pull_request_target_full_head_context_scope_case
+run_pull_request_target_bounded_head_context_scope_case
 
 run_pull_request_target_changed_context_scope_uses_pr_head_case
 run_pull_request_target_changed_backend_context_scope_case
@@ -5739,14 +5740,14 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"src/new_module.py" \
 	"__ABSENT__" \
 	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
-	"cat-file"
+	"show"
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-modified-file-pr-head-blob-read-failure" \
 	"src/existing.py" \
 	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_HEAD_READ_FAILURE" \
 	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
-	"cat-file"
+	"show"
 
 run_pull_request_target_irregular_head_entry_fails_closed_case \
 	"pull-request-target-symlink-head-entry-fails-closed" \
@@ -5769,7 +5770,8 @@ run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"src/existing.py" \
 	"BASE_CONTENT_MUST_NOT_BE_USED_AFTER_HEAD_LOOKUP_FAILURE" \
 	"HEAD_CONTENT_SHOULD_NOT_BECOME_PARTIAL_SCAN_INPUT" \
-	"ls-tree"
+	"ls-tree" \
+	"1"
 
 run_pull_request_target_aborts_on_pr_head_blob_failure_case \
 	"pull-request-target-changed-file-list-diff-failure" \
