@@ -1106,9 +1106,10 @@ jobs:
             {
               printf '## Pull request overview\n\n'
               printf 'OpenCode reviewed the current-head bounded evidence and requested changes before merge.\n\n'
-              printf '%s\n\n' "$summary"
               printf '## Findings\n\n'
               printf '%s\n\n' "$findings"
+              printf '## Summary\n\n'
+              printf '%s\n\n' "$summary"
               printf -- '- Result: REQUEST_CHANGES\n'
               printf -- '- Reason: %s\n\n' "$reason"
               printf -- "- Head SHA: \`%s\`\n" "$HEAD_SHA"
@@ -1923,11 +1924,13 @@ jobs:
                 "" \
                 "OpenCode reviewed the current-head bounded evidence and found no blocking issues." \
                 "" \
-                "$summary" \
-                "" \
                 "## Findings" \
                 "" \
                 "No blocking findings." \
+                "" \
+                "## Summary" \
+                "" \
+                "$summary" \
                 "" \
                 "- Result: APPROVE" \
                 "- Reason: ${reason}" \

@@ -502,6 +502,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "source_file.is_file()" "opencode approval gate requires finding paths to exist"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "removed_line not in source_line_set" "opencode approval gate rejects suggested diffs that remove code absent from the cited file"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "--check-structural-approval" "opencode approval gate delegates structural approval rejection to the normalizer"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "structural exploration was not possible" "opencode approval gate does not duplicate structural failure phrases"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check review validator rejects unrelated speculative findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_report_model_markers" "failed-check review validator extracts model markers from Strix vulnerability report windows"
@@ -698,6 +700,20 @@ EOF
 
 	assert_equals "4" "$rc" "opencode approval gate rejects approvals that admit missing structural exploration"
 	assert_equals "NO_CONCLUSION" "$gate_result" "missing structural exploration rejection gate result"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after structural exploration of changed files.","summary":"CodeGraph evidence was insufficient for one generated artifact, but local inspection covered the changed workflow, scripts, and tests.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize-valid.out" 2>"$tmp_dir/normalize-valid.err"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "opencode normalizer accepts approvals that mention limited evidence after structural inspection"
 
 	rm -rf "$tmp_dir"
 }
