@@ -20,6 +20,7 @@ from db.models import Email, LLMProvider
 from main import app
 import datetime
 from unittest.mock import AsyncMock, patch
+from services.embedding import STORAGE_EMBEDDING_DIMENSION
 from services.email_service import generate_email_fingerprint
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -804,7 +805,7 @@ async def test_import_email_files_persists_signed_scoped_eml_upload(
     assert added_email.subject == "Quarter plan"
     assert added_email.body == "Body text"
     assert added_email.fingerprint
-    assert len(added_email.embedding) == 1536
+    assert len(added_email.embedding) == STORAGE_EMBEDDING_DIMENSION
 
 
 @pytest.mark.asyncio
@@ -1000,7 +1001,7 @@ async def test_import_email_files_uses_active_provider_embedding_model(
         model="embeddinggemma",
     )
     added_email = session.added[0]
-    assert len(added_email.embedding) == 1536
+    assert len(added_email.embedding) == STORAGE_EMBEDDING_DIMENSION
     assert added_email.embedding[:768] == [0.25] * 768
     assert added_email.embedding[768:] == [0.0] * 768
 

@@ -1371,7 +1371,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-deepseek-v3|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-deepseek-v3|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds|github-models-meta-prefix-with-api-base-succeeds|github-models-mistral-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -1382,7 +1382,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/openai/gpt-5.4|openai/meta/test-github-model|openai/mistral-ai/test-github-model)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -8197,6 +8197,28 @@ run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"scan ok" \
 	"1" \
 	"openai/gpt-5" \
+	"https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference"
+
+run_gate_case "github-models-meta-prefix-with-api-base-succeeds" \
+	"openai/meta/test-github-model" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/meta/test-github-model" \
+	"https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference"
+
+run_gate_case "github-models-mistral-prefix-with-api-base-succeeds" \
+	"openai/mistral-ai/test-github-model" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/mistral-ai/test-github-model" \
 	"https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference"
