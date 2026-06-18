@@ -82,7 +82,9 @@ assert_workflow_uses_are_sha_pinned() {
 assert_strix_pr_scope_includes_deployment_context() {
 	assert_file_contains "$GATE_SCRIPT" "needs_deployment_context=0" "strix gate tracks deployment-context scoped PRs"
 	assert_file_contains "$GATE_SCRIPT" ".github/workflows/* | Dockerfile | frontend/Dockerfile | frontend/next.config.ts | docker-compose*.yml | render.yaml" "strix gate recognizes deployment and CI files"
+	assert_file_contains "$GATE_SCRIPT" "Dockerfile | */Dockerfile | Containerfile | */Containerfile | Makefile | */Makefile" "strix gate treats extensionless deployment files as source files"
 	assert_file_contains "$GATE_SCRIPT" "backend/scripts/docker_entrypoint.sh" "strix gate includes the combined Docker image entrypoint with deployment context"
+	assert_file_contains "$GATE_SCRIPT" "backend/api/auth.py" "strix gate includes backend auth context for deployment scans"
 	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
 	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
@@ -2548,6 +2550,15 @@ EOS
 		echo "Penetration test failed: baseline critical finding with absolute target"
 		exit 1
 		;;
+	pr-baseline-critical-extensionless-dockerfile-target)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-dockerfile/vulnerabilities"
+		cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-dockerfile/vulnerabilities/vuln-0001.md" <<'EOS'
+**Severity:** CRITICAL
+**Target:** File: /workspace/smart-crawling-server/Dockerfile
+EOS
+		echo "Penetration test failed: baseline critical finding with extensionless Dockerfile target"
+		exit 1
+		;;
 	pr-baseline-critical-subdir-target)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-baseline-subdir/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-baseline-subdir/vulnerabilities/vuln-0001.md" <<'EOS'
@@ -3035,8 +3046,8 @@ EOS
 		echo 'async def assign_thread_id(*args, **kwargs): return "thread"' >"$repo_root_dir/backend/services/threading_service.py"
 		echo 'async def send_email(*args, **kwargs): return None' >"$repo_root_dir/backend/services/email_client.py"
 		echo 'pytest==0' >"$repo_root_dir/backend/requirements.txt"
-	elif [ "$scenario" = "pr-deployment-scope-entrypoint-context" ]; then
-		mkdir -p "$repo_root_dir/.github/workflows" "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
+	elif [ "$scenario" = "pr-deployment-scope-entrypoint-context" ] || [ "$scenario" = "pr-baseline-critical-extensionless-dockerfile-target" ]; then
+		mkdir -p "$repo_root_dir/.github/workflows" "$repo_root_dir/backend/api" "$repo_root_dir/backend/core" "$repo_root_dir/backend/scripts" "$repo_root_dir/frontend"
 		echo 'name: OpenCode Review' >"$repo_root_dir/.github/workflows/opencode-review.yml"
 		cat >"$repo_root_dir/Dockerfile" <<'EOS'
 FROM python:3.11-slim AS backend-runtime
@@ -3050,6 +3061,9 @@ EOS
 #!/usr/bin/env bash
 echo "Starting backend (uvicorn :8000)"
 EOS
+		echo 'router = object()' >"$repo_root_dir/backend/api/auth.py"
+		echo 'class Settings: pass' >"$repo_root_dir/backend/core/config.py"
+		echo 'app = object()' >"$repo_root_dir/backend/main.py"
 		touch "$repo_root_dir/frontend/Dockerfile"
 		echo '{"scripts":{"start":"next start"}}' >"$repo_root_dir/frontend/package.json"
 		touch "$repo_root_dir/frontend/next.config.ts"
@@ -7283,6 +7297,27 @@ run_gate_case "pr-baseline-critical-absolute-target" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-baseline-critical-extensionless-dockerfile-target" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Strix findings are limited to unchanged files in this pull request; allowing pipeline continuation." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	".github/workflows/opencode-review.yml"
 
 run_gate_case "pr-baseline-critical-subdir-target" \
 	"openai/gpt-4o-mini" \
