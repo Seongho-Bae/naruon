@@ -38,6 +38,10 @@
 **Learning:** When users click a "clear search" icon button to empty an input field, screen readers and keyboard navigation can lose their place in the DOM structure.
 **Action:** Always capture a `useRef` to the `<Input>` and explicitly call `ref.current?.focus()` inside the clear button's `onClick` handler to preserve interaction flow.
 
+## 2026-06-16 - Internal tool form accessibility and visual feedback
+**Learning:** Internal tool forms can miss basic accessibility attributes like stable IDs, linked labels, and clear async feedback on submit buttons. Without those details, screen readers lose form context and users get weak confirmation during long-running actions.
+**Action:** Verify internal form inputs use explicit `label htmlFor`/`id` pairs, decorative icons are `aria-hidden`, and async buttons expose disabled loading states with visible spinner feedback.
+
 ## 2026-06-19 - Global search clear button without native WebKit controls
 **Learning:** Header-level global search should use the same custom clear-button pattern as the Search page: `type="text"`, `inputMode="search"`, and `role="searchbox"` avoid native WebKit clear controls while preserving search semantics.
 **Action:** Keep custom clear buttons in the same wrapper as the search input, label the clear action as `검색어 지우기`, and refocus the input after clearing.

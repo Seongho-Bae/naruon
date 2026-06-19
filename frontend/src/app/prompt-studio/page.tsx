@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Play, Save, Code } from 'lucide-react';
+import { Play, Save, Code, Loader2 } from 'lucide-react';
 
 export default function PromptStudioPage() {
   const [formData, setFormData] = useState({
@@ -55,7 +55,7 @@ export default function PromptStudioPage() {
     <div className="p-8 max-w-4xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-black text-foreground flex items-center gap-2 mb-2">
-          <Code className="w-6 h-6 text-primary" />
+          <Code className="w-6 h-6 text-primary" aria-hidden="true" />
           Prompt Studio
         </h1>
         <p className="text-muted-foreground text-sm">프롬프트를 작성, 테스트, 저장하세요.</p>
@@ -64,21 +64,33 @@ export default function PromptStudioPage() {
       <div className="space-y-4">
         {error && <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg border border-red-100">{error}</div>}
         
-        <Input 
-          placeholder="프롬프트 이름" 
-          value={formData.title} 
-          onChange={e => setFormData({ ...formData, title: e.target.value })} 
-        />
-        <Input 
-          placeholder="설명" 
-          value={formData.description} 
-          onChange={e => setFormData({ ...formData, description: e.target.value })} 
-        />
-        <Textarea 
-          className="min-h-[200px] font-mono text-sm"
-          value={formData.content} 
-          onChange={e => setFormData({ ...formData, content: e.target.value })} 
-        />
+        <div className="space-y-1.5">
+          <label htmlFor="prompt-title" className="text-sm font-medium">프롬프트 이름</label>
+          <Input
+            id="prompt-title"
+            placeholder="프롬프트 이름"
+            value={formData.title}
+            onChange={e => setFormData({ ...formData, title: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="prompt-description" className="text-sm font-medium">설명</label>
+          <Input
+            id="prompt-description"
+            placeholder="설명"
+            value={formData.description}
+            onChange={e => setFormData({ ...formData, description: e.target.value })}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="prompt-content" className="text-sm font-medium">프롬프트 내용</label>
+          <Textarea
+            id="prompt-content"
+            className="min-h-[200px] font-mono text-sm"
+            value={formData.content}
+            onChange={e => setFormData({ ...formData, content: e.target.value })}
+          />
+        </div>
         <div className="flex items-center space-x-2">
           <Checkbox 
             id="is_shared" 
@@ -93,14 +105,16 @@ export default function PromptStudioPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-border pt-6">
         <div className="space-y-3">
-          <h3 className="font-bold text-sm">테스트 변수 입력</h3>
+          <label htmlFor="test-variable" className="font-bold text-sm block">테스트 변수 입력</label>
           <Textarea 
+            id="test-variable"
             placeholder="{{email}} 변수 값" 
             value={testVariable} 
             onChange={e => setTestVariable(e.target.value)} 
           />
           <Button onClick={handleTest} disabled={testing} className="w-full">
-            <Play className="w-4 h-4 mr-2" /> {testing ? '테스트 중...' : '실행 (Test)'}
+            {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <Play className="w-4 h-4 mr-2" aria-hidden="true" />}
+            {testing ? '테스트 중...' : '실행 (Test)'}
           </Button>
         </div>
         <div className="space-y-3">
@@ -109,7 +123,8 @@ export default function PromptStudioPage() {
             {testResult || '실행 결과가 여기에 표시됩니다.'}
           </div>
           <Button onClick={handleSave} disabled={saving} variant="secondary" className="w-full">
-            <Save className="w-4 h-4 mr-2" /> {saving ? '저장 중...' : '프롬프트 저장 (Save)'}
+            {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4 mr-2" aria-hidden="true" />}
+            {saving ? '저장 중...' : '프롬프트 저장 (Save)'}
           </Button>
         </div>
       </div>
