@@ -362,7 +362,9 @@ export function DashboardLayout({
               id="global-search-input"
               className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
               placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
-              type="search"
+              type="text"
+              inputMode="search"
+              role="searchbox"
             />
           </label>
           <section aria-label="Desktop startup preference" className="hidden shrink-0 items-center gap-1 rounded-2xl border border-border bg-background/80 p-1 shadow-sm lg:flex">

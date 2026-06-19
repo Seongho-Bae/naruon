@@ -56,6 +56,7 @@ describe("DashboardLayout", () => {
       'a[href="#main-content"]',
     );
     const logo = container.querySelector<HTMLImageElement>('img[alt="Naruon"]');
+    const globalSearch = container.querySelector<HTMLInputElement>('#global-search-input');
 
     expect(banner).not.toBeNull();
     expect(primaryNav?.textContent).toContain("홈");
@@ -82,6 +83,9 @@ describe("DashboardLayout", () => {
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
+    expect(globalSearch?.type).toBe("text");
+    expect(globalSearch?.inputMode).toBe("search");
+    expect(globalSearch?.getAttribute("role")).toBe("searchbox");
     expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
     expect(headerActionGroup?.className).not.toContain("xl:flex");
