@@ -122,7 +122,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
     assert 'python-version: ["3.14"]' in app_ci_workflow
     assert 'python-version: "3.14"' in bandit_workflow
-    assert 'python-version: "3.14"' in strix_workflow
+    assert 'python-version: "3.13"' in strix_workflow
     assert "Python 3.14 toolchain" in render_deployment
     assert "python:3.11" not in root_dockerfile
     assert "python:3.11" not in docker_publish_workflow
@@ -763,7 +763,7 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "provider_mode=github_models" in workflow
     assert "strix_llm:" in workflow
     assert "github.event.inputs.strix_llm || 'openai/gpt-5'" in workflow
-    assert 'python-version: "3.14"' in workflow
+    assert 'python-version: "3.13"' in workflow
     assert "secrets.STRIX_LLM ||" not in workflow
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow
