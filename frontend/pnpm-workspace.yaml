@@ -2,6 +2,17 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
 
+supportedArchitectures:
+  os:
+    - current
+    - linux
+  cpu:
+    - current
+    - arm64
+  libc:
+    - current
+    - glibc
+
 overrides:
   postcss: ^8.5.15
   undici: 7.28.0
