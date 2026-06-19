@@ -233,6 +233,59 @@ describe('AIHubPage', () => {
     await flushAsyncWork();
   });
 
+  it('disables the refresh action while a reload is pending', async () => {
+    const pendingFetches: Array<(response: Response) => void> = [];
+    const fetchMock = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          pendingFetches.push(resolve);
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<AIHubPage />);
+    });
+
+    await act(async () => {
+      pendingFetches.shift()?.(jsonResponse(aiHubSurface));
+    });
+    await flushAsyncWork();
+
+    let refreshButton = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('새로고침'),
+    ) as HTMLButtonElement | undefined;
+    expect(refreshButton).not.toBeUndefined();
+    expect(refreshButton?.disabled).toBe(false);
+    expect(refreshButton?.getAttribute('aria-busy')).toBe('false');
+
+    act(() => {
+      refreshButton?.click();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    refreshButton = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('새로고침 중'),
+    ) as HTMLButtonElement | undefined;
+    expect(refreshButton).not.toBeUndefined();
+    expect(refreshButton?.disabled).toBe(true);
+    expect(refreshButton?.getAttribute('aria-busy')).toBe('true');
+
+    await act(async () => {
+      pendingFetches.shift()?.(jsonResponse(aiHubSurface));
+    });
+    await flushAsyncWork();
+
+    refreshButton = Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes('새로고침'),
+    ) as HTMLButtonElement | undefined;
+    expect(refreshButton?.disabled).toBe(false);
+    expect(refreshButton?.getAttribute('aria-busy')).toBe('false');
+  });
+
   it('renders a retryable error state when the source surface fails', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ message: 'Internal Server Error' }, false)));

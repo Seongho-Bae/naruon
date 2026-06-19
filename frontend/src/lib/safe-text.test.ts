@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 
 import { toSafeReactText } from './safe-text';
@@ -43,5 +44,15 @@ describe('toSafeReactText', () => {
 
   it('does not use fallback for empty string', () => {
     expect(toSafeReactText('', 'fallback')).toBe('');
+  });
+
+  it('removes display-ambiguous control characters for arbitrary text', () => {
+    fc.assert(
+      fc.property(fc.string(), (value) => {
+        const safeText = toSafeReactText(value);
+
+        expect(safeText).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/);
+      }),
+    );
   });
 });
