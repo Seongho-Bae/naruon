@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   Bell,
   Briefcase,
@@ -23,7 +23,8 @@ import {
   MoreHorizontal,
   Settings,
   ShieldCheck,
-  UserCircle
+  UserCircle,
+  X
 } from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
@@ -273,6 +274,8 @@ export function DashboardLayout({
   const pathname = usePathname();
   const searchParams = useCurrentSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const globalSearchInputRef = useRef<HTMLInputElement>(null);
   const activeMobileView = useMobileWorkspaceView();
   const startupView = useWorkspaceStartupView();
 
@@ -355,16 +358,34 @@ export function DashboardLayout({
               <PrimaryNavLink key={item.href} {...item} />
             ))}
           </nav>
-          <label htmlFor="global-search-input" className="hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
+          <div className="relative hidden min-w-0 flex-1 items-center rounded-2xl border border-border bg-background/80 px-4 py-2 text-sm text-muted-foreground shadow-inner shadow-slate-950/[0.02] xl:flex">
+            <label htmlFor="global-search-input" className="sr-only">맥락 검색</label>
             <Search className="mr-2 size-4 text-primary" aria-hidden="true" />
-            <span className="sr-only">맥락 검색</span>
             <input
               id="global-search-input"
-              className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
+              ref={globalSearchInputRef}
+              className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground"
+              inputMode="search"
+              role="searchbox"
+              value={globalSearchQuery}
+              onChange={(event) => setGlobalSearchQuery(event.target.value)}
               placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
-              type="search"
+              type="text"
             />
-          </label>
+            {globalSearchQuery ? (
+              <button
+                type="button"
+                aria-label="검색어 지우기"
+                onClick={() => {
+                  setGlobalSearchQuery('');
+                  globalSearchInputRef.current?.focus();
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
           <section aria-label="Desktop startup preference" className="hidden shrink-0 items-center gap-1 rounded-2xl border border-border bg-background/80 p-1 shadow-sm lg:flex">
             <span className="px-2 text-[11px] font-black text-muted-foreground">시작 화면</span>
             {startupViewItems.map(({ label, view, description }) => {
