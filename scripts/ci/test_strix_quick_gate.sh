@@ -88,6 +88,7 @@ assert_strix_pr_scope_includes_deployment_context() {
 	assert_file_contains "$GATE_SCRIPT" "frontend/package-lock.json" "strix gate includes frontend dependency lock context"
 	assert_file_contains "$GATE_SCRIPT" "frontend/postcss.config.mjs" "strix gate includes frontend build config context"
 	assert_file_contains "$GATE_SCRIPT" "VERSION" "strix gate includes release version context for workflow scans"
+	assert_file_contains "$GATE_SCRIPT" "scripts/ci/test_*.sh" "strix gate excludes large CI self-test harnesses from PR scan targets"
 }
 
 assert_strix_workflow_pr_trigger_hardened() {
@@ -95,9 +96,13 @@ assert_strix_workflow_pr_trigger_hardened() {
 
 	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
-	assert_file_contains "$workflow_file" 'group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}' "strix workflow serializes scans per PR, manual PR evidence run, or branch for GitHub Models quota"
+	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.pull_request.number)" "strix workflow scopes concurrency to the active pull request"
+	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.inputs.pr_number)" "strix workflow scopes manual PR evidence concurrency to the requested pull request"
+	assert_file_contains "$workflow_file" "|| github.ref" "strix workflow scopes non-PR concurrency to the current ref"
 	assert_file_contains "$workflow_file" "cancel-in-progress: false" "strix workflow never cancels in-progress security evidence"
 	assert_file_contains "$workflow_file" "models: read" "strix workflow grants only the GitHub Models read permission needed for Strix"
+	assert_file_contains "$workflow_file" "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6" "strix workflow pins actions/setup-python"
+	assert_file_contains "$workflow_file" 'python-version: "3.14"' "strix workflow runs Python steps on Python 3.14"
 	assert_file_contains "$workflow_file" "Materialize trusted workspace" "strix workflow materializes trusted workspace"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE_SHA" "strix workflow pins trusted workspace SHA"
 	assert_file_contains "$workflow_file" "TRUSTED_WORKSPACE=\$trusted_workspace" "strix workflow exports a trusted workspace path"
@@ -174,6 +179,11 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" =~ ^backend/.+\.py$ ]]' "strix gate detects nested backend Python files for PR-scoped import context"
 	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" == scripts/ci/test_*.sh || "$normalized_changed_file" == scripts/ci/*_test.sh ]]' "strix gate excludes large CI test harness scripts from model scan input"
 	assert_file_contains "$GATE_SCRIPT" "Materialized PR-head changed-file scope for Strix scan" "strix gate avoids copying the full PR head tree into privileged scan targets by default"
+	assert_file_contains "$GATE_SCRIPT" "sanitize_known_strix_report_warnings" "strix gate sanitizes only known internal Strix report warnings"
+	assert_file_contains "$GATE_SCRIPT" "iter_report_logs" "strix gate enumerates report logs through a safe walker"
+	assert_file_contains "$GATE_SCRIPT" "os.walk(root, topdown=True, followlinks=False)" "strix gate does not recurse into symlinked report directories"
+	assert_file_not_contains "$GATE_SCRIPT" 'root.rglob("*.log")' "strix gate avoids recursive pathlib glob traversal for report logs"
+	assert_file_contains "$GATE_SCRIPT" "has_strix_report_failure_signal" "strix gate fails closed on warning-class Strix report artifacts"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
 	assert_file_contains "$workflow_file" "provider_mode=openai_direct" "strix workflow requires direct OpenAI GPT-5 credentials"
@@ -1496,7 +1506,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 		echo "scan ok with timeout disabled"
 		exit 0
 		;;
-	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-deepseek-v3|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds)
+	vertex-primary-notfound-fallback-success|github-models-fallback-success|github-models-fallback-success-deepseek-v3|github-models-fallback-requires-api-base|github-models-model-prefix-with-api-base-succeeds|github-models-meta-prefix-with-api-base-succeeds|github-models-mistral-prefix-with-api-base-succeeds)
 		case "${STRIX_LLM:-}" in
 		vertex_ai/missing-primary)
 			echo "Error: litellm.NotFoundError: Vertex_aiException - x"
@@ -1507,7 +1517,7 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			echo "scan ok with fallback"
 			exit 0
 			;;
-		openai/gpt-5|openai/openai/gpt-5.4)
+		openai/gpt-5|openai/openai/gpt-5.4|openai/meta/test-github-model|openai/mistral-ai/test-github-model)
 			echo "scan ok with GitHub Models fallback"
 			exit 0
 			;;
@@ -2376,6 +2386,29 @@ EOS
 		;;
 	provider-denied-success-signal)
 		echo "Denied: provider credentials were rejected"
+		exit 0
+		;;
+	report-known-internal-warning-sanitized)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-known-internal-warning"
+		cat >"$STRIX_REPORTS_DIR/fake-known-internal-warning/strix.log" <<'EOS'
+2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): internal agent coordination note
+2026-06-18 13:10:44.089 INFO    strix-pr-scope-example - strix.tools.finish.tool: finish_scan: completed scan with 0 vulnerability report(s)
+EOS
+		outside_report_dir="${FAKE_STRIX_OUTSIDE_REPORT_DIR:-$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report}"
+		mkdir -p "$outside_report_dir"
+		cat >"$outside_report_dir/strix.log" <<'EOS'
+2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): outside report should not be rewritten
+EOS
+		ln -s "$outside_report_dir" "$STRIX_REPORTS_DIR/fake-known-internal-warning/linked-outside"
+		echo "scan ok with sanitized internal Strix report notice"
+		exit 0
+		;;
+	report-unknown-warning-fails)
+		mkdir -p "$STRIX_REPORTS_DIR/fake-unknown-warning"
+		cat >"$STRIX_REPORTS_DIR/fake-unknown-warning/strix.log" <<'EOS'
+2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.provider: provider returned incomplete scan state
+EOS
+		echo "scan ok but unknown report warning remains"
 		exit 0
 		;;
 	bare-timeout-with-provider-marker)
@@ -3248,6 +3281,11 @@ EOS
 			UNRELATED_SECRET="should-not-forward"
 		)
 	fi
+	if [ "$scenario" = "report-known-internal-warning-sanitized" ]; then
+		env_cmd+=(
+			FAKE_STRIX_OUTSIDE_REPORT_DIR="$repo_root_dir/outside-strix-report"
+		)
+	fi
 	if [ "$min_fail_severity" = "__UNSET__" ]; then
 		local next_env_cmd=()
 		local env_pair
@@ -3399,6 +3437,21 @@ EOS
 			"$runtime_env_log" \
 			"LLM_TIMEOUT=90;STRIX_MEMORY_COMPRESSOR_TIMEOUT=10;STRIX_REASONING_EFFORT=minimal;STRIX_LLM_MAX_RETRIES=1;GEMINI_LOCATION=GLOBAL;PYTHONWARNINGS=ignore:Pydantic serializer warnings:UserWarning:pydantic.main;NPM_CONFIG_IGNORE_SCRIPTS=true;PNPM_CONFIG_IGNORE_SCRIPTS=true;YARN_ENABLE_SCRIPTS=false;UNRELATED_SECRET=<unset>" \
 			"scenario=$scenario runtime env forwarding"
+	fi
+
+	if [ "$scenario" = "report-known-internal-warning-sanitized" ]; then
+		assert_file_not_contains \
+			"$repo_root_dir/strix_runs/fake-known-internal-warning/strix.log" \
+			"produced non-lifecycle final output" \
+			"scenario=$scenario strips the known internal Strix warning from published artifacts"
+		assert_file_contains \
+			"$repo_root_dir/strix_runs/fake-known-internal-warning/strix.log" \
+			"finish_scan: completed scan with 0 vulnerability report(s)" \
+			"scenario=$scenario keeps non-warning Strix report evidence"
+		assert_file_contains \
+			"$repo_root_dir/outside-strix-report/strix.log" \
+			"outside report should not be rewritten" \
+			"scenario=$scenario does not rewrite logs through symlinked report directories"
 	fi
 
 	if [ "$scenario" = "pr-changed-scope-full-set" ]; then
@@ -6652,6 +6705,66 @@ run_gate_case "provider-warning-success-signal" \
 	"" \
 	"1"
 
+run_gate_case "report-known-internal-warning-sanitized" \
+	"vertex_ai/report-known-internal-warning-sanitized" \
+	"" \
+	"0" \
+	"Strix run succeeded for model 'vertex_ai/report-known-internal-warning-sanitized'" \
+	"1" \
+	"vertex_ai/report-known-internal-warning-sanitized" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"" \
+	"1"
+
+run_gate_case "report-unknown-warning-fails" \
+	"vertex_ai/report-unknown-warning-fails" \
+	"" \
+	"1" \
+	"Strix report artifacts emitted warning/fatal/denied/timeout output; failing closed." \
+	"1" \
+	"vertex_ai/report-unknown-warning-fails" \
+	"<unset>" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"" \
+	"1"
+
 run_gate_case "provider-denied-success-signal" \
 	"vertex_ai/provider-denied-success-signal" \
 	"" \
@@ -7385,6 +7498,27 @@ run_gate_case "pr-changed-scope-includes-ci-dependency" \
 	"0" \
 	"pull_request" \
 	"scripts/ci/strix_quick_gate.sh"
+
+run_gate_case "pr-ci-test-harness-only-skip" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"No scannable changed files in pull request; skipping Strix quick scan." \
+	"0" \
+	"" \
+	"" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	"scripts/ci/test_strix_quick_gate.sh"
 
 run_gate_case "pr-deployment-scope-entrypoint-context" \
 	"openai/gpt-4o-mini" \
@@ -8326,6 +8460,28 @@ run_gate_case "github-models-model-prefix-with-api-base-succeeds" \
 	"scan ok" \
 	"1" \
 	"openai/gpt-5" \
+	"https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference"
+
+run_gate_case "github-models-meta-prefix-with-api-base-succeeds" \
+	"openai/meta/test-github-model" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/meta/test-github-model" \
+	"https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference"
+
+run_gate_case "github-models-mistral-prefix-with-api-base-succeeds" \
+	"openai/mistral-ai/test-github-model" \
+	"" \
+	"0" \
+	"scan ok" \
+	"1" \
+	"openai/mistral-ai/test-github-model" \
 	"https://models.github.ai/inference" \
 	"openai" \
 	"https://models.github.ai/inference"

@@ -1,5 +1,5 @@
-import email
-from email import policy
+from email import message_from_binary_file, message_from_bytes, policy
+from email.message import Message
 from pathlib import Path
 import datetime
 from email.utils import formataddr, getaddresses
@@ -50,7 +50,7 @@ def _sanitize_address_display_text(text: str) -> str:
     return _sanitize_display_text(text)
 
 
-def _process_multipart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
+def _process_multipart_body(msg: Message) -> tuple[str, str, list[dict]]:
     plain_body = ""
     html_body = ""
     attachments = []
@@ -82,7 +82,7 @@ def _process_multipart_body(msg: email.message.Message) -> tuple[str, str, list[
     return plain_body, html_body, attachments
 
 
-def _process_singlepart_body(msg: email.message.Message) -> tuple[str, str, list[dict]]:
+def _process_singlepart_body(msg: Message) -> tuple[str, str, list[dict]]:
     plain_body = ""
     html_body = ""
     content_type = msg.get_content_type()
@@ -95,7 +95,7 @@ def _process_singlepart_body(msg: email.message.Message) -> tuple[str, str, list
     return plain_body, html_body, []
 
 
-def _extract_body_and_attachments(msg: email.message.Message) -> tuple[str, list[dict]]:
+def _extract_body_and_attachments(msg: Message) -> tuple[str, list[dict]]:
     if msg.is_multipart():
         plain_body, html_body, attachments = _process_multipart_body(msg)
     else:
@@ -105,7 +105,7 @@ def _extract_body_and_attachments(msg: email.message.Message) -> tuple[str, list
     return body, attachments
 
 
-def _extract_date(msg: email.message.Message) -> datetime.datetime:
+def _extract_date(msg: Message) -> datetime.datetime:
     date_header = msg.get("Date")
     parsed_date = None
     if date_header:
@@ -119,7 +119,7 @@ def _extract_date(msg: email.message.Message) -> datetime.datetime:
     return parsed_date
 
 
-def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | None:
+def _extract_thread_id(msg: Message, message_id: str) -> str | None:
     thread_id = None
     references = msg.get("References")  # O3: email threading support
     in_reply_to = msg.get("In-Reply-To")
@@ -141,7 +141,7 @@ def _extract_thread_id(msg: email.message.Message, message_id: str) -> str | Non
     return thread_id
 
 
-def _message_to_email_data(msg: email.message.Message) -> EmailData:
+def _message_to_email_data(msg: Message) -> EmailData:
     body, attachments = _extract_body_and_attachments(msg)
     parsed_date = _extract_date(msg)
     message_id = _sanitize_nul(msg.get("Message-ID", ""))
@@ -180,7 +180,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
     """
     try:
         with open(file_path, "rb") as f:
-            msg = email.message_from_binary_file(f, policy=policy.default)
+            msg = message_from_binary_file(f, policy=policy.default)
     except OSError as e:
         raise EmailParseError(f"Failed to read file {file_path}: {e}") from e
 
@@ -190,7 +190,7 @@ def parse_eml(file_path: str | Path) -> EmailData:
 def parse_eml_bytes(content: bytes) -> EmailData:
     """Parses EML bytes fetched from a provider."""
     try:
-        msg = email.message_from_bytes(content, policy=policy.default)
+        msg = message_from_bytes(content, policy=policy.default)
     except Exception as e:
         raise EmailParseError("Failed to parse provider email bytes") from e
 

@@ -28,7 +28,10 @@ on:
         type: string
 
 concurrency:
-  group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  group: >-
+    strix-${{ github.repository }}-${{ github.event_name == 'pull_request_target' &&
+    format('pr-{0}', github.event.pull_request.number) || github.event.inputs.pr_number != '' &&
+    format('pr-{0}', github.event.inputs.pr_number) || github.ref }}
   # cancel-in-progress deliberately disabled: an attacker could force-push
   # a benign commit to cancel an in-progress scan of a malicious commit.
   cancel-in-progress: false
@@ -44,10 +47,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
         with:
           egress-policy: audit
           disable-file-monitoring: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.14"
 
       - name: Materialize trusted workspace
         env:
@@ -78,6 +86,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
           PR_HEAD_SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
         run: |
+          set -euo pipefail
           if [ -z "$PR_NUMBER" ] || [ -z "$PR_HEAD_SHA" ]; then
             echo "::error::PR number and head SHA are required for trusted PR-scope Strix evidence."
             exit 1
@@ -94,6 +103,13 @@ jobs:
           if [ -n "$PR_BASE_SHA" ]; then
             git -C "$TRUSTED_WORKSPACE" fetch --no-tags --depth=1 origin "$PR_BASE_SHA"
             git -C "$TRUSTED_WORKSPACE" cat-file -e "$PR_BASE_SHA^{commit}"
+          fi
+          # Fetching the expected head SHA directly avoids false failures when
+          # refs/pull/<n>/head has already advanced before this queued run starts.
+          if git -C "$TRUSTED_WORKSPACE" fetch --no-tags --depth=1 origin "$PR_HEAD_SHA"; then
+            git -C "$TRUSTED_WORKSPACE" cat-file -e "$PR_HEAD_SHA^{commit}"
+            git -C "$TRUSTED_WORKSPACE" update-ref "refs/remotes/pull/${PR_NUMBER}/head" "$PR_HEAD_SHA"
+            exit 0
           fi
           for pr_head_fetch_attempt in 1 2 3 4 5 6; do
             git -C "$TRUSTED_WORKSPACE" fetch --no-tags --prune origin "+refs/pull/${PR_NUMBER}/head:refs/remotes/pull/${PR_NUMBER}/head"
@@ -173,7 +189,7 @@ jobs:
         if: steps.gate.outputs.enabled == 'true'
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
-          python-version: '3.14'
+          python-version: "3.14"
 
       - name: Install Strix
         if: steps.gate.outputs.enabled == 'true'
@@ -395,7 +411,7 @@ jobs:
 
       - name: Upload Strix reports artifact
         if: ${{ always() && steps.gate.outputs.enabled == 'true' }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: strix-reports
           path: strix_runs/

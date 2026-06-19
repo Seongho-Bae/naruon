@@ -114,6 +114,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     app_ci_workflow = read_repo_text(".github/workflows/app-ci.yml")
     bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
+    strix_workflow = read_repo_text(".github/workflows/strix.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
     assert_dockerfile_stage_from(root_dockerfile, "python:3.14-slim", "backend-runtime")
@@ -121,6 +122,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
     assert 'python-version: ["3.14"]' in app_ci_workflow
     assert 'python-version: "3.14"' in bandit_workflow
+    assert 'python-version: "3.14"' in strix_workflow
     assert "Python 3.14 toolchain" in render_deployment
     assert "python:3.11" not in root_dockerfile
     assert "python:3.11" not in docker_publish_workflow
@@ -224,13 +226,13 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         assert "- develop" in workflow
         assert "- master" in workflow
         assert (
-            "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6"
+            "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0"
             in workflow
         )
         assert "security-events: write" in workflow
         assert "continue-on-error: true" not in workflow
         assert (
-            "github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4"
+            "github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4"
             in workflow
         )
 
@@ -309,11 +311,15 @@ def test_scorecard_sarif_normalizer_preserves_branch_protection_category(
     )
 
     normalizer = REPO_ROOT / "scripts/ci/ensure_scorecard_sarif_categories.py"
-    for _ in range(2):
-        subprocess.run(
-            [sys.executable, str(normalizer), str(sarif_path)],
-            check=True,
-        )
+    sarif_path.chmod(0o444)
+    try:
+        for _ in range(2):
+            subprocess.run(
+                [sys.executable, str(normalizer), str(sarif_path)],
+                check=True,
+            )
+    finally:
+        sarif_path.chmod(0o644)
 
     normalized = json.loads(sarif_path.read_text(encoding="utf-8"))
     categories = [
@@ -458,27 +464,27 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
     assert "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true" in workflow
     assert (
         workflow.count(
-            "docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0"
+            "docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0"
         )
         == 2
     )
     assert (
         workflow.count(
-            "docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0"
+            "docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0"
         )
         == 2
     )
     assert (
-        "docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0"
+        "docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0"
         in workflow
     )
     assert (
-        "docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0"
+        "docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0"
         in workflow
     )
     assert (
         workflow.count(
-            "docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0"
+            "docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0"
         )
         == 2
     )
@@ -746,15 +752,15 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
-    assert (
-        "group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}"
-        in workflow
-    )
+    assert "format('pr-{0}', github.event.pull_request.number)" in workflow
+    assert "format('pr-{0}', github.event.inputs.pr_number)" in workflow
+    assert "|| github.ref" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
     assert "strix_llm:" in workflow
     assert "github.event.inputs.strix_llm || 'openai/gpt-5'" in workflow
+    assert 'python-version: "3.14"' in workflow
     assert "secrets.STRIX_LLM ||" not in workflow
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow

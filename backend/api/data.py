@@ -5,7 +5,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
@@ -514,7 +514,9 @@ def _attachment_repository_assets(rows) -> list[DataRepositoryAsset]:
             DataRepositoryAsset(
                 asset_key=_opaque_asset_key(email, attachment),
                 asset_type="email_attachment",
-                display_name=_safe_display_text(attachment.filename, "email attachment"),
+                display_name=_safe_display_text(
+                    attachment.filename, "email attachment"
+                ),
                 source_label=_safe_display_text(email.subject, "untitled email"),
                 state_code=state_code,
                 detail_text=", ".join(detail_parts),
@@ -898,49 +900,51 @@ async def get_data_quality_surface(
         .limit(8),
     )
     email_scope = _email_scope_filter(auth_context)
-    email_count = await _count_scalar(
-        db,
-        select(func.count(Email.id)).where(*email_scope),
-    )
-    attachment_count = await _count_scalar(
-        db,
-        select(func.count(Attachment.id)).join(Email).where(*email_scope),
-    )
-    missing_thread_count = await _count_scalar(
-        db,
-        select(func.count(Email.id)).where(
-            *email_scope,
-            or_(Email.thread_id.is_(None), Email.thread_id == ""),
-        ),
-    )
-    missing_fingerprint_count = await _count_scalar(
-        db,
-        select(func.count(Email.id)).where(
-            *email_scope,
-            or_(Email.fingerprint.is_(None), Email.fingerprint == ""),
-        ),
-    )
-    blank_attachment_count = await _count_scalar(
-        db,
-        select(func.count(Attachment.id)).join(Email).where(
-            *email_scope,
-            or_(
-                Attachment.content.is_(None),
-                func.length(func.trim(Attachment.content)) == 0,
+
+    # ⚡ Bolt Optimization: Batching scalar counts using CASE
+    # Impact: Reduces 7 sequential database queries down to 2, drastically cutting
+    # latency from network roundtrips when fetching quality surface metrics.
+    email_stats_result = await db.execute(
+        select(
+            func.count(Email.id),
+            func.count(
+                case((or_(Email.thread_id.is_(None), Email.thread_id == ""), 1))
             ),
-        ),
+            func.count(
+                case((or_(Email.fingerprint.is_(None), Email.fingerprint == ""), 1))
+            ),
+            func.count(case((Email.embedding.is_not(None), 1))),
+        ).where(*email_scope)
     )
-    embedded_email_count = await _count_scalar(
-        db,
-        select(func.count(Email.id)).where(*email_scope, Email.embedding.is_not(None)),
+    email_stats = email_stats_result.one_or_none()
+    email_count = email_stats[0] if email_stats else 0
+    missing_thread_count = email_stats[1] if email_stats else 0
+    missing_fingerprint_count = email_stats[2] if email_stats else 0
+    embedded_email_count = email_stats[3] if email_stats else 0
+
+    attachment_stats_result = await db.execute(
+        select(
+            func.count(Attachment.id),
+            func.count(
+                case(
+                    (
+                        or_(
+                            Attachment.content.is_(None),
+                            func.length(func.trim(Attachment.content)) == 0,
+                        ),
+                        1,
+                    )
+                )
+            ),
+            func.count(case((Attachment.embedding.is_not(None), 1))),
+        )
+        .join(Email)
+        .where(*email_scope)
     )
-    embedded_attachment_count = await _count_scalar(
-        db,
-        select(func.count(Attachment.id)).join(Email).where(
-            *email_scope,
-            Attachment.embedding.is_not(None),
-        ),
-    )
+    attachment_stats = attachment_stats_result.one_or_none()
+    attachment_count = attachment_stats[0] if attachment_stats else 0
+    blank_attachment_count = attachment_stats[1] if attachment_stats else 0
+    embedded_attachment_count = attachment_stats[2] if attachment_stats else 0
     connector_statement = _connector_scope_statement(auth_context)
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:

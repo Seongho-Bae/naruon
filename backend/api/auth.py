@@ -378,7 +378,7 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
             raise _authentication_error()
         try:
             payload = _decode_cached_oidc_session_payload(token)
-            _reject_signed_session_system_admin_payload(payload)
+            _reject_signed_session_admin_payload(payload)
             return payload, "oidc"
         except Exception:
             raise _authentication_error() from None
@@ -407,19 +407,17 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
         raise _authentication_error()
     if not isinstance(payload, dict):
         raise _authentication_error()
-    _reject_signed_session_system_admin_payload(payload)
+    _reject_signed_session_admin_payload(payload)
     return payload, "hmac"
 
 
-def _reject_signed_session_system_admin_payload(payload: dict[str, Any]) -> None:
+def _reject_signed_session_admin_payload(payload: dict[str, Any]) -> None:
     role_claim = payload.get("role")
     if not isinstance(role_claim, str):
         raise _authentication_error()
-    # SaaS control-plane roles require explicit server-side assignment, not
-    # externally supplied HMAC or enterprise OIDC session claims.
-    if role_claim in SYSTEM_ADMIN_ROLES:
-        raise _authentication_error()
-    if role_claim in TENANT_ADMIN_ROLES:
+    # Admin roles require explicit server-side assignment, not externally
+    # supplied HMAC or enterprise OIDC session claims.
+    if role_claim in ADMIN_ROLES:
         raise _authentication_error()
 
 
