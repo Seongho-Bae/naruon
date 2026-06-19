@@ -115,7 +115,7 @@ class MockSession:
 
     async def scalar(self, query):
         query_text = compiled_query_text(query)
-        if "count(" in query_text and "email_items" in query_text:
+        if "count(" in query_text and "emails" in query_text:
             return len(self.items)
         return self.tenant_config
 
@@ -306,7 +306,7 @@ def override_get_db(db_session):
 async def test_get_emails(client: AsyncClient, db_session):
     response = await client.get("/api/emails?limit=10")
     assert response.status_code == 200
-    assert "email_items" in response.json()
+    assert "emails" in response.json()
 
 
 @pytest.mark.asyncio
@@ -321,7 +321,7 @@ async def test_get_emails_returns_ui_safe_display_fields(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    item = response.json()["email_items"][0]
+    item = response.json()["emails"][0]
     assert item["subject"] == "Quarter plan"
     assert item["sender"] == '"" <sender@example.com>'
     assert item["reply_to"] == '"" <reply@example.com>'
@@ -372,7 +372,7 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
     response = await client.get("/api/emails?limit=2")
 
     assert response.status_code == 200
-    data = response.json()["email_items"]
+    data = response.json()["emails"]
     assert [item["thread_id"] for item in data] == ["hot-thread", "second-thread"]
     assert data[0]["reply_count"] == 6
 
@@ -433,7 +433,7 @@ async def test_get_emails_normalizes_legacy_bracketed_thread_ids(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    data = response.json()["email_items"]
+    data = response.json()["emails"]
     assert len(data) == 1
     assert data[0]["thread_id"] == "root@example.com"
     assert data[0]["reply_count"] == 2
@@ -475,7 +475,7 @@ async def test_get_emails_marks_self_sent_and_pending_reply_threads(
     response = await client.get("/api/emails?limit=10")
 
     assert response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
     assert by_thread["waiting-thread"]["requires_reply"] is True
     assert by_thread["waiting-thread"]["is_self_sent"] is False
     assert by_thread["note-thread"]["is_self_sent"] is True
@@ -529,7 +529,7 @@ async def test_get_emails_sent_folder_returns_user_sent_threads_only(
     response = await client.get("/api/emails?folder=sent&limit=10")
 
     assert response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in response.json()["emails"]}
     assert set(by_thread) == {"sent-waiting-thread", "sent-note-thread"}
     assert by_thread["sent-waiting-thread"]["requires_reply"] is True
     assert by_thread["sent-note-thread"]["is_self_sent"] is True
@@ -630,7 +630,7 @@ async def test_unique_email_thread_intent_applies_auth_dependency(
     client: AsyncClient,
 ):
     from api.auth import AuthContext
-    from api.email_items import get_auth_context as emails_get_auth_context
+    from api.emails import get_auth_context as emails_get_auth_context
 
     calls = []
 
@@ -1252,13 +1252,13 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
         await engine.dispose()
 
     assert inbox_response.status_code == 200
-    by_thread = {item["thread_id"]: item for item in inbox_response.json()["email_items"]}
+    by_thread = {item["thread_id"]: item for item in inbox_response.json()["emails"]}
     assert by_thread["waiting-smoke-thread"]["requires_reply"] is True
     assert by_thread["note-smoke-thread"]["is_self_sent"] is True
     assert by_thread["answered-smoke-thread"]["requires_reply"] is False
 
     assert pending_response.status_code == 200
-    pending_threads = {item["thread_id"] for item in pending_response.json()["email_items"]}
+    pending_threads = {item["thread_id"] for item in pending_response.json()["emails"]}
     assert pending_threads == {"waiting-smoke-thread"}
 
 
@@ -1371,7 +1371,7 @@ async def test_get_email_thread_accepts_url_encoded_reserved_characters(
 )
 async def test_get_email_routes_apply_auth_dependency(client: AsyncClient, path: str):
     from api.auth import AuthContext
-    from api.email_items import get_auth_context as emails_get_auth_context
+    from api.emails import get_auth_context as emails_get_auth_context
 
     calls = []
 
@@ -1447,7 +1447,7 @@ async def test_get_email_thread_query_is_scoped_to_current_user(
     assert_query_is_owner_scoped(session.queries[-1])
 
 
-@patch("api.email_items.send_email", return_value={"status": "simulated", "simulated": True})
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
 def test_send_email_endpoint(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
@@ -1459,7 +1459,7 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
         return smtp_server, smtp_port
 
     monkeypatch.setattr(
-        "api.email_items.validate_smtp_destination", fake_validate_smtp_destination
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
     )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
@@ -1499,7 +1499,7 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
     )
 
 
-@patch("api.email_items.send_email", return_value={"status": "simulated", "simulated": True})
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
 def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_config(
     mock_send_email, monkeypatch, sample_email
 ):
@@ -1511,7 +1511,7 @@ def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_c
         return smtp_server, smtp_port
 
     monkeypatch.setattr(
-        "api.email_items.validate_smtp_destination", fake_validate_smtp_destination
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
     )
     session = ScalarQueryCapturingSession([sample_email])
 
@@ -1568,7 +1568,7 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
     assert response.json() == {"detail": "SMTP is not configured"}
 
 
-@patch("api.email_items.send_email", return_value={"status": "sent", "simulated": False})
+@patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
 def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email, caplog):
     from main import app
     from fastapi.testclient import TestClient
@@ -1583,7 +1583,7 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email,
     async def unsafe_smtp_db():
         yield MockSession([], tenant_config=UnsafeTenantConfig())
 
-    caplog.set_level(logging.WARNING, logger="api.email_items")
+    caplog.set_level(logging.WARNING, logger="api.emails")
     app.dependency_overrides[get_db] = unsafe_smtp_db
     try:
         client = TestClient(app, headers={"X-User-Id": "testuser"})
@@ -1605,7 +1605,7 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email,
     mock_send_email.assert_not_called()
 
 
-@patch("api.email_items.send_email", return_value={"status": "failed", "simulated": False})
+@patch("api.emails.send_email", return_value={"status": "failed", "simulated": False})
 def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeypatch):
     from main import app
     from fastapi.testclient import TestClient
@@ -1615,7 +1615,7 @@ def test_send_email_endpoint_rejects_failed_send_status(mock_send_email, monkeyp
         return smtp_server, smtp_port
 
     monkeypatch.setattr(
-        "api.email_items.validate_smtp_destination", fake_validate_smtp_destination
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
     )
 
     client = TestClient(app, headers={"X-User-Id": "testuser"})
@@ -1687,16 +1687,16 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     response = await client.get("/api/emails/pending-replies")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["email_items"]) == 1
-    assert data["email_items"][0]["sender"] == '"" <testuser@example.com>'
-    assert data["email_items"][0]["subject"] == "Did you get this?"
-    assert data["email_items"][0]["snippet"] == "Please reply when you can."
-    assert data["email_items"][0]["thread_id"] == "thread3"
-    assert data["email_items"][0]["requires_reply"] is True
+    assert len(data["emails"]) == 1
+    assert data["emails"][0]["sender"] == '"" <testuser@example.com>'
+    assert data["emails"][0]["subject"] == "Did you get this?"
+    assert data["emails"][0]["snippet"] == "Please reply when you can."
+    assert data["emails"][0]["thread_id"] == "thread3"
+    assert data["emails"][0]["requires_reply"] is True
 
 
 def test_email_owner_filters():
-    from api.email_items import email_owner_filters
+    from api.emails import email_owner_filters
     from api.auth import AuthContext
 
     # Test with organization_id

@@ -304,7 +304,7 @@ async def get_emails(
                 ),
             )
         )
-    return {"email_items": items}
+    return {"emails": items}
 
 
 @router.get("/pending-replies", response_model=dict[str, list[EmailListItem]])
@@ -327,7 +327,7 @@ async def get_pending_replies(
                 requires_reply=True,
             )
         )
-    return {"email_items": items}
+    return {"emails": items}
 
 
 def _extract_candidate_lookups(

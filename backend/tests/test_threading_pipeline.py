@@ -55,7 +55,7 @@ async def test_email_deduplication():
         "references": None,
         "thread_id": None,
         "reply_to": None,
-        "file_attachments": []
+        "attachments": []
     }
     
     await process_fetched_email(session_mock, email_data, "user_1", "org_1")
@@ -101,7 +101,7 @@ async def test_email_pipeline_triggers_self_sent_knowledge_extraction():
         "references": None,
         "thread_id": None,
         "reply_to": None,
-        "file_attachments": [],
+        "attachments": [],
     }
 
     with patch(
@@ -146,7 +146,7 @@ async def test_email_pipeline_preserves_personal_scope_as_null():
         "references": None,
         "thread_id": None,
         "reply_to": None,
-        "file_attachments": [],
+        "attachments": [],
     }
 
     await process_fetched_email(session_mock, email_data, "user@example.com", None)

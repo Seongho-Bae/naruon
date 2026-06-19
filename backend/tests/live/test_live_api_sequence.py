@@ -113,7 +113,7 @@ def test_live_api_sequence_uses_real_http() -> None:
     token = _signed_live_session_token()
     for _ in range(12):
         inbox = read_json(f"{live_base_url}/api/emails", token)
-        subjects = {item.get("subject") for item in inbox["email_items"]}
+        subjects = {item.get("subject") for item in inbox["emails"]}
         if "Live E2E Release" in subjects:
             return
         time.sleep(1)

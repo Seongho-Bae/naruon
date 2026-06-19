@@ -46,7 +46,7 @@ async def test_root_importer_persists_canonical_thread_id(tmp_path):
         "references": "<root@example.com> <parent@example.com>",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "file_attachments": [],
+        "attachments": [],
     }
     session = MockSession()
 
@@ -95,7 +95,7 @@ async def test_root_importer_duplicate_check_is_scoped_to_owner(tmp_path):
         "subject": "Duplicate scope",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "file_attachments": [],
+        "attachments": [],
     }
     session = MockSession()
 
@@ -152,7 +152,7 @@ async def test_root_importer_uses_local_embedding_without_openai_key(
         "subject": "Root",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "file_attachments": [],
+        "attachments": [],
     }
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     session = MockSession()
@@ -198,7 +198,7 @@ async def test_root_importer_handles_empty_embedding_provider_response(
         "subject": "Empty embedding",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "file_attachments": [],
+        "attachments": [],
     }
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     session = MockSession()
@@ -249,7 +249,7 @@ async def test_root_importer_rolls_back_and_returns_false_on_commit_failure(tmp_
         "subject": "Commit failure",
         "date": datetime.datetime.now(datetime.timezone.utc),
         "body": "Body",
-        "file_attachments": [],
+        "attachments": [],
     }
     session = MockSession()
 

@@ -1,6 +1,6 @@
 import pytest
 import datetime
-from api.email_items import EmailListItem
+from api.emails import EmailListItem
 from db.models import Email, TenantConfig
 
 
@@ -21,7 +21,7 @@ class ReplyTrackingResult:
 class ReplyTrackingSession:
     def __init__(self, tenant_config, emails):
         self.tenant_config = tenant_config
-        self.email_items = emails
+        self.emails = emails
         self.queries = []
 
     async def execute(self, query):
@@ -29,7 +29,7 @@ class ReplyTrackingSession:
         if "tenant_configs" in str(query).lower():
             rows = [] if self.tenant_config is None else [self.tenant_config]
             return ReplyTrackingResult(rows)
-        return ReplyTrackingResult(self.email_items)
+        return ReplyTrackingResult(self.emails)
 
 
 def compiled_query_text(query) -> str:
