@@ -1034,8 +1034,8 @@ EOF
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Prompt Injection and XSS in AI Prompt Studio" "fallback includes second report from same model"
 	assert_file_contains "$output_file" "frontend/src/app/prompt-studio/page.tsx:29" "fallback maps second report to exact source line"
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Missing Content Security Policy in Next.js Frontend" "fallback includes report from second model"
-	assert_file_contains "$output_file" "frontend/next.config.ts:10" "fallback derives a concrete CSP hardening line"
-	assert_file_contains "$output_file" "Suggested edit: change \`frontend/next.config.ts:10\`" "fallback provides a concrete suggested edit for model reports"
+	assert_file_contains "$output_file" "frontend/next.config.ts:35" "fallback derives a concrete CSP hardening line"
+	assert_file_contains "$output_file" "Suggested edit: change \`frontend/next.config.ts:35\`" "fallback provides a concrete suggested edit for model reports"
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback still reports provider failure after vulnerability reports"
 	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not contradict preserved Strix report windows"
 

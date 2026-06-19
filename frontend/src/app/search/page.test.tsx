@@ -447,7 +447,7 @@ describe("SearchPage", () => {
     ).not.toBeNull();
 
     await act(async () => {
-      container
+      container!
         .querySelector('button[aria-label="검색어 지우기"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
