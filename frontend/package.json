@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "0.14.3",
+  "version": "0.14.4",
   "private": true,
   "packageManager": "pnpm@11.5.3",
   "scripts": {
@@ -36,6 +36,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "fast-check": "^4.8.0",
     "jsdom": "^29.1.0",
     "postcss": "^8.5.15",
     "typescript": "^5",
@@ -43,12 +44,11 @@
   },
   "overrides": {
     "postcss": "^8.5.15",
+    "undici": "7.28.0",
     "uuid": "^14.0.0"
   },
-  "pnpm.overrides": {
-    "postcss": "^8.5.15"
-  },
   "resolutions": {
-    "postcss": "^8.5.15"
+    "postcss": "^8.5.15",
+    "undici": "7.28.0"
   }
 }

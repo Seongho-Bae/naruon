@@ -622,27 +622,13 @@ async def test_admin_subject_does_not_imply_system_admin_role():
 
 
 @pytest.mark.asyncio
-async def test_hmac_session_rejects_platform_system_admin_role_claim():
+@pytest.mark.parametrize(
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin", "organization_admin")
+)
+async def test_hmac_session_rejects_admin_role_claim(admin_role: str):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     token = _signed_session_token(
-        _valid_session_payload(
-            role="system_admin", org=None, workspace="workspace-root"
-        )
-    )
-
-    with pytest.raises(HTTPException) as exc:
-        await get_auth_context(authorization=f"Bearer {token}")
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_hmac_session_rejects_platform_admin_role_claim():
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    token = _signed_session_token(
-        _valid_session_payload(
-            role="platform_admin", org=None, workspace="workspace-root"
-        )
+        _valid_session_payload(role=admin_role, org="org-acme")
     )
 
     with pytest.raises(HTTPException) as exc:
@@ -1131,10 +1117,10 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("role_claim", ("system_admin", "platform_admin"))
-async def test_oidc_session_rejects_platform_system_admin_role_claim(
-    monkeypatch, role_claim: str
-):
+@pytest.mark.parametrize(
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin", "organization_admin")
+)
+async def test_oidc_session_rejects_admin_role_claim(monkeypatch, admin_role: str):
     import jwt
 
     previous_issuer_url = settings.OIDC_ISSUER_URL
@@ -1156,7 +1142,7 @@ async def test_oidc_session_rejects_platform_system_admin_role_claim(
             "iss": "https://login.example.test/realms/naruon",
             "aud": "naruon-api",
             "sub": "operator",
-            "role": role_claim,
+            "role": admin_role,
             "org": None,
             "groups": [],
             "workspace": "workspace-root",

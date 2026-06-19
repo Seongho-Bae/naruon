@@ -1,5 +1,5 @@
 # Stage 1: Backend runtime for local Compose and backend-only deployments
-FROM python:3.14-slim AS backend-runtime
+FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS backend-runtime
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -7,9 +7,9 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
 # Install Backend dependencies
-COPY backend/requirements.txt /app/requirements.txt
+COPY backend/requirements-hashes.txt /app/requirements-hashes.txt
 RUN PIP_ROOT_USER_ACTION=ignore PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_ONLY_BINARY=:all: \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir --require-hashes -r requirements-hashes.txt
 
 # Copy Backend
 COPY VERSION /app/VERSION
@@ -24,7 +24,7 @@ EXPOSE 8000
 CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
 
 # Stage 2: Build Frontend
-FROM node:24-slim AS frontend-builder
+FROM node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a AS frontend-builder
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN corepack enable pnpm
@@ -49,15 +49,15 @@ ARG OCI_IMAGE_AUTHORS="Seongho Bae"
 ARG OCI_IMAGE_URL="https://github.com/Seongho-Bae/naruon"
 ARG OCI_IMAGE_DOCUMENTATION="https://github.com/Seongho-Bae/naruon#readme"
 ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"
-ARG OCI_IMAGE_VERSION="0.14.3"
+ARG OCI_IMAGE_VERSION="0.14.4"
 ARG OCI_IMAGE_REVISION=""
 ARG OCI_IMAGE_VENDOR="Seongho-Bae"
 ARG OCI_IMAGE_LICENSES="LicenseRef-Naruon-Proprietary"
 ARG OCI_IMAGE_REF_NAME=""
 ARG OCI_IMAGE_TITLE="naruon"
 ARG OCI_IMAGE_DESCRIPTION="Naruon combined FastAPI and Next.js runtime image"
-ARG OCI_IMAGE_BASE_DIGEST=""
-ARG OCI_IMAGE_BASE_NAME="docker.io/library/python:3.14-slim"
+ARG OCI_IMAGE_BASE_DIGEST="sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
 
 LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
