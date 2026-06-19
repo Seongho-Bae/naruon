@@ -1,5 +1,30 @@
 import type { NextConfig } from "next";
 
+export function frontendCspHeaderValue(nodeEnv = process.env.NODE_ENV) {
+  const scriptSources = ["'self'", "'unsafe-inline'"];
+  const connectSources = ["'self'"];
+  if (nodeEnv === "development") {
+    scriptSources.push("'unsafe-eval'");
+    connectSources.push(
+      "http://127.0.0.1:*",
+      "http://localhost:*",
+      "ws://127.0.0.1:*",
+      "ws://localhost:*",
+    );
+  }
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSources.join(" ")}`,
+    "style-src 'self' 'unsafe-inline'",
+    `connect-src ${connectSources.join(" ")}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
 function positiveIntegerFromEnv(name: string, fallback: number) {
   const rawValue = process.env[name];
   if (!rawValue) return fallback;
@@ -30,7 +55,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+            value: frontendCspHeaderValue(),
           },
           {
             key: "X-Content-Type-Options",

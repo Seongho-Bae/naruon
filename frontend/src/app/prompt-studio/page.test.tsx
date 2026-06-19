@@ -121,7 +121,9 @@ describe("PromptStudioPage", () => {
 
   it("shows disabled loading feedback while testing a prompt", async () => {
     const promptTest = deferred<Response>();
-    const fetchMock = vi.fn(() => promptTest.promise);
+    const fetchMock = vi.fn((..._args: Parameters<typeof fetch>) =>
+      promptTest.promise,
+    );
     vi.stubGlobal("fetch", fetchMock);
     const page = await renderPage();
 
@@ -156,7 +158,9 @@ describe("PromptStudioPage", () => {
 
   it("shows disabled loading feedback while saving a prompt", async () => {
     const promptSave = deferred<Response>();
-    const fetchMock = vi.fn(() => promptSave.promise);
+    const fetchMock = vi.fn((..._args: Parameters<typeof fetch>) =>
+      promptSave.promise,
+    );
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("alert", vi.fn());
     const page = await renderPage();
