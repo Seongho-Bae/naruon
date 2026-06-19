@@ -50,3 +50,7 @@
 ## 2025-06-15 - Optimize O(n) email threading dictionary lookups with defaultdict
 **Learning:** When organizing pre-sorted collections by groups, explicit dictionary membership and date tracking inside a tight loop creates unnecessary CPU overhead. Because SQL `ORDER BY` combined with Python sorting guarantees an oldest-to-newest ordering, tracking the 'most recent' item per group simplifies to blindly overwriting the dictionary key.
 **Action:** Use `collections.defaultdict` for tracking accumulators (`int`, `list`) and take advantage of implicit data ordering to eliminate branch conditions and explicit `.get()` checks in grouping loops.
+
+## 2026-06-19 - Email owner/date lookup index
+**Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
+**Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
