@@ -531,6 +531,12 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper exited non-zero; using inline fallback." "opencode failed-check fallback handles helper failures without aborting under set -e"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "emit_strix_report_findings" "failed-check fallback emits every Strix vulnerability report as a separate finding"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider signal left current-head security evidence incomplete" "failed-check fallback does not claim reports are absent after Strix emitted vulnerabilities"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "cancelled pull_request_target run still used the base branch copies" "failed-check fallback explains trusted-base Strix workflow semantics for self-modifying PRs"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "get_validated_pr_diff_range" "failed-check fallback validates PR diff range before comparing trusted Strix inputs"
+	assert_file_contains "$workflow_file" ".github/workflows/strix.yml" "opencode inline fallback watches Strix workflow changes"
+	assert_file_contains "$workflow_file" "scripts/ci/strix_quick_gate.sh" "opencode inline fallback watches trusted Strix gate changes"
+	assert_file_contains "$workflow_file" "scripts/ci/test_strix_quick_gate.sh" "opencode inline fallback watches trusted Strix self-test changes"
+	assert_file_contains "$workflow_file" "requirements-strix-ci.txt" "opencode inline fallback watches trusted Strix dependency changes"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider failure blocked current-head security evidence" "failed-check fallback does not label non-quota provider routing/auth failures as quota"
 	assert_file_not_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider quota blocked current-head security evidence" "failed-check fallback avoids misleading quota-only provider blocker title"
 	assert_file_contains "$workflow_file" "- Root cause:" "opencode review request-changes body includes root cause per finding"
@@ -950,6 +956,60 @@ EOF
 	assert_file_contains "$output_file" "Suggested edit: change \`frontend/next.config.ts:10\`" "fallback provides a concrete suggested edit for model reports"
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback still reports provider failure after vulnerability reports"
 	assert_file_not_contains "$output_file" "failed before producing vulnerability reports" "fallback does not contradict preserved Strix report windows"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_failed_check_fallback_explains_trusted_base_strix_prs() {
+	local tmp_dir
+	local fixture_repo
+	local evidence_file
+	local output_file
+	local base_sha
+	local head_sha
+	tmp_dir="$(mktemp -d)"
+	fixture_repo="$tmp_dir/repo"
+	evidence_file="$tmp_dir/failed-check-evidence.md"
+	output_file="$tmp_dir/fallback.md"
+
+	mkdir -p "$fixture_repo/.github/workflows"
+	cat >"$fixture_repo/.github/workflows/strix.yml" <<'EOF'
+name: Strix Security Scan
+concurrency:
+  cancel-in-progress: false
+EOF
+
+	git init "$fixture_repo" >/dev/null
+	git -C "$fixture_repo" config user.email "copilot@example.com"
+	git -C "$fixture_repo" config user.name "copilot"
+	git -C "$fixture_repo" add .github/workflows/strix.yml
+	git -C "$fixture_repo" commit -m "base" >/dev/null
+	base_sha="$(git -C "$fixture_repo" rev-parse HEAD)"
+
+	cat >"$fixture_repo/.github/workflows/strix.yml" <<'EOF'
+name: Strix Security Scan
+concurrency:
+  group: strix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+EOF
+	git -C "$fixture_repo" add .github/workflows/strix.yml
+	git -C "$fixture_repo" commit -m "head" >/dev/null
+	head_sha="$(git -C "$fixture_repo" rev-parse HEAD)"
+
+	cat >"$evidence_file" <<'EOF'
+## Failed check: Strix Security Scan/strix
+
+Conclusion: cancelled
+
+No GitHub Actions job log is available for this failed workflow run.
+EOF
+
+	PR_BASE_SHA="$base_sha" PR_HEAD_SHA="$head_sha" \
+		bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
+		"$evidence_file" "$fixture_repo" >"$output_file"
+
+	assert_file_contains "$output_file" "cancelled pull_request_target run still used the base branch copies" "fallback explains trusted-base workflow execution"
+	assert_file_contains "$output_file" "Re-run Strix after the trusted base branch contains the workflow/gate change or capture equivalent temporary evidence tied to this head SHA" "fallback directs reviewers to trusted-base rerun or equivalent evidence"
 
 	rm -rf "$tmp_dir"
 }
@@ -5669,6 +5729,8 @@ assert_opencode_review_gate_rejects_non_source_backed_findings
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
 assert_opencode_failed_check_fallback_emits_each_strix_report
+
+assert_opencode_failed_check_fallback_explains_trusted_base_strix_prs
 
 assert_opencode_failed_check_fallback_does_not_treat_no_report_summary_as_report
 

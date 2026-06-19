@@ -55,6 +55,47 @@ first_existing_line() {
 	printf '1'
 }
 
+get_validated_pr_diff_range() {
+	local repo_root="${REPO_ROOT%/}"
+	local base_sha="${PR_BASE_SHA:-}"
+	local head_sha="${PR_HEAD_SHA:-${HEAD_SHA:-HEAD}}"
+
+	if ! git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+		return 1
+	fi
+	if [ -z "$base_sha" ]; then
+		return 1
+	fi
+	if ! git -C "$repo_root" rev-parse --verify "${base_sha}^{commit}" >/dev/null 2>&1; then
+		return 1
+	fi
+	if ! git -C "$repo_root" rev-parse --verify "${head_sha}^{commit}" >/dev/null 2>&1; then
+		return 1
+	fi
+
+	printf '%s...%s' "$base_sha" "$head_sha"
+}
+
+pr_changes_trusted_strix_inputs() {
+	local diff_range
+	local diff_status
+
+	diff_range="$(get_validated_pr_diff_range)" || return 1
+	set +e
+	git -C "${REPO_ROOT%/}" diff --quiet "$diff_range" -- \
+		.github/workflows/strix.yml \
+		scripts/ci/strix_quick_gate.sh \
+		scripts/ci/test_strix_quick_gate.sh \
+		requirements-strix-ci.txt
+	diff_status=$?
+	set -e
+
+	if [ "$diff_status" -eq 1 ]; then
+		return 0
+	fi
+	return 1
+}
+
 derive_location_from_report() {
 	local title="$1"
 	local endpoint="$2"
@@ -437,9 +478,15 @@ emit_strix_cancelled_without_log_finding() {
 	finding_index=$((finding_index + 1))
 	printf '### %s. HIGH %s:%s - Current-head Strix evidence is missing because the workflow run was cancelled before logs\n' "$finding_index" "$path" "$line"
 	printf -- '- Problem: Strix Security Scan reported a current-head workflow_run conclusion of cancelled, but GitHub emitted no failed job log and no Strix Vulnerability Report window.\n'
-	printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This is a workflow execution/queue state, not an application vulnerability finding, so OpenCode must not invent a source-code fix.\n'
-	printf -- '- Fix: Do not approve from this cancelled run. Re-run the current-head Strix Security Scan after stale runs complete or are cancelled, then review the resulting job log; keep the workflow concurrency line at %s:%s so stale runs do not silently replace current-head evidence.\n' "$path" "$line"
-	printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log so reviewers see that the blocker is missing scanner evidence.\n\n'
+	if pr_changes_trusted_strix_inputs; then
+		printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This PR changes trusted Strix workflow or gate inputs, but the cancelled pull_request_target run still used the base branch copies, so current-head edits cannot affect this run.\n'
+		printf -- '- Fix: Do not invent an application code fix from this cancelled run. Re-run Strix after the trusted base branch contains the workflow/gate change or capture equivalent temporary evidence tied to this head SHA; keep the workflow concurrency line at %s:%s aligned with the intended queue isolation.\n' "$path" "$line"
+		printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log and cover self-modifying Strix workflow PRs so reviews explain trusted-base execution semantics.\n\n'
+	else
+		printf -- '- Root cause: The security gate has no usable Strix evidence for this head SHA. This is a workflow execution/queue state, not an application vulnerability finding, so OpenCode must not invent a source-code fix.\n'
+		printf -- '- Fix: Do not approve from this cancelled run. Re-run the current-head Strix Security Scan after stale runs complete or are cancelled, then review the resulting job log; keep the workflow concurrency line at %s:%s so stale runs do not silently replace current-head evidence.\n' "$path" "$line"
+		printf -- '- Regression test: Keep failed-check evidence collection explicit for cancelled workflow runs with no job log so reviewers see that the blocker is missing scanner evidence.\n\n'
+	fi
 	printf -- '- Suggested edit: preserve `%s:%s` with `cancel-in-progress: false`, cancel only superseded non-current-head runs when needed, and rerun current-head Strix until logs exist.\n\n' "$path" "$line"
 }
 
