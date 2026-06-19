@@ -251,6 +251,9 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         in trivy_workflow
     )
     assert "results_format: sarif" in scorecard_workflow
+    assert "Restore Scorecard SARIF ownership" in scorecard_workflow
+    assert 'sudo chown "$(id -u):$(id -g)" scorecard-results.sarif' in scorecard_workflow
+    assert "chmod u+rw scorecard-results.sarif" in scorecard_workflow
     assert "Preserve Scorecard SARIF categories" in scorecard_workflow
     assert (
         "python scripts/ci/ensure_scorecard_sarif_categories.py scorecard-results.sarif"
