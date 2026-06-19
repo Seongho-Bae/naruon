@@ -80,6 +80,15 @@ test('nano test: verify user requested features', async ({ page }) => {
   // Verify Model registration UI
   await expect(page.getByText('로컬 모델 등록', { exact: true }).first()).toBeVisible();
   await expect(page.getByText('임베딩 모델 지정', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('제공자 유형').first()).toBeVisible();
+  await expect(page.getByText('연결 엔드포인트').first()).toBeVisible();
+  await expect(page.getByText('API 엔드포인트')).toBeVisible();
+  await expect(page.getByText('로컬 API 키 대체값')).toBeVisible();
+  await expect(page.getByLabel('모델 식별자').nth(1)).toHaveValue('gemma4:e2b-it-qat');
+  await expect(page.getByLabel('임베딩 모델').nth(1)).toHaveValue('embeddinggemma');
+  await expect(page.getByText('Provider', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Endpoint', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Local API key override', { exact: true })).toHaveCount(0);
 
   // 2. Check Data page for email import
   await page.goto('/data');

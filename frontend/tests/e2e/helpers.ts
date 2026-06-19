@@ -767,7 +767,9 @@ export async function mockDashboardApi(page: Page, onApiRequest?: (path: string,
     if (path === '/api/runner-config/rotate' && request.method() === 'POST') {
       await fulfillJson(route, {
         workspace_id: 'workspace-org-acme',
-        registration_token: 'nrn_e2e_one_time_connector_token',
+        configured: true,
+        fingerprint: '***e2e',
+        updated_at: '2026-05-27T07:00:00Z',
         connector_manifest: runnerConfig.connector_manifest,
       });
       return;

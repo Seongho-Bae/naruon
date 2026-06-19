@@ -5,7 +5,7 @@ import { apiClient } from '@/lib/api-client';
 import type { SessionClaims } from '@/lib/session-cookie';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 export type SettingsTab = '워크스페이스' | '멤버' | 'AI 모델' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
 const EMPTY_SESSION_CLAIMS: SessionClaims = {
@@ -31,7 +31,9 @@ interface RunnerConfig {
 
 interface RunnerRotateResponse {
   workspace_id: string;
-  registration_token: string;
+  configured: boolean;
+  fingerprint: string | null;
+  updated_at: string | null;
   connector_manifest: RunnerConfig['connector_manifest'];
 }
 
@@ -156,17 +158,13 @@ interface AccountFormState {
   smtpServer: string;
   smtpPort: string;
   smtpUsername: string;
-  smtpPassword: string;
   imapServer: string;
   imapPort: string;
   imapUsername: string;
-  imapPassword: string;
   pop3Server: string;
   pop3Port: string;
   pop3Username: string;
-  pop3Password: string;
   oauthClientId: string;
-  oauthClientSecret: string;
   oauthRedirectUri: string;
 }
 
@@ -176,25 +174,27 @@ interface ModelProviderFormState {
   baseUrl: string;
   modelIdentifier: string;
   embeddingModel: string;
-  apiKey: string;
   isActive: boolean;
+}
+
+interface AccountSecretFormValues {
+  smtpPassword: string;
+  imapPassword: string;
+  pop3Password: string;
+  oauthClientSecret: string;
 }
 
 const emptyAccountForm: AccountFormState = {
   smtpServer: '',
   smtpPort: '',
   smtpUsername: '',
-  smtpPassword: '',
   imapServer: '',
   imapPort: '',
   imapUsername: '',
-  imapPassword: '',
   pop3Server: '',
   pop3Port: '',
   pop3Username: '',
-  pop3Password: '',
   oauthClientId: '',
-  oauthClientSecret: '',
   oauthRedirectUri: '',
 };
 
@@ -204,7 +204,6 @@ const commercialModelFormDefaults: ModelProviderFormState = {
   baseUrl: 'https://api.openai.com/v1',
   modelIdentifier: 'gpt-5.4',
   embeddingModel: 'text-embedding-3-small',
-  apiKey: '',
   isActive: true,
 };
 
@@ -214,7 +213,6 @@ const localModelFormDefaults: ModelProviderFormState = {
   baseUrl: 'http://ollama:11434/v1',
   modelIdentifier: 'gemma4:e2b-it-qat',
   embeddingModel: 'embeddinggemma',
-  apiKey: '',
   isActive: true,
 };
 
@@ -232,17 +230,13 @@ function toAccountForm(config: AccountConfig): AccountFormState {
     smtpServer: config.smtp_server ?? '',
     smtpPort: config.smtp_port?.toString() ?? '',
     smtpUsername: config.smtp_username ?? '',
-    smtpPassword: '',
     imapServer: config.imap_server ?? '',
     imapPort: config.imap_port?.toString() ?? '',
     imapUsername: config.imap_username ?? '',
-    imapPassword: '',
     pop3Server: config.pop3_server ?? '',
     pop3Port: config.pop3_port?.toString() ?? '',
     pop3Username: config.pop3_username ?? '',
-    pop3Password: '',
     oauthClientId: config.oauth_client_id ?? '',
-    oauthClientSecret: '',
     oauthRedirectUri: config.oauth_redirect_uri ?? '',
   };
 }
@@ -260,7 +254,7 @@ function optionalPort(value: string) {
   return Number.isFinite(parsed) && parsed >= 1 && parsed <= 65535 ? parsed : null;
 }
 
-function buildAccountUpdate(form: AccountFormState): AccountConfigUpdate {
+function buildAccountUpdate(form: AccountFormState, secrets: AccountSecretFormValues): AccountConfigUpdate {
   const update: AccountConfigUpdate = {
     smtp_server: optionalText(form.smtpServer),
     smtp_port: optionalPort(form.smtpPort),
@@ -275,19 +269,19 @@ function buildAccountUpdate(form: AccountFormState): AccountConfigUpdate {
     oauth_redirect_uri: optionalText(form.oauthRedirectUri),
   };
 
-  const smtpPassword = optionalText(form.smtpPassword);
+  const smtpPassword = optionalText(secrets.smtpPassword);
   if (smtpPassword) update.smtp_password = smtpPassword;
-  const imapPassword = optionalText(form.imapPassword);
+  const imapPassword = optionalText(secrets.imapPassword);
   if (imapPassword) update.imap_password = imapPassword;
-  const pop3Password = optionalText(form.pop3Password);
+  const pop3Password = optionalText(secrets.pop3Password);
   if (pop3Password) update.pop3_password = pop3Password;
-  const oauthClientSecret = optionalText(form.oauthClientSecret);
+  const oauthClientSecret = optionalText(secrets.oauthClientSecret);
   if (oauthClientSecret) update.oauth_client_secret = oauthClientSecret;
 
   return update;
 }
 
-function buildProviderCreate(form: ModelProviderFormState) {
+function buildProviderCreate(form: ModelProviderFormState, apiKeyValue: string) {
   const payload: {
     name: string;
     provider_type: string;
@@ -305,9 +299,17 @@ function buildProviderCreate(form: ModelProviderFormState) {
     is_active: form.isActive,
   };
 
-  const apiKey = optionalText(form.apiKey);
+  const apiKey = optionalText(apiKeyValue);
   if (apiKey) payload.api_key = apiKey;
   return payload;
+}
+
+function readInputValue(ref: RefObject<HTMLInputElement | null>) {
+  return ref.current?.value ?? '';
+}
+
+function clearInputValue(ref: RefObject<HTMLInputElement | null>) {
+  if (ref.current) ref.current.value = '';
 }
 
 function formatEndpoint(host: string | null | undefined, port: number | null | undefined) {
@@ -444,7 +446,7 @@ function getProviderTypeLabel(providerType: string) {
 
 function getProviderEndpointLabel(provider: LLMProviderConfig) {
   if (provider.base_url) return provider.base_url;
-  return provider.provider_type === 'openai' ? '기본 OpenAI API endpoint' : 'Provider 기본 endpoint';
+  return provider.provider_type === 'openai' ? '기본 OpenAI API 엔드포인트' : '기본 제공자 엔드포인트';
 }
 
 const settingsDetailSurfaces: Partial<Record<SettingsTab, {
@@ -524,6 +526,12 @@ export function SettingsLayout() {
   const [embeddingSaving, setEmbeddingSaving] = useState(false);
   const [oidcSessionClaims, setOidcSessionClaims] = useState<SessionClaims>(EMPTY_SESSION_CLAIMS);
   const [oidcActionError, setOidcActionError] = useState<string | null>(null);
+  const smtpPasswordInputRef = useRef<HTMLInputElement>(null);
+  const imapPasswordInputRef = useRef<HTMLInputElement>(null);
+  const pop3PasswordInputRef = useRef<HTMLInputElement>(null);
+  const oauthClientSecretInputRef = useRef<HTMLInputElement>(null);
+  const commercialApiKeyInputRef = useRef<HTMLInputElement>(null);
+  const localApiKeyInputRef = useRef<HTMLInputElement>(null);
   const startupView = useWorkspaceStartupView();
   const oidcBrowserConfig = getOidcBrowserConfig();
   const connectorManifest = runnerConfig?.connector_manifest;
@@ -574,6 +582,13 @@ export function SettingsLayout() {
     setAccountStatus(null);
   };
 
+  const clearAccountSecretInputs = () => {
+    clearInputValue(smtpPasswordInputRef);
+    clearInputValue(imapPasswordInputRef);
+    clearInputValue(pop3PasswordInputRef);
+    clearInputValue(oauthClientSecretInputRef);
+  };
+
   const handleOidcLogin = async () => {
     setOidcActionError(null);
     try {
@@ -601,9 +616,15 @@ export function SettingsLayout() {
     setAccountStatus(null);
 
     try {
-      const savedConfig = await apiClient.put<AccountConfig>('/api/accounts/config', buildAccountUpdate(accountForm));
+      const savedConfig = await apiClient.put<AccountConfig>('/api/accounts/config', buildAccountUpdate(accountForm, {
+        smtpPassword: readInputValue(smtpPasswordInputRef),
+        imapPassword: readInputValue(imapPasswordInputRef),
+        pop3Password: readInputValue(pop3PasswordInputRef),
+        oauthClientSecret: readInputValue(oauthClientSecretInputRef),
+      }));
       setAccountConfig(savedConfig);
       setAccountForm(toAccountForm(savedConfig));
+      clearAccountSecretInputs();
       setAccountStatus('계정 설정을 저장했습니다. 저장된 secret은 응답에 노출되지 않습니다.');
     } catch (error) {
       const message = error instanceof Error ? error.message : '계정 설정을 저장할 수 없습니다.';
@@ -628,7 +649,7 @@ export function SettingsLayout() {
     form: ModelProviderFormState,
     options: {
       setSaving: (saving: boolean) => void;
-      resetApiKey: () => void;
+      apiKeyRef: RefObject<HTMLInputElement | null>;
       successMessage: string;
     },
   ) => {
@@ -638,11 +659,11 @@ export function SettingsLayout() {
     setModelProviderStatus(null);
 
     try {
-      const created = await apiClient.post<LLMProviderConfig>('/api/llm-providers', buildProviderCreate(form));
+      const created = await apiClient.post<LLMProviderConfig>('/api/llm-providers', buildProviderCreate(form, readInputValue(options.apiKeyRef)));
       setModelProviders((current) => [created, ...current.filter((provider) => provider.id !== created.id)]);
       setSelectedEmbeddingProviderId(created.id);
       setSelectedEmbeddingModel(created.embedding_model ?? form.embeddingModel);
-      options.resetApiKey();
+      clearInputValue(options.apiKeyRef);
       setModelProviderStatus(options.successMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI 모델 설정을 저장할 수 없습니다.';
@@ -683,9 +704,9 @@ export function SettingsLayout() {
       const rotated = await apiClient.post<RunnerRotateResponse>('/api/runner-config/rotate', {});
       setRunnerConfig({
         workspace_id: rotated.workspace_id,
-        configured: true,
-        fingerprint: null,
-        updated_at: null,
+        configured: rotated.configured,
+        fingerprint: rotated.fingerprint,
+        updated_at: rotated.updated_at,
         connector_manifest: rotated.connector_manifest,
       });
       setRunnerTokenIssued(true);
@@ -939,11 +960,11 @@ export function SettingsLayout() {
                               </div>
                               <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
                                 <div>
-                                  <dt className="text-xs font-bold text-muted-foreground">Provider</dt>
+                                  <dt className="text-xs font-bold text-muted-foreground">제공자 유형</dt>
                                   <dd className="mt-1 break-all font-semibold">{getProviderTypeLabel(provider.provider_type)}</dd>
                                 </div>
                                 <div>
-                                  <dt className="text-xs font-bold text-muted-foreground">Endpoint</dt>
+                                  <dt className="text-xs font-bold text-muted-foreground">연결 엔드포인트</dt>
                                   <dd className="mt-1 break-all font-semibold">{getProviderEndpointLabel(provider)}</dd>
                                 </div>
                                 <div>
@@ -975,7 +996,7 @@ export function SettingsLayout() {
                   <form
                     onSubmit={(event) => createModelProvider(event, commercialModelForm, {
                       setSaving: setCommercialModelSaving,
-                      resetApiKey: () => setCommercialModelForm((current) => ({ ...current, apiKey: '' })),
+                      apiKeyRef: commercialApiKeyInputRef,
                       successMessage: '상용 API 모델을 등록했습니다.',
                     })}
                     className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4"
@@ -1001,7 +1022,7 @@ export function SettingsLayout() {
                         </select>
                       </div>
                       <div className="space-y-2">
-                        <label htmlFor="commercial-base-url" className="text-sm font-bold text-muted-foreground">API endpoint</label>
+                        <label htmlFor="commercial-base-url" className="text-sm font-bold text-muted-foreground">API 엔드포인트</label>
                         <input id="commercial-base-url" type="url" value={commercialModelForm.baseUrl} onChange={(event) => updateCommercialModelField('baseUrl', event.target.value)} placeholder="https://api.openai.com/v1" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <div className="grid gap-4 sm:grid-cols-2">
@@ -1020,7 +1041,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="commercial-api-key" className="text-sm font-bold text-muted-foreground">API Key</label>
-                        <input id="commercial-api-key" type="password" value={commercialModelForm.apiKey} onChange={(event) => updateCommercialModelField('apiKey', event.target.value)} placeholder="저장 시에만 전송" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input id="commercial-api-key" ref={commercialApiKeyInputRef} type="password" onChange={() => setModelProviderStatus(null)} placeholder="저장 시에만 전송" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <button type="submit" disabled={commercialModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background transition-colors hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60">
                         {commercialModelSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Plus className="size-4" aria-hidden="true" />}
@@ -1032,7 +1053,7 @@ export function SettingsLayout() {
                   <form
                     onSubmit={(event) => createModelProvider(event, localModelForm, {
                       setSaving: setLocalModelSaving,
-                      resetApiKey: () => setLocalModelForm((current) => ({ ...current, apiKey: '' })),
+                      apiKeyRef: localApiKeyInputRef,
                       successMessage: 'Gemma4 로컬 모델을 등록했습니다.',
                     })}
                     className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4"
@@ -1068,8 +1089,8 @@ export function SettingsLayout() {
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label htmlFor="local-api-key" className="text-sm font-bold text-muted-foreground">Local API key override</label>
-                        <input id="local-api-key" type="password" value={localModelForm.apiKey} onChange={(event) => updateLocalModelField('apiKey', event.target.value)} placeholder="필요한 경우에만 입력" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <label htmlFor="local-api-key" className="text-sm font-bold text-muted-foreground">로컬 API 키 대체값</label>
+                        <input id="local-api-key" ref={localApiKeyInputRef} type="password" onChange={() => setModelProviderStatus(null)} placeholder="필요한 경우에만 입력" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <button type="submit" disabled={localModelSaving || modelProvidersLoading} className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-secondary disabled:cursor-not-allowed disabled:opacity-60">
                         {localModelSaving ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Cpu className="size-4" aria-hidden="true" />}
@@ -1305,7 +1326,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="smtp-password" className="text-sm font-bold text-muted-foreground">SMTP secret</label>
-                        <input id="smtp-password" name="smtp_password" type="password" value={accountForm.smtpPassword} onChange={(event) => updateAccountField('smtpPassword', event.target.value)} placeholder={accountConfig?.has_smtp_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input id="smtp-password" ref={smtpPasswordInputRef} name="smtp_password" type="password" onChange={() => setAccountStatus(null)} placeholder={accountConfig?.has_smtp_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                     </section>
 
@@ -1324,7 +1345,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="imap-password" className="text-sm font-bold text-muted-foreground">IMAP secret</label>
-                        <input id="imap-password" name="imap_password" type="password" value={accountForm.imapPassword} onChange={(event) => updateAccountField('imapPassword', event.target.value)} placeholder={accountConfig?.has_imap_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input id="imap-password" ref={imapPasswordInputRef} name="imap_password" type="password" onChange={() => setAccountStatus(null)} placeholder={accountConfig?.has_imap_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                     </section>
 
@@ -1343,7 +1364,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="pop3-password" className="text-sm font-bold text-muted-foreground">POP3 secret</label>
-                        <input id="pop3-password" name="pop3_password" type="password" value={accountForm.pop3Password} onChange={(event) => updateAccountField('pop3Password', event.target.value)} placeholder={accountConfig?.has_pop3_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input id="pop3-password" ref={pop3PasswordInputRef} name="pop3_password" type="password" onChange={() => setAccountStatus(null)} placeholder={accountConfig?.has_pop3_password ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                     </section>
 
@@ -1354,7 +1375,7 @@ export function SettingsLayout() {
                       </div>
                       <div className="space-y-2">
                         <label htmlFor="oauth-client-secret" className="text-sm font-bold text-muted-foreground">OAuth client secret</label>
-                        <input id="oauth-client-secret" name="oauth_client_secret" type="password" value={accountForm.oauthClientSecret} onChange={(event) => updateAccountField('oauthClientSecret', event.target.value)} placeholder={accountConfig?.has_oauth_client_secret ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                        <input id="oauth-client-secret" ref={oauthClientSecretInputRef} name="oauth_client_secret" type="password" onChange={() => setAccountStatus(null)} placeholder={accountConfig?.has_oauth_client_secret ? '저장된 secret 유지' : '새 secret 입력'} className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                       </div>
                       <div className="space-y-2 sm:col-span-2">
                         <label htmlFor="oauth-redirect-uri" className="text-sm font-bold text-muted-foreground">OAuth redirect URI</label>

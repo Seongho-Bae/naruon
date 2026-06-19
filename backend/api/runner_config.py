@@ -33,7 +33,9 @@ class RunnerConfigResponse(BaseModel):
 
 class RunnerRotateResponse(BaseModel):
     workspace_id: str
-    registration_token: str
+    configured: bool
+    fingerprint: str | None = None
+    updated_at: datetime.datetime | None = None
     connector_manifest: dict[str, object]
 
 
@@ -143,6 +145,8 @@ async def rotate_runner_token(
         ) from exc
     return RunnerRotateResponse(
         workspace_id=config.workspace_id,
-        registration_token=token,
+        configured=True,
+        fingerprint=_fingerprint(token),
+        updated_at=config.updated_at,
         connector_manifest=_connector_manifest(),
     )
