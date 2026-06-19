@@ -750,6 +750,7 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "provider_mode=github_models" in workflow
     assert "strix_llm:" in workflow
     assert "github.event.inputs.strix_llm || 'openai/gpt-5'" in workflow
+    assert 'python-version: "3.14"' in workflow
     assert "secrets.STRIX_LLM ||" not in workflow
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow

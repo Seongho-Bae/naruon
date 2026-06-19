@@ -10,6 +10,10 @@
 **Learning:** Search inputs placed in complex dashboard layouts frequently miss explicitly associated labels and IDs, relying only on placeholders or visual icons, which creates barriers for screen reader users navigating the page landmarks.
 **Action:** Always provide a visually hidden `<label>` explicitly tied to the input via `htmlFor` and `id`, and ensure any adjacent decorative search icons have `aria-hidden="true"`.
 
+## 2026-06-08 - Accessible Loading States for Buttons
+**Learning:** The native HTML `disabled` attribute inherently communicates the disabled state to screen readers and removes elements from the tab order. Adding `aria-disabled="true"` to a `disabled` button is redundant and can be flagged by accessibility linters. However, adding `aria-busy="true"` during an async operation correctly communicates to screen readers that the element is actively updating.
+**Action:** When adding accessible loading states to buttons, use `disabled={isLoading}` for state, add `aria-busy={isLoading}` for context, but avoid redundant `aria-disabled={isLoading}`.
+
 ## 2024-06-04 - Semantic Buttons for Task Interactions
 **Learning:** Interactive areas that trigger actions (like opening a task detail view or navigating to a source) should be semantic `<button>` elements rather than `<div>`s with `onClick` handlers. `div`s lack native keyboard accessibility, focus rings, and proper screen reader roles. Also, `aria-label`s should be context-aware (e.g., "접수 더보기" instead of just "더보기").
 **Action:** When creating new components that function as clickable cards or icon triggers, always wrap them in `<button type="button">` and ensure they have `focus-visible` styles and contextually descriptive `aria-label`s.
