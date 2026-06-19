@@ -131,7 +131,9 @@ def test_org_scoped_runner_config_uses_shared_workspace(
     assert rotate_response.status_code == 200
     rotate_data = rotate_response.json()
     assert rotate_data["workspace_id"] == "workspace-org-acme"
-    assert rotate_data["registration_token"].startswith("nrn_")
+    assert rotate_data["configured"] is True
+    assert rotate_data["fingerprint"] is not None
+    assert "registration_token" not in rotate_data
     assert mock_db.runner.organization_id == "org-acme"
 
     read_response = second_org_admin_client.get("/api/runner-config")
@@ -178,6 +180,7 @@ def test_runner_rotation_includes_connector_bootstrap_contract(admin_client):
 
     assert response.status_code == 200
     data = response.json()
+    assert "registration_token" not in data
     assert data["connector_manifest"]["network_mode"] == "outbound_only"
     assert data["connector_manifest"]["control_plane_domain"] == "naruon.net"
     assert "registration_token" not in data["connector_manifest"]

@@ -89,7 +89,9 @@ describe("SettingsLayout", () => {
         if (String(input) === "/api/runner-config/rotate" && init?.method === "POST") {
           return jsonResponse({
             workspace_id: "workspace-org-acme",
-            registration_token: "nrn_one_time_connector_token",
+            configured: true,
+            fingerprint: "***rotated",
+            updated_at: "2026-05-27T07:00:00Z",
             connector_manifest: {
               role: "self-hosted_connector",
               network_mode: "outbound_only",
@@ -394,7 +396,8 @@ describe("SettingsLayout", () => {
     expect(rotateCall?.[1]?.headers).not.toHaveProperty("X-Dev-Auth-Token");
     expect(container.textContent).toContain("등록 토큰이 생성되었습니다");
     expect(container.textContent).toContain("원문 토큰은 화면에 보관하지 않습니다");
-    expect(container.textContent).not.toContain("nrn_one_time_connector_token");
+    expect(container.textContent).not.toMatch(/nrn_[A-Za-z0-9_-]+/);
+    expect(container.textContent).toContain("***rotated");
   });
 
   it("marks external operational console links with explicit noopener", async () => {
@@ -628,6 +631,13 @@ describe("SettingsLayout", () => {
     expect(container.textContent).toContain("gpt-5.4");
     expect(container.textContent).toContain("text-embedding-3-small");
     expect(container.textContent).toContain("Gemma4 로컬 모델 등록");
+    expect(container.textContent).toContain("제공자 유형");
+    expect(container.textContent).toContain("연결 엔드포인트");
+    expect(container.textContent).toContain("API 엔드포인트");
+    expect(container.textContent).toContain("로컬 API 키 대체값");
+    expect(container.textContent).not.toContain("Provider");
+    expect(container.textContent).not.toContain("Endpoint");
+    expect(container.textContent).not.toContain("Local API key override");
     expect(container.textContent).not.toContain("sk-");
 
     const localRegisterButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Gemma4 로컬 모델 등록"));
