@@ -40,6 +40,13 @@ def read_repo_text(relative_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def assert_dockerfile_stage_from(dockerfile: str, image: str, stage_alias: str) -> None:
+    pattern = rf"^FROM {re.escape(image)}@sha256:[0-9a-f]{{64}} AS {re.escape(stage_alias)}$"
+    assert re.search(pattern, dockerfile, flags=re.MULTILINE), (
+        f"missing pinned {image} stage alias {stage_alias}"
+    )
+
+
 def test_root_version_exists_and_is_initial_semver_release() -> None:
     version = read_repo_text("VERSION").strip()
 
@@ -91,8 +98,8 @@ def test_container_images_use_node_24_runtime() -> None:
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert "FROM node:24-slim AS frontend-builder" in root_dockerfile
-    assert "FROM node:24-slim" in frontend_dockerfile
+    assert_dockerfile_stage_from(root_dockerfile, "node:24-slim", "frontend-builder")
+    assert "FROM node:24-slim@sha256:" in frontend_dockerfile
     assert "docker.io/library/node:24-slim" in frontend_dockerfile
     assert "docker.io/library/node:24-slim" in docker_publish_workflow
     assert "Node 24 toolchain" in render_deployment
@@ -109,7 +116,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert "FROM python:3.14-slim AS backend-runtime" in root_dockerfile
+    assert_dockerfile_stage_from(root_dockerfile, "python:3.14-slim", "backend-runtime")
     assert "docker.io/library/python:3.14-slim" in root_dockerfile
     assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
     assert 'python-version: ["3.14"]' in app_ci_workflow
@@ -132,7 +139,8 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
     assert "build-essential" not in dockerfile
     assert "cargo" not in dockerfile
     assert "libpq-dev" not in dockerfile
-    assert "pip install --no-cache-dir -r requirements.txt" in dockerfile
+    assert "COPY backend/requirements-hashes.txt /app/requirements-hashes.txt" in dockerfile
+    assert "pip install --no-cache-dir --require-hashes -r requirements-hashes.txt" in dockerfile
 
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
@@ -241,7 +249,24 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         in trivy_workflow
     )
     assert "results_format: sarif" in scorecard_workflow
+    assert "Preserve Scorecard SARIF categories" in scorecard_workflow
+    assert (
+        "python scripts/ci/ensure_scorecard_sarif_categories.py scorecard-results.sarif"
+        in scorecard_workflow
+    )
     assert "category: scorecard" in scorecard_workflow
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in scorecard_workflow
+    )
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}"
+        in scorecard_workflow
+    )
+    assert (
+        "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in scorecard_workflow
+    )
 
     assert (
         "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0"
@@ -261,6 +286,49 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
         in trivy_workflow
     )
+
+
+def test_scorecard_sarif_normalizer_preserves_branch_protection_category(
+    tmp_path: Path,
+) -> None:
+    sarif_path = tmp_path / "scorecard-results.sarif"
+    sarif_path.write_text(
+        json.dumps(
+            {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {"driver": {"name": "Scorecard", "rules": []}},
+                        "automationDetails": {"id": "supply-chain/local"},
+                        "results": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    normalizer = REPO_ROOT / "scripts/ci/ensure_scorecard_sarif_categories.py"
+    for _ in range(2):
+        subprocess.run(
+            [sys.executable, str(normalizer), str(sarif_path)],
+            check=True,
+        )
+
+    normalized = json.loads(sarif_path.read_text(encoding="utf-8"))
+    categories = [
+        run.get("automationDetails", {}).get("id")
+        for run in normalized["runs"]
+    ]
+    assert categories.count("supply-chain/branch-protection") == 1
+    branch_protection_run = next(
+        run
+        for run in normalized["runs"]
+        if run.get("automationDetails", {}).get("id")
+        == "supply-chain/branch-protection"
+    )
+    assert branch_protection_run["tool"]["driver"]["name"] == "Scorecard"
+    assert branch_protection_run["results"] == []
 
 
 def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
@@ -455,7 +523,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
 def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     dockerfile = read_repo_text("Dockerfile")
 
-    assert "FROM python:3.14-slim AS backend-runtime" in dockerfile
+    assert_dockerfile_stage_from(dockerfile, "python:3.14-slim", "backend-runtime")
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in dockerfile
     assert "ENV PYTHONUNBUFFERED=1" in dockerfile
     assert "pnpm install --frozen-lockfile" in dockerfile
