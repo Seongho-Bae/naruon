@@ -28,15 +28,19 @@
   - `ix_security_audit_events_scope_time`
   - `ix_security_audit_events_actor_scope`
 - Extend signed `GET /api/security/access-surface` to return
-  `durable_audit_events`.
+  `durable_audit_events` as source-safe presentation evidence. The API response
+  does not return browser-facing source ids, event ids, decision ids, review ids,
+  workspace/org/user/group claims, raw hosts, provider execution flags, or
+  resource UIDs.
 - Scope reads by signed context:
   - organization admins see events in their organization and workspace;
   - members see only their own actor events in their organization/workspace.
 - Keep legacy `AuditLog` as an internal compatibility sink only; it is not
   returned by the Security API or UI.
-- Render durable audit evidence in the Security audit tab with event UID,
-  actor, workspace, resource UID, evidence source, observed time, and detail
-  text. Connector evidence remains separate.
+- Render durable audit evidence in the Security audit tab with actor role,
+  scoped governance labels, source-safe evidence labels, observed time, and a
+  generic detail sentence. Connector evidence remains separate. Internal event
+  and resource identifiers stay server-side only.
 
 ## Verification
 
