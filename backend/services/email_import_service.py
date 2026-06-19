@@ -1,6 +1,9 @@
 import asyncio
 import datetime
+from email import policy as email_policy
 import hashlib
+import logging
+import mailbox
 import os
 import stat
 from dataclasses import dataclass, field
@@ -15,7 +18,12 @@ from db.models import Attachment, Email
 from services.archive import extract_backup_async
 from services.email_dedupe_service import strong_email_fingerprint
 from services.email_parser import EmailData, parse_eml_bytes
-from services.exceptions import ArchiveError, EmailParseError
+from services.embedding import (
+    STORAGE_EMBEDDING_DIMENSION,
+    fit_embedding_vector,
+    generate_embeddings,
+)
+from services.exceptions import ArchiveError, EmailParseError, EmbeddingGenerationError
 from services.threading_service import (
     assign_thread_id,
     email_owner_filters,
@@ -23,12 +31,13 @@ from services.threading_service import (
     normalize_message_id,
 )
 
-EMBEDDING_DIMENSION = 1536
+EMBEDDING_DIMENSION = STORAGE_EMBEDDING_DIMENSION
 MAX_IMPORT_UPLOADS = 10
 MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_IMPORT_EML_FILES = 100
 MAX_IMPORT_EMAILS_PER_OWNER = 1000
 EMAIL_IMPORT_QUOTA_LOCK_NAMESPACE = "naruon-email-import-quota"
+logger = logging.getLogger(__name__)
 
 EmailImportItemStatus = Literal["imported", "skipped_duplicate", "failed"]
 
@@ -41,6 +50,13 @@ class EmailImportQuotaExceeded(Exception):
 class EmailImportUpload:
     filename: str
     content: bytes
+
+
+@dataclass(frozen=True)
+class EmailImportEmbeddingProvider:
+    api_key: str
+    base_url: str | None
+    embedding_model: str
 
 
 @dataclass
@@ -72,6 +88,8 @@ class EmailImportResult:
 
 def _safe_upload_filename(filename: str) -> str:
     name = Path(filename or "upload").name.strip()
+    if name in {".", ".."}:
+        return "upload"
     return name or "upload"
 
 
@@ -204,6 +222,7 @@ async def _import_single_eml(
     display_filename: str,
     user_id: str,
     organization_id: str,
+    embedding_provider: EmailImportEmbeddingProvider | None = None,
 ) -> EmailImportItemResult:
     try:
         content, parsed = await asyncio.to_thread(_read_and_parse_eml, eml_path)
@@ -239,6 +258,15 @@ async def _import_single_eml(
         user_id=user_id,
         organization_id=organization_id,
     )
+    attachment_payloads = list(parsed.get("attachments", []))
+    embedding_texts = [str(parsed.get("body") or "")]
+    embedding_texts.extend(
+        str(attachment.get("content") or "") for attachment in attachment_payloads
+    )
+    fitted_embeddings = await _generate_import_embeddings(
+        embedding_texts,
+        embedding_provider=embedding_provider,
+    )
     email_obj = Email(
         user_id=user_id,
         organization_id=organization_id,
@@ -253,16 +281,20 @@ async def _import_single_eml(
         references=parsed.get("references"),
         date=persisted_date,
         body=parsed.get("body", ""),
-        embedding=[0.0] * EMBEDDING_DIMENSION,
+        embedding=fitted_embeddings[0] if fitted_embeddings else _zero_embedding(),
     )
 
     attachment_count = 0
-    for attachment in parsed.get("attachments", []):
+    for attachment_index, attachment in enumerate(attachment_payloads, start=1):
         email_obj.attachments.append(
             Attachment(
                 filename=str(attachment.get("filename") or "attachment.txt"),
                 content=str(attachment.get("content") or ""),
-                embedding=[0.0] * EMBEDDING_DIMENSION,
+                embedding=(
+                    fitted_embeddings[attachment_index]
+                    if attachment_index < len(fitted_embeddings)
+                    else _zero_embedding()
+                ),
             )
         )
         attachment_count += 1
@@ -288,6 +320,82 @@ async def _import_single_eml(
 def _read_and_parse_eml(eml_path: Path) -> tuple[bytes, EmailData]:
     content = _read_eml_bytes(eml_path)
     return content, parse_eml_bytes(content)
+
+
+def _zero_embedding() -> list[float]:
+    return [0.0] * EMBEDDING_DIMENSION
+
+
+async def _generate_import_embeddings(
+    texts: list[str],
+    *,
+    embedding_provider: EmailImportEmbeddingProvider | None,
+) -> list[list[float]]:
+    if embedding_provider is None:
+        return [_zero_embedding() for _ in texts]
+    try:
+        provider_embeddings = await generate_embeddings(
+            texts,
+            embedding_provider.api_key,
+            base_url=embedding_provider.base_url,
+            model=embedding_provider.embedding_model,
+        )
+    except (EmbeddingGenerationError, ValueError) as exc:
+        logger.warning(
+            "Email import embedding generation failed; retrying imported content "
+            "item by item before zero-vector fallback: "
+            "error_type=%s text_count=%s",
+            type(exc).__name__,
+            len(texts),
+        )
+        recovered: list[list[float]] = []
+        for index, text in enumerate(texts):
+            try:
+                single_embedding = await generate_embeddings(
+                    [text],
+                    embedding_provider.api_key,
+                    base_url=embedding_provider.base_url,
+                    model=embedding_provider.embedding_model,
+                )
+                if not single_embedding:
+                    recovered.append(_zero_embedding())
+                    continue
+                recovered.append(
+                    fit_embedding_vector(single_embedding[0], EMBEDDING_DIMENSION)
+                )
+            except (
+                EmbeddingGenerationError,
+                ValueError,
+                TypeError,
+                IndexError,
+            ) as item_exc:
+                logger.warning(
+                    "Email import embedding item retry failed; falling back to zero "
+                    "vector for imported content: error_type=%s embedding_index=%s",
+                    type(item_exc).__name__,
+                    index,
+                )
+                recovered.append(_zero_embedding())
+        return recovered
+
+    fitted: list[list[float]] = []
+    for index in range(len(texts)):
+        if index >= len(provider_embeddings):
+            fitted.append(_zero_embedding())
+            continue
+        try:
+            fitted.append(
+                fit_embedding_vector(provider_embeddings[index], EMBEDDING_DIMENSION)
+            )
+        except ValueError as exc:
+            logger.warning(
+                "Email import embedding fit failed; falling back to zero vector "
+                "for imported content: error_type=%s embedding_index=%s",
+                type(exc).__name__,
+                index,
+            )
+            fitted.append(_zero_embedding())
+    return fitted
 
 
 def _read_eml_bytes(eml_path: Path) -> bytes:
@@ -334,6 +442,8 @@ async def _eml_paths_for_upload(
     suffix = upload_path.suffix.lower()
     if suffix == ".eml":
         return [upload_path], None
+    if suffix == ".mbox":
+        return _eml_paths_for_mbox_upload(upload_path, upload_dir)
     if suffix != ".zip":
         return [], "unsupported_file_type"
 
@@ -352,12 +462,41 @@ async def _eml_paths_for_upload(
     return eml_paths, None
 
 
+def _eml_paths_for_mbox_upload(
+    upload_path: Path,
+    upload_dir: Path,
+) -> tuple[list[Path], str | None]:
+    extract_dir = upload_dir / "mbox"
+    extract_dir.mkdir(parents=True, exist_ok=True)
+
+    parsed_mailbox = None
+    try:
+        parsed_mailbox = mailbox.mbox(upload_path, create=False)
+        eml_paths: list[Path] = []
+        for index, message in enumerate(parsed_mailbox, start=1):
+            if len(eml_paths) >= MAX_IMPORT_EML_FILES:
+                return [], "mbox_too_many_eml_files"
+            eml_path = extract_dir / f"message_{index:06d}.eml"
+            eml_path.write_bytes(message.as_bytes(policy=email_policy.default))
+            eml_paths.append(eml_path)
+    except (OSError, mailbox.Error, UnicodeError, ValueError):
+        return [], "mbox_parse_failed"
+    finally:
+        if parsed_mailbox is not None:
+            parsed_mailbox.close()
+
+    if not eml_paths:
+        return [], "mbox_contains_no_eml"
+    return eml_paths, None
+
+
 async def import_email_uploads(
     session: AsyncSession,
     *,
     uploads: list[EmailImportUpload],
     user_id: str,
     organization_id: str,
+    embedding_provider: EmailImportEmbeddingProvider | None = None,
 ) -> EmailImportResult:
     lock_acquired = await _acquire_owner_import_quota_lock(
         session, user_id=user_id, organization_id=organization_id
@@ -411,6 +550,7 @@ async def import_email_uploads(
                         display_filename=display_filename,
                         user_id=user_id,
                         organization_id=organization_id,
+                        embedding_provider=embedding_provider,
                     )
                 )
     finally:

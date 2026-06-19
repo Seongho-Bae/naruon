@@ -28,6 +28,7 @@ from services.email_dedupe_service import (
     email_strong_fingerprint,
 )
 from services.email_import_service import (
+    EmailImportEmbeddingProvider,
     EmailImportQuotaExceeded,
     MAX_IMPORT_UPLOAD_BYTES,
     MAX_IMPORT_UPLOADS,
@@ -35,6 +36,7 @@ from services.email_import_service import (
     EmailImportUpload,
     import_email_uploads,
 )
+from services.llm_provider_selection import resolve_runtime_llm_provider
 from services.text_safety import strip_html_markup
 import logging
 from api.auth import AuthContext, get_auth_context
@@ -495,7 +497,11 @@ async def import_email_files(
     uploads: list[EmailImportUpload] = []
     for upload in files:
         normalized_filename = upload.filename.lower().strip() if upload.filename else ""
-        if not upload.filename or not (normalized_filename.endswith(".eml") or normalized_filename.endswith(".zip") or normalized_filename.endswith(".mbox")):
+        if not upload.filename or not (
+            normalized_filename.endswith(".eml")
+            or normalized_filename.endswith(".zip")
+            or normalized_filename.endswith(".mbox")
+        ):
             raise HTTPException(status_code=400, detail="invalid_file_type")
 
         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
@@ -508,12 +514,26 @@ async def import_email_files(
             )
         )
 
+    runtime_provider = await resolve_runtime_llm_provider(
+        db,
+        user_id=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+    )
+    embedding_provider = None
+    if runtime_provider is not None:
+        embedding_provider = EmailImportEmbeddingProvider(
+            api_key=runtime_provider.api_key,
+            base_url=runtime_provider.base_url,
+            embedding_model=runtime_provider.embedding_model,
+        )
+
     try:
         import_result = await import_email_uploads(
             db,
             uploads=uploads,
             user_id=auth_context.user_id,
             organization_id=auth_context.organization_id,
+            embedding_provider=embedding_provider,
         )
     except EmailImportQuotaExceeded as exc:
         raise HTTPException(

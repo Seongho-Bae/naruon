@@ -54,3 +54,7 @@
 ## 2026-06-18 - Route heavy search reads to read replica
 **Learning:** `backend/api/search.py` needs the primary database session for current provider and tenant configuration, but the heavy email and attachment search query can use the read-only session from `db.session.get_readonly_db`.
 **Action:** Keep provider/config resolution on `Depends(get_db)` and route only the read-only search query through `Depends(get_readonly_db)` so search load moves to replicas without replica-lagging fresh configuration reads.
+
+## 2026-06-19 - Email owner/date lookup index
+**Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
+**Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
