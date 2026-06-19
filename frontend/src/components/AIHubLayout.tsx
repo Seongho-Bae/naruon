@@ -550,10 +550,12 @@ export function AIHubLayout() {
           <button
             type="button"
             onClick={requestRefresh}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            disabled={surfaceStatus === 'loading'}
+            aria-busy={surfaceStatus === 'loading'}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw className="size-4" aria-hidden="true" />
-            새로고침
+            <RefreshCw className={`size-4 ${surfaceStatus === 'loading' ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {surfaceStatus === 'loading' ? '새로고침 중' : '새로고침'}
           </button>
         </div>
         <nav aria-label="AI 허브 섹션" className="mt-4 flex gap-2 overflow-x-auto pb-1">
