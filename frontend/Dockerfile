@@ -36,12 +36,7 @@ ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 RUN corepack enable pnpm
 
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.pnpmfile.cjs ./
-ARG TARGETARCH
-RUN pnpm install --frozen-lockfile \
-    && if [ "$TARGETARCH" = "arm64" ] \
-      && [ ! -f node_modules/lightningcss-linux-arm64-gnu/lightningcss.linux-arm64-gnu.node ]; then \
-      pnpm install lightningcss-linux-arm64-gnu@1.32.0; \
-    fi
+RUN pnpm install --frozen-lockfile
 
 COPY frontend ./
 

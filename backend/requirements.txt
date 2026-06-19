@@ -26,7 +26,7 @@ opentelemetry-api==1.42.1
 opentelemetry-sdk==1.42.1
 opentelemetry-instrumentation-fastapi==0.63b1
 opentelemetry-exporter-otlp==1.42.1
-protobuf==7.35.1
+protobuf==6.33.6  # latest <7 compatible with opentelemetry-proto 1.42.1
 setuptools==82.0.1
 wheel==0.47.0
 websockets==16.0
