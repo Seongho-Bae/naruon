@@ -768,7 +768,8 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow
     assert "STRIX_GITHUB_MODELS_TOKEN is required for GitHub Models Strix scans" in workflow
-    assert "secrets.STRIX_GITHUB_MODELS_TOKEN" in workflow
+    assert "secrets.STRIX_GITHUB_MODELS_TOKEN || github.token" in workflow
+    assert "steps.gate.outputs.provider_mode == 'github_models' && (secrets.STRIX_GITHUB_MODELS_TOKEN || github.token)" in workflow
     assert "openai/gpt-5-mini* | openai/gpt-5-nano*" in workflow
     assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
     assert (
