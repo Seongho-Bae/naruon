@@ -51,6 +51,10 @@
 **Learning:** When organizing pre-sorted collections by groups, explicit dictionary membership and date tracking inside a tight loop creates unnecessary CPU overhead. Because SQL `ORDER BY` combined with Python sorting guarantees an oldest-to-newest ordering, tracking the 'most recent' item per group simplifies to blindly overwriting the dictionary key.
 **Action:** Use `collections.defaultdict` for tracking accumulators (`int`, `list`) and take advantage of implicit data ordering to eliminate branch conditions and explicit `.get()` checks in grouping loops.
 
+## 2026-06-19 - Batched COUNT aggregations using CASE
+**Learning:** Sequential scalar `COUNT` aggregations using multiple database queries introduce significant network roundtrip latency in `get_data_quality_surface`. `asyncio.gather` on the same session is unsafe in SQLAlchemy, and standard `func.count(Model.id)` requires individual queries if not batched.
+**Action:** When multiple independent counts are required from the same table, batch them into a single query using conditional aggregation (e.g., `func.count(case((condition, 1)))`).
+
 ## 2026-06-18 - Route heavy search reads to read replica
 **Learning:** `backend/api/search.py` needs the primary database session for current provider and tenant configuration, but the heavy email and attachment search query can use the read-only session from `db.session.get_readonly_db`.
 **Action:** Keep provider/config resolution on `Depends(get_db)` and route only the read-only search query through `Depends(get_readonly_db)` so search load moves to replicas without replica-lagging fresh configuration reads.

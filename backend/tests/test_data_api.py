@@ -49,6 +49,9 @@ class MockResult:
     def scalar_one_or_none(self):
         return self.obj
 
+    def one_or_none(self):
+        return self.obj
+
 
 class MockAsyncSession:
     def __init__(self, results):
@@ -238,13 +241,8 @@ def mock_db():
         [
             [_webdav_account("webdav_src_primary")],
             [_project_folder("webdav_folder_roadmap")],
-            4,
-            3,
-            1,
-            2,
-            1,
-            3,
-            1,
+            (4, 1, 2, 3), # email stats
+            (3, 1, 1), # attachment stats
             [_connector_event("connector_evt_data_quality")],
             [
                 (_attachment("roadmap.pdf", "extracted attachment text"), ready_email),
