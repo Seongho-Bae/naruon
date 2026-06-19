@@ -55,7 +55,7 @@ describe('mobile workspace API panels', () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain('Q2 출시 계획 및 우선순위 조정');
-    expect(container.textContent).not.toContain('검색 결과를 불러오는 중입니다.');
+    expect(container.textContent).not.toContain('맥락 검색 결과를 불러오는 중입니다.');
     expect(fetch).toHaveBeenCalledWith('/api/search', expect.objectContaining({ method: 'POST' }));
   });
 
@@ -132,7 +132,7 @@ describe('mobile workspace API panels', () => {
       resolveFirst(jsonResponse({
         results: [{
           id: 1,
-          subject: '이전 검색 결과',
+          subject: '이전 맥락 검색 결과',
           sender: '김지현 PM',
           date: '2026-05-11T09:30:00Z',
           snippet: '이전 요청 결과입니다.',
@@ -140,7 +140,7 @@ describe('mobile workspace API panels', () => {
       }));
     });
     await flushAsyncWork();
-    expect(container.textContent).toContain('이전 검색 결과');
+    expect(container.textContent).toContain('이전 맥락 검색 결과');
 
     await act(async () => {
       root?.render(<div />);
@@ -150,7 +150,7 @@ describe('mobile workspace API panels', () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain('검색 결과를 불러오는 중입니다.');
-    expect(container.textContent).not.toContain('이전 검색 결과');
+    expect(container.textContent).toContain('맥락 검색 결과를 불러오는 중입니다.');
+    expect(container.textContent).not.toContain('이전 맥락 검색 결과');
   });
 });

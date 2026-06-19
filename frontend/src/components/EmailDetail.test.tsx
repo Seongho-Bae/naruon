@@ -128,7 +128,7 @@ describe("EmailDetail", () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/api/emails/15")) return Promise.resolve(jsonResponse(email));
-      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "정상 요약", todos: [] }));
+      if (url.endsWith("/api/llm/summarize")) return Promise.resolve(jsonResponse({ summary: "정상 맥락 종합", todos: [] }));
       throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -261,14 +261,14 @@ describe("EmailDetail", () => {
     expect(container.textContent).not.toContain("Thread A stale sibling body");
   });
 
-  it("renders 맥락 종합, action items, and reply drafting in reusable insight cards", async () => {
+  it("renders 맥락 종합, action items, and reply drafting in reusable 판단 포인트 cards", async () => {
     const email: TestEmail = {
       id: 7,
       message_id: "<insight@example.com>",
       thread_id: null,
       sender: "insight@example.com",
       recipients: "user@example.com",
-      subject: "Insight card adoption",
+      subject: "판단 포인트 카드 adoption",
       date: "2026-05-17T10:00:00Z",
       body: "Please summarize this launch message and prepare actions.",
     };
@@ -700,7 +700,7 @@ describe("EmailDetail", () => {
       if (url.endsWith("/api/emails/10")) return Promise.resolve(jsonResponse(emailA));
       if (url.endsWith("/api/emails/11")) return Promise.resolve(jsonResponse(emailB));
       if (url.endsWith("/api/llm/summarize")) {
-        return Promise.resolve(jsonResponse({ summary: "요약", todos: ["일정 확인"] }));
+        return Promise.resolve(jsonResponse({ summary: "맥락 종합", todos: ["일정 확인"] }));
       }
       if (url.endsWith("/api/llm/draft")) return draftResponse.promise;
       throw new Error(`Unexpected fetch: ${url}`);

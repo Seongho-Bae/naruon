@@ -713,7 +713,7 @@ describe("Home workspace action bridge", () => {
     await flushAsyncWork();
 
     expect(container.querySelector('#mobile-search')?.className).toContain("flex");
-    expect(container.textContent).toContain("검색 결과를 불러오는 중입니다.");
+    expect(container.textContent).toContain("맥락 검색 결과를 불러오는 중입니다.");
     expect(fetch).toHaveBeenCalledWith("/api/search", expect.objectContaining({ method: "POST" }));
   });
 

@@ -133,13 +133,13 @@ describe("PromptStudioPage", () => {
     expect(page.querySelector("[data-testid='loader']")).not.toBeNull();
 
     await act(async () => {
-      promptTest.resolve(jsonResponse({ result: "요약 결과" }));
+      promptTest.resolve(jsonResponse({ result: "맥락 종합 결과" }));
       await promptTest.promise;
     });
     await flushAsyncWork();
 
     expect(getButton(page, "실행 (Test)").disabled).toBe(false);
-    expect(page.textContent).toContain("요약 결과");
+    expect(page.textContent).toContain("맥락 종합 결과");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/prompts/test",
       expect.objectContaining({
@@ -151,7 +151,7 @@ describe("PromptStudioPage", () => {
         method: "POST",
       }),
     );
-    expectNoPublicIdentityHeaders(fetchMock.mock.calls[0]?.[1]?.headers);
+    expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
   });
 
   it("shows disabled loading feedback while saving a prompt", async () => {
@@ -188,6 +188,6 @@ describe("PromptStudioPage", () => {
         method: "POST",
       }),
     );
-    expectNoPublicIdentityHeaders(fetchMock.mock.calls[0]?.[1]?.headers);
+    expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
   });
 });

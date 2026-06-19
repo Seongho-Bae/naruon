@@ -66,7 +66,7 @@ const startupViewItems = [
 
 const mobileWorkspaceMenuItems = [
   { label: '받은편지함', description: '메일 스레드', icon: Inbox, href: '#mobile-inbox', view: 'inbox' as const },
-  { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
+  { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 맥락 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
   { label: '일정 연결', description: '일정 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
   { label: 'AI 실행', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
 ];
@@ -369,13 +369,13 @@ export function DashboardLayout({
               role="searchbox"
               value={globalSearchQuery}
               onChange={(event) => setGlobalSearchQuery(event.target.value)}
-              placeholder="맥락, 사람, 파일, 판단 포인트 검색..."
+              placeholder="맥락, 사람, 파일, 판단 포인트 맥락 검색..."
               type="text"
             />
             {globalSearchQuery ? (
               <button
                 type="button"
-                aria-label="검색어 지우기"
+                aria-label="맥락 검색어 지우기"
                 onClick={() => {
                   setGlobalSearchQuery('');
                   globalSearchInputRef.current?.focus();

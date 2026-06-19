@@ -342,7 +342,7 @@ describe("SearchPage", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain(
-      "이 검색 결과에 연결된 발신자 관계가 아직 없습니다.",
+      "이 맥락 검색 결과에 연결된 발신자 관계가 아직 없습니다.",
     );
     const captureButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.includes("발신자 관계 캡처"),
@@ -411,7 +411,7 @@ describe("SearchPage", () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("검색 결과를 불러오지 못했습니다.");
+    expect(container.textContent).toContain("맥락 검색 결과를 불러오지 못했습니다.");
   });
 
   it("clears the query with the custom button while keeping focus on the searchbox", async () => {
@@ -443,19 +443,19 @@ describe("SearchPage", () => {
     expect(input?.getAttribute("inputmode")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
     expect(
-      container.querySelector('button[aria-label="검색어 지우기"]'),
+      container.querySelector('button[aria-label="맥락 검색어 지우기"]'),
     ).not.toBeNull();
 
     await act(async () => {
-      container
-        .querySelector('button[aria-label="검색어 지우기"]')
+      container!
+        .querySelector('button[aria-label="맥락 검색어 지우기"]')
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(input?.value).toBe("");
     expect(document.activeElement).toBe(input);
     expect(
-      container.querySelector('button[aria-label="검색어 지우기"]'),
+      container.querySelector('button[aria-label="맥락 검색어 지우기"]'),
     ).toBeNull();
 
     await act(async () => {
@@ -465,14 +465,14 @@ describe("SearchPage", () => {
           window.HTMLInputElement.prototype,
           "value",
         )?.set;
-        valueSetter?.call(input, "새 검색어");
+        valueSetter?.call(input, "새 맥락 검색어");
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }
     });
 
-    expect(input?.value).toBe("새 검색어");
+    expect(input?.value).toBe("새 맥락 검색어");
     expect(
-      container.querySelector('button[aria-label="검색어 지우기"]'),
+      container.querySelector('button[aria-label="맥락 검색어 지우기"]'),
     ).not.toBeNull();
   });
 });

@@ -586,7 +586,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
               ) : sourceEvidenceLoading ? (
                 <div className="text-sm text-muted-foreground p-2">일정 원본 목록을 확인하는 중입니다.</div>
               ) : calendarSources.length === 0 ? (
-                <div className="text-sm text-muted-foreground p-2">검색된 일정 조율 후보와 연결된 일정 원본이 없습니다.</div>
+                <div className="text-sm text-muted-foreground p-2">맥락 검색된 일정 조율 후보와 연결된 일정 원본이 없습니다.</div>
               ) : calendarSources.slice(0, 3).map((source, index) => {
                 const writable = isWritableCalendarSource(source);
                 return (

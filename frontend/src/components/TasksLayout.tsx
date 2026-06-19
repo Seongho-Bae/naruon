@@ -321,7 +321,7 @@ export function TasksLayout() {
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:gap-3">
           <div className="relative min-w-[180px] flex-1 sm:flex-none">
-            <label htmlFor="task-search-input" className="sr-only">작업 검색</label>
+            <label htmlFor="task-search-input" className="sr-only">작업 맥락 검색</label>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" aria-hidden="true" />
             <input
               ref={taskSearchInputRef}
@@ -331,14 +331,14 @@ export function TasksLayout() {
               role="searchbox"
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
-              placeholder="작업 검색..."
-              aria-label="작업 검색"
+              placeholder="작업 맥락 검색..."
+              aria-label="작업 맥락 검색"
               className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64"
             />
             {taskSearch.length > 0 && (
               <button
                 type="button"
-                aria-label="검색어 지우기"
+                aria-label="맥락 검색어 지우기"
                 onClick={() => {
                   setTaskSearch("");
                   taskSearchInputRef.current?.focus();
