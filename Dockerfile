@@ -8,7 +8,7 @@ ENV PYTHONPATH=/app
 
 # Install system dependencies if any are needed for pgvector/psycopg2 and tiktoken on Python 3.14
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev curl \
+    && apt-get install -y --no-install-recommends build-essential libpq-dev curl \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && export PATH="$HOME/.cargo/bin:$PATH" \
     && rm -rf /var/lib/apt/lists/*

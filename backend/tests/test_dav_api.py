@@ -24,20 +24,14 @@ def test_dav_route_uses_signed_session_dependency():
         (
             route
             for route in app.routes
-            if getattr(route, "original_router", None) is not None
-            and any(
-                isinstance(inner_route, APIRoute)
-                and inner_route.path == "/dav/{path:path}"
-                for inner_route in route.original_router.routes
-            )
+            if isinstance(route, APIRoute)
+            and route.path == "/dav/{path:path}"
         ),
         None,
     )
 
     assert route is not None, "DAV route is not registered"
-    dependencies = {
-        dependency.dependency for dependency in route.include_context.dependencies
-    }
+    dependencies = {dependency.dependency for dependency in route.dependencies}
     assert get_auth_context in dependencies
 
 
