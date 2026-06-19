@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 from db.models import LLMProvider
 from main import app
-from db.session import get_db
+from db.session import get_db, get_readonly_db
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
@@ -79,8 +79,8 @@ async def override_get_db():
 
 
 class CapturingMockSession(MockSession):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, providers=None):
+        super().__init__(providers=providers)
         self.statements = []
 
     async def execute(self, stmt):
@@ -91,6 +91,7 @@ class CapturingMockSession(MockSession):
 @pytest.fixture
 def client():
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_readonly_db] = override_get_db
     with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
         yield c
     app.dependency_overrides.clear()
@@ -140,6 +141,7 @@ def test_search_endpoint_uses_active_provider_embedding_model(mock_generate_embe
         yield session
 
     app.dependency_overrides[get_db] = override_scoped_db
+    app.dependency_overrides[get_readonly_db] = override_scoped_db
     try:
         with TestClient(
             app,
@@ -180,6 +182,7 @@ def test_search_endpoint_query_is_scoped_to_current_user(mock_generate_embedding
         yield session
 
     app.dependency_overrides[get_db] = override_scoped_db
+    app.dependency_overrides[get_readonly_db] = override_scoped_db
     try:
         with TestClient(
             app,
@@ -219,6 +222,7 @@ def test_search_falls_back_to_full_text_when_embedding_provider_fails(
         yield session
 
     app.dependency_overrides[get_db] = override_scoped_db
+    app.dependency_overrides[get_readonly_db] = override_scoped_db
     try:
         with TestClient(
             app,
@@ -237,6 +241,56 @@ def test_search_falls_back_to_full_text_when_embedding_provider_fails(
 
 
 @patch("api.search.generate_embeddings", new_callable=AsyncMock)
+def test_search_uses_primary_config_session_and_readonly_search_session(
+    mock_generate_embeddings,
+):
+    provider = LLMProvider(
+        id=4,
+        user_id="admin",
+        organization_id="org-acme",
+        name="Local Gemma4",
+        provider_type="ollama",
+        base_url="http://ollama:11434/v1",
+        model_identifier="gemma4",
+        embedding_model="embeddinggemma",
+        api_key=None,
+        is_active=True,
+    )
+    mock_generate_embeddings.return_value = [[0.1] * 1536]
+    config_session = CapturingMockSession(providers=[provider])
+    search_session = CapturingMockSession()
+
+    async def override_config_db():
+        yield config_session
+
+    async def override_search_db():
+        yield search_session
+
+    app.dependency_overrides[get_db] = override_config_db
+    app.dependency_overrides[get_readonly_db] = override_search_db
+    try:
+        with TestClient(
+            app,
+            headers={"X-User-Id": "testuser", "X-Organization-Id": "org-acme"},
+        ) as client:
+            response = client.post("/api/search", json={"query": "test query"})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert config_session.statements
+    assert search_session.statements
+    assert any(
+        "llm_providers" in str(stmt).lower() for stmt in config_session.statements
+    )
+    assert all(
+        "combined_search" not in str(stmt).lower()
+        for stmt in config_session.statements
+    )
+    assert "combined_search" in str(search_session.statements[-1]).lower()
+
+
+@patch("api.search.generate_embeddings", new_callable=AsyncMock)
 def test_search_pads_local_embedding_dimension_for_vector_search(
     mock_generate_embeddings,
 ):
@@ -247,6 +301,7 @@ def test_search_pads_local_embedding_dimension_for_vector_search(
         yield session
 
     app.dependency_overrides[get_db] = override_scoped_db
+    app.dependency_overrides[get_readonly_db] = override_scoped_db
     try:
         with TestClient(
             app,

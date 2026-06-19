@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from email import policy as email_policy
 import hashlib
@@ -429,7 +430,10 @@ async def _eml_paths_for_upload(
 ) -> tuple[list[Path], str | None]:
     upload_name = _safe_upload_filename(upload.filename)
     upload_path = upload_dir / upload_name
-    upload_path.write_bytes(upload.content)
+    try:
+        await asyncio.to_thread(upload_path.write_bytes, upload.content)
+    except OSError:
+        return [], "file_write_failed"
 
     suffix = upload_path.suffix.lower()
     if suffix == ".eml":
