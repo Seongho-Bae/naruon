@@ -127,6 +127,7 @@ sanitize_known_strix_report_warnings() {
 		fi
 		python3 - "$report_root" <<'PY'
 from pathlib import Path
+import os
 import re
 import sys
 
@@ -138,9 +139,23 @@ known_internal_warning = re.compile(
     r"continuation \(\d+/\d+\): "
 )
 
-for log_path in root.rglob("*.log"):
-    if log_path.is_symlink() or not log_path.is_file():
-        continue
+
+def iter_report_logs(root: Path):
+    for current_root, dir_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current_root)
+        dir_names[:] = [
+            dir_name
+            for dir_name in dir_names
+            if not (current_path / dir_name).is_symlink()
+        ]
+        for file_name in file_names:
+            log_path = current_path / file_name
+            if log_path.suffix != ".log" or log_path.is_symlink() or not log_path.is_file():
+                continue
+            yield log_path
+
+
+for log_path in iter_report_logs(root):
     try:
         lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
     except UnicodeDecodeError:

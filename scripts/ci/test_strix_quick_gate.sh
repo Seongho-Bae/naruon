@@ -176,6 +176,9 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$GATE_SCRIPT" '[[ "$normalized_changed_file" == scripts/ci/test_*.sh || "$normalized_changed_file" == scripts/ci/*_test.sh ]]' "strix gate excludes large CI test harness scripts from model scan input"
 	assert_file_contains "$GATE_SCRIPT" "Materialized PR-head changed-file scope for Strix scan" "strix gate avoids copying the full PR head tree into privileged scan targets by default"
 	assert_file_contains "$GATE_SCRIPT" "sanitize_known_strix_report_warnings" "strix gate sanitizes only known internal Strix report warnings"
+	assert_file_contains "$GATE_SCRIPT" "iter_report_logs" "strix gate enumerates report logs through a safe walker"
+	assert_file_contains "$GATE_SCRIPT" "os.walk(root, topdown=True, followlinks=False)" "strix gate does not recurse into symlinked report directories"
+	assert_file_not_contains "$GATE_SCRIPT" 'root.rglob("*.log")' "strix gate avoids recursive pathlib glob traversal for report logs"
 	assert_file_contains "$GATE_SCRIPT" "has_strix_report_failure_signal" "strix gate fails closed on warning-class Strix report artifacts"
 	assert_file_not_contains "$workflow_file" "ignore::UserWarning" "strix workflow must not blanket-suppress all UserWarning output"
 	assert_file_not_contains "$workflow_file" "vertex_ai/* | vertex_ai_beta/*" "strix workflow must not accept arbitrary Vertex models"
@@ -2262,6 +2265,11 @@ EOS
 2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): internal agent coordination note
 2026-06-18 13:10:44.089 INFO    strix-pr-scope-example - strix.tools.finish.tool: finish_scan: completed scan with 0 vulnerability report(s)
 EOS
+		mkdir -p "$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report"
+		cat >"$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report/strix.log" <<'EOS'
+2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): outside report should not be rewritten
+EOS
+		ln -s "$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report" "$STRIX_REPORTS_DIR/fake-known-internal-warning/linked-outside"
 		echo "scan ok with sanitized internal Strix report notice"
 		exit 0
 		;;
@@ -3305,6 +3313,10 @@ EOS
 			"$repo_root_dir/strix_runs/fake-known-internal-warning/strix.log" \
 			"finish_scan: completed scan with 0 vulnerability report(s)" \
 			"scenario=$scenario keeps non-warning Strix report evidence"
+		assert_file_contains \
+			"$repo_root_dir/outside-strix-report/strix.log" \
+			"outside report should not be rewritten" \
+			"scenario=$scenario does not rewrite logs through symlinked report directories"
 	fi
 
 	if [ "$scenario" = "pr-changed-scope-full-set" ]; then

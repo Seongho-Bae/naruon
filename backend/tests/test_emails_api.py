@@ -753,24 +753,28 @@ async def test_import_email_files_persists_signed_scoped_eml_upload(
     previous_db_override = app.dependency_overrides.get(get_db)
     app.dependency_overrides[get_db] = lambda: session
     try:
-        response = await client.post(
-            "/api/emails/import-files",
-            files=[
-                (
-                    "files",
+        with patch(
+            "services.email_import_service.generate_embeddings",
+            new_callable=AsyncMock,
+        ) as mock_generate_embeddings:
+            response = await client.post(
+                "/api/emails/import-files",
+                files=[
                     (
-                        "customer-source.eml",
-                        _sample_eml_bytes(
-                            message_id="<imported@example.com>",
-                            subject="<script>bad()</script>Quarter plan",
-                            body="<p>Body text</p>",
+                        "files",
+                        (
+                            "customer-source.eml",
+                            _sample_eml_bytes(
+                                message_id="<imported@example.com>",
+                                subject="<script>bad()</script>Quarter plan",
+                                body="<p>Body text</p>",
+                            ),
+                            "message/rfc822",
                         ),
-                        "message/rfc822",
-                    ),
-                )
-            ],
-            headers={"X-Organization-Id": "org-acme"},
-        )
+                    )
+                ],
+                headers={"X-Organization-Id": "org-acme"},
+            )
     finally:
         if previous_db_override is None:
             app.dependency_overrides.pop(get_db, None)
@@ -797,6 +801,7 @@ async def test_import_email_files_persists_signed_scoped_eml_upload(
 
     assert session.commit_count == 1
     assert session.rollback_count == 0
+    mock_generate_embeddings.assert_not_awaited()
     assert len(session.added) == 1
     added_email = session.added[0]
     assert added_email.user_id == "testuser"
@@ -1715,7 +1720,9 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
 
 @patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
-def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email, caplog):
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(
+    mock_send_email, caplog
+):
     from main import app
     from fastapi.testclient import TestClient
     from db.session import get_db

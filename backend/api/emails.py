@@ -497,7 +497,11 @@ async def import_email_files(
     uploads: list[EmailImportUpload] = []
     for upload in files:
         normalized_filename = upload.filename.lower().strip() if upload.filename else ""
-        if not upload.filename or not (normalized_filename.endswith(".eml") or normalized_filename.endswith(".zip") or normalized_filename.endswith(".mbox")):
+        if not upload.filename or not (
+            normalized_filename.endswith(".eml")
+            or normalized_filename.endswith(".zip")
+            or normalized_filename.endswith(".mbox")
+        ):
             raise HTTPException(status_code=400, detail="invalid_file_type")
 
         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
@@ -515,15 +519,13 @@ async def import_email_files(
         user_id=auth_context.user_id,
         organization_id=auth_context.organization_id,
     )
-    embedding_provider = (
-        EmailImportEmbeddingProvider(
+    embedding_provider = None
+    if runtime_provider is not None:
+        embedding_provider = EmailImportEmbeddingProvider(
             api_key=runtime_provider.api_key,
             base_url=runtime_provider.base_url,
             embedding_model=runtime_provider.embedding_model,
         )
-        if runtime_provider is not None
-        else None
-    )
 
     try:
         import_result = await import_email_uploads(
