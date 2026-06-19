@@ -365,18 +365,17 @@ def test_access_surface_returns_org_scoped_sources_and_policy_decisions(admin_cl
 
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["audit_event"] == "security.access_surface.viewed"
     assert data["viewer"]["role"] == "tenant_admin"
-    source_ids = {source["source_id"] for source in data["sources"]}
-    assert source_ids == {"webdav_src_org_primary", "caldav_src_primary"}
+    assert data["scope_kind"] == "organization"
+    source_types = {source["source_type"] for source in data["sources"]}
+    assert source_types == {"webdav_repository", "caldav_source"}
     assert "webdav_src_other_org" not in response.text
     assert "caldav_src_other_org" not in response.text
-    assert data["connector_events"][0]["event_uid"] == "connector_evt_heartbeat"
+    assert data["connector_events"][0]["state_code"] == "heartbeat"
     assert "connector_evt_other_org" not in response.text
-    audit_event_ids = {event["event_uid"] for event in data["durable_audit_events"]}
-    assert audit_event_ids == {"audit_evt_provider_update"}
+    assert len(data["durable_audit_events"]) == 1
     assert "audit_evt_other_org" not in response.text
-    assert data["durable_audit_events"][0]["workspace_id"] == "workspace-org-acme"
+    assert data["durable_audit_events"][0]["scope_kind"] == "organization"
     reasons = {decision["reason"] for decision in data["policy_decisions"]}
     assert "organization_denied" in reasons
     assert "data_region_denied" in reasons
@@ -389,6 +388,19 @@ def test_access_surface_redacts_sequential_ids_and_credentials(admin_client):
     assert response.status_code == 200, response.text
     serialized = response.text
     for forbidden in (
+        "source_id",
+        "event_uid",
+        "decision_uid",
+        "review_uid",
+        "provider_write_executed",
+        "workspace-org-acme",
+        "org-acme",
+        "group-security",
+        "webdav_src_org_primary",
+        "caldav_src_primary",
+        "connector_evt_heartbeat",
+        "audit_evt_provider_update",
+        "llm_provider:provider_primary",
         "account_id",
         "credentials_encrypted",
         "credential secret",
@@ -434,12 +446,15 @@ def test_member_surface_only_returns_owned_sources(mock_db):
         app.dependency_overrides.pop(get_db, None)
 
     assert response.status_code == 200, response.text
-    source_ids = {source["source_id"] for source in response.json()["sources"]}
-    assert source_ids == {"webdav_src_owned", "caldav_src_owned"}
-    audit_event_ids = {
-        event["event_uid"] for event in response.json()["durable_audit_events"]
-    }
-    assert audit_event_ids == {"audit_evt_member"}
+    body = response.json()
+    assert len(body["sources"]) == 2
+    assert len(body["durable_audit_events"]) == 1
+    assert "webdav_src_owned" not in response.text
+    assert "caldav_src_owned" not in response.text
+    assert "webdav_src_admin" not in response.text
+    assert "caldav_src_admin" not in response.text
+    assert "audit_evt_member" not in response.text
+    assert "audit_evt_admin" not in response.text
 
 
 def test_access_surface_rejects_public_identity_headers_without_signed_session(mock_db):
@@ -732,12 +747,12 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
 
     assert response.status_code == 200, response.text
     body = response.json()
-    source_ids = {source["source_id"] for source in body["sources"]}
-    assert source_uid in source_ids
-    assert caldav_uid in source_ids
-    assert event_uid in {event["event_uid"] for event in body["connector_events"]}
-    assert audit_uid in {
-        event["event_uid"] for event in body["durable_audit_events"]
-    }
+    assert len(body["sources"]) == 2
+    assert len(body["connector_events"]) == 1
+    assert len(body["durable_audit_events"]) == 1
+    assert source_uid not in response.text
+    assert caldav_uid not in response.text
+    assert event_uid not in response.text
+    assert audit_uid not in response.text
     assert "account_id" not in response.text
     assert "security-smoke@example.com" not in response.text

@@ -74,7 +74,8 @@ mail/calendar/file systems.
 - Security governance is source-backed through signed
   `/api/security/access-surface`. The endpoint reads scoped WebDAV, CalDAV, and
   connector evidence plus durable `security_audit_events`, reuses the deny-first
-  RBAC/ABAC policy engine, and returns no sequential account ids, raw
+  RBAC/ABAC policy engine, and returns no sequential account ids, browser-facing
+  source/event/decision identifiers, provider-write execution flags, raw
   credentials, legacy unscoped audit rows, or fake security posture claims.
   HMAC fallback sessions are not accepted as authoritative workspace-membership
   evidence for this security posture surface; enterprise OIDC/JWKS or an
@@ -352,7 +353,7 @@ curl -s -X POST http://localhost:8000/api/calendar/writeback-intent \
 # Review source-backed Security governance without exposing provider secrets.
 curl -s http://localhost:8000/api/security/access-surface \
   -H "Authorization: Bearer $NARUON_DEV_BEARER" \
-  | jq '{workspace_id, audit_event, sources, policy_decisions}'
+  | jq '{scope_kind, sources, policy_decisions}'
 
 # Review source-backed Data repository, ingestion, embedding, and quality state.
 curl -s http://localhost:8000/api/data/quality-surface \

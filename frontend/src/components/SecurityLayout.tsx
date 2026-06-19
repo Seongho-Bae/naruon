@@ -16,79 +16,58 @@ import {
 import { apiClient } from '@/lib/api-client';
 
 type SecurityTab = '보안 대시보드' | '접근 권한' | '감사 로그' | '외부 공유' | '정책';
+type ScopeKind = 'organization' | 'personal';
 
 type PolicyDecisionSummary = {
-  decision_uid: string;
   resource_label: string;
   resource_type: string;
   allowed: boolean;
   reason: string;
-  evidence_source: string;
+  evidence_label: string;
 };
 
 type GovernanceSource = {
-  source_id: string;
   source_type: 'caldav_source' | 'carddav_source' | 'webdav_repository';
   source_label: string;
-  source_host: string;
-  owner_id: string;
-  organization_id: string | null;
-  workspace_id: string;
+  scope_kind: ScopeKind;
   capabilities: string[];
   writeback_enabled: boolean;
-  provider_write_executed: boolean;
   policy_decision: PolicyDecisionSummary;
   last_observed_at: string | null;
 };
 
 type ConnectorEvidence = {
-  event_uid: string;
-  signal_key: string;
   state_code: string;
-  detail_text: string | null;
+  evidence_label: string;
   observed_at: string;
 };
 
 type DurableAuditEvidence = {
-  event_uid: string;
-  actor_user_id: string;
   actor_role: string;
-  organization_id: string | null;
-  workspace_id: string;
+  scope_kind: ScopeKind;
   event_action: string;
   resource_type: string;
-  resource_uid: string | null;
-  evidence_source: string;
-  detail_text: string | null;
+  evidence_label: string;
   observed_at: string;
 };
 
 type ExternalShareReview = {
-  review_uid: string;
-  source_id: string;
   source_type: GovernanceSource['source_type'];
   review_label: string;
   exposure_level: 'internal' | 'external_writeback';
   decision_reason: string;
-  provider_write_executed: boolean;
 };
 
 type PolicyOrderStep = {
-  step_key: string;
   display_name: string;
-  evidence_source: string;
+  evidence_label: string;
 };
 
 type SecurityAccessSurface = {
-  workspace_id: string;
-  organization_id: string | null;
-  audit_event: 'security.access_surface.viewed';
+  scope_kind: ScopeKind;
   viewer: {
-    user_id: string;
     role: string;
-    organization_id: string | null;
-    group_ids: string[];
-    workspace_id: string;
+    scope_kind: ScopeKind;
   };
   sources: GovernanceSource[];
   connector_events: ConnectorEvidence[];
@@ -132,7 +111,7 @@ function sourceTypeLabel(sourceType: GovernanceSource['source_type'] | string) {
 
 function sourceDisplayLabel(source: GovernanceSource, index: number) {
   const label = source.source_label.trim();
-  if (!label || label === source.source_id || /repository/i.test(label)) {
+  if (!label || /repository|source/i.test(label)) {
     return `${sourceTypeLabel(source.source_type)} ${index + 1}`;
   }
   return label;
@@ -151,12 +130,8 @@ function capabilityLabel(capability: string) {
   }
 }
 
-function writeBoundaryLabel(providerWriteExecuted: boolean) {
-  return providerWriteExecuted ? '외부 쓰기 실행됨' : '외부 쓰기 실행 안 함';
-}
-
-function scopeLabel(organizationId: string | null) {
-  return organizationId ? '조직 스코프' : '개인 스코프';
+function scopeLabel(scopeKind: ScopeKind) {
+  return scopeKind === 'organization' ? '조직 스코프' : '개인 스코프';
 }
 
 function roleLabel(role: string) {
@@ -174,12 +149,13 @@ function roleLabel(role: string) {
   }
 }
 
-function evidenceLabel(evidenceSource: string) {
-  if (/webdav/i.test(evidenceSource)) return 'WebDAV 원본 근거';
-  if (/access_policy/i.test(evidenceSource)) return '정책 엔진 근거';
-  if (/auth/i.test(evidenceSource)) return '서명 세션 근거';
-  if (/llm|provider/i.test(evidenceSource)) return '제공자 설정 근거';
-  if (/connector|runner/i.test(evidenceSource)) return 'connector 관측 근거';
+function evidenceLabel(evidenceLabelValue: string) {
+  if (/webdav/i.test(evidenceLabelValue)) return 'WebDAV 원본 근거';
+  if (/calendar/i.test(evidenceLabelValue)) return '일정 원본 근거';
+  if (/policy|access_policy/i.test(evidenceLabelValue)) return '정책 엔진 근거';
+  if (/auth|session/i.test(evidenceLabelValue)) return '서명 세션 근거';
+  if (/llm|provider/i.test(evidenceLabelValue)) return '제공자 설정 근거';
+  if (/connector|runner/i.test(evidenceLabelValue)) return 'connector 관측 근거';
   return '서버 근거';
 }
 
@@ -221,8 +197,12 @@ function shareReviewLabel(review: ExternalShareReview) {
 }
 
 function policyStepLabel(step: PolicyOrderStep) {
-  if (step.step_key === 'signed_session') return '서명 세션 식별';
-  if (step.step_key === 'rbac') return 'ABAC 차단 후 RBAC 허용';
+  if (/signed session/i.test(step.display_name)) return '서명 세션 식별';
+  if (/organization and workspace/i.test(step.display_name)) return '조직과 워크스페이스 스코프';
+  if (/data-region/i.test(step.display_name)) return '데이터 리전 차단';
+  if (/consent/i.test(step.display_name)) return '동의와 원본 기능 차단';
+  if (/owner|delegated/i.test(step.display_name)) return '소유자 또는 위임 관리자 경계';
+  if (/rbac/i.test(step.display_name)) return 'ABAC 차단 후 RBAC 허용';
   return step.display_name;
 }
 
@@ -301,7 +281,6 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
   const allowedCount = data.policy_decisions.filter((decision) => decision.allowed).length;
   const deniedCount = data.policy_decisions.length - allowedCount;
   const writebackReady = data.sources.filter((source) => source.writeback_enabled).length;
-  const providerWrites = data.sources.filter((source) => source.provider_write_executed).length;
 
   return (
     <section aria-label="보안 거버넌스 대시보드" className="space-y-5">
@@ -326,7 +305,7 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
         />
         <SummaryCard
           title="외부 쓰기"
-          value={`${providerWrites}건`}
+          value="0건"
           detail="이 화면은 읽기 전용 근거만 표시합니다."
           icon={<Lock className="size-5" />}
         />
@@ -337,7 +316,7 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
           <div>
             <h2 className="text-base font-bold">현재 관리자 경계</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {roleLabel(data.viewer.role)} / {scopeLabel(data.organization_id)}
+              {roleLabel(data.viewer.role)} / {scopeLabel(data.scope_kind)}
             </p>
           </div>
           <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">
@@ -345,13 +324,13 @@ function DashboardTab({ data }: { data: SecurityAccessSurface }) {
           </span>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-          {data.policy_decisions.slice(0, 4).map((decision) => (
-            <div key={decision.decision_uid} className="rounded-lg border border-border bg-background p-3">
+          {data.policy_decisions.slice(0, 4).map((decision, index) => (
+            <div key={`${decision.resource_type}-${index}`} className="rounded-lg border border-border bg-background p-3">
               <div className="flex items-center justify-between gap-3">
                 <p className="min-w-0 truncate text-sm font-bold">{decisionResourceLabel(decision)}</p>
                 <DecisionPill decision={decision} />
               </div>
-              <p className="mt-2 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_source)}</p>
+              <p className="mt-2 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</p>
             </div>
           ))}
         </div>
@@ -383,7 +362,7 @@ function AccessTab({ data }: { data: SecurityAccessSurface }) {
           <>
             <div className="mt-4 grid grid-cols-1 gap-3 md:hidden">
               {data.sources.map((source, index) => (
-                <article key={source.source_id} className="rounded-lg border border-border bg-background p-4">
+                <article key={`${source.source_type}-${index}`} className="rounded-lg border border-border bg-background p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="text-sm font-bold">{sourceDisplayLabel(source, index)}</h3>
@@ -398,7 +377,7 @@ function AccessTab({ data }: { data: SecurityAccessSurface }) {
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="font-bold text-muted-foreground">소유 경계</dt>
-                      <dd className="text-right">{scopeLabel(source.organization_id)}</dd>
+                      <dd className="text-right">{scopeLabel(source.scope_kind)}</dd>
                     </div>
                     <div>
                       <dt className="font-bold text-muted-foreground">기능</dt>
@@ -427,14 +406,14 @@ function AccessTab({ data }: { data: SecurityAccessSurface }) {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {data.sources.map((source, index) => (
-                    <tr key={source.source_id} className="bg-background">
+                    <tr key={`${source.source_type}-${index}`} className="bg-background">
                       <td className="p-3">
                         <p className="font-bold">{sourceDisplayLabel(source, index)}</p>
                         <p className="mt-1 text-xs font-semibold text-muted-foreground">{sourceTypeLabel(source.source_type)}</p>
                       </td>
                       <td className="p-3 text-xs font-semibold">서버에서 검증됨</td>
                       <td className="p-3">
-                        <p>{scopeLabel(source.organization_id)}</p>
+                        <p>{scopeLabel(source.scope_kind)}</p>
                         <p className="mt-1 text-xs text-muted-foreground">{source.writeback_enabled ? '쓰기 의도 가능' : '읽기 전용'}</p>
                       </td>
                       <td className="p-3">
@@ -477,12 +456,12 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {data.durable_audit_events.map((event) => (
-              <article key={event.event_uid} className="rounded-lg border border-border bg-background p-3">
+            {data.durable_audit_events.map((event, index) => (
+              <article key={`${event.resource_type}-${event.observed_at}-${index}`} className="rounded-lg border border-border bg-background p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h3 className="text-sm font-bold">{auditActionLabel(event.event_action)} / {sourceTypeLabel(event.resource_type)}</h3>
-                    <p className="mt-1 text-xs font-semibold text-muted-foreground">{scopeLabel(event.organization_id)}</p>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">{scopeLabel(event.scope_kind)}</p>
                   </div>
                   <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">{roleLabel(event.actor_role)}</span>
                 </div>
@@ -501,16 +480,14 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
                   </div>
                   <div>
                     <dt className="font-bold text-muted-foreground">근거</dt>
-                    <dd className="font-semibold">{evidenceLabel(event.evidence_source)}</dd>
+                    <dd className="font-semibold">{evidenceLabel(event.evidence_label)}</dd>
                   </div>
                   <div>
                     <dt className="font-bold text-muted-foreground">observed_at</dt>
                     <dd className="break-all font-mono">{event.observed_at}</dd>
                   </div>
                 </dl>
-                {event.detail_text ? (
-                  <p className="mt-3 break-words text-sm text-muted-foreground">보안 설정 변경이 서버 감사 근거로 기록되었습니다.</p>
-                ) : null}
+                <p className="mt-3 break-words text-sm text-muted-foreground">보안 설정 변경이 서버 감사 근거로 기록되었습니다.</p>
               </article>
             ))}
           </div>
@@ -528,13 +505,13 @@ function AuditTab({ data }: { data: SecurityAccessSurface }) {
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {data.connector_events.map((event) => (
-              <div key={event.event_uid} className="rounded-lg border border-border bg-background p-3">
+            {data.connector_events.map((event, index) => (
+              <div key={`${event.state_code}-${event.observed_at}-${index}`} className="rounded-lg border border-border bg-background p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-bold">서버 관측 이벤트</p>
                   <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold">{connectorStateLabel(event.state_code)}</span>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">Outbound connector 상태가 서버에서 관측되었습니다.</p>
+                <p className="mt-2 text-sm text-muted-foreground">{evidenceLabel(event.evidence_label)}로 connector 상태가 관측되었습니다.</p>
                 <p className="mt-2 font-mono text-xs text-muted-foreground">{event.observed_at}</p>
               </div>
             ))}
@@ -559,8 +536,8 @@ function SharingTab({ data }: { data: SecurityAccessSurface }) {
           </div>
         ) : (
           <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-            {data.external_share_reviews.map((review) => (
-              <article key={review.review_uid} className="rounded-lg border border-border bg-background p-4">
+            {data.external_share_reviews.map((review, index) => (
+              <article key={`${review.source_type}-${index}`} className="rounded-lg border border-border bg-background p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="truncate text-sm font-bold">{shareReviewLabel(review)}</h3>
@@ -575,7 +552,7 @@ function SharingTab({ data }: { data: SecurityAccessSurface }) {
                     {reasonLabel(review.decision_reason)}
                   </span>
                   <span className="rounded-md bg-secondary px-2 py-1 font-bold">
-                    {writeBoundaryLabel(review.provider_write_executed)}
+                    외부 쓰기 실행 안 함
                   </span>
                 </div>
               </article>
@@ -597,14 +574,14 @@ function PolicyTab({ data }: { data: SecurityAccessSurface }) {
         </p>
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           {data.policy_order.map((step, index) => (
-            <div key={step.step_key} className="rounded-lg border border-border bg-background p-3">
+            <div key={`${step.display_name}-${index}`} className="rounded-lg border border-border bg-background p-3">
               <div className="flex items-center gap-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-bold">{policyStepLabel(step)}</p>
-                  <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(step.evidence_source)}</p>
+                  <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">{evidenceLabel(step.evidence_label)}</p>
                 </div>
               </div>
             </div>
@@ -624,12 +601,12 @@ function PolicyTab({ data }: { data: SecurityAccessSurface }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {data.policy_decisions.map((decision) => (
-                <tr key={decision.decision_uid} className="bg-background">
+              {data.policy_decisions.map((decision, index) => (
+                <tr key={`${decision.resource_type}-${index}`} className="bg-background">
                   <td className="p-3 font-bold">{decisionResourceLabel(decision)}</td>
                   <td className="p-3 text-xs font-semibold">{sourceTypeLabel(decision.resource_type)}</td>
                   <td className="p-3"><DecisionPill decision={decision} /></td>
-                  <td className="p-3 text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_source)}</td>
+                  <td className="p-3 text-xs font-semibold text-muted-foreground">{evidenceLabel(decision.evidence_label)}</td>
                 </tr>
               ))}
             </tbody>
@@ -712,6 +689,8 @@ export function SecurityLayout() {
             </div>
             <button
               type="button"
+              disabled={loading}
+              aria-busy={loading}
               onClick={() => {
                 setLoading(true);
                 setError(null);
@@ -721,9 +700,10 @@ export function SecurityLayout() {
                   .catch((err: unknown) => setError(err instanceof Error ? err.message : 'unknown error'))
                   .finally(() => setLoading(false));
               }}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw className="size-4" /> 새로고침
+              <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {loading ? '새로고침 중' : '새로고침'}
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
