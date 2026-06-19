@@ -48,6 +48,8 @@ def test_validate_auth_session_hmac_secret_value_rejects_low_diversity():
         validate_auth_session_hmac_secret_value("abcabcabcabcabcabcabcabcabcabcab")
     with pytest.raises(ValueError, match="at least three character classes"):
         validate_auth_session_hmac_secret_value("abcdefghijklmnopqrstuvwxyzabcdef")
+    with pytest.raises(ValueError, match="at least 128 bits of estimated entropy"):
+        validate_auth_session_hmac_secret_value("aaaaaaaaaaaaaaaaaaaaABC123!@#xyz")
 
 
 def test_validate_auth_session_hmac_secret_value_public_fixture():

@@ -10,6 +10,7 @@ from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
+    Email,
     ProjectFolder,
     SecurityAuditEvent,
     SenderRelationship,
@@ -101,6 +102,11 @@ def test_schema_backfill_adds_email_indexes(monkeypatch):
     )
     assert any(
         "create index if not exists ix_email_records_organization_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_email_records_owner_date" in statement
+        and "user_id, organization_id, date" in statement
         for statement in statements
     )
     assert any(
@@ -412,6 +418,19 @@ def test_sender_relationship_model_declares_source_unique_index():
     assert "sender_email" in expression_text
     assert "source_message_id" in expression_text
     assert "source_thread_id" in expression_text
+
+
+def test_email_model_declares_owner_date_index():
+    indexes = {index.name: index for index in Email.__table__.indexes}
+
+    owner_date_index = indexes["ix_email_records_owner_date"]
+
+    assert owner_date_index.unique is False
+    assert [column.name for column in owner_date_index.columns] == [
+        "user_id",
+        "organization_id",
+        "date",
+    ]
 
 
 def test_tenant_config_model_declares_owner_scope_unique_index():
