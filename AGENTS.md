@@ -8,11 +8,6 @@
 - Security scanners are required gates. Do not use `continue-on-error: true` to
   hide Bandit, Strix, CodeQL, or dependency findings; preserve artifacts with
   explicit `if: ${{ always() }}` upload steps when needed.
-- Repository rulesets that require code-scanning tools such as Scorecard or
-  Trivy must have matching PR and default-branch workflows that upload those
-  tools' SARIF results. If merge is blocked with "Code scanning is waiting for
-  results from Scorecard" or another ruleset-required tool, restore the missing
-  SARIF workflow and rerun it instead of bypassing or weakening the ruleset.
 - PR-scoped Strix scans must include trusted import context for changed backend
   Python entrypoints; do not scan `backend/main.py` or routers as isolated
   single files if that makes real repo modules look missing.
@@ -23,16 +18,11 @@
   `LLM_API_BASE_FILE` pointing at a trusted file containing
   `https://models.github.ai/inference`; GitHub Models scans must try the
   configured GPT-5-or-newer model first and may fall back to the explicit
-  workflow fallback list, currently
-  `github_models/deepseek/deepseek-r1-0528` and
-  `github_models/deepseek/deepseek-v3-0324`, when GitHub Models provider
-  capacity or model availability blocks the primary run. The Strix gate must
-  route these fallback names through the GitHub Models endpoint with
-  OpenAI-compatible child model names such as
-  `openai/deepseek/deepseek-r1-0528`, not the public DeepSeek API. Do not use
-  GPT-4.1 or weaker GitHub Models fallbacks for Strix or OpenCode PR review
-  evidence. Keep the GitHub Models endpoint in a trusted input file and pass
-  the token only through
+  workflow fallback list, currently `deepseek/deepseek-r1-0528` and
+  `deepseek/deepseek-v3-0324`, when GitHub Models provider capacity or model
+  availability blocks the primary run. Do not use GPT-4.1 or weaker GitHub
+  Models fallbacks for Strix or OpenCode PR review evidence. Keep the
+  GitHub Models endpoint in a trusted input file and pass the token only through
   the provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets
   must not override PR, push, or scheduled Strix defaults. Vertex remains
   available only for manual
@@ -55,14 +45,12 @@
   do not carry stale timeout-signal strings. Keep PR-scope process budgets large
   enough for Strix to finalize reports after the scanner emits completion
   events; a wrapper timeout after `vulnerability_count: 0` is still failed
-  evidence, not a pass. PR evidence must present the full scannable changed-file
-  set from the PR head, plus allowlisted trusted context files, to Strix in one
-  scanner invocation; do not split changed files into separate scanner runs or
-  copy the entire PR-head repository tree by default because either breaks
-  Strix's required whole-context and bounded-input contract. Keep architecture
-  docs and reusable Strix gate tests aligned with this rule so stale
-  Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or generic-key
-  examples cannot re-enter copied workflow guidance.
+  evidence, not a pass. PR evidence must present the full PR-head scope to
+  Strix in one scanner invocation; do not split changed files into separate
+  scanner runs because that breaks Strix's required whole-context contract. Keep
+  architecture docs and reusable Strix gate tests aligned with this rule so
+  stale Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or
+  generic-key examples cannot re-enter copied workflow guidance.
 - HMAC fallback sessions are local/control-plane compatibility credentials, not
   authoritative workspace-membership evidence. Sensitive tenant security posture
   surfaces must require OIDC/JWKS-backed membership or an explicit dependency

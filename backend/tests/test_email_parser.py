@@ -131,7 +131,7 @@ Content-Disposition: attachment; filename="<img src=x onerror=alert(1)>.txt"
 
     try:
         parsed = parse_eml(temp_path)
-        assert parsed["attachments"] == [{"filename": ".txt", "content": "report"}]
+        assert parsed["file_attachments"] == [{"filename": ".txt", "content": "report"}]
     finally:
         os.unlink(temp_path)
 

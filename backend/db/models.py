@@ -323,7 +323,7 @@ class PromptTemplate(Base):
     )
 
 class Email(Base):
-    __tablename__ = "email_records"
+    __tablename__ = "email_items"
     __table_args__ = (
         UniqueConstraint(
             "user_id",
@@ -352,7 +352,7 @@ class Email(Base):
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
     body: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
-    attachments: Mapped[list["Attachment"]] = relationship(
+    file_attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
     ticket_tasks: Mapped[list["TicketTask"]] = relationship(
@@ -380,7 +380,7 @@ class TicketTask(Base):
     )
     source_type: Mapped[str] = mapped_column(String, default="email", index=True)
     related_email_id: Mapped[int | None] = mapped_column(
-        "email_id", ForeignKey("email_records.id"), nullable=True, index=True
+        "email_id", ForeignKey("email_items.id"), nullable=True, index=True
     )
     related_thread_id: Mapped[str | None] = mapped_column(
         "thread_id", String, nullable=True, index=True
@@ -413,15 +413,15 @@ Index(
 
 
 class Attachment(Base):
-    __tablename__ = "email_attachments"
+    __tablename__ = "file_attachments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    email_id: Mapped[int] = mapped_column(ForeignKey("email_records.id"))
+    email_id: Mapped[int] = mapped_column(ForeignKey("email_items.id"))
     filename: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
     embedding = mapped_column(Vector(1536))
 
-    email: Mapped["Email"] = relationship(back_populates="attachments")
+    email: Mapped["Email"] = relationship(back_populates="file_attachments")
 
 
 class TenantConfig(Base):
@@ -640,7 +640,7 @@ class Workspace(Base):
     )
 
 class User(Base):
-    __tablename__ = "user_accounts"
+    __tablename__ = "user_entities"
 
     user_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"user_{uuid.uuid4().hex}")
     user_name: Mapped[str] = mapped_column(String, nullable=False)
@@ -652,10 +652,10 @@ class User(Base):
     )
 
 class Account(Base):
-    __tablename__ = "provider_accounts"
+    __tablename__ = "auth_accounts"
 
     account_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"account_{uuid.uuid4().hex}")
-    user_id: Mapped[str] = mapped_column(String, ForeignKey("user_accounts.user_id"), index=True, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.user_id"), index=True, nullable=False)
     account_type: Mapped[str] = mapped_column(String, nullable=False)
     account_status: Mapped[str] = mapped_column(String, default="active")
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -668,7 +668,7 @@ class EmailRaw(Base):
 
     raw_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"raw_{uuid.uuid4().hex}")
     provider_id: Mapped[str] = mapped_column(String, index=True, nullable=False)
-    account_id: Mapped[str] = mapped_column(String, ForeignKey("provider_accounts.account_id"), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
     raw_content: Mapped[str] = mapped_column(Text, nullable=False)
     ingested_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
@@ -693,7 +693,7 @@ class EmailInstance(Base):
 
     instance_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"inst_{uuid.uuid4().hex}")
     message_uid: Mapped[str] = mapped_column(String, ForeignKey("email_messages.message_uid"), index=True, nullable=False)
-    account_id: Mapped[str] = mapped_column(String, ForeignKey("provider_accounts.account_id"), index=True, nullable=False)
+    account_id: Mapped[str] = mapped_column(String, ForeignKey("accounts.account_id"), index=True, nullable=False)
     folder_name: Mapped[str] = mapped_column(String, nullable=False)
     label_names: Mapped[str] = mapped_column(String, nullable=True)
     instance_status: Mapped[str] = mapped_column(String, default="unread")
@@ -728,10 +728,10 @@ class EmailThreadEdge(Base):
     )
 
 class Document(Base):
-    __tablename__ = "workspace_documents"
+    __tablename__ = "document_entities"
 
     document_id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: f"doc_{uuid.uuid4().hex}")
-    workspace_id: Mapped[str] = mapped_column(String, ForeignKey("workspace_entities.workspace_id"), index=True, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String, ForeignKey("workspaces.workspace_id"), index=True, nullable=False)
     document_name: Mapped[str] = mapped_column(String, nullable=False)
     document_type: Mapped[str] = mapped_column(String, nullable=False)
     document_content: Mapped[str] = mapped_column(Text, nullable=True)

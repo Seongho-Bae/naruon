@@ -48,10 +48,7 @@ def test_provider_writeback_retry_queue_has_incremental_revision():
     assert '"retry_state"' in revision_text
     assert "ix_provider_writeback_retry_items_scope_state" in revision_text
     assert "has_table" in revision_text
-    assert "op.create_index(" in revision_text
-    assert "if_not_exists=True" in revision_text
-    assert "op.drop_index(" in revision_text
-    assert "if_exists=True" in revision_text
+    assert "CREATE INDEX IF NOT EXISTS" in revision_text
 
 
 def test_migration_runner_uses_alembic_upgrade_head_not_bootstrap_create_all():

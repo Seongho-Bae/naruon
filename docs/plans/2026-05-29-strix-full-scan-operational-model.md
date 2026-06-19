@@ -61,8 +61,7 @@
    even when the PR branch records the file as mode `100755`.
 9. Use `STRIX_TARGET_PATH=__PR_SCOPE__` for PR evidence runs so workflow-level
    review and the gate script share the same contract: the scanner receives a
-   generated PR-head changed-file scope with allowlisted trusted context, not
-   the trusted base checkout or the full repository tree by default.
+   generated PR-head scope, not the trusted base checkout.
 10. Disable package-manager lifecycle scripts in the Strix child process
     environment while scanning untrusted PR-head scope data, covering npm, pnpm,
     yarn, and bun script execution knobs.

@@ -168,7 +168,7 @@ def _message_to_email_data(msg: email.message.Message) -> EmailData:
         ),
         "date": parsed_date,
         "body": _sanitize_display_text(body),
-        "attachments": attachments,
+        "file_attachments": attachments,
     }
 
 

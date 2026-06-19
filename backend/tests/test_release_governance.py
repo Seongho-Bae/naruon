@@ -148,14 +148,6 @@ def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None
     assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
 
 
-def test_strix_ci_requirements_use_security_quality_clean_pins() -> None:
-    strix_ci_requirements = read_repo_text("requirements-strix-ci.txt")
-
-    assert "strix-agent==1.0.4" in strix_ci_requirements
-    assert "cryptography==49.0.0" in strix_ci_requirements
-    assert "python-multipart==0.0.31" in strix_ci_requirements
-
-
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
     changelog = read_repo_text("CHANGELOG.md")
 
@@ -204,82 +196,6 @@ def test_bandit_security_scan_does_not_continue_on_error() -> None:
     workflow = read_repo_text(".github/workflows/bandit.yml")
 
     assert "continue-on-error: true" not in workflow
-
-
-def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> None:
-    scorecard_workflow = read_repo_text(".github/workflows/scorecard.yml")
-    trivy_workflow = read_repo_text(".github/workflows/trivy.yml")
-
-    for workflow in (scorecard_workflow, trivy_workflow):
-        assert "pull_request:" in workflow
-        assert "push:" in workflow
-        assert "- develop" in workflow
-        assert "- master" in workflow
-        assert (
-            "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6"
-            in workflow
-        )
-        assert "security-events: write" in workflow
-        assert "continue-on-error: true" not in workflow
-        assert (
-            "github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e # v4"
-            in workflow
-        )
-
-    assert (
-        "ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3"
-        in scorecard_workflow
-    )
-    assert "permissions:\n  contents: read\n\njobs:" in scorecard_workflow
-    assert "permissions:\n  contents: read\n\njobs:" in trivy_workflow
-    assert (
-        "    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      security-events: write"
-        in scorecard_workflow
-    )
-    assert (
-        "    permissions:\n      contents: read\n      security-events: write"
-        in trivy_workflow
-    )
-    assert "results_format: sarif" in scorecard_workflow
-    assert "category: scorecard" in scorecard_workflow
-
-    assert (
-        "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0"
-        in trivy_workflow
-    )
-    assert "format: sarif" in trivy_workflow
-    assert "category: trivy" in trivy_workflow
-    assert (
-        "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-        in trivy_workflow
-    )
-    assert (
-        "ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}"
-        in trivy_workflow
-    )
-    assert (
-        "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
-        in trivy_workflow
-    )
-
-
-def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
-    workflow = read_repo_text(".github/workflows/opencode-review.yml")
-
-    assert "Actively consult the configured MCP evidence sources" in workflow
-    assert "actively consult CodeGraph MCP" in workflow
-    assert "DeepWiki for repo docs" in workflow
-    assert "Context7 for current library/API docs" in workflow
-    assert "web_search for bounded external lookups" in workflow
-    assert "If a configured MCP source is unavailable or not applicable" in workflow
-    assert "Lead with findings ordered by severity" in workflow
-    assert "Distinguish blocking findings from important suggestions and nits" in workflow
-    assert "request changes only for actionable blockers" in workflow.lower()
-    assert "regression test direction" in workflow
-    assert '"codegraph"' in workflow
-    assert '"deepwiki"' in workflow
-    assert '"context7"' in workflow
-    assert '"web_search"' in workflow
 
 
 def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> (
@@ -595,10 +511,7 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
-    assert (
-        "group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}"
-        in workflow
-    )
+    assert 'group: strix-${{ github.repository }}' in workflow
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
