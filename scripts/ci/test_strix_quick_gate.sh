@@ -1842,12 +1842,16 @@ case "${FAKE_STRIX_SCENARIO:?}" in
 			;;
 		esac
 		;;
-	github-models-primary-unavailable-fallback-success)
+	github-models-primary-unavailable-fallback-success|github-models-primary-denied-fallback-success)
 		case "${STRIX_LLM:-}" in
 		openai/gpt-5)
 			echo "LLM CONNECTION FAILED"
 			echo "Could not establish connection to the language model."
-			echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			if [ "${FAKE_STRIX_SCENARIO:?}" = "github-models-primary-denied-fallback-success" ]; then
+				echo "openai.PermissionDeniedError: Error code: 403"
+			else
+				echo "Error: litellm.BadRequestError: OpenAIException - Unavailable model: gpt-5"
+			fi
 			exit 1
 			;;
 		openai/deepseek/deepseek-r1-0528)
@@ -6255,6 +6259,36 @@ run_gate_case_allow_provider_signal "github-models-internal-server-connection-re
 	"1"
 
 run_gate_case "github-models-primary-unavailable-fallback-success" \
+	"openai/gpt-5" \
+	"" \
+	"0" \
+	"REGEX:Strix quick scan succeeded with fallback model 'deepseek/deepseek-r1-0528' in [0-9]+s\\." \
+	"2" \
+	"openai/gpt-5|openai/deepseek/deepseek-r1-0528" \
+	"https://models.github.ai/inference|https://models.github.ai/inference" \
+	"openai" \
+	"https://models.github.ai/inference" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"" \
+	"" \
+	"1200" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"" \
+	"0" \
+	"" \
+	"" \
+	"" \
+	"__SAME_AS_FALLBACK_MODELS__" \
+	"deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324" \
+	"1"
+
+run_gate_case "github-models-primary-denied-fallback-success" \
 	"openai/gpt-5" \
 	"" \
 	"0" \
