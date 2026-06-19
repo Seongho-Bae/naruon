@@ -43,6 +43,12 @@ def test_frontend_dockerfile_runs_as_non_root_user():
 def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
     dockerfile = (REPO_ROOT / "Dockerfile.ollama").read_text()
 
+    assert (
+        "FROM ollama/ollama@sha256:"
+        "bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee"
+        in dockerfile
+    )
+    assert "FROM ollama/ollama:latest\n" not in dockerfile
     assert "ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models" in dockerfile
     assert "useradd --system --create-home --home-dir /home/ollama" in dockerfile
     assert "curl " not in dockerfile
