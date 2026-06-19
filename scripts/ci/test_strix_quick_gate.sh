@@ -1058,7 +1058,7 @@ concurrency:
   cancel-in-progress: false
 EOF
 
-	git init "$fixture_repo" >/dev/null
+	git init -q "$fixture_repo" >/dev/null
 	git -C "$fixture_repo" config user.email "copilot@example.com"
 	git -C "$fixture_repo" config user.name "copilot"
 	git -C "$fixture_repo" add .github/workflows/strix.yml
