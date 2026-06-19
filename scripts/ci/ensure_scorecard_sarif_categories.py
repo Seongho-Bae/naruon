@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import stat
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -69,6 +70,16 @@ def ensure_categories(sarif: dict[str, Any]) -> bool:
     return True
 
 
+def write_sarif(path: Path, sarif: dict[str, Any]) -> None:
+    mode = path.stat().st_mode
+    if mode & stat.S_IWUSR == 0:
+        path.chmod(mode | stat.S_IWUSR)
+    path.write_text(
+        json.dumps(sarif, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print(
@@ -82,10 +93,7 @@ def main(argv: list[str]) -> int:
         sarif = json.loads(sarif_path.read_text(encoding="utf-8"))
         changed = ensure_categories(sarif)
         if changed:
-            sarif_path.write_text(
-                json.dumps(sarif, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+            write_sarif(sarif_path, sarif)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"cannot normalize Scorecard SARIF: {exc}", file=sys.stderr)
         return 65
