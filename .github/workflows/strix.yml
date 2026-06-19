@@ -140,8 +140,7 @@ jobs:
               ;;
             openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
             openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
-            github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)
+            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]*)
               echo 'enabled=true' >> "$GITHUB_OUTPUT"
               echo 'provider_mode=github_models' >> "$GITHUB_OUTPUT"
               sanitized_github_models_token="$(printf '%s' "$STRIX_GITHUB_MODELS_TOKEN" | tr -d '\r\n')"
@@ -177,6 +176,12 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Set up Python
+        if: steps.gate.outputs.enabled == 'true'
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: '3.14'
 
       - name: Install Strix
         if: steps.gate.outputs.enabled == 'true'
@@ -297,18 +302,17 @@ jobs:
               ;;
             openai/gpt-5* | openai/gpt-[6-9]* | openai/gpt-[1-9][0-9]* | \
             openai/openai/gpt-5* | openai/openai/gpt-[6-9]* | openai/openai/gpt-[1-9][0-9]* | \
-            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]* | \
-            github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)
+            github_models/openai/gpt-5* | github_models/openai/gpt-[6-9]* | github_models/openai/gpt-[1-9][0-9]*)
               printf '%s' "${strix_model#github_models/}" > "$strix_llm_file"
               ;;
             openai/*)
               printf '%s' "$strix_model" > "$strix_llm_file"
               ;;
             openai-direct/gpt-*)
-              printf 'openai/%s' "${strix_model#openai-direct/}" > "$strix_llm_file"
+              printf 'openai_direct/%s' "${strix_model#openai-direct/}" > "$strix_llm_file"
               ;;
             gpt-*)
-              printf 'openai/%s' "$strix_model" > "$strix_llm_file"
+              printf 'openai_direct/%s' "$strix_model" > "$strix_llm_file"
               ;;
             vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash)
               printf '%s' "$strix_model" > "$strix_llm_file"
@@ -349,7 +353,7 @@ jobs:
           STRIX_LLM_MAX_RETRIES: 1
           STRIX_TRANSIENT_RETRY_PER_MODEL: 5
           STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS: 60
-          STRIX_FALLBACK_MODELS: ${{ steps.gate.outputs.provider_mode == 'github_models' && 'deepseek/deepseek-r1-0528 deepseek/deepseek-v3-0324' || '' }}
+          STRIX_FALLBACK_MODELS: ${{ steps.gate.outputs.provider_mode == 'github_models' && 'github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324' || '' }}
           STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"
           STRIX_VERTEX_FALLBACK_MODELS: ""
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
