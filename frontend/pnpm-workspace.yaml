@@ -4,4 +4,4 @@ allowBuilds:
 
 overrides:
   postcss: ^8.5.15
-  undici: ^7.28.0
+  undici: 7.28.0

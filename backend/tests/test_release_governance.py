@@ -257,6 +257,18 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
     )
     assert "format: sarif" in trivy_workflow
     assert "category: trivy" in trivy_workflow
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in trivy_workflow
+    )
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}"
+        in trivy_workflow
+    )
+    assert (
+        "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in trivy_workflow
+    )
 
 
 def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:

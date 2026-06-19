@@ -35,33 +35,26 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("retry_item_uid"),
         )
 
-    existing_index_names = _existing_provider_writeback_retry_index_names(inspector)
     for index_name, column_names in _provider_writeback_retry_indexes():
-        if index_name in existing_index_names:
-            continue
-        op.create_index(index_name, _RETRY_TABLE, column_names)
-        existing_index_names.add(index_name)
+        op.create_index(
+            index_name,
+            _RETRY_TABLE,
+            column_names,
+            if_not_exists=True,
+        )
 
 
 def downgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    if not inspector.has_table(_RETRY_TABLE):
-        return
-
-    existing_index_names = _existing_provider_writeback_retry_index_names(inspector)
-    for index_name in reversed(_provider_writeback_retry_index_names()):
-        if index_name in existing_index_names:
-            op.drop_index(index_name, table_name=_RETRY_TABLE)
-    op.drop_table(_RETRY_TABLE)
-
-
-def _existing_provider_writeback_retry_index_names(inspector) -> set[str]:
-    return {
-        index["name"]
-        for index in inspector.get_indexes(_RETRY_TABLE)
-        if isinstance(index.get("name"), str)
-    }
+    if inspector.has_table(_RETRY_TABLE):
+        for index_name, _column_names in reversed(_provider_writeback_retry_indexes()):
+            op.drop_index(
+                index_name,
+                table_name=_RETRY_TABLE,
+                if_exists=True,
+            )
+        op.drop_table(_RETRY_TABLE)
 
 
 def _provider_writeback_retry_index_names() -> list[str]:
@@ -84,6 +77,9 @@ def _provider_writeback_retry_indexes() -> list[tuple[str, list[str]]]:
         ("ix_provider_writeback_retry_items_command_action", ["command_action"]),
         ("ix_provider_writeback_retry_items_retry_state", ["retry_state"]),
         ("ix_provider_writeback_retry_items_last_error_code", ["last_error_code"]),
-        ("ix_provider_writeback_retry_items_runner_request_uid", ["runner_request_uid"]),
+        (
+            "ix_provider_writeback_retry_items_runner_request_uid",
+            ["runner_request_uid"],
+        ),
         ("ix_provider_writeback_retry_items_next_retry_at", ["next_retry_at"]),
     ]

@@ -6,7 +6,7 @@ settings:
 
 overrides:
   postcss: ^8.5.15
-  undici: ^7.28.0
+  undici: 7.28.0
 
 pnpmfileChecksum: sha256-RXPq3MmEdRb3xD3rhbER9kciz9nBr/i0J/uMUjql5t0=
 
