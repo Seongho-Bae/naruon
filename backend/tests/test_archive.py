@@ -2,8 +2,8 @@ import os
 import zipfile
 import pytest
 import asyncio
+import services.archive as archive_module
 
-from services.archive import extract_backup, extract_backup_async
 from services.exceptions import (
     InvalidArchiveError,
     ArchiveSizeExceededError,
@@ -19,7 +19,7 @@ def test_extract_backup_success(tmp_path):
         z.writestr("folder/test2.eml", b"Subject: Test Email 2")
 
     out_dir = tmp_path / "output"
-    extracted_files = extract_backup(zip_path, out_dir)
+    extracted_files = archive_module.extract_backup(zip_path, out_dir)
 
     # Check only files are returned, not directories
     assert len(extracted_files) == 2
@@ -34,7 +34,7 @@ def test_extract_backup_success(tmp_path):
 
 def test_extract_backup_file_not_found(tmp_path):
     with pytest.raises(InvalidArchiveError, match="Failed to extract archive"):
-        extract_backup(tmp_path / "missing.zip", tmp_path / "output")
+        archive_module.extract_backup(tmp_path / "missing.zip", tmp_path / "output")
 
 
 def test_extract_backup_bad_zip_file(tmp_path):
@@ -42,11 +42,11 @@ def test_extract_backup_bad_zip_file(tmp_path):
     bad_zip.write_text("This is not a zip file")
 
     with pytest.raises(InvalidArchiveError, match="Failed to extract archive"):
-        extract_backup(bad_zip, tmp_path / "output")
+        archive_module.extract_backup(bad_zip, tmp_path / "output")
 
 
 def test_extract_backup_size_exceeded(tmp_path, monkeypatch):
-    monkeypatch.setattr("services.archive.MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
+    monkeypatch.setattr(archive_module, "MAX_EXTRACT_SIZE", 10)  # 10 bytes limit
 
     zip_path = tmp_path / "test.zip"
     with zipfile.ZipFile(zip_path, "w") as z:
@@ -56,7 +56,7 @@ def test_extract_backup_size_exceeded(tmp_path, monkeypatch):
         ArchiveSizeExceededError,
         match="Archive exceeds maximum allowed extraction size",
     ):
-        extract_backup(zip_path, tmp_path / "output")
+        archive_module.extract_backup(zip_path, tmp_path / "output")
 
 
 def test_extract_backup_malformed_path(tmp_path):
@@ -66,7 +66,7 @@ def test_extract_backup_malformed_path(tmp_path):
         z.writestr("../malformed.eml", b"Subject: Malformed Email")
 
     with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
-        extract_backup(zip_path, tmp_path / "output")
+        archive_module.extract_backup(zip_path, tmp_path / "output")
 
     assert not (tmp_path / "malformed.eml").exists()
 
@@ -78,7 +78,7 @@ def test_extract_backup_rejects_absolute_path(tmp_path):
         z.writestr(str(escaped_path), b"Subject: Absolute Email")
 
     with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
-        extract_backup(zip_path, tmp_path / "output")
+        archive_module.extract_backup(zip_path, tmp_path / "output")
 
     assert not escaped_path.exists()
 
@@ -92,7 +92,7 @@ def test_extract_backup_rejects_symlink_zip_entry(tmp_path):
         z.writestr(link_info, "../..")
 
     with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
-        extract_backup(zip_path, tmp_path / "output")
+        archive_module.extract_backup(zip_path, tmp_path / "output")
 
 
 def test_extract_backup_rejects_preexisting_symlink_escape(tmp_path):
@@ -106,13 +106,13 @@ def test_extract_backup_rejects_preexisting_symlink_escape(tmp_path):
         z.writestr("link/escaped.eml", b"Subject: Escaped Email")
 
     with pytest.raises(InvalidArchiveError, match="Unsafe archive path"):
-        extract_backup(zip_path, out_dir)
+        archive_module.extract_backup(zip_path, out_dir)
 
     assert not (outside_dir / "escaped.eml").exists()
 
 
 def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
-    monkeypatch.setattr("services.archive.MAX_FILE_COUNT", 2)
+    monkeypatch.setattr(archive_module, "MAX_FILE_COUNT", 2)
 
     zip_path = tmp_path / "test_count.zip"
     with zipfile.ZipFile(zip_path, "w") as z:
@@ -124,7 +124,7 @@ def test_extract_backup_file_count_exceeded(tmp_path, monkeypatch):
         ArchiveFileCountExceededError,
         match="Archive exceeds maximum allowed file count",
     ):
-        extract_backup(zip_path, tmp_path / "output")
+        archive_module.extract_backup(zip_path, tmp_path / "output")
 
 
 def test_extract_backup_async(tmp_path):
@@ -133,7 +133,7 @@ def test_extract_backup_async(tmp_path):
         z.writestr("test.eml", b"Subject: Test Email")
 
     out_dir = tmp_path / "output"
-    extracted_files = asyncio.run(extract_backup_async(zip_path, out_dir))
+    extracted_files = asyncio.run(archive_module.extract_backup_async(zip_path, out_dir))
 
     assert len(extracted_files) == 1
     assert extracted_files[0].name == "test.eml"
@@ -156,8 +156,8 @@ async def test_extract_backup_async_calls_to_thread(tmp_path, monkeypatch):
     zip_path = tmp_path / "test.zip"
     out_dir = tmp_path / "output"
 
-    result = await extract_backup_async(zip_path, out_dir)
+    result = await archive_module.extract_backup_async(zip_path, out_dir)
 
     assert called is True
-    assert passed_args == (extract_backup, zip_path, out_dir)
+    assert passed_args == (archive_module.extract_backup, zip_path, out_dir)
     assert result == [tmp_path / "dummy.txt"]
