@@ -712,6 +712,8 @@ export function SecurityLayout() {
             </div>
             <button
               type="button"
+              disabled={loading}
+              aria-busy={loading}
               onClick={() => {
                 setLoading(true);
                 setError(null);
@@ -721,9 +723,10 @@ export function SecurityLayout() {
                   .catch((err: unknown) => setError(err instanceof Error ? err.message : 'unknown error'))
                   .finally(() => setLoading(false));
               }}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-bold hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw className="size-4" /> 새로고침
+              <RefreshCw className={`size-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              {loading ? '새로고침 중' : '새로고침'}
             </button>
           </div>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
