@@ -618,7 +618,7 @@ export function DashboardLayout({
           aria-haspopup="dialog"
           aria-controls="mobile-ai-action-menu"
           popoverTarget="mobile-ai-action-menu"
-          className="mx-auto grid size-14 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(37,99,255,0.35)] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:translate-y-[-10px]"
+          className="mx-auto grid size-14 -translate-y-3 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-[0_18px_38px_rgba(37,99,255,0.35)] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 active:translate-y-[-10px]"
         >
           <Sparkles className="size-6" aria-hidden="true" />
         </button>
