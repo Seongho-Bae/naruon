@@ -10,6 +10,15 @@ vi.mock("next/navigation", () => ({
 
 import { DashboardLayout } from "./DashboardLayout";
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(
+    window.HTMLInputElement.prototype,
+    "value",
+  )?.set;
+  valueSetter?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 describe("DashboardLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -56,7 +65,7 @@ describe("DashboardLayout", () => {
       'a[href="#main-content"]',
     );
     const logo = container.querySelector<HTMLImageElement>('img[alt="Naruon"]');
-    const globalSearch = container.querySelector<HTMLInputElement>('#global-search-input');
+    const globalSearchInput = container.querySelector<HTMLInputElement>("#global-search-input");
 
     expect(banner).not.toBeNull();
     expect(primaryNav?.textContent).toContain("홈");
@@ -83,9 +92,9 @@ describe("DashboardLayout", () => {
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
-    expect(globalSearch?.type).toBe("text");
-    expect(globalSearch?.inputMode).toBe("search");
-    expect(globalSearch?.getAttribute("role")).toBe("searchbox");
+    expect(globalSearchInput?.getAttribute("type")).toBe("text");
+    expect(globalSearchInput?.getAttribute("inputmode")).toBe("search");
+    expect(globalSearchInput?.getAttribute("role")).toBe("searchbox");
     expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
     expect(headerActionGroup?.className).not.toContain("xl:flex");
@@ -196,6 +205,42 @@ describe("DashboardLayout", () => {
     expect(events).toContain("actions");
     window.removeEventListener("naruon:header-action", onHeaderAction);
     window.removeEventListener("naruon:mobile-workspace", onMobileWorkspace);
+  });
+
+  it("clears and refocuses the desktop global search without native search controls", () => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <DashboardLayout>
+          <section>Dashboard workspace content</section>
+        </DashboardLayout>,
+      );
+    });
+
+    const input = container.querySelector<HTMLInputElement>("#global-search-input");
+    expect(input).not.toBeNull();
+    expect(input?.getAttribute("type")).toBe("text");
+    expect(input?.getAttribute("inputmode")).toBe("search");
+    expect(input?.getAttribute("role")).toBe("searchbox");
+
+    act(() => {
+      setInputValue(input as HTMLInputElement, "계약 검토");
+    });
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="검색어 지우기"]',
+    );
+    expect(clearButton).not.toBeNull();
+
+    act(() => {
+      clearButton?.click();
+    });
+
+    expect(input?.value).toBe("");
+    expect(document.activeElement).toBe(input);
   });
 
   it("keeps desktop primary and mobile primary destinations synchronized", () => {

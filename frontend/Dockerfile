@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
 
 ARG OCI_IMAGE_CREATED=""
 ARG OCI_IMAGE_AUTHORS="Seongho Bae"
@@ -12,8 +12,8 @@ ARG OCI_IMAGE_LICENSES="LicenseRef-Naruon-Proprietary"
 ARG OCI_IMAGE_REF_NAME=""
 ARG OCI_IMAGE_TITLE="naruon frontend"
 ARG OCI_IMAGE_DESCRIPTION="Naruon Next.js frontend runtime image"
-ARG OCI_IMAGE_BASE_DIGEST=""
-ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:24-slim"
+ARG OCI_IMAGE_BASE_DIGEST="sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a"
+ARG OCI_IMAGE_BASE_NAME="docker.io/library/node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a"
 
 LABEL org.opencontainers.image.created="${OCI_IMAGE_CREATED}" \
       org.opencontainers.image.authors="${OCI_IMAGE_AUTHORS}" \
