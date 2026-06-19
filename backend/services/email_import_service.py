@@ -225,8 +225,7 @@ async def _import_single_eml(
     embedding_provider: EmailImportEmbeddingProvider | None = None,
 ) -> EmailImportItemResult:
     try:
-        content = _read_eml_bytes(eml_path)
-        parsed = parse_eml_bytes(content)
+        content, parsed = await asyncio.to_thread(_read_and_parse_eml, eml_path)
     except EmailParseError:
         return EmailImportItemResult(
             filename=display_filename,
@@ -316,6 +315,11 @@ async def _import_single_eml(
         status="imported",
         attachment_count=attachment_count,
     )
+
+
+def _read_and_parse_eml(eml_path: Path) -> tuple[bytes, EmailData]:
+    content = _read_eml_bytes(eml_path)
+    return content, parse_eml_bytes(content)
 
 
 def _zero_embedding() -> list[float]:

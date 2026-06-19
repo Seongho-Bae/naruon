@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.email_import_service as email_import_module
-from services.exceptions import EmbeddingGenerationError
+from services.exceptions import EmailParseError, EmbeddingGenerationError
 from services.email_import_service import (
     EMBEDDING_DIMENSION,
     EmailImportEmbeddingProvider,
@@ -53,6 +53,43 @@ def test_safe_upload_filename(input_name, expected):
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert email_import_module._safe_item_filename(upload_name, eml_path) == expected
+
+
+@pytest.mark.asyncio
+async def test_import_single_eml_offloads_read_and_parse(monkeypatch, tmp_path):
+    eml_path = tmp_path / "message.eml"
+    eml_path.write_bytes(b"From: a@example.com\nTo: b@example.com\n\nbody")
+    session = AsyncMock(spec=AsyncSession)
+    calls = []
+
+    def fake_read_and_parse(path):
+        calls.append(("read_and_parse", path))
+        raise EmailParseError("boom")
+
+    async def fake_to_thread(func, *args):
+        calls.append(("to_thread", func, args))
+        return func(*args)
+
+    monkeypatch.setattr(
+        email_import_module, "_read_and_parse_eml", fake_read_and_parse
+    )
+    monkeypatch.setattr(email_import_module.asyncio, "to_thread", fake_to_thread)
+
+    result = await email_import_module._import_single_eml(
+        session,
+        eml_path=eml_path,
+        display_filename="message.eml",
+        user_id="user-1",
+        organization_id="org-1",
+    )
+
+    assert result.status == "failed"
+    assert result.reason_code == "parse_failed"
+    assert calls == [
+        ("to_thread", fake_read_and_parse, (eml_path,)),
+        ("read_and_parse", eml_path),
+    ]
+    session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
