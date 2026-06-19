@@ -255,6 +255,18 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         in scorecard_workflow
     )
     assert "category: scorecard" in scorecard_workflow
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in scorecard_workflow
+    )
+    assert (
+        "ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}"
+        in scorecard_workflow
+    )
+    assert (
+        "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+        in scorecard_workflow
+    )
 
     assert (
         "aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0"
