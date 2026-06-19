@@ -732,7 +732,8 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         username,
                         credentials_encrypted,
                         writeback_enabled,
-                        etag_value
+                        etag_value,
+                        created_at
                     )
                     VALUES (
                         :account_id,
@@ -744,7 +745,8 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
                         :username,
                         :credentials_encrypted,
                         :writeback_enabled,
-                        :etag_value
+                        :etag_value,
+                        now()
                     )
                     """
                 ),
@@ -894,7 +896,8 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
                         user_id,
                         organization_id,
                         project_name,
-                        webdav_path
+                        webdav_path,
+                        created_at
                     )
                     VALUES (
                         :folder_id,
@@ -902,7 +905,8 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
                         :user_id,
                         :organization_id,
                         :project_name,
-                        :webdav_path
+                        :webdav_path,
+                        now()
                     )
                     """
                 ),
@@ -924,7 +928,8 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
                         user_id,
                         organization_id,
                         project_name,
-                        webdav_path
+                        webdav_path,
+                        created_at
                     )
                     VALUES (
                         :folder_id,
@@ -932,7 +937,8 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
                         :user_id,
                         :organization_id,
                         :project_name,
-                        :webdav_path
+                        :webdav_path,
+                        now()
                     )
                     """
                 ),
@@ -1081,7 +1087,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
             await conn.execute(
                 text(
                     """
-                    CREATE TABLE emails (
+                    CREATE TABLE email_records (
                         id INTEGER PRIMARY KEY,
                         user_id VARCHAR NOT NULL,
                         organization_id VARCHAR NOT NULL,
@@ -1133,7 +1139,7 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
             await conn.execute(
                 text(
                     """
-                    INSERT INTO emails (
+                    INSERT INTO email_records (
                         id,
                         user_id,
                         organization_id,
@@ -1209,7 +1215,8 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         username,
                         credentials_encrypted,
                         writeback_enabled,
-                        etag_value
+                        etag_value,
+                        created_at
                     )
                     VALUES (
                         :account_id,
@@ -1221,7 +1228,8 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
                         :username,
                         :credentials_encrypted,
                         :writeback_enabled,
-                        :etag_value
+                        :etag_value,
+                        now()
                     )
                     """
                 ),
