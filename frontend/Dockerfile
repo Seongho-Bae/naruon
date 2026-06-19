@@ -50,10 +50,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # and reaches the backend through the same-origin /api/* route handler.
 # BACKEND_INTERNAL_URL is intentionally runtime-only so published images
 # are not permanently wired to one deployment environment.
-# NEXT_PUBLIC_API_URL is kept for backwards compatibility with callers that
-# explicitly construct a base URL; new code should rely on the route handler.
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 ENV POSTCSS_WORKERS=1
 ENV DISABLE_POSTCSS_WORKERS=true

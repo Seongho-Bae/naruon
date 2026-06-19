@@ -38,6 +38,10 @@
 **Learning:** When users click a "clear search" icon button to empty an input field, screen readers and keyboard navigation can lose their place in the DOM structure.
 **Action:** Always capture a `useRef` to the `<Input>` and explicitly call `ref.current?.focus()` inside the clear button's `onClick` handler to preserve interaction flow.
 
+## 2025-02-28 - Add Loader2 spinner to async buttons in SettingsLayout.tsx
+**Learning:** Providing explicit visual feedback, such as a spinning loader, during asynchronous save operations prevents users from wondering if their click registered and improves perceived performance.
+**Action:** Always map loading states such as `isSaving` or `isLoading` to explicit UI indicators like the `Loader2` icon with `animate-spin` inside submit buttons, rather than only changing button text or disabling the button.
+
 ## 2026-06-16 - Internal tool form accessibility and visual feedback
 **Learning:** Internal tool forms can miss basic accessibility attributes like stable IDs, linked labels, and clear async feedback on submit buttons. Without those details, screen readers lose form context and users get weak confirmation during long-running actions.
 **Action:** Verify internal form inputs use explicit `label htmlFor`/`id` pairs, decorative icons are `aria-hidden`, and async buttons expose disabled loading states with visible spinner feedback.

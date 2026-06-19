@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("lucide-react", () => ({
   Activity: () => <svg aria-hidden="true" />,
   AlertCircle: () => <svg aria-hidden="true" />,
+  Loader2: () => <svg aria-hidden="true" />,
   Bell: () => <svg aria-hidden="true" />,
   Bot: () => <svg aria-hidden="true" />,
   CheckCircle2: () => <svg aria-hidden="true" />,

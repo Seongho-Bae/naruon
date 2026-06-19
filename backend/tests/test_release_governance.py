@@ -508,12 +508,22 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
 
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
+    root_dockerfile = read_repo_text("Dockerfile")
     dockerfile = read_repo_text("frontend/Dockerfile")
+    docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
+    frontend_deployment = read_repo_text("k8s/frontend-deployment.yaml")
     package_json = read_repo_text("frontend/package.json")
 
     assert '"packageManager": "pnpm@11.5.3"' in package_json
-    assert dockerfile.index("ARG NEXT_PUBLIC_API_URL") < dockerfile.index(
-        "RUN pnpm run build"
+    assert "NEXT_PUBLIC_API_URL" not in root_dockerfile
+    assert "NEXT_PUBLIC_API_URL" not in dockerfile
+    assert "NEXT_PUBLIC_API_URL" not in docker_publish_workflow
+    assert "NEXT_PUBLIC_API_URL" not in frontend_deployment
+    assert "BACKEND_INTERNAL_URL" in frontend_deployment
+    assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL' in frontend_deployment
+    assert "BACKEND_INTERNAL_URL" in dockerfile
+    assert dockerfile.index("BACKEND_INTERNAL_URL is intentionally runtime-only") < (
+        dockerfile.index("RUN pnpm run build")
     )
     assert "pnpm run build" in dockerfile
     assert "ENV POSTCSS_WORKERS=1" in dockerfile
@@ -674,7 +684,7 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     live_frontend_block = live_e2e_compose.split("  frontend:", 1)[1].split(
         "  nginx:", 1
     )[0]
-    assert "NEXT_PUBLIC_API_URL: http://127.0.0.1:18080" in live_frontend_block
+    assert "NEXT_PUBLIC_API_URL" not in live_frontend_block
     assert "BACKEND_INTERNAL_URL: http://backend:8000" in live_frontend_block
     assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"' in live_frontend_block
     assert "TRUSTED_FRONTEND_ORIGINS: http://127.0.0.1:18080" in live_frontend_block

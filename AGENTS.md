@@ -148,6 +148,11 @@
   `X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
   or `X-Dev-Auth-Token`; tests/mocks must exercise the signed-session cookie
   path.
+- Frontend Docker, Compose, and publish workflows must not compile or inject a
+  public `NEXT_PUBLIC_API_URL` into browser bundles. Browser API calls stay on
+  same-origin `/api/*`; only server-side Next.js route handlers should read
+  runtime `BACKEND_INTERNAL_URL`, with the exact Docker-network opt-in when
+  running local Compose.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.

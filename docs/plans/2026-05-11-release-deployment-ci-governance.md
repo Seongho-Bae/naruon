@@ -214,7 +214,7 @@ Run:
 
 ```bash
 docker build --pull --progress=plain -t naruon-backend:local -f Dockerfile .
-docker build --pull --progress=plain -t naruon-frontend:local -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 .
+docker build --pull --progress=plain -t naruon-frontend:local -f frontend/Dockerfile .
 ```
 
 Expected: both build without warnings treated as failures where the tool supports it.
@@ -295,7 +295,7 @@ Run:
 export POSTGRES_PASSWORD=live-e2e-local-only
 export BACKEND_IMAGE=naruon-backend:local
 export FRONTEND_IMAGE=naruon-frontend:local
-docker build --pull --progress=plain -t "$FRONTEND_IMAGE" -f frontend/Dockerfile --build-arg NEXT_PUBLIC_API_URL=http://127.0.0.1:18080 .
+docker build --pull --progress=plain -t "$FRONTEND_IMAGE" -f frontend/Dockerfile .
 docker compose -f docker-compose.live-e2e.yml up -d --scale backend=3
 cd backend && PYTHONWARNINGS=error python3 -m pytest -q tests/live/test_live_api_sequence.py --live-base-url=http://127.0.0.1:18080
 cd frontend && LIVE_BASE_URL=http://127.0.0.1:18080 NODE_OPTIONS="--throw-deprecation --trace-warnings" npx playwright test --project=chromium --reporter=line

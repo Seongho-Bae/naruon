@@ -78,7 +78,6 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a pre-built frontend image}
     environment:
-      NEXT_PUBLIC_API_URL: http://127.0.0.1:18080
       BACKEND_INTERNAL_URL: http://backend:8000
       ALLOW_DOCKER_BACKEND_INTERNAL_URL: "1"
       TRUSTED_FRONTEND_ORIGINS: http://127.0.0.1:18080
