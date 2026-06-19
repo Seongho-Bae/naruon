@@ -682,7 +682,7 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "- AUTH_SESSION_HMAC_SECRET" not in backend_block
     assert "- ENCRYPTION_KEY" not in backend_block
     assert "python scripts/migrate_db.py && python scripts/start_backend.py" in compose
-    assert '"scripts/start_backend.py"' in live_e2e_compose
+    assert "scripts/start_backend.py" in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
     assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose
     assert "postgresql+asyncpg://" not in live_e2e_compose
@@ -692,6 +692,11 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "OPENAI_BASE_URL: http://ollama:11434/v1" in live_e2e_compose
     assert "OPENAI_MODEL: gemma4:e2b-it-qat" in live_e2e_compose
     assert "OPENAI_EMBEDDING_MODEL: embeddinggemma" in live_e2e_compose
+    assert "live-e2e-state:/live-e2e-state" in live_e2e_compose
+    assert "touch /live-e2e-state/migrated" in live_e2e_compose
+    assert "touch /live-e2e-state/seeded" in live_e2e_compose
+    assert "Required startup marker missing: $$marker" in live_e2e_compose
+    assert "  live-e2e-state:" in live_e2e_compose
     live_backend_block = live_e2e_compose.split("  backend:", 1)[1].split(
         "  frontend:", 1
     )[0]
