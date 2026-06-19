@@ -4,7 +4,7 @@ import logging
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, union_all
-from db.session import get_db
+from db.session import get_db, get_readonly_db
 from db.models import Email, Attachment
 from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector, generate_embeddings
 from api.auth import AuthContext, get_auth_context
@@ -175,7 +175,8 @@ def process_search_results(rows, limit: int) -> list[SearchResultItem]:
 async def hybrid_search(
     request: SearchRequest,
     user_id: str | None = None,
-    db: AsyncSession = Depends(get_db),
+    config_db: AsyncSession = Depends(get_db),
+    search_db: AsyncSession = Depends(get_readonly_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
     if user_id and user_id != auth_context.user_id:
@@ -187,7 +188,7 @@ async def hybrid_search(
 
     try:
         runtime_provider = await resolve_runtime_llm_provider(
-            db,
+            config_db,
             user_id=target_user_id,
             organization_id=auth_context.organization_id,
         )
@@ -242,7 +243,7 @@ async def hybrid_search(
             .limit(request.limit * 2)
         )
 
-        result = await db.execute(stmt)
+        result = await search_db.execute(stmt)
         rows = result.all()
 
         search_results = process_search_results(rows, request.limit)

@@ -37,3 +37,7 @@
 ## 2025-02-28 - Add Loader2 spinner to async buttons in SettingsLayout.tsx
 **Learning:** Providing explicit visual feedback, such as a spinning loader, during asynchronous save operations prevents users from wondering if their click registered and improves perceived performance.
 **Action:** Always map loading states such as `isSaving` or `isLoading` to explicit UI indicators like the `Loader2` icon with `animate-spin` inside submit buttons, rather than only changing button text or disabling the button.
+
+## 2026-06-19 - Global search clear button without native WebKit controls
+**Learning:** Header-level global search should use the same custom clear-button pattern as the Search page: `type="text"`, `inputMode="search"`, and `role="searchbox"` avoid native WebKit clear controls while preserving search semantics.
+**Action:** Keep custom clear buttons in the same wrapper as the search input, label the clear action as `검색어 지우기`, and refocus the input after clearing.
