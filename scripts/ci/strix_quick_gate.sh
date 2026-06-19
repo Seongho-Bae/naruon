@@ -119,6 +119,70 @@ publish_artifact_reports() {
 	done
 }
 
+sanitize_known_strix_report_warnings() {
+	local report_root
+	for report_root in "$@"; do
+		if [ -z "$report_root" ] || [ ! -d "$report_root" ] || [ -L "$report_root" ]; then
+			continue
+		fi
+		python3 - "$report_root" <<'PY'
+from pathlib import Path
+import os
+import re
+import sys
+
+root = Path(sys.argv[1])
+known_internal_warning = re.compile(
+    r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ WARNING "
+    r"[^ ]+ - strix\.core\.execution: agent [0-9a-f]+ produced "
+    r"non-lifecycle final output in non-interactive mode; forcing tool "
+    r"continuation \(\d+/\d+\): "
+)
+
+
+def iter_report_logs(root: Path):
+    for current_root, dir_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        current_path = Path(current_root)
+        dir_names[:] = [
+            dir_name
+            for dir_name in dir_names
+            if not (current_path / dir_name).is_symlink()
+        ]
+        for file_name in file_names:
+            log_path = current_path / file_name
+            if log_path.suffix != ".log" or log_path.is_symlink() or not log_path.is_file():
+                continue
+            yield log_path
+
+
+for log_path in iter_report_logs(root):
+    try:
+        lines = log_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    except UnicodeDecodeError:
+        continue
+    filtered = [line for line in lines if not known_internal_warning.match(line)]
+    if filtered != lines:
+        log_path.write_text("".join(filtered), encoding="utf-8")
+PY
+	done
+}
+
+has_strix_report_failure_signal() {
+	local report_root
+	local report_log
+	for report_root in "$@"; do
+		if [ -z "$report_root" ] || [ ! -d "$report_root" ] || [ -L "$report_root" ]; then
+			continue
+		fi
+		while IFS= read -r -d '' report_log; do
+			if grep -Eiq '(^|[^[:alpha:]])(Fatal|Denied|Warn|Warning|WARNING|Timeout)([^[:alpha:]]|$)' "$report_log"; then
+				return 0
+			fi
+		done < <(find "$report_root" -type f -name '*.log' -print0)
+	done
+	return 1
+}
+
 # shellcheck disable=SC2317,SC2329  # invoked from EXIT/INT/TERM trap
 cleanup_runtime() {
 	publish_artifact_reports || true
@@ -2263,7 +2327,14 @@ PY
 		echo "Strix run timed out after ${timeout_seconds}s." | tee -a "$STRIX_LOG" >&2
 	fi
 
-	if has_detected_infrastructure_error; then
+	sanitize_known_strix_report_warnings "$ACTIVE_REPORTS_DIR" "${resolved_target_path%/}/strix_runs"
+	local report_failure_signal=0
+	if has_strix_report_failure_signal "$ACTIVE_REPORTS_DIR" "${resolved_target_path%/}/strix_runs"; then
+		report_failure_signal=1
+		echo "Strix report artifacts emitted warning/fatal/denied/timeout output; failing closed." | tee -a "$STRIX_LOG" >&2
+	fi
+
+	if [ "$report_failure_signal" -eq 1 ] || has_detected_infrastructure_error; then
 		INFRA_ERROR_DETECTED=1
 		if [ "$rc" -eq 0 ] && provider_signal_fail_closed_enabled; then
 			echo "Strix run emitted provider infrastructure or failure-signal output; failing closed." >&2

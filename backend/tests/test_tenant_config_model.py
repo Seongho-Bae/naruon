@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 from cryptography.fernet import Fernet
 from pydantic import SecretStr
@@ -78,6 +80,15 @@ def test_get_fernet_requires_encryption_key_even_when_debug_enabled():
 
 def test_get_fernet_rejects_non_fernet_key_without_derivation():
     settings.ENCRYPTION_KEY = SecretStr("test-encryption-key")
+
+    with pytest.raises(RuntimeError, match="valid Fernet key"):
+        get_fernet()
+
+
+def test_get_fernet_rejects_base64_key_with_wrong_decoded_length():
+    settings.ENCRYPTION_KEY = SecretStr(
+        base64.urlsafe_b64encode(b"too-short-for-fernet").decode("ascii")
+    )
 
     with pytest.raises(RuntimeError, match="valid Fernet key"):
         get_fernet()
