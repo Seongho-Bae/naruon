@@ -216,6 +216,18 @@ def test_bandit_security_scan_does_not_continue_on_error() -> None:
     assert "continue-on-error: true" not in workflow
 
 
+def test_codeql_workflow_can_read_security_events_without_uploading_sarif() -> None:
+    workflow = read_repo_text(".github/workflows/codeql.yml")
+
+    assert "permissions:\n  contents: read\n  security-events: read" in workflow
+    assert (
+        "    permissions:\n      actions: read\n      contents: read\n      security-events: read"
+        in workflow
+    )
+    assert "upload: never" in workflow
+    assert "security-events: write" not in workflow
+
+
 def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> None:
     scorecard_workflow = read_repo_text(".github/workflows/scorecard.yml")
     trivy_workflow = read_repo_text(".github/workflows/trivy.yml")
