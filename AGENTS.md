@@ -414,8 +414,12 @@
 - Security governance screens must be source-backed by signed
   `/api/security/access-surface` data. Do not ship static RBAC/ABAC rows, fake
   blocked-login logs, unsupported TLS/TDE claims, or permanent Security tab
-  placeholders as implemented features. New Security mocks and E2E fixtures must
-  preserve bearer-session calls and omit public identity headers.
+  placeholders as implemented features. The browser-facing Security API and UI
+  must not expose source ids, event ids, decision ids, review ids,
+  workspace/org/user/group claims, provider execution flags, raw hosts, or
+  resource UIDs; render scoped governance labels instead. New Security mocks and
+  E2E fixtures must preserve bearer-session calls and omit public identity
+  headers.
 - Data workspace repository, ingestion, embedding, and quality surfaces must be
   source-backed by signed `/api/data/quality-surface` data or explicitly labeled
   pending. Do not ship static ingestion logs, fake progress percentages, fake

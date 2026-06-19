@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Literal
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -27,6 +26,7 @@ from services.access_policy import AccessRequest, ResourcePolicy, evaluate_acces
 router = APIRouter(prefix="/api/security", tags=["security"])
 
 SourceType = Literal["caldav_source", "carddav_source", "webdav_repository"]
+ScopeKind = Literal["organization", "personal"]
 DecisionReason = Literal[
     "allowed",
     "organization_denied",
@@ -39,79 +39,57 @@ DecisionReason = Literal[
 
 
 class ViewerContext(BaseModel):
-    user_id: str
     role: str
-    organization_id: str | None
-    group_ids: list[str]
-    workspace_id: str
+    scope_kind: ScopeKind
 
 
 class PolicyDecisionSummary(BaseModel):
-    decision_uid: str
     resource_label: str
     resource_type: str
     allowed: bool
     reason: DecisionReason
-    evidence_source: str
+    evidence_label: str
 
 
 class GovernanceSource(BaseModel):
-    source_id: str
     source_type: SourceType
     source_label: str
-    source_host: str
-    owner_id: str
-    organization_id: str | None
-    workspace_id: str
+    scope_kind: ScopeKind
     capabilities: list[str]
     writeback_enabled: bool
-    provider_write_executed: bool
     policy_decision: PolicyDecisionSummary
     last_observed_at: str | None
 
 
 class ConnectorEvidence(BaseModel):
-    event_uid: str
-    signal_key: str
     state_code: str
-    detail_text: str | None
+    evidence_label: str
     observed_at: str
 
 
 class DurableAuditEvidence(BaseModel):
-    event_uid: str
-    actor_user_id: str
     actor_role: str
-    organization_id: str | None
-    workspace_id: str
+    scope_kind: ScopeKind
     event_action: str
     resource_type: str
-    resource_uid: str | None
-    evidence_source: str
-    detail_text: str | None
+    evidence_label: str
     observed_at: str
 
 
 class ExternalShareReview(BaseModel):
-    review_uid: str
-    source_id: str
     source_type: SourceType
     review_label: str
     exposure_level: Literal["internal", "external_writeback"]
     decision_reason: DecisionReason
-    provider_write_executed: bool
 
 
 class PolicyOrderStep(BaseModel):
-    step_key: str
     display_name: str
-    evidence_source: str
+    evidence_label: str
 
 
 class SecurityAccessSurfaceResponse(BaseModel):
-    workspace_id: str
-    organization_id: str | None
-    audit_event: Literal["security.access_surface.viewed"]
+    scope_kind: ScopeKind
     viewer: ViewerContext
     sources: list[GovernanceSource]
     connector_events: list[ConnectorEvidence]
@@ -127,9 +105,22 @@ def _datetime_to_utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _host_from_url(value: str) -> str:
-    parsed = urlparse(value)
-    return parsed.netloc.rsplit("@", 1)[-1] if parsed.netloc else value
+def _scope_kind(organization_id: str | None) -> ScopeKind:
+    return "organization" if organization_id is not None else "personal"
+
+
+def _evidence_label(evidence_source: str) -> str:
+    if "webdav" in evidence_source.lower():
+        return "webdav_source_evidence"
+    if "calendar" in evidence_source.lower():
+        return "calendar_source_evidence"
+    if "access_policy" in evidence_source.lower():
+        return "policy_engine_evidence"
+    if "auth" in evidence_source.lower() or "session" in evidence_source.lower():
+        return "signed_session_evidence"
+    if "connector" in evidence_source.lower() or "runner" in evidence_source.lower():
+        return "connector_observation_evidence"
+    return "server_audit_evidence"
 
 
 def _can_read_org_scope(auth_context: AuthContext) -> bool:
@@ -237,7 +228,6 @@ def _access_request(auth_context: AuthContext) -> AccessRequest:
 
 def _decision_summary(
     *,
-    decision_uid: str,
     resource_label: str,
     resource_type: str,
     auth_context: AuthContext,
@@ -246,12 +236,11 @@ def _decision_summary(
 ) -> PolicyDecisionSummary:
     decision = evaluate_access(_access_request(auth_context), resource)
     return PolicyDecisionSummary(
-        decision_uid=decision_uid,
         resource_label=resource_label,
         resource_type=resource_type,
         allowed=decision.allowed,
         reason=decision.reason,
-        evidence_source=evidence_source,
+        evidence_label=_evidence_label(evidence_source),
     )
 
 
@@ -287,7 +276,6 @@ def _webdav_source(
     account: WebdavAccount, auth_context: AuthContext
 ) -> GovernanceSource:
     decision = _decision_summary(
-        decision_uid=f"policy:{account.source_uid}",
         resource_label="WebDAV repository",
         resource_type="webdav_repository",
         auth_context=auth_context,
@@ -301,16 +289,11 @@ def _webdav_source(
         evidence_source="webdav_accounts",
     )
     return GovernanceSource(
-        source_id=account.source_uid,
         source_type="webdav_repository",
         source_label="WebDAV repository",
-        source_host=_host_from_url(account.server_url),
-        owner_id=account.user_id,
-        organization_id=account.organization_id,
-        workspace_id=account.workspace_id,
+        scope_kind=_scope_kind(account.organization_id),
         capabilities=["read", "write", "etag"] if account.writeback_enabled else ["read"],
         writeback_enabled=bool(account.writeback_enabled),
-        provider_write_executed=False,
         policy_decision=decision,
         last_observed_at=_datetime_to_utc_iso(account.created_at),
     )
@@ -323,7 +306,6 @@ def _calendar_source(
         "carddav_source" if source.source_protocol == "carddav" else "caldav_source"
     )
     decision = _decision_summary(
-        decision_uid=f"policy:{source.source_uid}",
         resource_label=f"{source.provider_name} {source.source_protocol.upper()} source",
         resource_type=source_type,
         auth_context=auth_context,
@@ -340,16 +322,11 @@ def _calendar_source(
     if source.writeback_enabled:
         capabilities.extend(["write", "etag"])
     return GovernanceSource(
-        source_id=source.source_uid,
         source_type=source_type,
         source_label=source.provider_name,
-        source_host=source.source_host,
-        owner_id=source.user_id,
-        organization_id=source.organization_id,
-        workspace_id=source.workspace_id,
+        scope_kind=_scope_kind(source.organization_id),
         capabilities=capabilities,
         writeback_enabled=bool(source.writeback_enabled),
-        provider_write_executed=False,
         policy_decision=decision,
         last_observed_at=_datetime_to_utc_iso(source.created_at),
     )
@@ -357,26 +334,19 @@ def _calendar_source(
 
 def _connector_evidence(event: ConnectorSignalEvent) -> ConnectorEvidence:
     return ConnectorEvidence(
-        event_uid=event.event_uid,
-        signal_key=event.signal_key,
         state_code=event.state_code,
-        detail_text=event.detail_text,
+        evidence_label=_evidence_label("connector_signal_events"),
         observed_at=_datetime_to_utc_iso(event.observed_at),
     )
 
 
 def _durable_audit_evidence(event: SecurityAuditEvent) -> DurableAuditEvidence:
     return DurableAuditEvidence(
-        event_uid=event.event_uid,
-        actor_user_id=event.actor_user_id,
         actor_role=event.actor_role,
-        organization_id=event.organization_id,
-        workspace_id=event.workspace_id,
+        scope_kind=_scope_kind(event.organization_id),
         event_action=event.event_action,
         resource_type=event.resource_type,
-        resource_uid=event.resource_uid,
-        evidence_source=event.evidence_source,
-        detail_text=event.detail_text,
+        evidence_label=_evidence_label(event.evidence_source),
         observed_at=_datetime_to_utc_iso(event.observed_at),
     )
 
@@ -388,7 +358,6 @@ def _canonical_policy_decisions(
     decisions = list(source_decisions)
     decisions.append(
         _decision_summary(
-            decision_uid="policy:cross-organization-deny",
             resource_label="Cross-organization provider secret",
             resource_type="provider_secret",
             auth_context=auth_context,
@@ -406,7 +375,6 @@ def _canonical_policy_decisions(
     )
     decisions.append(
         _decision_summary(
-            decision_uid="policy:data-region-deny",
             resource_label="Regional export outside policy",
             resource_type="data_export",
             auth_context=auth_context,
@@ -428,15 +396,12 @@ def _canonical_policy_decisions(
 def _share_reviews(sources: list[GovernanceSource]) -> list[ExternalShareReview]:
     return [
         ExternalShareReview(
-            review_uid=f"share:{source.source_id}",
-            source_id=source.source_id,
             source_type=source.source_type,
             review_label=f"{source.source_label} writeback boundary",
             exposure_level="external_writeback"
             if source.writeback_enabled
             else "internal",
             decision_reason=source.policy_decision.reason,
-            provider_write_executed=False,
         )
         for source in sources
     ]
@@ -445,34 +410,28 @@ def _share_reviews(sources: list[GovernanceSource]) -> list[ExternalShareReview]
 def _policy_order() -> list[PolicyOrderStep]:
     return [
         PolicyOrderStep(
-            step_key="signed_session",
             display_name="Signed session identity",
-            evidence_source="api.auth.get_auth_context",
+            evidence_label="signed_session_evidence",
         ),
         PolicyOrderStep(
-            step_key="organization_scope",
             display_name="Organization and workspace scope",
-            evidence_source="organization_id and workspace_id claims",
+            evidence_label="signed_session_evidence",
         ),
         PolicyOrderStep(
-            step_key="data_region",
             display_name="Data-region deny",
-            evidence_source="services.access_policy.evaluate_access",
+            evidence_label="policy_engine_evidence",
         ),
         PolicyOrderStep(
-            step_key="consent",
             display_name="Consent and source capability deny",
-            evidence_source="services.access_policy.evaluate_access",
+            evidence_label="policy_engine_evidence",
         ),
         PolicyOrderStep(
-            step_key="ownership",
             display_name="Owner or delegated admin boundary",
-            evidence_source="services.access_policy.evaluate_access",
+            evidence_label="policy_engine_evidence",
         ),
         PolicyOrderStep(
-            step_key="rbac",
             display_name="RBAC allow after ABAC denies",
-            evidence_source="services.access_policy.evaluate_access",
+            evidence_label="policy_engine_evidence",
         ),
     ]
 
@@ -514,15 +473,10 @@ async def get_access_surface(
     policy_decisions = _canonical_policy_decisions(auth_context, source_decisions)
 
     return SecurityAccessSurfaceResponse(
-        workspace_id=auth_context.workspace_id,
-        organization_id=auth_context.organization_id,
-        audit_event="security.access_surface.viewed",
+        scope_kind=_scope_kind(auth_context.organization_id),
         viewer=ViewerContext(
-            user_id=auth_context.user_id,
             role=auth_context.role,
-            organization_id=auth_context.organization_id,
-            group_ids=list(auth_context.group_ids),
-            workspace_id=auth_context.workspace_id,
+            scope_kind=_scope_kind(auth_context.organization_id),
         ),
         sources=sources,
         connector_events=[_connector_evidence(event) for event in connector_events],
