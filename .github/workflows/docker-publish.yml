@@ -73,17 +73,20 @@ jobs:
             frontend)
               title="naruon frontend"
               description="Naruon Next.js frontend runtime image"
-              base_name="docker.io/library/node:24-slim"
+              base_digest="sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a"
+              base_name="docker.io/library/node:24-slim@${base_digest}"
               ;;
             backend)
               title="naruon backend"
               description="Naruon FastAPI backend runtime image"
-              base_name="docker.io/library/python:3.14-slim"
+              base_digest="sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
+              base_name="docker.io/library/python:3.14-slim@${base_digest}"
               ;;
             *)
               title="naruon"
               description="Naruon combined FastAPI and Next.js runtime image"
-              base_name="docker.io/library/python:3.14-slim"
+              base_digest="sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
+              base_name="docker.io/library/python:3.14-slim@${base_digest}"
               ;;
           esac
           {
@@ -99,7 +102,7 @@ jobs:
             printf 'ref_name=%s\n' "$GIT_REF_NAME"
             printf 'title=%s\n' "$title"
             printf 'description=%s\n' "$description"
-            printf 'base_digest=\n'
+            printf 'base_digest=%s\n' "$base_digest"
             printf 'base_name=%s\n' "$base_name"
           } >> "$GITHUB_OUTPUT"
 
@@ -197,17 +200,20 @@ jobs:
             frontend)
               title="naruon frontend"
               description="Naruon Next.js frontend runtime image"
-              base_name="docker.io/library/node:24-slim"
+              base_digest="sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a"
+              base_name="docker.io/library/node:24-slim@${base_digest}"
               ;;
             backend)
               title="naruon backend"
               description="Naruon FastAPI backend runtime image"
-              base_name="docker.io/library/python:3.14-slim"
+              base_digest="sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
+              base_name="docker.io/library/python:3.14-slim@${base_digest}"
               ;;
             *)
               title="naruon"
               description="Naruon combined FastAPI and Next.js runtime image"
-              base_name="docker.io/library/python:3.14-slim"
+              base_digest="sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061"
+              base_name="docker.io/library/python:3.14-slim@${base_digest}"
               ;;
           esac
           {
@@ -223,7 +229,7 @@ jobs:
             printf 'ref_name=%s\n' "$GIT_REF_NAME"
             printf 'title=%s\n' "$title"
             printf 'description=%s\n' "$description"
-            printf 'base_digest=\n'
+            printf 'base_digest=%s\n' "$base_digest"
             printf 'base_name=%s\n' "$base_name"
           } >> "$GITHUB_OUTPUT"
 

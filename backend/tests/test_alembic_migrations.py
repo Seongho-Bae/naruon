@@ -37,7 +37,9 @@ def test_initial_alembic_revision_records_current_schema_path():
 
 def test_provider_writeback_retry_queue_has_incremental_revision():
     versions_dir = BACKEND_ROOT / "alembic" / "versions"
-    revision_text = "\n".join(path.read_text() for path in sorted(versions_dir.glob("*.py")))
+    revision_path = versions_dir / "0002_provider_writeback_retry_queue.py"
+    assert revision_path.exists()
+    revision_text = revision_path.read_text()
 
     assert 'revision = "0002_provider_retry_queue"' in revision_text
     assert 'down_revision = "0001_initial_control_plane"' in revision_text
@@ -49,6 +51,7 @@ def test_provider_writeback_retry_queue_has_incremental_revision():
     assert "ix_provider_writeback_retry_items_scope_state" in revision_text
     assert "has_table" in revision_text
     assert "op.create_index(" in revision_text
+    assert "sa.text(" not in revision_text
     assert "if_not_exists=True" in revision_text
     assert "op.drop_index(" in revision_text
     assert "if_exists=True" in revision_text
