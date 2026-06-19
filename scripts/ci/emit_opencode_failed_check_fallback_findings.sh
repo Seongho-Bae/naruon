@@ -320,6 +320,64 @@ emit_known_missing_string_finding() {
 	fi
 }
 
+all_failed_check_blocks_have_billing_lock() {
+	local evidence_file="$1"
+
+	grep -Fqi "account is locked due to a billing issue" "$evidence_file" || return 1
+	awk '
+		BEGIN {
+			has_failed_check = 0
+			block_has_billing_lock = 0
+			all_blocks_have_billing_lock = 1
+		}
+		/^## Failed check: / {
+			if (has_failed_check && !block_has_billing_lock) {
+				all_blocks_have_billing_lock = 0
+			}
+			has_failed_check = 1
+			block_has_billing_lock = 0
+			next
+		}
+		has_failed_check && tolower($0) ~ /account is locked due to a billing issue/ {
+			block_has_billing_lock = 1
+		}
+		END {
+			if (has_failed_check && !block_has_billing_lock) {
+				all_blocks_have_billing_lock = 0
+			}
+			if (has_failed_check && all_blocks_have_billing_lock) {
+				exit 0
+			}
+			exit 1
+		}
+	' "$evidence_file"
+}
+
+emit_github_billing_lock_finding() {
+	local match=""
+	local path=".github/workflows/opencode-review.yml"
+	local line="1"
+
+	if ! all_failed_check_blocks_have_billing_lock "$EVIDENCE_FILE"; then
+		return 0
+	fi
+
+	if [ -f "${REPO_ROOT%/}/$path" ]; then
+		match="$(grep -nF -- "account is locked due to a billing issue" "${REPO_ROOT%/}/$path" | head -n 1 || true)"
+		if [ -n "$match" ]; then
+			line="${match%%:*}"
+		fi
+	fi
+
+	finding_index=$((finding_index + 1))
+	printf '### %s. HIGH %s:%s - GitHub Actions billing lock blocked current-head check evidence\n' "$finding_index" "$path" "$line"
+	printf -- '- Problem: Every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue.\n'
+	printf -- '- Root cause: GitHub Actions never started the affected jobs, so the evidence is an external CI/account blocker rather than a repository source defect.\n'
+	printf -- '- Fix: Restore GitHub billing or Actions access, then rerun the current-head checks; do not request repository source changes from this evidence alone.\n'
+	printf -- '- Regression test: Keep the OpenCode approval gate classifying all-billing-lock failed checks as a neutral COMMENT review so stale REQUEST_CHANGES reviews are not created for infrastructure-only failures.\n\n'
+	printf -- '- Suggested edit: no repository source edit is appropriate until the billing lock is cleared and a real failed job log or annotation identifies an actionable source line.\n\n'
+}
+
 emit_strix_report_findings() {
 	local strix_evidence_file="$1"
 	local reports_file
@@ -466,6 +524,7 @@ emit_known_missing_string_finding \
 	".github/workflows/opencode-review.yml" \
 	"scripts/ci/test_strix_quick_gate.sh"
 
+emit_github_billing_lock_finding
 emit_strix_report_findings "$strix_evidence_file"
 emit_strix_provider_failure_finding "$strix_evidence_file"
 emit_strix_cancelled_without_log_finding "$strix_evidence_file"

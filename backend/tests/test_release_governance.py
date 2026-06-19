@@ -276,10 +276,83 @@ def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
     assert "Distinguish blocking findings from important suggestions and nits" in workflow
     assert "request changes only for actionable blockers" in workflow.lower()
     assert "regression test direction" in workflow
+    assert "OpenCode-owned review structure compatible with Copilot Review" in workflow
+    assert "CodeRabbitAI's severity-ordered, actionable finding format" in workflow
+    assert "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer" in workflow
+    assert "## Pull request overview" in workflow
+    assert "## Findings" in workflow
+    assert "No blocking findings." in workflow
+    assert "Keep raw tool logs out of the main review body" in workflow
+    assert "<summary>Failed check evidence for line-specific fixes</summary>" in workflow
     assert '"codegraph"' in workflow
     assert '"deepwiki"' in workflow
     assert '"context7"' in workflow
     assert '"web_search"' in workflow
+
+
+def test_opencode_billing_lock_failed_checks_publish_neutral_comment(
+    tmp_path: Path,
+) -> None:
+    workflow = read_repo_text(".github/workflows/opencode-review.yml")
+    repo_root = tmp_path / "repo"
+    workflow_file = repo_root / ".github" / "workflows" / "opencode-review.yml"
+    workflow_file.parent.mkdir(parents=True)
+    workflow_file.write_text(
+        "If every active failed-check block says the job was not started because "
+        "the GitHub account is locked due to a billing issue, classify it as an "
+        "external CI/account blocker with no repository source fix.\n",
+        encoding="utf-8",
+    )
+
+    assert "is_github_billing_lock_evidence()" in workflow
+    assert "build_billing_lock_body()" in workflow
+    assert 'create_pull_review "COMMENT"' in workflow
+    assert "No source-code findings." in workflow
+    assert (
+        "do not invent source-backed REQUEST_CHANGES findings for it"
+        in workflow
+    )
+
+    evidence_file = tmp_path / "failed-check-evidence.md"
+    evidence_file.write_text(
+        """
+# Failed GitHub Check Evidence
+
+## Failed check: App CI / backend
+
+### Check annotations
+
+- unknown:0-0 [failure] The job was not started because your account is locked due to a billing issue.
+
+## Failed check: Strix Security Scan/strix
+
+### Check annotations
+
+- unknown:0-0 [failure] The job was not started because your account is locked due to a billing issue.
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fallback = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
+            str(evidence_file),
+            str(repo_root),
+        ],
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    assert (
+        "GitHub Actions billing lock blocked current-head check evidence"
+        in fallback.stdout
+    )
+    assert "external CI/account blocker" in fallback.stdout
+    assert "do not request repository source changes" in fallback.stdout
+    assert "No deterministic missing-string markers" not in fallback.stdout
 
 
 def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> (
@@ -618,6 +691,10 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     )
     assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
     assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
+    assert (
+        "github_models/deepseek/deepseek-r1-0528 "
+        "github_models/deepseek/deepseek-v3-0324"
+    ) in workflow
     assert (
         "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
         in workflow
