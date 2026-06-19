@@ -249,6 +249,11 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         in trivy_workflow
     )
     assert "results_format: sarif" in scorecard_workflow
+    assert "Preserve Scorecard SARIF categories" in scorecard_workflow
+    assert (
+        "python scripts/ci/ensure_scorecard_sarif_categories.py scorecard-results.sarif"
+        in scorecard_workflow
+    )
     assert "category: scorecard" in scorecard_workflow
 
     assert (
@@ -269,6 +274,49 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
         "sha: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
         in trivy_workflow
     )
+
+
+def test_scorecard_sarif_normalizer_preserves_branch_protection_category(
+    tmp_path: Path,
+) -> None:
+    sarif_path = tmp_path / "scorecard-results.sarif"
+    sarif_path.write_text(
+        json.dumps(
+            {
+                "version": "2.1.0",
+                "runs": [
+                    {
+                        "tool": {"driver": {"name": "Scorecard", "rules": []}},
+                        "automationDetails": {"id": "supply-chain/local"},
+                        "results": [],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    normalizer = REPO_ROOT / "scripts/ci/ensure_scorecard_sarif_categories.py"
+    for _ in range(2):
+        subprocess.run(
+            [sys.executable, str(normalizer), str(sarif_path)],
+            check=True,
+        )
+
+    normalized = json.loads(sarif_path.read_text(encoding="utf-8"))
+    categories = [
+        run.get("automationDetails", {}).get("id")
+        for run in normalized["runs"]
+    ]
+    assert categories.count("supply-chain/branch-protection") == 1
+    branch_protection_run = next(
+        run
+        for run in normalized["runs"]
+        if run.get("automationDetails", {}).get("id")
+        == "supply-chain/branch-protection"
+    )
+    assert branch_protection_run["tool"]["driver"]["name"] == "Scorecard"
+    assert branch_protection_run["results"] == []
 
 
 def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
