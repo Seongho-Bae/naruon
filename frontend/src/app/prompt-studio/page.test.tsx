@@ -3,16 +3,6 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const apiMocks = vi.hoisted(() => ({
-  post: vi.fn(),
-}));
-
-vi.mock("@/lib/api-client", () => ({
-  apiClient: {
-    post: apiMocks.post,
-  },
-}));
-
 vi.mock("lucide-react", () => ({
   CheckIcon: () => <svg aria-hidden="true" />,
   Code: () => <svg aria-hidden="true" />,
@@ -33,6 +23,13 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
+function jsonResponse(body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
@@ -46,6 +43,41 @@ function getButton(container: HTMLElement, label: string) {
   );
   expect(button).toBeInstanceOf(HTMLButtonElement);
   return button as HTMLButtonElement;
+}
+
+function lowerCaseHeaders(headers: HeadersInit | undefined) {
+  if (!headers) return {};
+  if (headers instanceof Headers) {
+    return Object.fromEntries(
+      Array.from(headers.entries()).map(([key, value]) => [
+        key.toLowerCase(),
+        value,
+      ]),
+    );
+  }
+  if (Array.isArray(headers)) {
+    return Object.fromEntries(
+      headers.map(([key, value]) => [key.toLowerCase(), value]),
+    );
+  }
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]),
+  );
+}
+
+function expectNoPublicIdentityHeaders(headers: HeadersInit | undefined) {
+  const lowerHeaders = lowerCaseHeaders(headers);
+  expect(lowerHeaders.authorization).toBeUndefined();
+  for (const headerName of [
+    "x-user-id",
+    "x-organization-id",
+    "x-group-id",
+    "x-group-ids",
+    "x-user-role",
+    "x-dev-auth-token",
+  ]) {
+    expect(lowerHeaders[headerName]).toBeUndefined();
+  }
 }
 
 describe("PromptStudioPage", () => {
@@ -88,8 +120,9 @@ describe("PromptStudioPage", () => {
   });
 
   it("shows disabled loading feedback while testing a prompt", async () => {
-    const promptTest = deferred<{ result: string }>();
-    apiMocks.post.mockReturnValueOnce(promptTest.promise);
+    const promptTest = deferred<Response>();
+    const fetchMock = vi.fn(() => promptTest.promise);
+    vi.stubGlobal("fetch", fetchMock);
     const page = await renderPage();
 
     act(() => {
@@ -100,22 +133,31 @@ describe("PromptStudioPage", () => {
     expect(page.querySelector("[data-testid='loader']")).not.toBeNull();
 
     await act(async () => {
-      promptTest.resolve({ result: "요약 결과" });
+      promptTest.resolve(jsonResponse({ result: "요약 결과" }));
       await promptTest.promise;
     });
     await flushAsyncWork();
 
     expect(getButton(page, "실행 (Test)").disabled).toBe(false);
     expect(page.textContent).toContain("요약 결과");
-    expect(apiMocks.post).toHaveBeenCalledWith("/api/prompts/test", {
-      content: "핵심 맥락을 종합해주세요: {{email}}",
-      variables: { email: "메일 내용 예시입니다." },
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prompts/test",
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: "핵심 맥락을 종합해주세요: {{email}}",
+          variables: { email: "메일 내용 예시입니다." },
+        }),
+        credentials: "same-origin",
+        method: "POST",
+      }),
+    );
+    expectNoPublicIdentityHeaders(fetchMock.mock.calls[0]?.[1]?.headers);
   });
 
   it("shows disabled loading feedback while saving a prompt", async () => {
-    const promptSave = deferred<{ result?: string }>();
-    apiMocks.post.mockReturnValueOnce(promptSave.promise);
+    const promptSave = deferred<Response>();
+    const fetchMock = vi.fn(() => promptSave.promise);
+    vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("alert", vi.fn());
     const page = await renderPage();
 
@@ -127,17 +169,25 @@ describe("PromptStudioPage", () => {
     expect(page.querySelector("[data-testid='loader']")).not.toBeNull();
 
     await act(async () => {
-      promptSave.resolve({});
+      promptSave.resolve(jsonResponse({}));
       await promptSave.promise;
     });
     await flushAsyncWork();
 
     expect(getButton(page, "프롬프트 저장 (Save)").disabled).toBe(false);
-    expect(apiMocks.post).toHaveBeenCalledWith("/api/prompts", {
-      title: "",
-      description: "",
-      content: "핵심 맥락을 종합해주세요: {{email}}",
-      is_shared: false,
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prompts",
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: "",
+          description: "",
+          content: "핵심 맥락을 종합해주세요: {{email}}",
+          is_shared: false,
+        }),
+        credentials: "same-origin",
+        method: "POST",
+      }),
+    );
+    expectNoPublicIdentityHeaders(fetchMock.mock.calls[0]?.[1]?.headers);
   });
 });
