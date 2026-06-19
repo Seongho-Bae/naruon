@@ -498,7 +498,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -609,7 +609,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -720,7 +720,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, fix direction, and regression test direction. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
-          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
+          If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
           Do not request rollback of Node 24 or Python 3.14 solely from model memory. If all current-head GitHub Checks for those runtime changes passed, version support is not a blocker unless you cite a concrete current source inconsistency or failed registry/check evidence.
@@ -1291,6 +1291,79 @@ jobs:
             } >"$body_file"
           }
 
+          is_github_billing_lock_evidence() {
+            local evidence_file="$1"
+
+            grep -Fqi "account is locked due to a billing issue" "$evidence_file" || return 1
+            awk '
+              BEGIN {
+                has_failed_check = 0
+                block_has_billing_lock = 0
+                all_blocks_have_billing_lock = 1
+              }
+              /^## Failed check: / {
+                if (has_failed_check && !block_has_billing_lock) {
+                  all_blocks_have_billing_lock = 0
+                }
+                has_failed_check = 1
+                block_has_billing_lock = 0
+                next
+              }
+              has_failed_check && tolower($0) ~ /account is locked due to a billing issue/ {
+                block_has_billing_lock = 1
+              }
+              END {
+                if (has_failed_check && !block_has_billing_lock) {
+                  all_blocks_have_billing_lock = 0
+                }
+                if (has_failed_check && all_blocks_have_billing_lock) {
+                  exit 0
+                }
+                exit 1
+              }
+            ' "$evidence_file"
+          }
+
+          build_billing_lock_body() {
+            local failed_checks_file="$1"
+            local evidence_file="$2"
+            local body_file="$3"
+
+            {
+              printf '## Pull request overview\n\n'
+              printf 'OpenCode reviewed the current-head bounded evidence and found that peer GitHub Checks did not start because the GitHub account is locked due to a billing issue.\n\n'
+              printf '## Findings\n\n'
+              printf 'No source-code findings.\n\n'
+              printf -- '- Result: COMMENT\n'
+              printf -- '- Reason: GitHub Actions did not start one or more required jobs because the account is locked due to a billing issue.\n'
+              printf -- "- Head SHA: \`%s\`\n" "$HEAD_SHA"
+              printf -- '- Workflow run: %s\n' "$RUN_ID"
+              printf -- '- Workflow attempt: %s\n\n' "$RUN_ATTEMPT"
+              printf '## Required follow-up\n\n'
+              printf 'Restore GitHub billing or Actions access, then rerun the current-head checks. OpenCode must not request repository source changes for this evidence because no failed job executed far enough to produce a source-backed diagnostic.\n\n'
+              printf '<details>\n<summary>Failed checks blocked by GitHub billing</summary>\n\n'
+              cat "$failed_checks_file"
+              printf '\n</details>\n\n'
+              printf '<details>\n<summary>Billing-lock evidence</summary>\n\n'
+              sed -n '1,240p' "$evidence_file"
+              printf '\n</details>\n'
+            } >"$body_file"
+          }
+
+          comment_for_billing_lock_if_present() {
+            local failed_checks_file="$1"
+            local evidence_file="$2"
+            local body_file="$3"
+
+            if ! is_github_billing_lock_evidence "$evidence_file"; then
+              return 1
+            fi
+
+            build_billing_lock_body "$failed_checks_file" "$evidence_file" "$body_file"
+            create_pull_review "COMMENT" "$(cat "$body_file")"
+            return 0
+          }
+
           build_pending_check_body() {
             local pending_checks_file="$1"
             local body_file="$2"
@@ -1742,6 +1815,11 @@ jobs:
                 printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
               fi
 
+              if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                echo "::endgroup::"
+                exit 0
+              fi
+
               if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
               else
@@ -1906,6 +1984,10 @@ jobs:
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
+                if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                  echo "::endgroup::"
+                  exit 0
+                fi
                 if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                   echo "::endgroup::"
@@ -1952,6 +2034,10 @@ jobs:
                 failed_check_evidence_file="$(mktemp)"
                 if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
+                fi
+                if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
+                  echo "::endgroup::"
+                  exit 0
                 fi
                 if scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
                   format_request_changes_body "$control_json" "$failed_check_review_body_file"
