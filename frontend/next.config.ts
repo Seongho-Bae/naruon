@@ -1,14 +1,5 @@
 import type { NextConfig } from "next";
 
-const CONTENT_SECURITY_POLICY = [
-  "default-src 'self'",
-  "style-src 'self' 'unsafe-inline'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
-
 function positiveIntegerFromEnv(name: string, fallback: number) {
   const rawValue = process.env[name];
   if (!rawValue) return fallback;
@@ -39,7 +30,7 @@ const nextConfig: NextConfig = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: CONTENT_SECURITY_POLICY,
+            value: "default-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
           },
           {
             key: "X-Content-Type-Options",
@@ -52,10 +43,6 @@ const nextConfig: NextConfig = {
           {
             key: "Strict-Transport-Security",
             value: "max-age=63072000; includeSubDomains; preload",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
           },
         ],
       },
