@@ -770,6 +770,9 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "format('pr-{0}', github.event.pull_request.number)" in workflow
     assert "format('pr-{0}', github.event.inputs.pr_number)" in workflow
     assert "|| github.ref" in workflow
+    push_block = workflow.split("push:", 1)[1].split("pull_request_target:", 1)[0]
+    assert "develop" in push_block
+    assert "master" in push_block
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow
