@@ -5,6 +5,23 @@
 - **Standard findings:** 0건
 - **AI Findings:** 0건
 
+## Vulnerability Reporting
+
+Report suspected vulnerabilities through GitHub private vulnerability
+reporting:
+https://github.com/Seongho-Bae/naruon/security/advisories/new
+
+If GitHub private reporting is unavailable, email `security@naruon.net` with:
+
+- affected component and version or commit SHA
+- reproducible impact and proof of concept
+- whether the report affects production data, credentials, or tenant isolation
+
+We acknowledge high and critical reports within 3 business days, keep the
+reporter informed while triage is active, and coordinate disclosure after a
+fix or mitigation is available. Do not publish exploit details before the
+private report is resolved.
+
 ## Dependabot
 
 - **Malware:** 0건
