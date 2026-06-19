@@ -42,13 +42,25 @@ describe("backend URL guard", () => {
     }
   });
 
-  it("allows the exact Compose backend URL only with the explicit opt-in", () => {
+  it("allows exact Docker internal backend URLs only with the explicit opt-in", () => {
     expect(() => parseBackendInternalUrl("http://backend:8000")).toThrow(
+      "https://",
+    );
+    expect(() => parseBackendInternalUrl("http://127.0.0.1:8000")).toThrow(
       "https://",
     );
     process.env.ALLOW_DOCKER_BACKEND_INTERNAL_URL = "1";
     expect(parseBackendInternalUrl("http://backend:8000").origin).toBe(
       "http://backend:8000",
+    );
+    expect(parseBackendInternalUrl("http://127.0.0.1:8000").origin).toBe(
+      "http://127.0.0.1:8000",
+    );
+    expect(parseBackendInternalUrl("http://localhost:8000").origin).toBe(
+      "http://localhost:8000",
+    );
+    expect(() => parseBackendInternalUrl("http://127.0.0.1:8001")).toThrow(
+      "https://",
     );
   });
 
@@ -69,14 +81,15 @@ describe("backend URL guard", () => {
     // since Node.js newer URL parser rejects `https:///` and similar.
     const originalURL = global.URL;
     try {
-      global.URL = class extends URL {
+      const MockURL = class extends URL {
         constructor(input: string | URL, base?: string | URL) {
           super(input, base);
           if (input === "https:///empty") {
             Object.defineProperty(this, "hostname", { get: () => "" });
           }
         }
-      } as any;
+      };
+      global.URL = MockURL as unknown as typeof URL;
       expect(() => parseBackendInternalUrl("https:///empty")).toThrow(
         "BACKEND_INTERNAL_URL must include a hostname",
       );

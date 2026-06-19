@@ -1,0 +1,12 @@
+--- backend/api/emails.py
++++ backend/api/emails.py
+@@ -494,6 +494,9 @@
+
+     uploads: list[EmailImportUpload] = []
+     for upload in files:
++        if not upload.filename or not upload.filename.endswith(".eml"):
++            raise HTTPException(status_code=400, detail="invalid_file_type")
++
+         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
+         if len(content) > MAX_IMPORT_UPLOAD_BYTES:
+             raise HTTPException(status_code=413, detail="file_too_large")

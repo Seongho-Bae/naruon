@@ -6,8 +6,8 @@ describe("fetchRuntimeConfig", () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    const module = await import("./runtime-config");
-    fetchRuntimeConfig = module.fetchRuntimeConfig;
+    const runtimeConfigModule = await import("./runtime-config");
+    fetchRuntimeConfig = runtimeConfigModule.fetchRuntimeConfig;
   });
 
   afterEach(() => {
@@ -71,8 +71,8 @@ describe("fetchRuntimeConfig", () => {
   });
 
   it("returns the in-flight promise if a fetch is already in progress", async () => {
-    let resolveJson: (value: any) => void;
-    const jsonPromise = new Promise((resolve) => {
+    let resolveJson: (value: RuntimeConfig) => void;
+    const jsonPromise = new Promise<RuntimeConfig>((resolve) => {
       resolveJson = resolve;
     });
 
@@ -105,7 +105,9 @@ describe("fetchRuntimeConfig", () => {
     const config = await fetchRuntimeConfig();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Runtime config fetch failed, using fallback", expect.any(Error));
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Runtime config fetch failed, using fallback", {
+      error_type: "Error",
+    });
     expect(config).toEqual(fallbackConfig);
   });
 
@@ -118,7 +120,12 @@ describe("fetchRuntimeConfig", () => {
     const config = await fetchRuntimeConfig();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(consoleErrorSpy).toHaveBeenCalledWith("Runtime config fetch failed, using fallback", networkError);
+    expect(consoleErrorSpy).toHaveBeenCalledWith("Runtime config fetch failed, using fallback", {
+      error_type: "Error",
+    });
+    const loggedArgs = consoleErrorSpy.mock.calls[0] ?? [];
+    expect(loggedArgs).not.toContain(networkError);
+    expect(JSON.stringify(loggedArgs)).not.toContain("Network Error");
     expect(config).toEqual(fallbackConfig);
   });
 });

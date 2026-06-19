@@ -6,8 +6,12 @@ from argparse import ArgumentParser
 from collections.abc import Sequence
 from pathlib import Path
 
-from core.runtime_secrets import validate_auth_session_hmac_secret_value
-from core.url_validation import parse_allowed_hosts, validate_https_url_host
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+if str(BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(BACKEND_ROOT))
+
+from core.runtime_secrets import validate_auth_session_hmac_secret_value  # noqa: E402
+from core.url_validation import parse_allowed_hosts, validate_https_url_host  # noqa: E402
 
 DEFAULT_SERVER_HOST = "127.0.0.1"
 DEFAULT_SERVER_PORT = 8000

@@ -3,6 +3,20 @@
 import { completeOidcRedirect } from '@/lib/oidc-session';
 import { useEffect, useState } from 'react';
 
+export function toSafeReturnTo(returnTo: string | null | undefined) {
+  const candidate = returnTo?.trim() ?? '';
+  if (
+    !candidate ||
+    !candidate.startsWith('/') ||
+    candidate.startsWith('//') ||
+    candidate.includes('\\') ||
+    /[\u0000-\u001f\u007f]/.test(candidate)
+  ) {
+    return '/';
+  }
+  return candidate;
+}
+
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
 
@@ -10,7 +24,7 @@ export default function AuthCallbackPage() {
     let cancelled = false;
     completeOidcRedirect()
       .then(({ returnTo }) => {
-        if (!cancelled) window.location.replace(returnTo || '/');
+        if (!cancelled) window.location.replace(toSafeReturnTo(returnTo));
       })
       .catch((err: unknown) => {
         if (cancelled) return;

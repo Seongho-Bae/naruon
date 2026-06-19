@@ -2,11 +2,17 @@
 
 import { Activity, Settings, User, Mail, Bell, Shield, Smartphone, Monitor, AlertCircle, RefreshCw, Bot, Cpu, Network, Plus, CheckCircle2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
+import type { SessionClaims } from '@/lib/session-cookie';
 import { clearOidcSession, getOidcBrowserConfig, startOidcLogin } from '@/lib/oidc-session';
 import { useWorkspaceStartupView, setWorkspaceStartupView } from '@/lib/workspace-preferences';
 import { useEffect, useState } from 'react';
 
 export type SettingsTab = '워크스페이스' | '멤버' | 'AI 모델' | '연결 계정' | '알림' | '자동화' | '결제' | '개발자';
+const EMPTY_SESSION_CLAIMS: SessionClaims = {
+  userId: null,
+  organizationId: null,
+  workspaceId: null,
+};
 
 interface RunnerConfig {
   workspace_id: string;
@@ -66,7 +72,14 @@ interface OperationalSignalsResponse {
     local_protocols: string[];
     last_heartbeat_at: string | null;
     last_disconnect_at: string | null;
-    queue_depth_state: 'not_reported';
+    queue_depth_state: 'clear' | 'backlog' | 'degraded';
+    queue_depth: {
+      pending_count: number;
+      running_count: number;
+      failed_count: number;
+      total_count: number;
+      next_retry_at: string | null;
+    };
     recent_events: ConnectorSignalEvent[];
   };
   signals: OperationalSignal[];
@@ -199,7 +212,7 @@ const localModelFormDefaults: ModelProviderFormState = {
   name: 'Local Gemma4',
   providerType: 'ollama',
   baseUrl: 'http://ollama:11434/v1',
-  modelIdentifier: 'gemma4',
+  modelIdentifier: 'gemma4:e2b-it-qat',
   embeddingModel: 'embeddinggemma',
   apiKey: '',
   isActive: true,
@@ -401,8 +414,15 @@ function getConnectorEventDetail(event: ConnectorSignalEvent) {
 
 function getOperationalSignalDetail(signal: OperationalSignal) {
   if (signal.signal_key === 'connector_heartbeat') return '서버가 활성 outbound runner 상태를 확인합니다.';
+  if (signal.signal_key === 'writeback_retry_queue') return '서버가 provider writeback 재시도 큐 상태를 집계합니다.';
   if (signal.signal_key === 'sync_lag') return '원본 connector 작업이 동기화 지연 신호를 기록하면 표시합니다.';
   return signal.detail ? '운영 신호 상태를 확인합니다.' : '상세 근거가 아직 기록되지 않았습니다.';
+}
+
+function getQueueDepthLabel(state: OperationalSignalsResponse['connector']['queue_depth_state']) {
+  if (state === 'degraded') return '조치 필요';
+  if (state === 'backlog') return '대기 중';
+  return '비어 있음';
 }
 
 function getProviderTypeLabel(providerType: string) {
@@ -502,7 +522,7 @@ export function SettingsLayout() {
   const [selectedEmbeddingProviderId, setSelectedEmbeddingProviderId] = useState<number | null>(null);
   const [selectedEmbeddingModel, setSelectedEmbeddingModel] = useState('embeddinggemma');
   const [embeddingSaving, setEmbeddingSaving] = useState(false);
-  const [oidcSessionClaims, setOidcSessionClaims] = useState(() => apiClient.getSessionClaims());
+  const [oidcSessionClaims, setOidcSessionClaims] = useState<SessionClaims>(EMPTY_SESSION_CLAIMS);
   const [oidcActionError, setOidcActionError] = useState<string | null>(null);
   const startupView = useWorkspaceStartupView();
   const oidcBrowserConfig = getOidcBrowserConfig();
@@ -563,11 +583,11 @@ export function SettingsLayout() {
     }
   };
 
-  const handleOidcLogout = () => {
+  const handleOidcLogout = async () => {
     setOidcActionError(null);
     try {
-      clearOidcSession({ postLogoutRedirectUri: window.location.origin });
-      setOidcSessionClaims(apiClient.getSessionClaims());
+      await clearOidcSession({ postLogoutRedirectUri: window.location.origin });
+      setOidcSessionClaims(EMPTY_SESSION_CLAIMS);
     } catch (error) {
       setOidcActionError(error instanceof Error ? error.message : 'OIDC logout failed');
     }
@@ -680,6 +700,15 @@ export function SettingsLayout() {
 
   useEffect(() => {
     let cancelled = false;
+
+    void apiClient
+      .getServerSessionClaims()
+      .then((claims) => {
+        if (!cancelled) setOidcSessionClaims(claims);
+      })
+      .catch(() => {
+        if (!cancelled) setOidcSessionClaims(EMPTY_SESSION_CLAIMS);
+      });
 
     void apiClient
       .get<RunnerConfig>('/api/runner-config')
@@ -1027,7 +1056,7 @@ export function SettingsLayout() {
                       <div className="grid gap-4 sm:grid-cols-2">
                         <div className="space-y-2">
                           <label htmlFor="local-model-id" className="text-sm font-bold text-muted-foreground">모델 식별자</label>
-                          <input id="local-model-id" value={localModelForm.modelIdentifier} onChange={(event) => updateLocalModelField('modelIdentifier', event.target.value)} placeholder="gemma4" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
+                          <input id="local-model-id" value={localModelForm.modelIdentifier} onChange={(event) => updateLocalModelField('modelIdentifier', event.target.value)} placeholder="gemma4:e2b-it-qat" className="w-full rounded-lg border border-border bg-background px-4 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary" />
                         </div>
                         <div className="space-y-2">
                           <label htmlFor="local-embedding-model" className="text-sm font-bold text-muted-foreground">임베딩 모델</label>
@@ -1252,6 +1281,7 @@ export function SettingsLayout() {
                       type="submit"
                       disabled={accountSaving || !accountReady}
                       aria-disabled={accountSaving || !accountReady}
+                      title={accountSaving ? "저장 중입니다" : !accountReady ? "입력값이 부족합니다" : "계정 설정 저장"}
                       className="rounded-lg bg-foreground px-5 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {accountSaving ? '저장 중' : '계정 설정 저장'}
@@ -1385,6 +1415,7 @@ export function SettingsLayout() {
                       onClick={handleRunnerTokenRotate}
                       disabled={runnerRotating}
                       aria-disabled={runnerRotating}
+                      title={runnerRotating ? "등록 토큰을 회전 중입니다" : "등록 토큰을 회전합니다"}
                       className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-bold text-background hover:bg-foreground/90 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RefreshCw className={`size-4 ${runnerRotating ? 'animate-spin' : ''}`} />
@@ -1465,7 +1496,7 @@ export function SettingsLayout() {
                   ) : null}
                   {operationalSignals ? (
                     <div className="mt-5 space-y-5">
-                      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div className="rounded-xl border border-border bg-background p-3">
                           <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">연결 상태</dt>
                           <dd className="mt-1 text-sm font-bold text-foreground">{getConnectorStateLabel(operationalSignals.connector.connection_state)}</dd>
@@ -1481,6 +1512,14 @@ export function SettingsLayout() {
                         <div className="rounded-xl border border-border bg-background p-3">
                           <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">OTel traces</dt>
                           <dd className="mt-1 text-sm font-bold text-foreground">{operationalSignals.telemetry.otel_traces_enabled ? '활성' : '미설정'}</dd>
+                        </div>
+                        <div className="rounded-xl border border-border bg-background p-3">
+                          <dt className="text-xs font-bold uppercase tracking-wide text-muted-foreground">writeback queue</dt>
+                          <dd className="mt-1 text-sm font-bold text-foreground">{getQueueDepthLabel(operationalSignals.connector.queue_depth_state)}</dd>
+                          <dd className="mt-2 space-y-1 text-xs font-semibold text-muted-foreground">
+                            <span className="block">재시도 대기 {operationalSignals.connector.queue_depth.pending_count}건</span>
+                            <span className="block">진행 {operationalSignals.connector.queue_depth.running_count}건 · 실패 {operationalSignals.connector.queue_depth.failed_count}건</span>
+                          </dd>
                         </div>
                       </dl>
 
@@ -1554,6 +1593,7 @@ export function SettingsLayout() {
                         type="button"
                         onClick={handleOidcLogin}
                         disabled={!oidcBrowserConfig}
+                        title={!oidcBrowserConfig ? "OIDC 브라우저 설정이 없습니다" : "OIDC 로그인"}
                         className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         OIDC 로그인
@@ -1562,6 +1602,7 @@ export function SettingsLayout() {
                         type="button"
                         onClick={handleOidcLogout}
                         disabled={!oidcSessionClaims.userId}
+                        title={!oidcSessionClaims.userId ? "로그인된 세션이 없습니다" : "로그아웃"}
                         className="rounded-lg border border-border px-4 py-2 text-sm font-bold text-foreground transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         로그아웃

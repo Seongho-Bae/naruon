@@ -19,6 +19,7 @@ vi.mock("lucide-react", () => ({
   User: () => <svg aria-hidden="true" />,
   UserRoundCheck: () => <svg aria-hidden="true" />,
   Plus: () => <svg aria-hidden="true" />,
+  X: () => <svg aria-hidden="true" />,
 }));
 
 import TasksPage from "./page";
@@ -73,8 +74,6 @@ describe("TasksPage", () => {
   });
 
   it("loads source-linked tickets from the signed task API without exposing raw source ids", async () => {
-    const token = "signed.task.read";
-    localStorage.setItem("naruon_session_token", token);
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -116,13 +115,14 @@ describe("TasksPage", () => {
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledWith("/api/tasks", expect.objectContaining({
+      credentials: "same-origin",
       headers: expect.objectContaining({
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       }),
     }));
     const firstFetchCall = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit?] | undefined;
     const firstCallHeaders = firstFetchCall?.[1]?.headers as Record<string, string> | undefined;
+    expect(firstCallHeaders).not.toHaveProperty("Authorization");
     for (const headerName of publicIdentityHeaders) {
       expect(Object.keys(firstCallHeaders ?? {}).some((key) => key.toLowerCase() === headerName)).toBe(false);
     }
@@ -149,17 +149,27 @@ describe("TasksPage", () => {
     await flushAsyncWork();
     expect(container.textContent).toContain("보낸 메일 회신 추적");
     expect(container.textContent).not.toContain("문서 원본 검토");
+
+    const clearSearchButton = container.querySelector<HTMLButtonElement>('button[aria-label="검색어 지우기"]');
+    expect(clearSearchButton).not.toBeNull();
+    await act(async () => {
+      clearSearchButton?.click();
+    });
+    await flushAsyncWork();
+    expect(taskSearchInput?.value).toBe("");
+    expect(document.activeElement).toBe(taskSearchInput);
+    expect(container.textContent).toContain("문서 원본 검토");
   });
 
   it("updates ticket status through the signed task API", async () => {
-    localStorage.setItem("naruon_session_token", "signed.task.status");
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/api/tasks/task_public_123" && init?.method === "PATCH") {
+        expect(init.credentials).toBe("same-origin");
         expect(init.headers).toEqual(expect.objectContaining({
-          Authorization: "Bearer signed.task.status",
           "Content-Type": "application/json",
         }));
+        expect(init.headers).not.toHaveProperty("Authorization");
         expect(JSON.parse(String(init.body))).toEqual({ status: "done" });
         return jsonResponse({
           id: "task_public_123",
@@ -210,7 +220,6 @@ describe("TasksPage", () => {
   });
 
   it("creates reply SLA ticket escalations with signed headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.reply.sla");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -224,7 +233,8 @@ describe("TasksPage", () => {
       if (url === "/api/tasks/reply-sla-escalations") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(headers.Authorization).toBe("Bearer signed.reply.sla");
+        expect(init?.credentials).toBe("same-origin");
+        expect(headers.Authorization).toBeUndefined();
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
@@ -281,7 +291,6 @@ describe("TasksPage", () => {
   });
 
   it("creates self-sent knowledge WebDAV materialization intent with signed headers", async () => {
-    localStorage.setItem("naruon_session_token", "signed.knowledge.intent");
     const publicIdentityHeaders = [
       "x-user-id",
       "x-organization-id",
@@ -295,7 +304,8 @@ describe("TasksPage", () => {
       if (url === "/api/webdav/knowledge-materialization-intent") {
         const headers = init?.headers as Record<string, string>;
         expect(init?.method).toBe("POST");
-        expect(headers.Authorization).toBe("Bearer signed.knowledge.intent");
+        expect(init?.credentials).toBe("same-origin");
+        expect(headers.Authorization).toBeUndefined();
         expect(headers["Content-Type"]).toBe("application/json");
         for (const headerName of publicIdentityHeaders) {
           expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
@@ -364,6 +374,94 @@ describe("TasksPage", () => {
     expect(container.textContent).not.toContain("https://webdav.naruon.net");
     expect(container.textContent).not.toContain("provider_write_executed=false");
     expect(container.textContent).not.toContain("webdav.self_sent_knowledge_intent.created");
+  });
+
+  it("explicitly requests self-sent knowledge WebDAV provider execution with signed headers", async () => {
+    const publicIdentityHeaders = [
+      "x-user-id",
+      "x-organization-id",
+      "x-group-id",
+      "x-group-ids",
+      "x-user-role",
+      "x-dev-auth-token",
+    ];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/webdav/knowledge-materialization-intent") {
+        const headers = init?.headers as Record<string, string>;
+        expect(init?.method).toBe("POST");
+        expect(init?.credentials).toBe("same-origin");
+        expect(headers.Authorization).toBeUndefined();
+        expect(headers["Content-Type"]).toBe("application/json");
+        for (const headerName of publicIdentityHeaders) {
+          expect(Object.keys(headers).some((key) => key.toLowerCase() === headerName)).toBe(false);
+        }
+        expect(JSON.parse(String(init?.body))).toEqual({
+          source_task_id: "task-self-knowledge",
+          execute_provider: true,
+        });
+        return jsonResponse({
+          intent: "knowledge_materialization",
+          status: "queued",
+          task_id: "task-self-knowledge",
+          source_type: "self_sent_knowledge",
+          source_email_id: "<self-note@example.com>",
+          source_thread_id: "thread-self-note",
+          source_id: "webdav_src_primary",
+          target_label: "WebDAV source webdav_src_primary",
+          target_path: "/Naruon/Notes/task-self-knowledge.md",
+          requires_if_match: true,
+          provenance: "server-authoritative",
+          provider_write_executed: false,
+          audit_event: "webdav.self_sent_knowledge_write.dispatch_failed",
+          runner_request_id: "runner-request-webdav-1",
+          retry_item_uid: "provider-retry-webdav-1",
+        });
+      }
+      return jsonResponse([
+        {
+          id: "task-self-knowledge",
+          title: "나에게 보낸 지식 메모 정리",
+          status: "open",
+          priority: "normal",
+          source_type: "self_sent_knowledge",
+          source_email_id: "<self-note@example.com>",
+          related_thread_id: "thread-self-note",
+          updated_at: "2026-05-26T09:00:00.000Z",
+        },
+      ]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksPage />);
+    });
+    await flushAsyncWork();
+
+    const executeButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="나에게 보낸 지식 메모 정리 WebDAV 지식 노트 실행 요청"]',
+    );
+    expect(executeButton).not.toBeNull();
+    await act(async () => {
+      executeButton?.click();
+    });
+    await flushAsyncWork();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/webdav/knowledge-materialization-intent", expect.objectContaining({
+      method: "POST",
+    }));
+    expect(container.textContent).toContain("커넥터 실행 요청 접수");
+    expect(container.textContent).toContain("재시도 대기");
+    expect(container.textContent).toContain("충돌 검사 필요");
+    expect(container.textContent).not.toContain("/Naruon/Notes/task-self-knowledge.md");
+    expect(container.textContent).not.toContain("WebDAV source webdav_src_primary");
+    expect(container.textContent).not.toContain("webdav_src_primary");
+    expect(container.textContent).not.toContain("runner-request-webdav-1");
+    expect(container.textContent).not.toContain("provider-retry-webdav-1");
+    expect(container.textContent).not.toContain("webdav.self_sent_knowledge_write.dispatch_failed");
   });
 
   it("distinguishes signed-session authorization failures from generic task API errors", async () => {

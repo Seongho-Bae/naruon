@@ -168,7 +168,6 @@ describe("SecurityPage", () => {
   });
 
   it("fetches signed security governance and renders source-backed access data", async () => {
-    localStorage.setItem("naruon_session_token", "signed-security-session");
     const fetchMock = mockSecurityFetch();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -188,6 +187,7 @@ describe("SecurityPage", () => {
     const accessCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/security/access-surface");
     expect(accessCall).toBeDefined();
     const [, init] = accessCall ?? [];
+    expect(init?.credentials).toBe("same-origin");
     const headerEntries =
       init?.headers instanceof Headers
         ? Array.from(init.headers.entries())
@@ -195,7 +195,7 @@ describe("SecurityPage", () => {
     const requestHeaders = Object.fromEntries(
       headerEntries.map(([key, value]) => [key.toLowerCase(), String(value)]),
     );
-    expect(requestHeaders.authorization).toBe("Bearer signed-security-session");
+    expect(requestHeaders.authorization).toBeUndefined();
     for (const publicHeader of [
       "x-user-id",
       "x-organization-id",

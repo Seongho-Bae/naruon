@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from api.prompts import PromptTestRequest, execute_prompt_with_llm
+from api.prompts import PromptTestRequest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
@@ -377,6 +377,8 @@ def test_prompt_test_rejects_abusive_preview_inputs(auth_client, payload):
 async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_base_url(
     monkeypatch,
 ):
+    from api.prompts import execute_prompt_with_llm
+
     monkeypatch.setattr(
         settings, "ALLOWED_LLM_BASE_URL_HOSTS", "llm-gateway.example.com"
     )

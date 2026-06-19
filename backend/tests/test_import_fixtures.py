@@ -169,6 +169,55 @@ async def test_root_importer_uses_local_embedding_without_openai_key(
 
 
 @pytest.mark.asyncio
+async def test_root_importer_handles_empty_embedding_provider_response(
+    tmp_path, monkeypatch
+):
+    class MockResult:
+        def scalar_one_or_none(self):
+            return None
+
+    class MockSession:
+        def __init__(self):
+            self.added = None
+
+        async def execute(self, _query):
+            return MockResult()
+
+        def add(self, obj):
+            self.added = obj
+
+        async def commit(self):
+            pass
+
+    eml_file = tmp_path / "empty-embedding.eml"
+    eml_file.write_text("Message-ID: <empty-embedding@example.com>\n\nBody")
+    parsed = {
+        "message_id": "<empty-embedding@example.com>",
+        "sender": "sender@example.com",
+        "recipients": "user@example.com",
+        "subject": "Empty embedding",
+        "date": datetime.datetime.now(datetime.timezone.utc),
+        "body": "Body",
+        "attachments": [],
+    }
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    session = MockSession()
+
+    with patch.object(import_fixtures, "parse_eml", return_value=parsed), patch.object(
+        import_fixtures, "generate_embeddings", new_callable=AsyncMock
+    ) as mock_embeddings, patch.object(
+        import_fixtures, "assign_thread_id", new_callable=AsyncMock
+    ) as mock_assign:
+        mock_embeddings.return_value = []
+        mock_assign.return_value = "empty-embedding-thread"
+
+        imported = await import_fixtures.import_eml_file(session, eml_file)
+
+    assert imported is True
+    assert session.added.embedding == [0.0] * 1536
+
+
+@pytest.mark.asyncio
 async def test_root_importer_rolls_back_and_returns_false_on_commit_failure(tmp_path):
     class MockResult:
         def scalar_one_or_none(self):

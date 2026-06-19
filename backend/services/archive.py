@@ -1,6 +1,6 @@
 import asyncio
-import zipfile
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from .exceptions import (
     InvalidArchiveError,
@@ -14,11 +14,11 @@ ZIP_UNIX_FILE_TYPE_MASK = 0o170000
 ZIP_UNIX_SYMLINK_TYPE = 0o120000
 
 
-def _is_zipinfo_symlink(info: zipfile.ZipInfo) -> bool:
+def _is_zipinfo_symlink(info: ZipInfo) -> bool:
     return (info.external_attr >> 16) & ZIP_UNIX_FILE_TYPE_MASK == ZIP_UNIX_SYMLINK_TYPE
 
 
-def _resolve_safe_archive_member(output_dir: Path, info: zipfile.ZipInfo) -> Path:
+def _resolve_safe_archive_member(output_dir: Path, info: ZipInfo) -> Path:
     normalized_name = info.filename.replace("\\", "/")
     if (
         not normalized_name
@@ -69,7 +69,7 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
     extracted_paths = []
 
     try:
-        with zipfile.ZipFile(zip_path, "r") as z:
+        with ZipFile(zip_path, "r") as z:
             total_size = 0
             file_count = 0
 
@@ -98,7 +98,7 @@ def extract_backup(zip_path: str | Path, output_dir: str | Path) -> list[Path]:
 
                 extracted_paths.append(target_path)
 
-    except (zipfile.BadZipFile, FileNotFoundError) as e:
+    except (BadZipFile, FileNotFoundError) as e:
         raise InvalidArchiveError(f"Failed to extract archive: {e}") from e
 
     return extracted_paths

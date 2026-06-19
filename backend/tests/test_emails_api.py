@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import io
 import json
+import logging
 import os
 import time
 import zipfile
@@ -93,7 +94,7 @@ class MockSession:
             else tenant_config
         )
 
-    async def execute(self, query):
+    async def execute(self, query, params=None):
         class MockResult:
             def __init__(self, rows):
                 self.rows = rows
@@ -124,7 +125,7 @@ class LimitAwareMockSession(MockSession):
         super().__init__(items, tenant_config=tenant_config)
         self.last_limit_value = None
 
-    async def execute(self, query):
+    async def execute(self, query, params=None):
         class MockResult:
             def __init__(self, rows):
                 self.rows = rows
@@ -150,9 +151,9 @@ class QueryCapturingSession(MockSession):
         super().__init__(items, tenant_config=tenant_config)
         self.queries = []
 
-    async def execute(self, query):
+    async def execute(self, query, params=None):
         self.queries.append(query)
-        return await super().execute(query)
+        return await super().execute(query, params)
 
 
 class ScalarQueryCapturingSession(MockSession):
@@ -161,9 +162,9 @@ class ScalarQueryCapturingSession(MockSession):
         self.queries = []
         self.scalar_queries = []
 
-    async def execute(self, query):
+    async def execute(self, query, params=None):
         self.queries.append(query)
-        return await super().execute(query)
+        return await super().execute(query, params)
 
     async def scalar(self, query):
         self.scalar_queries.append(query)
@@ -175,12 +176,14 @@ class ImportRecordingSession(MockSession):
         super().__init__(items, tenant_config=tenant_config)
         self.added = []
         self.queries = []
+        self.query_params = []
         self.commit_count = 0
         self.rollback_count = 0
 
-    async def execute(self, query):
+    async def execute(self, query, params=None):
         self.queries.append(query)
-        return await super().execute(query)
+        self.query_params.append(params)
+        return await super().execute(query, params)
 
     def add(self, item):
         self.added.append(item)
@@ -232,6 +235,14 @@ def advisory_query_texts(session: ImportRecordingSession) -> list[str]:
     ]
 
 
+def advisory_query_params(session: ImportRecordingSession) -> list[dict[str, object]]:
+    return [
+        params
+        for query, params in zip(session.queries, session.query_params)
+        if "pg_advisory" in compiled_query_text(query) and isinstance(params, dict)
+    ]
+
+
 def _sample_eml_bytes(
     *,
     message_id: str = "<imported@example.com>",
@@ -239,14 +250,18 @@ def _sample_eml_bytes(
     body: str = "Body text",
 ) -> bytes:
     return (
-        "Message-ID: {message_id}\r\n"
-        "Date: Thu, 11 Jun 2026 10:00:00 +0000\r\n"
-        "From: Partner <partner@example.com>\r\n"
-        "To: User <user@example.com>\r\n"
-        "Subject: {subject}\r\n"
-        "\r\n"
-        "{body}\r\n"
-    ).format(message_id=message_id, subject=subject, body=body).encode("utf-8")
+        (
+            "Message-ID: {message_id}\r\n"
+            "Date: Thu, 11 Jun 2026 10:00:00 +0000\r\n"
+            "From: Partner <partner@example.com>\r\n"
+            "To: User <user@example.com>\r\n"
+            "Subject: {subject}\r\n"
+            "\r\n"
+            "{body}\r\n"
+        )
+        .format(message_id=message_id, subject=subject, body=body)
+        .encode("utf-8")
+    )
 
 
 def _zip_with_eml_bytes(filename: str, eml_bytes: bytes) -> bytes:
@@ -602,7 +617,9 @@ async def test_unique_email_thread_intent_detects_message_id_and_fingerprint_dup
 async def test_unique_email_thread_intent_rejects_empty_candidates(
     client: AsyncClient,
 ):
-    response = await client.post("/api/emails/unique-thread-intent", json={"candidates": []})
+    response = await client.post(
+        "/api/emails/unique-thread-intent", json={"candidates": []}
+    )
 
     assert response.status_code == 422
     assert "candidates" in response.text
@@ -959,6 +976,18 @@ async def test_import_email_files_serializes_quota_with_postgres_owner_lock(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
+    assert "hashtext(:namespace_key)" in advisory_queries[0]
+    assert ":owner_key" in advisory_queries[0]
+    assert advisory_query_params(session) == [
+        {
+            "namespace_key": "naruon-email-import-quota",
+            "owner_key": "testuser\x00org-acme",
+        },
+        {
+            "namespace_key": "naruon-email-import-quota",
+            "owner_key": "testuser\x00org-acme",
+        },
+    ]
 
 
 @pytest.mark.asyncio
@@ -967,9 +996,7 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
 ):
     from db.session import get_db
 
-    monkeypatch.setattr(
-        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
-    )
+    monkeypatch.setattr("services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1)
     existing_email = Email(
         id=90,
         user_id="testuser",
@@ -1014,6 +1041,16 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
+    assert advisory_query_params(session) == [
+        {
+            "namespace_key": "naruon-email-import-quota",
+            "owner_key": "testuser\x00org-acme",
+        },
+        {
+            "namespace_key": "naruon-email-import-quota",
+            "owner_key": "testuser\x00org-acme",
+        },
+    ]
 
 
 @pytest.mark.asyncio
@@ -1022,9 +1059,7 @@ async def test_import_email_files_rejects_oversized_archive_before_partial_commi
 ):
     from db.session import get_db
 
-    monkeypatch.setattr(
-        "services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1
-    )
+    monkeypatch.setattr("services.email_import_service.MAX_IMPORT_EMAILS_PER_OWNER", 1)
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w") as bundle:
         bundle.writestr(
@@ -1223,9 +1258,7 @@ async def test_get_emails_reply_tracking_real_postgres_smoke():
     assert by_thread["answered-smoke-thread"]["requires_reply"] is False
 
     assert pending_response.status_code == 200
-    pending_threads = {
-        item["thread_id"] for item in pending_response.json()["emails"]
-    }
+    pending_threads = {item["thread_id"] for item in pending_response.json()["emails"]}
     assert pending_threads == {"waiting-smoke-thread"}
 
 
@@ -1310,7 +1343,7 @@ async def test_get_email_thread_returns_chronological_order(
         date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
         body="Older body",
     )
-    db_session.items = [newer, older]
+    db_session.items = sorted([newer, older], key=lambda item: item.date)
 
     response = await client.get("/api/emails/thread/thread123")
 
@@ -1446,6 +1479,7 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
     assert response.json() == {"status": "simulated", "simulated": True}
     assert validate_calls == [True]
     from services.email_client import EmailMessageParams, SmtpConfig
+
     expected_params = EmailMessageParams(
         to_address="test@example.com",
         subject="Re: Test",
@@ -1500,7 +1534,9 @@ def test_send_email_endpoint_ignores_user_id_query_and_uses_authenticated_user_c
 
     assert response.status_code == 200
     tenant_query = next(
-        query for query in session.queries if "tenant_configs" in compiled_query_text(query)
+        query
+        for query in session.queries
+        if "tenant_configs" in compiled_query_text(query)
     )
     assert compiled_query_params(tenant_query)["user_id_1"] == "testuser"
     mock_send_email.assert_called_once()
@@ -1533,7 +1569,7 @@ def test_send_email_endpoint_preserves_configuration_error(sample_email):
 
 
 @patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
-def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email):
+def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email, caplog):
     from main import app
     from fastapi.testclient import TestClient
     from db.session import get_db
@@ -1547,6 +1583,7 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
     async def unsafe_smtp_db():
         yield MockSession([], tenant_config=UnsafeTenantConfig())
 
+    caplog.set_level(logging.WARNING, logger="api.emails")
     app.dependency_overrides[get_db] = unsafe_smtp_db
     try:
         client = TestClient(app, headers={"X-User-Id": "testuser"})
@@ -1562,7 +1599,9 @@ def test_send_email_endpoint_rejects_unsafe_persisted_smtp_host(mock_send_email)
         app.dependency_overrides.clear()
 
     assert response.status_code == 400
-    assert "SMTP server is not allowed" in response.json()["detail"]
+    assert "Invalid email configuration" in response.json()["detail"]
+    assert "Email send rejected invalid SMTP configuration" in caplog.text
+    assert "127.0.0.1" not in caplog.text
     mock_send_email.assert_not_called()
 
 
@@ -1655,6 +1694,7 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
     assert data["emails"][0]["thread_id"] == "thread3"
     assert data["emails"][0]["requires_reply"] is True
 
+
 def test_email_owner_filters():
     from api.emails import email_owner_filters
     from api.auth import AuthContext
@@ -1670,8 +1710,14 @@ def test_email_owner_filters():
     filters1 = email_owner_filters(ctx1)
 
     assert len(filters1) == 2
-    assert str(filters1[0].compile(compile_kwargs={"literal_binds": True})) == "emails.user_id = 'user-123'"
-    assert str(filters1[1].compile(compile_kwargs={"literal_binds": True})) == "emails.organization_id = 'org-456'"
+    assert (
+        str(filters1[0].compile(compile_kwargs={"literal_binds": True}))
+        == "emails.user_id = 'user-123'"
+    )
+    assert (
+        str(filters1[1].compile(compile_kwargs={"literal_binds": True}))
+        == "emails.organization_id = 'org-456'"
+    )
 
     # Test with None organization_id
     ctx2 = AuthContext(
@@ -1684,5 +1730,11 @@ def test_email_owner_filters():
     filters2 = email_owner_filters(ctx2)
 
     assert len(filters2) == 2
-    assert str(filters2[0].compile(compile_kwargs={"literal_binds": True})) == "emails.user_id = 'user-123'"
-    assert str(filters2[1].compile(compile_kwargs={"literal_binds": True})) == "emails.organization_id IS NULL"
+    assert (
+        str(filters2[0].compile(compile_kwargs={"literal_binds": True}))
+        == "emails.user_id = 'user-123'"
+    )
+    assert (
+        str(filters2[1].compile(compile_kwargs={"literal_binds": True}))
+        == "emails.organization_id IS NULL"
+    )

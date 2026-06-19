@@ -8,6 +8,11 @@
 - Security scanners are required gates. Do not use `continue-on-error: true` to
   hide Bandit, Strix, CodeQL, or dependency findings; preserve artifacts with
   explicit `if: ${{ always() }}` upload steps when needed.
+- Repository rulesets that require code-scanning tools such as Scorecard or
+  Trivy must have matching PR and default-branch workflows that upload those
+  tools' SARIF results. If merge is blocked with "Code scanning is waiting for
+  results from Scorecard" or another ruleset-required tool, restore the missing
+  SARIF workflow and rerun it instead of bypassing or weakening the ruleset.
 - PR-scoped Strix scans must include trusted import context for changed backend
   Python entrypoints; do not scan `backend/main.py` or routers as isolated
   single files if that makes real repo modules look missing.
@@ -18,11 +23,16 @@
   `LLM_API_BASE_FILE` pointing at a trusted file containing
   `https://models.github.ai/inference`; GitHub Models scans must try the
   configured GPT-5-or-newer model first and may fall back to the explicit
-  workflow fallback list, currently `deepseek/deepseek-r1-0528` and
-  `deepseek/deepseek-v3-0324`, when GitHub Models provider capacity or model
-  availability blocks the primary run. Do not use GPT-4.1 or weaker GitHub
-  Models fallbacks for Strix or OpenCode PR review evidence. Keep the
-  GitHub Models endpoint in a trusted input file and pass the token only through
+  workflow fallback list, currently
+  `github_models/deepseek/deepseek-r1-0528` and
+  `github_models/deepseek/deepseek-v3-0324`, when GitHub Models provider
+  capacity or model availability blocks the primary run. The Strix gate must
+  route these fallback names through the GitHub Models endpoint with
+  OpenAI-compatible child model names such as
+  `openai/deepseek/deepseek-r1-0528`, not the public DeepSeek API. Do not use
+  GPT-4.1 or weaker GitHub Models fallbacks for Strix or OpenCode PR review
+  evidence. Keep the GitHub Models endpoint in a trusted input file and pass
+  the token only through
   the provider-scoped Strix child-process key path. Legacy `STRIX_LLM` secrets
   must not override PR, push, or scheduled Strix defaults. Vertex remains
   available only for manual
@@ -45,12 +55,14 @@
   do not carry stale timeout-signal strings. Keep PR-scope process budgets large
   enough for Strix to finalize reports after the scanner emits completion
   events; a wrapper timeout after `vulnerability_count: 0` is still failed
-  evidence, not a pass. PR evidence must present the full PR-head scope to
-  Strix in one scanner invocation; do not split changed files into separate
-  scanner runs because that breaks Strix's required whole-context contract. Keep
-  architecture docs and reusable Strix gate tests aligned with this rule so
-  stale Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or
-  generic-key examples cannot re-enter copied workflow guidance.
+  evidence, not a pass. PR evidence must present the full scannable changed-file
+  set from the PR head, plus allowlisted trusted context files, to Strix in one
+  scanner invocation; do not split changed files into separate scanner runs or
+  copy the entire PR-head repository tree by default because either breaks
+  Strix's required whole-context and bounded-input contract. Keep architecture
+  docs and reusable Strix gate tests aligned with this rule so stale
+  Vertex-default, OpenAI-only, unavailable-model, blanket-warning, or generic-key
+  examples cannot re-enter copied workflow guidance.
 - HMAC fallback sessions are local/control-plane compatibility credentials, not
   authoritative workspace-membership evidence. Sensitive tenant security posture
   surfaces must require OIDC/JWKS-backed membership or an explicit dependency
@@ -72,6 +84,19 @@
   completed check run or status context failed, or the check rollup cannot be
   verified, the OpenCode review must request changes or explain the verification
   failure instead of approving.
+- When OpenCode requests changes because Strix or another GitHub Check failed,
+  it must access the failed check logs and annotations, cite the exact failure
+  phrase, map each actionable failure to a concrete repository `path:line`, and
+  provide root cause, fix direction, regression-test direction, and a
+  source-backed suggested diff. A review that only cites a workflow URL, check
+  name, or generic failure summary is not sufficient. If Strix output contains
+  multiple model vulnerability reports, include every model-reported
+  vulnerability separately with the model name, title, severity, endpoint, and
+  Code Locations/path:line evidence when present.
+- Strix logs may print the report's `Model ...` line after the title, endpoint,
+  and Code Locations block. Failed-check evidence parsers and OpenCode review
+  validators must attribute each vulnerability to that in-report model line, not
+  to a previous retry attempt such as a failed primary `openai/gpt-5` run.
 - OpenCode Agent PR reviews must be general-purpose and meticulous rather than
   narrowly scenario-specific. Configure the review prompt to use all relevant
   MCP sources: CodeGraph for structural source evidence, DeepWiki for repo docs,
@@ -111,11 +136,14 @@
   Data needs repository/ingestion/embedding/quality/WebDAV queues; Security and
   Settings need governance and operational control surfaces. Keep provider writes
   labeled as future work until source-backed integrations exist.
-- Browser frontend writes to signed backend routes must carry the stored
-  `naruon_session_token` as `Authorization: Bearer` and must not emit or forward
-  public identity headers such as `X-User-Id`, `X-Organization-Id`,
-  `X-Group-Id`, `X-Group-Ids`, `X-User-Role`, or `X-Dev-Auth-Token`;
-  tests/mocks must exercise the signed-session path.
+- Browser frontend writes to signed backend routes must use the HttpOnly
+  `naruon_session` cookie through the same-origin Next.js `/api/*` proxy, which
+  translates the server-readable cookie into backend `Authorization: Bearer`.
+  Browser code must not store bearer/session tokens in `localStorage` or
+  `sessionStorage`, and must not emit or forward public identity headers such as
+  `X-User-Id`, `X-Organization-Id`, `X-Group-Id`, `X-Group-Ids`, `X-User-Role`,
+  or `X-Dev-Auth-Token`; tests/mocks must exercise the signed-session cookie
+  path.
 - JWT/session verification must reject unsupported critical headers (`crit`)
   before trusting payload claims; do not rely only on library defaults for this
   boundary.
@@ -158,7 +186,7 @@
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
-  stored `naruon_session_token` bearer path and must not add public identity
+  HttpOnly `naruon_session` cookie proxy path and must not add public identity
   headers.
 - TenantConfig/provider account settings must be scoped by signed-session
   `user_id` and `organization_id`; do not query provider credentials or API keys
@@ -391,6 +419,42 @@
   deployment rather than during `uvicorn main:app` import.
 - Python standard library `re` flags (`re.IGNORECASE`) must be passed via the `flags=` keyword argument. Do not use inline `(?i)` at the start of the expression, as it will trigger `DeprecationWarning` regressions in Python 3.11+ test suites.
 - Next.js builds in memory-constrained CI environments (e.g., GitHub Actions) can fail with OOM errors due to PostCSS worker explosion. Set `POSTCSS_WORKERS: "1"` and `DISABLE_POSTCSS_WORKERS: "true"` in the build environment to limit memory usage.
+- Release version bumps must keep `VERSION`, `CHANGELOG.md`,
+  `frontend/package.json`, FastAPI app metadata, runtime-config responses, and
+  Docker runtime packaging synchronized. The backend should read the release
+  version from `VERSION`; do not add a new hardcoded API version string.
+- Before opening a PR, new committers should run the focused tests that cover
+  the changed contract and include exact commands in the PR body. For release
+  and Docker changes, at minimum verify `python -m pytest
+  backend/tests/test_release_governance.py backend/tests/test_runtime_config_api.py
+  -q`, `corepack pnpm@11.5.3 --dir frontend test --runInBand` when frontend
+  behavior changes, and a Docker build of the affected image.
+- GHCR publishing evidence for the combined `naruon` image must include the
+  exact image name, tag, local image ID, push result, and registry verification
+  from GitHub Packages or an equivalent manifest/API query. Publish the package
+  with public visibility unless a repository policy explicitly says otherwise.
+  Do not treat a local tag as published evidence. GitHub's REST Packages API and
+  GraphQL package mutations currently do not expose a supported package
+  visibility change operation for GHCR container packages; when API checks show
+  `visibility: private`, complete the public conversion through the logged-in
+  GitHub package settings UI (`Package settings` -> `Danger Zone` -> `Change
+  visibility`) and then verify anonymous pull/token access before declaring the
+  image public.
+- Docker image security inspection is part of release evidence. Use a current
+  container scanner such as Trivy or Grype against the exact pushed image tag
+  and treat high/critical actionable findings as blockers until fixed or
+  documented with precise non-applicability evidence.
+- Docker Compose and Podman live-E2E work must clean up after itself. Stop
+  stale `naruon*` containers, remove unused volumes/layers with
+  `podman system prune --all --volumes --force` when safe, and verify
+  `podman ps` has no stale Naruon services. If Podman reports broken storage
+  metadata such as missing overlay layers or `readlink ... overlay: invalid
+  argument`, run `podman system check --repair --force` before relying on
+  `podman system df` or additional image scans.
+- Keep contributor setup friction low: document any new required environment
+  variables, model tags, package-manager version pins, or live-E2E ports in the
+  same PR that introduces them, and avoid hidden local-only defaults that make
+  another committer's PR fail after checkout.
 
 ## Phase 10 development rules
 

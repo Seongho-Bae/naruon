@@ -137,6 +137,132 @@ async def test_handle_send_smtp_fails_closed_without_adapter():
 
 
 @pytest.mark.asyncio
+async def test_handle_message_dispatches_write_webdav():
+    async def write_webdav_adapter(payload):
+        assert payload["source_id"] == "webdav_src_1"
+        return {
+            "status": "success",
+            "etag": "etag-after-write",
+            "provider_write_executed": True,
+        }
+
+    connector = SelfHostedConnector(
+        "ws://gateway.example/api/runner/ws",
+        "token",
+        webdav_write_handler=write_webdav_adapter,
+    )
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps(
+            {
+                "action": "write_webdav",
+                "account": "webdav-primary",
+                "source_id": "webdav_src_1",
+                "request_id": "runner_req_webdav",
+            }
+        )
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "success",
+            "action": "write_webdav",
+            "protocol": "WebDAV",
+            "account": "webdav-primary",
+            "request_id": "runner_req_webdav",
+            "provider_write_executed": True,
+            "etag": "etag-after-write",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_write_webdav_fails_closed_without_adapter():
+    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps({"action": "write_webdav", "account": "webdav-primary"})
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "error",
+            "action": "write_webdav",
+            "protocol": "WebDAV",
+            "account": "webdav-primary",
+            "request_id": None,
+            "provider_write_executed": False,
+            "error": "adapter_not_configured",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_message_dispatches_write_caldav():
+    async def write_caldav_adapter(payload):
+        assert payload["source_id"] == "caldav_src_1"
+        return {
+            "status": "success",
+            "etag": "etag-calendar-after-write",
+            "provider_write_executed": True,
+        }
+
+    connector = SelfHostedConnector(
+        "ws://gateway.example/api/runner/ws",
+        "token",
+        caldav_write_handler=write_caldav_adapter,
+    )
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps(
+            {
+                "action": "write_caldav",
+                "account": "calendar-primary",
+                "source_id": "caldav_src_1",
+                "request_id": "runner_req_caldav",
+            }
+        )
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "success",
+            "action": "write_caldav",
+            "protocol": "CalDAV",
+            "account": "calendar-primary",
+            "request_id": "runner_req_caldav",
+            "provider_write_executed": True,
+            "etag": "etag-calendar-after-write",
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_handle_write_caldav_fails_closed_without_adapter():
+    connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
+    connector.send_response = AsyncMock()
+
+    await connector.handle_message(
+        json.dumps({"action": "write_caldav", "account": "calendar-primary"})
+    )
+
+    connector.send_response.assert_awaited_once_with(
+        {
+            "status": "error",
+            "action": "write_caldav",
+            "protocol": "CalDAV",
+            "account": "calendar-primary",
+            "request_id": None,
+            "provider_write_executed": False,
+            "error": "adapter_not_configured",
+        }
+    )
+
+
+@pytest.mark.asyncio
 async def test_handle_message_reports_invalid_json():
     connector = SelfHostedConnector("ws://gateway.example/api/runner/ws", "token")
     connector.send_response = AsyncMock()

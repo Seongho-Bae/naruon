@@ -1,9 +1,10 @@
 {
   "name": "frontend",
-  "version": "0.1.0",
+  "version": "0.14.3",
   "private": true,
+  "packageManager": "pnpm@11.5.3",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
