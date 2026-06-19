@@ -135,7 +135,7 @@ describe("TasksPage", () => {
     expect(container.textContent).not.toContain("mail_public_456");
     expect(container.textContent).not.toContain("thread_public_789");
 
-    const taskSearchInput = container.querySelector<HTMLInputElement>('input[aria-label="작업 검색"]');
+    const taskSearchInput = container.querySelector<HTMLInputElement>('input[aria-label="작업 맥락 검색"]');
     expect(taskSearchInput).not.toBeNull();
     expect(taskSearchInput?.type).toBe("text");
     expect(taskSearchInput?.inputMode).toBe("search");
@@ -153,7 +153,7 @@ describe("TasksPage", () => {
     expect(container.textContent).toContain("보낸 메일 회신 추적");
     expect(container.textContent).not.toContain("문서 원본 검토");
 
-    const clearSearchButton = container.querySelector<HTMLButtonElement>('button[aria-label="검색어 지우기"]');
+    const clearSearchButton = container.querySelector<HTMLButtonElement>('button[aria-label="맥락 검색어 지우기"]');
     expect(clearSearchButton).not.toBeNull();
     await act(async () => {
       clearSearchButton?.click();

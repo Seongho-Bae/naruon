@@ -167,7 +167,7 @@ function SenderDagPanel({
   if (relationships.length === 0) {
     return (
       <div className="rounded-lg border border-border bg-background p-4 text-sm font-semibold text-muted-foreground">
-        <p>이 검색 결과에 연결된 발신자 관계가 아직 없습니다.</p>
+        <p>이 맥락 검색 결과에 연결된 발신자 관계가 아직 없습니다.</p>
         {canCapture ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs">
@@ -344,7 +344,7 @@ export function SearchLayout() {
         if (controller.signal.aborted) return;
         setResults([]);
         setActiveResultId(null);
-        setError("검색 결과를 불러오지 못했습니다.");
+        setError("맥락 검색 결과를 불러오지 못했습니다.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -464,7 +464,7 @@ export function SearchLayout() {
           aria-live="polite"
           className="p-5 text-sm font-semibold text-muted-foreground"
         >
-          검색 결과를 불러오는 중입니다.
+          맥락 검색 결과를 불러오는 중입니다.
         </div>
       ) : error ? (
         <div
@@ -476,7 +476,7 @@ export function SearchLayout() {
         </div>
       ) : filteredResults.length === 0 ? (
         <div className="p-5 text-sm font-semibold text-muted-foreground">
-          검색 결과가 없습니다.
+          맥락 검색 결과가 없습니다.
         </div>
       ) : (
         filteredResults.map((result) => (
@@ -515,7 +515,7 @@ export function SearchLayout() {
               aria-label="맥락 검색어 입력"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="메일, 일정, 파일, 사람, 의사결정 로그 검색..."
+              placeholder="메일, 일정, 파일, 사람, 의사결정 로그 맥락 검색..."
               className="h-12 w-full rounded-full border-2 border-primary/20 bg-background pl-12 pr-12 text-base shadow-sm transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/10"
             />
             {query && (
@@ -526,7 +526,7 @@ export function SearchLayout() {
                   searchInputRef.current?.focus();
                 }}
                 className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                aria-label="검색어 지우기"
+                aria-label="맥락 검색어 지우기"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -539,7 +539,7 @@ export function SearchLayout() {
             className="h-12 shrink-0 rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-wait disabled:opacity-60 inline-flex items-center justify-center"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {loading ? "검색 중" : "검색"}
+            {loading ? "맥락 검색 중" : "맥락 검색"}
           </button>
         </form>
       </header>
@@ -547,7 +547,7 @@ export function SearchLayout() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         <aside className="max-h-[42dvh] w-full shrink-0 overflow-y-auto border-b border-border bg-card md:max-h-none md:w-[400px] md:border-b-0 md:border-r">
           <div className="flex items-center justify-between border-b border-border p-5">
-            <h2 className="font-bold">통합 검색 결과</h2>
+            <h2 className="font-bold">통합 맥락 검색 결과</h2>
             <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
               {results.length}건
             </span>
@@ -582,7 +582,7 @@ export function SearchLayout() {
             ) : (
               <>
                 <section
-                  aria-label="검색 결과 상세"
+                  aria-label="맥락 검색 결과 상세"
                   className="rounded-lg border border-border bg-card p-5 shadow-sm md:p-6"
                 >
                   <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -660,7 +660,7 @@ export function SearchLayout() {
                   <div className="rounded-2xl border border-border bg-background/80 p-2">
                     <div
                       role="tablist"
-                      aria-label="검색 결과 증거 상세"
+                      aria-label="맥락 검색 결과 증거 상세"
                       className="grid gap-1 rounded-xl bg-secondary/50 p-1 sm:grid-cols-3"
                     >
                       {detailTabs.map((tab) => (
@@ -721,7 +721,7 @@ export function SearchLayout() {
                               {activeResult.source_message_id ? "원본 메시지 필터로 관계 API를 조회합니다." : "원본 메시지 필터가 없는 결과입니다."}
                             </p>
                             <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                              관계 조회는 선택된 검색 결과의 source/thread 범위 안에서만 수행됩니다.
+                              관계 조회는 선택된 맥락 검색 결과의 source/thread 범위 안에서만 수행됩니다.
                             </p>
                           </div>
                           <div className="rounded-xl border border-border bg-card p-4">
@@ -811,7 +811,7 @@ export function SearchLayout() {
                           현재
                         </p>
                         <h4 className="inline-block rounded bg-secondary px-2 py-1 text-sm font-bold">
-                          검색 결과 선택됨
+                          맥락 검색 결과 선택됨
                         </h4>
                       </div>
                       <div className="relative pl-6">

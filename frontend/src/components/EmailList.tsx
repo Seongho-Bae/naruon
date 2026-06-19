@@ -167,8 +167,8 @@ export function EmailList({
         secondaryBadge: '실행 항목',
         focusLabel: '오늘의 판단 포인트',
         focusText: '메일 데이터 기반으로 판단 포인트를 표시합니다',
-        emptyTitle: '검색 결과가 없습니다',
-        emptyBody: '검색어를 바꾸거나 메일 동기화 상태를 확인하세요.',
+        emptyTitle: '맥락 검색 결과가 없습니다',
+        emptyBody: '맥락 검색어를 바꾸거나 메일 동기화 상태를 확인하세요.',
       };
   const searchBusy = isSearching || loading;
 
@@ -210,14 +210,14 @@ export function EmailList({
           }}
           className="flex gap-2"
         >
-          <label htmlFor="email-search" className="sr-only">메일 검색</label>
+          <label htmlFor="email-search" className="sr-only">메일 맥락 검색</label>
           <div className="relative min-w-0 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
             <Input
               id="email-search"
               ref={searchInputRef}
-              aria-label="메일 검색"
-              placeholder="메일, 사람, 키워드 검색..."
+              aria-label="메일 맥락 검색"
+              placeholder="메일, 사람, 키워드 맥락 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
               className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
@@ -231,7 +231,7 @@ export function EmailList({
                   searchInputRef.current?.focus();
                 }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
-                aria-label="검색어 지우기"
+                aria-label="맥락 검색어 지우기"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>
@@ -239,7 +239,7 @@ export function EmailList({
           </div>
           <Button type="submit" disabled={searchBusy} className="h-10 rounded-xl px-4">
             {searchBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-            {searchBusy ? "검색 중" : "검색"}
+            {searchBusy ? "맥락 검색 중" : "맥락 검색"}
           </Button>
         </form>
       </div>
