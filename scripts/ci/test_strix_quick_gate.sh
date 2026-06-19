@@ -2265,11 +2265,12 @@ EOS
 2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): internal agent coordination note
 2026-06-18 13:10:44.089 INFO    strix-pr-scope-example - strix.tools.finish.tool: finish_scan: completed scan with 0 vulnerability report(s)
 EOS
-		mkdir -p "$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report"
-		cat >"$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report/strix.log" <<'EOS'
+		outside_report_dir="${FAKE_STRIX_OUTSIDE_REPORT_DIR:-$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report}"
+		mkdir -p "$outside_report_dir"
+		cat >"$outside_report_dir/strix.log" <<'EOS'
 2026-06-18 13:08:05.986 WARNING strix-pr-scope-example - strix.core.execution: agent a9fb4033 produced non-lifecycle final output in non-interactive mode; forcing tool continuation (1/500): outside report should not be rewritten
 EOS
-		ln -s "$(dirname -- "$STRIX_REPORTS_DIR")/outside-strix-report" "$STRIX_REPORTS_DIR/fake-known-internal-warning/linked-outside"
+		ln -s "$outside_report_dir" "$STRIX_REPORTS_DIR/fake-known-internal-warning/linked-outside"
 		echo "scan ok with sanitized internal Strix report notice"
 		exit 0
 		;;
@@ -3149,6 +3150,11 @@ EOS
 			STRIX_LLM_MAX_RETRIES="1"
 			GEMINI_LOCATION="GLOBAL"
 			UNRELATED_SECRET="should-not-forward"
+		)
+	fi
+	if [ "$scenario" = "report-known-internal-warning-sanitized" ]; then
+		env_cmd+=(
+			FAKE_STRIX_OUTSIDE_REPORT_DIR="$repo_root_dir/outside-strix-report"
 		)
 	fi
 	if [ "$min_fail_severity" = "__UNSET__" ]; then
