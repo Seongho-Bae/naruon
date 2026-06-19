@@ -2493,6 +2493,12 @@ is_github_models_unavailable_model_error() {
 		return 0
 	fi
 
+	if grep -Eiq '(PermissionDeniedError|Error code:[[:space:]]*403|(^|[^0-9])403([^0-9]|$))' "$STRIX_LOG" &&
+		grep -Eiq '(LLM CONNECTION FAILED|Could not establish connection to the language model)' "$STRIX_LOG" &&
+		grep -Eiq '(models\.github\.ai|GitHub Models|openai|OpenAIException)' "$STRIX_LOG"; then
+		return 0
+	fi
+
 	return 1
 }
 
