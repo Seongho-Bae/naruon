@@ -114,6 +114,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     app_ci_workflow = read_repo_text(".github/workflows/app-ci.yml")
     bandit_workflow = read_repo_text(".github/workflows/bandit.yml")
+    strix_workflow = read_repo_text(".github/workflows/strix.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
     assert_dockerfile_stage_from(root_dockerfile, "python:3.14-slim", "backend-runtime")
@@ -121,6 +122,7 @@ def test_backend_images_use_python_314_runtime() -> None:
     assert "docker.io/library/python:3.14-slim" in docker_publish_workflow
     assert 'python-version: ["3.14"]' in app_ci_workflow
     assert 'python-version: "3.14"' in bandit_workflow
+    assert 'python-version: "3.14"' in strix_workflow
     assert "Python 3.14 toolchain" in render_deployment
     assert "python:3.11" not in root_dockerfile
     assert "python:3.11" not in docker_publish_workflow
@@ -740,10 +742,9 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
-    assert (
-        "group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}"
-        in workflow
-    )
+    assert "format('pr-{0}', github.event.pull_request.number)" in workflow
+    assert "format('pr-{0}', github.event.inputs.pr_number)" in workflow
+    assert "|| github.ref" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "models: read" in workflow
     assert "provider_mode=github_models" in workflow

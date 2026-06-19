@@ -28,7 +28,10 @@ on:
         type: string
 
 concurrency:
-  group: strix-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.ref }}
+  group: >-
+    strix-${{ github.repository }}-${{ github.event_name == 'pull_request_target' &&
+    format('pr-{0}', github.event.pull_request.number) || github.event.inputs.pr_number != '' &&
+    format('pr-{0}', github.event.inputs.pr_number) || github.ref }}
   # cancel-in-progress deliberately disabled: an attacker could force-push
   # a benign commit to cancel an in-progress scan of a malicious commit.
   cancel-in-progress: false
@@ -48,6 +51,11 @@ jobs:
         with:
           egress-policy: audit
           disable-file-monitoring: true
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
+        with:
+          python-version: "3.14"
 
       - name: Materialize trusted workspace
         env:
