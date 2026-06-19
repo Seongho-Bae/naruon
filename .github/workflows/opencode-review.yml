@@ -1012,11 +1012,21 @@ jobs:
           overview_comment_token="$GH_TOKEN"
           echo "approval token source=${approval_token_source}"
 
+          warn_gh_publication_failure() {
+            local action="$1" error_file="$2"
+            printf 'OpenCode could not publish %s; continuing without review side effect.\n' "$action" >&2
+            if [ -s "$error_file" ]; then
+              sed 's/^/gh: /' "$error_file" >&2 || true
+            fi
+          }
+
           update_review_overview() {
             local result="$1" body="$2"
+            local gh_error_file
             local overview_body_file
             local overview_comment_id
 
+            gh_error_file="$(mktemp)"
             overview_body_file="$(mktemp)"
             {
               printf '<!-- opencode-review-overview -->\n'
@@ -1028,31 +1038,52 @@ jobs:
               printf '%s\n' "$body"
             } >"$overview_body_file"
 
-            overview_comment_id="$(
+            if ! overview_comment_id="$(
               env GH_TOKEN="$overview_comment_token" \
                 gh api -X GET "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-                --jq '[.[] | select((.user.login == "github-actions[bot]" or .user.login == "opencode-agent[bot]") and (.body | contains("<!-- opencode-review-overview -->")))] | sort_by(.created_at) | last.id // empty'
-            )"
-            if [ -n "$overview_comment_id" ]; then
-              jq -n --rawfile body "$overview_body_file" '{body: $body}' |
-                env GH_TOKEN="$overview_comment_token" \
-                  gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}" --input - >/dev/null
-            else
-              jq -n --rawfile body "$overview_body_file" '{body: $body}' |
-                env GH_TOKEN="$overview_comment_token" \
-                  gh api -X POST "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null
+                --jq '[.[] | select((.user.login == "github-actions[bot]" or .user.login == "opencode-agent[bot]") and (.body | contains("<!-- opencode-review-overview -->")))] | sort_by(.created_at) | last.id // empty' \
+                2>"$gh_error_file"
+            )"; then
+              warn_gh_publication_failure "review overview lookup" "$gh_error_file"
+              rm -f "$gh_error_file" "$overview_body_file"
+              return 0
             fi
-            rm -f "$overview_body_file"
+            if [ -n "$overview_comment_id" ]; then
+              : >"$gh_error_file"
+              if ! jq -n --rawfile body "$overview_body_file" '{body: $body}' |
+                env GH_TOKEN="$overview_comment_token" \
+                  gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}" --input - >/dev/null 2>"$gh_error_file"; then
+                warn_gh_publication_failure "review overview update" "$gh_error_file"
+              fi
+            else
+              : >"$gh_error_file"
+              if ! jq -n --rawfile body "$overview_body_file" '{body: $body}' |
+                env GH_TOKEN="$overview_comment_token" \
+                  gh api -X POST "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null 2>"$gh_error_file"; then
+                warn_gh_publication_failure "review overview comment" "$gh_error_file"
+              fi
+            fi
+            rm -f "$gh_error_file" "$overview_body_file"
           }
 
           create_pull_review() {
             local event="$1" body="$2"
+            local gh_error_file
+            local review_payload_file
+            gh_error_file="$(mktemp)"
+            review_payload_file="$(mktemp)"
             jq -n \
               --arg event "$event" \
               --arg body "$body" \
               --arg commit_id "$HEAD_SHA" \
-              '{event: $event, body: $body, commit_id: $commit_id}' |
-              gh api -X POST "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input - >/dev/null
+              '{event: $event, body: $body, commit_id: $commit_id}' >"$review_payload_file"
+            if ! gh api -X POST "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input "$review_payload_file" >/dev/null 2>"$gh_error_file"; then
+              warn_gh_publication_failure "pull review" "$gh_error_file"
+              rm -f "$gh_error_file" "$review_payload_file"
+              update_review_overview "$event" "$body"
+              return 0
+            fi
+            rm -f "$gh_error_file" "$review_payload_file"
             update_review_overview "$event" "$body"
           }
 
