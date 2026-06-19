@@ -14,6 +14,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 
+SESSION_COOKIE_NAME = "naruon_session"
+
+
 def _encode_json(value: dict[str, Any]) -> str:
     raw = json.dumps(value, separators=(",", ":")).encode("utf-8")
     return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
@@ -85,7 +88,10 @@ def read_json(
                 timeout=5,
             )
             try:
-                headers = {"Authorization": f"Bearer {token}"}
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Cookie": f"{SESSION_COOKIE_NAME}={token}",
+                }
                 if request_body is not None:
                     headers["Content-Type"] = "application/json"
                 connection.request(
