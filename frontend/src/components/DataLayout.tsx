@@ -589,7 +589,7 @@ export function DataLayout() {
                         <input
                           type="file"
                           multiple
-                          accept=".eml,.zip,message/rfc822,application/zip"
+                          accept=".eml,.zip,.mbox,message/rfc822,application/zip,application/mbox"
                           className="sr-only"
                           onChange={handleEmailImportFileChange}
                         />
@@ -606,7 +606,7 @@ export function DataLayout() {
                       </button>
                     </div>
                     <div role="status" aria-live="polite" className="text-xs font-semibold text-muted-foreground">
-                      {emailImportStatus === 'idle' && emailImportFiles.length === 0 && 'EML 또는 ZIP 원본을 선택해 메일/첨부 근거로 수집합니다.'}
+                      {emailImportStatus === 'idle' && emailImportFiles.length === 0 && 'EML, ZIP, MBOX 원본을 선택해 메일/첨부 근거로 수집합니다.'}
                       {emailImportStatus === 'idle' && emailImportFiles.length > 0 && `${formatCount(emailImportFiles.length)}개 파일 선택됨`}
                       {emailImportStatus === 'loading' && '이메일 원본 파일을 반입하는 중입니다.'}
                       {emailImportStatus === 'auth' && <span className="font-bold text-red-700">signed session이 필요합니다. 공개 identity header로는 이메일 원본을 반입할 수 없습니다.</span>}

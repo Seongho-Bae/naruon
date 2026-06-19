@@ -16,6 +16,10 @@
 - PR-scoped Strix scans must include trusted import context for changed backend
   Python entrypoints; do not scan `backend/main.py` or routers as isolated
   single files if that makes real repo modules look missing.
+- PR-scoped Strix scans should include changed scanner/workflow/gate code but
+  exclude large CI self-test harnesses such as `scripts/ci/test_*.sh` from the
+  scanner target. Those harnesses remain covered by Strix self-tests; scanning
+  them as source can exhaust model context before security evidence finalizes.
 - Prefer upgrading or removing vulnerable dependencies over downgrading patched
   packages unless compatibility evidence is recorded in the PR.
 - Strix Security Scan uses GitHub Models by default through
@@ -183,6 +187,15 @@
   responses must sanitize stored subject/body/snippet/address display fields
   before returning them. Preserve message/thread identifiers separately from
   UI-safe subject/body, address, and attachment display text.
+- Email file import must keep frontend file pickers, `/api/emails/import-files`,
+  and `services.email_import_service` in the same source-backed contract:
+  supported uploads are `.eml`, `.zip`, and `.mbox`; imported email and
+  attachment vectors must use the active organization LLM provider's
+  `embedding_model` and `base_url` when configured, fit provider vector
+  dimensions to storage, and fall back to zero vectors only when provider
+  embedding generation is unavailable. Tests must cover the local
+  `embeddinggemma` path so Data workspace imports do not silently bypass the
+  selected embedding model.
 - Home/Today dashboard reply-wait surfaces must read signed
   `/api/emails/pending-replies` data instead of inferring pending replies from
   generic inbox fixtures or static copy. Tests and E2E mocks must verify the
@@ -210,6 +223,10 @@
   roles. Platform-wide operators require the OIDC/JWKS path or a separately
   audited support flow so compromise of an HMAC session secret cannot mint
   platform administrator claims.
+- `AUTH_SESSION_HMAC_SECRET` validation must enforce byte length, distinct
+  character count, character-class diversity, placeholder/public-fixture
+  rejection, and an explicit estimated entropy floor; keep runtime-secret tests
+  aligned so long low-entropy strings cannot pass by length alone.
 - Reply-wait task escalation must reuse the server-authoritative pending reply
   path, create or update source-linked `reply_sla` ticket tasks by opaque task
   id, and sanitize generated task titles from email subjects before persistence.
@@ -245,6 +262,18 @@
   `urllib.request.urlopen`; keep URL scheme validation and use explicit HTTP or
   HTTPS clients so Bandit/Strix do not normalize test-only SSRF patterns into
   production examples.
+- Screenshot and browser-capture helper scripts must build navigation targets
+  from a fixed localhost origin and an explicit route allowlist before calling
+  Playwright `page.goto`; do not concatenate raw route or URL strings, and log
+  capture failures with fixed message templates plus sanitized fields.
+- Alembic migrations must use structured Alembic/SQLAlchemy operation APIs such
+  as `op.create_index` and `op.drop_index` for schema objects. Do not build DDL
+  with `sa.text(f"...")` or interpolated identifier strings, even when the
+  current identifiers are static.
+- Infrastructure Docker Compose services must inherit the repo hardening
+  contract: `no-new-privileges:true`, `read_only: true`, read-only config
+  mounts, and explicit `tmpfs` entries for the few runtime paths that must be
+  writable.
 - Settings account screens must be source-backed by signed-session APIs rather
   than static provider examples. Display only masked secret presence flags, keep
   blank secret fields out of save payloads so stored values are preserved, and
@@ -280,6 +309,11 @@
   the visible app language; do not rely on the SVG icon alone for Calendar,
   Tasks, drawer, modal, or toolbar actions.
 - Execution steps resulting in `Timeout`, `Fatal`, `Warn`, or `Denied` outputs are considered hard failures. Tests must run without these warnings to be considered passing.
+- Strix success artifacts must also be scanned for `Timeout`, `Fatal`, `Warn`,
+  or `Denied` output before accepting clean evidence. Filter only narrowly known
+  third-party Strix internal warnings, such as the
+  `strix.core.execution` non-lifecycle continuation line, before artifact upload;
+  fail closed on any remaining warning-class report log output.
 - DB-affecting API slices need both mocked fast tests and a real PostgreSQL
   bootstrap/smoke path before PR merge evidence is considered complete.
 - When a backend container reports missing `DATABASE_URL` or

@@ -10,14 +10,15 @@ import sqlalchemy as sa
 
 revision = "0002_provider_retry_queue"
 down_revision = "0001_initial_control_plane"
+_RETRY_TABLE = "provider_writeback_retry_items"
 
 
 def upgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    if not inspector.has_table("provider_writeback_retry_items"):
+    if not inspector.has_table(_RETRY_TABLE):
         op.create_table(
-            "provider_writeback_retry_items",
+            _RETRY_TABLE,
             sa.Column("retry_item_uid", sa.String(), nullable=False),
             sa.Column("organization_id", sa.String(), nullable=False),
             sa.Column("workspace_id", sa.String(), nullable=False),
@@ -33,10 +34,11 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.PrimaryKeyConstraint("retry_item_uid"),
         )
+
     for index_name, column_names in _provider_writeback_retry_indexes():
         op.create_index(
             index_name,
-            "provider_writeback_retry_items",
+            _RETRY_TABLE,
             column_names,
             if_not_exists=True,
         )
@@ -45,14 +47,18 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     inspector = sa.inspect(connection)
-    if inspector.has_table("provider_writeback_retry_items"):
+    if inspector.has_table(_RETRY_TABLE):
         for index_name, _column_names in reversed(_provider_writeback_retry_indexes()):
             op.drop_index(
                 index_name,
-                table_name="provider_writeback_retry_items",
+                table_name=_RETRY_TABLE,
                 if_exists=True,
             )
-        op.drop_table("provider_writeback_retry_items")
+        op.drop_table(_RETRY_TABLE)
+
+
+def _provider_writeback_retry_index_names() -> list[str]:
+    return [index_name for index_name, _column_names in _provider_writeback_retry_indexes()]
 
 
 def _provider_writeback_retry_indexes() -> list[tuple[str, list[str]]]:

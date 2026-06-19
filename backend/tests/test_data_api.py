@@ -49,6 +49,9 @@ class MockResult:
     def scalar_one_or_none(self):
         return self.obj
 
+    def one_or_none(self):
+        return self.obj
+
 
 class MockAsyncSession:
     def __init__(self, results):
@@ -60,9 +63,10 @@ class MockAsyncSession:
     async def execute(self, query):
         self.queries.append(query)
         rendered_query = str(query)
+        rendered_query_lower = rendered_query.lower()
         if (
-            "webdav_accounts.source_uid" in rendered_query
-            and "webdav_accounts.account_id" not in rendered_query
+            "webdav_accounts.source_uid" in rendered_query_lower
+            and "webdav_accounts.account_id" not in rendered_query_lower
         ):
             result = self.results[self.execute_calls]
             self.execute_calls += 1
@@ -76,7 +80,7 @@ class MockAsyncSession:
                     for account in result
                 ]
             )
-        if "FROM documents" in rendered_query:
+        if "from workspace_documents" in rendered_query_lower:
             compiled = query.compile()
             params = compiled.params
             document_id = next(
@@ -101,7 +105,7 @@ class MockAsyncSession:
                 if (document_id is None or document.document_id == document_id)
                 and (workspace_id is None or document.workspace_id == workspace_id)
             ]
-            if "ORDER BY" in rendered_query:
+            if "order by" in rendered_query_lower:
                 return MockResult(rows)
             return MockResult(rows[0] if rows else None)
         result = self.results[self.execute_calls]
@@ -237,13 +241,8 @@ def mock_db():
         [
             [_webdav_account("webdav_src_primary")],
             [_project_folder("webdav_folder_roadmap")],
-            4,
-            3,
-            1,
-            2,
-            1,
-            3,
-            1,
+            (4, 1, 2, 3), # email stats
+            (3, 1, 1), # attachment stats
             [_connector_event("connector_evt_data_quality")],
             [
                 (_attachment("roadmap.pdf", "extracted attachment text"), ready_email),
@@ -392,7 +391,7 @@ def test_member_data_quality_queries_are_owner_scoped(mock_db):
     assert "webdav_accounts.user_id = :user_id_1" in rendered_queries
     assert "webdav_accounts.workspace_id = :workspace_id_1" in rendered_queries
     assert "project_folders.user_id = :user_id_1" in rendered_queries
-    assert "emails.user_id = :user_id_1" in rendered_queries
+    assert "email_records.user_id = :user_id_1" in rendered_queries
 
 
 def test_data_quality_surface_includes_workspace_document_assets(mock_db):
