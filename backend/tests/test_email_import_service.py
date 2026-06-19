@@ -2,11 +2,9 @@ import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
-from services.email_import_service import (
-    _import_single_eml,
-    _safe_item_filename,
-    _safe_upload_filename,
-)
+import services.email_import_service as email_import_module
+from services.exceptions import EmailParseError
+
 
 @pytest.mark.parametrize(
     "input_name,expected",
@@ -20,7 +18,8 @@ from services.email_import_service import (
     ]
 )
 def test_safe_upload_filename(input_name, expected):
-    assert _safe_upload_filename(input_name) == expected
+    assert email_import_module._safe_upload_filename(input_name) == expected
+
 
 @pytest.mark.parametrize(
     "upload_name,eml_path,expected",
@@ -42,7 +41,44 @@ def test_safe_upload_filename(input_name, expected):
     ]
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
-    assert _safe_item_filename(upload_name, eml_path) == expected
+    assert email_import_module._safe_item_filename(upload_name, eml_path) == expected
+
+
+@pytest.mark.asyncio
+async def test_import_single_eml_offloads_read_and_parse(monkeypatch, tmp_path):
+    eml_path = tmp_path / "message.eml"
+    eml_path.write_bytes(b"From: a@example.com\nTo: b@example.com\n\nbody")
+    session = AsyncMock(spec=AsyncSession)
+    calls = []
+
+    def fake_read_and_parse(path):
+        calls.append(("read_and_parse", path))
+        raise EmailParseError("boom")
+
+    async def fake_to_thread(func, *args):
+        calls.append(("to_thread", func, args))
+        return func(*args)
+
+    monkeypatch.setattr(
+        email_import_module, "_read_and_parse_eml", fake_read_and_parse
+    )
+    monkeypatch.setattr(email_import_module.asyncio, "to_thread", fake_to_thread)
+
+    result = await email_import_module._import_single_eml(
+        session,
+        eml_path=eml_path,
+        display_filename="message.eml",
+        user_id="user-1",
+        organization_id="org-1",
+    )
+
+    assert result.status == "failed"
+    assert result.reason_code == "parse_failed"
+    assert calls == [
+        ("to_thread", fake_read_and_parse, (eml_path,)),
+        ("read_and_parse", eml_path),
+    ]
+    session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -53,7 +89,7 @@ async def test_import_single_eml_rejects_symlink(tmp_path):
     symlink_path.symlink_to(target_path)
     session = AsyncMock(spec=AsyncSession)
 
-    result = await _import_single_eml(
+    result = await email_import_module._import_single_eml(
         session,
         eml_path=symlink_path,
         display_filename="message.eml",
