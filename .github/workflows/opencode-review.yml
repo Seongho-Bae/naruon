@@ -907,10 +907,19 @@ jobs:
           comment_body_file="$(mktemp)"
           normalized_comment_json="$(mktemp)"
           overview_body_file="$(mktemp)"
+          gh_error_file="$(mktemp)"
           cleanup_publish_files() {
-            rm -f "$clean_output" "$comment_body_file" "$normalized_comment_json" "$overview_body_file"
+            rm -f "$clean_output" "$comment_body_file" "$normalized_comment_json" "$overview_body_file" "$gh_error_file"
           }
           trap cleanup_publish_files EXIT
+
+          warn_gh_publication_failure() {
+            local action="$1" error_file="$2"
+            printf 'OpenCode could not publish %s; continuing without review side effect.\n' "$action" >&2
+            if [ -s "$error_file" ]; then
+              sed 's/^/gh: /' "$error_file" >&2 || true
+            fi
+          }
 
           perl -pe 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$review_output_file" >"$clean_output"
           if ! python3 scripts/ci/opencode_review_normalize_output.py \
@@ -959,16 +968,24 @@ jobs:
             cat "$comment_body_file"
           } >"$overview_body_file"
 
-          overview_comment_id="$(
+          if ! overview_comment_id="$(
             gh api -X GET "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-              --jq '[.[] | select((.user.login == "github-actions[bot]" or .user.login == "opencode-agent[bot]") and (.body | contains("<!-- opencode-review-overview -->")))] | sort_by(.created_at) | last.id // empty'
-          )"
-          if [ -n "$overview_comment_id" ]; then
-            jq -n --rawfile body "$overview_body_file" '{body: $body}' |
-              gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}" --input - >/dev/null
+              --jq '[.[] | select((.user.login == "github-actions[bot]" or .user.login == "opencode-agent[bot]") and (.body | contains("<!-- opencode-review-overview -->")))] | sort_by(.created_at) | last.id // empty' \
+              2>"$gh_error_file"
+          )"; then
+            warn_gh_publication_failure "initial review overview lookup" "$gh_error_file"
+          elif [ -n "$overview_comment_id" ]; then
+            : >"$gh_error_file"
+            if ! jq -n --rawfile body "$overview_body_file" '{body: $body}' |
+              gh api -X PATCH "repos/${GH_REPOSITORY}/issues/comments/${overview_comment_id}" --input - >/dev/null 2>"$gh_error_file"; then
+              warn_gh_publication_failure "initial review overview update" "$gh_error_file"
+            fi
           else
-            jq -n --rawfile body "$overview_body_file" '{body: $body}' |
-              gh api -X POST "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null
+            : >"$gh_error_file"
+            if ! jq -n --rawfile body "$overview_body_file" '{body: $body}' |
+              gh api -X POST "repos/${GH_REPOSITORY}/issues/${PR_NUMBER}/comments" --input - >/dev/null 2>"$gh_error_file"; then
+              warn_gh_publication_failure "initial review overview comment" "$gh_error_file"
+            fi
           fi
 
       - name: Approve PR if OpenCode review passed

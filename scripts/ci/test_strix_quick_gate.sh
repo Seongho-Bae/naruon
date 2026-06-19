@@ -94,7 +94,7 @@ assert_strix_pr_scope_includes_deployment_context() {
 assert_strix_workflow_pr_trigger_hardened() {
 	local workflow_file="$REPO_ROOT/.github/workflows/strix.yml"
 
-	assert_file_contains "$workflow_file" "branches: [master]" "strix workflow scans the protected default branch"
+	assert_file_contains "$workflow_file" "branches: [develop, master]" "strix workflow scans the protected default branch"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
 	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.pull_request.number)" "strix workflow scopes concurrency to the active pull request"
 	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.inputs.pr_number)" "strix workflow scopes manual PR evidence concurrency to the requested pull request"
@@ -459,6 +459,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'env GH_TOKEN="$overview_comment_token"' "opencode approval overview updates use the workflow comment token"
 	assert_file_contains "$workflow_file" 'warn_gh_publication_failure()' "opencode approval soft-fails PR review/comment publication errors"
 	assert_file_contains "$workflow_file" 'OpenCode could not publish %s; continuing without review side effect.' "opencode approval explains permission-denied publication failures"
+	assert_file_contains "$workflow_file" 'warn_gh_publication_failure "initial review overview lookup"' "opencode initial overview lookup soft-fails permission-denied publication errors"
+	assert_file_contains "$workflow_file" 'warn_gh_publication_failure "initial review overview update"' "opencode initial overview update soft-fails permission-denied publication errors"
+	assert_file_contains "$workflow_file" 'warn_gh_publication_failure "initial review overview comment"' "opencode initial overview comment soft-fails permission-denied publication errors"
 	assert_file_contains "$workflow_file" 'warn_gh_publication_failure "pull review"' "opencode approval soft-fails permission-denied review publication"
 	assert_file_contains "$workflow_file" 'warn_gh_publication_failure "review overview comment"' "opencode approval soft-fails permission-denied overview publication"
 	assert_file_not_contains "$workflow_file" 'gh api -X DELETE "repos/${GH_REPOSITORY}/issues/comments/${comment_id}"' "opencode review must not delete Review Overview gate evidence"
@@ -1058,7 +1061,7 @@ concurrency:
   cancel-in-progress: false
 EOF
 
-	git init "$fixture_repo" >/dev/null
+	git init -q "$fixture_repo" >/dev/null
 	git -C "$fixture_repo" config user.email "copilot@example.com"
 	git -C "$fixture_repo" config user.name "copilot"
 	git -C "$fixture_repo" add .github/workflows/strix.yml
