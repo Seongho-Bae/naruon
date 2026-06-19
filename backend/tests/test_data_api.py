@@ -706,7 +706,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             first_email = await conn.execute(
                 text(
                     """
-                    INSERT INTO emails (
+                    INSERT INTO email_records (
                         user_id, organization_id, message_id, thread_id,
                         fingerprint, sender, recipients, subject, "date", body
                     )
@@ -732,7 +732,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             second_email = await conn.execute(
                 text(
                     """
-                    INSERT INTO emails (
+                    INSERT INTO email_records (
                         user_id, organization_id, message_id, sender, recipients,
                         subject, "date", body
                     )
@@ -756,7 +756,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             rival_email = await conn.execute(
                 text(
                     """
-                    INSERT INTO emails (
+                    INSERT INTO email_records (
                         user_id, organization_id, message_id, thread_id,
                         fingerprint, sender, recipients, subject, "date", body
                     )
@@ -785,7 +785,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             await conn.execute(
                 text(
                     """
-                    INSERT INTO attachments (email_id, filename, content)
+                    INSERT INTO email_attachments (email_id, filename, content)
                     VALUES
                     (:first_email_id, 'ready.txt', 'ready attachment'),
                     (:second_email_id, 'blank.txt', ''),
@@ -804,19 +804,20 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
                     INSERT INTO webdav_accounts (
                         source_uid, user_id, organization_id, workspace_id,
                         server_url, username, credentials_encrypted,
-                        writeback_enabled
+                        writeback_enabled,
+                        created_at
                     )
                     VALUES
                     (
                         :webdav_uid, :user_id, :organization_id, :workspace_id,
                         'https://data-files.example/dav', 'data@example.com',
-                        'encrypted-data-secret', true
+                        'encrypted-data-secret', true, now()
                     ),
                     (
                         :rival_webdav_uid, :rival_user_id, :rival_organization_id,
                         :rival_workspace_id,
                         'https://rival-files.example/dav', 'rival@example.com',
-                        'encrypted-rival-secret', true
+                        'encrypted-rival-secret', true, now()
                     )
                     """
                 ),
@@ -836,11 +837,12 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
                     """
                     INSERT INTO project_folders (
                         folder_uid, user_id, organization_id, project_name,
-                        webdav_path
+                        webdav_path,
+                        created_at
                     )
                     VALUES (
                         :folder_uid, :user_id, :organization_id,
-                        'Data Smoke Folder', '/Projects/Data_Smoke'
+                        'Data Smoke Folder', '/Projects/Data_Smoke', now()
                     )
                     """
                 ),
@@ -855,18 +857,18 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
                     """
                     INSERT INTO connector_signal_events (
                         event_uid, organization_id, workspace_id, signal_key,
-                        state_code, detail_text
+                        state_code, detail_text, observed_at
                     )
                     VALUES
                     (
                         :event_uid, :organization_id, :workspace_id,
                         'connector_heartbeat', 'heartbeat',
-                        'data smoke heartbeat'
+                        'data smoke heartbeat', now()
                     ),
                     (
                         :other_workspace_event_uid, :organization_id,
                         'other_workspace', 'connector_heartbeat', 'heartbeat',
-                        'other workspace heartbeat'
+                        'other workspace heartbeat', now()
                     )
                     """
                 ),
@@ -927,9 +929,9 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             await conn.execute(
                 text(
                     """
-                    DELETE FROM attachments
+                    DELETE FROM email_attachments
                     WHERE email_id IN (
-                        SELECT id FROM emails
+                        SELECT id FROM email_records
                         WHERE user_id IN (:user_id, :rival_user_id)
                     )
                     """
@@ -938,7 +940,7 @@ async def test_data_quality_surface_real_postgres_smoke_uses_signed_scope():
             )
             await conn.execute(
                 text(
-                    "DELETE FROM emails WHERE user_id IN (:user_id, :rival_user_id)"
+                    "DELETE FROM email_records WHERE user_id IN (:user_id, :rival_user_id)"
                 ),
                 {"user_id": user_id, "rival_user_id": rival_user_id},
             )
