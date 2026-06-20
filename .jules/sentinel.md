@@ -17,6 +17,16 @@
 **Learning:** `auth_ctx: AuthContext = Depends(get_auth_context)` is already correctly implemented in the endpoint signature.
 **Prevention:** Always rely on FastAPI dependency injection to enforce endpoint security.
 
+## 2024-05-28 - [Subprocess path execution vulnerability fix]
+**Vulnerability:** [Bandit B607 Starting a process with a partial executable path and B603 subprocess call without shell equals true]
+**Learning:** [Using partial paths with subprocess like 'bash' instead of absolute paths allows potential path manipulation attacks if PATH is altered. Executing python scripts with subprocess.run introduces process spawning overhead and could expose untrusted execution depending on how the interpreter executes inputs.]
+**Prevention:** [Use shutil.which("bash") or absolute paths. For executing local python scripts from tests, use importlib to dynamically load the module and execute the target function directly instead of spawning a new python subprocess, which avoids B603 entirely and is generally more efficient.]
+
+## 2026-06-20 - [Fix Subprocess Path Execution Vulnerability]
+**Vulnerability:** B607: Starting a process with a partial executable path & B603: subprocess call without shell equals true.
+**Learning:** Using `subprocess.run` with partial executable paths (like `"bash"`) could allow path injection attacks if the `PATH` environment variable is manipulated. Also calling local Python scripts using `subprocess` can be inefficient and triggers B603 warnings.
+**Prevention:** Always use absolute paths (e.g. `shutil.which("bash")`) for external command execution. For local Python scripts, use `importlib` to dynamically import the module and invoke its `main()` function directly to avoid spawning new subprocesses.
+
 ## 2025-06-19 - Inconsistent Authorization in AI Hub
 
 **Vulnerability:** The AI Hub's list prompts endpoint (`_list_prompts` in `backend/api/ai_hub.py`) strictly filtered returned prompts by `created_by == auth_context.user_id`, ignoring the `is_shared` property which allows a prompt to be accessed globally. This resulted in a failure of access control policies because shared resources were effectively hidden from the surface, while directly accessible through other APIs.
