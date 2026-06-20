@@ -488,6 +488,21 @@ def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushe
     assert "release/**" not in push_block
 
 
+def test_pr_review_merge_scheduler_uses_minimal_token_permissions() -> None:
+    workflow = read_repo_text(".github/workflows/pr-review-merge-scheduler.yml")
+
+    assert (
+        "permissions:\n"
+        "      actions: read\n"
+        "      checks: read\n"
+        "      contents: read\n"
+        "      pull-requests: write"
+        in workflow
+    )
+    assert "actions: write" not in workflow
+    assert "contents: write" not in workflow
+
+
 def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_tags() -> (
     None
 ):
