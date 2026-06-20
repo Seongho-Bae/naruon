@@ -53,7 +53,11 @@ class MockSession:
         if entity is PromptTemplate:
             owner_id = params.get("created_by_1")
             return MockResult(
-                [prompt for prompt in self.prompts if prompt.created_by == owner_id]
+                [
+                    prompt
+                    for prompt in self.prompts
+                    if prompt.created_by == owner_id or prompt.is_shared is True
+                ]
             )
         if entity is LLMProvider:
             organization_id = params.get("organization_id_1")
@@ -215,9 +219,10 @@ def test_ai_hub_surface_uses_signed_source_evidence():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["summary_cards"][0]["value_text"] == "1"
+    assert data["summary_cards"][0]["value_text"] == "2"
     assert data["prompt_cards"][0]["prompt_title"] == "의사결정 로그 맥락 종합"
-    assert all(card["owner_label"] == "alice" for card in data["prompt_cards"])
+    assert data["prompt_cards"][1]["prompt_title"] == "공유 프롬프트"
+    assert data["prompt_cards"][1]["owner_label"] == "other-user"
     assert data["prompt_cards"][0]["prompt_key"].startswith("prompt_")
     assert "id" not in data["prompt_cards"][0]
     assert data["workflow_cards"][0]["state_code"] == "needs_provider"
