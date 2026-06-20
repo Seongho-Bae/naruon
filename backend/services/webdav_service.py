@@ -16,15 +16,13 @@ def safe_webdav_source_label(source_id: str | None) -> str:
     return f"WebDAV source {source_id}"
 
 
-async def sync_webdav_folders(
-    session, user_id: str, organization_id: str | None
-):
+async def sync_webdav_folders(session, user_id: str, organization_id: str | None):
     """
     Fetch folder structures for all WebDAV accounts of the user.
     """
     from core.url_validation import _reject_unsafe_ip_literal
     from urllib.parse import urlsplit
-    
+
     logger.info(f"Syncing WebDAV folders for user {user_id}")
     organization_filter = (
         WebdavAccount.organization_id == organization_id
@@ -59,6 +57,7 @@ async def sync_webdav_folders(
         )
     return True
 
+
 class WebDavService:
     def __init__(self):
         self._mock_accounts = {
@@ -88,7 +87,7 @@ class WebDavService:
                     "webdav_path": "/Projects/Marketing_Assets",
                     "owner_user_id": "demo_user",
                     "organization_id": None,
-                }
+                },
             ]
         }
 
@@ -141,6 +140,7 @@ class WebDavService:
         session: AsyncSession,
         user_id: str,
         organization_id: str | None,
+        folder_uid: str | None = None,
     ) -> List[Dict[str, Any]]:
         stmt = select(ProjectFolder).where(
             ProjectFolder.user_id == user_id,
@@ -148,6 +148,8 @@ class WebDavService:
             if organization_id is not None
             else ProjectFolder.organization_id.is_(None),
         )
+        if folder_uid is not None:
+            stmt = stmt.where(ProjectFolder.folder_uid == folder_uid)
         result = await session.execute(stmt)
         return [
             {
@@ -164,7 +166,9 @@ class WebDavService:
         """
         Organizes an email's attachments into the specified WebDAV project folder.
         """
-        logger.info(f"Syncing attachments from email {email_id} to project {project_name}")
+        logger.info(
+            f"Syncing attachments from email {email_id} to project {project_name}"
+        )
         # Mock implementation: in reality, this would download from storage and upload via webdavclient3
         return True
 
@@ -284,7 +288,7 @@ class WebDavService:
                 "error_code": "no_webdav_account",
                 "message": "No connected WebDAV accounts found.",
             }
-            
+
         if target_source_id is not None:
             selected_account = writable_accounts.get(target_source_id)
             if selected_account is None:
@@ -295,7 +299,7 @@ class WebDavService:
                 }
         else:
             selected_account = next(iter(writable_accounts.values()))
-                    
+
         return {
             "intent": "writeback",
             "source_id": selected_account["source_id"],
@@ -304,7 +308,8 @@ class WebDavService:
             "requires_if_match": True,
             "if_match": selected_account.get("etag")
             or selected_account.get("etag_value"),
-            "provenance": "server-authoritative"
+            "provenance": "server-authoritative",
         }
+
 
 webdav_service = WebDavService()
