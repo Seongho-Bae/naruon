@@ -5,9 +5,7 @@ import socket
 import pytest
 import services.email_client as email_client
 
-import os
-
-TEST_SMTP_PASSWORD = os.environ.get("TEST_SMTP_PASSWORD", "dummy-smtp-password")
+TEST_SMTP_PASSWORD = "secret"  # noqa: S105 - test fixture password
 
 
 def _make_socket() -> socket.socket:
@@ -182,9 +180,7 @@ def test_inbound_mail_hosts_reject_legacy_numeric_ip_literals_before_dns(
     monkeypatch.setattr(email_client.settings, allowed_setting, numeric_host)
 
     def fail_getaddrinfo(*args, **kwargs):
-        raise AssertionError(
-            f"legacy numeric {protocol_name} host must fail before DNS"
-        )
+        raise AssertionError(f"legacy numeric {protocol_name} host must fail before DNS")
 
     monkeypatch.setattr(email_client.socket, "getaddrinfo", fail_getaddrinfo)
 
