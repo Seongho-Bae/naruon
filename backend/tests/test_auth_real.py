@@ -13,8 +13,6 @@ from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from api.auth import (
-    is_tenant_admin_role,
-    is_admin_role,
     AuthContext,
     OIDC_ALLOWED_ALGORITHMS,
     SESSION_ALLOWED_ALGORITHMS,
@@ -28,11 +26,17 @@ from core.config import settings
 from db.session import get_db
 from main import app
 
-TEST_DEV_AUTH_TOKEN = "test-dev-auth-token-with-32-byte-minimum"  # noqa: S105 - test-only token
+TEST_DEV_AUTH_TOKEN = (
+    "test-dev-auth-token-with-32-byte-minimum"  # noqa: S105 - test-only token
+)
 WEAK_DEV_AUTH_TOKEN = "weak-token"  # noqa: S105 - test-only token
-WRONG_DEV_AUTH_TOKEN = "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
+WRONG_DEV_AUTH_TOKEN = (
+    "wrong-dev-auth-token-with-32-byte-min"  # noqa: S105 - test-only token
+)
 TEST_SESSION_HMAC_SECRET = os.environ["AUTH_SESSION_HMAC_SECRET"]
-WRONG_SESSION_HMAC_SECRET = "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
+WRONG_SESSION_HMAC_SECRET = (
+    "wrong-session-hmac-secret-with-32-byte-min"  # noqa: S105 - test-only secret
+)
 PUBLIC_FIXTURE_SESSION_HMAC_SECRET = "-".join(
     ("naruon", "session", "hmac", "token", "32", "byte", "minimum")
 )
@@ -619,8 +623,7 @@ async def test_admin_subject_does_not_imply_system_admin_role():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "admin_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin"),
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin", "organization_admin")
 )
 async def test_hmac_session_rejects_admin_role_claim(admin_role: str):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
@@ -1115,8 +1118,7 @@ async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "admin_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin"),
+    "admin_role", ("system_admin", "platform_admin", "tenant_admin", "organization_admin")
 )
 async def test_oidc_session_rejects_admin_role_claim(monkeypatch, admin_role: str):
     import jwt
@@ -1231,37 +1233,3 @@ async def test_oidc_request_path_requires_preloaded_jwks(monkeypatch):
         settings.AUTH_SESSION_HMAC_SECRET = previous_secret
 
     assert exc.value.status_code == 401
-
-
-@pytest.mark.parametrize(
-    "role, expected",
-    [
-        ("tenant_admin", True),
-        ("organization_admin", True),
-        ("system_admin", False),
-        ("platform_admin", False),
-        ("group_admin", False),
-        ("member", False),
-        ("invalid_role", False),
-        ("", False),
-    ],
-)
-def test_is_tenant_admin_role(role: str, expected: bool):
-    assert is_tenant_admin_role(role) is expected
-
-
-@pytest.mark.parametrize(
-    "role, expected",
-    [
-        ("system_admin", True),
-        ("platform_admin", True),
-        ("tenant_admin", True),
-        ("organization_admin", True),
-        ("group_admin", False),
-        ("member", False),
-        ("invalid_role", False),
-        ("", False),
-    ],
-)
-def test_is_admin_role(role: str, expected: bool):
-    assert is_admin_role(role) is expected

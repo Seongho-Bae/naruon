@@ -108,11 +108,6 @@
   external lookups. The agent may directly read changed files and focused hunks
   in read-only mode when MCP evidence is insufficient, but must not edit files
   or execute project code during the review.
-- OpenCode Agent findings should be concrete and directly usable: each blocking
-  finding should name the observable impact, the trigger condition or affected
-  workflow, the smallest source-backed fix, and an exact verification command or
-  test target when the repository already has one. Avoid generic architecture
-  advice unless it maps to the cited `path:line`.
 - OpenCode `Review Overview` comments are durable gate evidence. Publish them
   through an idempotent marker such as `<!-- opencode-review-overview -->` and
   update the existing comment instead of deleting it after approval, failed
