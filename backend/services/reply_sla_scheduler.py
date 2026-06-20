@@ -46,7 +46,9 @@ class ReplySlaScheduler:
             try:
                 await self._task
             except asyncio.CancelledError:
-                logger.debug("ReplySlaScheduler cancellation acknowledged during shutdown.")
+                logger.debug(
+                    "ReplySlaScheduler cancellation acknowledged during shutdown."
+                )
         logger.info("ReplySlaScheduler stopped.")
 
     async def _run_loop(self):
@@ -75,18 +77,25 @@ class ReplySlaScheduler:
                 )
             )
             configs = result.scalars().all()
+
+            tasks = []
             for config in configs:
-                try:
-                    await create_reply_sla_escalation_tasks(
+                tasks.append(
+                    create_reply_sla_escalation_tasks(
                         session,
                         user_id=config.user_id,
                         organization_id=config.organization_id,
                         overdue_hours=self.overdue_hours,
                         limit=self.limit,
                     )
-                except Exception:
-                    logger.error(
-                        "Reply SLA escalation failed for configured owner %s.",
-                        config.user_id,
-                        exc_info=True,
-                    )
+                )
+
+            if tasks:
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                for config, result in zip(configs, results):
+                    if isinstance(result, Exception):
+                        logger.error(
+                            "Reply SLA escalation failed for configured owner %s.",
+                            config.user_id,
+                            exc_info=result,
+                        )
