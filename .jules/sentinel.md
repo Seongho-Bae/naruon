@@ -17,6 +17,11 @@
 **Learning:** Using MD5, even for non-cryptographic purposes like generating unique IDs from randomness, triggers security scanners. Cryptographically weak functions like MD5 should not be used when stronger ones are available.
 **Prevention:** In SQL queries and backend code, prefer using `encode(sha256((...)::bytea), 'hex')` over `md5(...)` to generate deterministic hashes or unique IDs to maintain compliance and security.
 
+## 2026-06-20 - Missing Auth on update_tenant_config (Already Mitigated)
+**Vulnerability:** A previous state of the codebase was reported to be missing `Depends(get_auth_context)` on `update_tenant_config`.
+**Learning:** `auth_ctx: AuthContext = Depends(get_auth_context)` is already correctly implemented in the endpoint signature.
+**Prevention:** Always rely on FastAPI dependency injection to enforce endpoint security.
+
 ## 2024-05-28 - [Subprocess path execution vulnerability fix]
 **Vulnerability:** [Bandit B607 Starting a process with a partial executable path and B603 subprocess call without shell equals true]
 **Learning:** [Using partial paths with subprocess like 'bash' instead of absolute paths allows potential path manipulation attacks if PATH is altered. Executing python scripts with subprocess.run introduces process spawning overhead and could expose untrusted execution depending on how the interpreter executes inputs.]
@@ -32,6 +37,11 @@
 **Vulnerability:** The AI Hub's list prompts endpoint (`_list_prompts` in `backend/api/ai_hub.py`) strictly filtered returned prompts by `created_by == auth_context.user_id`, ignoring the `is_shared` property which allows a prompt to be accessed globally. This resulted in a failure of access control policies because shared resources were effectively hidden from the surface, while directly accessible through other APIs.
 **Learning:** Authorization and resource filtering must be consistently scoped across the system. Inconsistency leads to functional security bugs where visibility does not match explicit intent (e.g. sharing).
 **Prevention:** Unify queries regarding scoping (e.g., using centralized helper functions for where-clauses) instead of redefining conditions per-endpoint. When creating models with boolean overrides for visibility like `is_shared`, ensure all read paths respect them.
+
+## 2024-05-31 - Hardcoded Session Token in Tests
+**Vulnerability:** Found hardcoded string `"header.payload.signature"` in multiple `.test.ts` files.
+**Learning:** Even in test files, realistic-looking hardcoded tokens or secrets can be flagged by security scanners as hardcoded credentials. It is bad hygiene.
+**Prevention:** Use explicitly fake and descriptive placeholder strings like `"test-header.test-payload.test-signature"` for token mocking in tests.
 
 ## 2026-06-20 - Hardcoded API Key for Testing
 **Vulnerability:** Hardcoded API keys and passwords were found in `backend/tests/test_tenant_config_model.py` and `backend/tests/test_email_client_smtp.py`.
