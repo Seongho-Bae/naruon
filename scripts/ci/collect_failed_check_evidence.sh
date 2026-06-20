@@ -377,8 +377,8 @@ done <"$failed_contexts"
 	printf -- '- For each actionable failed check, inspect the local source or diff and identify the exact file line that must change.\n'
 	printf -- '- OpenCode `REQUEST_CHANGES` findings must include `path`, `line`, `root_cause`, `fix_direction`, `regression_test_direction`, and `suggested_diff`.\n'
 	printf -- '- Do not request changes with only a GitHub Actions URL or a generic check name.\n\n'
-	printf -- '- When Strix logs contain multiple `Vulnerability Report` or `Model ... Vulnerabilities ...` sections, include every model-reported vulnerability in the review evidence and findings, including model name, title, severity, endpoint, and Code Locations/path:line evidence when present.\n'
-	printf -- '- Create one OpenCode finding per Strix model vulnerability report; do not satisfy two model reports with one combined finding, even when titles or locations match.\n\n'
+	printf -- '- When Strix logs contain multiple `Vulnerability Report` or `Model ... Vulnerabilities ...` sections, cluster reports that describe the same root vulnerability, source line, or remediation into one review finding while preserving each model name, title, severity, endpoint, and Code Locations/path:line evidence when present.\n'
+	printf -- '- Create separate OpenCode findings only for distinct root causes, affected source lines, or remediation actions; do not list duplicate titles or matching locations from different models as separate findings.\n\n'
 
 	if [ -s "$superseded_failed_contexts" ]; then
 		printf '## Superseded failed checks\n\n'

@@ -203,7 +203,7 @@ extract_strix_reports() {
 		}
 		sub starts_new_field {
 			my ($line) = @_;
-			return $line =~ /^(Title|Severity|CVSS Score|CVSS Vector|Target|Endpoint|Method|Description|Impact|Technical Analysis|PoC Description|PoC Code|Code Locations|Remediation)\b/i;
+			return $line =~ /^(Title|Severity|CVSS Score|CVSS Vector|Target|Endpoint|Method|Location|Description|Impact|Technical Analysis|PoC Description|PoC Code|Code Locations|Remediation)\b/i;
 		}
 		sub finish_report {
 			return unless defined $title && length $title;
@@ -419,6 +419,39 @@ emit_github_billing_lock_finding() {
 	printf -- '- Suggested edit: no repository source edit is appropriate until the billing lock is cleared and a real failed job log or annotation identifies an actionable source line.\n\n'
 }
 
+append_unique() {
+	local existing="$1"
+	local value="$2"
+	local separator="${3:-, }"
+
+	if [ -z "$value" ]; then
+		printf '%s' "$existing"
+		return 0
+	fi
+	case "$separator$existing$separator" in
+		*"$separator$value$separator"*)
+			printf '%s' "$existing"
+			;;
+		*)
+			if [ -z "$existing" ]; then
+				printf '%s' "$value"
+			else
+				printf '%s%s%s' "$existing" "$separator" "$value"
+			fi
+			;;
+	esac
+}
+
+severity_rank() {
+	case "${1:-UNKNOWN}" in
+		CRITICAL) printf '4' ;;
+		HIGH) printf '3' ;;
+		MEDIUM) printf '2' ;;
+		LOW) printf '1' ;;
+		*) printf '0' ;;
+	esac
+}
+
 emit_strix_report_findings() {
 	local strix_evidence_file="$1"
 	local reports_file
@@ -433,6 +466,23 @@ emit_strix_report_findings() {
 	local path
 	local line
 	local source_detail
+	local key
+	local detail
+	local models
+	local titles
+	local severity_value
+	local endpoint_value
+	local method_value
+	local source_value
+	local group_title
+	local report_keys=()
+	local -A group_models=()
+	local -A group_titles=()
+	local -A group_details=()
+	local -A group_severity=()
+	local -A group_path=()
+	local -A group_line=()
+	local -A group_source=()
 
 	if ! grep -Eq "^### Strix vulnerability report window([[:space:]]|$)" "$strix_evidence_file"; then
 		return 0
@@ -453,14 +503,48 @@ emit_strix_report_findings() {
 			continue
 		fi
 
-		finding_index=$((finding_index + 1))
-		printf '### %s. %s %s:%s - Strix report from %s: %s\n' "$finding_index" "${severity:-HIGH}" "$path" "$line" "$model" "$title"
-		printf -- '- Problem: Strix Security Scan failed and %s reported "%s" with severity %s. Endpoint: %s. Method: %s. Code location evidence: %s.\n' "$model" "$title" "${severity:-UNKNOWN}" "${endpoint:-N/A}" "${method:-N/A}" "$source_detail"
-		printf -- '- Root cause: The failed Strix evidence contains a distinct model vulnerability report, so OpenCode must not collapse it into provider-quota or generic check-failure text.\n'
-		printf -- '- Fix: Inspect and patch %s:%s for this exact report before approval; apply the remediation described by Strix for "%s" and keep the review finding tied to this line.\n' "$path" "$line" "$title"
-		printf -- '- Regression test: Add or update coverage that exercises the reported endpoint/path and proves the %s finding cannot recur.\n\n' "${severity:-Strix}"
-		printf -- '- Suggested edit: change `%s:%s` for the `%s` report from model `%s`; preserve the exact endpoint `%s`, method `%s`, and Code Location evidence `%s` in the OpenCode review finding.\n\n' "$path" "$line" "$title" "$model" "${endpoint:-N/A}" "${method:-N/A}" "$source_detail"
+		key="${path}"$'\037'"${line}"
+		if [ -z "${group_path[$key]:-}" ]; then
+			report_keys+=("$key")
+			group_path[$key]="$path"
+			group_line[$key]="$line"
+			group_source[$key]="$source_detail"
+			group_severity[$key]="${severity:-HIGH}"
+		elif [ "$(severity_rank "${severity:-UNKNOWN}")" -gt "$(severity_rank "${group_severity[$key]}")" ]; then
+			group_severity[$key]="${severity:-HIGH}"
+		fi
+		group_models[$key]="$(append_unique "${group_models[$key]:-}" "$model")"
+		group_titles[$key]="$(append_unique "${group_titles[$key]:-}" "$title")"
+		detail="${model} reported \"${title}\" with severity ${severity:-UNKNOWN}. Endpoint: ${endpoint:-N/A}. Method: ${method:-N/A}. Code location evidence: ${source_detail}"
+		group_details[$key]="$(append_unique "${group_details[$key]:-}" "$detail" "; ")"
 	done <"$reports_file"
+
+	for key in "${report_keys[@]}"; do
+		path="${group_path[$key]}"
+		line="${group_line[$key]}"
+		models="${group_models[$key]}"
+		titles="${group_titles[$key]}"
+		severity_value="${group_severity[$key]}"
+		source_value="${group_source[$key]}"
+		group_title="$titles"
+		finding_index=$((finding_index + 1))
+		if [[ "$models" == *", "* ]]; then
+			printf '### %s. %s %s:%s - Strix reports from %s: %s\n' "$finding_index" "$severity_value" "$path" "$line" "$models" "$group_title"
+			printf -- '- Problem: Strix Security Scan failed and multiple model reports mapped to %s:%s. Reports: %s.\n' "$path" "$line" "${group_details[$key]}"
+			printf -- '- Root cause: The failed Strix evidence points these reports at the same source line or remediation path, so OpenCode groups them instead of listing duplicate findings.\n'
+			printf -- '- Fix: Inspect and patch %s:%s once for the grouped Strix reports; keep every model title, severity, endpoint, method, and Code Location in the review evidence.\n' "$path" "$line"
+			printf -- '- Regression test: Add or update coverage that exercises the grouped endpoint/path and proves the %s finding cannot recur.\n\n' "$severity_value"
+			printf -- '- Suggested edit: change `%s:%s` for the grouped Strix reports from `%s`; preserve Code Location evidence `%s` and each report detail in the OpenCode review finding.\n\n' "$path" "$line" "$models" "$source_value"
+		else
+			printf '### %s. %s %s:%s - Strix report from %s: %s\n' "$finding_index" "$severity_value" "$path" "$line" "$models" "$group_title"
+			detail="${group_details[$key]}"
+			printf -- '- Problem: Strix Security Scan failed and %s.\n' "$detail"
+			printf -- '- Root cause: The failed Strix evidence contains a source-backed model vulnerability report, so OpenCode must not reduce it to provider-quota or generic check-failure text.\n'
+			printf -- '- Fix: Inspect and patch %s:%s for this exact report before approval; apply the remediation described by Strix for "%s" and keep the review finding tied to this line.\n' "$path" "$line" "$group_title"
+			printf -- '- Regression test: Add or update coverage that exercises the reported endpoint/path and proves the %s finding cannot recur.\n\n' "$severity_value"
+			printf -- '- Suggested edit: change `%s:%s` for the `%s` report from model `%s`; preserve Code Location evidence `%s` in the OpenCode review finding.\n\n' "$path" "$line" "$group_title" "$models" "$source_value"
+		fi
+	done
 }
 
 emit_strix_provider_failure_finding() {

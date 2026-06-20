@@ -497,8 +497,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Failed log signal summary" "failed-check evidence collector preserves fail/error signal lines outside bounded excerpts"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Strix model attempt and finding summary" "failed-check evidence collector summarizes every Strix model attempt"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Strix vulnerability report window" "failed-check evidence collector preserves Strix vulnerability report windows"
-	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "When Strix logs contain multiple" "failed-check evidence collector requires all model-reported vulnerabilities"
-	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Create one OpenCode finding per Strix model vulnerability report" "failed-check evidence contract requires one finding per Strix model report"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "cluster reports that describe the same root vulnerability" "failed-check evidence collector requires duplicate Strix report grouping"
+	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "Create separate OpenCode findings only for distinct root causes" "failed-check evidence contract separates only distinct Strix root causes"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "model name, title, severity, endpoint, and Code Locations/path:line evidence" "failed-check evidence collector names required Strix report fields"
 	assert_file_contains "$workflow_file" "If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed." "opencode review prompt forces active failed-check diagnosis"
 	assert_file_contains "$workflow_file" "A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL" "opencode review prompt allows only explicit same-head manual Strix evidence to supersede stale rollup failures"
@@ -510,10 +510,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_not_contains "$workflow_file" "failed_check_evidence_has_active_failures" "opencode approval must treat collected failed rollup contexts as blockers"
 	assert_file_not_contains "$workflow_file" "failed-check evidence showed only superseded failures" "opencode approval must not continue approval after failed PR rollup contexts"
 	assert_file_not_contains "$workflow_file" "preserving model REQUEST_CHANGES" "opencode request-changes path must validate failed-check findings when failed rollup contexts exist"
-	assert_file_contains "$workflow_file" "include every model-reported vulnerability as a separate evidence-backed finding" "opencode review prompt requires all Strix model findings"
-	assert_file_contains "$workflow_file" "Multiple Strix model reports must not be collapsed" "opencode review prompt prevents collapsing multiple Strix model reports"
-	assert_file_contains "$workflow_file" "One Strix model vulnerability report requires one distinct finding" "opencode review prompt requires one finding per Strix model report"
-	assert_file_contains "$workflow_file" "model name, report title, severity, endpoint, and Code Locations/path:line evidence" "opencode review prompt preserves exact Strix report fields"
+	assert_file_contains "$workflow_file" "cluster same-root reports into one evidence-backed finding" "opencode review prompt groups duplicate Strix model findings"
+	assert_file_contains "$workflow_file" "Multiple Strix model reports must be clustered" "opencode review prompt requires grouping by root cause and source line"
+	assert_file_contains "$workflow_file" "Create separate findings only for distinct root causes" "opencode review prompt separates only distinct Strix root causes"
+	assert_file_contains "$workflow_file" "model name, title, severity, endpoint, and Code Locations/path:line evidence" "opencode review prompt preserves exact Strix report fields"
 	assert_file_contains "$workflow_file" "Full failed-check evidence, when collected, is available as failed-check-evidence.md" "opencode review exposes full failed-check evidence for multiple Strix model reports without oversizing the prompt"
 	assert_file_contains "$workflow_file" "Do not request changes with only a check URL, workflow name, or generic failure summary." "opencode review prompt forbids generic failed-check reviews"
 	assert_file_contains "$workflow_file" "Failed-check findings must be line-specific and concrete" "opencode review prompt requires line-specific failed-check findings"
@@ -534,9 +534,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Self-test Strix gate script" "failed-check review validator requires Strix failed step evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "github.event.inputs.strix_llm" "failed-check review validator requires exact Strix missing assertion evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "extract_strix_required_markers" "failed-check review validator extracts Strix report titles and locations"
-	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "count_strix_review_findings" "failed-check review validator compares Strix reports to Strix-specific findings"
-	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "validate_distinct_strix_report_findings" "failed-check review validator requires distinct findings for each Strix model report"
-	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "used_findings" "failed-check review validator prevents one finding from satisfying multiple Strix reports"
+	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "validate_strix_report_findings" "failed-check review validator requires each Strix report to be represented"
+	assert_file_not_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "used_findings" "failed-check review validator allows one grouped finding to satisfy duplicate Strix reports"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Severity: \$1" "failed-check review validator requires Strix severity evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/validate_opencode_failed_check_review.sh" "Location[[:space:]]+[0-9]+" "failed-check review validator requires Strix location evidence"
 	assert_file_contains "$REPO_ROOT/scripts/ci/collect_failed_check_evidence.sh" "RateLimitError" "failed-check evidence collector preserves Strix provider rate-limit failures"
@@ -558,7 +557,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "emit_opencode_failed_check_fallback_findings.sh" "opencode failed-check fallback delegates deterministic Strix report expansion to tested helper"
 	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper exited non-zero; using inline fallback." "opencode failed-check fallback handles helper failures without aborting under set -e"
 	assert_file_contains "$workflow_file" "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer" "opencode review format is independent of other review agents"
-	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "emit_strix_report_findings" "failed-check fallback emits every Strix vulnerability report as a separate finding"
+	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "group_models" "failed-check fallback groups same-line Strix vulnerability reports"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "Strix provider signal left current-head security evidence incomplete" "failed-check fallback does not claim reports are absent after Strix emitted vulnerabilities"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "cancelled pull_request_target run still used the base branch copies" "failed-check fallback explains trusted-base Strix workflow semantics for self-modifying PRs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "get_validated_pr_diff_range" "failed-check fallback validates PR diff range before comparing trusted Strix inputs"
@@ -933,8 +932,8 @@ EOF
 		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/collapsed.out" 2>"$tmp_dir/collapsed.err"
 	rc=$?
 	set -e
-	assert_equals "4" "$rc" "failed-check review validator rejects collapsed duplicate Strix model reports"
-	assert_file_contains "$tmp_dir/collapsed.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator requires one Strix-specific finding per model report"
+	assert_equals "0" "$rc" "failed-check review validator accepts grouped duplicate Strix model reports"
+	assert_file_not_contains "$tmp_dir/collapsed.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator allows one source-backed finding to represent duplicate model reports"
 
 	cat >"$control_json" <<'EOF'
 {"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Strix Security Scan/strix failed","summary":"Strix Security Scan/strix failed and mentioned github-models/openai/gpt-5 plus deepseek/deepseek-v3-0324, but the model reports were still collapsed.","findings":[{"path":".github/workflows/strix.yml","line":120,"severity":"HIGH","title":"Strix self-test failed","problem":"Strix Security Scan/strix failed in Self-test Strix gate script while github-models/openai/gpt-5 and deepseek/deepseek-v3-0324 model reports were present elsewhere in the evidence.","root_cause":"The workflow finding is about CI self-test evidence, not a distinct model vulnerability report.","fix_direction":"Fix the workflow default.","regression_test_direction":"Keep the self-test assertion.","suggested_diff":"diff --git a/.github/workflows/strix.yml b/.github/workflows/strix.yml\n--- a/.github/workflows/strix.yml\n+++ b/.github/workflows/strix.yml\n@@ -120 +120 @@\n-old\n+new"},{"path":"backend/app/auth.py","line":132,"severity":"CRITICAL","title":"Authentication Bypass via X-Dev-User Header","problem":"Strix Security Scan/strix failed with github-models/openai/gpt-5 and deepseek/deepseek-v3-0324 reports for Authentication Bypass via X-Dev-User Header, Severity: CRITICAL, /api/me, Method: GET, backend/app/auth.py:132-135.","root_cause":"This finding still collapses two Strix model reports into one item even though the titles and locations match.","fix_direction":"Remove the unauthenticated fallback at backend/app/auth.py:132-135.","regression_test_direction":"Add auth tests for both request paths.","suggested_diff":"diff --git a/backend/app/auth.py b/backend/app/auth.py\n--- a/backend/app/auth.py\n+++ b/backend/app/auth.py\n@@ -132 +132 @@\n-old\n+new"}]}
@@ -944,8 +943,8 @@ EOF
 		"$control_json" "$failed_checks_file" "$evidence_file" >"$tmp_dir/collapsed-with-count.out" 2>"$tmp_dir/collapsed-with-count.err"
 	rc=$?
 	set -e
-	assert_equals "4" "$rc" "failed-check review validator rejects collapsed Strix reports even when finding count matches"
-	assert_file_contains "$tmp_dir/collapsed-with-count.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator requires distinct matching findings, not only matching counts"
+	assert_equals "0" "$rc" "failed-check review validator accepts grouped duplicate Strix reports alongside other findings"
+	assert_file_not_contains "$tmp_dir/collapsed-with-count.out" "FAILED_CHECK_EVIDENCE_NOT_REFERENCED" "failed-check validator no longer requires duplicate model reports to be separate findings"
 
 	cat >"$evidence_file" <<'EOF'
 ## Failed check: Strix Security Scan/strix
@@ -991,10 +990,11 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
-assert_opencode_failed_check_fallback_emits_each_strix_report() {
+assert_opencode_failed_check_fallback_groups_duplicate_strix_reports() {
 	local tmp_dir
 	local evidence_file
 	local output_file
+	local path_traversal_heading_count
 	tmp_dir="$(mktemp -d)"
 	evidence_file="$tmp_dir/failed-check-evidence.md"
 	output_file="$tmp_dir/fallback.md"
@@ -1025,7 +1025,12 @@ Model deepseek/deepseek-r1-0528 Vulnerabilities 2
 
 ### Strix vulnerability report window 2
 
-Model deepseek/deepseek-v3-0324 Vulnerabilities 1
+Model deepseek/deepseek-v3-0324 Vulnerabilities 2
+│  Vulnerability Report                                                        │
+│  Title: Path Traversal in Email Attachment Handling                          │
+│  Severity: CRITICAL                                                          │
+│  Endpoint: /services/email_parser.py                                         │
+│    Location 1: backend/services/email_parser.py:60-72                        │
 │  Vulnerability Report                                                        │
 │  Title: Missing Content Security Policy in Next.js Frontend                  │
 │  Severity: HIGH                                                              │
@@ -1035,8 +1040,10 @@ EOF
 	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
 		"$evidence_file" "$REPO_ROOT" >"$output_file"
 
-	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Path Traversal in Email Attachment Handling" "fallback includes first model report"
+	assert_file_contains "$output_file" "Strix reports from deepseek/deepseek-r1-0528, deepseek/deepseek-v3-0324: Path Traversal in Email Attachment Handling" "fallback groups duplicate model reports"
 	assert_file_contains "$output_file" "backend/services/email_parser.py:60" "fallback maps first report to exact source line"
+	path_traversal_heading_count="$(grep -Ec '^### .*Path Traversal in Email Attachment Handling' "$output_file")"
+	assert_equals "1" "$path_traversal_heading_count" "fallback emits one finding for duplicate same-line Strix reports"
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Prompt Injection and XSS in AI Prompt Studio" "fallback includes second report from same model"
 	assert_file_contains "$output_file" "frontend/src/app/prompt-studio/page.tsx:29" "fallback maps second report to exact source line"
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-v3-0324: Missing Content Security Policy in Next.js Frontend" "fallback includes report from second model"
@@ -5865,7 +5872,7 @@ assert_opencode_review_gate_rejects_non_source_backed_findings
 
 assert_opencode_failed_check_review_validator_rejects_unrelated_findings
 
-assert_opencode_failed_check_fallback_emits_each_strix_report
+assert_opencode_failed_check_fallback_groups_duplicate_strix_reports
 
 assert_opencode_failed_check_fallback_explains_trusted_base_strix_prs
 
