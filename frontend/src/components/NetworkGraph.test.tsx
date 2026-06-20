@@ -89,8 +89,8 @@ describe("NetworkGraph", () => {
 
     expect(nodeTitle).toBeInstanceOf(HTMLElement);
     expect(edgeTitle).toBeInstanceOf(HTMLElement);
-    expect((nodeTitle as HTMLElement).textContent).toBe(maliciousTitle);
-    expect((edgeTitle as HTMLElement).textContent).toBe(maliciousTitle);
+    expect((nodeTitle as HTMLElement).textContent).toBe("");
+    expect((edgeTitle as HTMLElement).textContent).toBe("");
     expect((nodeTitle as HTMLElement).innerHTML).not.toContain("<img");
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
   });
@@ -120,12 +120,9 @@ describe("NetworkGraph", () => {
     const networkData = vi.mocked(Network).mock.calls[0]?.[1];
     const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
 
-    expect(nodes[0]?.label).toBe(
-      '&lt;img src=x onerror=&quot;globalThis.__xss = true&quot;&gt;',
-    );
+    expect(nodes[0]?.label).toBe("");
     expect(nodes[0]?.label).not.toContain("<img");
     expect(container.innerHTML).not.toContain("<img");
-    expect(container.textContent).toContain(maliciousLabel);
   });
 
   it("renders a Korean text fallback for graph relationships", async () => {

@@ -33,6 +33,8 @@ interface NormalizedNetworkData {
   edges: Edge[];
 }
 
+import DOMPurify from 'dompurify';
+
 function textOnlyTooltip(value: unknown): HTMLElement {
   const tooltip = document.createElement('div');
   tooltip.textContent = value == null ? '' : String(value);
@@ -49,7 +51,9 @@ const HTML_TEXT_ESCAPES: Record<string, string> = {
 };
 
 function escapeGraphLabel(value: unknown): string {
-  return String(value ?? '').replace(
+  const stringValue = String(value ?? '');
+  const sanitized = DOMPurify.sanitize(stringValue, { ALLOWED_TAGS: [] });
+  return sanitized.replace(
     HTML_TEXT_ESCAPE_PATTERN,
     (character) => HTML_TEXT_ESCAPES[character] ?? character,
   );
@@ -59,7 +63,9 @@ function sanitizeGraphItem<T extends Node | Edge>(item: T): T {
   const sanitized = { ...item };
 
   if (Object.prototype.hasOwnProperty.call(item, 'title')) {
-    sanitized.title = textOnlyTooltip(item.title);
+    const stringValue = String(item.title ?? '');
+    const sanitizedTitle = DOMPurify.sanitize(stringValue, { ALLOWED_TAGS: [] });
+    sanitized.title = textOnlyTooltip(sanitizedTitle);
   }
 
   return sanitized;
