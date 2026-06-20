@@ -3,9 +3,27 @@ name: OpenCode Review
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: string
+      pr_base_ref:
+        description: Pull request base branch
+        required: true
+        type: string
+      pr_base_sha:
+        description: Pull request base SHA
+        required: true
+        type: string
+      pr_head_sha:
+        description: Pull request head SHA
+        required: true
+        type: string
 
 concurrency:
-  group: opencode-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+  group: opencode-review-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}-${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -14,8 +32,11 @@ permissions:
 jobs:
   opencode-review:
     if: >-
-      github.event.pull_request.draft != true
-      && github.event.pull_request.head.repo.full_name == github.repository
+      github.event_name == 'workflow_dispatch'
+      || (
+        github.event.pull_request.draft != true
+        && github.event.pull_request.head.repo.full_name == github.repository
+      )
     runs-on: ubuntu-latest
     permissions:
       actions: read
@@ -31,10 +52,11 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: true
+          ref: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}
 
       - name: Fetch PR base branch for OpenCode context
         env:
-          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.pr_base_ref }}
         run: |
           set -euo pipefail
           git fetch --no-tags origin \
@@ -77,10 +99,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
           FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"
@@ -499,10 +521,10 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-primary.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -612,8 +634,8 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -723,8 +745,8 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-second-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
@@ -895,8 +917,8 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.opencode_app_token.outputs.token || secrets.OPENCODE_APPROVE_TOKEN || secrets.GITHUB_TOKEN }}
           GH_REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outputs.review_status }}
@@ -1027,8 +1049,8 @@ jobs:
           USE_GITHUB_TOKEN: "true"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           NO_COLOR: "1"
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
           RUN_ATTEMPT: ${{ github.run_attempt }}
           OPENCODE_PRIMARY_OUTCOME: ${{ steps.opencode_review_primary.outputs.review_status }}
