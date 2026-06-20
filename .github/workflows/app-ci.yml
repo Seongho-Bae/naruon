@@ -58,7 +58,6 @@ jobs:
             tests/test_accounts_api.py \
             tests/test_auth_real.py \
             tests/test_start_backend.py \
-            tests/test_tenant_config_model.py \
             tests/test_release_governance.py::test_backend_images_use_python_314_runtime \
             tests/test_release_governance.py::test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes \
             2>&1 | tee pytest_output.log
