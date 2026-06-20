@@ -172,8 +172,8 @@ async def test_missing_reply_tracking_scopes_email_query_to_user_and_org():
     email_query = session.queries[-1]
     query_text = compiled_query_text(email_query)
     query_params = compiled_query_params(email_query)
-    assert "emails.user_id = :user_id_1" in query_text
-    assert "emails.organization_id = :organization_id_1" in query_text
+    assert "email_records.user_id = :user_id_1" in query_text
+    assert "email_records.organization_id = :organization_id_1" in query_text
     assert query_params["user_id_1"] == "user_1"
     assert query_params["organization_id_1"] == "org_1"
 

@@ -263,6 +263,6 @@ def test_capture_relationship_from_source_email_uses_signed_owner_scope():
     assert added.source_message_id == "<q2@example.com>"
     assert added.source_thread_id == "thread-q2"
     query_text = str(session.statements[0]).lower()
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
-    assert "emails.message_id" in query_text
+    assert "email_records.user_id" in query_text
+    assert "email_records.organization_id" in query_text
+    assert "email_records.message_id" in query_text

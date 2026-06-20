@@ -316,7 +316,7 @@ jobs:
           inspect the highest-risk evidence first and always return a final control block instead of a progress
           summary. Lead with findings ordered by severity, separate blocking findings from important suggestions
           and nits, and request changes only for actionable blockers with observable impact, trigger condition,
-          minimal fix direction, and exact regression-test or verification command when the repository already
+          minimal fix direction, and exact regression test direction or verification command when the repository already
           provides one.
           For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding,
           cite the evidence type behind the claim (nearby implementation, matching existing example,
