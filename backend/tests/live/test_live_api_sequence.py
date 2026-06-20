@@ -17,6 +17,7 @@ import pytest
 
 
 SESSION_COOKIE_NAME = "naruon_session"
+DEFAULT_LIVE_HTTP_TIMEOUT_SECONDS = 30.0
 
 
 def _encode_json(value: dict[str, Any]) -> str:
@@ -61,6 +62,21 @@ def _live_base_url() -> str:
     return live_base_url.rstrip("/")
 
 
+def _live_http_timeout_seconds() -> float:
+    configured = os.environ.get("LIVE_E2E_HTTP_TIMEOUT_SECONDS")
+    if not configured:
+        return DEFAULT_LIVE_HTTP_TIMEOUT_SECONDS
+    try:
+        timeout_seconds = float(configured)
+    except ValueError as exc:
+        raise AssertionError(
+            "LIVE_E2E_HTTP_TIMEOUT_SECONDS must be a number"
+        ) from exc
+    if timeout_seconds <= 0:
+        raise AssertionError("LIVE_E2E_HTTP_TIMEOUT_SECONDS must be positive")
+    return timeout_seconds
+
+
 def read_json(
     url: str,
     token: str,
@@ -70,6 +86,7 @@ def read_json(
     attempts: int = 12,
 ) -> dict[str, Any]:
     last_error: Exception | None = None
+    timeout_seconds = _live_http_timeout_seconds()
     request_body = json.dumps(body).encode("utf-8") if body is not None else None
     for _ in range(attempts):
         try:
@@ -87,7 +104,7 @@ def read_json(
             connection = connection_cls(
                 parsed_url.hostname,
                 parsed_url.port,
-                timeout=5,
+                timeout=timeout_seconds,
             )
             try:
                 headers = {
