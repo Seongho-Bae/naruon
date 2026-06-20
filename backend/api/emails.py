@@ -259,8 +259,11 @@ async def get_emails(
         .order_by(Email.date.desc())
         .limit(candidate_window)
     )
-    emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    emails = list(result.scalars().all())
+    # ⚡ Bolt: Reverse the list in-place (O(N)) instead of sorting (O(N log N)).
+    # The database already sorted the records by date descending, so reversing it
+    # yields chronological order without redundant sorting overhead.
+    emails.reverse()
 
     grouped = {}
     # ⚡ Bolt: Use defaultdict to avoid redundant membership checks and dictionary access overhead.
