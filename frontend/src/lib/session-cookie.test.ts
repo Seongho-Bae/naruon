@@ -10,8 +10,8 @@ import {
 
 describe("normalizeSessionToken", () => {
   it("accepts compact JWT-shaped bearer session tokens", () => {
-    expect(normalizeSessionToken(" test-header.test-payload.test-signature ")).toBe(
-      "test-header.test-payload.test-signature",
+    expect(normalizeSessionToken(" header.payload.signature ")).toBe(
+      "header.payload.signature",
     );
     expect(normalizeSessionToken("hdr_segment.payload_segment.sig_segment")).toBe(
       "hdr_segment.payload_segment.sig_segment",
@@ -54,40 +54,40 @@ describe("normalizeSessionToken", () => {
 
   describe("rejects control characters", () => {
     it("rejects tokens with null bytes", () => {
-      expect(normalizeSessionToken("test-head\u0000er.test-payload.test-signature")).toBeNull();
+      expect(normalizeSessionToken("head\u0000er.payload.signature")).toBeNull();
     });
 
     it("rejects tokens with newlines", () => {
-      expect(normalizeSessionToken("test-header.test-pay\nload.test-signature")).toBeNull();
+      expect(normalizeSessionToken("header.pay\nload.signature")).toBeNull();
     });
 
     it("rejects tokens with other control characters", () => {
-      expect(normalizeSessionToken("test-header.test-payload.test-signature\u001f")).toBeNull();
-      expect(normalizeSessionToken("test-header.test-payload.test-signature\u007f")).toBeNull();
+      expect(normalizeSessionToken("header.payload.signature\u001f")).toBeNull();
+      expect(normalizeSessionToken("header.payload.signature\u007f")).toBeNull();
     });
   });
 
   describe("enforces JWT pattern", () => {
     it("rejects tokens with missing segments", () => {
-      expect(normalizeSessionToken("test-header.test-payload")).toBeNull();
-      expect(normalizeSessionToken("test-header")).toBeNull();
+      expect(normalizeSessionToken("header.payload")).toBeNull();
+      expect(normalizeSessionToken("header")).toBeNull();
     });
 
     it("rejects tokens with too many segments", () => {
-      expect(normalizeSessionToken("test-header.test-payload.test-signature.extra")).toBeNull();
+      expect(normalizeSessionToken("header.payload.signature.extra")).toBeNull();
     });
 
     it("rejects tokens with invalid characters in segments", () => {
-      expect(normalizeSessionToken("test-header.test-payload!.test-signature")).toBeNull();
+      expect(normalizeSessionToken("header.payload!.signature")).toBeNull();
       expect(normalizeSessionToken("<script>alert(1)</script>")).toBeNull();
-      expect(normalizeSessionToken("test-header.test-payload.test-sig@nature")).toBeNull();
+      expect(normalizeSessionToken("header.payload.sig@nature")).toBeNull();
     });
   });
 });
 
 describe("buildSessionCookieOptions", () => {
   it("returns correct cookie options for a valid token", () => {
-    const token = "test-header.test-payload.test-signature";
+    const token = "header.payload.signature";
     const options = buildSessionCookieOptions(token);
 
     expect(options).toEqual({
