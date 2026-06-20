@@ -3,10 +3,12 @@ name: Application CI
 on:
   pull_request:
     branches:
+      - develop
       - master
       - "release/**"
   push:
     branches:
+      - develop
       - master
 
 permissions:
