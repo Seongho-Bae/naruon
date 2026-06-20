@@ -1,7 +1,0 @@
-Naruon Next.js 애플리케이션의 검색 입력 필드에서 발생할 수 있는 잠재적인 XSS 보안 취약점을 해결합니다.
-
-💡 **What:**
-1. `DashboardLayout.tsx` 컴포넌트 내의 전역 검색 입력(Global Search Input) 필드에서 사용자 입력을 상태로 반영하기 전에 `toSafeReactText` 함수를 이용해 입력값을 새니타이즈(Sanitize)하도록 코드를 수정했습니다.
-
-🎯 **Why:**
-최신 STRIX CI 보안 검사에서 해당 검색 입력 필드가 제대로 새니타이즈 되지 않아 공격자가 잠재적으로 악의적인 자바스크립트나 HTML을 포함시킬 수 있다는 경고(CRITICAL XSS vulnerability)가 탐지되었습니다. 기존에 존재하는 `safe-text` 유틸리티 함수를 재사용하여 입력값 내의 제어 문자와 안전하지 않은 입력 패턴을 무효화함으로써 해당 리스크를 근본적으로 차단했습니다.
