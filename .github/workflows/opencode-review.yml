@@ -312,7 +312,7 @@ jobs:
           inspect the highest-risk evidence first and always return a final control block instead of a progress
           summary. Lead with findings ordered by severity, separate blocking findings from important suggestions
           and nits, and request changes only for actionable blockers with observable impact, trigger condition,
-          minimal fix direction, and exact regression-test or verification command when the repository already
+          minimal fix direction, and exact regression test direction or verification command when the repository already
           provides one.
           Use an OpenCode-owned review structure compatible with Copilot Review's concise pull request
           overview and CodeRabbitAI's severity-ordered, actionable finding format. Put any extra summary

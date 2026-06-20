@@ -111,9 +111,9 @@ async def test_root_importer_duplicate_check_is_scoped_to_owner(tmp_path):
 
     assert imported is True
     query_text = str(session.queries[0]).lower()
-    assert "emails.message_id" in query_text
-    assert "emails.user_id" in query_text
-    assert "emails.organization_id" in query_text
+    assert "email_records.message_id" in query_text
+    assert "email_records.user_id" in query_text
+    assert "email_records.organization_id" in query_text
     mock_assign.assert_awaited_once_with(
         session,
         parsed,

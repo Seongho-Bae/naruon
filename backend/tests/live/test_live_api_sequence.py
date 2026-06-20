@@ -13,6 +13,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import pytest
+
 
 SESSION_COOKIE_NAME = "naruon_session"
 
@@ -25,7 +27,7 @@ def _encode_json(value: dict[str, Any]) -> str:
 def _signed_live_session_token() -> str:
     secret = os.environ.get("LIVE_E2E_SESSION_SECRET")
     if not secret:
-        raise AssertionError("LIVE_E2E_SESSION_SECRET is required for live API smoke")
+        pytest.skip("LIVE_E2E_SESSION_SECRET is required for live API smoke")
 
     header = _encode_json({"alg": "HS256", "typ": "JWT"})
     payload = _encode_json(
@@ -55,7 +57,7 @@ def _signed_live_session_token() -> str:
 def _live_base_url() -> str:
     live_base_url = os.environ.get("LIVE_BASE_URL")
     if not live_base_url:
-        raise AssertionError("LIVE_BASE_URL is required for live API smoke")
+        pytest.skip("LIVE_BASE_URL is required for live API smoke")
     return live_base_url.rstrip("/")
 
 
