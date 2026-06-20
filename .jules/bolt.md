@@ -65,3 +65,7 @@
 ## 2024-05-18 - Optimize redundant tuple/string creation in dedupe loop
 **Learning:** Instantiating new tuples and using f-strings inside a tight loop creates unnecessary allocations that impact performance, especially when checking dictionary membership where most items are already present.
 **Action:** Inline lookup values directly, use early returns and `msg_id is not None` checks, and avoid generating formats like `f"<{normalized}>"` unless the basic `normalized` key wasn't sufficient, keeping inner loop bodies lean.
+
+## 2024-05-24 - Optimize WebDAV Project Folder Query
+**Learning:** Found an N+1 query vulnerability / O(n) filtering bottleneck where `get_project_folders_from_db` loaded all project folders for a tenant just to filter for a single `folder_uid` in Python logic.
+**Action:** When filtering database models by ID, always push the filtering logic to the database query layer (using `.where()`) rather than fetching the entire collection and filtering in-memory. This prevents memory bloat and speeds up queries significantly.
