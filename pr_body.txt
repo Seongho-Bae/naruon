@@ -1,3 +1,0 @@
-🎯 **What:** Added parameterized test coverage for previously untested pure functions `is_tenant_admin_role` and `is_admin_role` located in `backend/api/auth.py`.
-📊 **Coverage:** Covered all known variations of valid and invalid roles specified in the module's `ALLOWED_ROLES` to ensure role mapping bounds are thoroughly checked.
-✨ **Result:** Improved test coverage for `backend/api/auth.py` by filling out simple function testing gaps.
