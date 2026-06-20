@@ -1,0 +1,5 @@
+DashboardLayout.tsx 컴포넌트 내부에서 발생하는 인증 우회 취약점을 수정했습니다.
+
+💡 **What:** DashboardLayout에서 `/auth/session` 검증 로직을 추가하고, 인증되지 않은 사용자가 보호된 라우트(예: `/settings`)에 접근하지 못하도록 보호합니다. 사용자의 세션 클레임을 가져와 프로필 메뉴의 'Seongho'와 같은 하드코딩된 정보를 제거하고 실제 사용자 아이디를 출력합니다.
+🎯 **Why:** STRIX CI 보안 검사에서 발견된 'Authentication Bypass in Dashboard Routing' 취약점 문제를 해결하기 위함입니다.
+📊 **Testing:** DashboardLayout.test.tsx 내부에 `fetch` 모의(mock) 구문을 추가하고 테스트들을 비동기화(await act)하여 모든 37개의 테스트가 깨지지 않고 성공하는 것을 로컬에서 확인했습니다.

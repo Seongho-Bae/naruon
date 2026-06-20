@@ -11,8 +11,6 @@ import json
 import re
 import subprocess
 import sys
-import importlib.util
-import shutil
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -43,9 +41,7 @@ def read_repo_text(relative_path: str) -> str:
 
 
 def assert_dockerfile_stage_from(dockerfile: str, image: str, stage_alias: str) -> None:
-    pattern = (
-        rf"^FROM {re.escape(image)}@sha256:[0-9a-f]{{64}} AS {re.escape(stage_alias)}$"
-    )
+    pattern = rf"^FROM {re.escape(image)}@sha256:[0-9a-f]{{64}} AS {re.escape(stage_alias)}$"
     assert re.search(pattern, dockerfile, flags=re.MULTILINE), (
         f"missing pinned {image} stage alias {stage_alias}"
     )
@@ -54,9 +50,9 @@ def assert_dockerfile_stage_from(dockerfile: str, image: str, stage_alias: str) 
 def test_root_version_exists_and_is_initial_semver_release() -> None:
     version = read_repo_text("VERSION").strip()
 
-    assert re.fullmatch(r"\d+\.\d+\.\d+", version), (
-        f"VERSION is not valid SemVer: {version!r}"
-    )
+    assert re.fullmatch(
+        r"\d+\.\d+\.\d+", version
+    ), f"VERSION is not valid SemVer: {version!r}"
 
 
 def test_release_version_sources_are_synchronized() -> None:
@@ -72,8 +68,14 @@ def test_release_version_sources_are_synchronized() -> None:
     assert "COPY VERSION /app/VERSION" in dockerfile
     assert 'ARG OCI_IMAGE_TITLE="naruon"' in dockerfile
     assert 'org.opencontainers.image.title="${OCI_IMAGE_TITLE}"' in dockerfile
-    assert 'ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"' in dockerfile
-    assert 'org.opencontainers.image.source="${OCI_IMAGE_SOURCE}"' in dockerfile
+    assert (
+        'ARG OCI_IMAGE_SOURCE="https://github.com/Seongho-Bae/naruon"'
+        in dockerfile
+    )
+    assert (
+        'org.opencontainers.image.source="${OCI_IMAGE_SOURCE}"'
+        in dockerfile
+    )
 
 
 def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
@@ -86,12 +88,8 @@ def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
         assert annotation_key in frontend_dockerfile
         assert annotation_key in docker_publish_workflow
 
-    assert (
-        "DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index" in docker_publish_workflow
-    )
-    assert (
-        "annotations: ${{ steps.meta.outputs.annotations }}" in docker_publish_workflow
-    )
+    assert "DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index" in docker_publish_workflow
+    assert "annotations: ${{ steps.meta.outputs.annotations }}" in docker_publish_workflow
 
 
 def test_container_images_use_node_24_runtime() -> None:
@@ -143,14 +141,8 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
     assert "build-essential" not in dockerfile
     assert "cargo" not in dockerfile
     assert "libpq-dev" not in dockerfile
-    assert (
-        "COPY backend/requirements-hashes.txt /app/requirements-hashes.txt"
-        in dockerfile
-    )
-    assert (
-        "pip install --no-cache-dir --require-hashes -r requirements-hashes.txt"
-        in dockerfile
-    )
+    assert "COPY backend/requirements-hashes.txt /app/requirements-hashes.txt" in dockerfile
+    assert "pip install --no-cache-dir --require-hashes -r requirements-hashes.txt" in dockerfile
 
 
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
@@ -186,9 +178,9 @@ def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None
 
 
 def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
-    assert WORKFLOW_DIR.exists(), (
-        "required governance artifact is missing: .github/workflows"
-    )
+    assert (
+        WORKFLOW_DIR.exists()
+    ), "required governance artifact is missing: .github/workflows"
     governed_workflows = sorted(WORKFLOW_DIR.glob("*.yml")) + sorted(
         WORKFLOW_DIR.glob("*.yaml")
     )
@@ -272,9 +264,7 @@ def test_required_code_scanning_workflows_upload_scorecard_and_trivy_sarif() -> 
     )
     assert "results_format: sarif" in scorecard_workflow
     assert "Restore Scorecard SARIF ownership" in scorecard_workflow
-    assert (
-        'sudo chown "$(id -u):$(id -g)" scorecard-results.sarif' in scorecard_workflow
-    )
+    assert 'sudo chown "$(id -u):$(id -g)" scorecard-results.sarif' in scorecard_workflow
     assert "chmod u+rw scorecard-results.sarif" in scorecard_workflow
     assert "Preserve Scorecard SARIF categories" in scorecard_workflow
     assert (
@@ -336,23 +326,20 @@ def test_scorecard_sarif_normalizer_preserves_branch_protection_category(
     )
 
     normalizer = REPO_ROOT / "scripts/ci/ensure_scorecard_sarif_categories.py"
-    spec = importlib.util.spec_from_file_location("ensure_scorecard", normalizer)
-    assert spec and spec.loader, "Failed to load module"
-    ensure_scorecard_module = importlib.util.module_from_spec(spec)
-    sys.modules["ensure_scorecard"] = ensure_scorecard_module
-    spec.loader.exec_module(ensure_scorecard_module)
-
     sarif_path.chmod(0o444)
     try:
         for _ in range(2):
-            ret = ensure_scorecard_module.main([str(normalizer), str(sarif_path)])
-            assert ret == 0, f"Scorecard script failed with {ret}"
+            subprocess.run(
+                [sys.executable, str(normalizer), str(sarif_path)],
+                check=True,
+            )
     finally:
         sarif_path.chmod(0o644)
 
     normalized = json.loads(sarif_path.read_text(encoding="utf-8"))
     categories = [
-        run.get("automationDetails", {}).get("id") for run in normalized["runs"]
+        run.get("automationDetails", {}).get("id")
+        for run in normalized["runs"]
     ]
     assert categories.count("supply-chain/branch-protection") == 1
     branch_protection_run = next(
@@ -375,24 +362,17 @@ def test_opencode_review_prompt_requires_active_mcp_evidence_use() -> None:
     assert "web_search for bounded external lookups" in workflow
     assert "If a configured MCP source is unavailable or not applicable" in workflow
     assert "Lead with findings ordered by severity" in workflow
-    assert (
-        "Distinguish blocking findings from important suggestions and nits" in workflow
-    )
+    assert "Distinguish blocking findings from important suggestions and nits" in workflow
     assert "request changes only for actionable blockers" in workflow.lower()
     assert "regression test direction" in workflow
     assert "OpenCode-owned review structure compatible with Copilot Review" in workflow
     assert "CodeRabbitAI's severity-ordered, actionable finding format" in workflow
-    assert (
-        "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer"
-        in workflow
-    )
+    assert "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer" in workflow
     assert "## Pull request overview" in workflow
     assert "## Findings" in workflow
     assert "No blocking findings." in workflow
     assert "Keep raw tool logs out of the main review body" in workflow
-    assert (
-        "<summary>Failed check evidence for line-specific fixes</summary>" in workflow
-    )
+    assert "<summary>Failed check evidence for line-specific fixes</summary>" in workflow
     assert '"codegraph"' in workflow
     assert '"deepwiki"' in workflow
     assert '"context7"' in workflow
@@ -417,7 +397,10 @@ def test_opencode_billing_lock_failed_checks_publish_neutral_comment(
     assert "build_billing_lock_body()" in workflow
     assert 'create_pull_review "COMMENT"' in workflow
     assert "No source-code findings." in workflow
-    assert "do not invent source-backed REQUEST_CHANGES findings for it" in workflow
+    assert (
+        "do not invent source-backed REQUEST_CHANGES findings for it"
+        in workflow
+    )
 
     evidence_file = tmp_path / "failed-check-evidence.md"
     evidence_file.write_text(
@@ -440,12 +423,10 @@ def test_opencode_billing_lock_failed_checks_publish_neutral_comment(
         encoding="utf-8",
     )
 
-    fallback = subprocess.run(  # nosec B603
+    fallback = subprocess.run(
         [
-            shutil.which("bash"),
-            str(
-                REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"
-            ),
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
             str(evidence_file),
             str(repo_root),
         ],
@@ -523,9 +504,7 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
         == 2
     )
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
-    pull_request_block = workflow.split("pull_request:", 1)[1].split("permissions:", 1)[
-        0
-    ]
+    pull_request_block = workflow.split("pull_request:", 1)[1].split("permissions:", 1)[0]
     assert "tags:" in push_block
     assert "branches:" not in push_block
     assert "develop" in pull_request_block
@@ -540,9 +519,7 @@ def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_
     assert "AKS_KUBECONFIG_CONTENT: ${{ secrets.AKS_KUBECONFIG }}" in workflow
     assert "configured=false" in workflow
     assert "skipping deploy workflow" in workflow
-    assert (
-        "needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'" in workflow
-    )
+    assert "needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'" in workflow
 
 
 def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
@@ -558,7 +535,7 @@ def test_frontend_dockerfile_builds_and_starts_production_artifact() -> None:
     assert "NEXT_PUBLIC_API_URL" not in docker_publish_workflow
     assert "NEXT_PUBLIC_API_URL" not in frontend_deployment
     assert "BACKEND_INTERNAL_URL" in frontend_deployment
-    assert "ALLOW_DOCKER_BACKEND_INTERNAL_URL" in frontend_deployment
+    assert 'ALLOW_DOCKER_BACKEND_INTERNAL_URL' in frontend_deployment
     assert "BACKEND_INTERNAL_URL" in dockerfile
     assert dockerfile.index("BACKEND_INTERNAL_URL is intentionally runtime-only") < (
         dockerfile.index("RUN pnpm run build")
@@ -584,10 +561,7 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert "pnpm run build" in dockerfile
     assert "FROM backend-runtime" in dockerfile
     # Node binary is copied into /app/bin (owned by appuser) to avoid USER root.
-    assert (
-        "COPY --from=frontend-builder --chown=appuser:appuser /usr/local/bin/node /app/bin/node"
-        in dockerfile
-    )
+    assert "COPY --from=frontend-builder --chown=appuser:appuser /usr/local/bin/node /app/bin/node" in dockerfile
     assert "ENV PATH=/app/bin:$PATH" in dockerfile
     assert "USER root" not in dockerfile
     assert "nodejs" not in dockerfile
@@ -598,7 +572,9 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
     assert '"/app/scripts/docker_entrypoint.sh"' in dockerfile
     assert "RUN chmod +x /app/scripts/docker_entrypoint.sh" in dockerfile
     assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
-    backend_cmd = 'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    backend_cmd = (
+        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
+    )
     assert dockerfile.find("USER appuser") < dockerfile.find(backend_cmd)
     assert dockerfile.rfind("USER appuser") < dockerfile.find(
         'CMD ["/app/scripts/docker_entrypoint.sh"]'
@@ -611,10 +587,7 @@ def test_backend_dockerfile_uses_modern_env_syntax() -> None:
 def test_combined_image_start_script_preflights_env_and_logs_service_exit() -> None:
     start_script = read_repo_text("backend/scripts/docker_entrypoint.sh")
 
-    assert (
-        "for var in DATABASE_URL AUTH_SESSION_HMAC_SECRET ENCRYPTION_KEY"
-        in start_script
-    )
+    assert "for var in DATABASE_URL AUTH_SESSION_HMAC_SECRET ENCRYPTION_KEY" in start_script
     assert "Fernet.generate_key()" in start_script
     assert "validate_auth_session_hmac_secret_value" in start_script
     assert "AUTH_SESSION_HMAC_SECRET is invalid" in start_script
@@ -711,10 +684,7 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "python scripts/migrate_db.py && python scripts/start_backend.py" in compose
     assert "scripts/start_backend.py" in live_e2e_compose
     assert "Dockerfile.ollama" in live_e2e_compose
-    assert (
-        "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}"
-        in live_e2e_compose
-    )
+    assert "DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for live E2E}" in live_e2e_compose
     assert "postgresql+asyncpg://" not in live_e2e_compose
     assert '"127.0.0.1:18080:8080"' in live_e2e_compose
     assert 'OLLAMA_NO_CLOUD: "true"' in compose
@@ -740,10 +710,7 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
     assert "TRUSTED_FRONTEND_ORIGINS: http://127.0.0.1:18080" in live_frontend_block
     live_nginx = read_repo_text("tests/live/nginx.conf")
     assert "proxy_read_timeout 600s" in live_nginx
-    assert (
-        'add_header Referrer-Policy "strict-origin-when-cross-origin" always;'
-        in live_nginx
-    )
+    assert 'add_header Referrer-Policy "strict-origin-when-cross-origin" always;' in live_nginx
     assert 'add_header X-Content-Type-Options "nosniff" always;' in live_nginx
     assert 'add_header X-Frame-Options "DENY" always;' in live_nginx
     assert "upstream live_backend" not in live_nginx
@@ -754,7 +721,8 @@ def test_backend_compose_commands_use_startup_preflight() -> None:
         assert "proxy_set_header X-Forwarded-Host $http_host;" in location
         assert "proxy_set_header X-Real-IP $remote_addr;" in location
         assert (
-            "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;" in location
+            "proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;"
+            in location
         )
         assert "proxy_set_header X-Forwarded-Proto $scheme;" in location
         assert "proxy_set_header Upgrade $http_upgrade;" in location
@@ -786,21 +754,21 @@ def test_compose_log_scanner_allows_nginx_stderr_startup_notices() -> None:
         ]
     )
 
-    scanner_script = REPO_ROOT / "scripts/check_compose_logs.py"
-    spec = importlib.util.spec_from_file_location("check_compose_logs", scanner_script)
-    assert spec and spec.loader, "Failed to load module"
-    check_compose_logs_module = importlib.util.module_from_spec(spec)
-    sys.modules["check_compose_logs"] = check_compose_logs_module
-    spec.loader.exec_module(check_compose_logs_module)
-
-    unexpected, allowed = check_compose_logs_module.scan_lines(
-        nginx_startup_lines.splitlines()
+    result = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "scripts/check_compose_logs.py")],
+        input=nginx_startup_lines,
+        text=True,
+        capture_output=True,
+        check=False,
     )
-    assert not unexpected, f"Unexpected lines found: {unexpected}"
-    assert len(allowed) == 7, f"Expected 7 allowed lines, got {len(allowed)}"
+
+    assert result.returncode == 0, result.stderr
+    assert "PASS compose log policy: allowed_count=7" in result.stdout
 
 
-def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> None:
+def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -> (
+    None
+):
     workflow = read_repo_text(".github/workflows/strix.yml")
     gate_script = read_repo_text("scripts/ci/strix_quick_gate.sh")
 
@@ -819,20 +787,15 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "secrets.STRIX_LLM ||" not in workflow
     assert "https://models.github.ai/inference" in workflow
     assert "LLM_API_BASE_FILE" in workflow
-    assert (
-        "STRIX_GITHUB_MODELS_TOKEN is required for GitHub Models Strix scans"
-        in workflow
-    )
+    assert "STRIX_GITHUB_MODELS_TOKEN is required for GitHub Models Strix scans" in workflow
     assert "secrets.STRIX_GITHUB_MODELS_TOKEN || github.token" in workflow
-    assert (
-        "steps.gate.outputs.provider_mode == 'github_models' && (secrets.STRIX_GITHUB_MODELS_TOKEN || github.token)"
-        in workflow
-    )
+    assert "steps.gate.outputs.provider_mode == 'github_models' && (secrets.STRIX_GITHUB_MODELS_TOKEN || github.token)" in workflow
     assert "openai/gpt-5-mini* | openai/gpt-5-nano*" in workflow
     assert "vertex_ai/gemini-3.1-pro-preview-customtools" in workflow
     assert (
         "secrets.STRIX_LLM == 'vertex_ai/gemini-3.1-pro-preview-customtools' "
-        "&& 'vertex_ai/gemini-2.5-flash'" not in workflow
+        "&& 'vertex_ai/gemini-2.5-flash'"
+        not in workflow
     )
     assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
     assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
@@ -848,7 +811,8 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert "PYTHONWARNINGS:" not in workflow
     assert (
         'child_env["PYTHONWARNINGS"] = '
-        '"ignore:Pydantic serializer warnings:UserWarning:pydantic.main"' in gate_script
+        '"ignore:Pydantic serializer warnings:UserWarning:pydantic.main"'
+        in gate_script
     )
     assert "ignore::UserWarning" not in workflow
 
@@ -856,9 +820,9 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
 def test_strix_workflow_validates_vertex_credentials_before_export() -> None:
     workflow = read_repo_text(".github/workflows/strix.yml")
 
-    assert 'credentials_path.read_text(encoding="utf-8")' in workflow
+    assert "credentials_path.read_text(encoding=\"utf-8\")" in workflow
     assert "object_pairs_hook=reject_duplicate_json_keys" in workflow
-    assert 'raise ValueError("duplicate credential key")' in workflow
+    assert "raise ValueError(\"duplicate credential key\")" in workflow
     assert (
         "except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError):"
         in workflow
@@ -877,13 +841,12 @@ def test_opencode_review_fallbacks_do_not_emit_successful_error_annotations() ->
 
     assert "continue-on-error: true" not in workflow
     assert 'printf \'review_status=%s\\n\' "$1" >>"$GITHUB_OUTPUT"' in workflow
-    assert 'record_review_status "failed"' in workflow
-    assert 'record_review_status "success"' in workflow
+    assert "record_review_status \"failed\"" in workflow
+    assert "record_review_status \"success\"" in workflow
+    assert "steps.opencode_review_primary.outputs.review_status != 'success'" in workflow
     assert (
-        "steps.opencode_review_primary.outputs.review_status != 'success'" in workflow
-    )
-    assert (
-        "steps.opencode_review_primary.outputs.review_status == 'success'" in workflow
+        "steps.opencode_review_primary.outputs.review_status == 'success'"
+        in workflow
     )
     assert "steps.opencode_review_primary.outcome" not in workflow
     assert "steps.opencode_review_fallback.outcome" not in workflow
@@ -948,12 +911,10 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         encoding="utf-8",
     )
 
-    fallback = subprocess.run(  # nosec B603
+    fallback = subprocess.run(
         [
-            shutil.which("bash"),
-            str(
-                REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"
-            ),
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
             str(evidence_file),
             str(repo_root),
         ],
@@ -971,7 +932,8 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         "Frontend Security Issues: XSS and Insecure Data Handling"
     ) in fallback.stdout
     assert (
-        "Strix report from openai/gpt-5: Authentication Bypass" not in fallback.stdout
+        "Strix report from openai/gpt-5: Authentication Bypass"
+        not in fallback.stdout
     )
     assert fallback.stdout.count("Strix report from deepseek/") == 2
     normalized_agents = " ".join(agents.split())
@@ -1022,9 +984,9 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         ),
         encoding="utf-8",
     )
-    good_validation = subprocess.run(  # nosec B603
+    good_validation = subprocess.run(
         [
-            shutil.which("bash"),
+            "bash",
             str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
             str(good_control_file),
             str(failed_checks_file),
@@ -1065,9 +1027,9 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         ),
         encoding="utf-8",
     )
-    collapsed_validation = subprocess.run(  # nosec B603
+    collapsed_validation = subprocess.run(
         [
-            shutil.which("bash"),
+            "bash",
             str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
             str(collapsed_control_file),
             str(failed_checks_file),
@@ -1126,12 +1088,10 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         encoding="utf-8",
     )
 
-    fallback = subprocess.run(  # nosec B603
+    fallback = subprocess.run(
         [
-            shutil.which("bash"),
-            str(
-                REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"
-            ),
+            "bash",
+            str(REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"),
             str(evidence_file),
             str(repo_root),
         ],
@@ -1173,9 +1133,9 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         ),
         encoding="utf-8",
     )
-    good_validation = subprocess.run(  # nosec B603
+    good_validation = subprocess.run(
         [
-            shutil.which("bash"),
+            "bash",
             str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
             str(good_control_file),
             str(failed_checks_file),
@@ -1213,9 +1173,9 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         ),
         encoding="utf-8",
     )
-    wrong_validation = subprocess.run(  # nosec B603
+    wrong_validation = subprocess.run(
         [
-            shutil.which("bash"),
+            "bash",
             str(REPO_ROOT / "scripts/ci/validate_opencode_failed_check_review.sh"),
             str(wrong_attribution_file),
             str(failed_checks_file),
