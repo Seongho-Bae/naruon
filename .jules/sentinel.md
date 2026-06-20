@@ -12,3 +12,7 @@
 **Vulnerability:** A path traversal vulnerability existed in the `/dav/{path:path}` endpoint where `_dav_path_owner_user_id` extracted the owner user ID using `path.partition("/")` without validating or normalizing `..` segments.
 **Learning:** This allowed an attacker to supply a path like `my_user_id/../other_user_id/projects`, tricking the authorization check `_ensure_dav_owner_scope` into passing because the first segment matched their authenticated `user_id`. The remaining path could then be used downstream to access resources of `other_user_id`. When testing this against FastAPI's TestClient, the TestClient normalizes `../` automatically; `..%2F` must be used to test the router correctly.
 **Prevention:** Always validate or normalize dynamic paths used for authorization constraints, explicitly rejecting paths containing traversal segments like `..` before parsing hierarchical data.
+## 2026-06-20 - Missing Auth on Data Surface
+**Vulnerability:** The data quality surface endpoint `/api/data/quality-surface` was missing the `_require_authoritative_workspace_scope` dependency check.
+**Learning:** This allowed the endpoint to be accessed using non-authoritative session types (like `hmac`), bypassing the explicit check required for endpoints exposing data surfaces, which are meant to be restricted to authoritative workspace contexts.
+**Prevention:** Ensure that all endpoints exposing broad workspace data or quality metrics implement the `_require_authoritative_workspace_scope` check and avoid relying solely on the base `get_auth_context`.
