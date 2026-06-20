@@ -275,7 +275,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
     { title: '받은 메일', value: loading ? '-' : emails.length.toString(), diff: unreadCount > 0 ? `+${unreadCount}` : '-', diffText: '안 읽음', icon: Inbox, color: 'text-primary' },
     { title: '답변 대기', value: loading ? '-' : pendingReplyCount.toString(), diff: pendingReplyCount > 0 ? `${pendingReplyCount}건` : '-', diffText: '보낸 메일', icon: Send, color: 'text-rose-500' },
     { title: '일정 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : calendarSources.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${writableCalendarSourceCount}개`, diffText: sourceEvidenceError ? '원본 확인' : '반영 가능', icon: CalendarDays, color: sourceEvidenceError ? 'text-red-500' : 'text-blue-500' },
-    { title: '대기 중 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: 'source-linked', icon: CheckCircle2, color: 'text-green-500' },
+    { title: '대기 작업', value: loading ? '-' : pendingTasks.length.toString(), diff: '-', diffText: 'source-linked', icon: CheckCircle2, color: 'text-green-500' },
     { title: '프로젝트 원본', value: sourceEvidenceError ? '오류' : sourceEvidenceLoading ? '-' : projectFolders.length.toString(), diff: sourceEvidenceError ? '확인 필요' : sourceEvidenceLoading ? '-' : `${projectFolders.length}개`, diffText: 'WebDAV 폴더', icon: Network, color: sourceEvidenceError ? 'text-red-500' : 'text-purple-500' },
     { title: '작업 완료율', value: loading ? '-' : `${taskCompletionRate}%`, diff: loading ? '-' : `${completedTaskCount}/${tasks.length}`, diffText: '완료', icon: CheckCircle2, color: 'text-emerald-500' },
   ]), [
@@ -482,6 +482,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">오늘의 판단 포인트</h2>
+              <a href="/tasks?new=true" className="text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">실행 항목 만들기</a>
             </div>
             <div className="space-y-3">
               <div className="text-xs font-bold text-muted-foreground">답변 대기 메일</div>
@@ -511,13 +512,13 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
 
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold">대기 중 작업 {pendingTasks.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{pendingTasks.length}건</span>}</h2>
+              <h2 className="text-base font-bold">대기 작업 {pendingTasks.length > 0 && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">{pendingTasks.length}건</span>}</h2>
             </div>
             <div className="space-y-3">
               {loading ? (
                 <div className="text-sm text-muted-foreground p-2">작업을 불러오는 중...</div>
               ) : pendingTasks.length === 0 ? (
-                <div className="text-sm text-muted-foreground p-2">대기 중인 작업이 없습니다.</div>
+                <div className="text-sm text-muted-foreground p-2">대기 작업이 없습니다.</div>
               ) : pendingTasks.slice(0, 3).map((task) => {
                 const pKor = mapPriorityToKorean(task.priority);
                 const pClass = pKor === '긴급' || pKor === '높음' ? 'text-red-500' : pKor === '보통' ? 'text-green-500' : 'text-muted-foreground';
@@ -550,7 +551,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
           <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-base font-bold">
-                일정 후보 근거{' '}
+                일정 충돌{' '}
                 {calendarCandidateEvidence.status === 'success'
                   ? <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">일정 조율 후보 {calendarCandidateEvidence.results.length}건</span>
                   : !sourceEvidenceError && calendarSources.length > 0
@@ -604,7 +605,7 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                 );
               })}
             </div>
-            <a href="/calendar" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조정하기</a>
+            <a href="/calendar" className="mt-4 block w-full rounded-sm text-center text-sm font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">일정 조율하기</a>
           </div>
         </div>
 
@@ -634,6 +635,10 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                   <div suppressHydrationWarning className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
                     {formatStartupDate(mail.date || '')}
                     {mail.unread && <span className="size-2 rounded-full bg-primary" />}
+                  </div>
+                  <div className="flex gap-2 ml-2">
+                    <a href={`/mail?id=${mail.id}`} className="rounded bg-primary/10 px-2 py-1 text-xs font-bold text-primary hover:bg-primary/20">열기</a>
+                    <button className="rounded bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground hover:bg-secondary/80">보류</button>
                   </div>
                 </div>
               ))}
