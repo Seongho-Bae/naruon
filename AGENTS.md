@@ -118,7 +118,9 @@
   existing example, cross-file counterpart, current official docs, or failed
   check/log evidence), flag unrelated PR scope drift as scope risk instead of
   burying it in style notes, and make `suggested_diff` a GitHub
-  suggestion-ready minimal diff when possible.
+  suggestion-ready minimal diff when possible. Include one compact Mermaid
+  graph in the human-readable review body that maps the changed surface to the
+  main risk, fix, and verification path.
 - OpenCode `Review Overview` comments are durable gate evidence. Publish them
   through an idempotent marker such as `<!-- opencode-review-overview -->` and
   update the existing comment instead of deleting it after approval, failed
