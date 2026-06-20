@@ -47,6 +47,16 @@ describe("NetworkGraph", () => {
     }
   }
 
+  async function renderGraph() {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<NetworkGraph />);
+    });
+  }
+
   afterEach(() => {
     if (root) {
       act(() => root?.unmount());
@@ -57,6 +67,42 @@ describe("NetworkGraph", () => {
     resizeObserverCallback = null;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+  });
+
+  it("announces an empty graph as a polite status region", async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        jsonResponse({
+          nodes: [],
+          edges: [],
+        }),
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderGraph();
+    await flushAsyncWork();
+
+    const status = container?.querySelector('[role="status"][aria-live="polite"]');
+    expect(status?.textContent).toContain("관계 데이터가 없습니다");
+    expect(Network).not.toHaveBeenCalled();
+  });
+
+  it("announces graph loading failures as a polite alert", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fetchMock = vi.fn(() => Promise.reject(new Error("network unavailable")));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await renderGraph();
+      await flushAsyncWork();
+
+      const alert = container?.querySelector('[role="alert"][aria-live="polite"]');
+      expect(alert?.textContent).toContain("관계 맥락을 불러오지 못했습니다");
+      expect(Network).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it("coerces graph tooltip titles to text-only DOM nodes before vis-network renders them", async () => {
@@ -71,13 +117,7 @@ describe("NetworkGraph", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<NetworkGraph />);
-    });
+    await renderGraph();
     await flushAsyncWork();
 
     expect(Network).toHaveBeenCalledTimes(1);
@@ -89,8 +129,8 @@ describe("NetworkGraph", () => {
 
     expect(nodeTitle).toBeInstanceOf(HTMLElement);
     expect(edgeTitle).toBeInstanceOf(HTMLElement);
-    expect((nodeTitle as HTMLElement).textContent).toBe("");
-    expect((edgeTitle as HTMLElement).textContent).toBe("");
+    expect((nodeTitle as HTMLElement).textContent).toBe(maliciousTitle);
+    expect((edgeTitle as HTMLElement).textContent).toBe(maliciousTitle);
     expect((nodeTitle as HTMLElement).innerHTML).not.toContain("<img");
     expect((edgeTitle as HTMLElement).innerHTML).not.toContain("<img");
   });
@@ -107,21 +147,16 @@ describe("NetworkGraph", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<NetworkGraph />);
-    });
+    await renderGraph();
     await flushAsyncWork();
 
     expect(Network).toHaveBeenCalledTimes(1);
     const networkData = vi.mocked(Network).mock.calls[0]?.[1];
     const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
 
-    expect(nodes[0]?.label).toBe("");
+    expect(nodes[0]?.label).toBe("&lt;img src=x onerror=&quot;globalThis.__xss = true&quot;&gt;");
     expect(nodes[0]?.label).not.toContain("<img");
+    expect(container.textContent).toContain(maliciousLabel);
     expect(container.innerHTML).not.toContain("<img");
   });
 
@@ -136,13 +171,7 @@ describe("NetworkGraph", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<NetworkGraph />);
-    });
+    await renderGraph();
     await flushAsyncWork();
 
     expect(container.textContent).toContain("관계 이해");
@@ -166,13 +195,7 @@ describe("NetworkGraph", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<NetworkGraph />);
-    });
+    await renderGraph();
     await flushAsyncWork();
 
     expect(Network).toHaveBeenCalledTimes(1);
@@ -195,13 +218,7 @@ describe("NetworkGraph", () => {
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
 
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    await act(async () => {
-      root?.render(<NetworkGraph />);
-    });
+    await renderGraph();
     await flushAsyncWork();
 
     expect(Network).toHaveBeenCalledTimes(1);
