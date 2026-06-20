@@ -33,9 +33,9 @@ jobs:
   scan-pr-queue:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
+      actions: read
       checks: read
-      contents: write
+      contents: read
       pull-requests: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
