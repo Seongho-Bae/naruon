@@ -37,4 +37,4 @@ async def test_assign_thread_id_batches_many_reference_lookups():
 
     assert thread_id == "ref0@example.com"
     assert session.execute_count == 1
-    assert "email_records.message_id" in str(session.queries[0]).lower()
+    assert "emails.message_id" in str(session.queries[0]).lower()
