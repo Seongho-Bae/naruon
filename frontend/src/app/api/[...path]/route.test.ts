@@ -41,6 +41,7 @@ describe("/api runtime proxy route", () => {
         headers: {
           Authorization: "Bearer attacker-controlled-token",
           Cookie: `naruon_session=${SIGNED_SESSION_TOKEN}`,
+          Origin: "https://frontend.naruon.net",
           "Content-Type": "application/json",
           "X-User-Id": "public-user-id",
         },
@@ -71,6 +72,7 @@ describe("/api runtime proxy route", () => {
         method: "POST",
         headers: {
           Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Origin: "https://frontend.naruon.net",
         },
         body: "{}",
       },
@@ -198,6 +200,7 @@ describe("/api runtime proxy route", () => {
         method: "POST",
         headers: {
           Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          Origin: "https://frontend.naruon.net",
         },
         body: "{}",
       },
@@ -211,5 +214,32 @@ describe("/api runtime proxy route", () => {
       target_url:
         "https://api.naruon.net/api/ontology/relationships?source_message_id=%3Cabc%40example.com%3E&source_thread_id=thread%2Fone",
     });
+  });
+
+  it("rejects state-changing requests when both Origin and Referer are absent", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const request = new NextRequest(
+      "https://frontend.naruon.net/api/accounts/config",
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${SIGNED_SESSION_TOKEN}`,
+          // Both Origin and Referer are intentionally omitted
+        },
+        body: "{}",
+      },
+    );
+
+    const response = await PUT(request, {
+      params: Promise.resolve({ path: ["accounts", "config"] }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error_code: "csrf_origin_rejected",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
