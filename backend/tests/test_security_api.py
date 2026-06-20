@@ -1,3 +1,4 @@
+from api.security import _obfuscate_id
 import base64
 from datetime import datetime, timezone
 import hashlib
@@ -368,13 +369,18 @@ def test_access_surface_returns_org_scoped_sources_and_policy_decisions(admin_cl
     assert data["audit_event"] == "security.access_surface.viewed"
     assert data["viewer"]["role"] == "tenant_admin"
     source_ids = {source["source_id"] for source in data["sources"]}
-    assert source_ids == {"webdav_src_org_primary", "caldav_src_primary"}
+    assert source_ids == {
+        _obfuscate_id("webdav_src_org_primary"),
+        _obfuscate_id("caldav_src_primary"),
+    }
     assert "webdav_src_other_org" not in response.text
     assert "caldav_src_other_org" not in response.text
-    assert data["connector_events"][0]["event_uid"] == "connector_evt_heartbeat"
+    assert data["connector_events"][0]["event_uid"] == _obfuscate_id(
+        "connector_evt_heartbeat"
+    )
     assert "connector_evt_other_org" not in response.text
     audit_event_ids = {event["event_uid"] for event in data["durable_audit_events"]}
-    assert audit_event_ids == {"audit_evt_provider_update"}
+    assert audit_event_ids == {_obfuscate_id("audit_evt_provider_update")}
     assert "audit_evt_other_org" not in response.text
     assert data["durable_audit_events"][0]["workspace_id"] == "workspace-org-acme"
     reasons = {decision["reason"] for decision in data["policy_decisions"]}
@@ -435,11 +441,14 @@ def test_member_surface_only_returns_owned_sources(mock_db):
 
     assert response.status_code == 200, response.text
     source_ids = {source["source_id"] for source in response.json()["sources"]}
-    assert source_ids == {"webdav_src_owned", "caldav_src_owned"}
+    assert source_ids == {
+        _obfuscate_id("webdav_src_owned"),
+        _obfuscate_id("caldav_src_owned"),
+    }
     audit_event_ids = {
         event["event_uid"] for event in response.json()["durable_audit_events"]
     }
-    assert audit_event_ids == {"audit_evt_member"}
+    assert audit_event_ids == {_obfuscate_id("audit_evt_member")}
 
 
 def test_access_surface_rejects_public_identity_headers_without_signed_session(mock_db):
@@ -716,16 +725,12 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
             )
             await conn.execute(
                 text(
-                    "DELETE FROM connector_signal_events "
-                    "WHERE event_uid = :event_uid"
+                    "DELETE FROM connector_signal_events WHERE event_uid = :event_uid"
                 ),
                 {"event_uid": event_uid},
             )
             await conn.execute(
-                text(
-                    "DELETE FROM security_audit_events "
-                    "WHERE event_uid = :event_uid"
-                ),
+                text("DELETE FROM security_audit_events WHERE event_uid = :event_uid"),
                 {"event_uid": audit_uid},
             )
         await engine.dispose()
@@ -733,10 +738,12 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     assert response.status_code == 200, response.text
     body = response.json()
     source_ids = {source["source_id"] for source in body["sources"]}
-    assert source_uid in source_ids
-    assert caldav_uid in source_ids
-    assert event_uid in {event["event_uid"] for event in body["connector_events"]}
-    assert audit_uid in {
+    assert _obfuscate_id(source_uid) in source_ids
+    assert _obfuscate_id(caldav_uid) in source_ids
+    assert _obfuscate_id(event_uid) in {
+        event["event_uid"] for event in body["connector_events"]
+    }
+    assert _obfuscate_id(audit_uid) in {
         event["event_uid"] for event in body["durable_audit_events"]
     }
     assert "account_id" not in response.text

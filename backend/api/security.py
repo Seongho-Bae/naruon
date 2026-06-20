@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from datetime import datetime, timezone
 from typing import Literal
 from urllib.parse import urlparse
@@ -119,6 +121,12 @@ class SecurityAccessSurfaceResponse(BaseModel):
     policy_decisions: list[PolicyDecisionSummary]
     external_share_reviews: list[ExternalShareReview]
     policy_order: list[PolicyOrderStep]
+
+
+
+def _obfuscate_id(original_id: str) -> str:
+    """Obfuscate direct internal resource identifiers."""
+    return str(uuid.uuid5(uuid.NAMESPACE_OID, original_id))
 
 
 def _datetime_to_utc_iso(value: datetime) -> str:
@@ -301,7 +309,7 @@ def _webdav_source(
         evidence_source="webdav_accounts",
     )
     return GovernanceSource(
-        source_id=account.source_uid,
+        source_id=_obfuscate_id(account.source_uid),
         source_type="webdav_repository",
         source_label="WebDAV repository",
         source_host=_host_from_url(account.server_url),
@@ -340,7 +348,7 @@ def _calendar_source(
     if source.writeback_enabled:
         capabilities.extend(["write", "etag"])
     return GovernanceSource(
-        source_id=source.source_uid,
+        source_id=_obfuscate_id(source.source_uid),
         source_type=source_type,
         source_label=source.provider_name,
         source_host=source.source_host,
@@ -357,7 +365,7 @@ def _calendar_source(
 
 def _connector_evidence(event: ConnectorSignalEvent) -> ConnectorEvidence:
     return ConnectorEvidence(
-        event_uid=event.event_uid,
+        event_uid=_obfuscate_id(event.event_uid),
         signal_key=event.signal_key,
         state_code=event.state_code,
         detail_text=event.detail_text,
@@ -367,14 +375,14 @@ def _connector_evidence(event: ConnectorSignalEvent) -> ConnectorEvidence:
 
 def _durable_audit_evidence(event: SecurityAuditEvent) -> DurableAuditEvidence:
     return DurableAuditEvidence(
-        event_uid=event.event_uid,
+        event_uid=_obfuscate_id(event.event_uid),
         actor_user_id=event.actor_user_id,
         actor_role=event.actor_role,
         organization_id=event.organization_id,
         workspace_id=event.workspace_id,
         event_action=event.event_action,
         resource_type=event.resource_type,
-        resource_uid=event.resource_uid,
+        resource_uid=_obfuscate_id(event.resource_uid) if event.resource_uid else None,
         evidence_source=event.evidence_source,
         detail_text=event.detail_text,
         observed_at=_datetime_to_utc_iso(event.observed_at),
