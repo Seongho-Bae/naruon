@@ -259,8 +259,11 @@ async def get_emails(
         .order_by(Email.date.desc())
         .limit(candidate_window)
     )
-    emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    emails = list(result.scalars().all())
+    # ⚡ Bolt: Reverse the list in-place (O(N)) instead of sorting (O(N log N)).
+    # The database already sorted the records by date descending, so reversing it
+    # yields chronological order without redundant sorting overhead.
+    emails.reverse()
 
     grouped = {}
     # ⚡ Bolt: Use defaultdict to avoid redundant membership checks and dictionary access overhead.
@@ -290,7 +293,10 @@ async def get_emails(
         ]
     else:
         visible_groups = list(grouped.values())
-    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
+    # ⚡ Bolt: Visible groups were appended sequentially in ascending order.
+    # Reversing it gives us descending order faster than re-sorting.
+    visible_groups.reverse()
+    sorted_groups = visible_groups[:limit]
 
     items = []
     for email in sorted_groups:
