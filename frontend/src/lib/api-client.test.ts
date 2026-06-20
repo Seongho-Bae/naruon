@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClient } from "./api-client";
 
-const SIGNED_SESSION_TOKEN = "header.payload.signature";
+const SIGNED_SESSION_TOKEN = "test-header.test-payload.test-signature";
 
 function jsonResponse(body: unknown) {
   return {
