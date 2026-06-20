@@ -57,6 +57,13 @@ describe("NetworkGraph", () => {
     });
   }
 
+  function getMountedContainer(): HTMLDivElement {
+    if (!container) {
+      throw new Error("NetworkGraph test container was not mounted.");
+    }
+    return container;
+  }
+
   afterEach(() => {
     if (root) {
       act(() => root?.unmount());
@@ -150,14 +157,15 @@ describe("NetworkGraph", () => {
     await renderGraph();
     await flushAsyncWork();
 
+    const mountedContainer = getMountedContainer();
     expect(Network).toHaveBeenCalledTimes(1);
     const networkData = vi.mocked(Network).mock.calls[0]?.[1];
     const nodes = Array.isArray(networkData?.nodes) ? networkData.nodes : [];
 
     expect(nodes[0]?.label).toBe("&lt;img src=x onerror=&quot;globalThis.__xss = true&quot;&gt;");
     expect(nodes[0]?.label).not.toContain("<img");
-    expect(container.textContent).toContain(maliciousLabel);
-    expect(container.innerHTML).not.toContain("<img");
+    expect(mountedContainer.textContent).toContain(maliciousLabel);
+    expect(mountedContainer.innerHTML).not.toContain("<img");
   });
 
   it("renders a Korean text fallback for graph relationships", async () => {
@@ -174,11 +182,12 @@ describe("NetworkGraph", () => {
     await renderGraph();
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("관계 이해");
-    expect(container.textContent).toContain("1개 노드");
-    expect(container.textContent).toContain("1개 관계");
-    expect(container.textContent).toContain("김지현");
-    expect(container.textContent).not.toContain("nodes and");
+    const mountedContainer = getMountedContainer();
+    expect(mountedContainer.textContent).toContain("관계 이해");
+    expect(mountedContainer.textContent).toContain("1개 노드");
+    expect(mountedContainer.textContent).toContain("1개 관계");
+    expect(mountedContainer.textContent).toContain("김지현");
+    expect(mountedContainer.textContent).not.toContain("nodes and");
   });
 
   it("normalizes backend source target edges before rendering the graph", async () => {
