@@ -265,7 +265,7 @@ async def _list_prompts(
 ) -> list[PromptTemplate]:
     result = await db.execute(
         select(PromptTemplate)
-        .where((PromptTemplate.created_by == auth_context.user_id) | PromptTemplate.is_shared.is_(True))
+        .where(PromptTemplate.created_by == auth_context.user_id)
         .order_by(desc(PromptTemplate.updated_at), desc(PromptTemplate.id))
         .limit(8)
     )

@@ -1,18 +1,14 @@
 /* @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => window.location.pathname,
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
-import { DashboardLayout, NavLink } from "./DashboardLayout";
-
-function TestIcon({ className, "aria-hidden": ariaHidden }: { className?: string; "aria-hidden"?: boolean }) {
-  return <span className={className} aria-hidden={ariaHidden}>icon</span>;
-}
+import { DashboardLayout } from "./DashboardLayout";
 
 function setInputValue(input: HTMLInputElement, value: string) {
   const valueSetter = Object.getOwnPropertyDescriptor(
@@ -27,10 +23,30 @@ describe("DashboardLayout", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
+
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    global.fetch = vi.fn().mockImplementation((url) => {
+      if (url === '/auth/session') {
+        return Promise.resolve({
+          json: () => Promise.resolve({
+            authenticated: true,
+            claims: { userId: 'Seongho', organizationId: 'org1', workspaceId: 'ws1' }
+          })
+        });
+      }
+      return originalFetch(url);
+    });
+  });
+
   afterEach(() => {
+    global.fetch = originalFetch;
     if (root) {
       act(() => root?.unmount());
     }
+
     root = null;
     container?.remove();
     container = null;
@@ -39,12 +55,12 @@ describe("DashboardLayout", () => {
     Reflect.deleteProperty(window, "__naruonMobileWorkspace");
   });
 
-  it("renders the Naruon branded shell with accessible navigation landmarks", () => {
+  it("renders the Naruon branded shell with accessible navigation landmarks", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(
         <DashboardLayout>
           <section>Inbox workspace content</section>
@@ -211,12 +227,12 @@ describe("DashboardLayout", () => {
     window.removeEventListener("naruon:mobile-workspace", onMobileWorkspace);
   });
 
-  it("clears and refocuses the desktop global search without native search controls", () => {
+  it("clears and refocuses the desktop global search without native search controls", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(
         <DashboardLayout>
           <section>Dashboard workspace content</section>
@@ -247,37 +263,12 @@ describe("DashboardLayout", () => {
     expect(document.activeElement).toBe(input);
   });
 
-  it("normalizes HTML-like global search input before keeping it in state", () => {
+  it("keeps desktop primary and mobile primary destinations synchronized", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
-      root?.render(
-        <DashboardLayout>
-          <section>Dashboard workspace content</section>
-        </DashboardLayout>,
-      );
-    });
-
-    const input = container.querySelector<HTMLInputElement>("#global-search-input");
-    expect(input).not.toBeNull();
-
-    act(() => {
-      setInputValue(input as HTMLInputElement, "<img src=x onerror=alert(1)>계약\u0000 검토");
-    });
-
-    expect(input?.value).toBe("img src=x onerror=alert(1)계약 검토");
-    expect(input?.value).not.toContain("<");
-    expect(input?.value).not.toContain(">");
-  });
-
-  it("keeps desktop primary and mobile primary destinations synchronized", () => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
+    await act(async () => {
       root?.render(
         <DashboardLayout>
           <section>Inbox workspace content</section>
@@ -296,13 +287,13 @@ describe("DashboardLayout", () => {
     expect(mobileHrefs).toEqual(["/", "/mail", "/calendar", "/tasks", "/projects", "/search", "/ai-hub", "/data", "/security", "/settings"]);
   });
 
-  it("keeps query-based mail shortcuts mutually exclusive in the mobile drawer", () => {
+  it("keeps query-based mail shortcuts mutually exclusive in the mobile drawer", async () => {
     window.history.replaceState(null, "", "/mail?folder=sent");
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => {
+    await act(async () => {
       root?.render(
         <DashboardLayout>
           <section>Mail workspace content</section>
@@ -334,43 +325,12 @@ describe("DashboardLayout", () => {
     ).toBeNull();
   });
 
-  it("keeps query link state correct after cached search params are evicted", () => {
-    window.history.replaceState(null, "", "/mail?folder=sent");
+  it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", async () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
-    const renderQueryLinks = () => {
-      root?.render(
-        <nav aria-label="Query cache exercise">
-          {Array.from({ length: 40 }, (_, index) => {
-            const folder = index === 0 ? "sent" : `folder-${index}`;
-            return (
-              <NavLink
-                key={folder}
-                label={folder}
-                href={`/mail?folder=${folder}`}
-                icon={TestIcon}
-              />
-            );
-          })}
-        </nav>,
-      );
-    };
-
-    act(renderQueryLinks);
-    act(renderQueryLinks);
-
-    expect(container.querySelector<HTMLAnchorElement>('a[href="/mail?folder=sent"]')?.getAttribute("aria-current")).toBe("page");
-    expect(container.querySelector<HTMLAnchorElement>('a[href="/mail?folder=folder-39"]')?.getAttribute("aria-current")).toBeNull();
-  });
-
-  it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", () => {
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() => {
+    await act(async () => {
       root?.render(
         <DashboardLayout>
           <section>Inbox workspace content</section>

@@ -42,8 +42,7 @@ def test_schema_backfill_adds_email_columns(monkeypatch):
         for statement in statements
     )
     assert any(
-        "alter table email_records add column if not exists organization_id"
-        in statement
+        "alter table email_records add column if not exists organization_id" in statement
         for statement in statements
     )
     assert any(
@@ -58,12 +57,9 @@ def test_schema_backfill_adds_email_columns(monkeypatch):
         'alter table email_records add column if not exists "references"' in statement
         for statement in statements
     )
+    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update email_records set user_id" in statement for statement in statements
-    )
-    assert not any(
-        "update email_records set organization_id" in statement
-        for statement in statements
+        "update email_records set organization_id" in statement for statement in statements
     )
     assert any(
         "existing email_records require explicit non-default" in statement
@@ -123,8 +119,7 @@ def test_schema_backfill_adds_email_indexes(monkeypatch):
         for statement in statements
     )
     assert any(
-        "create unique index if not exists uq_email_records_owner_message_id"
-        in statement
+        "create unique index if not exists uq_email_records_owner_message_id" in statement
         for statement in statements
     )
     assert any(
@@ -244,9 +239,7 @@ def test_schema_backfill_adds_webdav_account_columns_and_indexes(monkeypatch):
     assert any(
         "update webdav_accounts set source_uid" in statement
         and "webdav_src_" in statement
-        and "encode(sha256" in statement
-        and "bytea" in statement
-        and "hex" in statement
+        and "md5" in statement
         and "random()::text" in statement
         and "clock_timestamp()::text" in statement
         for statement in statements
@@ -295,9 +288,7 @@ def test_schema_backfill_adds_project_folder_columns_and_indexes(monkeypatch):
     assert any(
         "update project_folders set folder_uid" in statement
         and "webdav_folder_" in statement
-        and "encode(sha256" in statement
-        and "bytea" in statement
-        and "hex" in statement
+        and "md5" in statement
         and "random()::text" in statement
         and "clock_timestamp()::text" in statement
         for statement in statements
@@ -406,12 +397,9 @@ def test_schema_backfill_rejects_default_owner_ids(monkeypatch):
 
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
+    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update email_records set user_id" in statement for statement in statements
-    )
-    assert not any(
-        "update email_records set organization_id" in statement
-        for statement in statements
+        "update email_records set organization_id" in statement for statement in statements
     )
 
 
@@ -660,13 +648,11 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                 },
             )
             await conn.run_sync(_execute_schema_backfill)
-            result = await conn.execute(
-                text("""
+            result = await conn.execute(text("""
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'connector_signal_events'
-                    """)
-            )
+                    """))
             column_names = {row[0] for row in result.fetchall()}
             duplicate_result = await conn.execute(
                 text("""

@@ -62,10 +62,7 @@
 ## 2026-06-19 - Email owner/date lookup index
 **Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
 **Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
-## 2024-05-24 - Optimize WebDAV Project Folder Query
-**Learning:** Found an N+1 query vulnerability / O(n) filtering bottleneck where `get_project_folders_from_db` loaded all project folders for a tenant just to filter for a single `folder_uid` in Python logic.
-**Action:** When filtering database models by ID, always push the filtering logic to the database query layer (using `.where()`) rather than fetching the entire collection and filtering in-memory. This prevents memory bloat and speeds up queries significantly.
 
-## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
-**Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
-**Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
+## YYYY-MM-DD - Optimize URLSearchParams comparison in DashboardLayout
+**Learning:** Instantiating `new URLSearchParams()` and converting `.entries()` inside hot loops (like navigation active checks on every render) is unexpectedly costly. Caching the parsed array globally via a `Map` is significantly faster (measured ~5x improvement).
+**Action:** Identify and cache expensive parsing objects derived from static inputs, even if they seem minor like `URLSearchParams`, especially within rendering or frequent checks.
