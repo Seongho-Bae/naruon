@@ -12,6 +12,11 @@
 **Vulnerability:** A path traversal vulnerability existed in the `/dav/{path:path}` endpoint where `_dav_path_owner_user_id` extracted the owner user ID using `path.partition("/")` without validating or normalizing `..` segments.
 **Learning:** This allowed an attacker to supply a path like `my_user_id/../other_user_id/projects`, tricking the authorization check `_ensure_dav_owner_scope` into passing because the first segment matched their authenticated `user_id`. The remaining path could then be used downstream to access resources of `other_user_id`. When testing this against FastAPI's TestClient, the TestClient normalizes `../` automatically; `..%2F` must be used to test the router correctly.
 **Prevention:** Always validate or normalize dynamic paths used for authorization constraints, explicitly rejecting paths containing traversal segments like `..` before parsing hierarchical data.
+## 2026-06-20 - Missing Auth on update_tenant_config (Already Mitigated)
+**Vulnerability:** A previous state of the codebase was reported to be missing `Depends(get_auth_context)` on `update_tenant_config`.
+**Learning:** `auth_ctx: AuthContext = Depends(get_auth_context)` is already correctly implemented in the endpoint signature.
+**Prevention:** Always rely on FastAPI dependency injection to enforce endpoint security.
+
 ## 2024-05-28 - [Subprocess path execution vulnerability fix]
 **Vulnerability:** [Bandit B607 Starting a process with a partial executable path and B603 subprocess call without shell equals true]
 **Learning:** [Using partial paths with subprocess like 'bash' instead of absolute paths allows potential path manipulation attacks if PATH is altered. Executing python scripts with subprocess.run introduces process spawning overhead and could expose untrusted execution depending on how the interpreter executes inputs.]
