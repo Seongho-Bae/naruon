@@ -62,6 +62,10 @@
 ## 2026-06-19 - Email owner/date lookup index
 **Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
 **Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
+## 2024-05-18 - Optimize redundant tuple/string creation in dedupe loop
+**Learning:** Instantiating new tuples and using f-strings inside a tight loop creates unnecessary allocations that impact performance, especially when checking dictionary membership where most items are already present.
+**Action:** Inline lookup values directly, use early returns and `msg_id is not None` checks, and avoid generating formats like `f"<{normalized}>"` unless the basic `normalized` key wasn't sufficient, keeping inner loop bodies lean.
+
 ## 2026-06-20 - list.reverse() vs sorted() for database results
 **Learning:** Re-sorting objects that were retrieved from a database query with `.order_by(...)` incurs unnecessary `O(N log N)` overhead. The lists can be reversed in-place in `O(N)` time to switch chronological order. In tight APIs and data processing paths, list copies and Python sorts should be avoided if ordering is implicitly guaranteed.
 **Action:** Always prefer `list.reverse()` over `sorted(..., reverse=True)` or `sorted(..., key=...)` when reversing elements retrieved from a query that are already ordered by SQL.
