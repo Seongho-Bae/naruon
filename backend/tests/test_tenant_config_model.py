@@ -30,8 +30,11 @@ def mock_debug():
 def db_session():
     engine = create_engine("sqlite:///:memory:")
     TenantConfig.__table__.create(engine)
-    with Session(engine) as session:
-        yield session
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
 
 
 def test_tenant_config_model_exists():
