@@ -113,6 +113,12 @@
   workflow, the smallest source-backed fix, and an exact verification command or
   test target when the repository already has one. Avoid generic architecture
   advice unless it maps to the cited `path:line`.
+  For Greptile-style specificity, carry a P1/P2/P3 priority in each finding,
+  cite the evidence type that justifies it (nearby implementation, matching
+  existing example, cross-file counterpart, current official docs, or failed
+  check/log evidence), flag unrelated PR scope drift as scope risk instead of
+  burying it in style notes, and make `suggested_diff` a GitHub
+  suggestion-ready minimal diff when possible.
 - OpenCode `Review Overview` comments are durable gate evidence. Publish them
   through an idempotent marker such as `<!-- opencode-review-overview -->` and
   update the existing comment instead of deleting it after approval, failed
