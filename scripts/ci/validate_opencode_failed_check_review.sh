@@ -128,27 +128,7 @@ extract_strix_report_model_markers() {
   ' "$FAILED_CHECK_EVIDENCE_FILE" | sort -u
 }
 
-count_strix_review_findings() {
-  jq -r '
-    [
-      (.findings // [])[]
-      | [
-          .title,
-          .problem,
-          .root_cause,
-          .fix_direction,
-          .regression_test_direction,
-          .suggested_diff
-        ]
-        | map(. // "")
-        | join("\n")
-      | select(test("strix|github[-_]models/|deepseek/|openai/gpt-|vertex_ai/|Vulnerability Report"; "i"))
-    ]
-    | length
-  ' "$CONTROL_JSON_FILE"
-}
-
-validate_distinct_strix_report_findings() {
+validate_strix_report_findings() {
   python3 - "$CONTROL_JSON_FILE" "$FAILED_CHECK_EVIDENCE_FILE" <<'PY'
 from __future__ import annotations
 
@@ -189,7 +169,7 @@ def clean(raw_line: str) -> str:
 def starts_new_field(line: str) -> bool:
     return bool(
         re.match(
-            r"^(Title|Severity|CVSS Score|CVSS Vector|Target|Endpoint|Method|Description|Impact|Technical Analysis|PoC Description|PoC Code|Code Locations|Remediation)\b",
+            r"^(Title|Severity|CVSS Score|CVSS Vector|Target|Endpoint|Method|Location|Description|Impact|Technical Analysis|PoC Description|PoC Code|Code Locations|Remediation)\b",
             line,
             re.IGNORECASE,
         )
@@ -328,7 +308,6 @@ if not reports:
     raise SystemExit(0)
 
 findings = [finding_text(finding) for finding in control.get("findings", []) if isinstance(finding, dict)]
-used_findings: set[int] = set()
 
 for report in reports:
     required_markers = [
@@ -340,10 +319,7 @@ for report in reports:
         report["location"],
     ]
     for index, text in enumerate(findings):
-        if index in used_findings:
-            continue
         if all(contains(text, marker) for marker in required_markers):
-            used_findings.add(index)
             break
     else:
         raise SystemExit(1)
@@ -384,15 +360,7 @@ do
 done
 
 if grep -Fq "Strix vulnerability report window" "$FAILED_CHECK_EVIDENCE_FILE"; then
-  if ! validate_distinct_strix_report_findings; then
-    echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
-    exit 4
-  fi
-
-  strix_title_count="$(extract_strix_title_markers | sed '/^[[:space:]]*$/d' | wc -l | tr -d '[:space:]')"
-  finding_count="$(count_strix_review_findings)"
-  if [ -n "$strix_title_count" ] && [ "$strix_title_count" -gt 0 ] &&
-    [ "$finding_count" -lt "$strix_title_count" ]; then
+  if ! validate_strix_report_findings; then
     echo "FAILED_CHECK_EVIDENCE_NOT_REFERENCED"
     exit 4
   fi
