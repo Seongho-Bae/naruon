@@ -52,17 +52,7 @@ jobs:
         run: |
           set -o pipefail
           cd backend
-          python -m pytest -q \
-            tests/test_config.py \
-            tests/test_main.py \
-            tests/test_accounts_api.py \
-            tests/test_auth_real.py \
-            tests/test_bootstrap_db.py \
-            tests/test_start_backend.py \
-            tests/test_tenant_config_model.py \
-            tests/test_release_governance.py::test_backend_images_use_python_314_runtime \
-            tests/test_release_governance.py::test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes \
-            2>&1 | tee pytest_output.log
+          python -m pytest -q 2>&1 | tee pytest_output.log
           if grep -qiE 'timeout|fatal|warn|denied' pytest_output.log; then
             echo "::error::Tests produced Timeout, Fatal, Warn, or Denied outputs"
             exit 1
