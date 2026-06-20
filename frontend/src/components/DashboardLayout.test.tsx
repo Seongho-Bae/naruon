@@ -264,12 +264,13 @@ describe("DashboardLayout", () => {
     expect(input).not.toBeNull();
 
     act(() => {
-      setInputValue(input as HTMLInputElement, "<img src=x onerror=alert(1)>계약\u0000 검토");
+      setInputValue(input as HTMLInputElement, "<img src=x onerror=alert(1)>\";alert(document.domain);//계약\u0000 검토");
     });
 
-    expect(input?.value).toBe("img src=x onerror=alert(1)계약 검토");
+    expect(input?.value).toBe("img srcx onerroralert1alertdocument.domain계약 검토");
     expect(input?.value).not.toContain("<");
     expect(input?.value).not.toContain(">");
+    expect(input?.value).not.toMatch(/["'`;=(){}[\]\\/]/);
   });
 
   it("keeps desktop primary and mobile primary destinations synchronized", () => {

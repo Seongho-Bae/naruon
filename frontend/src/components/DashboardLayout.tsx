@@ -143,7 +143,7 @@ const GLOBAL_SEARCH_QUERY_MAX_LENGTH = 160;
 
 function sanitizeGlobalSearchQuery(value: string) {
   return value
-    .replace(/[\u0000-\u001F\u007F<>]/g, '')
+    .replace(/[\u0000-\u001F\u007F<>"'`;=(){}\[\]\\/]/g, '')
     .slice(0, GLOBAL_SEARCH_QUERY_MAX_LENGTH);
 }
 
