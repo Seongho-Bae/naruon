@@ -137,7 +137,27 @@ function splitHref(href: string) {
 
 type SearchParamsLike = Pick<URLSearchParams, 'get'>;
 
+const SEARCH_PARAMS_CACHE_LIMIT = 32;
 const searchParamsCache = new Map<string, [string, string][]>();
+
+function getSearchParamEntries(query: string) {
+  const cachedEntries = searchParamsCache.get(query);
+  if (cachedEntries) {
+    searchParamsCache.delete(query);
+    searchParamsCache.set(query, cachedEntries);
+    return cachedEntries;
+  }
+
+  const entries = Array.from(new URLSearchParams(query).entries());
+  if (searchParamsCache.size >= SEARCH_PARAMS_CACHE_LIMIT) {
+    const oldestKey = searchParamsCache.keys().next().value;
+    if (typeof oldestKey === 'string') {
+      searchParamsCache.delete(oldestKey);
+    }
+  }
+  searchParamsCache.set(query, entries);
+  return entries;
+}
 
 function isActivePath(
   pathname: string | null,
@@ -157,11 +177,7 @@ function isActivePath(
   if (!query) return true;
   if (!currentSearchParams) return false;
 
-  let entries = searchParamsCache.get(query);
-  if (!entries) {
-    entries = Array.from(new URLSearchParams(query).entries());
-    searchParamsCache.set(query, entries);
-  }
+  const entries = getSearchParamEntries(query);
 
   for (let i = 0; i < entries.length; i++) {
     if (currentSearchParams.get(entries[i][0]) !== entries[i][1]) return false;

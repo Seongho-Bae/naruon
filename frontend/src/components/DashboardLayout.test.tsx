@@ -8,7 +8,11 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
 
-import { DashboardLayout } from "./DashboardLayout";
+import { DashboardLayout, NavLink } from "./DashboardLayout";
+
+function TestIcon({ className, "aria-hidden": ariaHidden }: { className?: string; "aria-hidden"?: boolean }) {
+  return <span className={className} aria-hidden={ariaHidden}>icon</span>;
+}
 
 function setInputValue(input: HTMLInputElement, value: string) {
   const valueSetter = Object.getOwnPropertyDescriptor(
@@ -303,6 +307,37 @@ describe("DashboardLayout", () => {
         ?.querySelector<HTMLAnchorElement>('a[href="/mail?folder=starred"]')
         ?.getAttribute("aria-current"),
     ).toBeNull();
+  });
+
+  it("keeps query link state correct after cached search params are evicted", () => {
+    window.history.replaceState(null, "", "/mail?folder=sent");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    const renderQueryLinks = () => {
+      root?.render(
+        <nav aria-label="Query cache exercise">
+          {Array.from({ length: 40 }, (_, index) => {
+            const folder = index === 0 ? "sent" : `folder-${index}`;
+            return (
+              <NavLink
+                key={folder}
+                label={folder}
+                href={`/mail?folder=${folder}`}
+                icon={TestIcon}
+              />
+            );
+          })}
+        </nav>,
+      );
+    };
+
+    act(renderQueryLinks);
+    act(renderQueryLinks);
+
+    expect(container.querySelector<HTMLAnchorElement>('a[href="/mail?folder=sent"]')?.getAttribute("aria-current")).toBe("page");
+    expect(container.querySelector<HTMLAnchorElement>('a[href="/mail?folder=folder-39"]')?.getAttribute("aria-current")).toBeNull();
   });
 
   it("clears stale mobile hashes and resets the mobile workspace store when switching startup back to dashboard", () => {
