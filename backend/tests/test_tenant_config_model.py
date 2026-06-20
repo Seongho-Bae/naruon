@@ -1,5 +1,4 @@
 import base64
-import os
 
 import pytest
 from cryptography.fernet import Fernet
@@ -9,10 +8,10 @@ from sqlalchemy.orm import Session
 from db.models import EncryptedString, TenantConfig, get_fernet
 from core.config import settings
 
-TEST_OPENAI_KEY = os.environ.get("TEST_OPENAI_KEY", "dummy-openai-key")
-TEST_IMAP_PASSWORD = os.environ.get("TEST_IMAP_PASSWORD", "dummy-imap-password")
-TEST_POP3_PASSWORD = os.environ.get("TEST_POP3_PASSWORD", "dummy-pop3-password")
-TEST_SMTP_PASSWORD = os.environ.get("TEST_SMTP_PASSWORD", "dummy-smtp-password")
+TEST_OPENAI_KEY = "test_key2"  # noqa: S105
+TEST_IMAP_PASSWORD = "imap-secret"  # noqa: S105
+TEST_POP3_PASSWORD = "pop3-secret"  # noqa: S105
+TEST_SMTP_PASSWORD = "smtp-secret"  # noqa: S105
 
 
 @pytest.fixture(autouse=True)
@@ -38,11 +37,11 @@ def test_tenant_config_model_exists():
     config = TenantConfig(
         user_id="test_user",
         organization_id="org_acme",
-        openai_api_key=TEST_OPENAI_KEY,
+        openai_api_key="test_key",
     )
     assert config.user_id == "test_user"
     assert config.organization_id == "org_acme"
-    assert config.openai_api_key == TEST_OPENAI_KEY
+    assert config.openai_api_key == "test_key"
 
 
 def test_tenant_config_allows_same_user_in_different_organizations(db_session):
@@ -142,7 +141,7 @@ def test_tenant_config_model_encryption(db_session):
     result = db_session.execute(
         text("SELECT openai_api_key FROM tenant_configs WHERE user_id='test_user2'")
     ).scalar()
-    assert result != TEST_OPENAI_KEY
+    assert result != "test_key2"
     assert result is not None
     assert isinstance(result, str)
 

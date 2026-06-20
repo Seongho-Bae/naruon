@@ -24,40 +24,47 @@ def _explicit_email_backfill_owner_ids() -> tuple[str | None, str | None]:
 
 def _get_add_columns_statements() -> list[Executable]:
     return [
-        text("ALTER TABLE email_records ADD COLUMN IF NOT EXISTS thread_id varchar"),
-        text("ALTER TABLE email_records ADD COLUMN IF NOT EXISTS user_id varchar"),
+        text("ALTER TABLE email_records " "ADD COLUMN IF NOT EXISTS thread_id varchar"),
+        text("ALTER TABLE email_records " "ADD COLUMN IF NOT EXISTS user_id varchar"),
+        text("ALTER TABLE email_records " "ADD COLUMN IF NOT EXISTS organization_id varchar"),
+        text("ALTER TABLE email_records " "ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
+        text("ALTER TABLE email_records " 'ADD COLUMN IF NOT EXISTS "references" varchar'),
+        text("ALTER TABLE email_records " "ADD COLUMN IF NOT EXISTS reply_to varchar"),
+        text("ALTER TABLE llm_providers " "ADD COLUMN IF NOT EXISTS user_id varchar"),
         text(
-            "ALTER TABLE email_records ADD COLUMN IF NOT EXISTS organization_id varchar"
-        ),
-        text("ALTER TABLE email_records ADD COLUMN IF NOT EXISTS in_reply_to varchar"),
-        text('ALTER TABLE email_records ADD COLUMN IF NOT EXISTS "references" varchar'),
-        text("ALTER TABLE email_records ADD COLUMN IF NOT EXISTS reply_to varchar"),
-        text("ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS user_id varchar"),
-        text(
-            "ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS organization_id varchar"
+            "ALTER TABLE llm_providers "
+            "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
         text(
             "ALTER TABLE llm_providers "
             "ADD COLUMN IF NOT EXISTS model_identifier varchar"
         ),
         text(
-            "ALTER TABLE llm_providers ADD COLUMN IF NOT EXISTS embedding_model varchar"
+            "ALTER TABLE llm_providers "
+            "ADD COLUMN IF NOT EXISTS embedding_model varchar"
         ),
-        text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS source_uid varchar"),
+        text(
+            "ALTER TABLE webdav_accounts " "ADD COLUMN IF NOT EXISTS source_uid varchar"
+        ),
         text(
             "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
         text(
-            "ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS workspace_id varchar"
+            "ALTER TABLE webdav_accounts "
+            "ADD COLUMN IF NOT EXISTS workspace_id varchar"
         ),
         text(
             "ALTER TABLE webdav_accounts "
             "ADD COLUMN IF NOT EXISTS writeback_enabled boolean "
             "NOT NULL DEFAULT false"
         ),
-        text("ALTER TABLE webdav_accounts ADD COLUMN IF NOT EXISTS etag_value varchar"),
-        text("ALTER TABLE project_folders ADD COLUMN IF NOT EXISTS folder_uid varchar"),
+        text(
+            "ALTER TABLE webdav_accounts " "ADD COLUMN IF NOT EXISTS etag_value varchar"
+        ),
+        text(
+            "ALTER TABLE project_folders " "ADD COLUMN IF NOT EXISTS folder_uid varchar"
+        ),
         text(
             "ALTER TABLE project_folders "
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
@@ -67,10 +74,12 @@ def _get_add_columns_statements() -> list[Executable]:
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
         text(
-            "ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_username varchar"
+            "ALTER TABLE tenant_configs "
+            "ADD COLUMN IF NOT EXISTS pop3_username varchar"
         ),
         text(
-            "ALTER TABLE tenant_configs ADD COLUMN IF NOT EXISTS pop3_password varchar"
+            "ALTER TABLE tenant_configs "
+            "ADD COLUMN IF NOT EXISTS pop3_password varchar"
         ),
         text(
             "ALTER TABLE sender_relationships "
@@ -131,10 +140,7 @@ def _get_create_tables_statements() -> list[Executable]:
 
 def _get_create_indexes_statements() -> list[Executable]:
     return [
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_email_records_user_id "
-            "ON email_records (user_id)"
-        ),
+        text("CREATE INDEX IF NOT EXISTS ix_email_records_user_id " "ON email_records (user_id)"),
         text(
             "CREATE INDEX IF NOT EXISTS ix_email_records_organization_id "
             "ON email_records (organization_id)"
@@ -183,10 +189,10 @@ def _get_update_webdav_accounts_statements() -> list[Executable]:
     return [
         text(
             "UPDATE webdav_accounts "
-            "SET source_uid = 'webdav_src_' || encode(sha256(("
+            "SET source_uid = 'webdav_src_' || md5("
             "random()::text || ':' || clock_timestamp()::text || ':' || "
             "user_id || ':' || server_url"
-            ")::bytea), 'hex') "
+            ") "
             "WHERE source_uid IS NULL OR source_uid = ''"
         ),
         text(
@@ -197,8 +203,8 @@ def _get_update_webdav_accounts_statements() -> list[Executable]:
             "ELSE 'workspace-' || user_id END "
             "WHERE workspace_id IS NULL OR workspace_id = ''"
         ),
-        text("ALTER TABLE webdav_accounts ALTER COLUMN source_uid SET NOT NULL"),
-        text("ALTER TABLE webdav_accounts ALTER COLUMN workspace_id SET NOT NULL"),
+        text("ALTER TABLE webdav_accounts " "ALTER COLUMN source_uid SET NOT NULL"),
+        text("ALTER TABLE webdav_accounts " "ALTER COLUMN workspace_id SET NOT NULL"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_webdav_accounts_source_uid "
             "ON webdav_accounts (source_uid)"
@@ -218,13 +224,13 @@ def _get_update_project_folders_statements() -> list[Executable]:
     return [
         text(
             "UPDATE project_folders "
-            "SET folder_uid = 'webdav_folder_' || encode(sha256(("
+            "SET folder_uid = 'webdav_folder_' || md5("
             "random()::text || ':' || clock_timestamp()::text || ':' || "
             "user_id || ':' || project_name || ':' || webdav_path"
-            ")::bytea), 'hex') "
+            ") "
             "WHERE folder_uid IS NULL OR folder_uid = ''"
         ),
-        text("ALTER TABLE project_folders ALTER COLUMN folder_uid SET NOT NULL"),
+        text("ALTER TABLE project_folders " "ALTER COLUMN folder_uid SET NOT NULL"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_project_folders_folder_uid "
             "ON project_folders (folder_uid)"
@@ -238,9 +244,7 @@ def _get_update_project_folders_statements() -> list[Executable]:
 
 def _get_drop_constraints_and_indexes_statements() -> list[Executable]:
     return [
-        text(
-            "ALTER TABLE email_records DROP CONSTRAINT IF EXISTS emails_message_id_key"
-        ),
+        text("ALTER TABLE email_records " "DROP CONSTRAINT IF EXISTS emails_message_id_key"),
         text(
             "ALTER TABLE tenant_configs "
             "DROP CONSTRAINT IF EXISTS tenant_configs_user_id_key"
@@ -250,7 +254,8 @@ def _get_drop_constraints_and_indexes_statements() -> list[Executable]:
             "DROP CONSTRAINT IF EXISTS uq_sender_relationships_user_email"
         ),
         text(
-            "ALTER TABLE llm_providers DROP CONSTRAINT IF EXISTS llm_providers_name_key"
+            "ALTER TABLE llm_providers "
+            "DROP CONSTRAINT IF EXISTS llm_providers_name_key"
         ),
         text("DROP INDEX IF EXISTS ix_llm_providers_name"),
         text("DROP INDEX IF EXISTS ix_tenant_configs_user_id"),
@@ -261,8 +266,7 @@ def _get_drop_constraints_and_indexes_statements() -> list[Executable]:
 def _get_create_new_indexes_statements() -> list[Executable]:
     return [
         text(
-            "CREATE INDEX IF NOT EXISTS ix_email_records_message_id "
-            "ON email_records (message_id)"
+            "CREATE INDEX IF NOT EXISTS ix_email_records_message_id " "ON email_records (message_id)"
         ),
         text(
             "CREATE INDEX IF NOT EXISTS ix_tenant_configs_user_id "
@@ -337,7 +341,7 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "END $$"
         ),
         text("ALTER TABLE email_records ALTER COLUMN user_id SET NOT NULL"),
-        text("ALTER TABLE email_records ALTER COLUMN organization_id SET NOT NULL"),
+        text("ALTER TABLE email_records " "ALTER COLUMN organization_id SET NOT NULL"),
         text(
             "DO $$ "
             "BEGIN "
@@ -352,8 +356,8 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "END IF; "
             "END $$"
         ),
-        text("ALTER TABLE llm_providers ALTER COLUMN user_id SET NOT NULL"),
-        text("ALTER TABLE llm_providers ALTER COLUMN organization_id SET NOT NULL"),
+        text("ALTER TABLE llm_providers " "ALTER COLUMN user_id SET NOT NULL"),
+        text("ALTER TABLE llm_providers " "ALTER COLUMN organization_id SET NOT NULL"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_email_records_owner_message_id "
             "ON email_records (user_id, organization_id, message_id)"
@@ -362,13 +366,8 @@ def _get_validation_and_final_indexes_statements() -> list[Executable]:
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_llm_providers_org_name "
             "ON llm_providers (organization_id, name)"
         ),
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_email_records_thread_id "
-            "ON email_records (thread_id)"
-        ),
-        text(
-            "CREATE INDEX IF NOT EXISTS ix_email_records_date ON email_records (date)"
-        ),
+        text("CREATE INDEX IF NOT EXISTS ix_email_records_thread_id " "ON email_records (thread_id)"),
+        text("CREATE INDEX IF NOT EXISTS ix_email_records_date ON email_records (date)"),
         text(
             "CREATE UNIQUE INDEX IF NOT EXISTS "
             "uq_sender_relationships_scope_source "
