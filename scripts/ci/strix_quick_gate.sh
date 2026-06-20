@@ -2421,7 +2421,6 @@ run_strix_with_transient_retry() {
 	while [ "$attempt" -le "$max_attempts" ]; do
 		local run_rc=0
 		run_strix_once "$model" || run_rc=$?
-			cat "$STRIX_LOG" >> "$STRIX_RUNTIME_DIR/strix_cumulative.log" || true
 		if [ "$run_rc" -eq 0 ]; then
 			return 0
 		fi
@@ -2724,7 +2723,7 @@ has_only_below_threshold_vulnerabilities() {
 	done
 
 	if [ "$found_any_vuln_file" -eq 0 ]; then
-		update_max_severity_from_stream "$STRIX_RUNTIME_DIR/strix_cumulative.log"
+		update_max_severity_from_stream "$STRIX_LOG"
 	fi
 
 	if [ "$saw_any_severity" -eq 0 ]; then
@@ -2824,7 +2823,7 @@ has_any_reported_severity_markers() {
 		done
 	done
 
-	if grep -Eiq 'severity[[:space:]]*:' "$STRIX_RUNTIME_DIR/strix_cumulative.log"; then
+	if grep -Eiq 'severity[[:space:]]*:' "$STRIX_LOG"; then
 		return 0
 	fi
 
