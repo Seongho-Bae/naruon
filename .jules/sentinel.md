@@ -28,6 +28,11 @@
 **Learning:** Authorization and resource filtering must be consistently scoped across the system. Inconsistency leads to functional security bugs where visibility does not match explicit intent (e.g. sharing).
 **Prevention:** Unify queries regarding scoping (e.g., using centralized helper functions for where-clauses) instead of redefining conditions per-endpoint. When creating models with boolean overrides for visibility like `is_shared`, ensure all read paths respect them.
 
+## 2024-05-31 - Hardcoded Session Token in Tests
+**Vulnerability:** Found hardcoded string `"header.payload.signature"` in multiple `.test.ts` files.
+**Learning:** Even in test files, realistic-looking hardcoded tokens or secrets can be flagged by security scanners as hardcoded credentials. It is bad hygiene.
+**Prevention:** Use explicitly fake and descriptive placeholder strings like `"test-header.test-payload.test-signature"` for token mocking in tests.
+
 ## 2026-06-20 - Hardcoded API Key for Testing
 **Vulnerability:** Hardcoded API keys and passwords were found in `backend/tests/test_tenant_config_model.py` and `backend/tests/test_email_client_smtp.py`.
 **Learning:** Hardcoded secrets in testing files can still leak into version control and potentially be used in production or misconfigured systems.
