@@ -62,3 +62,6 @@
 ## 2026-06-19 - Email owner/date lookup index
 **Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
 **Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
+## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
+**Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
+**Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
