@@ -329,6 +329,7 @@ assert_strix_child_target_uses_constant_argument() {
 
 assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	local workflow_file="$REPO_ROOT/.github/workflows/opencode-review.yml"
+	local conflict_guidance_workflow="$REPO_ROOT/.github/workflows/opencode-merge-conflict-guidance.yml"
 	local opencode_config="$REPO_ROOT/opencode.jsonc"
 
 	assert_file_contains "$workflow_file" "Initialize CodeGraph index for OpenCode" "opencode review workflow initializes CodeGraph before review"
@@ -349,6 +350,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "failed-check-evidence.md" "opencode review copies full failed-check evidence into the isolated workspace"
 	assert_file_contains "$workflow_file" 'PR_MERGE_BASE="$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"' "opencode review evidence diffs use the PR merge base"
 	assert_file_matches "$workflow_file" 'uses:[[:space:]]+actions/checkout@[0-9a-fA-F]{40}([[:space:]]|$)' "opencode review workflow pins checkout to a full commit SHA"
+	assert_file_contains "$workflow_file" 'ref: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}' "opencode review checks out the PR head so merge-conflict PRs can still receive guidance"
 	assert_workflow_uses_are_sha_pinned "$workflow_file" "opencode review workflow"
 	assert_file_contains "$workflow_file" "@colbymchenry/codegraph@0.9.9" "opencode review workflow pins the CodeGraph package"
 	assert_file_contains "$workflow_file" "https://mcp.deepwiki.com/mcp" "opencode review workflow configures the DeepWiki remote MCP server"
@@ -367,6 +369,14 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "flag unrelated PR scope drift" "opencode review prompt catches unrelated scope drift"
 	assert_file_contains "$workflow_file" "GitHub suggestion-ready minimal diffs" "opencode review prompt requires directly applicable suggested diffs"
 	assert_file_contains "$workflow_file" "compact Mermaid graph" "opencode review prompt requires a Mermaid risk graph"
+	assert_file_contains "$workflow_file" "PR mergeability evidence" "opencode review evidence includes PR mergeability state"
+	assert_file_contains "$workflow_file" "Merge Conflict Guidance" "opencode review overview includes conflict repair guidance"
+	assert_file_contains "$workflow_file" "mergeStateStatus DIRTY" "opencode review prompt handles merge conflicts"
+	assert_file_contains "$conflict_guidance_workflow" "pull_request_target:" "opencode merge-conflict guidance runs even when pull_request merge refs are unavailable"
+	assert_file_contains "$conflict_guidance_workflow" 'merge_state == '"'"'DIRTY'"'"'' "opencode merge-conflict guidance only publishes for dirty PRs"
+	assert_file_contains "$conflict_guidance_workflow" "## Merge Conflict Guidance" "opencode merge-conflict guidance publishes explicit repair direction"
+	assert_file_contains "$conflict_guidance_workflow" "## Risk Graph" "opencode merge-conflict guidance preserves the Mermaid review graph"
+	assert_file_contains "$conflict_guidance_workflow" "<!-- opencode-review-overview -->" "opencode merge-conflict guidance updates the standard review overview"
 	assert_file_contains "$workflow_file" "Structural exploration is mandatory for every PR" "opencode review prompt makes structural exploration mandatory"
 	assert_file_contains "$workflow_file" "Never state that structural exploration, structural analysis, or structural review is not required or unnecessary" "opencode review prompt forbids dismissing structural review"
 	assert_file_contains "$workflow_file" "If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve" "opencode review prompt blocks approval without structural evidence"

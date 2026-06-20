@@ -113,6 +113,11 @@
   workflow, the smallest source-backed fix, and an exact verification command or
   test target when the repository already has one. Avoid generic architecture
   advice unless it maps to the cited `path:line`.
+  When GitHub reports a merge conflict, include a concrete conflict-resolution
+  direction instead of only saying the PR is blocked: name the base/head branch,
+  tell the author to merge or rebase the latest base branch into the PR branch,
+  resolve conflict markers in the changed files, rerun the focused checks, and
+  push the same branch.
   For Greptile-style specificity, carry a P1/P2/P3 priority in each finding,
   cite the evidence type that justifies it (nearby implementation, matching
   existing example, cross-file counterpart, current official docs, or failed
