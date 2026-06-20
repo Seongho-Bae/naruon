@@ -22,3 +22,8 @@
 **Vulnerability:** Found hardcoded string `"header.payload.signature"` in multiple `.test.ts` files.
 **Learning:** Even in test files, realistic-looking hardcoded tokens or secrets can be flagged by security scanners as hardcoded credentials. It is bad hygiene.
 **Prevention:** Use explicitly fake and descriptive placeholder strings like `"test-header.test-payload.test-signature"` for token mocking in tests.
+
+## 2026-06-20 - Hardcoded API Key for Testing
+**Vulnerability:** Hardcoded API keys and passwords were found in `backend/tests/test_tenant_config_model.py` and `backend/tests/test_email_client_smtp.py`.
+**Learning:** Hardcoded secrets in testing files can still leak into version control and potentially be used in production or misconfigured systems.
+**Prevention:** Avoid hardcoding any secrets, even in test files. Use environment variables with default fallback values (e.g. `os.environ.get("TEST_KEY", "dummy-value")`).
