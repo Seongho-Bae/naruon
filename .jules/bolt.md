@@ -69,3 +69,7 @@
 ## 2024-05-24 - Optimize WebDAV Project Folder Query
 **Learning:** Found an N+1 query vulnerability / O(n) filtering bottleneck where `get_project_folders_from_db` loaded all project folders for a tenant just to filter for a single `folder_uid` in Python logic.
 **Action:** When filtering database models by ID, always push the filtering logic to the database query layer (using `.where()`) rather than fetching the entire collection and filtering in-memory. This prevents memory bloat and speeds up queries significantly.
+
+## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
+**Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
+**Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
