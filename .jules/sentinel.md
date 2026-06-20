@@ -17,6 +17,11 @@
 **Learning:** Empty string defaults for critical security settings like CORS bypass the explicit requirement validation of Pydantic. It's better to make critical list-based security policies explicitly required by omitting the default so it fails securely and noticeably upon startup.
 **Prevention:** Remove default values like `= ""` or `= []` for strictly required security lists in application settings (e.g. `ALLOWED_CORS_ORIGINS: str`) to mandate explicit environment configuration.
 
+## 2025-02-20 - MD5 to SHA-256 for Security Scanner Compliance
+**Vulnerability:** MD5 used for hashing random parameters for DB table unique IDs.
+**Learning:** Using MD5, even for non-cryptographic purposes like generating unique IDs from randomness, triggers security scanners. Cryptographically weak functions like MD5 should not be used when stronger ones are available.
+**Prevention:** In SQL queries and backend code, prefer using `encode(sha256((...)::bytea), 'hex')` over `md5(...)` to generate deterministic hashes or unique IDs to maintain compliance and security.
+
 ## 2026-06-20 - Missing Auth on update_tenant_config (Already Mitigated)
 **Vulnerability:** A previous state of the codebase was reported to be missing `Depends(get_auth_context)` on `update_tenant_config`.
 **Learning:** `auth_ctx: AuthContext = Depends(get_auth_context)` is already correctly implemented in the endpoint signature.
