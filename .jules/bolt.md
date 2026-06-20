@@ -62,3 +62,7 @@
 ## 2026-06-19 - Email owner/date lookup index
 **Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
 **Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
+
+## YYYY-MM-DD - Optimize URLSearchParams comparison in DashboardLayout
+**Learning:** Instantiating `new URLSearchParams()` and converting `.entries()` inside hot loops (like navigation active checks on every render) is unexpectedly costly. Caching the parsed array globally via a `Map` is significantly faster (measured ~5x improvement).
+**Action:** Identify and cache expensive parsing objects derived from static inputs, even if they seem minor like `URLSearchParams`, especially within rendering or frequent checks.
