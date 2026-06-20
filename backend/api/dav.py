@@ -128,21 +128,18 @@ async def _handle_project_propfind(
         db,
         auth_context.user_id,
         auth_context.organization_id,
+        folder_uid=folder_uid,
     )
 
     if folder_uid is None:
         return _dav_xml_response(
-            [
-                _project_folder_response(path_owner_user_id, folder)
-                for folder in folders
-            ]
+            [_project_folder_response(path_owner_user_id, folder) for folder in folders]
         )
 
-    for folder in folders:
-        if folder.get("folder_uid") == folder_uid:
-            return _dav_xml_response(
-                [_project_folder_response(path_owner_user_id, folder)]
-            )
+    if folders:
+        return _dav_xml_response(
+            [_project_folder_response(path_owner_user_id, folder) for folder in folders]
+        )
 
     raise HTTPException(status_code=404, detail="DAV project folder not found")
 
