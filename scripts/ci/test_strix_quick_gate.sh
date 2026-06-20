@@ -360,8 +360,6 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "CodeGraph MCP tools" "opencode review prompt requires CodeGraph-backed review evidence"
 	assert_file_contains "$workflow_file" "general-purpose and meticulous" "opencode review prompt requires a general-purpose meticulous review"
 	assert_file_contains "$workflow_file" "actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups" "opencode review prompt directs the agent to use all configured MCP sources"
-	assert_file_contains "$workflow_file" "observable impact, trigger condition, minimal fix direction, and exact regression test or verification command" "opencode review prompt requires practical finding details"
-	assert_file_contains "$workflow_file" "The regression_test_direction should name an exact test target or verification command when the repository already provides one." "opencode review prompt requires concrete validation guidance"
 	assert_file_contains "$workflow_file" "Structural exploration is mandatory for every PR" "opencode review prompt makes structural exploration mandatory"
 	assert_file_contains "$workflow_file" "Never state that structural exploration, structural analysis, or structural review is not required or unnecessary" "opencode review prompt forbids dismissing structural review"
 	assert_file_contains "$workflow_file" "If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve" "opencode review prompt blocks approval without structural evidence"

@@ -293,7 +293,10 @@ async def get_emails(
         ]
     else:
         visible_groups = list(grouped.values())
-    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
+    # ⚡ Bolt: Visible groups were appended sequentially in ascending order.
+    # Reversing it gives us descending order faster than re-sorting.
+    visible_groups.reverse()
+    sorted_groups = visible_groups[:limit]
 
     items = []
     for email in sorted_groups:

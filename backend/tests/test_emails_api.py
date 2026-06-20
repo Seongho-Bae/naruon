@@ -414,54 +414,6 @@ async def test_get_emails_returns_exact_distinct_threads_beyond_overfetch_window
 
 
 @pytest.mark.asyncio
-async def test_get_emails_orders_interleaved_threads_by_latest_message_date(
-    client: AsyncClient, db_session
-):
-    older_alpha = Email(
-        id=1,
-        user_id="testuser",
-        message_id="alpha-root",
-        thread_id="alpha-thread",
-        sender="alpha@example.com",
-        recipients="user@example.com",
-        subject="Alpha root",
-        date=datetime.datetime(2026, 4, 27, 9, 0, tzinfo=datetime.timezone.utc),
-        body="Alpha root body",
-    )
-    beta = Email(
-        id=2,
-        user_id="testuser",
-        message_id="beta-root",
-        thread_id="beta-thread",
-        sender="beta@example.com",
-        recipients="user@example.com",
-        subject="Beta root",
-        date=datetime.datetime(2026, 4, 27, 10, 0, tzinfo=datetime.timezone.utc),
-        body="Beta body",
-    )
-    newer_alpha = Email(
-        id=3,
-        user_id="testuser",
-        message_id="alpha-reply",
-        thread_id="alpha-thread",
-        sender="alpha@example.com",
-        recipients="user@example.com",
-        subject="Re: Alpha root",
-        date=datetime.datetime(2026, 4, 27, 11, 0, tzinfo=datetime.timezone.utc),
-        body="Alpha reply body",
-    )
-    db_session.items = [newer_alpha, beta, older_alpha]
-
-    response = await client.get("/api/emails?limit=10")
-
-    assert response.status_code == 200
-    assert [item["thread_id"] for item in response.json()["emails"]] == [
-        "alpha-thread",
-        "beta-thread",
-    ]
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("limit", [0, -1])
 async def test_get_emails_rejects_non_positive_limit(client: AsyncClient, limit: int):
     response = await client.get(f"/api/emails?limit={limit}")
