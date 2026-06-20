@@ -16,3 +16,14 @@
 **Vulnerability:** The default for `ALLOWED_CORS_ORIGINS` in Pydantic Settings was set to an empty string (`""`). This is overly permissive (or rather, overly implicit and insecure fallback behavior) because an unconfigured deployment would not explicitly force the operator to define CORS origins, leading to potential misconfigurations or users overriding checks with wildcard fallbacks due to friction.
 **Learning:** Empty string defaults for critical security settings like CORS bypass the explicit requirement validation of Pydantic. It's better to make critical list-based security policies explicitly required by omitting the default so it fails securely and noticeably upon startup.
 **Prevention:** Remove default values like `= ""` or `= []` for strictly required security lists in application settings (e.g. `ALLOWED_CORS_ORIGINS: str`) to mandate explicit environment configuration.
+
+## 2025-06-19 - Inconsistent Authorization in AI Hub
+
+**Vulnerability:** The AI Hub's list prompts endpoint (`_list_prompts` in `backend/api/ai_hub.py`) strictly filtered returned prompts by `created_by == auth_context.user_id`, ignoring the `is_shared` property which allows a prompt to be accessed globally. This resulted in a failure of access control policies because shared resources were effectively hidden from the surface, while directly accessible through other APIs.
+**Learning:** Authorization and resource filtering must be consistently scoped across the system. Inconsistency leads to functional security bugs where visibility does not match explicit intent (e.g. sharing).
+**Prevention:** Unify queries regarding scoping (e.g., using centralized helper functions for where-clauses) instead of redefining conditions per-endpoint. When creating models with boolean overrides for visibility like `is_shared`, ensure all read paths respect them.
+
+## 2026-06-20 - Hardcoded API Key for Testing
+**Vulnerability:** Hardcoded API keys and passwords were found in `backend/tests/test_tenant_config_model.py` and `backend/tests/test_email_client_smtp.py`.
+**Learning:** Hardcoded secrets in testing files can still leak into version control and potentially be used in production or misconfigured systems.
+**Prevention:** Avoid hardcoding any secrets, even in test files. Use environment variables with default fallback values (e.g. `os.environ.get("TEST_KEY", "dummy-value")`).
