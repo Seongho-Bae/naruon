@@ -29,6 +29,17 @@ import {
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
+import { startOidcLogin } from '@/lib/oidc-session';
+
+
+
+
+function sanitizeGlobalSearchQuery(input: string): string {
+  if (!input) return '';
+  // Remove control characters, quotes, semicolons, and angle brackets to strictly prevent XSS payloads
+  // even though React already escapes them in text nodes and attribute values.
+  return input.replace(/[<>\"';]/g, '').replace(/[\u0000-\u001F\u007F]/g, '');
+}
 
 const mailNavItems = [
   { label: '받은 메일', description: '우선순위 인박스', icon: Inbox, href: '/mail?folder=inbox' },
@@ -137,34 +148,7 @@ function splitHref(href: string) {
 
 type SearchParamsLike = Pick<URLSearchParams, 'get'>;
 
-const SEARCH_PARAMS_CACHE_LIMIT = 32;
 const searchParamsCache = new Map<string, [string, string][]>();
-const GLOBAL_SEARCH_QUERY_MAX_LENGTH = 160;
-
-function sanitizeGlobalSearchQuery(value: string) {
-  return value
-    .replace(/[\u0000-\u001F\u007F<>"'`;=(){}\[\]\\/]/g, '')
-    .slice(0, GLOBAL_SEARCH_QUERY_MAX_LENGTH);
-}
-
-function getSearchParamEntries(query: string) {
-  const cachedEntries = searchParamsCache.get(query);
-  if (cachedEntries) {
-    searchParamsCache.delete(query);
-    searchParamsCache.set(query, cachedEntries);
-    return cachedEntries;
-  }
-
-  const entries = Array.from(new URLSearchParams(query).entries());
-  if (searchParamsCache.size >= SEARCH_PARAMS_CACHE_LIMIT) {
-    const oldestKey = searchParamsCache.keys().next().value;
-    if (typeof oldestKey === 'string') {
-      searchParamsCache.delete(oldestKey);
-    }
-  }
-  searchParamsCache.set(query, entries);
-  return entries;
-}
 
 function isActivePath(
   pathname: string | null,
@@ -184,7 +168,11 @@ function isActivePath(
   if (!query) return true;
   if (!currentSearchParams) return false;
 
-  const entries = getSearchParamEntries(query);
+  let entries = searchParamsCache.get(query);
+  if (!entries) {
+    entries = Array.from(new URLSearchParams(query).entries());
+    searchParamsCache.set(query, entries);
+  }
 
   for (let i = 0; i < entries.length; i++) {
     if (currentSearchParams.get(entries[i][0]) !== entries[i][1]) return false;
@@ -302,6 +290,25 @@ export function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [session, setSession] = useState<{ authenticated: boolean; claims: { userId: string | null } } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch('/auth/session')
+      .then(res => res.json())
+      .then(data => {
+        if (!mounted) return;
+        setSession(data);
+        if (data && !data.authenticated) {
+          startOidcLogin().catch(console.error);
+        }
+      })
+      .catch(console.error);
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const pathname = usePathname();
   const searchParams = useCurrentSearchParams();
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
@@ -353,6 +360,18 @@ export function DashboardLayout({
     if (view === 'calendar') {
       setMobileWorkspaceView('calendar', { updateHash: false });
     }
+  }
+
+
+  if (!session || !session.authenticated) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="size-8 animate-spin rounded-full border-4 border-primary border-t-transparent" role="status" aria-label="인증 중입니다"></div>
+          <p className="text-sm font-medium text-muted-foreground">인증을 확인하고 있습니다...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -462,7 +481,7 @@ export function DashboardLayout({
             </Link>
             <Link href="/settings#profile" aria-label="프로필 메뉴" className="hidden h-10 items-center gap-2 rounded-xl border border-border bg-background/80 px-3 text-xs font-bold text-foreground transition-colors hover:border-primary/30 hover:text-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40 xl:inline-flex">
               <UserCircle className="size-4 text-primary" aria-hidden="true" />
-              Seongho
+              {session.claims.userId || "사용자"}
             </Link>
             <span className="hidden rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary xl:inline-flex">
               답장 추적
