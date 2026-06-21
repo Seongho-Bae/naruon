@@ -395,6 +395,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Structural exploration is mandatory for every PR" "opencode review prompt makes structural exploration mandatory"
 	assert_file_contains "$workflow_file" "Never state that structural exploration, structural analysis, or structural review is not required or unnecessary" "opencode review prompt forbids dismissing structural review"
 	assert_file_contains "$workflow_file" "If structural exploration was not possible or changed files could not be inspected after reading bounded-review-evidence.md and the changed files, do not approve" "opencode review prompt blocks approval without structural evidence"
+	assert_file_contains "$workflow_file" "Use CodeGraph for blast-radius, call graph, and test-coverage questions before broad local reads" "opencode review prompt adapts code-review-graph guidance without adding a duplicate dependency"
+	assert_file_contains "$workflow_file" "Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages" "opencode review prompt adapts ponytail minimal-change guidance"
+	assert_file_contains "$workflow_file" "For Korean prose, preserve facts, identifiers, numbers, and quotes" "opencode review prompt adapts im-not-ai guidance only for Korean prose"
+	assert_file_contains "$workflow_file" "concrete CWE/KISA-style class" "opencode failed-check diagnosis maps Strix findings to evidence-backed security categories"
 	assert_file_contains "$workflow_file" "Do not request changes solely because the prompt did not inline the full evidence" "opencode review prompt requires file inspection instead of evidence-truncation blockers"
 	assert_file_contains "$workflow_file" "Inspect changed files and focused hunks directly when MCP evidence is insufficient." "opencode review allows focused direct source inspection when MCP evidence is insufficient"
 	assert_file_contains "$workflow_file" "Never return raw tool-call markup, tool-call JSON, or MCP call syntax in the review body" "opencode review prompt forbids raw tool-call transcripts as final review output"
@@ -582,8 +586,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Unrelated speculative findings are invalid when failed-check evidence is present." "opencode review prompt forbids unrelated failed-check findings"
 	assert_file_contains "$workflow_file" "run_failed_check_diagnosis" "opencode approval gate reruns OpenCode diagnosis when checks fail after the initial review"
 	assert_file_contains "$workflow_file" "OpenCode action outcomes were primary=" "opencode approval gate records invalid model outcome details"
-	assert_file_contains "$workflow_file" "OpenCode model attempts did not produce a usable control block" "opencode approval gate does not turn invalid model output into blocking changes when peer checks and human threads are clean"
-	assert_file_contains "$workflow_file" "no failed checks, pending checks, or unresolved human review threads remained" "opencode model-failure approval fallback is gated on clean same-head checks and review threads"
+	assert_file_contains "$workflow_file" "OpenCode model attempts did not produce a usable control block" "opencode approval gate reports invalid model output as a review-governance blocker"
+	assert_file_contains "$workflow_file" "it will not approve without source-backed current-head review evidence" "opencode approval gate refuses to approve invalid model output when peer checks and human threads are clean"
+	assert_file_contains "$workflow_file" "no valid source-backed review output was available" "opencode model-failure fallback requests changes instead of approving invalid model output"
 	assert_file_contains "$workflow_file" "request_changes_for_merge_conflict_if_present" "opencode approval gate checks mergeability before approving model or fallback output"
 	assert_file_contains "$workflow_file" "Merge Conflict Guidance" "opencode approval gate emits explicit conflict guidance when mergeability is dirty"
 	assert_file_contains "$workflow_file" "flowchart LR" "opencode merge-conflict guidance includes a compact Mermaid graph"
@@ -793,7 +798,113 @@ EOF
 	rc=$?
 	set -e
 
-	assert_equals "0" "$rc" "opencode normalizer accepts approvals that mention limited evidence after structural inspection"
+	assert_equals "4" "$rc" "opencode normalizer rejects approvals that omit concrete changed-file evidence"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after structural exploration of .github/workflows/opencode-review.yml.","summary":"CodeGraph evidence was insufficient for one generated artifact, but local inspection covered scripts/ci/test_strix_quick_gate.sh and the changed workflow.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize-valid.out" 2>"$tmp_dir/normalize-valid.err"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "opencode normalizer accepts approvals that name concrete changed-file evidence after structural inspection"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_no_changes_approval() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No changes detected in the PR head source directory.","summary":"No files or changes were found in the PR head source directory, indicating no actionable changes to review.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects no-changes approvals"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for no-changes approval"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No changes detected in the PR head source directory.","summary":"No files or changes were found in the PR head source directory, indicating no actionable changes to review.","findings":[]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects no-changes approvals"
+	assert_equals "NO_CONCLUSION" "$gate_result" "no-changes approval rejection gate result"
+	assert_file_contains "$REPO_ROOT/.github/workflows/opencode-review.yml" "Never approve with a reason or summary that says no changes" "opencode prompt rejects no-changes approvals when bounded evidence lists changed files"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_approve_without_changed_file_evidence() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blocking issues found; changes improve CI configuration and documentation.","summary":"PR enhances OpenCode review workflow with clearer guidance and validation. Changes are well-contained with no security or functional regressions detected.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects approvals without changed-file evidence"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for approvals without changed-file evidence"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blocking issues found; changes improve CI configuration and documentation.","summary":"PR enhances OpenCode review workflow with clearer guidance and validation. Changes are well-contained with no security or functional regressions detected.","findings":[]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects approvals without changed-file evidence"
+	assert_equals "NO_CONCLUSION" "$gate_result" "missing changed-file evidence rejection gate result"
+	assert_file_contains "$REPO_ROOT/.github/workflows/opencode-review.yml" "Before APPROVE, the summary must include at least one exact changed file path inspected as changed-file evidence" "opencode prompt requires changed-file evidence before approval"
 
 	rm -rf "$tmp_dir"
 }
@@ -5914,6 +6025,10 @@ assert_opencode_review_normalizer_accepts_transcript_json
 assert_opencode_review_publish_body_discards_trailing_model_prose
 
 assert_opencode_review_gate_rejects_missing_structural_exploration_approval
+
+assert_opencode_review_gate_rejects_no_changes_approval
+
+assert_opencode_review_gate_rejects_approve_without_changed_file_evidence
 
 assert_opencode_review_gate_rejects_line_zero_findings
 

@@ -36,6 +36,15 @@ STRUCTURAL_FAILURE_PHRASES = (
     "could not access required evidence",
     "evidence was truncated",
     "truncated evidence",
+    "no changes detected",
+    "no changes were detected",
+    "no changes found",
+    "no changes were found",
+    "no files or changes were found",
+    "no files or changes found",
+    "no actionable changes to review",
+    "no changes to review",
+    "no changed files",
 )
 
 STRUCTURAL_FAILURE_PATTERNS = (
@@ -53,6 +62,20 @@ STRUCTURAL_FAILURE_PATTERNS = (
         r"\b(?:structural\s+(?:exploration|analysis|review))\s+"
         r"(?:was\s+)?(?:unavailable|incomplete|blocked|not possible)\b"
     ),
+    re.compile(
+        r"\bno\s+(?:files?\s+or\s+)?changes?\s+"
+        r"(?:were\s+)?(?:detected|found|present)\b"
+    ),
+    re.compile(r"\bno\s+(?:actionable\s+)?changes?\s+to\s+review\b"),
+    re.compile(r"\b(?:no|zero)\s+changed\s+files?\b"),
+)
+
+CHANGED_FILE_EVIDENCE_PATTERN = re.compile(
+    r"(?<![A-Za-z0-9_])(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.@+-]+"
+    r"|(?<![A-Za-z0-9_])[A-Za-z0-9_.-]+\."
+    r"(?:py|js|jsx|ts|tsx|mjs|cjs|sh|bash|yml|yaml|json|jsonc|toml|lock|md|txt|css|scss|html|sql|go|rs|java|kt|swift|rb|php|cs|xml|ini|cfg)"
+    r"(?![A-Za-z0-9_])"
+    r"|(?<![A-Za-z0-9_])(?:Dockerfile|Makefile|README|LICENSE|AGENTS\.md)(?![A-Za-z0-9_])"
 )
 
 
@@ -62,6 +85,11 @@ def admits_missing_structural_review(reason: str, summary: str) -> bool:
     return any(phrase in combined for phrase in STRUCTURAL_FAILURE_PHRASES) or any(
         pattern.search(combined) for pattern in STRUCTURAL_FAILURE_PATTERNS
     )
+
+
+def mentions_changed_file_evidence(reason: str, summary: str) -> bool:
+    """Return whether an approval names at least one concrete changed file/path."""
+    return bool(CHANGED_FILE_EVIDENCE_PATTERN.search(f"{reason}\n{summary}"))
 
 
 def check_structural_approval(control_file: Path) -> int:
@@ -76,6 +104,12 @@ def check_structural_approval(control_file: Path) -> int:
         return 4
 
     if value.get("result") == "APPROVE" and admits_missing_structural_review(
+        str(value.get("reason", "")),
+        str(value.get("summary", "")),
+    ):
+        print("NO_CONCLUSION", file=sys.stderr)
+        return 4
+    if value.get("result") == "APPROVE" and not mentions_changed_file_evidence(
         str(value.get("reason", "")),
         str(value.get("summary", "")),
     ):
@@ -123,6 +157,8 @@ def valid_control(
     if result == "REQUEST_CHANGES" and not findings:
         return None
     if result == "APPROVE" and admits_missing_structural_review(reason, summary):
+        return None
+    if result == "APPROVE" and not mentions_changed_file_evidence(reason, summary):
         return None
 
     required_finding_fields = (
