@@ -2384,6 +2384,53 @@ jobs:
             return 2
           }
 
+          request_changes_for_merge_conflict_if_present() {
+            local pr_json merge_state mergeable base_ref head_ref body
+
+            if ! pr_json="$(gh pr view "$PR_NUMBER" --repo "$GH_REPOSITORY" --json baseRefName,headRefName,mergeStateStatus,mergeable 2>/dev/null)"; then
+              return 1
+            fi
+
+            merge_state="$(printf '%s\n' "$pr_json" | jq -r '.mergeStateStatus // "UNKNOWN"')"
+            case "$merge_state" in
+              DIRTY|CONFLICTING) ;;
+              *) return 1 ;;
+            esac
+
+            base_ref="$(printf '%s\n' "$pr_json" | jq -r '.baseRefName // "unknown"')"
+            head_ref="$(printf '%s\n' "$pr_json" | jq -r '.headRefName // "unknown"')"
+            mergeable="$(printf '%s\n' "$pr_json" | jq -r '(.mergeable // "unknown") | tostring')"
+            body="$(printf '%s\n' \
+              "## Pull request overview" \
+              "" \
+              "OpenCode reviewed the current-head mergeability evidence and found merge conflicts before approval." \
+              "" \
+              "## Findings" \
+              "" \
+              "### 1. HIGH Merge Conflict Guidance - Resolve the PR branch against the latest base branch" \
+              "- Problem: GitHub reports mergeStateStatus \`${merge_state}\` for this pull request." \
+              "- Root cause: Branch \`${head_ref}\` cannot be merged cleanly into \`${base_ref}\` without resolving conflicting edits." \
+              "- Fix: Merge or rebase the latest \`${base_ref}\` into \`${head_ref}\`, resolve conflict markers in the PR branch, rerun the focused checks, and push the same branch." \
+              "- Regression test: Keep OpenCode approval gated on mergeability so model-output failures cannot approve a conflicted PR." \
+              "" \
+              "\`\`\`mermaid" \
+              "flowchart LR" \
+              "  base[Base branch latest] --> sync[Merge or rebase base into PR branch]" \
+              "  head[PR branch] --> sync" \
+              "  sync --> resolve[Resolve conflict markers]" \
+              "  resolve --> verify[Rerun focused checks]" \
+              "  verify --> push[Push the same branch]" \
+              "\`\`\`" \
+              "" \
+              "- Result: REQUEST_CHANGES" \
+              "- Reason: mergeStateStatus is \`${merge_state}\`; mergeable is \`${mergeable}\`." \
+              "- Head SHA: \`${HEAD_SHA}\`" \
+              "- Workflow run: ${RUN_ID}" \
+              "- Workflow attempt: ${RUN_ATTEMPT}")"
+            create_pull_review "REQUEST_CHANGES" "$body"
+            return 0
+          }
+
           live_head_sha="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
@@ -2448,6 +2495,8 @@ jobs:
               elif [ -s "$unresolved_human_threads_file" ]; then
                 build_unresolved_human_threads_body "$unresolved_human_threads_file" "$human_thread_review_body_file"
                 create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
+              elif request_changes_for_merge_conflict_if_present; then
+                :
               else
                 body="$(printf '%s\n' \
                   "## Pull request overview" \
@@ -2556,6 +2605,10 @@ jobs:
 
           case "$gate_result" in
             APPROVE)
+              if request_changes_for_merge_conflict_if_present; then
+                echo "::endgroup::"
+                exit 0
+              fi
               pending_checks_file="$(mktemp)"
               set +e
               wait_for_peer_github_checks "$pending_checks_file"
