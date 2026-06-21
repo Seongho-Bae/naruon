@@ -666,7 +666,7 @@ assert_opencode_review_normalizer_accepts_transcript_json() {
 	cat >"$output_file" <<'EOF'
 OpenCode transcript text before the review control block.
 
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found in the current bounded evidence.","summary":"Reviewed current head evidence and no blocking review findings were identified.","findings":[]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed current head evidence including scripts/ci/test_strix_quick_gate.sh and no blocking review findings were identified.","findings":[]}
 EOF
 
 	set +e
@@ -711,7 +711,7 @@ assert_opencode_review_publish_body_discards_trailing_model_prose() {
 <!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
 
 <!-- opencode-review-control-v1
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found in the current bounded evidence.","summary":"Reviewed current head evidence and no blocking review findings were identified.","findings":[]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed current head evidence including scripts/ci/test_strix_quick_gate.sh and no blocking review findings were identified.","findings":[]}
 -->
 
 But that is not meticulous.
