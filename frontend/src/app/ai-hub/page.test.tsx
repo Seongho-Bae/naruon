@@ -63,10 +63,10 @@ const aiHubSurface = {
   workflow_cards: [
     {
       workflow_key: 'workflow_prompt_safe',
-      workflow_title: '의사결정 로그 맥락 종합 실행 흐름',
-      trigger_source: 'prompt_template',
+      workflow_title: '의사결정 로그 자동 작성',
+      trigger_source: 'workflow_definition',
       state_code: 'ready',
-      evidence_text: '활성 조직 모델 연결을 사용할 수 있습니다.',
+      evidence_text: '2 persisted workflow steps',
     },
   ],
   agent_cards: [
@@ -89,12 +89,12 @@ const aiHubSurface = {
   ],
   run_events: [
     {
-      event_key: 'event_provider',
-      event_title: '모델 연결 업데이트',
-      state_code: 'recorded',
-      evidence_source: 'api.llm_providers',
+      event_key: 'agent_run_prompt_safe',
+      event_title: '워크플로우 실행',
+      state_code: 'completed',
+      evidence_source: 'agent_run_records',
       observed_at: '2026-05-29T09:30:00Z',
-      detail_text: '모델 연결 설정이 업데이트되었습니다.',
+      detail_text: '3개 판단 포인트를 추출했습니다.',
     },
   ],
 };
@@ -183,10 +183,11 @@ describe('AIHubPage', () => {
     expect(container.textContent).not.toContain('설명 없음');
 
     clickButton(container, '워크플로우');
-    expect(container.textContent).toContain('의사결정 로그 맥락 종합 실행 흐름');
+    expect(container.textContent).toContain('의사결정 로그 자동 작성');
+    expect(container.textContent).toContain('workflow_definition');
     expect(container.textContent).toContain('실행 이력 보기');
     clickButton(container, '실행 이력 보기');
-    expect(container.textContent).toContain('모델 연결 업데이트');
+    expect(container.textContent).toContain('워크플로우 실행');
 
     clickButton(container, 'AI 에이전트');
     expect(container.textContent).toContain('Primary OpenAI');
@@ -200,10 +201,10 @@ describe('AIHubPage', () => {
     expect(container.textContent).toContain('활성 모델 연결 1/1');
     expect(container.textContent).toContain('평가 근거 보기');
     clickButton(container, '평가 근거 보기');
-    expect(container.textContent).toContain('모델 연결 업데이트');
+    expect(container.textContent).toContain('워크플로우 실행');
 
     clickButton(container, '실행 이력');
-    expect(container.textContent).toContain('api.llm_providers');
+    expect(container.textContent).toContain('agent_run_records');
   });
 
   it('renders a loading state while the AI Hub surface is pending', async () => {

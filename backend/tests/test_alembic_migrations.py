@@ -80,6 +80,34 @@ def test_prompt_template_scope_has_incremental_revision():
     assert "if_exists=True" in revision_text
 
 
+def test_ai_hub_workflow_runs_have_incremental_revision():
+    versions_dir = BACKEND_ROOT / "alembic" / "versions"
+    revision_path = versions_dir / "0004_ai_hub_workflow_runs.py"
+    assert revision_path.exists()
+    revision_text = revision_path.read_text()
+
+    assert 'revision = "0004_ai_hub_workflow_runs"' in revision_text
+    assert 'down_revision = "0003_prompt_template_scope"' in revision_text
+    assert '"workflow_definitions"' in revision_text
+    assert '"agent_run_records"' in revision_text
+    assert '"workflow_uid"' in revision_text
+    assert '"run_uid"' in revision_text
+    assert '"steps_json"' in revision_text
+    assert '"status_code"' in revision_text
+    assert "ix_workflow_definitions_scope_time" in revision_text
+    assert "ix_workflow_definitions_owner_scope" in revision_text
+    assert "ix_agent_run_records_workflow_uid" in revision_text
+    assert "ix_agent_run_records_scope_time" in revision_text
+    assert "ix_agent_run_records_owner_scope" in revision_text
+    assert "ForeignKeyConstraint" in revision_text
+    assert "has_table" in revision_text
+    assert "op.create_table(" in revision_text
+    assert "op.create_index(" in revision_text
+    assert "if_not_exists=True" in revision_text
+    assert "op.drop_index(" in revision_text
+    assert "if_exists=True" in revision_text
+
+
 def test_migration_runner_uses_alembic_upgrade_head_not_bootstrap_create_all():
     migration_runner = BACKEND_ROOT / "scripts" / "migrate_db.py"
 

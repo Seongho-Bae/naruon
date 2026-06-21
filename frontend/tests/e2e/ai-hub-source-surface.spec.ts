@@ -50,14 +50,14 @@ for (const viewport of viewports) {
     ).toBeVisible();
     await page.getByRole('button', { name: /워크플로우/ }).click();
     await expect(
-      page.getByRole('region', { name: '워크플로우' }).getByRole('heading', { name: '의사결정 로그 맥락 종합 실행 흐름' }),
+      page.getByRole('region', { name: '워크플로우' }).getByRole('heading', { name: '의사결정 로그 자동 작성' }),
     ).toBeVisible();
     await page.getByRole('button', { name: /AI 에이전트/ }).click();
     await expect(page.getByRole('region', { name: 'AI 에이전트' }).getByRole('heading', { name: 'Primary OpenAI' })).toBeVisible();
     await page.getByRole('button', { name: /평가/ }).click();
     await expect(page.getByRole('region', { name: '평가' }).getByRole('heading', { name: '연동 준비도' })).toBeVisible();
     await page.getByRole('button', { name: /실행 이력/ }).click();
-    await expect(page.getByRole('region', { name: '실행 이력' }).getByText('api.llm_providers')).toBeVisible();
+    await expect(page.getByRole('region', { name: '실행 이력' }).getByText('agent_run_records')).toBeVisible();
 
     const horizontalOverflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
