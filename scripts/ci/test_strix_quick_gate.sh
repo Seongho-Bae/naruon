@@ -798,7 +798,21 @@ EOF
 	rc=$?
 	set -e
 
-	assert_equals "0" "$rc" "opencode normalizer accepts approvals that mention limited evidence after structural inspection"
+	assert_equals "4" "$rc" "opencode normalizer rejects approvals that omit concrete changed-file evidence"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after structural exploration of .github/workflows/opencode-review.yml.","summary":"CodeGraph evidence was insufficient for one generated artifact, but local inspection covered scripts/ci/test_strix_quick_gate.sh and the changed workflow.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize-valid.out" 2>"$tmp_dir/normalize-valid.err"
+	rc=$?
+	set -e
+
+	assert_equals "0" "$rc" "opencode normalizer accepts approvals that name concrete changed-file evidence after structural inspection"
 
 	rm -rf "$tmp_dir"
 }
@@ -845,6 +859,52 @@ EOF
 	assert_equals "4" "$rc" "opencode approval gate rejects no-changes approvals"
 	assert_equals "NO_CONCLUSION" "$gate_result" "no-changes approval rejection gate result"
 	assert_file_contains "$REPO_ROOT/.github/workflows/opencode-review.yml" "Never approve with a reason or summary that says no changes" "opencode prompt rejects no-changes approvals when bounded evidence lists changed files"
+
+	rm -rf "$tmp_dir"
+}
+
+assert_opencode_review_gate_rejects_approve_without_changed_file_evidence() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blocking issues found; changes improve CI configuration and documentation.","summary":"PR enhances OpenCode review workflow with clearer guidance and validation. Changes are well-contained with no security or functional regressions detected.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects approvals without changed-file evidence"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for approvals without changed-file evidence"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blocking issues found; changes improve CI configuration and documentation.","summary":"PR enhances OpenCode review workflow with clearer guidance and validation. Changes are well-contained with no security or functional regressions detected.","findings":[]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects approvals without changed-file evidence"
+	assert_equals "NO_CONCLUSION" "$gate_result" "missing changed-file evidence rejection gate result"
+	assert_file_contains "$REPO_ROOT/.github/workflows/opencode-review.yml" "Before APPROVE, the summary must include at least one exact changed file path inspected as changed-file evidence" "opencode prompt requires changed-file evidence before approval"
 
 	rm -rf "$tmp_dir"
 }
@@ -5967,6 +6027,8 @@ assert_opencode_review_publish_body_discards_trailing_model_prose
 assert_opencode_review_gate_rejects_missing_structural_exploration_approval
 
 assert_opencode_review_gate_rejects_no_changes_approval
+
+assert_opencode_review_gate_rejects_approve_without_changed_file_evidence
 
 assert_opencode_review_gate_rejects_line_zero_findings
 
