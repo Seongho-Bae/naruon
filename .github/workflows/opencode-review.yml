@@ -563,7 +563,7 @@ jobs:
 
       - name: Run OpenCode PR Review (GPT-5)
         id: opencode_review_primary
-        timeout-minutes: 60
+        timeout-minutes: 20
         env:
           STRIX_GITHUB_MODELS_TOKEN: ${{ secrets.STRIX_GITHUB_MODELS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -615,7 +615,7 @@ jobs:
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
           set +e
-          timeout 2400 opencode run "$(cat "$prompt_file")" \
+          timeout 600 opencode run "$(cat "$prompt_file")" \
             --pure \
             --agent ci-review \
             --model "$MODEL" \
