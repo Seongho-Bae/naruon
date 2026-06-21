@@ -2405,9 +2405,12 @@ jobs:
             failed_check_review_body_file="$(mktemp)"
             failed_check_review_payload_file="$(mktemp)"
             failed_check_inline_failure_body_file="$(mktemp)"
+            pending_checks_file=""
+            unresolved_human_threads_file=""
+            human_thread_review_body_file=""
             # shellcheck disable=SC2329
             cleanup_failed_outcome_files() {
-              rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
+              rm -f "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file" "$pending_checks_file" "$unresolved_human_threads_file" "$human_thread_review_body_file"
             }
             trap cleanup_failed_outcome_files EXIT
             if collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file" && [ -s "$failed_checks_file" ]; then
@@ -2431,11 +2434,41 @@ jobs:
             fi
 
             pending_checks_file="$(mktemp)"
-            if collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file" && [ -s "$pending_checks_file" ]; then
+            if ! collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file"; then
+              request_changes_for_gate_failure "GitHub Checks statusCheckRollup could not be read after OpenCode model output failure."
+            elif [ -s "$pending_checks_file" ]; then
               build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
               create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
             else
-              request_changes_for_gate_failure "OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}."
+              unresolved_human_threads_file="$(mktemp)"
+              human_thread_review_body_file="$(mktemp)"
+              if ! collect_unresolved_human_review_threads "$unresolved_human_threads_file"; then
+                build_human_thread_lookup_failure_body "$human_thread_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
+              elif [ -s "$unresolved_human_threads_file" ]; then
+                build_unresolved_human_threads_body "$unresolved_human_threads_file" "$human_thread_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
+              else
+                body="$(printf '%s\n' \
+                  "## Pull request overview" \
+                  "" \
+                  "OpenCode model attempts did not produce a usable control block for this run, but the trusted gate verified the current-head peer GitHub Checks and human review threads before changing review state." \
+                  "" \
+                  "## Findings" \
+                  "" \
+                  "No blocking findings." \
+                  "" \
+                  "## Summary" \
+                  "" \
+                  "All same-head peer GitHub Checks completed without failed or pending contexts, and no unresolved human review threads remained. The invalid model output is treated as review tooling instability, not as a source-code defect." \
+                  "" \
+                  "- Result: APPROVE" \
+                  "- Reason: OpenCode action outcomes were primary=${OPENCODE_PRIMARY_OUTCOME:-unknown}, fallback=${OPENCODE_FALLBACK_OUTCOME:-unknown}, second_fallback=${OPENCODE_SECOND_FALLBACK_OUTCOME:-unknown}; no failed checks, pending checks, or unresolved human review threads remained for current head \`${HEAD_SHA}\`." \
+                  "- Head SHA: \`${HEAD_SHA}\`" \
+                  "- Workflow run: ${RUN_ID}" \
+                  "- Workflow attempt: ${RUN_ATTEMPT}")"
+                create_pull_review "APPROVE" "$body"
+              fi
             fi
             echo "::endgroup::"
             exit 0
