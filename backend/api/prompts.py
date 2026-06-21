@@ -5,10 +5,10 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import AuthContext, get_auth_context, get_current_user
+from api.auth import AuthContext, get_auth_context
 from db.models import LLMProvider, PromptTemplate
 from db.session import get_db
 from services.llm_provider_urls import build_llm_provider_http_client
@@ -37,6 +37,7 @@ class PromptCreate(BaseModel):
 
 class PromptResponse(BaseModel):
     id: int
+    prompt_uid: str
     title: str
     description: Optional[str] = None
     content: str
@@ -129,12 +130,17 @@ def _render_prompt_test_content(data: PromptTestRequest) -> str:
 
 @router.get("", response_model=List[PromptResponse])
 async def list_prompts(
-    db: AsyncSession = Depends(get_db), user_id: str = Depends(get_current_user)
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
-    # Only return prompts created by user OR shared prompts
     result = await db.execute(
         select(PromptTemplate).where(
-            (PromptTemplate.created_by == user_id) | PromptTemplate.is_shared.is_(True)
+            PromptTemplate.organization_id == auth_context.organization_id,
+            PromptTemplate.workspace_id == auth_context.workspace_id,
+            or_(
+                PromptTemplate.created_by == auth_context.user_id,
+                PromptTemplate.is_shared.is_(True),
+            ),
         )
     )
     return result.scalars().all()
@@ -144,14 +150,16 @@ async def list_prompts(
 async def create_prompt(
     data: PromptCreate,
     db: AsyncSession = Depends(get_db),
-    user_id: str = Depends(get_current_user),
+    auth_context: AuthContext = Depends(get_auth_context),
 ):
     prompt = PromptTemplate(
         title=data.title,
         description=data.description,
         content=data.content,
         is_shared=data.is_shared,
-        created_by=user_id,
+        created_by=auth_context.user_id,
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
     )
     db.add(prompt)
     await db.commit()
