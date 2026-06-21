@@ -2384,6 +2384,10 @@ jobs:
             return 2
           }
 
+          emit_validation_conflict_probe() {
+            printf 'temporary conflict validation probe for OpenCode merge guidance\n'
+          }
+
           live_head_sha="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
