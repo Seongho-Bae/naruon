@@ -149,8 +149,8 @@ const aiHubSurface = {
     {
       summary_key: 'workflow_blueprints',
       label_text: '워크플로우',
-      value_text: '3',
-      detail_text: 'prompt-derived execution flows',
+      value_text: '1',
+      detail_text: 'source-backed execution flows',
       state_code: 'ready',
     },
     {
@@ -170,8 +170,8 @@ const aiHubSurface = {
     {
       summary_key: 'run_events',
       label_text: '실행 이력',
-      value_text: '2',
-      detail_text: 'scoped source evidence',
+      value_text: '1',
+      detail_text: 'scoped execution evidence',
       state_code: 'ready',
     },
   ],
@@ -183,13 +183,15 @@ const aiHubSurface = {
     owner_label: prompt.id === 102 ? 'shared-template' : 'admin',
     updated_at: '2026-05-29T09:30:00Z',
   })),
-  workflow_cards: aiHubPrompts.map((prompt) => ({
-    workflow_key: `workflow_${prompt.id}`,
-    workflow_title: `${prompt.title} 실행 흐름`,
-    trigger_source: 'prompt_template',
-    state_code: 'ready',
-    evidence_text: 'active organization provider is available',
-  })),
+  workflow_cards: [
+    {
+      workflow_key: 'workflow_decision_log',
+      workflow_title: '의사결정 로그 자동 작성',
+      trigger_source: 'workflow_definition',
+      state_code: 'ready',
+      evidence_text: '2 persisted workflow steps',
+    },
+  ],
   agent_cards: [
     {
       agent_key: 'agent_primary',
@@ -216,20 +218,12 @@ const aiHubSurface = {
   ],
   run_events: [
     {
-      event_key: 'event_provider_update',
-      event_title: 'llm_provider update',
-      state_code: 'recorded',
-      evidence_source: 'api.llm_providers',
+      event_key: 'agent_run_decision_log',
+      event_title: '워크플로우 실행',
+      state_code: 'completed',
+      evidence_source: 'agent_run_records',
       observed_at: '2026-05-29T09:30:00Z',
-      detail_text: 'Updated provider configuration',
-    },
-    {
-      event_key: 'event_prompt_update',
-      event_title: 'prompt template updated: Q2 출시 판단',
-      state_code: 'recorded',
-      evidence_source: 'prompt_templates',
-      observed_at: '2026-05-29T09:31:00Z',
-      detail_text: '출시 일정과 파트너 리스크를 함께 검토합니다.',
+      detail_text: '3개 판단 포인트를 추출했습니다.',
     },
   ],
 };

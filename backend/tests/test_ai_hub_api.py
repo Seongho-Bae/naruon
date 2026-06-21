@@ -17,7 +17,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
 from core.config import settings
-from db.models import Base, LLMProvider, PromptTemplate, SecurityAuditEvent
+from db.models import (
+    AgentRunRecord,
+    Base,
+    LLMProvider,
+    PromptTemplate,
+    SecurityAuditEvent,
+    WorkflowDefinition,
+)
 from db.session import get_db
 from main import app
 
@@ -45,6 +52,8 @@ class MockSession:
         self.prompts: list[PromptTemplate] = []
         self.providers: list[LLMProvider] = []
         self.audit_events: list[SecurityAuditEvent] = []
+        self.workflow_definitions: list[WorkflowDefinition] = []
+        self.agent_run_records: list[AgentRunRecord] = []
 
     async def execute(self, stmt):
         descriptions = getattr(stmt, "column_descriptions", [])
@@ -86,7 +95,52 @@ class MockSession:
             if actor_user_id:
                 rows = [event for event in rows if event.actor_user_id == actor_user_id]
             return MockResult(rows)
+        if entity is WorkflowDefinition:
+            organization_id = params.get("organization_id_1")
+            workspace_id = params.get("workspace_id_1")
+            user_id = params.get("user_id_1")
+            return MockResult(
+                [
+                    workflow
+                    for workflow in self.workflow_definitions
+                    if workflow.organization_id == organization_id
+                    and workflow.workspace_id == workspace_id
+                    and workflow.user_id == user_id
+                ]
+            )
+        if entity is AgentRunRecord:
+            organization_id = params.get("organization_id_1")
+            workspace_id = params.get("workspace_id_1")
+            user_id = params.get("user_id_1")
+            return MockResult(
+                [
+                    run_record
+                    for run_record in self.agent_run_records
+                    if run_record.organization_id == organization_id
+                    and run_record.workspace_id == workspace_id
+                    and run_record.user_id == user_id
+                ]
+            )
         return MockResult([])
+
+    def add(self, row):
+        if isinstance(row, WorkflowDefinition):
+            self.workflow_definitions.append(row)
+            return
+        if isinstance(row, AgentRunRecord):
+            self.agent_run_records.append(row)
+            return
+        raise AssertionError(f"Unexpected mock row type: {type(row)!r}")
+
+    def add_all(self, rows):
+        for row in rows:
+            self.add(row)
+
+    async def commit(self):
+        return None
+
+    async def refresh(self, row):
+        return None
 
 
 def _base64url_encode(raw: bytes) -> str:
@@ -190,9 +244,58 @@ def _audit_event() -> SecurityAuditEvent:
     )
 
 
+def _workflow_definition(
+    workflow_uid: str = "workflow_test_actual",
+    *,
+    user_id: str = "alice",
+    organization_id: str = "org-acme",
+    workspace_id: str = "workspace-org-acme",
+) -> WorkflowDefinition:
+    return WorkflowDefinition(
+        workflow_uid=workflow_uid,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        workflow_name="주간 리포트 자동 작성",
+        workflow_description="durable workflow definition",
+        steps_json=[
+            {"step_key": "mail_collect", "step_label": "메일 수집"},
+            {"step_key": "summary_write", "step_label": "요약 작성"},
+        ],
+        state_code="ready",
+        created_at=_now(),
+        updated_at=_now(),
+    )
+
+
+def _agent_run_record(
+    run_uid: str = "agent_run_test_actual",
+    *,
+    workflow_uid: str = "workflow_test_actual",
+    user_id: str = "alice",
+    organization_id: str = "org-acme",
+    workspace_id: str = "workspace-org-acme",
+) -> AgentRunRecord:
+    return AgentRunRecord(
+        run_uid=run_uid,
+        workflow_uid=workflow_uid,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        user_id=user_id,
+        status_code="completed",
+        started_at=_now(),
+        completed_at=_now() + datetime.timedelta(minutes=3),
+        result_summary="3개 판단 포인트를 추출했습니다.",
+    )
+
+
 def _request_with_signed_session(
     db_session: MockSession,
     header: dict[str, object] | None = None,
+    *,
+    method: str = "GET",
+    path: str = "/api/ai-hub/surface",
+    json_body: dict[str, object] | None = None,
     **payload_overrides: object,
 ):
     previous_secret = settings.AUTH_SESSION_HMAC_SECRET
@@ -209,10 +312,11 @@ def _request_with_signed_session(
             header=header,
         )
         with TestClient(app) as client:
-            return client.get(
-                "/api/ai-hub/surface",
-                headers={"Authorization": f"Bearer {token}"},
-            )
+            request = getattr(client, method.lower())
+            kwargs = {"headers": {"Authorization": f"Bearer {token}"}}
+            if json_body is not None:
+                kwargs["json"] = json_body
+            return request(path, **kwargs)
     finally:
         settings.AUTH_SESSION_HMAC_SECRET = previous_secret
         app.dependency_overrides.clear()
@@ -279,6 +383,142 @@ def test_ai_hub_surface_hides_provider_metadata_for_members():
     assert data["summary_cards"][2]["value_text"] == "0/0"
 
 
+def test_ai_hub_surface_prefers_durable_workflows_and_agent_runs():
+    session = MockSession()
+    session.prompts = [_prompt(1, "Fallback prompt")]
+    session.workflow_definitions = [_workflow_definition()]
+    session.agent_run_records = [_agent_run_record()]
+
+    response = _request_with_signed_session(session)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["workflow_cards"][0]["workflow_key"] == "workflow_test_actual"
+    assert data["workflow_cards"][0]["workflow_title"] == "주간 리포트 자동 작성"
+    assert data["workflow_cards"][0]["trigger_source"] == "workflow_definition"
+    assert data["workflow_cards"][0]["evidence_text"] == "2 persisted workflow steps"
+    assert data["run_events"][0]["event_key"] == "agent_run_test_actual"
+    assert data["run_events"][0]["evidence_source"] == "agent_run_records"
+    assert data["run_events"][0]["state_code"] == "completed"
+    assert "prompt template updated" not in response.text
+
+
+def test_ai_hub_workflow_api_creates_and_lists_scoped_workflows():
+    session = MockSession()
+
+    create_response = _request_with_signed_session(
+        session,
+        method="POST",
+        path="/api/ai-hub/workflows",
+        json_body={
+            "workflow_name": " 신규 워크플로우 ",
+            "workflow_description": " 신규 실행 흐름 ",
+            "steps_json": [{"step_key": "collect"}, {"step_key": "summarize"}],
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["workflow_key"].startswith("workflow_")
+    assert created["workflow_title"] == "신규 워크플로우"
+    assert created["trigger_source"] == "workflow_definition"
+    assert created["state_code"] == "draft"
+    assert "id" not in created
+    assert len(session.workflow_definitions) == 1
+    stored_workflow = session.workflow_definitions[0]
+    assert stored_workflow.organization_id == "org-acme"
+    assert stored_workflow.workspace_id == "workspace-org-acme"
+    assert stored_workflow.user_id == "alice"
+    assert stored_workflow.workflow_description == "신규 실행 흐름"
+
+    list_response = _request_with_signed_session(
+        session,
+        path="/api/ai-hub/workflows",
+    )
+
+    assert list_response.status_code == 200
+    listed = list_response.json()
+    assert listed == [created]
+
+
+@pytest.mark.parametrize(
+    "json_body",
+    [
+        {
+            "workflow_name": "   ",
+            "workflow_description": "blank names are rejected",
+            "steps_json": [{"step_key": "collect"}],
+        },
+        {
+            "workflow_name": "잘못된 단계",
+            "workflow_description": "steps_json must be a list",
+            "steps_json": {"step_key": "collect"},
+        },
+    ],
+)
+def test_ai_hub_workflow_api_rejects_invalid_create_payloads(json_body):
+    session = MockSession()
+
+    response = _request_with_signed_session(
+        session,
+        method="POST",
+        path="/api/ai-hub/workflows",
+        json_body=json_body,
+    )
+
+    assert response.status_code == 422
+    assert session.workflow_definitions == []
+
+
+def test_ai_hub_workflow_api_requires_signed_session():
+    session = MockSession()
+    original_overrides = dict(app.dependency_overrides)
+
+    async def scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = scoped_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/ai-hub/workflows",
+                json={
+                    "workflow_name": "인증 없는 생성",
+                    "steps_json": [{"step_key": "collect"}],
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+    assert session.workflow_definitions == []
+
+
+def test_ai_hub_run_api_lists_only_signed_session_scope():
+    session = MockSession()
+    session.agent_run_records = [
+        _agent_run_record(),
+        _agent_run_record(
+            run_uid="agent_run_rival",
+            workflow_uid="workflow_rival",
+            organization_id="org-rival",
+            workspace_id="workspace-org-rival",
+        ),
+    ]
+
+    response = _request_with_signed_session(
+        session,
+        path="/api/ai-hub/runs",
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert [event["event_key"] for event in data] == ["agent_run_test_actual"]
+    assert data[0]["evidence_source"] == "agent_run_records"
+
+
 def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session():
     session = MockSession()
     original_overrides = dict(app.dependency_overrides)
@@ -333,6 +573,8 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
     organization_id = f"ai_hub_org_{uuid.uuid4().hex[:12]}"
     workspace_id = f"workspace_{organization_id}"
     event_uid = f"audit_evt_ai_hub_{uuid.uuid4().hex[:18]}"
+    workflow_uid = f"workflow_{uuid.uuid4().hex}"
+    run_uid = f"agent_run_{uuid.uuid4().hex}"
     engine = create_async_engine(database_url, echo=False)
     session_factory = None
     try:
@@ -374,7 +616,30 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
                 detail_text="Postgres provider evidence",
                 observed_at=_now(),
             )
-            session.add_all([prompt, provider, audit_event])
+            workflow = WorkflowDefinition(
+                workflow_uid=workflow_uid,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                workflow_name="Postgres workflow",
+                workflow_description="source-backed workflow smoke",
+                steps_json=[{"step_key": "postgres_smoke"}],
+                state_code="ready",
+                created_at=_now(),
+                updated_at=_now(),
+            )
+            run_record = AgentRunRecord(
+                run_uid=run_uid,
+                workflow_uid=workflow_uid,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                user_id=user_id,
+                status_code="completed",
+                started_at=_now(),
+                completed_at=_now() + datetime.timedelta(minutes=1),
+                result_summary="Postgres run evidence",
+            )
+            session.add_all([prompt, provider, audit_event, workflow, run_record])
             await session.commit()
     except (
         ConnectionRefusedError,
@@ -422,6 +687,17 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
         app.dependency_overrides.update(original_overrides)
         async with engine.begin() as conn:
             await conn.execute(
+                text("DELETE FROM agent_run_records WHERE run_uid = :run_uid"),
+                {"run_uid": run_uid},
+            )
+            await conn.execute(
+                text(
+                    "DELETE FROM workflow_definitions "
+                    "WHERE workflow_uid = :workflow_uid"
+                ),
+                {"workflow_uid": workflow_uid},
+            )
+            await conn.execute(
                 text("DELETE FROM security_audit_events WHERE event_uid = :event_uid"),
                 {"event_uid": event_uid},
             )
@@ -443,6 +719,9 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["prompt_cards"][0]["prompt_title"] == "Postgres AI Hub prompt"
+    assert data["workflow_cards"][0]["workflow_key"] == workflow_uid
+    assert data["workflow_cards"][0]["trigger_source"] == "workflow_definition"
     assert data["agent_cards"][0]["agent_title"] == "Postgres Provider"
     assert data["agent_cards"][0]["configured"] is False
-    assert data["run_events"][0]["evidence_source"] == "api.llm_providers"
+    assert data["run_events"][0]["event_key"] == run_uid
+    assert data["run_events"][0]["evidence_source"] == "agent_run_records"

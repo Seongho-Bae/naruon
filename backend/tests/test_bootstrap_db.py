@@ -8,6 +8,7 @@ from core.config import settings
 from db.models import Base
 from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
+    AgentRunRecord,
     CalendarWritebackSource,
     ConnectorSignalEvent,
     Email,
@@ -18,6 +19,7 @@ from db.models import (
     TenantConfig,
     TicketTask,
     WebdavAccount,
+    WorkflowDefinition,
 )
 
 
@@ -262,6 +264,52 @@ def test_schema_backfill_creates_security_audit_events_table(monkeypatch):
     )
     assert any("event_action varchar not null" in statement for statement in statements)
     assert any("resource_uid varchar" in statement for statement in statements)
+
+
+def test_schema_backfill_creates_ai_hub_workflow_tables(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+
+    assert any(
+        "create table if not exists workflow_definitions" in statement
+        for statement in statements
+    )
+    assert any(
+        "workflow_uid varchar primary key" in statement for statement in statements
+    )
+    assert any("steps_json json not null" in statement for statement in statements)
+    assert any(
+        "create table if not exists agent_run_records" in statement
+        for statement in statements
+    )
+    assert any("run_uid varchar primary key" in statement for statement in statements)
+    assert any(
+        "references workflow_definitions(workflow_uid)" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_workflow_definitions_scope_time" in statement for statement in statements
+    )
+    assert any(
+        "ix_workflow_definitions_owner_scope" in statement
+        and "user_id, organization_id, workspace_id, updated_at" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_agent_run_records_scope_time" in statement for statement in statements
+    )
+    assert any(
+        "ix_agent_run_records_workflow_uid" in statement
+        and "workflow_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_agent_run_records_owner_scope" in statement
+        and "user_id, organization_id, workspace_id, started_at" in statement
+        for statement in statements
+    )
+    assert any(
+        "ix_agent_run_records_workflow_time" in statement for statement in statements
+    )
 
 
 def test_schema_backfill_adds_webdav_account_columns_and_indexes(monkeypatch):
@@ -625,6 +673,55 @@ def test_security_audit_event_model_uses_two_word_names():
     assert all("_" in column_name for column_name in column_names)
     assert "ix_security_audit_events_scope_time" in index_names
     assert "ix_security_audit_events_actor_scope" in index_names
+
+
+def test_ai_hub_workflow_models_use_opaque_two_word_names():
+    assert WorkflowDefinition.__tablename__ == "workflow_definitions"
+    workflow_column_names = {
+        column.name for column in WorkflowDefinition.__table__.columns
+    }
+    workflow_index_names = {
+        index.name for index in WorkflowDefinition.__table__.indexes
+    }
+
+    assert workflow_column_names == {
+        "workflow_uid",
+        "organization_id",
+        "workspace_id",
+        "user_id",
+        "workflow_name",
+        "workflow_description",
+        "steps_json",
+        "state_code",
+        "created_at",
+        "updated_at",
+    }
+    assert all("_" in column_name for column_name in workflow_column_names)
+    assert WorkflowDefinition.__table__.c.workflow_uid.primary_key is True
+    assert "ix_workflow_definitions_scope_time" in workflow_index_names
+    assert "ix_workflow_definitions_owner_scope" in workflow_index_names
+
+    assert AgentRunRecord.__tablename__ == "agent_run_records"
+    run_column_names = {column.name for column in AgentRunRecord.__table__.columns}
+    run_index_names = {index.name for index in AgentRunRecord.__table__.indexes}
+
+    assert run_column_names == {
+        "run_uid",
+        "workflow_uid",
+        "organization_id",
+        "workspace_id",
+        "user_id",
+        "status_code",
+        "started_at",
+        "completed_at",
+        "result_summary",
+    }
+    assert all("_" in column_name for column_name in run_column_names)
+    assert AgentRunRecord.__table__.c.run_uid.primary_key is True
+    assert "ix_agent_run_records_workflow_uid" in run_index_names
+    assert "ix_agent_run_records_scope_time" in run_index_names
+    assert "ix_agent_run_records_owner_scope" in run_index_names
+    assert "ix_agent_run_records_workflow_time" in run_index_names
 
 
 def test_schema_backfill_creates_connector_signal_events():

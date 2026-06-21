@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -366,6 +367,105 @@ class PromptTemplate(Base):
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
         onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
     )
+
+
+class WorkflowDefinition(Base):
+    __tablename__ = "workflow_definitions"
+    __table_args__ = (
+        Index(
+            "ix_workflow_definitions_scope_time",
+            "organization_id",
+            "workspace_id",
+            "updated_at",
+        ),
+        Index(
+            "ix_workflow_definitions_owner_scope",
+            "user_id",
+            "organization_id",
+            "workspace_id",
+            "updated_at",
+        ),
+    )
+
+    workflow_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"workflow_{uuid.uuid4().hex}",
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    workflow_name: Mapped[str] = mapped_column(String, nullable=False)
+    workflow_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps_json: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    state_code: Mapped[str] = mapped_column(
+        String, default="draft", nullable=False
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+
+class AgentRunRecord(Base):
+    __tablename__ = "agent_run_records"
+    __table_args__ = (
+        Index("ix_agent_run_records_workflow_uid", "workflow_uid"),
+        Index(
+            "ix_agent_run_records_scope_time",
+            "organization_id",
+            "workspace_id",
+            "started_at",
+        ),
+        Index(
+            "ix_agent_run_records_owner_scope",
+            "user_id",
+            "organization_id",
+            "workspace_id",
+            "started_at",
+        ),
+        Index(
+            "ix_agent_run_records_workflow_time",
+            "workflow_uid",
+            "started_at",
+        ),
+    )
+
+    run_uid: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: f"agent_run_{uuid.uuid4().hex}",
+        nullable=False,
+    )
+    workflow_uid: Mapped[str] = mapped_column(
+        ForeignKey("workflow_definitions.workflow_uid"), nullable=False
+    )
+    organization_id: Mapped[str] = mapped_column(String, nullable=False)
+    workspace_id: Mapped[str] = mapped_column(String, nullable=False)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    status_code: Mapped[str] = mapped_column(
+        String, default="pending", nullable=False
+    )
+    started_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    completed_at: Mapped[datetime.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
 
 class Email(Base):
     __tablename__ = "email_records"

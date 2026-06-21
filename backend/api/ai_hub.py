@@ -1,13 +1,20 @@
 import datetime
 import hashlib
+import uuid
 
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
-from db.models import LLMProvider, PromptTemplate, SecurityAuditEvent
+from db.models import (
+    AgentRunRecord,
+    LLMProvider,
+    PromptTemplate,
+    SecurityAuditEvent,
+    WorkflowDefinition,
+)
 from db.session import get_db
 from services.llm_provider_readiness import (
     is_llm_provider_configured,
@@ -76,6 +83,30 @@ class AiHubSurfaceResponse(BaseModel):
     run_events: list[AiHubRunEvent]
 
 
+class AiHubWorkflowCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    workflow_name: str = Field(min_length=1, max_length=160)
+    workflow_description: str | None = Field(default=None, max_length=1000)
+    steps_json: list[dict[str, object]] = Field(default_factory=list)
+
+    @field_validator("workflow_name")
+    @classmethod
+    def _workflow_name_must_not_be_blank(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("workflow_name must not be blank")
+        return normalized
+
+    @field_validator("workflow_description")
+    @classmethod
+    def _normalize_optional_description(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 def _stable_key(prefix: str, *parts: object) -> str:
     digest = hashlib.sha256(
         "|".join(str(part or "") for part in parts).encode("utf-8")
@@ -140,6 +171,19 @@ def _workflow_cards(
     ]
 
 
+def _workflow_card_from_definition(
+    workflow: WorkflowDefinition,
+) -> AiHubWorkflowCard:
+    steps = workflow.steps_json or []
+    return AiHubWorkflowCard(
+        workflow_key=workflow.workflow_uid,
+        workflow_title=workflow.workflow_name,
+        trigger_source="workflow_definition",
+        state_code=workflow.state_code,
+        evidence_text=f"{len(steps)} persisted workflow steps",
+    )
+
+
 def _run_events(
     prompts: list[PromptTemplate],
     audit_events: list[SecurityAuditEvent],
@@ -169,6 +213,17 @@ def _run_events(
         )
         for prompt in prompts[:5]
     ]
+
+
+def _run_event_from_record(run_record: AgentRunRecord) -> AiHubRunEvent:
+    return AiHubRunEvent(
+        event_key=run_record.run_uid,
+        event_title="워크플로우 실행",
+        state_code=run_record.status_code,
+        evidence_source="agent_run_records",
+        observed_at=run_record.completed_at or run_record.started_at,
+        detail_text=run_record.result_summary,
+    )
 
 
 def _score(active_provider_count: int, prompt_count: int, audit_count: int) -> int:
@@ -232,7 +287,7 @@ def _summary_cards(
             summary_key="workflow_blueprints",
             label_text="워크플로우",
             value_text=str(workflow_count),
-            detail_text="prompt-derived execution flows",
+            detail_text="source-backed execution flows",
             state_code="ready" if workflow_count else "empty",
         ),
         AiHubSummaryCard(
@@ -253,7 +308,7 @@ def _summary_cards(
             summary_key="run_events",
             label_text="실행 이력",
             value_text=str(run_event_count),
-            detail_text="scoped source evidence",
+            detail_text="scoped execution evidence",
             state_code="ready" if run_event_count else "empty",
         ),
     ]
@@ -321,6 +376,103 @@ async def _list_audit_events(
     return list(result.scalars().all())
 
 
+async def _list_workflow_definitions(
+    db: AsyncSession,
+    auth_context: AuthContext,
+) -> list[WorkflowDefinition]:
+    if auth_context.organization_id is None:
+        return []
+    result = await db.execute(
+        select(WorkflowDefinition)
+        .where(
+            WorkflowDefinition.organization_id == auth_context.organization_id,
+            WorkflowDefinition.workspace_id == auth_context.workspace_id,
+            WorkflowDefinition.user_id == auth_context.user_id,
+        )
+        .order_by(
+            desc(WorkflowDefinition.updated_at),
+            desc(WorkflowDefinition.workflow_uid),
+        )
+        .limit(8)
+    )
+    return list(result.scalars().all())
+
+
+async def _list_agent_run_records(
+    db: AsyncSession,
+    auth_context: AuthContext,
+) -> list[AgentRunRecord]:
+    if auth_context.organization_id is None:
+        return []
+    result = await db.execute(
+        select(AgentRunRecord)
+        .where(
+            AgentRunRecord.organization_id == auth_context.organization_id,
+            AgentRunRecord.workspace_id == auth_context.workspace_id,
+            AgentRunRecord.user_id == auth_context.user_id,
+        )
+        .order_by(
+            desc(AgentRunRecord.started_at),
+            desc(AgentRunRecord.run_uid),
+        )
+        .limit(8)
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/workflows", response_model=list[AiHubWorkflowCard])
+async def list_ai_hub_workflows(
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[AiHubWorkflowCard]:
+    workflows = await _list_workflow_definitions(db, auth_context)
+    return [_workflow_card_from_definition(workflow) for workflow in workflows]
+
+
+@router.post(
+    "/workflows",
+    response_model=AiHubWorkflowCard,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_ai_hub_workflow(
+    request: AiHubWorkflowCreateRequest,
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> AiHubWorkflowCard:
+    if auth_context.organization_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="organization scope required",
+        )
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    workflow = WorkflowDefinition(
+        workflow_uid=f"workflow_{uuid.uuid4().hex}",
+        organization_id=auth_context.organization_id,
+        workspace_id=auth_context.workspace_id,
+        user_id=auth_context.user_id,
+        workflow_name=request.workflow_name,
+        workflow_description=request.workflow_description,
+        steps_json=request.steps_json,
+        state_code="draft",
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(workflow)
+    await db.commit()
+    await db.refresh(workflow)
+    return _workflow_card_from_definition(workflow)
+
+
+@router.get("/runs", response_model=list[AiHubRunEvent])
+async def list_ai_hub_runs(
+    auth_context: AuthContext = Depends(get_auth_context),
+    db: AsyncSession = Depends(get_db),
+) -> list[AiHubRunEvent]:
+    run_records = await _list_agent_run_records(db, auth_context)
+    return [_run_event_from_record(run_record) for run_record in run_records]
+
+
 @router.get("/surface", response_model=AiHubSurfaceResponse)
 async def get_ai_hub_surface(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -329,6 +481,8 @@ async def get_ai_hub_surface(
     prompts = await _list_prompts(db, auth_context)
     providers = await _list_providers(db, auth_context)
     audit_events = await _list_audit_events(db, auth_context)
+    workflow_definitions = await _list_workflow_definitions(db, auth_context)
+    agent_run_records = await _list_agent_run_records(db, auth_context)
 
     prompt_cards = [_prompt_card(prompt) for prompt in prompts]
     active_provider_count = sum(
@@ -336,9 +490,15 @@ async def get_ai_hub_surface(
         for provider in providers
         if provider.is_active and is_llm_provider_configured(provider)
     )
-    workflow_cards = _workflow_cards(prompt_cards, active_provider_count)
+    workflow_cards = [
+        _workflow_card_from_definition(workflow)
+        for workflow in workflow_definitions
+    ] or _workflow_cards(prompt_cards, active_provider_count)
     agent_cards = [_agent_card(provider) for provider in providers]
-    run_events = _run_events(prompts, audit_events)
+    run_events = [
+        _run_event_from_record(run_record)
+        for run_record in agent_run_records
+    ] or _run_events(prompts, audit_events)
     readiness_score = _score(
         active_provider_count,
         len(prompt_cards),
