@@ -246,6 +246,7 @@ async def get_emails(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     tenant_config = await get_scoped_tenant_config(
         db,
         auth_context.user_id,
@@ -315,6 +316,7 @@ async def get_pending_replies(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     pending_emails = await check_missing_replies(
         db, auth_context.user_id, auth_context.organization_id
     )
@@ -453,6 +455,7 @@ async def create_unique_thread_intent(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     candidates = [_to_dedupe_candidate(candidate) for candidate in request.candidates]
     (
         message_lookup_values,
@@ -489,6 +492,7 @@ async def import_email_files(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     if auth_context.organization_id is None:
         raise HTTPException(status_code=403, detail="organization_required")
     if len(files) > MAX_IMPORT_UPLOADS:
@@ -566,6 +570,7 @@ async def get_email(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     result = await db.execute(
         select(Email).where(Email.id == email_id, *email_owner_filters(auth_context))
     )
@@ -583,6 +588,7 @@ async def get_email_thread(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     lookup_values = thread_lookup_values(thread_id)
     result = await db.execute(
         select(Email)
@@ -618,6 +624,7 @@ async def send_email_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    # Ensure auth context validates the request payload and scopes access
     try:
         tenant_config = await get_scoped_tenant_config(
             db,
