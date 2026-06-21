@@ -47,20 +47,29 @@ jobs:
       pull-requests: read
       issues: read
     steps:
-      - name: Checkout repository
+      - name: Checkout trusted review workflow
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
-          persist-credentials: true
-          ref: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha || github.sha }}
 
-      - name: Fetch PR base branch for OpenCode context
+      - name: Materialize pull request head for OpenCode review data
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref || github.event.inputs.pr_base_ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
         run: |
           set -euo pipefail
+          gh auth setup-git
           git fetch --no-tags origin \
             "+refs/heads/${PR_BASE_REF}:refs/remotes/origin/${PR_BASE_REF}"
+          git fetch --no-tags origin "$PR_BASE_SHA" "$PR_HEAD_SHA"
+          rm -rf "$OPENCODE_SOURCE_WORKDIR"
+          git worktree add --detach "$OPENCODE_SOURCE_WORKDIR" "$PR_HEAD_SHA"
+          git -C "$OPENCODE_SOURCE_WORKDIR" status --short
 
       - name: Configure git identity for OpenCode action
         run: |
@@ -90,8 +99,10 @@ jobs:
         env:
           CODEGRAPH_PACKAGE: "@colbymchenry/codegraph@0.9.9"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
         run: |
           set -euo pipefail
+          cd "$OPENCODE_SOURCE_WORKDIR"
           npx -y "$CODEGRAPH_PACKAGE" init -i
           npx -y "$CODEGRAPH_PACKAGE" status
 
@@ -103,6 +114,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
           FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"
@@ -237,7 +249,7 @@ jobs:
             printf -- '- PR: #%s\n' "$PR_NUMBER"
             printf -- "- Base SHA: \`%s\`\n" "$PR_BASE_SHA"
             printf -- "- Head SHA: \`%s\`\n\n" "$PR_HEAD_SHA"
-            PR_MERGE_BASE="$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"
+            PR_MERGE_BASE="$(git -C "$OPENCODE_SOURCE_WORKDIR" merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"
             printf -- "- Merge base SHA: \`%s\`\n\n" "$PR_MERGE_BASE"
 
             printf '## CodeGraph evidence\n\n'
@@ -261,18 +273,18 @@ jobs:
             printf 'Do not request a rollback solely because a model memory says the version is unreleased or unsupported. Treat version availability as a blocker only when a current-head GitHub Check failed, a validated registry lookup failed, or a cited local source line is internally inconsistent with the documented runtime contract.\n\n'
 
             printf '## Changed files\n\n'
-            git diff --name-status "$PR_MERGE_BASE" "$PR_HEAD_SHA"
+            git -C "$OPENCODE_SOURCE_WORKDIR" diff --name-status "$PR_MERGE_BASE" "$PR_HEAD_SHA"
             printf '\n## Diff stat\n\n'
-            git diff --stat --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"
+            git -C "$OPENCODE_SOURCE_WORKDIR" diff --stat --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"
             printf '\n## Focused changed hunks\n\n'
             printf '```diff\n'
             mapfile -t focused_hunk_paths < <(
-              git diff --name-only --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" |
+              git -C "$OPENCODE_SOURCE_WORKDIR" diff --name-only --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" |
                 awk 'NF > 0 && $0 !~ /^\// && $0 !~ /(^|\/)\.\.($|\/)/ { print }'
             )
             if [ "${#focused_hunk_paths[@]}" -gt 0 ]; then
               focused_hunks_file="$(mktemp)"
-              git diff --unified=12 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "${focused_hunk_paths[@]}" >"$focused_hunks_file"
+              git -C "$OPENCODE_SOURCE_WORKDIR" diff --unified=12 --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "${focused_hunk_paths[@]}" >"$focused_hunks_file"
               emit_file_prefix "$focused_hunks_file" 12000
               rm -f "$focused_hunks_file"
             else
@@ -294,6 +306,7 @@ jobs:
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_FAILED_CHECK_EVIDENCE_FILE: ${{ runner.temp }}/opencode-failed-check-evidence.md
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
         run: |
           set -euo pipefail
           mkdir -p "$OPENCODE_REVIEW_WORKDIR"
@@ -391,7 +404,7 @@ jobs:
           Return only the requested review body.
           EOF
 
-          jq -n --arg workspace "$GITHUB_WORKSPACE" '{
+          jq -n --arg workspace "$OPENCODE_SOURCE_WORKDIR" '{
             "$schema": "https://opencode.ai/config.json",
             "model": "github-models/openai/gpt-5",
             "small_model": "github-models/deepseek/deepseek-v3-0324",
@@ -551,6 +564,7 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-primary.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.inputs.pr_base_sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
@@ -564,7 +578,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          Review PR #${PR_NUMBER} in ${OPENCODE_SOURCE_WORKDIR}. The trusted workflow checkout is ${GITHUB_WORKSPACE}; inspect the pull request head source only from ${OPENCODE_SOURCE_WORKDIR}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
@@ -664,6 +678,7 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
@@ -675,7 +690,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          GPT-5 failed; review PR #${PR_NUMBER} in ${OPENCODE_SOURCE_WORKDIR} with DeepSeek R1-0528. The trusted workflow checkout is ${GITHUB_WORKSPACE}; inspect the pull request head source only from ${OPENCODE_SOURCE_WORKDIR}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
@@ -775,6 +790,7 @@ jobs:
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-second-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
+          OPENCODE_SOURCE_WORKDIR: ${{ runner.temp }}/opencode-pr-head
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
           RUN_ID: ${{ github.run_id }}
@@ -786,7 +802,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${OPENCODE_SOURCE_WORKDIR} with DeepSeek V3-0324. The trusted workflow checkout is ${GITHUB_WORKSPACE}; inspect the pull request head source only from ${OPENCODE_SOURCE_WORKDIR}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
