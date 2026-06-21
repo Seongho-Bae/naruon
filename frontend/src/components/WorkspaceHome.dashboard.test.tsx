@@ -337,7 +337,12 @@ describe("WorkspaceHome Today dashboard", () => {
 
     expect(linkHrefByText("작업 바로가기")).toBe("/tasks");
     expect(linkHrefByText("전체 작업 보기")).toBe("/tasks");
-    expect(linkHrefByText("일정 조정하기")).toBe("/calendar");
+    expect(linkHrefByText("일정 조율하기")).toBe("/calendar");
+    expect(linkHrefByText("열기")).toBe("/mail?id=101");
+    expect(
+      Array.from(container?.querySelectorAll("button") ?? [])
+        .some((button) => button.textContent?.includes("보류")),
+    ).toBe(false);
 
     const quickActions = container.querySelector<HTMLElement>('[aria-label="홈 빠른 실행"]');
     expect(quickActions).not.toBeNull();
