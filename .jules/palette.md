@@ -52,3 +52,6 @@
 ## 2026-06-21 - Accessible Dynamic Empty and Error States
 **Learning:** For dynamic, client-side rendered UI components (like graph visualizations or data panels), rendering an empty state or error state message in a standard `div` will not be announced by screen readers when the state suddenly transitions (e.g., from loading to empty).
 **Action:** When creating or modifying dynamic empty, error, or loading states that update asynchronously, ensure their container has `role="status"` (or `role="alert"` for errors) and `aria-live="polite"` so screen readers are actively notified of the content change without aggressive interruption.
+## 2026-06-21 - Mocking new Lucide icons in tests
+**Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
+**Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.

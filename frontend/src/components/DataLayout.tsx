@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useEffect, type ChangeEvent } from 'react';
-import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server, Upload } from 'lucide-react';
+import { Database, FileText, HardDrive, RefreshCw, FolderOpen, CheckCircle2, Server, Upload, Loader2 } from 'lucide-react';
 import { apiClient } from '@/lib/api-client';
 
 type WebdavWritebackIntentResponse = {
@@ -601,8 +601,12 @@ export function DataLayout() {
                         aria-busy={isEmailImportLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-fit"
                       >
-                        <Upload className="size-4" />
-                        선택 파일 반입
+                        {isEmailImportLoading ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Upload className="size-4" />
+                        )}
+                        {isEmailImportLoading ? '반입 중' : '선택 파일 반입'}
                       </button>
                     </div>
                     <div role="status" aria-live="polite" className="text-xs font-semibold text-muted-foreground">
