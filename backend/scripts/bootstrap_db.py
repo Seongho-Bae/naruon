@@ -80,6 +80,15 @@ def _get_add_columns_statements() -> list[Executable]:
             "ALTER TABLE sender_relationships "
             "ADD COLUMN IF NOT EXISTS source_thread_id varchar"
         ),
+        text("ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS prompt_uid varchar"),
+        text(
+            "ALTER TABLE prompt_templates "
+            "ADD COLUMN IF NOT EXISTS organization_id varchar"
+        ),
+        text(
+            "ALTER TABLE prompt_templates "
+            "ADD COLUMN IF NOT EXISTS workspace_id varchar"
+        ),
     ]
 
 
@@ -176,6 +185,14 @@ def _get_create_indexes_statements() -> list[Executable]:
             "ON security_audit_events "
             "(actor_user_id, organization_id, workspace_id)"
         ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_prompt_templates_owner_scope "
+            "ON prompt_templates (created_by, organization_id, workspace_id)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_prompt_templates_shared_scope "
+            "ON prompt_templates (organization_id, workspace_id, is_shared)"
+        ),
     ]
 
 
@@ -232,6 +249,24 @@ def _get_update_project_folders_statements() -> list[Executable]:
         text(
             "CREATE INDEX IF NOT EXISTS ix_project_folders_owner_scope "
             "ON project_folders (user_id, organization_id)"
+        ),
+    ]
+
+
+def _get_update_prompt_template_statements() -> list[Executable]:
+    return [
+        text(
+            "UPDATE prompt_templates "
+            "SET prompt_uid = 'prompt_' || encode(sha256(("
+            "random()::text || ':' || clock_timestamp()::text || ':' || "
+            "created_by || ':' || title"
+            ")::bytea), 'hex') "
+            "WHERE prompt_uid IS NULL OR prompt_uid = ''"
+        ),
+        text("ALTER TABLE prompt_templates ALTER COLUMN prompt_uid SET NOT NULL"),
+        text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_templates_prompt_uid "
+            "ON prompt_templates (prompt_uid)"
         ),
     ]
 
@@ -410,6 +445,7 @@ def schema_backfill_sql() -> list[Executable]:
     statements.extend(_get_create_indexes_statements())
     statements.extend(_get_update_webdav_accounts_statements())
     statements.extend(_get_update_project_folders_statements())
+    statements.extend(_get_update_prompt_template_statements())
     statements.extend(_get_drop_constraints_and_indexes_statements())
     statements.extend(_get_create_new_indexes_statements())
 
