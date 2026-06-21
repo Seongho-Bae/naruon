@@ -213,6 +213,44 @@ jobs:
             '
           }
 
+          emit_changed_docs_tree_evidence() {
+            local docs_dir tree_count shown_count
+            local -a docs_dirs=()
+
+            mapfile -t docs_dirs < <(
+              git diff --name-only --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- 'docs/**' |
+                awk -F/ 'NF >= 2 { print $1 "/" $2 }' |
+                sort -u
+            )
+
+            if [ "${#docs_dirs[@]}" -eq 0 ]; then
+              printf 'No changed docs/ directories were detected.\n'
+              return 0
+            fi
+
+            printf 'Use this current-head tree evidence before accepting or rejecting claims that repository docs, images, mockups, or reference assets are missing.\n\n'
+            for docs_dir in "${docs_dirs[@]}"; do
+              printf '### `%s`\n\n' "$docs_dir"
+              printf 'Changed paths under this docs directory:\n\n'
+              git diff --name-status --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA" -- "$docs_dir" |
+                sed 's/^/- /'
+              printf '\nCurrent-head tree under this docs directory, capped at 160 paths:\n\n'
+              tree_count="$(git ls-tree -r --name-only HEAD -- "$docs_dir" | wc -l | tr -d '[:space:]')"
+              shown_count=0
+              while IFS= read -r tree_path; do
+                printf -- '- `%s`\n' "$tree_path"
+                shown_count=$((shown_count + 1))
+                if [ "$shown_count" -ge 160 ]; then
+                  break
+                fi
+              done < <(git ls-tree -r --name-only HEAD -- "$docs_dir")
+              if [ "$tree_count" -gt "$shown_count" ]; then
+                printf -- '- [tree truncated after %s of %s paths]\n' "$shown_count" "$tree_count"
+              fi
+              printf '\n'
+            done
+          }
+
           emit_file_prefix() {
             local file="$1"
             local max_bytes="$2"
@@ -262,6 +300,8 @@ jobs:
 
             printf '## Changed files\n\n'
             git diff --name-status "$PR_MERGE_BASE" "$PR_HEAD_SHA"
+            printf '\n## Changed docs repository tree evidence\n\n'
+            emit_changed_docs_tree_evidence
             printf '\n## Diff stat\n\n'
             git diff --stat --find-renames "$PR_MERGE_BASE" "$PR_HEAD_SHA"
             printf '\n## Focused changed hunks\n\n'
@@ -313,6 +353,8 @@ jobs:
           behavior, and web_search for bounded external lookups such as current action/tool release facts. Note
           any unavailable or inapplicable MCP source in the review summary so the review is not just local diff
           inspection. Also inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          Do not claim repository docs, images, or reference assets are unavailable, missing, or absent unless the changed docs repository tree evidence proves it.
+          If an external MCP source is unavailable, state that as a source limitation, not as a repository fact.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only,
           workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile,
           workflow, config, docs, dependency edges, generated side effects, and test-command contracts.
@@ -354,6 +396,8 @@ jobs:
           source when reachable: CodeGraph, DeepWiki, Context7, and web_search. If one is unavailable or not
           applicable to the diff, say so briefly in the review summary. Inspect changed files/focused hunks
           directly when MCP evidence is not enough.
+          Do not claim repository docs, images, or reference assets are unavailable, missing, or absent unless the changed docs repository tree evidence proves it.
+          If an external MCP source is unavailable, state that as a source limitation, not as a repository fact.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only,
           workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile,
           workflow, config, docs, dependency edges, generated side effects, and test-command contracts.
@@ -564,7 +608,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          Review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE}. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient. Do not claim repository docs, images, or reference assets are unavailable, missing, or absent unless the changed docs repository tree evidence proves it. If an external MCP source is unavailable, state that as a source limitation, not as a repository fact.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
@@ -675,7 +719,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          GPT-5 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek R1-0528. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient. Do not claim repository docs, images, or reference assets are unavailable, missing, or absent unless the changed docs repository tree evidence proves it. If an external MCP source is unavailable, state that as a source limitation, not as a repository fact.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
@@ -786,7 +830,7 @@ jobs:
           }
           prompt_file="${RUNNER_TEMP}/opencode-review-prompt.md"
           cat >"$prompt_file" <<EOF
-          GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient.
+          GPT-5 and DeepSeek R1-0528 failed; review PR #${PR_NUMBER} in ${GITHUB_WORKSPACE} with DeepSeek V3-0324. Be general-purpose and meticulous: actively consult CodeGraph MCP for structural checks, DeepWiki for repo docs, Context7 for current library/API docs, and web_search for bounded external lookups such as action/tool release facts. If a configured MCP source is unavailable or not applicable, say so briefly in the review summary. Inspect changed files and focused hunks directly when MCP evidence is insufficient. Do not claim repository docs, images, or reference assets are unavailable, missing, or absent unless the changed docs repository tree evidence proves it. If an external MCP source is unavailable, state that as a source limitation, not as a repository fact.
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible, changed files could not be inspected, or evidence was truncated, do not approve.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
           Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
@@ -1229,6 +1273,152 @@ jobs:
             fi
             rm -f "$gh_error_file" "$review_payload_file"
             update_review_overview "$event" "$body"
+          }
+
+          collect_unresolved_human_review_threads() {
+            local output_file="$1"
+            local owner="${GH_REPOSITORY%%/*}"
+            local name="${GH_REPOSITORY#*/}"
+            local thread_json_file
+            local review_threads_query
+
+            thread_json_file="$(mktemp)"
+            read -r -d '' review_threads_query <<'GRAPHQL' || true
+          query($owner:String!,$name:String!,$number:Int!) {
+            repository(owner:$owner,name:$name) {
+              pullRequest(number:$number) {
+                reviewThreads(first: 100) {
+                  nodes {
+                    isResolved
+                    isOutdated
+                    path
+                    line
+                    startLine
+                    comments(first: 100) {
+                      nodes {
+                        author {
+                          login
+                        }
+                        body
+                        createdAt
+                        url
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          GRAPHQL
+            if ! gh api graphql \
+              -f owner="$owner" \
+              -f name="$name" \
+              -F number="$PR_NUMBER" \
+              -f query="$review_threads_query" >"$thread_json_file"; then
+              rm -f "$thread_json_file"
+              return 1
+            fi
+
+            if ! jq -r '
+              [
+                (.data.repository.pullRequest.reviewThreads.nodes // [])
+                | .[]
+                | select((.isResolved // false) == false)
+                | select((.isOutdated // false) == false)
+                  | {
+                    path: (.path // "unknown"),
+                    line: (.line // .startLine // "unknown"),
+                    comments: [
+                      (.comments.nodes // [])
+                      | .[]
+                      | (.author.login // "") as $author
+                      | select($author != "")
+                      | select(($author | test("\\[bot\\]$")) | not)
+                      | select($author != "opencode-agent")
+                      | select($author != "github-actions")
+                      | {
+                          author: $author,
+                          body: (.body // ""),
+                          createdAt: (.createdAt // ""),
+                          url: (.url // "")
+                        }
+                    ]
+                  }
+                | select((.comments | length) > 0)
+              ] as $threads
+              | if ($threads | length) == 0 then
+                  empty
+                else
+                  "## Latest unresolved human review thread evidence",
+                  "",
+                  ($threads[] |
+                    "### `\(.path)` line \(.line)",
+                    (.comments[-1] |
+                      "- Latest human comment: @\(.author) at \(.createdAt)",
+                      "- Comment URL: \(.url)",
+                      "- Comment excerpt: \((.body | gsub("\r"; "") | split("\n") | map(select(length > 0)) | .[0:8] | join(" / ") | .[0:600]))"
+                    ),
+                    ""
+                  )
+                end
+            ' "$thread_json_file" >"$output_file"; then
+              rm -f "$thread_json_file"
+              return 1
+            fi
+            rm -f "$thread_json_file"
+          }
+
+          build_unresolved_human_threads_body() {
+            local evidence_file="$1" body_file="$2"
+
+            {
+              printf '%s\n' \
+                "## Pull request overview" \
+                "" \
+                "OpenCode reviewed the current-head evidence but found unresolved human review threads before approval." \
+                "" \
+                "## Findings" \
+                "" \
+                "### 1. HIGH .github/workflows/opencode-review.yml:1 - Unresolved human review thread blocks automated approval" \
+                "- Problem: OpenCode reached an APPROVE control result, but the approval step found unresolved, non-outdated human review thread evidence on the current pull request." \
+                "- Root cause: Human review feedback can arrive after bounded model evidence is prepared, so the approval step must re-query GitHub immediately before publishing an approval." \
+                "- Fix: Address or resolve the listed human review thread(s), then re-run OpenCode on the current head." \
+                "- Regression test: Keep the approval gate querying reviewThreads(first: 100) after model output and before create_pull_review APPROVE." \
+                "" \
+                "## Review thread evidence" \
+                ""
+              sed -n '1,240p' "$evidence_file"
+              printf '%s\n' \
+                "" \
+                "- Result: REQUEST_CHANGES" \
+                "- Reason: unresolved human review thread(s) were present before approval." \
+                "- Head SHA: \`${HEAD_SHA}\`" \
+                "- Workflow run: ${RUN_ID}" \
+                "- Workflow attempt: ${RUN_ATTEMPT}"
+            } >"$body_file"
+          }
+
+          build_human_thread_lookup_failure_body() {
+            local body_file="$1"
+
+            printf '%s\n' \
+              "## Pull request overview" \
+              "" \
+              "OpenCode reviewed the current-head evidence but could not verify unresolved human review threads before approval." \
+              "" \
+              "## Findings" \
+              "" \
+              "### 1. HIGH .github/workflows/opencode-review.yml:1 - Review thread lookup could not be read before approval" \
+              "- Problem: GitHub reviewThreads could not be read for the current pull request immediately before approval." \
+              "- Root cause: OpenCode cannot safely approve without verifying whether newer unresolved human review feedback exists." \
+              "- Fix: Re-run OpenCode after GitHub reviewThreads are readable." \
+              "- Regression test: Keep the approval gate failing closed when reviewThreads(first: 100) lookup fails." \
+              "" \
+              "- Result: REQUEST_CHANGES" \
+              "- Reason: unresolved human review thread state could not be verified for current head \`${HEAD_SHA}\`." \
+              "- Head SHA: \`${HEAD_SHA}\`" \
+              "- Workflow run: ${RUN_ID}" \
+              "- Workflow attempt: ${RUN_ATTEMPT}" >"$body_file"
           }
 
           request_changes_for_gate_failure() {
@@ -2102,9 +2292,11 @@ jobs:
           failed_check_evidence_file=""
           failed_check_review_body_file=""
           pending_checks_file=""
+          unresolved_human_threads_file=""
+          human_thread_review_body_file=""
           # shellcheck disable=SC2329
           cleanup_approval_files() {
-            rm -f "$tmp_body" "$control_json" "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$pending_checks_file"
+            rm -f "$tmp_body" "$control_json" "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$pending_checks_file" "$unresolved_human_threads_file" "$human_thread_review_body_file"
           }
           trap cleanup_approval_files EXIT
 
@@ -2214,6 +2406,20 @@ jobs:
                   echo "::endgroup::"
                   exit 0
                 fi
+              fi
+              unresolved_human_threads_file="$(mktemp)"
+              human_thread_review_body_file="$(mktemp)"
+              if ! collect_unresolved_human_review_threads "$unresolved_human_threads_file"; then
+                build_human_thread_lookup_failure_body "$human_thread_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
+                echo "::endgroup::"
+                exit 0
+              fi
+              if [ -s "$unresolved_human_threads_file" ]; then
+                build_unresolved_human_threads_body "$unresolved_human_threads_file" "$human_thread_review_body_file"
+                create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
+                echo "::endgroup::"
+                exit 0
               fi
               summary="$(jq -r '.summary' "$control_json")"
               reason="$(jq -r '.reason' "$control_json")"
