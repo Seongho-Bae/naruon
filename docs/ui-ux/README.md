@@ -13,6 +13,8 @@ review comments, and SHA-256 evidence remain reproducible.
 - `reference-set-2026-06-18/`: durable PR-review reference set. Its
   `images/` directory contains 45 images, and `sources.tsv` records each
   stable repository path and SHA-256 digest.
+- `asset-overviews-2026-06-21/`: rendered contact sheets and a manifest for
+  quickly reviewing every current UI/UX asset without changing source paths.
 
 ## Agent Workflow
 
@@ -34,3 +36,5 @@ review comments, and SHA-256 evidence remain reproducible.
 - Add a new dated reference-set directory when new durable provenance is needed.
 - Update `naruon-ui-ux-mapping.md` whenever new images are added, renamed, or
   semantically aliased.
+- Treat rendered overviews as review aids. The original PNG files and
+  `sources.tsv` remain the authority.
