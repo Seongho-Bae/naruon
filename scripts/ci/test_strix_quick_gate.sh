@@ -802,6 +802,52 @@ EOF
 	rm -rf "$tmp_dir"
 }
 
+assert_opencode_review_gate_rejects_no_changes_approval() {
+	local tmp_dir
+	local output_file
+	local rc
+	local gate_result
+	tmp_dir="$(mktemp -d)"
+	output_file="$tmp_dir/opencode-output.md"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No changes detected in the PR head source directory.","summary":"No files or changes were found in the PR head source directory, indicating no actionable changes to review.","findings":[]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/normalize.out" 2>"$tmp_dir/normalize.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects no-changes approvals"
+	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for no-changes approval"
+
+	cat >"$output_file" <<'EOF'
+<!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
+
+<!-- opencode-review-control-v1
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No changes detected in the PR head source directory.","summary":"No files or changes were found in the PR head source directory, indicating no actionable changes to review.","findings":[]}
+-->
+EOF
+
+	set +e
+	gate_result="$(
+		bash "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" \
+			"abc123" "42" "1" "$output_file"
+	)"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode approval gate rejects no-changes approvals"
+	assert_equals "NO_CONCLUSION" "$gate_result" "no-changes approval rejection gate result"
+	assert_file_contains "$REPO_ROOT/.github/workflows/opencode-review.yml" "Never approve with a reason or summary that says no changes" "opencode prompt rejects no-changes approvals when bounded evidence lists changed files"
+
+	rm -rf "$tmp_dir"
+}
+
 assert_opencode_review_gate_rejects_line_zero_findings() {
 	local tmp_dir
 	local output_file
@@ -5918,6 +5964,8 @@ assert_opencode_review_normalizer_accepts_transcript_json
 assert_opencode_review_publish_body_discards_trailing_model_prose
 
 assert_opencode_review_gate_rejects_missing_structural_exploration_approval
+
+assert_opencode_review_gate_rejects_no_changes_approval
 
 assert_opencode_review_gate_rejects_line_zero_findings
 

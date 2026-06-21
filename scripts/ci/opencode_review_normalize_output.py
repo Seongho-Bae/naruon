@@ -36,6 +36,15 @@ STRUCTURAL_FAILURE_PHRASES = (
     "could not access required evidence",
     "evidence was truncated",
     "truncated evidence",
+    "no changes detected",
+    "no changes were detected",
+    "no changes found",
+    "no changes were found",
+    "no files or changes were found",
+    "no files or changes found",
+    "no actionable changes to review",
+    "no changes to review",
+    "no changed files",
 )
 
 STRUCTURAL_FAILURE_PATTERNS = (
@@ -53,6 +62,12 @@ STRUCTURAL_FAILURE_PATTERNS = (
         r"\b(?:structural\s+(?:exploration|analysis|review))\s+"
         r"(?:was\s+)?(?:unavailable|incomplete|blocked|not possible)\b"
     ),
+    re.compile(
+        r"\bno\s+(?:files?\s+or\s+)?changes?\s+"
+        r"(?:were\s+)?(?:detected|found|present)\b"
+    ),
+    re.compile(r"\bno\s+(?:actionable\s+)?changes?\s+to\s+review\b"),
+    re.compile(r"\b(?:no|zero)\s+changed\s+files?\b"),
 )
 
 
