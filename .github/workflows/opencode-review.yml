@@ -282,6 +282,15 @@ jobs:
             local sleep_seconds="${FAILED_CHECK_EVIDENCE_SLEEP_SECONDS:-10}"
             local attempt=1
 
+            if [ ! -x scripts/ci/collect_failed_check_evidence.sh ]; then
+              {
+                printf 'Failed-check evidence collector is not installed in this repository.\n'
+                printf 'No completed failed GitHub Checks were present in this bounded evidence file.\n'
+                printf 'The approval gate will re-query current-head GitHub Checks before approving.\n'
+              } >"$evidence_file"
+              return 0
+            fi
+
             while [ "$attempt" -le "$attempts" ]; do
               if scripts/ci/collect_failed_check_evidence.sh "$evidence_file"; then
                 if ! grep -Fq "No completed failed GitHub Checks were present" "$evidence_file"; then
@@ -714,6 +723,7 @@ jobs:
           SHARE: "false"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           NO_COLOR: "1"
+          OPENCODE_MODEL_ATTEMPTS: "2"
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-primary.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
@@ -757,15 +767,30 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
-          set +e
-          timeout 600 opencode run "$(cat "$prompt_file")" \
-            --pure \
-            --agent ci-review \
-            --model "$MODEL" \
-            --format json \
-            --title "PR #${PR_NUMBER} OpenCode bounded review ${MODEL}" >"$opencode_json_file"
-          opencode_run_status=$?
-          set -e
+          opencode_attempts="${OPENCODE_MODEL_ATTEMPTS:-2}"
+          opencode_run_status=1
+          for opencode_attempt in $(seq 1 "$opencode_attempts"); do
+            rm -f "$opencode_json_file"
+            set +e
+            timeout 600 opencode run "$(cat "$prompt_file")" \
+              --pure \
+              --agent ci-review \
+              --model "$MODEL" \
+              --format json \
+              --title "PR #${PR_NUMBER} OpenCode bounded review ${MODEL} attempt ${opencode_attempt}/${opencode_attempts}" >"$opencode_json_file"
+            opencode_run_status=$?
+            set -e
+            if [ "$opencode_run_status" -eq 0 ]; then
+              break
+            fi
+            printf 'OpenCode %s attempt %s/%s failed with exit %s.\n' "$MODEL" "$opencode_attempt" "$opencode_attempts" "$opencode_run_status"
+            case "$opencode_run_status" in
+              124|137|143) break ;;
+            esac
+            if [ "$opencode_attempt" -lt "$opencode_attempts" ]; then
+              sleep 10
+            fi
+          done
           if [ "$opencode_run_status" -ne 0 ]; then
             echo "OpenCode primary review attempt did not complete; fallback review will run."
             record_review_status "failed"
@@ -826,6 +851,7 @@ jobs:
           SHARE: "false"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           NO_COLOR: "1"
+          OPENCODE_MODEL_ATTEMPTS: "2"
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
@@ -867,15 +893,30 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
-          set +e
-          timeout 300 opencode run "$(cat "$prompt_file")" \
-            --pure \
-            --agent ci-review-fallback \
-            --model "$MODEL" \
-            --format json \
-            --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
-          opencode_run_status=$?
-          set -e
+          opencode_attempts="${OPENCODE_MODEL_ATTEMPTS:-2}"
+          opencode_run_status=1
+          for opencode_attempt in $(seq 1 "$opencode_attempts"); do
+            rm -f "$opencode_json_file"
+            set +e
+            timeout 300 opencode run "$(cat "$prompt_file")" \
+              --pure \
+              --agent ci-review-fallback \
+              --model "$MODEL" \
+              --format json \
+              --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL} attempt ${opencode_attempt}/${opencode_attempts}" >"$opencode_json_file"
+            opencode_run_status=$?
+            set -e
+            if [ "$opencode_run_status" -eq 0 ]; then
+              break
+            fi
+            printf 'OpenCode %s attempt %s/%s failed with exit %s.\n' "$MODEL" "$opencode_attempt" "$opencode_attempts" "$opencode_run_status"
+            case "$opencode_run_status" in
+              124|137|143) break ;;
+            esac
+            if [ "$opencode_attempt" -lt "$opencode_attempts" ]; then
+              sleep 10
+            fi
+          done
           if [ "$opencode_run_status" -ne 0 ]; then
             echo "OpenCode DeepSeek R1 review attempt did not complete; next fallback review will run."
             record_review_status "failed"
@@ -936,6 +977,7 @@ jobs:
           SHARE: "false"
           NPM_CONFIG_IGNORE_SCRIPTS: "true"
           NO_COLOR: "1"
+          OPENCODE_MODEL_ATTEMPTS: "2"
           OPENCODE_EVIDENCE_FILE: ${{ runner.temp }}/opencode-review-evidence.md
           OPENCODE_OUTPUT_FILE: ${{ runner.temp }}/opencode-review-second-fallback.md
           OPENCODE_REVIEW_WORKDIR: ${{ runner.temp }}/opencode-review-project
@@ -977,15 +1019,30 @@ jobs:
           cd "$OPENCODE_REVIEW_WORKDIR"
           opencode_json_file="${OPENCODE_OUTPUT_FILE}.jsonl"
           opencode_export_file="${OPENCODE_OUTPUT_FILE}.session.json"
-          set +e
-          timeout 300 opencode run "$(cat "$prompt_file")" \
-            --pure \
-            --agent ci-review-fallback \
-            --model "$MODEL" \
-            --format json \
-            --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL}" >"$opencode_json_file"
-          opencode_run_status=$?
-          set -e
+          opencode_attempts="${OPENCODE_MODEL_ATTEMPTS:-2}"
+          opencode_run_status=1
+          for opencode_attempt in $(seq 1 "$opencode_attempts"); do
+            rm -f "$opencode_json_file"
+            set +e
+            timeout 300 opencode run "$(cat "$prompt_file")" \
+              --pure \
+              --agent ci-review-fallback \
+              --model "$MODEL" \
+              --format json \
+              --title "PR #${PR_NUMBER} OpenCode bounded fallback review ${MODEL} attempt ${opencode_attempt}/${opencode_attempts}" >"$opencode_json_file"
+            opencode_run_status=$?
+            set -e
+            if [ "$opencode_run_status" -eq 0 ]; then
+              break
+            fi
+            printf 'OpenCode %s attempt %s/%s failed with exit %s.\n' "$MODEL" "$opencode_attempt" "$opencode_attempts" "$opencode_run_status"
+            case "$opencode_run_status" in
+              124|137|143) break ;;
+            esac
+            if [ "$opencode_attempt" -lt "$opencode_attempts" ]; then
+              sleep 10
+            fi
+          done
           if [ "$opencode_run_status" -ne 0 ]; then
             echo "OpenCode DeepSeek V3 review attempt did not complete."
             record_review_status "failed"
@@ -2446,6 +2503,17 @@ jobs:
             return 0
           }
 
+          collect_failed_check_evidence_or_note() {
+            local evidence_file="$1"
+
+            if [ ! -x scripts/ci/collect_failed_check_evidence.sh ]; then
+              printf "Failed GitHub Check evidence collector is not installed in this repository for current head \`%s\`.\n" "$HEAD_SHA" >"$evidence_file"
+              return 0
+            fi
+
+            scripts/ci/collect_failed_check_evidence.sh "$evidence_file"
+          }
+
           live_head_sha="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}" --jq '.head.sha')"
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
@@ -2476,7 +2544,7 @@ jobs:
             }
             trap cleanup_failed_outcome_files EXIT
             if collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file" && [ -s "$failed_checks_file" ]; then
-              if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
+              if ! collect_failed_check_evidence_or_note "$failed_check_evidence_file"; then
                 printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
               fi
 
@@ -2496,9 +2564,13 @@ jobs:
             fi
 
             pending_checks_file="$(mktemp)"
-            if ! collect_github_checks_with_retry collect_pending_github_checks "$pending_checks_file"; then
+            set +e
+            wait_for_peer_github_checks "$pending_checks_file"
+            pending_wait_status=$?
+            set -e
+            if [ "$pending_wait_status" -eq 1 ]; then
               request_changes_for_gate_failure "GitHub Checks statusCheckRollup could not be read after OpenCode model output failure."
-            elif [ -s "$pending_checks_file" ]; then
+            elif [ "$pending_wait_status" -ne 0 ]; then
               build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
               create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
             else
@@ -2692,7 +2764,7 @@ jobs:
                 failed_check_review_body_file="$(mktemp)"
                 failed_check_review_payload_file="$(mktemp)"
                 failed_check_inline_failure_body_file="$(mktemp)"
-                if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
+                if ! collect_failed_check_evidence_or_note "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
                 if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
@@ -2759,7 +2831,7 @@ jobs:
 
               if [ -s "$failed_checks_file" ]; then
                 failed_check_evidence_file="$(mktemp)"
-                if ! scripts/ci/collect_failed_check_evidence.sh "$failed_check_evidence_file"; then
+                if ! collect_failed_check_evidence_or_note "$failed_check_evidence_file"; then
                   printf "Failed GitHub Check evidence could not be collected for current head \`%s\`.\n" "$HEAD_SHA" >"$failed_check_evidence_file"
                 fi
                 if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
