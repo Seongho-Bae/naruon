@@ -43,7 +43,7 @@ jobs:
       checks: read
       id-token: write
       contents: read
-      statuses: read
+      statuses: write
       pull-requests: read
       issues: read
     steps:
@@ -2498,3 +2498,57 @@ jobs:
               ;;
           esac
           echo "::endgroup::"
+
+      - name: Publish required OpenCode review status
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+
+          reviews_json="$(gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/reviews" -F per_page=100)"
+          current_review="$(
+            jq -c \
+              --arg run_id "$RUN_ID" \
+              --arg run_attempt "$RUN_ATTEMPT" \
+              --arg head_sha "$HEAD_SHA" \
+              '
+                [
+                  .[]
+                  | select((.user.login // "") as $login | ["github-actions[bot]", "opencode-agent", "opencode-agent[bot]"] | index($login))
+                  | select((.body // "") | contains("Workflow run: " + $run_id))
+                  | select((.body // "") | contains("Workflow attempt: " + $run_attempt))
+                  | select((.body // "") | contains("Head SHA: `" + $head_sha + "`"))
+                ]
+                | sort_by(.submitted_at)
+                | last // {}
+              ' <<<"$reviews_json"
+          )"
+
+          review_state="$(jq -r '.state // ""' <<<"$current_review")"
+          review_body="$(jq -r '.body // ""' <<<"$current_review")"
+          status_state="failure"
+          status_description="OpenCode Review did not produce current-run approval"
+
+          if [ "$review_state" = "APPROVED" ] && grep -Fq -- "- Result: APPROVE" <<<"$review_body"; then
+            status_state="success"
+            status_description="OpenCode Review approved current head"
+          elif [ "$review_state" = "CHANGES_REQUESTED" ] || grep -Fq -- "- Result: REQUEST_CHANGES" <<<"$review_body"; then
+            status_description="OpenCode Review requested changes"
+          fi
+
+          gh api "repos/${GH_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$status_state" \
+            -f context="opencode-review" \
+            -f description="$status_description" \
+            -f target_url="${GITHUB_SERVER_URL}/${GH_REPOSITORY}/actions/runs/${RUN_ID}"
+
+          if [ "$status_state" != "success" ]; then
+            echo "$status_description"
+            exit 1
+          fi
