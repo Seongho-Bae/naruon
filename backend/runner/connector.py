@@ -3,6 +3,7 @@ import json
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Dict
+from urllib.parse import urlsplit, urlunsplit
 
 try:
     import websockets
@@ -31,6 +32,15 @@ def _get_request_id(payload: Dict[str, Any]) -> str | None:
     if not request_id or len(request_id) > 128:
         return None
     return request_id
+
+
+def _log_safe_ws_url(target_ws_url: str) -> str:
+    parts = urlsplit(target_ws_url)
+    path_parts = [part for part in parts.path.split("/") if part]
+    if path_parts:
+        path_parts[-1] = "[redacted]"
+    safe_path = "/" + "/".join(path_parts) if path_parts else parts.path
+    return urlunsplit((parts.scheme, parts.netloc, safe_path, "", ""))
 
 
 class SelfHostedConnector:
@@ -62,7 +72,10 @@ class SelfHostedConnector:
         try:
             self.connection = await websockets.connect(self.target_ws_url, additional_headers=headers)
             self.is_connected = True
-            logger.info(f"Connected to Naruon Gateway at {self.target_ws_url}")
+            logger.info(
+                "Connected to Naruon Gateway at %s",
+                _log_safe_ws_url(self.target_ws_url),
+            )
             await self._listen_loop()
         except asyncio.CancelledError:
             raise
