@@ -3087,6 +3087,10 @@ EOS
 			echo "Error: deployment scope missing backend/scripts/docker_entrypoint.sh ($target_path)" >&2
 			exit 57
 		fi
+		if [ ! -f "$target_path/backend/core/runtime_secrets.py" ]; then
+			echo "Error: deployment scope missing backend/core/runtime_secrets.py ($target_path)" >&2
+			exit 60
+		fi
 		if ! grep -Fq -- 'CMD ["/app/scripts/docker_entrypoint.sh"]' "$target_path/Dockerfile"; then
 			echo "Error: deployment Dockerfile does not reference docker_entrypoint.sh ($target_path)" >&2
 			exit 58
@@ -3270,6 +3274,7 @@ echo "Starting backend (uvicorn :8000)"
 EOS
 		echo 'router = object()' >"$repo_root_dir/backend/api/auth.py"
 		echo 'class Settings: pass' >"$repo_root_dir/backend/core/config.py"
+		echo 'def validate_auth_session_hmac_secret_value(value): return value' >"$repo_root_dir/backend/core/runtime_secrets.py"
 		echo 'app = object()' >"$repo_root_dir/backend/main.py"
 		touch "$repo_root_dir/frontend/Dockerfile"
 		echo '{"scripts":{"start":"next start"}}' >"$repo_root_dir/frontend/package.json"
