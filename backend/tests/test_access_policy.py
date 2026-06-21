@@ -147,7 +147,7 @@ def test_missing_request_data_region_denies_regional_resource():
     assert decision.reason == "data_region_denied"
 
 
-def test_system_admin_bypasses_organization_and_ownership_when_role_permitted():
+def test_system_admin_cannot_bypass_organization_when_role_permitted():
     decision = evaluate_access(
         AccessRequest(
             user_id="root",
@@ -167,16 +167,16 @@ def test_system_admin_bypasses_organization_and_ownership_when_role_permitted():
         ),
     )
 
-    assert decision.allowed is True
-    assert decision.reason == "allowed"
+    assert decision.allowed is False
+    assert decision.reason == "organization_denied"
 
 
-def test_system_admin_owner_bypass_can_be_disabled_for_self_service_resources():
+def test_system_admin_cannot_bypass_ownership_when_role_permitted():
     decision = evaluate_access(
         AccessRequest(
             user_id="root",
             role="system_admin",
-            organization_id=None,
+            organization_id="org-acme",
             group_ids=(),
             data_region="eu",
             consent_scopes=("mail.read",),
@@ -188,7 +188,6 @@ def test_system_admin_owner_bypass_can_be_disabled_for_self_service_resources():
             permitted_group_ids=(),
             data_region="eu",
             required_consent_scopes=("mail.read",),
-            require_owner_match=True,
         ),
     )
 
@@ -201,7 +200,7 @@ def test_system_admin_can_access_owned_self_service_resource_when_owner_required
         AccessRequest(
             user_id="root",
             role="system_admin",
-            organization_id=None,
+            organization_id="org-acme",
             group_ids=(),
             data_region="eu",
             consent_scopes=("mail.read",),
