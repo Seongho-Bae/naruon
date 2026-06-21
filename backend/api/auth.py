@@ -248,6 +248,11 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
     header = _oidc_unverified_header(token)
     key_id = header["kid"].strip()
 
+    # Security enhancement: Validate algorithm before verification
+    alg = header.get("alg")
+    if alg not in OIDC_ALLOWED_ALGORITHMS:
+        raise _authentication_error("Invalid JWT algorithm")
+
     for signing_key in _cached_oidc_signing_keys:
         try:
             payload = jwt.decode(

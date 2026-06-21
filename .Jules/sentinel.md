@@ -1,0 +1,4 @@
+## 2026-06-21 - Algorithm confusion vulnerability in JWT verification
+**Vulnerability:** Algorithm confusion vulnerability in JWT verification in OIDC session payload decoding. Attacker could forge token using public key as HMAC secret by specifying HS256 algorithm.
+**Learning:** `jwt.decode` with PyJWT verifies the signature based on the algorithm specified in the token header if `algorithms` is not strictly enforced or if the algorithm in the header is not verified against an allowed list *before* verification, particularly when dealing with OIDC public keys which might be coerced into HMAC secrets.
+**Prevention:** Explicitly validate that the algorithm specified in the unverified token header is strictly within the allowed asymmetric algorithms (e.g., `RS256`) before passing the token to `jwt.decode()`.
