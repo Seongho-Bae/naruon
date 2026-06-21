@@ -1,4 +1,5 @@
 from collections import defaultdict
+from threading import Lock
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
@@ -6,6 +7,7 @@ from db.session import get_db
 from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
+import time
 from typing import Literal
 from services.email_client import (
     EmailMessageParams,
@@ -45,6 +47,33 @@ from services.tenant_config_scope import get_scoped_tenant_config
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/emails")
+
+_SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS = 10
+_SEND_EMAIL_RATE_LIMIT_WINDOW_SECONDS = 60.0
+_email_send_attempts_by_scope: dict[tuple[str | None, str], list[float]] = {}
+_email_send_rate_limit_lock = Lock()
+
+
+def _enforce_send_email_rate_limit(auth_context: AuthContext) -> None:
+    now = time.monotonic()
+    cutoff = now - _SEND_EMAIL_RATE_LIMIT_WINDOW_SECONDS
+    key = (auth_context.organization_id, auth_context.user_id)
+
+    # ponytail: process-local throttle; move to Redis when multi-worker send volume matters.
+    with _email_send_rate_limit_lock:
+        attempts = [
+            attempt
+            for attempt in _email_send_attempts_by_scope.get(key, [])
+            if attempt > cutoff
+        ]
+        if len(attempts) >= _SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS:
+            _email_send_attempts_by_scope[key] = attempts
+            raise HTTPException(
+                status_code=429,
+                detail="Email send rate limit exceeded",
+            )
+        attempts.append(now)
+        _email_send_attempts_by_scope[key] = attempts
 
 
 def canonical_thread_key(email: Email) -> str:
@@ -260,8 +289,11 @@ async def get_emails(
         .order_by(Email.date.desc())
         .limit(candidate_window)
     )
-    emails = result.scalars().all()
-    emails = sorted(emails, key=lambda item: item.date)
+    emails = list(result.scalars().all())
+    # ⚡ Bolt: Reverse the list in-place (O(N)) instead of sorting (O(N log N)).
+    # The database already sorted the records by date descending, so reversing it
+    # yields chronological order without redundant sorting overhead.
+    emails.reverse()
 
     grouped = {}
     # ⚡ Bolt: Use defaultdict to avoid redundant membership checks and dictionary access overhead.
@@ -393,9 +425,15 @@ def _build_email_lookup_dicts(
     by_message_id: dict[str, Email] = {}
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
-        for lookup_value in _email_message_lookup_values(email_row):
-            if lookup_value not in by_message_id:
-                by_message_id[lookup_value] = email_row
+        msg_id = email_row.message_id
+        if msg_id:
+            normalized = normalize_message_id(msg_id)
+            if normalized:
+                if normalized not in by_message_id:
+                    by_message_id[normalized] = email_row
+                bracketed = f"<{normalized}>"
+                if bracketed not in by_message_id:
+                    by_message_id[bracketed] = email_row
         row_fingerprint = email_strong_fingerprint(email_row)
         if row_fingerprint:
             if row_fingerprint not in by_fingerprint:
@@ -672,6 +710,7 @@ async def send_email_endpoint(
             in_reply_to=request.in_reply_to,
             references=request.references,
         )
+        _enforce_send_email_rate_limit(auth_context)
         smtp_config = SmtpConfig(
             smtp_server=smtp_server,
             smtp_port=smtp_port,

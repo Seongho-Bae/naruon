@@ -3,7 +3,7 @@ import hashlib
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import desc, select
+from sqlalchemy import desc, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
@@ -85,7 +85,7 @@ def _stable_key(prefix: str, *parts: object) -> str:
 
 def _prompt_card(prompt: PromptTemplate) -> AiHubPromptCard:
     return AiHubPromptCard(
-        prompt_key=_stable_key("prompt", prompt.created_by, prompt.id, prompt.title),
+        prompt_key=prompt.prompt_uid,
         prompt_title=prompt.title,
         description_text=prompt.description,
         shared_scope=bool(prompt.is_shared),
@@ -160,7 +160,7 @@ def _run_events(
 
     return [
         AiHubRunEvent(
-            event_key=_stable_key("event", prompt.created_by, prompt.id, prompt.title),
+            event_key=_stable_key("event", prompt.prompt_uid, prompt.updated_at),
             event_title=f"prompt template updated: {prompt.title}",
             state_code="recorded",
             evidence_source="prompt_templates",
@@ -265,7 +265,14 @@ async def _list_prompts(
 ) -> list[PromptTemplate]:
     result = await db.execute(
         select(PromptTemplate)
-        .where(PromptTemplate.created_by == auth_context.user_id)
+        .where(
+            PromptTemplate.organization_id == auth_context.organization_id,
+            PromptTemplate.workspace_id == auth_context.workspace_id,
+            or_(
+                PromptTemplate.created_by == auth_context.user_id,
+                PromptTemplate.is_shared.is_(True),
+            ),
+        )
         .order_by(desc(PromptTemplate.updated_at), desc(PromptTemplate.id))
         .limit(8)
     )

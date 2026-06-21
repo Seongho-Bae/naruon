@@ -12,6 +12,7 @@ from db.models import (
     ConnectorSignalEvent,
     Email,
     ProjectFolder,
+    PromptTemplate,
     SecurityAuditEvent,
     SenderRelationship,
     TenantConfig,
@@ -42,7 +43,8 @@ def test_schema_backfill_adds_email_columns(monkeypatch):
         for statement in statements
     )
     assert any(
-        "alter table email_records add column if not exists organization_id" in statement
+        "alter table email_records add column if not exists organization_id"
+        in statement
         for statement in statements
     )
     assert any(
@@ -57,9 +59,12 @@ def test_schema_backfill_adds_email_columns(monkeypatch):
         'alter table email_records add column if not exists "references"' in statement
         for statement in statements
     )
-    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update email_records set organization_id" in statement for statement in statements
+        "update email_records set user_id" in statement for statement in statements
+    )
+    assert not any(
+        "update email_records set organization_id" in statement
+        for statement in statements
     )
     assert any(
         "existing email_records require explicit non-default" in statement
@@ -119,7 +124,8 @@ def test_schema_backfill_adds_email_indexes(monkeypatch):
         for statement in statements
     )
     assert any(
-        "create unique index if not exists uq_email_records_owner_message_id" in statement
+        "create unique index if not exists uq_email_records_owner_message_id"
+        in statement
         for statement in statements
     )
     assert any(
@@ -167,6 +173,52 @@ def test_schema_backfill_adds_llm_provider_columns_and_indexes(monkeypatch):
     )
     assert any(
         "drop index if exists ix_llm_providers_name" in statement
+        for statement in statements
+    )
+
+
+def test_schema_backfill_adds_prompt_template_scope_columns_and_indexes(monkeypatch):
+    statements = _get_schema_statements(monkeypatch)
+    assert any(
+        "alter table prompt_templates add column if not exists prompt_uid" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table prompt_templates add column if not exists organization_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table prompt_templates add column if not exists workspace_id"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "update prompt_templates set prompt_uid" in statement
+        and "prompt_" in statement
+        and "encode(sha256" in statement
+        and "bytea" in statement
+        and "hex" in statement
+        for statement in statements
+    )
+    assert any(
+        "alter table prompt_templates alter column prompt_uid set not null"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create unique index if not exists uq_prompt_templates_prompt_uid"
+        in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_prompt_templates_owner_scope" in statement
+        and "created_by, organization_id, workspace_id" in statement
+        for statement in statements
+    )
+    assert any(
+        "create index if not exists ix_prompt_templates_shared_scope" in statement
+        and "organization_id, workspace_id, is_shared" in statement
         for statement in statements
     )
 
@@ -239,7 +291,9 @@ def test_schema_backfill_adds_webdav_account_columns_and_indexes(monkeypatch):
     assert any(
         "update webdav_accounts set source_uid" in statement
         and "webdav_src_" in statement
-        and "md5" in statement
+        and "encode(sha256" in statement
+        and "bytea" in statement
+        and "hex" in statement
         and "random()::text" in statement
         and "clock_timestamp()::text" in statement
         for statement in statements
@@ -288,7 +342,9 @@ def test_schema_backfill_adds_project_folder_columns_and_indexes(monkeypatch):
     assert any(
         "update project_folders set folder_uid" in statement
         and "webdav_folder_" in statement
-        and "md5" in statement
+        and "encode(sha256" in statement
+        and "bytea" in statement
+        and "hex" in statement
         and "random()::text" in statement
         and "clock_timestamp()::text" in statement
         for statement in statements
@@ -397,9 +453,12 @@ def test_schema_backfill_rejects_default_owner_ids(monkeypatch):
 
     statements = [str(statement).lower() for statement in schema_backfill_sql()]
 
-    assert not any("update email_records set user_id" in statement for statement in statements)
     assert not any(
-        "update email_records set organization_id" in statement for statement in statements
+        "update email_records set user_id" in statement for statement in statements
+    )
+    assert not any(
+        "update email_records set organization_id" in statement
+        for statement in statements
     )
 
 
@@ -514,6 +573,19 @@ def test_project_folder_model_exposes_opaque_folder_uid():
     assert "organization_id" in column_names
     assert ProjectFolder.__table__.c.folder_uid.nullable is False
     assert ProjectFolder.__table__.c.folder_uid.unique is True
+
+
+def test_prompt_template_model_declares_scope_and_opaque_uid():
+    column_names = {column.name for column in PromptTemplate.__table__.columns}
+    index_names = {index.name for index in PromptTemplate.__table__.indexes}
+
+    assert "prompt_uid" in column_names
+    assert "organization_id" in column_names
+    assert "workspace_id" in column_names
+    assert PromptTemplate.__table__.c.prompt_uid.nullable is False
+    assert PromptTemplate.__table__.c.prompt_uid.unique is True
+    assert "ix_prompt_templates_owner_scope" in index_names
+    assert "ix_prompt_templates_shared_scope" in index_names
 
 
 def test_connector_signal_event_model_uses_two_word_names():
@@ -648,11 +720,13 @@ async def test_connector_signal_events_real_postgres_bootstrap_smoke():
                 },
             )
             await conn.run_sync(_execute_schema_backfill)
-            result = await conn.execute(text("""
+            result = await conn.execute(
+                text("""
                     SELECT column_name
                     FROM information_schema.columns
                     WHERE table_name = 'connector_signal_events'
-                    """))
+                    """)
+            )
             column_names = {row[0] for row in result.fetchall()}
             duplicate_result = await conn.execute(
                 text("""

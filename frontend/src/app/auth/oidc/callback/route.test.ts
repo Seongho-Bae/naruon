@@ -38,10 +38,10 @@ describe("/auth/oidc/callback route", () => {
         expect(init?.method).toBe("POST");
         expect(String(init?.body)).toContain("code=auth-code");
         expect(String(init?.body)).toContain("code_verifier=verifier-123");
-        return Response.json({ access_token: "header.payload.signature" });
+        return Response.json({ access_token: "test-header.test-payload.test-signature" });
       }
       if (url === "https://api.naruon.net/api/auth/session") {
-        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer header.payload.signature");
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-header.test-payload.test-signature");
         return Response.json({
           user_id: "user-1",
           organization_id: "org-acme",
