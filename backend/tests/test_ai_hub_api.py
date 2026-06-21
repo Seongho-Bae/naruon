@@ -52,11 +52,15 @@ class MockSession:
         params = stmt.compile().params
         if entity is PromptTemplate:
             owner_id = params.get("created_by_1")
+            organization_id = params.get("organization_id_1")
+            workspace_id = params.get("workspace_id_1")
             return MockResult(
                 [
                     prompt
                     for prompt in self.prompts
-                    if prompt.created_by == owner_id or prompt.is_shared is True
+                    if prompt.organization_id == organization_id
+                    and prompt.workspace_id == workspace_id
+                    and (prompt.created_by == owner_id or prompt.is_shared is True)
                 ]
             )
         if entity is LLMProvider:
@@ -132,13 +136,23 @@ def _now() -> datetime.datetime:
     return datetime.datetime(2026, 5, 29, 9, 30, tzinfo=datetime.timezone.utc)
 
 
-def _prompt(prompt_id: int, title: str, owner_id: str = "alice") -> PromptTemplate:
+def _prompt(
+    prompt_id: int,
+    title: str,
+    owner_id: str = "alice",
+    *,
+    organization_id: str | None = "org-acme",
+    workspace_id: str | None = "workspace-org-acme",
+) -> PromptTemplate:
     prompt = PromptTemplate(
+        prompt_uid=f"prompt_test_{prompt_id}",
         title=title,
         description="메일에서 판단 포인트를 추출합니다.",
         content="Summarize {{email}}",
         is_shared=False,
         created_by=owner_id,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
     )
     prompt.id = prompt_id
     prompt.created_at = _now()
@@ -210,8 +224,24 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     session.prompts = [
         _prompt(1, "의사결정 로그 맥락 종합"),
         _prompt(2, "공유 프롬프트", owner_id="other-user"),
+        _prompt(
+            3,
+            "다른 조직 공유 프롬프트",
+            owner_id="rival-user",
+            organization_id="org-rival",
+            workspace_id="workspace-org-rival",
+        ),
+        _prompt(
+            4,
+            "무스코프 레거시 공유 프롬프트",
+            owner_id="legacy-user",
+            organization_id=None,
+            workspace_id=None,
+        ),
     ]
     session.prompts[1].is_shared = True
+    session.prompts[2].is_shared = True
+    session.prompts[3].is_shared = True
     session.providers = [_provider(1)]
     session.audit_events = [_audit_event()]
 
@@ -223,7 +253,9 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert data["prompt_cards"][0]["prompt_title"] == "의사결정 로그 맥락 종합"
     assert data["prompt_cards"][1]["prompt_title"] == "공유 프롬프트"
     assert data["prompt_cards"][1]["owner_label"] == "other-user"
-    assert data["prompt_cards"][0]["prompt_key"].startswith("prompt_")
+    assert data["prompt_cards"][0]["prompt_key"] == "prompt_test_1"
+    assert "다른 조직 공유 프롬프트" not in response.text
+    assert "무스코프 레거시 공유 프롬프트" not in response.text
     assert "id" not in data["prompt_cards"][0]
     assert data["workflow_cards"][0]["state_code"] == "needs_provider"
 
@@ -312,11 +344,14 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as session:
             prompt = PromptTemplate(
+                prompt_uid=f"prompt_{uuid.uuid4().hex}",
                 title="Postgres AI Hub prompt",
                 description="source-backed postgres smoke prompt",
                 content="Summarize {{email}}",
                 is_shared=False,
                 created_by=user_id,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
             )
             provider = LLMProvider(
                 user_id=user_id,

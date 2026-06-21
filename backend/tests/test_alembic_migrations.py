@@ -57,6 +57,29 @@ def test_provider_writeback_retry_queue_has_incremental_revision():
     assert "if_exists=True" in revision_text
 
 
+def test_prompt_template_scope_has_incremental_revision():
+    versions_dir = BACKEND_ROOT / "alembic" / "versions"
+    revision_path = versions_dir / "0003_prompt_template_scope.py"
+    assert revision_path.exists()
+    revision_text = revision_path.read_text()
+
+    assert 'revision = "0003_prompt_template_scope"' in revision_text
+    assert 'down_revision = "0002_provider_retry_queue"' in revision_text
+    assert '"prompt_templates"' in revision_text
+    assert '"prompt_uid"' in revision_text
+    assert '"organization_id"' in revision_text
+    assert '"workspace_id"' in revision_text
+    assert "ix_prompt_templates_owner_scope" in revision_text
+    assert "ix_prompt_templates_shared_scope" in revision_text
+    assert "uq_prompt_templates_prompt_uid" in revision_text
+    assert "has_table" in revision_text
+    assert "op.add_column(" in revision_text
+    assert "op.create_index(" in revision_text
+    assert "if_not_exists=True" in revision_text
+    assert "op.drop_index(" in revision_text
+    assert "if_exists=True" in revision_text
+
+
 def test_migration_runner_uses_alembic_upgrade_head_not_bootstrap_create_all():
     migration_runner = BACKEND_ROOT / "scripts" / "migrate_db.py"
 
