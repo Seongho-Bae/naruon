@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from pydantic import SecretStr
 
+from api import emails as emails_api
 from api.auth import get_auth_context as auth_get_auth_context
 from core.config import settings
 from db.models import Email, LLMProvider
@@ -1700,7 +1701,6 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
 
 @patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
 def test_send_email_endpoint_rate_limits_per_user(mock_send_email, monkeypatch):
-    import api.emails as emails_api
     from fastapi.testclient import TestClient
     from main import app
 
