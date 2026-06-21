@@ -397,6 +397,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     size="sm"
                     onClick={handleSyncCalendar}
                     disabled={isSyncing}
+                    aria-busy={isSyncing}
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -409,6 +410,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     variant="outline"
                     onClick={handleCreateTask}
                     disabled={isCreatingTask}
+                    aria-busy={isCreatingTask}
                     className="h-9 rounded-xl border-emerald-500/30 px-4 text-emerald-700 hover:bg-emerald-500/10"
                   >
                     {isCreatingTask && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
@@ -506,6 +508,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               <Button 
                 onClick={handleDraftReply} 
                 disabled={isDrafting || !instruction}
+                aria-busy={isDrafting}
                 variant="outline"
                 size="sm"
                 className="h-10 rounded-xl border-purple-500/30 px-4 text-purple-700 hover:bg-purple-500/10"
@@ -549,6 +552,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 <Button 
                   onClick={handleSendReply} 
                   disabled={isSending || !draft}
+                  aria-busy={isSending}
                   size="sm"
                   className="h-9 rounded-xl px-4"
                 >

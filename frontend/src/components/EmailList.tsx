@@ -238,7 +238,7 @@ export function EmailList({
               </button>
             )}
           </div>
-          <Button type="submit" disabled={searchBusy} className="h-10 rounded-xl px-4">
+          <Button type="submit" disabled={searchBusy} aria-busy={searchBusy} className="h-10 rounded-xl px-4">
             {searchBusy && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
             {searchBusy ? "맥락 검색 중" : "맥락 검색"}
           </Button>
