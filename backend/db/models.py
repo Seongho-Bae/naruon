@@ -420,6 +420,7 @@ class WorkflowDefinition(Base):
 class AgentRunRecord(Base):
     __tablename__ = "agent_run_records"
     __table_args__ = (
+        Index("ix_agent_run_records_workflow_uid", "workflow_uid"),
         Index(
             "ix_agent_run_records_scope_time",
             "organization_id",

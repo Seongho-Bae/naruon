@@ -95,6 +95,10 @@ def _ai_hub_indexes() -> dict[str, list[tuple[str, list[str]]]]:
         ],
         _RUN_TABLE: [
             (
+                "ix_agent_run_records_workflow_uid",
+                ["workflow_uid"],
+            ),
+            (
                 "ix_agent_run_records_scope_time",
                 ["organization_id", "workspace_id", "started_at"],
             ),

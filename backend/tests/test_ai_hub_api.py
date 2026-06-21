@@ -441,6 +441,61 @@ def test_ai_hub_workflow_api_creates_and_lists_scoped_workflows():
     assert listed == [created]
 
 
+@pytest.mark.parametrize(
+    "json_body",
+    [
+        {
+            "workflow_name": "   ",
+            "workflow_description": "blank names are rejected",
+            "steps_json": [{"step_key": "collect"}],
+        },
+        {
+            "workflow_name": "잘못된 단계",
+            "workflow_description": "steps_json must be a list",
+            "steps_json": {"step_key": "collect"},
+        },
+    ],
+)
+def test_ai_hub_workflow_api_rejects_invalid_create_payloads(json_body):
+    session = MockSession()
+
+    response = _request_with_signed_session(
+        session,
+        method="POST",
+        path="/api/ai-hub/workflows",
+        json_body=json_body,
+    )
+
+    assert response.status_code == 422
+    assert session.workflow_definitions == []
+
+
+def test_ai_hub_workflow_api_requires_signed_session():
+    session = MockSession()
+    original_overrides = dict(app.dependency_overrides)
+
+    async def scoped_db():
+        yield session
+
+    app.dependency_overrides[get_db] = scoped_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.post(
+                "/api/ai-hub/workflows",
+                json={
+                    "workflow_name": "인증 없는 생성",
+                    "steps_json": [{"step_key": "collect"}],
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Authentication required"}
+    assert session.workflow_definitions == []
+
+
 def test_ai_hub_run_api_lists_only_signed_session_scope():
     session = MockSession()
     session.agent_run_records = [

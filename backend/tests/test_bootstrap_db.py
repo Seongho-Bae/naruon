@@ -298,6 +298,11 @@ def test_schema_backfill_creates_ai_hub_workflow_tables(monkeypatch):
         "ix_agent_run_records_scope_time" in statement for statement in statements
     )
     assert any(
+        "ix_agent_run_records_workflow_uid" in statement
+        and "workflow_uid" in statement
+        for statement in statements
+    )
+    assert any(
         "ix_agent_run_records_owner_scope" in statement
         and "user_id, organization_id, workspace_id, started_at" in statement
         for statement in statements
@@ -713,6 +718,7 @@ def test_ai_hub_workflow_models_use_opaque_two_word_names():
     }
     assert all("_" in column_name for column_name in run_column_names)
     assert AgentRunRecord.__table__.c.run_uid.primary_key is True
+    assert "ix_agent_run_records_workflow_uid" in run_index_names
     assert "ix_agent_run_records_scope_time" in run_index_names
     assert "ix_agent_run_records_owner_scope" in run_index_names
     assert "ix_agent_run_records_workflow_time" in run_index_names

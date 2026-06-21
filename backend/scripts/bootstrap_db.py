@@ -241,6 +241,10 @@ def _get_create_indexes_statements() -> list[Executable]:
             "ON agent_run_records (organization_id, workspace_id, started_at)"
         ),
         text(
+            "CREATE INDEX IF NOT EXISTS ix_agent_run_records_workflow_uid "
+            "ON agent_run_records (workflow_uid)"
+        ),
+        text(
             "CREATE INDEX IF NOT EXISTS ix_agent_run_records_owner_scope "
             "ON agent_run_records "
             "(user_id, organization_id, workspace_id, started_at)"

@@ -96,6 +96,7 @@ def test_ai_hub_workflow_runs_have_incremental_revision():
     assert '"status_code"' in revision_text
     assert "ix_workflow_definitions_scope_time" in revision_text
     assert "ix_workflow_definitions_owner_scope" in revision_text
+    assert "ix_agent_run_records_workflow_uid" in revision_text
     assert "ix_agent_run_records_scope_time" in revision_text
     assert "ix_agent_run_records_owner_scope" in revision_text
     assert "ForeignKeyConstraint" in revision_text
