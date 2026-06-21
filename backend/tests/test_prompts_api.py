@@ -20,11 +20,23 @@ class MockSession:
         stmt_str = str(stmt).lower()
         descriptions = getattr(stmt, "column_descriptions", [])
         entity = descriptions[0].get("entity") if descriptions else None
+        params = stmt.compile().params
         items = [
             item for item in self.items if entity is None or isinstance(item, entity)
         ]
+        if entity is PromptTemplate:
+            organization_id = params.get("organization_id_1")
+            workspace_id = params.get("workspace_id_1")
+            created_by = params.get("created_by_1")
+            items = [
+                item
+                for item in items
+                if item.organization_id == organization_id
+                and item.workspace_id == workspace_id
+                and (item.created_by == created_by or item.is_shared is True)
+            ]
         if "llm_providers.organization_id" in stmt_str:
-            organization_id = stmt.compile().params.get("organization_id_1")
+            organization_id = params.get("organization_id_1")
             items = [
                 item
                 for item in items
@@ -59,6 +71,7 @@ class MockSession:
 
         if isinstance(obj, PromptTemplate):
             obj.id = len(self.items) + 1
+            obj.prompt_uid = obj.prompt_uid or f"prompt_test_{obj.id}"
             obj.created_at = datetime.datetime.now(datetime.timezone.utc)
             obj.updated_at = datetime.datetime.now(datetime.timezone.utc)
             self.items.append(obj)
@@ -106,6 +119,33 @@ def orgless_system_admin_client():
         yield c
 
 
+def _prompt_template(
+    prompt_id: int,
+    title: str,
+    *,
+    created_by: str = "testuser",
+    organization_id: str | None = "org-acme",
+    workspace_id: str | None = "workspace-org-acme",
+    is_shared: bool = False,
+) -> PromptTemplate:
+    import datetime
+
+    prompt = PromptTemplate(
+        prompt_uid=f"prompt_test_{prompt_id}",
+        title=title,
+        description="scoped prompt",
+        content="Summarize {{email}}",
+        is_shared=is_shared,
+        created_by=created_by,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+    )
+    prompt.id = prompt_id
+    prompt.created_at = datetime.datetime.now(datetime.timezone.utc)
+    prompt.updated_at = datetime.datetime.now(datetime.timezone.utc)
+    return prompt
+
+
 def test_prompt_crud_validation(auth_client):
     # Missing required fields
     resp = auth_client.post("/api/prompts", json={})
@@ -145,11 +185,57 @@ def test_prompt_crud(auth_client):
     assert resp.status_code == 200, resp.text
     data = resp.json()
     assert data["title"] == "Test Prompt"
+    assert data["prompt_uid"].startswith("prompt_")
+    assert mock_session.items[0].organization_id == "org-acme"
+    assert mock_session.items[0].workspace_id == "workspace-org-acme"
 
     # List
     resp = auth_client.get("/api/prompts")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+
+
+def test_prompt_list_scopes_shared_prompts_to_current_workspace(auth_client):
+    mock_session.items.extend(
+        [
+            _prompt_template(1, "내 프롬프트"),
+            _prompt_template(
+                2,
+                "같은 워크스페이스 공유",
+                created_by="other-user",
+                is_shared=True,
+            ),
+            _prompt_template(
+                3,
+                "다른 조직 공유",
+                created_by="rival-user",
+                organization_id="org-rival",
+                workspace_id="workspace-org-rival",
+                is_shared=True,
+            ),
+            _prompt_template(
+                4,
+                "레거시 무스코프 공유",
+                created_by="legacy-user",
+                organization_id=None,
+                workspace_id=None,
+                is_shared=True,
+            ),
+            _prompt_template(
+                5,
+                "같은 조직 다른 워크스페이스 공유",
+                created_by="other-user",
+                workspace_id="workspace-other",
+                is_shared=True,
+            ),
+        ]
+    )
+
+    response = auth_client.get("/api/prompts")
+
+    assert response.status_code == 200, response.text
+    titles = [prompt["title"] for prompt in response.json()]
+    assert titles == ["내 프롬프트", "같은 워크스페이스 공유"]
 
 
 def test_prompt_test_execution_mocked(auth_client, monkeypatch):

@@ -16,9 +16,9 @@
 
 - Add signed `GET /api/ai-hub/surface`.
 - Build the surface from existing source-backed objects:
-  - `PromptTemplate` rows owned by the signed user. Global `is_shared` prompts
-    are intentionally excluded until prompt rows have durable tenant/workspace
-    scope;
+  - `PromptTemplate` rows scoped by the signed user's organization and
+    workspace. `is_shared` prompts are returned only within the same
+    organization/workspace scope;
   - organization-scoped `LLMProvider` rows for admin roles only, exposing only
     non-secret metadata;
   - durable `SecurityAuditEvent` rows for provider governance events.
@@ -42,8 +42,6 @@
 ## Remaining roadmap
 
 - Add a durable workflow registry before allowing workflow edits in AI Hub.
-- Add tenant/workspace scope columns to prompt templates before returning shared
-  prompt rows from AI Hub.
 - Add a real evaluation result store before presenting model benchmark trends as
   historical evaluation data.
 - Connect run history to actual agent execution rows once workflow execution is
