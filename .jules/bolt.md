@@ -62,3 +62,10 @@
 ## 2026-06-19 - Email owner/date lookup index
 **Learning:** Inbox and reply-wait queries commonly scope `email_records` by `user_id` and `organization_id` before ordering or filtering by `date`, so separate single-column indexes still leave the planner with avoidable sort/filter work.
 **Action:** Keep `ix_email_records_owner_date` on `(user_id, organization_id, date)` in both the SQLAlchemy model and bootstrap backfill SQL when optimizing owner-scoped email timelines.
+## 2024-05-18 - Optimize redundant tuple/string creation in dedupe loop
+**Learning:** Instantiating new tuples and using f-strings inside a tight loop creates unnecessary allocations that impact performance, especially when checking dictionary membership where most items are already present.
+**Action:** Inline lookup values directly, use early returns and `msg_id is not None` checks, and avoid generating formats like `f"<{normalized}>"` unless the basic `normalized` key wasn't sufficient, keeping inner loop bodies lean.
+
+## 2026-06-21 - Strix LLM Hallucinated Missing Tool
+**Learning:** We hit a `ModelBehaviorError: Tool get_vulnerability_report not found in agent strix` during CI. `strix-agent` uses `create_vulnerability_report` internally, meaning the LLM model (deepseek) hallucinated an older tool call and crashed the agent loop with exit code 1.
+**Action:** When a known hallucination consistently crashes the strix test, we should mark the specific log pattern as a retryable error in `strix_quick_gate.sh` (`is_transient_same_model_retry_error` and `is_model_retryable_error`). This allows the script to automatically recover using its transient retry mechanism.

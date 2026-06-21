@@ -391,9 +391,15 @@ def _build_email_lookup_dicts(
     by_message_id: dict[str, Email] = {}
     by_fingerprint: dict[str, Email] = {}
     for email_row in existing_emails:
-        for lookup_value in _email_message_lookup_values(email_row):
-            if lookup_value not in by_message_id:
-                by_message_id[lookup_value] = email_row
+        msg_id = email_row.message_id
+        if msg_id:
+            normalized = normalize_message_id(msg_id)
+            if normalized:
+                if normalized not in by_message_id:
+                    by_message_id[normalized] = email_row
+                bracketed = f"<{normalized}>"
+                if bracketed not in by_message_id:
+                    by_message_id[bracketed] = email_row
         row_fingerprint = email_strong_fingerprint(email_row)
         if row_fingerprint:
             if row_fingerprint not in by_fingerprint:

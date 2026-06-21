@@ -2410,6 +2410,9 @@ is_transient_same_model_retry_error() {
 	if is_midstream_fallback_error; then
 		return 0
 	fi
+	if grep -Fq "Tool get_vulnerability_report not found" "$STRIX_LOG"; then
+		return 0
+	fi
 	return 1
 }
 
@@ -3149,6 +3152,10 @@ is_model_retryable_error() {
 	fi
 
 	if [ "$PR_FINDINGS_DECISION" = "retry_model_inconsistency" ]; then
+		return 0
+	fi
+
+	if grep -Fq "Tool get_vulnerability_report not found" "$STRIX_LOG"; then
 		return 0
 	fi
 
