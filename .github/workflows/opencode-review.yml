@@ -1,6 +1,8 @@
 name: OpenCode Review
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
@@ -23,7 +25,7 @@ on:
         type: string
 
 concurrency:
-  group: opencode-review-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}-${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}
+  group: opencode-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.inputs.pr_number || github.run_id }}-${{ github.event.pull_request.head.sha || github.event.inputs.pr_head_sha || github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -32,9 +34,93 @@ permissions:
 jobs:
   opencode-review:
     if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.draft != true
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Wait for trusted OpenCode approval review
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          APPROVAL_WAIT_ATTEMPTS: "150"
+          APPROVAL_WAIT_SLEEP_SECONDS: "30"
+        run: |
+          set -euo pipefail
+
+          owner="${GH_REPOSITORY%%/*}"
+          name="${GH_REPOSITORY#*/}"
+          attempts="${APPROVAL_WAIT_ATTEMPTS:-150}"
+          sleep_seconds="${APPROVAL_WAIT_SLEEP_SECONDS:-30}"
+
+          read -r -d '' reviews_query <<'GRAPHQL' || true
+          query($owner:String!,$name:String!,$number:Int!) {
+            repository(owner:$owner,name:$name) {
+              pullRequest(number:$number) {
+                reviews(first: 100) {
+                  nodes {
+                    author {
+                      login
+                    }
+                    state
+                    submittedAt
+                    commit {
+                      oid
+                    }
+                  }
+                }
+              }
+            }
+          }
+          GRAPHQL
+
+          for attempt in $(seq 1 "$attempts"); do
+            review_state="$(
+              gh api graphql \
+                -f owner="$owner" \
+                -f name="$name" \
+                -F number="$PR_NUMBER" \
+                -f query="$reviews_query" \
+                --jq '
+                  [
+                    (.data.repository.pullRequest.reviews.nodes // [])
+                    | .[]
+                    | select((.author.login // "") == "opencode-agent" or (.author.login // "") == "opencode-agent[bot]")
+                    | select((.commit.oid // "") == env.HEAD_SHA)
+                  ]
+                  | last
+                  | .state // "MISSING"
+                '
+            )"
+
+            if [ "$review_state" = "APPROVED" ]; then
+              printf 'Trusted OpenCode approval exists for head %s.\n' "$HEAD_SHA"
+              exit 0
+            fi
+
+            printf 'Waiting for trusted OpenCode approval for head %s (%s/%s, current=%s).\n' \
+              "$HEAD_SHA" "$attempt" "$attempts" "$review_state"
+            if [ "$attempt" -lt "$attempts" ]; then
+              sleep "$sleep_seconds"
+            fi
+          done
+
+          echo "::error::Timed out waiting for a trusted OpenCode approval review on head ${HEAD_SHA}."
+          exit 1
+
+  opencode-review-target:
+    name: opencode-review
+    if: >-
       github.event_name == 'workflow_dispatch'
       || (
-        github.event.pull_request.draft != true
+        github.event_name == 'pull_request_target'
+        && github.event.pull_request.draft != true
         && github.event.pull_request.head.repo.full_name == github.repository
       )
     runs-on: ubuntu-latest
