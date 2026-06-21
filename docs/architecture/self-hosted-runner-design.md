@@ -44,8 +44,10 @@ To connect to these private network mail servers without exposing them to the pu
 - All credentials (IMAP/SMTP passwords) can either be stored securely on the Naruon SaaS (encrypted via Fernet) or injected locally into the runner via environment variables, depending on customer security posture.
 
 ## Implementation Steps
-1. Package the connector plus local adapter account registry as a `RunnerAgent`
-   CLI/container entrypoint.
+1. The repository now includes a minimal `connector/` CLI/container entrypoint
+   that runs `SelfHostedConnector` with the server-issued registration token and
+   signed session bearer credential. Until local adapters are configured,
+   commands fail closed with `adapter_not_configured`.
 2. Expose WebSocket or HTTP polling endpoints on the Naruon backend.
 3. Update `WorkspaceRunnerConfig` in `backend/db/models.py` to manage runner lifecycle.
 4. Persist connector heartbeat, command outcome, retry queue, retry worker, and
