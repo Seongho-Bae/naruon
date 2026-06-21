@@ -20,6 +20,7 @@ vi.mock("lucide-react", () => ({
   CheckCircle2: () => <svg aria-hidden="true" />,
   Server: () => <svg aria-hidden="true" />,
   Upload: () => <svg aria-hidden="true" />,
+  Loader2: () => <svg aria-hidden="true" />,
 }));
 
 import DataPage from "./page";
