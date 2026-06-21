@@ -93,6 +93,7 @@ def mentions_changed_file_evidence(reason: str, summary: str) -> bool:
 
 
 def check_structural_approval(control_file: Path) -> int:
+    """Validate an already-normalized control block before publishing approval."""
     try:
         value = json.loads(control_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -126,6 +127,7 @@ def valid_control(
     expected_run_id: str,
     expected_run_attempt: str,
 ) -> dict[str, Any] | None:
+    """Return a normalized control block when it matches the current run."""
     if not isinstance(value, dict):
         return None
 
@@ -174,7 +176,8 @@ def valid_control(
     for finding in findings:
         if not isinstance(finding, dict):
             return None
-        if not isinstance(finding.get("line"), int) or finding["line"] <= 0:
+        line = finding.get("line")
+        if isinstance(line, bool) or not isinstance(line, int) or line <= 0:
             return None
         for field in required_finding_fields:
             if not isinstance(finding.get(field), str) or not finding[field].strip():
@@ -192,6 +195,7 @@ def valid_control(
 
 
 def iter_json_objects(text: str) -> list[Any]:
+    """Extract JSON objects from raw OpenCode output that may include prose."""
     decoder = json.JSONDecoder()
     values: list[Any] = []
 
@@ -214,6 +218,7 @@ def iter_json_objects(text: str) -> list[Any]:
 
 
 def main(argv: list[str]) -> int:
+    """Run the normalizer CLI and write the publishable control block."""
     if len(argv) == 3 and argv[1] == "--check-structural-approval":
         return check_structural_approval(Path(argv[2]))
 

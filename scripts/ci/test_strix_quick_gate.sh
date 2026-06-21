@@ -405,6 +405,9 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "Do not spend the session listing every changed path before reviewing" "opencode review prompt prevents fallback sessions from exhausting steps on file listing"
 	assert_file_contains "$workflow_file" "always return a final control block instead of a progress summary" "opencode review prompt requires a gate conclusion instead of a progress summary"
 	assert_file_contains "$workflow_file" "timeout 600 opencode run" "opencode review primary model has a bounded timeout so fallback review can publish promptly"
+	assert_file_contains "$workflow_file" 'OPENCODE_MODEL_ATTEMPTS: "2"' "opencode review retries transient model execution failures before exhausting a model"
+	assert_file_contains "$workflow_file" 'OpenCode %s attempt %s/%s failed with exit %s.' "opencode review logs per-model retry attempts"
+	assert_file_contains "$workflow_file" 'case "$opencode_run_status" in' "opencode review sends timeout-class failures directly to fallback instead of retrying the same stuck model"
 	assert_file_contains "$workflow_file" '"ci-review-fallback"' "opencode review workflow declares a dedicated fallback agent"
 	assert_file_contains "$workflow_file" '"steps": 12' "opencode review fallback agent has enough bounded steps to conclude after MCP inspection"
 	assert_file_contains "$workflow_file" '"read": "allow"' "opencode review allows read-only file inspection"
@@ -522,6 +525,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "FAILED_CHECK_EVIDENCE_ATTEMPTS" "opencode review workflow bounds waiting for peer check failures before model review"
 	assert_file_contains "$workflow_file" 'FAILED_CHECK_EVIDENCE_ATTEMPTS: "31"' "opencode review workflow waits long enough for slow Strix self-test failures"
 	assert_file_contains "$workflow_file" "collect_failed_check_evidence_with_wait" "opencode review workflow waits briefly for failed checks before building model evidence"
+	assert_file_contains "$workflow_file" "Failed-check evidence collector is not installed in this repository." "opencode review evidence handles repos without the failed-check helper instead of retrying a missing script"
+	assert_file_contains "$workflow_file" "collect_failed_check_evidence_or_note()" "opencode approval handles repos without the failed-check helper before publishing fallback reviews"
 	assert_file_contains "$workflow_file" "current_peer_checks_still_running" "opencode review workflow distinguishes pending peer checks from completed check state"
 	assert_file_contains "$workflow_file" 'select((.name // "") != "opencode-review")' "opencode review evidence wait excludes its own check run"
 	assert_file_contains "$workflow_file" 'select((.checkSuite.workflowRun.workflow.name // "") != "OpenCode PR Review")' "opencode review evidence wait excludes its own workflow"
@@ -559,7 +564,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" 'startswith("cannot provide diff")' "opencode approval gate rejects placeholder suggested diffs"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "source_file.is_file()" "opencode approval gate requires finding paths to exist"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "removed_line not in source_line_set" "opencode approval gate rejects suggested diffs that remove code absent from the cited file"
-	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" 'finding["line"] <= 0' "opencode normalizer rejects line zero findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" "isinstance(line, bool)" "opencode normalizer rejects boolean line findings"
+	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" "line <= 0" "opencode normalizer rejects line zero findings"
 	assert_file_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "--check-structural-approval" "opencode approval gate delegates structural approval rejection to the normalizer"
 	assert_file_not_contains "$REPO_ROOT/scripts/ci/opencode_review_approve_gate.sh" "structural exploration was not possible" "opencode approval gate does not duplicate structural failure phrases"
 	assert_file_contains "$workflow_file" "validate_opencode_failed_check_review.sh" "opencode approval gate validates request-changes reviews against failed-check evidence"
@@ -666,7 +672,7 @@ assert_opencode_review_normalizer_accepts_transcript_json() {
 	cat >"$output_file" <<'EOF'
 OpenCode transcript text before the review control block.
 
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed current head evidence including scripts/ci/test_strix_quick_gate.sh and no blocking review findings were identified.","findings":[]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed scripts/ci/opencode_review_normalize_output.py, scripts/ci/test_strix_quick_gate.sh, and current head evidence; no blocking review findings were identified.","findings":[]}
 EOF
 
 	set +e
@@ -711,7 +717,7 @@ assert_opencode_review_publish_body_discards_trailing_model_prose() {
 <!-- opencode-review-gate head_sha=abc123 run_id=42 run_attempt=1 -->
 
 <!-- opencode-review-control-v1
-{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed current head evidence including scripts/ci/test_strix_quick_gate.sh and no blocking review findings were identified.","findings":[]}
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"APPROVE","reason":"No blockers found after inspecting .github/workflows/opencode-review.yml.","summary":"Reviewed scripts/ci/opencode_review_normalize_output.py, scripts/ci/test_strix_quick_gate.sh, and current head evidence; no blocking review findings were identified.","findings":[]}
 -->
 
 But that is not meticulous.
@@ -944,6 +950,21 @@ EOF
 
 	assert_equals "4" "$rc" "opencode normalizer rejects line zero findings"
 	assert_file_contains "$tmp_dir/normalize.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for line zero findings"
+
+	cat >"$output_file" <<'EOF'
+OpenCode transcript text before the review control block.
+
+{"head_sha":"abc123","run_id":"42","run_attempt":"1","result":"REQUEST_CHANGES","reason":"Boolean line blocker","summary":"Boolean line values are not concrete source locations.","findings":[{"path":"scripts/ci/example.sh","line":true,"severity":"HIGH","title":"Boolean line","problem":"Boolean line values are not actionable.","root_cause":"The review did not inspect a concrete line.","fix_direction":"Inspect the actual file and cite a positive integer line number.","regression_test_direction":"Add a gate test for boolean line rejection.","suggested_diff":"diff --git a/scripts/ci/example.sh b/scripts/ci/example.sh\n--- a/scripts/ci/example.sh\n+++ b/scripts/ci/example.sh\n@@ -1 +1 @@\n-old\n+new"}]}
+EOF
+
+	set +e
+	python3 "$REPO_ROOT/scripts/ci/opencode_review_normalize_output.py" \
+		"abc123" "42" "1" "$output_file" >"$tmp_dir/bool-line.out" 2>"$tmp_dir/bool-line.err"
+	rc=$?
+	set -e
+
+	assert_equals "4" "$rc" "opencode normalizer rejects boolean line findings"
+	assert_file_contains "$tmp_dir/bool-line.err" "NO_CONCLUSION" "opencode normalizer reports no valid conclusion for boolean line findings"
 
 	rm -rf "$tmp_dir"
 }
@@ -5263,7 +5284,7 @@ run_total_timeout_case() {
 set -euo pipefail
 
 echo "1" >> "${FAKE_STRIX_CALL_COUNT_FILE:?}"
-sleep 5
+sleep 30
 EOF
 	chmod +x "$fake_strix"
 	printf '%s' 'vertex_ai/total-timeout-primary' >"$strix_llm_file"
@@ -5279,8 +5300,8 @@ EOF
 			FAKE_STRIX_CALL_COUNT_FILE="$call_count_file" \
 			STRIX_LLM_FILE="$strix_llm_file" \
 			LLM_API_KEY_FILE="$llm_api_key_file" \
-			STRIX_PROCESS_TIMEOUT_SECONDS="10" \
-			STRIX_TOTAL_TIMEOUT_SECONDS="3" \
+			STRIX_PROCESS_TIMEOUT_SECONDS="30" \
+			STRIX_TOTAL_TIMEOUT_SECONDS="8" \
 			STRIX_VERTEX_FALLBACK_MODELS="vertex_ai/fallback-one" \
 			STRIX_TRANSIENT_RETRY_PER_MODEL="2" \
 			STRIX_TRANSIENT_RETRY_BACKOFF_SECONDS="0" \
@@ -5292,7 +5313,7 @@ EOF
 	set -e
 
 	assert_equals "1" "$rc" "total timeout exit code"
-	assert_file_contains "$output_log" "Strix quick scan exceeded total timeout of 3s." "total timeout output"
+	assert_file_contains "$output_log" "Strix quick scan exceeded total timeout of 8s." "total timeout output"
 	local actual_calls="0"
 	if [ -f "$call_count_file" ]; then
 		actual_calls="$(wc -l <"$call_count_file" | tr -d ' ')"
