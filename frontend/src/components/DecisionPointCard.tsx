@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw, Info } from "lucide-react";
 
-export interface InsightCardProps {
+export interface DecisionPointCardProps {
   title: string;
   ariaLabel?: string;
   icon?: ReactNode;
@@ -18,7 +18,7 @@ export interface InsightCardProps {
   footerActions?: ReactNode;
 }
 
-export function InsightCard({
+export function DecisionPointCard({
   title,
   ariaLabel,
   icon,
@@ -31,9 +31,9 @@ export function InsightCard({
   confidence,
   children,
   footerActions,
-}: InsightCardProps) {
+}: DecisionPointCardProps) {
   return (
-    <article data-insight-card="true" aria-label={ariaLabel ?? title}>
+    <article data-decision-point-card="true" aria-label={ariaLabel ?? title}>
       <Card className="flex h-full flex-col border-white/20 bg-white/50 shadow-[0_8px_32px_-8px_rgba(37,99,255,0.08)] backdrop-blur-xl">
         <CardHeader className="pb-3 pt-4 px-4 flex flex-row items-center justify-between space-y-0 bg-gradient-to-r from-primary/5 to-transparent border-b border-primary/5">
           <CardTitle role="heading" aria-level={3} className="text-sm font-bold flex items-center gap-2">

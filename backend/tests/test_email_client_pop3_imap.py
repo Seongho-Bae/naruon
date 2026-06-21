@@ -14,6 +14,16 @@ from services.email_client import (
 )
 import socket
 
+
+@pytest.fixture
+def smtp_socket():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        yield sock
+    finally:
+        sock.close()
+
+
 def test_validate_imap_host(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_IMAP_HOSTS", "imap.example.com")
     assert validate_imap_host("imap.example.com", resolve_host=False) == "imap.example.com"
@@ -215,8 +225,8 @@ async def test_pinned_implicit_tls_smtp_not_socket(monkeypatch):
     assert result == "super-result"
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_not_tls(monkeypatch):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def test_pinned_implicit_tls_smtp_not_tls(monkeypatch, smtp_socket):
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -232,8 +242,8 @@ async def test_pinned_implicit_tls_smtp_not_tls(monkeypatch):
     assert result == "super-result"
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_connect_timeout(monkeypatch):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def test_pinned_implicit_tls_smtp_connect_timeout(monkeypatch, smtp_socket):
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -256,8 +266,8 @@ async def test_pinned_implicit_tls_smtp_connect_timeout(monkeypatch):
         await client._create_connection(timeout=10.0)
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_connect_oserror(monkeypatch):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def test_pinned_implicit_tls_smtp_connect_oserror(monkeypatch, smtp_socket):
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -280,8 +290,8 @@ async def test_pinned_implicit_tls_smtp_connect_oserror(monkeypatch):
         await client._create_connection(timeout=10.0)
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_read_response_disconnected(monkeypatch):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def test_pinned_implicit_tls_smtp_read_response_disconnected(monkeypatch, smtp_socket):
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -315,8 +325,8 @@ async def test_pinned_implicit_tls_smtp_read_response_disconnected(monkeypatch):
         await client._create_connection(timeout=10.0)
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_read_response_timeout(monkeypatch):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+async def test_pinned_implicit_tls_smtp_read_response_timeout(monkeypatch, smtp_socket):
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -350,9 +360,9 @@ async def test_pinned_implicit_tls_smtp_read_response_timeout(monkeypatch):
         await client._create_connection(timeout=10.0)
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_read_response_not_ready(monkeypatch):
+async def test_pinned_implicit_tls_smtp_read_response_not_ready(monkeypatch, smtp_socket):
     from aiosmtplib.response import SMTPResponse
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -386,9 +396,9 @@ async def test_pinned_implicit_tls_smtp_read_response_not_ready(monkeypatch):
         await client._create_connection(timeout=10.0)
 
 @pytest.mark.asyncio
-async def test_pinned_implicit_tls_smtp_read_response_success(monkeypatch):
+async def test_pinned_implicit_tls_smtp_read_response_success(monkeypatch, smtp_socket):
     from aiosmtplib.response import SMTPResponse
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock = smtp_socket
     client = email_client._PinnedImplicitTlsSMTP(
         tls_server_hostname="smtp.example.com",
         hostname=None,
@@ -425,8 +435,8 @@ def test_validate_smtp_host_ip_literal(monkeypatch):
     monkeypatch.setattr(email_client.settings, "ALLOWED_SMTP_HOSTS", "1.1.1.1")
     assert email_client.validate_smtp_host("1.1.1.1", resolve_host=False) == "1.1.1.1"
 
-def test_build_smtp_client_non_465():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+def test_build_smtp_client_non_465(smtp_socket):
+    sock = smtp_socket
     client = email_client._build_smtp_client(smtp_socket=sock, smtp_server="smtp.example.com", smtp_port=587)
     assert not client.use_tls
     assert client.sock == sock
