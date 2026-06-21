@@ -11,6 +11,11 @@ from db.session import engine
 INVALID_EMAIL_BACKFILL_OWNER_IDS = {None, "", "default"}
 
 
+def _static_bootstrap_sql(statement: str) -> Executable:
+    # ponytail: repo-authored static bootstrap SQL only; bind params before runtime input.
+    return text(statement)
+
+
 def _explicit_email_backfill_owner_ids() -> tuple[str | None, str | None]:
     user_id = os.environ.get("NARUON_IMPORT_USER_ID")
     organization_id = os.environ.get("NARUON_IMPORT_ORGANIZATION_ID")
@@ -80,12 +85,14 @@ def _get_add_columns_statements() -> list[Executable]:
             "ALTER TABLE sender_relationships "
             "ADD COLUMN IF NOT EXISTS source_thread_id varchar"
         ),
-        text("ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS prompt_uid varchar"),
-        text(
+        _static_bootstrap_sql(
+            "ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS prompt_uid varchar"
+        ),
+        _static_bootstrap_sql(
             "ALTER TABLE prompt_templates "
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
-        text(
+        _static_bootstrap_sql(
             "ALTER TABLE prompt_templates "
             "ADD COLUMN IF NOT EXISTS workspace_id varchar"
         ),
@@ -255,7 +262,7 @@ def _get_update_project_folders_statements() -> list[Executable]:
 
 def _get_update_prompt_template_statements() -> list[Executable]:
     return [
-        text(
+        _static_bootstrap_sql(
             "UPDATE prompt_templates "
             "SET prompt_uid = 'prompt_' || encode(sha256(("
             "random()::text || ':' || clock_timestamp()::text || ':' || "
@@ -263,8 +270,10 @@ def _get_update_prompt_template_statements() -> list[Executable]:
             ")::bytea), 'hex') "
             "WHERE prompt_uid IS NULL OR prompt_uid = ''"
         ),
-        text("ALTER TABLE prompt_templates ALTER COLUMN prompt_uid SET NOT NULL"),
-        text(
+        _static_bootstrap_sql(
+            "ALTER TABLE prompt_templates ALTER COLUMN prompt_uid SET NOT NULL"
+        ),
+        _static_bootstrap_sql(
             "CREATE UNIQUE INDEX IF NOT EXISTS uq_prompt_templates_prompt_uid "
             "ON prompt_templates (prompt_uid)"
         ),
