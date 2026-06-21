@@ -325,13 +325,38 @@ class ScopedRoleAssignment(Base):
 
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
+    __table_args__ = (
+        Index(
+            "ix_prompt_templates_owner_scope",
+            "created_by",
+            "organization_id",
+            "workspace_id",
+        ),
+        Index(
+            "ix_prompt_templates_shared_scope",
+            "organization_id",
+            "workspace_id",
+            "is_shared",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    prompt_uid: Mapped[str] = mapped_column(
+        String,
+        unique=True,
+        index=True,
+        default=lambda: f"prompt_{uuid.uuid4().hex}",
+        nullable=False,
+    )
     title: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     content: Mapped[str] = mapped_column(Text)
     is_shared: Mapped[bool] = mapped_column(Boolean, default=False)
     created_by: Mapped[str] = mapped_column(String, index=True)
+    organization_id: Mapped[str | None] = mapped_column(
+        String, index=True, nullable=True
+    )
+    workspace_id: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.datetime.now(datetime.timezone.utc),
