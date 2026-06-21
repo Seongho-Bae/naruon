@@ -108,6 +108,24 @@
   external lookups. The agent may directly read changed files and focused hunks
   in read-only mode when MCP evidence is insufficient, but must not edit files
   or execute project code during the review.
+- OpenCode Agent findings should be concrete and directly usable: each blocking
+  finding should name the observable impact, the trigger condition or affected
+  workflow, the smallest source-backed fix, and an exact verification command or
+  test target when the repository already has one. Avoid generic architecture
+  advice unless it maps to the cited `path:line`.
+  When GitHub reports a merge conflict, include a concrete conflict-resolution
+  direction instead of only saying the PR is blocked: name the base/head branch,
+  tell the author to merge or rebase the latest base branch into the PR branch,
+  resolve conflict markers in the changed files, rerun the focused checks, and
+  push the same branch.
+  For Greptile-style specificity, carry a P1/P2/P3 priority in each finding,
+  cite the evidence type that justifies it (nearby implementation, matching
+  existing example, cross-file counterpart, current official docs, or failed
+  check/log evidence), flag unrelated PR scope drift as scope risk instead of
+  burying it in style notes, and make `suggested_diff` a GitHub
+  suggestion-ready minimal diff when possible. Include one compact Mermaid
+  graph in the human-readable review body that maps the changed surface to the
+  main risk, fix, and verification path.
 - OpenCode `Review Overview` comments are durable gate evidence. Publish them
   through an idempotent marker such as `<!-- opencode-review-overview -->` and
   update the existing comment instead of deleting it after approval, failed

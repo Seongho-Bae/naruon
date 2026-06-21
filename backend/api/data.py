@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 import hashlib
 from typing import Literal
@@ -9,6 +8,7 @@ from sqlalchemy import case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
+
 from api.runner_ws import manager as runner_manager
 from core.config import settings
 from db.models import (
@@ -265,7 +265,9 @@ def _document_webdav_materialization_response(
     }
 
 
-def _document_webdav_runner_command(document: Document, intent_result: dict) -> dict[str, object]:
+def _document_webdav_runner_command(
+    document: Document, intent_result: dict
+) -> dict[str, object]:
     return {
         "action": "write_webdav",
         "account": intent_result["source_id"],
@@ -774,7 +776,9 @@ async def upload_data_document(
     )
 
 
-@router.post("/documents/{document_id}/reparse", response_model=DataDocumentActionResponse)
+@router.post(
+    "/documents/{document_id}/reparse", response_model=DataDocumentActionResponse
+)
 async def reparse_data_document(
     document_id: str,
     auth_context: AuthContext = Depends(get_auth_context),
@@ -860,7 +864,9 @@ async def create_document_webdav_materialization_intent(
             str(source_result.get("error_code") or ""),
             422,
         )
-        raise HTTPException(status_code=status_code, detail=source_result.get("message"))
+        raise HTTPException(
+            status_code=status_code, detail=source_result.get("message")
+        )
 
     result = _document_webdav_materialization_response(document, source_result)
     if request.execute_provider:
@@ -878,6 +884,11 @@ async def get_data_quality_surface(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ) -> DataQualitySurfaceResponse:
+    if auth_context.session_verifier == "hmac":
+        raise HTTPException(
+            status_code=403,
+            detail="Authoritative workspace membership is required for security access surface",
+        )
     webdav_accounts = await _scoped_rows(
         db,
         _owner_scope_statement(WebdavAccount, auth_context).order_by(
