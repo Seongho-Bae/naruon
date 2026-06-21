@@ -1288,6 +1288,7 @@ EOF
 Dockerfile
 backend/api/auth.py
 backend/core/config.py
+backend/core/runtime_secrets.py
 backend/main.py
 backend/scripts/docker_entrypoint.sh
 frontend/Dockerfile
