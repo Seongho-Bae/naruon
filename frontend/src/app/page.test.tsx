@@ -490,7 +490,7 @@ describe("Home workspace action bridge", () => {
 
     expect(container.textContent).toContain("수신된 메일이 없습니다.");
     expect(container.textContent).toContain("답변 대기 중인 보낸 메일이 없습니다.");
-    expect(container.textContent).toContain("대기 중인 작업이 없습니다.");
+    expect(container.textContent).toContain("대기 작업이 없습니다.");
   });
 
   it("shows desktop calendar empty and error states from the search API", async () => {
