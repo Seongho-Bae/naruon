@@ -142,6 +142,33 @@ def _get_create_tables_statements() -> list[Executable]:
             "observed_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
             ")"
         ),
+        text(
+            "CREATE TABLE IF NOT EXISTS workflow_definitions ("
+            "workflow_uid varchar PRIMARY KEY, "
+            "organization_id varchar NOT NULL, "
+            "workspace_id varchar NOT NULL, "
+            "user_id varchar NOT NULL, "
+            "workflow_name varchar NOT NULL, "
+            "workflow_description text, "
+            "steps_json json NOT NULL DEFAULT '[]'::json, "
+            "state_code varchar NOT NULL DEFAULT 'draft', "
+            "created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP"
+            ")"
+        ),
+        text(
+            "CREATE TABLE IF NOT EXISTS agent_run_records ("
+            "run_uid varchar PRIMARY KEY, "
+            "workflow_uid varchar NOT NULL REFERENCES workflow_definitions(workflow_uid), "
+            "organization_id varchar NOT NULL, "
+            "workspace_id varchar NOT NULL, "
+            "user_id varchar NOT NULL, "
+            "status_code varchar NOT NULL DEFAULT 'pending', "
+            "started_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP, "
+            "completed_at timestamptz, "
+            "result_summary text"
+            ")"
+        ),
     ]
 
 
@@ -199,6 +226,28 @@ def _get_create_indexes_statements() -> list[Executable]:
         text(
             "CREATE INDEX IF NOT EXISTS ix_prompt_templates_shared_scope "
             "ON prompt_templates (organization_id, workspace_id, is_shared)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_workflow_definitions_scope_time "
+            "ON workflow_definitions (organization_id, workspace_id, updated_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_workflow_definitions_owner_scope "
+            "ON workflow_definitions "
+            "(user_id, organization_id, workspace_id, updated_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_agent_run_records_scope_time "
+            "ON agent_run_records (organization_id, workspace_id, started_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_agent_run_records_owner_scope "
+            "ON agent_run_records "
+            "(user_id, organization_id, workspace_id, started_at)"
+        ),
+        text(
+            "CREATE INDEX IF NOT EXISTS ix_agent_run_records_workflow_time "
+            "ON agent_run_records (workflow_uid, started_at)"
         ),
     ]
 

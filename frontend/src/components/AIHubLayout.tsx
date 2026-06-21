@@ -105,19 +105,27 @@ function stateLabel(stateCode: string) {
   const labels: Record<string, string> = {
     active: '활성',
     attention: '점검',
+    completed: '완료',
     configured: '구성됨',
+    draft: '초안',
     empty: '없음',
+    failed: '실패',
     needs_key: '키 필요',
     needs_provider: '모델 연결 필요',
+    pending: '대기',
     ready: '준비됨',
     recorded: '기록됨',
+    running: '실행 중',
   };
   return labels[stateCode] ?? stateCode;
 }
 
 function stateClassName(stateCode: string) {
-  if (stateCode === 'active' || stateCode === 'ready' || stateCode === 'recorded') {
+  if (stateCode === 'active' || stateCode === 'ready' || stateCode === 'recorded' || stateCode === 'completed') {
     return 'border-green-200 bg-green-50 text-green-700';
+  }
+  if (stateCode === 'failed') {
+    return 'border-red-200 bg-red-50 text-red-700';
   }
   if (stateCode === 'attention' || stateCode.startsWith('needs_')) {
     return 'border-amber-200 bg-amber-50 text-amber-700';
@@ -307,7 +315,7 @@ function EvaluationPanel({ metrics, onOpenRuns }: { metrics: EvaluationMetric[];
 
 function RunHistoryPanel({ events }: { events: RunEvent[] }) {
   if (events.length === 0) {
-    return <EmptyState title="기록된 실행 증거가 없습니다." detail="프롬프트 변경 또는 모델 연결 감사 이벤트가 생기면 실행 이력으로 정렬됩니다." />;
+    return <EmptyState title="기록된 실행 증거가 없습니다." detail="에이전트 실행 row 또는 운영 감사 근거가 생기면 실행 근거로 정렬됩니다." />;
   }
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
