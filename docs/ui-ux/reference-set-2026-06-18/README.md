@@ -7,6 +7,10 @@ unchanged.
 `sources.tsv` records the stable SHA-256 digest and repository path for each
 image.
 
+For the unified repository index and LLM Agent reading order, start with
+`../README.md` and `../naruon-ui-ux-mapping.md`. This dated directory should
+remain path-stable once review comments or PR evidence refer to it.
+
 | # | Image |
 |---|---|
 | 01 | [ui-ux-reference-01.png](images/ui-ux-reference-01.png) |
