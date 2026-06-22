@@ -461,6 +461,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'current_peer_checks_still_running()' "opencode evidence waits for PR statusCheckRollup peer checks before reviewing"
 	assert_file_contains "$workflow_file" 'collect_pending_github_checks()' "opencode approval collects pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" 'collect_current_head_strix_workflow_runs()' "opencode approval separately accounts for jobless current-head Strix workflow runs"
+	assert_file_contains "$workflow_file" 'actions/workflows/strix.yml' "opencode approval probes whether Strix is installed before listing Strix runs"
+	assert_file_contains "$workflow_file" 'grep -Fq "HTTP 404" "$workflow_lookup_err"' "opencode approval treats missing Strix workflow as optional instead of a check lookup failure"
 	assert_file_contains "$workflow_file" 'gh run list' "opencode approval uses the Actions run list API for current-head Strix evidence"
 	assert_file_contains "$workflow_file" '--commit "$HEAD_SHA"' "opencode approval asks GitHub for runs scoped to the current PR head"
 	assert_file_contains "$workflow_file" '--limit 200' "opencode approval looks up enough Strix workflow runs to compare current-head failures against newer manual evidence"
