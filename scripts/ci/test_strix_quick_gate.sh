@@ -94,7 +94,7 @@ assert_strix_pr_scope_includes_deployment_context() {
 assert_strix_workflow_pr_trigger_hardened() {
 	local workflow_file="$REPO_ROOT/.github/workflows/strix.yml"
 
-	assert_file_contains "$workflow_file" "branches: [develop, master]" "strix workflow scans the protected default branch"
+	assert_file_contains "$workflow_file" "branches: [main, develop, master]" "strix workflow scans GitHub Flow and Git Flow protected branches"
 	assert_file_contains "$workflow_file" "pull_request_target:" "strix workflow uses trusted PR trigger"
 	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.pull_request.number)" "strix workflow scopes concurrency to the active pull request"
 	assert_file_contains "$workflow_file" "format('pr-{0}', github.event.inputs.pr_number)" "strix workflow scopes manual PR evidence concurrency to the requested pull request"
@@ -462,6 +462,10 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'approve_low_risk_changed_files_after_model_failure()' "opencode approval has a deterministic fallback for low-risk model-output failures"
 	assert_file_contains "$workflow_file" 'This fallback is not used for workflow, source-code, script, dependency, infrastructure, configuration, or lockfile changes.' "opencode low-risk fallback excludes executable and configuration changes"
 	assert_file_contains "$workflow_file" '.github/workflows' "opencode low-risk fallback explicitly excludes workflow changes"
+	assert_file_contains "$workflow_file" 'approve_review_tooling_bootstrap_after_model_failure()' "opencode approval has a deterministic fallback for review-tooling bootstrap failures"
+	assert_file_contains "$workflow_file" 'Deterministic review-tooling bootstrap fallback approval was used' "opencode review-tooling bootstrap fallback explains model-output failure approval"
+	assert_file_contains "$workflow_file" 'scripts/ci/strix_quick_gate.sh' "opencode review-tooling bootstrap fallback is scoped to the Strix/OpenCode review bundle"
+	assert_file_contains "$workflow_file" 'optional actionlint when installed, bash syntax checks for review shell scripts, and Python bytecode compilation' "opencode review-tooling bootstrap fallback runs local static validation"
 	assert_file_contains "$workflow_file" 'current_peer_checks_still_running()' "opencode evidence waits for PR statusCheckRollup peer checks before reviewing"
 	assert_file_contains "$workflow_file" 'collect_pending_github_checks()' "opencode approval collects pending peer GitHub Checks"
 	assert_file_contains "$workflow_file" 'collect_current_head_strix_workflow_runs()' "opencode approval separately accounts for jobless current-head Strix workflow runs"
@@ -1182,11 +1186,33 @@ EOF
 
 assert_opencode_failed_check_fallback_emits_each_strix_report() {
 	local tmp_dir
+	local fixture_repo
 	local evidence_file
 	local output_file
 	tmp_dir="$(mktemp -d)"
+	fixture_repo="$tmp_dir/repo"
 	evidence_file="$tmp_dir/failed-check-evidence.md"
 	output_file="$tmp_dir/fallback.md"
+	mkdir -p "$fixture_repo/backend/services" "$fixture_repo/frontend/src/app/prompt-studio" "$fixture_repo/frontend"
+
+	{
+		for _ in $(seq 1 59); do
+			printf '# filler\n'
+		done
+		printf 'filename = part.get_filename()\n'
+	} >"$fixture_repo/backend/services/email_parser.py"
+	{
+		for _ in $(seq 1 28); do
+			printf '// filler\n'
+		done
+		printf 'setTestResult(await apiClient.post("/prompt-studio", payload));\n'
+	} >"$fixture_repo/frontend/src/app/prompt-studio/page.tsx"
+	{
+		for _ in $(seq 1 34); do
+			printf '// filler\n'
+		done
+		printf 'const nextConfig = {};\n'
+	} >"$fixture_repo/frontend/next.config.ts"
 
 	cat >"$evidence_file" <<'EOF'
 ## Failed check: Strix Security Scan/strix
@@ -1222,7 +1248,7 @@ Model deepseek/deepseek-v3-0324 Vulnerabilities 1
 EOF
 
 	bash "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" \
-		"$evidence_file" "$REPO_ROOT" >"$output_file"
+		"$evidence_file" "$fixture_repo" >"$output_file"
 
 	assert_file_contains "$output_file" "Strix report from deepseek/deepseek-r1-0528: Path Traversal in Email Attachment Handling" "fallback includes first model report"
 	assert_file_contains "$output_file" "backend/services/email_parser.py:60" "fallback maps first report to exact source line"
