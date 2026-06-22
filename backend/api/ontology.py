@@ -48,7 +48,6 @@ class RelationshipCaptureRequest(BaseModel):
     )
 
 
-
 def _canonical_thread_id(email_row: Email) -> str:
     return (
         normalize_message_id(email_row.thread_id)

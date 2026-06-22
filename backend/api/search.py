@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, union_all
 from db.session import get_db, get_readonly_db
 from db.models import Email, Attachment
-from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector, generate_embeddings
+from services.embedding import (
+    STORAGE_EMBEDDING_DIMENSION,
+    fit_embedding_vector,
+    generate_embeddings,
+)
 from api.auth import AuthContext, get_auth_context
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import resolve_runtime_llm_provider
@@ -46,7 +50,6 @@ def thread_group_key():
         func.btrim(func.btrim(Email.message_id), "<>"), ""
     )
     return func.coalesce(normalized_thread_id, normalized_message_id)
-
 
 
 def build_reply_counts_subquery(

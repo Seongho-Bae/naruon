@@ -14,6 +14,7 @@ import hashlib
 # email header processing, yielding a measurable speedup when handling long reference lists.
 REFERENCE_PATTERN = re.compile(r"<([^>]+)>")
 
+
 def generate_email_fingerprint(
     subject: str | None,
     date_str: str | None,
@@ -58,7 +59,6 @@ def extract_reference_ids(value: str | None) -> list[str]:
             seen.add(normalized)
             normalized_refs.append(normalized)
     return normalized_refs
-
 
 
 async def _find_existing_thread_ids(

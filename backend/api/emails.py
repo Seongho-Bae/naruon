@@ -90,7 +90,6 @@ def thread_lookup_values(thread_id: str) -> list[str]:
     return list({thread_id, normalized, f"<{normalized}>"})
 
 
-
 MailFolder = Literal["inbox", "sent"]
 
 
@@ -603,7 +602,10 @@ async def get_email(
 ):
     # Ensure auth context validates the request payload and scopes access
     result = await db.execute(
-        select(Email).where(Email.id == email_id, *email_owner_filters(auth_context.user_id, auth_context.organization_id))
+        select(Email).where(
+            Email.id == email_id,
+            *email_owner_filters(auth_context.user_id, auth_context.organization_id),
+        )
     )
     email = result.scalar_one_or_none()
     if not email:
