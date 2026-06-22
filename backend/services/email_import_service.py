@@ -24,9 +24,9 @@ from services.embedding import (
     generate_embeddings,
 )
 from services.exceptions import ArchiveError, EmailParseError, EmbeddingGenerationError
+from db.filters import email_owner_filters
 from services.threading_service import (
     assign_thread_id,
-    email_owner_filters,
     generate_email_fingerprint,
     normalize_message_id,
 )

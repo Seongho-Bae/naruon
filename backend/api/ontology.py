@@ -12,6 +12,7 @@ from api.auth import get_auth_context, AuthContext
 from services.ontology_service import RelationshipData, ontology_service
 from services.text_safety import strip_html_markup
 from services.threading_service import normalize_message_id
+from db.filters import email_owner_filters
 
 router = APIRouter(prefix="/api/ontology", tags=["ontology"])
 SOURCE_IDENTIFIER_PATTERN = r"^[\w\.\-\+@_<>]+$"
@@ -46,14 +47,6 @@ class RelationshipCaptureRequest(BaseModel):
         min_length=1, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
     )
 
-
-def _email_owner_filters(auth_ctx: AuthContext):
-    organization_filter = (
-        Email.organization_id == auth_ctx.organization_id
-        if auth_ctx.organization_id is not None
-        else Email.organization_id.is_(None)
-    )
-    return (Email.user_id == auth_ctx.user_id, organization_filter)
 
 
 def _canonical_thread_id(email_row: Email) -> str:
@@ -188,7 +181,7 @@ async def capture_relationship_from_source(
 ):
     result = await db.execute(
         select(Email).where(
-            *_email_owner_filters(auth_ctx),
+            *email_owner_filters(auth_ctx.user_id, auth_ctx.organization_id),
             Email.message_id == req.source_message_id,
         )
     )

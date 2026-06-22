@@ -10,6 +10,7 @@ from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector
 from api.auth import AuthContext, get_auth_context
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import resolve_runtime_llm_provider
+from db.filters import email_owner_filters
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -46,14 +47,6 @@ def thread_group_key():
     )
     return func.coalesce(normalized_thread_id, normalized_message_id)
 
-
-def email_owner_filters(user_id: str, organization_id: str | None):
-    organization_filter = (
-        Email.organization_id == organization_id
-        if organization_id is not None
-        else Email.organization_id.is_(None)
-    )
-    return (Email.user_id == user_id, organization_filter)
 
 
 def build_reply_counts_subquery(

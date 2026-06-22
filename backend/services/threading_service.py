@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db.models import Email
 from services.email_parser import EmailData
+from db.filters import email_owner_filters
 
 
 import hashlib
@@ -58,14 +59,6 @@ def extract_reference_ids(value: str | None) -> list[str]:
             normalized_refs.append(normalized)
     return normalized_refs
 
-
-def email_owner_filters(user_id: str, organization_id: str | None):
-    organization_filter = (
-        Email.organization_id == organization_id
-        if organization_id is not None
-        else Email.organization_id.is_(None)
-    )
-    return (Email.user_id == user_id, organization_filter)
 
 
 async def _find_existing_thread_ids(
