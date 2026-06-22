@@ -467,7 +467,7 @@ const settingsDetailSurfaces: Partial<Record<SettingsTab, {
     heading: '알림 정책',
     copy: '메일 회신 추적, 일정 충돌, writeback conflict, connector health 이벤트를 사용자별 채널 정책으로 정리합니다.',
     items: [
-      { title: '답변 추적', detail: '보낸 메일 SLA가 지연되면 홈 대기 작업과 알림 큐에 같은 사건으로 표시합니다.', status: '메일 연동' },
+      { title: '답변 추적', detail: '보낸 메일 답변 기한이 지나면 홈 대기 작업과 알림 큐에 같은 사건으로 표시합니다.', status: '메일 연동' },
       { title: '일정 충돌', detail: 'CalDAV writeback 후보가 충돌하거나 ETag가 맞지 않으면 재확인 알림을 생성합니다.', status: '캘린더' },
       { title: 'Connector health', detail: 'self-hosted connector heartbeat, sync lag, provider throttling을 운영 알림으로 묶습니다.', status: '운영' },
     ],
