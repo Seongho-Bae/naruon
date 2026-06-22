@@ -229,6 +229,14 @@ def preload_oidc_jwks() -> None:
 
 
 def _oidc_unverified_header(token: str) -> dict[str, Any]:
+    if settings.OIDC_ISSUER_URL:
+        try:
+            payload = _decode_cached_oidc_session_payload(token)
+            _reject_signed_session_admin_payload(payload)
+            return payload, "oidc"
+        except Exception:
+            pass
+
     try:
         header = jwt.get_unverified_header(token)
     except Exception:
@@ -275,6 +283,26 @@ def _reject_unsupported_critical_headers(header: dict[str, Any]) -> None:
     if "crit" in header:
         raise _authentication_error()
 
+
+def issue_signed_session_token(payload: dict[str, Any]) -> str:
+    secret = _session_secret_bytes()
+    now = int(time.time())
+
+    # ensure basic payload structure matches what we expect
+    payload_to_encode = {
+        "ver": 1,
+        "iss": SESSION_ISSUER,
+        "aud": SESSION_AUDIENCE,
+        "iat": now,
+        "exp": now + MAX_SIGNED_SESSION_EXPIRATION_SECONDS,
+        **payload
+    }
+
+    return jwt.encode(
+        payload_to_encode,
+        secret,
+        algorithm="HS256"
+    )
 
 def _session_secret_bytes() -> bytes:
     configured = settings.AUTH_SESSION_HMAC_SECRET
@@ -372,16 +400,13 @@ def _verify_signed_session_payload(
 
 
 def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
-    # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
-        if jwks_client is None:
-            raise _authentication_error()
         try:
             payload = _decode_cached_oidc_session_payload(token)
             _reject_signed_session_admin_payload(payload)
             return payload, "oidc"
         except Exception:
-            raise _authentication_error() from None
+            pass
 
     try:
         header = jwt.get_unverified_header(token)

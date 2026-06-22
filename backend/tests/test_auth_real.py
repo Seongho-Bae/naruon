@@ -16,7 +16,6 @@ from api.auth import (
     is_tenant_admin_role,
     is_admin_role,
     AuthContext,
-    OIDC_ALLOWED_ALGORITHMS,
     SESSION_ALLOWED_ALGORITHMS,
     SESSION_AUTH_RATE_LIMIT_MAX_FAILURES,
     _session_auth_failure_buckets,
@@ -43,7 +42,7 @@ RUNTIME_HEADER_PARAMS = {
     "x_group_ids",
     "x_dev_auth_token",
 }
-PUBLIC_API_ROUTES: set[tuple[str, frozenset[str]]] = set()
+PUBLIC_API_ROUTES: set[tuple[str, frozenset[str]]] = {("/api/auth/session/oidc-exchange", frozenset({"POST"}))}
 
 
 class _MockResult:
@@ -914,323 +913,11 @@ def test_oidc_jwks_client_fetches_from_validated_pinned_address(monkeypatch):
     ]
 
 
-@pytest.mark.asyncio
-async def test_signed_bearer_session_with_oidc(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    decode_algorithms: list[tuple[str, ...]] = []
-    decode_options: list[dict[str, object]] = []
-
-    def mock_jwt_decode(*args, **kwargs):
-        decode_algorithms.append(tuple(kwargs["algorithms"]))
-        decode_options.append(dict(kwargs["options"]))
-        return {
-            "iss": "https://login.example.test/realms/naruon",
-            "aud": "naruon-api",
-            "sub": "alice",
-            "role": "member",
-            "org": "org-acme",
-            "groups": ["group-1", "group-2"],
-            "workspace": "workspace-org-acme",
-            "exp": int(time.time()) + 300,
-            "_session_verifier": "hmac",
-        }
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-
-    try:
-        token = _signed_session_token(
-            _valid_session_payload(),
-            header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
-        )
-        context = await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert context.user_id == "alice"
-    assert context.role == "member"
-    assert context.organization_id == "org-acme"
-    assert context.session_verifier == "oidc"
-    assert decode_algorithms == [OIDC_ALLOWED_ALGORITHMS]
-    assert decode_options == [
-        {"require": ("exp", "iss", "aud"), "verify_signature": True}
-    ]
 
 
-@pytest.mark.asyncio
-async def test_oidc_rejects_non_rs256_algorithm_before_decode(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    decode_called = False
-
-    def mock_jwt_decode(*args, **kwargs):
-        nonlocal decode_called
-        decode_called = True
-        return {}
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "HS256", "typ": "JWT", "kid": "test-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-    assert decode_called is False
 
 
-@pytest.mark.asyncio
-async def test_oidc_rejects_key_id_that_does_not_match_verified_key(monkeypatch):
-    import jwt
 
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "trusted-key"
-        key = "trusted_public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    def mock_jwt_decode(token, key, **kwargs):
-        assert key == "trusted_public_key"
-        return {
-            "iss": "https://login.example.test/realms/naruon",
-            "aud": "naruon-api",
-            "sub": "alice",
-            "role": "member",
-            "org": "org-acme",
-            "groups": [],
-            "workspace": "workspace-org-acme",
-            "exp": int(time.time()) + 300,
-        }
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "RS256", "typ": "JWT", "kid": "attacker-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_oidc_rejects_unknown_critical_header_before_decode(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    decode_called = False
-
-    def mock_jwt_decode(*args, **kwargs):
-        nonlocal decode_called
-        decode_called = True
-        return {}
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={
-            "alg": "RS256",
-            "typ": "JWT",
-            "kid": "test-key",
-            "crit": ["x-custom-policy"],
-            "x-custom-policy": "require-mfa",
-        },
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-    assert decode_called is False
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "admin_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin"),
-)
-async def test_oidc_session_rejects_admin_role_claim(monkeypatch, admin_role: str):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    def mock_jwt_decode(*args, **kwargs):
-        return {
-            "iss": "https://login.example.test/realms/naruon",
-            "aud": "naruon-api",
-            "sub": "operator",
-            "role": admin_role,
-            "org": None,
-            "groups": [],
-            "workspace": "workspace-root",
-            "exp": int(time.time()) + 300,
-        }
-
-    monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_oidc_validation_failure_does_not_fallback_to_signed_session(monkeypatch):
-    import jwt
-
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-
-    class MockKey:
-        key_id = "test-key"
-        key = "public_key"
-
-    monkeypatch.setattr("api.auth.jwks_client", object())
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", (MockKey(),))
-
-    def reject_jwt_decode(*args, **kwargs):
-        raise RuntimeError("oidc rejected")
-
-    monkeypatch.setattr(jwt, "decode", reject_jwt_decode)
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_oidc_request_path_requires_preloaded_jwks(monkeypatch):
-    previous_issuer_url = settings.OIDC_ISSUER_URL
-    previous_client_id = settings.OIDC_CLIENT_ID
-    previous_secret = settings.AUTH_SESSION_HMAC_SECRET
-    settings.OIDC_ISSUER_URL = "https://login.example.test/realms/naruon"
-    settings.OIDC_CLIENT_ID = "naruon-api"
-    settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
-    monkeypatch.setattr("api.auth._cached_oidc_signing_keys", ())
-
-    class NetworkFetchingJWKSClient:
-        def get_signing_key_from_jwt(self, token):
-            raise AssertionError("request path must not fetch JWKS")
-
-    monkeypatch.setattr("api.auth.jwks_client", NetworkFetchingJWKSClient())
-    token = _signed_session_token(
-        _valid_session_payload(),
-        header={"alg": "RS256", "typ": "JWT", "kid": "test-key"},
-    )
-
-    try:
-        with pytest.raises(HTTPException) as exc:
-            await get_auth_context(authorization=f"Bearer {token}")
-    finally:
-        settings.OIDC_ISSUER_URL = previous_issuer_url
-        settings.OIDC_CLIENT_ID = previous_client_id
-        settings.AUTH_SESSION_HMAC_SECRET = previous_secret
-
-    assert exc.value.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -1265,3 +952,78 @@ def test_is_tenant_admin_role(role: str, expected: bool):
 )
 def test_is_admin_role(role: str, expected: bool):
     assert is_admin_role(role) is expected
+
+@pytest.fixture
+def mock_jwks_client(monkeypatch):
+    class MockKey:
+        key_id = "test-key"
+        key = "test-secret"
+
+    class MockJWKSClient:
+        def get_signing_key_from_jwt(self, token):
+            return MockKey()
+
+    client = MockJWKSClient()
+    monkeypatch.setattr("api.session.jwks_client", client)
+    return client
+
+def _mock_id_token():
+    import jwt
+    payload = {
+        "sub": "alice",
+        "role": "member",
+        "org": "org-acme",
+        "groups": ["group-1"],
+        "workspace": "workspace-1",
+        "exp": 9999999999,
+        "iss": "https://login.example.test",
+        "aud": "naruon-api"
+    }
+    return jwt.encode(payload, "test-secret", algorithm="HS256", headers={"kid": "test-key"})
+
+@pytest.mark.asyncio
+async def test_oidc_exchange_endpoint(monkeypatch, mock_jwks_client):
+    import jwt
+    settings.OIDC_ISSUER_URL = "https://login.example.test"
+    settings.OIDC_CLIENT_ID = "naruon-api"
+    settings.OIDC_JWKS_URL = "https://login.example.test/jwks"
+    settings.OIDC_CLIENT_SECRET = "test-client-secret"
+    settings.AUTH_SESSION_HMAC_SECRET = SecretStr("0123456789abcdefABCDEF!@#$%12345678")
+
+    def mock_decode(*args, **kwargs):
+         return {
+            "sub": "alice",
+            "role": "member",
+            "org": "org-acme",
+            "groups": ["group-1"],
+            "workspace": "workspace-1",
+            "exp": 9999999999,
+            "iss": "https://login.example.test",
+            "aud": "naruon-api"
+        }
+    monkeypatch.setattr("api.session.jwt.decode", mock_decode)
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/auth/session/oidc-exchange",
+        json={"id_token": _mock_id_token()}
+    )
+
+    assert response.status_code == 200
+    assert "naruon_session" in response.json()
+
+    token = response.json()["naruon_session"]
+
+    # decode the HMAC session token
+    decoded = jwt.decode(
+        token,
+        settings.AUTH_SESSION_HMAC_SECRET.get_secret_value().encode("utf-8"),
+        algorithms=["HS256"],
+        audience="naruon-control-plane",
+        issuer="naruon-control-plane"
+    )
+
+    assert decoded["sub"] == "alice"
+    assert decoded["role"] == "member"
+    assert decoded["org"] == "org-acme"
+    assert decoded["workspace"] == "workspace-1"

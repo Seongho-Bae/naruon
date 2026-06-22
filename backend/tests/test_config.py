@@ -284,7 +284,7 @@ def test_oidc_settings_must_be_configured_together(monkeypatch):
 
     with pytest.raises(
         ValidationError,
-        match="OIDC_ISSUER_URL, OIDC_CLIENT_ID, and OIDC_JWKS_URL",
+        match="OIDC_ISSUER_URL, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and OIDC_JWKS_URL",
     ):
         _settings_without_env_file()
 
@@ -296,6 +296,7 @@ def test_oidc_settings_accept_complete_configuration(monkeypatch):
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
     _patch_oidc_dns(monkeypatch)
@@ -312,6 +313,7 @@ def test_oidc_settings_reject_hostname_resolving_private_address(monkeypatch):
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
     _patch_oidc_dns(monkeypatch, {"login.example.com": ["192.168.1.1"]})
@@ -330,6 +332,7 @@ def test_oidc_settings_reject_hostname_resolving_mixed_private_address(monkeypat
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
     _patch_oidc_dns(
@@ -351,6 +354,7 @@ def test_oidc_settings_reject_missing_allowed_hosts(monkeypatch):
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
     monkeypatch.delenv("ALLOWED_OIDC_HOSTS", raising=False)
 
@@ -368,6 +372,7 @@ def test_oidc_settings_reject_untrusted_jwks_host(monkeypatch):
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://metadata.google.internal/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
     _patch_oidc_dns(monkeypatch)
@@ -386,6 +391,7 @@ def test_oidc_settings_reject_non_https_issuer(monkeypatch):
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "http://login.example.com/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://login.example.com/realms/naruon/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "login.example.com")
 
@@ -400,6 +406,7 @@ def test_oidc_settings_reject_private_ip_literal_even_when_allowlisted(monkeypat
     monkeypatch.setenv("AUTH_SESSION_HMAC_SECRET", TEST_AUTH_SESSION_HMAC_SECRET)
     monkeypatch.setenv("OIDC_ISSUER_URL", "https://127.0.0.1/realms/naruon")
     monkeypatch.setenv("OIDC_CLIENT_ID", "naruon-api")
+    monkeypatch.setenv("OIDC_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("OIDC_JWKS_URL", "https://127.0.0.1/jwks")
     monkeypatch.setenv("ALLOWED_OIDC_HOSTS", "127.0.0.1")
 
