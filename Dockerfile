@@ -27,7 +27,7 @@ CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"
 FROM node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a AS frontend-builder
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
-RUN corepack enable pnpm
+RUN npm install -g pnpm@11.5.3
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.pnpmfile.cjs ./
 RUN pnpm install --frozen-lockfile
 COPY frontend ./
