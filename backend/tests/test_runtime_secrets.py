@@ -1,9 +1,54 @@
 import pytest
+import math
 from core.runtime_secrets import (
+    _shannon_entropy_bits,
+    _character_class_count,
     validate_auth_session_hmac_secret_value,
     _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS,
     _LOW_ENTROPY_PLACEHOLDER_TERMS,
 )
+
+
+def test_shannon_entropy_bits():
+    # A single repeated character has 0 entropy
+    assert _shannon_entropy_bits("a") == 0.0
+    assert _shannon_entropy_bits("aaaaa") == 0.0
+
+    # 2 distinct characters with equal frequency
+    assert math.isclose(_shannon_entropy_bits("ab"), 2.0)
+    assert math.isclose(_shannon_entropy_bits("aabb"), 4.0)
+
+    # 4 distinct characters with equal frequency
+    assert math.isclose(_shannon_entropy_bits("abcd"), 8.0)
+
+    # String with unequal frequencies
+    # For 'aab': lengths=3, counts={'a': 2, 'b': 1}
+    # -(2/3 * log2(2/3) + 1/3 * log2(1/3)) * 3
+    # = -(2/3 * (1 - log2(3)) + 1/3 * (0 - log2(3))) * 3
+    # = -(2/3 - 2/3 * log2(3) - 1/3 * log2(3)) * 3
+    # = -(2/3 - log2(3)) * 3 = -2 + 3 * log2(3) = 3 * log2(3) - 2
+    expected = 3 * math.log2(3) - 2
+    assert math.isclose(_shannon_entropy_bits("aab"), expected)
+
+
+def test_character_class_count():
+    assert _character_class_count("a") == 1
+    assert _character_class_count("A") == 1
+    assert _character_class_count("1") == 1
+    assert _character_class_count("!") == 1
+
+    assert _character_class_count("aA") == 2
+    assert _character_class_count("a1") == 2
+    assert _character_class_count("a!") == 2
+
+    assert _character_class_count("aA1") == 3
+    assert _character_class_count("aA!") == 3
+
+    assert _character_class_count("aA1!") == 4
+
+    # Repeated characters shouldn't increase class count
+    assert _character_class_count("aaAA11!!") == 4
+    assert _character_class_count("abcDEF123!@#") == 4
 
 
 def test_validate_auth_session_hmac_secret_value_valid():
