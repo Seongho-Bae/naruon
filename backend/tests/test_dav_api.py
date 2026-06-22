@@ -1,4 +1,4 @@
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from contextlib import contextmanager
 from urllib.parse import unquote
 
