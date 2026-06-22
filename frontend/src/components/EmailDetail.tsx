@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Loader2, MessagesSquare } from "lucide-react";
-import { DecisionPointCard } from "@/components/DecisionPointCard";
+import { InsightCard } from "@/components/InsightCard";
 import {
   buildThreadUrl,
   buildReplyPayload,
@@ -359,7 +359,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-6 bg-background/50 p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
           
-          <DecisionPointCard
+          <InsightCard
             title="맥락 종합"
             icon={<span aria-hidden="true">✦</span>}
             loading={!llmData && !llmError}
@@ -377,9 +377,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 </div>
               </div>
             ) : null}
-          </DecisionPointCard>
+          </InsightCard>
 
-          <DecisionPointCard
+          <InsightCard
             title="실행 항목"
             icon={<span aria-hidden="true">✓</span>}
             loading={!llmData && !llmError}
@@ -440,7 +440,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 </ul>
               ) : null
             ) : null}
-          </DecisionPointCard>
+          </InsightCard>
 
           <Separator />
           
@@ -490,7 +490,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
           <Separator />
 
-          <DecisionPointCard title="답장 초안" provenance="사용자 확인 필요">
+          <InsightCard title="답장 초안" provenance="사용자 확인 필요">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
                 <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>
@@ -557,7 +557,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 </Button>
               </div>
             </div>
-          </DecisionPointCard>
+          </InsightCard>
         </div>
       </ScrollArea>
     </div>

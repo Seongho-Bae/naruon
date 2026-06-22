@@ -95,7 +95,7 @@ def _ensure_mailbox_account_owner_session(
 @router.get("/config", response_model=TenantConfigResponse)
 async def get_tenant_config(
     db: AsyncSession = Depends(get_db),
-    auth_ctx: AuthContext = Depends(get_auth_context),
+    auth_ctx: AuthContext = Depends(get_auth_context)
 ):
     _ensure_mailbox_account_owner_session(auth_ctx, MAILBOX_VIEW_FORBIDDEN)
     config = await get_scoped_tenant_config(

@@ -153,8 +153,8 @@ class MockTaskSession:
             related_email_id = params.get("email_id_1")
             returns_joined_email = len(descriptions) > 1
             scoped_email_join = (
-                "email_records.user_id" in statement_text
-                and "email_records.organization_id" in statement_text
+                "emails.user_id" in statement_text
+                and "emails.organization_id" in statement_text
             )
 
             def source_message_id(task: TicketTask) -> str | None:

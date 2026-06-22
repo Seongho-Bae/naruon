@@ -160,8 +160,8 @@ def test_network_graph_query_is_scoped_to_current_user():
 
     assert response.status_code == 200
     query_text = str(session.queries[-1]).lower()
-    assert "email_records.user_id" in query_text
-    assert "email_records.organization_id" in query_text
+    assert "emails.user_id" in query_text
+    assert "emails.organization_id" in query_text
 
 def test_extract_emails_valid():
     assert extract_emails("foo@example.com") == ["foo@example.com"]

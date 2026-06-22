@@ -372,6 +372,12 @@ def _verify_signed_session_payload(
 
 
 def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.PyJWTError:
+        raise _authentication_error() from None
+    if header.get("alg") == "none" or header.get("alg") is None:
+        raise _authentication_error()
     # OIDC RS256 verification is authoritative when configured.
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
@@ -383,10 +389,6 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
         except Exception:
             raise _authentication_error() from None
 
-    try:
-        header = jwt.get_unverified_header(token)
-    except jwt.PyJWTError:
-        raise _authentication_error() from None
     if header.get("alg") not in SESSION_ALLOWED_ALGORITHMS:
         raise _authentication_error()
     _reject_unsupported_critical_headers(header)

@@ -3,18 +3,6 @@ import sys
 from types import SimpleNamespace
 
 
-def _import_isolated_db_session():
-    original = sys.modules.get("db.session")
-    sys.modules.pop("db.session", None)
-    try:
-        return importlib.import_module("db.session")
-    finally:
-        if original is None:
-            sys.modules.pop("db.session", None)
-        else:
-            sys.modules["db.session"] = original
-
-
 def test_readonly_session_uses_replica_url_when_configured(monkeypatch):
     created_urls: list[str] = []
 
@@ -40,7 +28,9 @@ def test_readonly_session_uses_replica_url_when_configured(monkeypatch):
         ),
     )
 
-    reloaded = _import_isolated_db_session()
+    sys.modules.pop("db.session", None)
+
+    reloaded = importlib.import_module("db.session")
 
     assert created_urls == [
         "postgresql+asyncpg://primary/db",
@@ -74,7 +64,9 @@ def test_readonly_session_falls_back_to_primary_url_without_replica(monkeypatch)
         ),
     )
 
-    reloaded = _import_isolated_db_session()
+    sys.modules.pop("db.session", None)
+
+    reloaded = importlib.import_module("db.session")
 
     assert created_urls == [
         "postgresql+asyncpg://primary/db",

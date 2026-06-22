@@ -2,9 +2,9 @@ name: Bandit Security Scan
 
 on:
   push:
-    branches: [ develop, master ]
+    branches: [ master ]
   pull_request:
-    branches: [ develop, master ]
+    branches: [ master ]
   workflow_dispatch:
 
 permissions:

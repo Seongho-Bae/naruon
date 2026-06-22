@@ -180,7 +180,7 @@ export default function NetworkGraph() {
 
   if (error) {
     return (
-      <div role="alert" aria-live="polite" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
+      <div role="alert" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
         <div className="max-w-xs rounded-2xl border border-red-200 bg-red-50 p-5 text-red-700">
           <h4 className="font-bold">관계 맥락을 불러오지 못했습니다</h4>
           <p className="mt-2 text-sm leading-6">{error}</p>
@@ -191,7 +191,7 @@ export default function NetworkGraph() {
 
   if (nodes.length === 0) {
     return (
-      <div role="status" aria-live="polite" className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
+      <div className="flex h-full min-h-[320px] w-full items-center justify-center p-6 text-center sm:min-h-[420px]">
         <div className="max-w-xs rounded-2xl border border-primary/15 bg-primary/5 p-5">
           <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-primary/10 text-2xl" aria-hidden="true">✦</div>
           <h4 className="font-bold text-foreground">관계 데이터가 없습니다</h4>

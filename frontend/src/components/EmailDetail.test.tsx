@@ -295,7 +295,7 @@ describe("EmailDetail", () => {
     });
     await waitForCondition(() => container?.textContent?.includes("출시 메시지의 핵심 맥락입니다.") ?? false);
 
-    const cards = Array.from(container.querySelectorAll<HTMLElement>('article[data-decision-point-card="true"]'));
+    const cards = Array.from(container.querySelectorAll<HTMLElement>('article[data-insight-card="true"]'));
     expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual(
       expect.arrayContaining(["맥락 종합", "실행 항목", "답장 초안"]),
     );
@@ -361,7 +361,7 @@ describe("EmailDetail", () => {
     });
     await waitForCondition(() => container?.textContent?.includes("후속 실행 항목을 정리해야 합니다.") ?? false);
 
-    const actionCard = Array.from(container.querySelectorAll<HTMLElement>('article[data-decision-point-card="true"]')).find(
+    const actionCard = Array.from(container.querySelectorAll<HTMLElement>('article[data-insight-card="true"]')).find(
       (card) => card.getAttribute("aria-label") === "실행 항목",
     );
     const createTaskButton = Array.from(actionCard?.querySelectorAll<HTMLButtonElement>("button") ?? []).find(
