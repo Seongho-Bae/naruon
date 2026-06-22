@@ -203,8 +203,8 @@ assert_strix_workflow_pr_trigger_hardened() {
 	assert_file_contains "$workflow_file" "https://models.github.ai/inference" "strix workflow routes GitHub Models scans to the inference endpoint"
 	assert_file_contains "$workflow_file" "LLM_API_BASE_FILE" "strix workflow passes the GitHub Models API base through a trusted input file"
 	assert_file_not_contains "$workflow_file" '${{ secrets.STRIX_OPENAI_API_KEY || github.token }}' "strix workflow must not use fallback-secret syntax for LLM API keys"
-	assert_file_contains "$workflow_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
-	assert_file_not_contains "$workflow_file" 'github_models/deepseek/deepseek-r1-0528 | github_models/deepseek/deepseek-v3-0324)' "strix workflow keeps DeepSeek GitHub Models restricted to fallback-only routing"
+	assert_file_contains "$workflow_file" "github_models/openai/deepseek/deepseek-r1-0528 github_models/openai/deepseek/deepseek-v3-0324" "strix workflow configures reachable stronger-than-GPT-4.1 GitHub Models fallback models"
+	assert_file_not_contains "$workflow_file" 'github_models/openai/deepseek/deepseek-r1-0528 | github_models/openai/deepseek/deepseek-v3-0324)' "strix workflow keeps DeepSeek GitHub Models restricted to fallback-only routing"
 	assert_file_contains "$workflow_file" '${strix_model#github_models/}' "strix workflow strips manual github_models routing prefix for OpenAI GPT model names before passing model names to LiteLLM"
 	assert_file_contains "$workflow_file" "openai_direct/%s" "strix workflow keeps manual direct OpenAI scans distinct from GitHub Models openai/gpt-* routing"
 	assert_file_not_contains "$workflow_file" "openai/gpt-4.1" "strix workflow must not fall back to GPT-4.1 or weaker review evidence"
@@ -279,10 +279,10 @@ assert_strix_gpt54_model_guard_cases() {
 	if assert_strix_gpt54_model_guard_semantics "openai/deepseek/deepseek-v3-0324"; then
 		record_failure "strix guard must reject direct DeepSeek V3 primary selection"
 	fi
-	if assert_strix_gpt54_model_guard_semantics "github_models/deepseek/deepseek-r1-0528"; then
+	if assert_strix_gpt54_model_guard_semantics "github_models/openai/deepseek/deepseek-r1-0528"; then
 		record_failure "strix guard must reject manual GitHub Models DeepSeek R1 primary selection"
 	fi
-	if assert_strix_gpt54_model_guard_semantics "github_models/deepseek/deepseek-v3-0324"; then
+	if assert_strix_gpt54_model_guard_semantics "github_models/openai/deepseek/deepseek-v3-0324"; then
 		record_failure "strix guard must reject manual GitHub Models DeepSeek V3 primary selection"
 	fi
 	if ! assert_strix_gpt54_model_guard_semantics "vertex_ai/gemini-3.1-pro-preview-customtools"; then
@@ -1320,7 +1320,7 @@ EOF
 	assert_file_contains "$output_file" "Strix provider failure blocked current-head security evidence" "fallback treats no-report summary as provider blocker"
 	assert_file_contains "$output_file" "api.deepseek.com" "fallback preserves direct DeepSeek endpoint failure evidence"
 	assert_file_contains "$output_file" "Authentication Fails" "fallback preserves direct DeepSeek authentication failure evidence"
-	assert_file_contains "$output_file" "github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" "fallback gives exact GitHub Models fallback list"
+	assert_file_contains "$output_file" "github_models/openai/deepseek/deepseek-r1-0528 github_models/openai/deepseek/deepseek-v3-0324" "fallback gives exact GitHub Models fallback list"
 	assert_file_contains "$output_file" "Suggested edit: \`.github/workflows/strix.yml" "fallback gives a line-specific suggested edit for provider routing"
 	assert_file_not_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback does not invent vulnerability report windows from a no-report summary"
 	assert_file_not_contains "$output_file" "after vulnerability reports" "fallback does not contradict no-report evidence"
@@ -1464,7 +1464,7 @@ assert_opencode_failed_check_fallback_handles_split_code_location_lines() {
 ### Failed log signal summary
 
 ```text
-strix	Run Strix (quick)	Strix fallback model 'github_models/deepseek/deepseek-r1-0528' emitted provider infrastructure or failure-signal output; trying next configured fallback if available.
+strix	Run Strix (quick)	Strix fallback model 'github_models/openai/deepseek/deepseek-r1-0528' emitted provider infrastructure or failure-signal output; trying next configured fallback if available.
 strix	Run Strix (quick)	Strix reported zero vulnerabilities before provider infrastructure failure; failing closed because provider infrastructure failures are not clean scan evidence.
 ```
 
@@ -1516,7 +1516,7 @@ jobs:
     steps:
       - name: Run Strix
         env:
-          STRIX_FALLBACK_MODELS: github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324
+          STRIX_FALLBACK_MODELS: github_models/openai/deepseek/deepseek-r1-0528 github_models/openai/deepseek/deepseek-v3-0324
 EOF
 
 	cat >"$evidence_file" <<'EOF'
@@ -1537,7 +1537,7 @@ strix	Run Strix (quick)	Unable to map Strix findings to changed files; failing c
 │  Target: /workspace/strix-pr-scope.mVhTAV/backend                            │
 │  Code Locations                                                              │
 │    Location 1: backend/api/users.py:45-52                                    │
-│  Model github_models/deepseek/deepseek-v3-0324                               │
+│  Model github_models/openai/deepseek/deepseek-v3-0324                               │
 │  Vulnerabilities 1                                                           │
 EOF
 
@@ -1547,7 +1547,7 @@ EOF
 	assert_file_contains "$output_file" "Strix provider signal left current-head security evidence incomplete" "fallback reports incomplete Strix evidence for unmapped report"
 	assert_file_contains "$output_file" "did not map to an existing repository file" "fallback explains unmapped Strix report"
 	assert_file_contains "$output_file" "Insecure Direct Object Reference (IDOR) in User Profile API" "fallback preserves unmapped report title as diagnostic evidence"
-	assert_file_not_contains "$output_file" "Strix report from github_models/deepseek/deepseek-v3-0324" "fallback does not convert unmapped report into source finding"
+	assert_file_not_contains "$output_file" "Strix report from github_models/openai/deepseek/deepseek-v3-0324" "fallback does not convert unmapped report into source finding"
 	assert_file_not_contains "$output_file" "Inspect and patch .github/workflows/strix.yml" "fallback does not anchor unmapped report to workflow line"
 	assert_file_not_contains "$output_file" "backend/api/users.py:45" "fallback does not cite nonexistent source path as actionable line"
 
@@ -8746,9 +8746,9 @@ run_gate_case "github-models-fallback-requires-api-base" \
 
 run_gate_case "github-models-fallback-success" \
 	"vertex_ai/missing-primary" \
-	"github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" \
+	"github_models/openai/deepseek/deepseek-r1-0528 github_models/openai/deepseek/deepseek-v3-0324" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'github_models/deepseek/deepseek-r1-0528' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'github_models/openai/deepseek/deepseek-r1-0528' in [0-9]+s\\." \
 	"2" \
 	"vertex_ai/missing-primary|openai/deepseek/deepseek-r1-0528" \
 	"<unset>|https://models.github.ai/inference" \
@@ -8780,9 +8780,9 @@ run_gate_case "github-models-fallback-success" \
 
 run_gate_case "github-models-fallback-success-deepseek-v3" \
 	"vertex_ai/missing-primary" \
-	"github_models/deepseek/deepseek-r1-0528 github_models/deepseek/deepseek-v3-0324" \
+	"github_models/openai/deepseek/deepseek-r1-0528 github_models/openai/deepseek/deepseek-v3-0324" \
 	"0" \
-	"REGEX:Strix quick scan succeeded with fallback model 'github_models/deepseek/deepseek-v3-0324' in [0-9]+s\\." \
+	"REGEX:Strix quick scan succeeded with fallback model 'github_models/openai/deepseek/deepseek-v3-0324' in [0-9]+s\\." \
 	"3" \
 	"vertex_ai/missing-primary|openai/deepseek/deepseek-r1-0528|openai/deepseek/deepseek-v3-0324" \
 	"<unset>|https://models.github.ai/inference|https://models.github.ai/inference" \
