@@ -108,6 +108,9 @@ separate explicit execution path: the browser selects an opaque WebDAV
 re-reads the scoped document server-side, derives the provider target path and
 Markdown content, and dispatches `write_webdav` only when
 `execute_provider=true`.
+PixelRAG visual retrieval is being evaluated as an optional sidecar for
+visually rich documents, not as a core backend dependency or hosted third-party
+tenant-data path; see `docs/architecture/pixelrag-integration-evaluation.md`.
 
 Authorization is RBAC plus ABAC with deny precedence. Data-region, consent,
 workspace, group, source capability, and customer-policy denies still override
