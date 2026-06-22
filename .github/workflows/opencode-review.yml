@@ -504,7 +504,7 @@ jobs:
           cite the evidence type behind the claim (nearby implementation, matching existing example,
           cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR
           scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include
-          one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path.
+          one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk.
           Use an OpenCode-owned review structure compatible with Copilot Review and CodeRabbitAI formatting:
           include a concise pull request overview, then severity-ordered findings with actionable bullets, then
           any extra summary context after the findings. Keep raw tool logs out of the main review body.
@@ -552,7 +552,7 @@ jobs:
           cite the evidence type behind the claim (nearby implementation, matching existing example,
           cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR
           scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include
-          one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path.
+          one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk.
           Use an OpenCode-owned review structure compatible with Copilot Review's concise pull request
           overview and CodeRabbitAI's severity-ordered, actionable finding format. Put any extra summary
           context after findings, keep raw tool logs out of the main human-readable review body.
@@ -750,7 +750,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible or changed files could not be inspected after reading bounded-review-evidence.md and the changed files, do not approve. If evidence is truncated, inspect focused hunks and changed files directly before deciding. Do not request changes solely because the prompt did not inline the full evidence.
           Use CodeGraph for blast-radius, call graph, and test-coverage questions before broad local reads. Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages, but do not simplify away trust-boundary validation, data-loss handling, security, accessibility, or required tests. For Korean prose, preserve facts, identifiers, numbers, and quotes while removing only formulaic filler or translationese.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
           If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. When evidence supports it, name the concrete CWE/KISA-style class such as injection, auth/authz, secrets, crypto, path traversal/file upload, XSS/CSRF/SSRF, error disclosure, or debug/deployment config; do not invent a category without evidence. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
@@ -876,7 +876,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible or changed files could not be inspected after reading bounded-review-evidence.md and the changed files, do not approve. If evidence is truncated, inspect focused hunks and changed files directly before deciding. Do not request changes solely because the prompt did not inline the full evidence.
           Use CodeGraph for blast-radius, call graph, and test-coverage questions before broad local reads. Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages, but do not simplify away trust-boundary validation, data-loss handling, security, accessibility, or required tests. For Korean prose, preserve facts, identifiers, numbers, and quotes while removing only formulaic filler or translationese.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
           If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. When evidence supports it, name the concrete CWE/KISA-style class such as injection, auth/authz, secrets, crypto, path traversal/file upload, XSS/CSRF/SSRF, error disclosure, or debug/deployment config; do not invent a category without evidence. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
@@ -1002,7 +1002,7 @@ jobs:
           Structural exploration is mandatory for every PR, including dependency-only, lockfile-only, workflow-only, docs-only, and no-source-code changes; inspect the relevant manifest, lockfile, workflow, config, docs, dependency edges, generated side effects, and test-command contracts. Never state that structural exploration, structural analysis, or structural review is not required or unnecessary. If structural exploration was not possible or changed files could not be inspected after reading bounded-review-evidence.md and the changed files, do not approve. If evidence is truncated, inspect focused hunks and changed files directly before deciding. Do not request changes solely because the prompt did not inline the full evidence.
           Use CodeGraph for blast-radius, call graph, and test-coverage questions before broad local reads. Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages, but do not simplify away trust-boundary validation, data-loss handling, security, accessibility, or required tests. For Korean prose, preserve facts, identifiers, numbers, and quotes while removing only formulaic filler or translationese.
           Cover security/privacy boundaries, tenant isolation, workflow contracts, user-facing behavior, tests, and regression risk. Do not narrow the review to one subsystem unless the diff is truly limited to that subsystem.
-          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
+          Lead with findings ordered by severity. Distinguish blocking findings from important suggestions and nits. Request changes only for actionable blockers with clear problem, root cause, observable impact, trigger condition, minimal fix direction, and exact regression test or verification command when the repository already provides one. For Greptile-style specificity, include a P1/P2/P3 priority in each actionable finding, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk. Use an OpenCode-owned human-readable review structure compatible with Copilot Review's concise pull request overview followed by CodeRabbitAI's severity-ordered actionable finding format; put brief summary context after findings and do not depend on Copilot Review, CodeRabbitAI, or any human reviewer being present.
           If bounded failed GitHub Check evidence contains active failed checks, treat it as a blocker until diagnosed. If every active failed-check block says the job was not started because the GitHub account is locked due to a billing issue, classify it as an external CI/account blocker with no repository source fix; do not invent source-backed REQUEST_CHANGES findings for it. If the evidence says no completed failed GitHub Checks were present, do not request changes solely from that section. A successful same-head manual workflow_dispatch Strix run may supersede a stale failed PR statusCheckRollup Strix context only when failed-check evidence explicitly lists it under Superseded failed checks with the exact target URL; otherwise treat failed rollup contexts as blockers. For Strix or other GitHub Checks, use the failed log excerpt and annotations to identify the exact local file line that must change, then provide a concrete from/to fix and suggested diff. When Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding, preserving each report's model name, title, severity, endpoint, and Code Locations/path:line evidence when present. When evidence supports it, name the concrete CWE/KISA-style class such as injection, auth/authz, secrets, crypto, path traversal/file upload, XSS/CSRF/SSRF, error disclosure, or debug/deployment config; do not invent a category without evidence. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. Do not request changes with only a check URL, workflow name, or generic failure summary.
           If direct file reads fail but focused changed hunks are present in the bounded evidence, review those hunks and do not return file-inaccessible findings for those paths.
           Full failed-check evidence, when collected, is available as failed-check-evidence.md in the isolated review workspace; inspect it before emitting any failed-check or Strix finding.
@@ -1211,14 +1211,103 @@ jobs:
             fi
           }
 
-          append_mermaid_review_graph() {
-            printf '\n## Risk Graph\n\n'
+          emit_change_flow_mermaid_graph() {
+            local merge_state="${1:-UNKNOWN}"
+            local changed_files_file surfaces_file idx next_node
+
+            changed_files_file="$(mktemp)"
+            surfaces_file="$(mktemp)"
+            if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
+              [ ! -s "$changed_files_file" ]; then
+              printf '```mermaid\n'
+              printf 'flowchart LR\n'
+              printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
+              printf '  Risk --> Verify[Required checks]\n'
+              printf '```\n'
+              rm -f "$changed_files_file" "$surfaces_file"
+              return 0
+            fi
+
+            awk '
+              function basename(path) {
+                sub(/^.*\//, "", path)
+                return path
+              }
+              function add(key, surface, impact, verify, path) {
+                if (!(key in count)) {
+                  keys[++n] = key
+                  label[key] = surface ": " basename(path)
+                  impacts[key] = impact
+                  verifies[key] = verify
+                }
+                count[key]++
+              }
+              /^\.github\/workflows\// {
+                add("workflow", "Workflow", "GitHub Actions review job", "actionlint plus required checks", $0)
+                next
+              }
+              /^scripts\/ci\// {
+                add("ci", "CI script", "review and security gate shell path", "bash -n plus Strix self-test", $0)
+                next
+              }
+              /^backend\// {
+                add("backend", "Backend", "API and service runtime", "backend tests", $0)
+                next
+              }
+              /^frontend\// {
+                add("frontend", "Frontend", "browser runtime and bundle", "frontend tests", $0)
+                next
+              }
+              /^tests?\// || /(^|\/)test_/ {
+                add("tests", "Test", "regression suite", "targeted test run", $0)
+                next
+              }
+              /^docs\// {
+                add("docs", "Docs", "operator or user guidance", "docs review", $0)
+                next
+              }
+              {
+                add("other", "Changed file", "repository behavior", "required checks", $0)
+              }
+              END {
+                for (i = 1; i <= n; i++) {
+                  key = keys[i]
+                  if (count[key] > 1) {
+                    sub(/: .*/, " (" count[key] " files)", label[key])
+                  }
+                  print label[key] "\t" impacts[key] "\t" verifies[key]
+                }
+              }
+            ' "$changed_files_file" >"$surfaces_file"
+
             printf '```mermaid\n'
             printf 'flowchart LR\n'
-            printf '  Change[Changed surface] --> Risk[Main risk]\n'
-            printf '  Risk --> Fix[Smallest fix]\n'
-            printf '  Fix --> Verify[Verification]\n'
+            printf '  PR[PR changed files] --> Evidence[OpenCode bounded evidence]\n'
+            idx=1
+            while IFS="$(printf '\t')" read -r surface impact verify; do
+              [ -n "$surface" ] || continue
+              printf '  Evidence --> S%s[%s]\n' "$idx" "$surface"
+              printf '  S%s --> I%s[%s]\n' "$idx" "$idx" "$impact"
+              if [ "$merge_state" = "DIRTY" ] || [ "$merge_state" = "CONFLICTING" ]; then
+                printf '  I%s --> Conflict[Merge conflict blocks this path]\n' "$idx"
+                next_node="Conflict"
+              else
+                printf '  I%s --> Review[Main review risk]\n' "$idx"
+                next_node="Review"
+              fi
+              printf '  %s --> V%s[%s]\n' "$next_node" "$idx" "$verify"
+              idx=$((idx + 1))
+            done <"$surfaces_file"
             printf '```\n'
+            rm -f "$changed_files_file" "$surfaces_file"
+          }
+
+          append_mermaid_review_graph() {
+            local pr_json merge_state
+            pr_json="$(gh pr view "$PR_NUMBER" --repo "$GH_REPOSITORY" --json mergeStateStatus 2>/dev/null || true)"
+            merge_state="$(printf '%s' "$pr_json" | jq -r '.mergeStateStatus // "UNKNOWN"' 2>/dev/null || printf 'UNKNOWN')"
+            printf '\n## Change Flow Graph\n\n'
+            emit_change_flow_mermaid_graph "$merge_state"
           }
 
           append_merge_conflict_guidance() {
@@ -1358,14 +1447,103 @@ jobs:
             fi
           }
 
-          append_mermaid_review_graph() {
-            printf '\n## Risk Graph\n\n'
+          emit_change_flow_mermaid_graph() {
+            local merge_state="${1:-UNKNOWN}"
+            local changed_files_file surfaces_file idx next_node
+
+            changed_files_file="$(mktemp)"
+            surfaces_file="$(mktemp)"
+            if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
+              [ ! -s "$changed_files_file" ]; then
+              printf '```mermaid\n'
+              printf 'flowchart LR\n'
+              printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
+              printf '  Risk --> Verify[Required checks]\n'
+              printf '```\n'
+              rm -f "$changed_files_file" "$surfaces_file"
+              return 0
+            fi
+
+            awk '
+              function basename(path) {
+                sub(/^.*\//, "", path)
+                return path
+              }
+              function add(key, surface, impact, verify, path) {
+                if (!(key in count)) {
+                  keys[++n] = key
+                  label[key] = surface ": " basename(path)
+                  impacts[key] = impact
+                  verifies[key] = verify
+                }
+                count[key]++
+              }
+              /^\.github\/workflows\// {
+                add("workflow", "Workflow", "GitHub Actions review job", "actionlint plus required checks", $0)
+                next
+              }
+              /^scripts\/ci\// {
+                add("ci", "CI script", "review and security gate shell path", "bash -n plus Strix self-test", $0)
+                next
+              }
+              /^backend\// {
+                add("backend", "Backend", "API and service runtime", "backend tests", $0)
+                next
+              }
+              /^frontend\// {
+                add("frontend", "Frontend", "browser runtime and bundle", "frontend tests", $0)
+                next
+              }
+              /^tests?\// || /(^|\/)test_/ {
+                add("tests", "Test", "regression suite", "targeted test run", $0)
+                next
+              }
+              /^docs\// {
+                add("docs", "Docs", "operator or user guidance", "docs review", $0)
+                next
+              }
+              {
+                add("other", "Changed file", "repository behavior", "required checks", $0)
+              }
+              END {
+                for (i = 1; i <= n; i++) {
+                  key = keys[i]
+                  if (count[key] > 1) {
+                    sub(/: .*/, " (" count[key] " files)", label[key])
+                  }
+                  print label[key] "\t" impacts[key] "\t" verifies[key]
+                }
+              }
+            ' "$changed_files_file" >"$surfaces_file"
+
             printf '```mermaid\n'
             printf 'flowchart LR\n'
-            printf '  Change[Changed surface] --> Risk[Main risk]\n'
-            printf '  Risk --> Fix[Smallest fix]\n'
-            printf '  Fix --> Verify[Verification]\n'
+            printf '  PR[PR changed files] --> Evidence[OpenCode bounded evidence]\n'
+            idx=1
+            while IFS="$(printf '\t')" read -r surface impact verify; do
+              [ -n "$surface" ] || continue
+              printf '  Evidence --> S%s[%s]\n' "$idx" "$surface"
+              printf '  S%s --> I%s[%s]\n' "$idx" "$idx" "$impact"
+              if [ "$merge_state" = "DIRTY" ] || [ "$merge_state" = "CONFLICTING" ]; then
+                printf '  I%s --> Conflict[Merge conflict blocks this path]\n' "$idx"
+                next_node="Conflict"
+              else
+                printf '  I%s --> Review[Main review risk]\n' "$idx"
+                next_node="Review"
+              fi
+              printf '  %s --> V%s[%s]\n' "$next_node" "$idx" "$verify"
+              idx=$((idx + 1))
+            done <"$surfaces_file"
             printf '```\n'
+            rm -f "$changed_files_file" "$surfaces_file"
+          }
+
+          append_mermaid_review_graph() {
+            local pr_json merge_state
+            pr_json="$(gh pr view "$PR_NUMBER" --repo "$GH_REPOSITORY" --json mergeStateStatus 2>/dev/null || true)"
+            merge_state="$(printf '%s' "$pr_json" | jq -r '.mergeStateStatus // "UNKNOWN"' 2>/dev/null || printf 'UNKNOWN')"
+            printf '\n## Change Flow Graph\n\n'
+            emit_change_flow_mermaid_graph "$merge_state"
           }
 
           append_merge_conflict_guidance() {
@@ -2096,7 +2274,7 @@ jobs:
 
             {
               printf 'GitHub Checks failed after the initial OpenCode review. Diagnose the failed checks and return a line-specific REQUEST_CHANGES review for PR #%s in %s.\n' "$PR_NUMBER" "$GITHUB_WORKSPACE"
-              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. If PR mergeability evidence reports mergeStateStatus DIRTY, include merge-conflict repair direction that names base/head branches, tells the author to merge or rebase the latest base branch into the PR branch, resolve conflict markers, rerun focused checks, and push the same branch. Use Greptile-style specificity: preserve a P1/P2/P3 priority, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid graph mapping the changed surface to the main risk, fix, and verification path. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Include the failed check label and exact failed log phrase in problem or root_cause; unrelated speculative findings are invalid. Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages, but do not simplify away trust-boundary validation, data-loss handling, security, accessibility, or required tests. The fix_direction must state the concrete from/to change, not only the workflow URL. The suggested_diff must be source-backed and GitHub suggestion-ready when possible: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve each report'\''s model name, title, severity, endpoint, and Code Locations/path:line evidence in problem or root_cause when present. When evidence supports it, name the concrete CWE/KISA-style class such as injection, auth/authz, secrets, crypto, path traversal/file upload, XSS/CSRF/SSRF, error disclosure, or debug/deployment config; do not invent a category without evidence. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
+              printf 'Use the failed log excerpt and annotations below as evidence, then inspect local source files and focused hunks to identify the exact line to edit. For each actionable Strix or GitHub Check failure, provide one finding with path,line,severity,title,problem,root_cause,fix_direction,regression_test_direction,suggested_diff. If PR mergeability evidence reports mergeStateStatus DIRTY, include merge-conflict repair direction that names base/head branches, tells the author to merge or rebase the latest base branch into the PR branch, resolve conflict markers, rerun focused checks, and push the same branch. Use Greptile-style specificity: preserve a P1/P2/P3 priority, cite the evidence type behind the claim (nearby implementation, matching existing example, cross-file counterpart, current official docs, or failed check/log evidence), flag unrelated PR scope drift, make suggested diffs GitHub suggestion-ready minimal diffs when possible, and include one compact Mermaid software-flow graph that names the changed file or surface and maps it to the affected execution path, main risk, and verification path; do not use generic placeholder nodes like Changed surface or Main risk. The line must be a positive line number from an actual changed or relevant local file; never use line 0. Include the failed check label and exact failed log phrase in problem or root_cause; unrelated speculative findings are invalid. Prefer deletion, stdlib/native platform features, and already-installed dependencies before proposing new code or packages, but do not simplify away trust-boundary validation, data-loss handling, security, accessibility, or required tests. The fix_direction must state the concrete from/to change, not only the workflow URL. The suggested_diff must be source-backed and GitHub suggestion-ready when possible: every removed line in the diff must exist in the cited current local file, so do not request changes for code you did not verify in the current source. If Strix evidence contains multiple model vulnerability reports, include every model-reported vulnerability as a separate evidence-backed finding and preserve each report'\''s model name, title, severity, endpoint, and Code Locations/path:line evidence in problem or root_cause when present. When evidence supports it, name the concrete CWE/KISA-style class such as injection, auth/authz, secrets, crypto, path traversal/file upload, XSS/CSRF/SSRF, error disclosure, or debug/deployment config; do not invent a category without evidence. One Strix model vulnerability report requires one distinct finding; do not combine duplicate titles or matching locations from different models into one finding. If a failure is external infrastructure with no source fix, the finding must identify the exact external blocker, supporting log line, and why no repository line can fix it.\n\n'
               printf 'Format the human-readable review with OpenCode-owned sections compatible with Copilot Review and CodeRabbitAI: start with a concise pull request overview, then list severity-ordered actionable findings without raw tool logs. Do not depend on those agents or a human reviewer being present.\n\n'
               printf 'Failed checks:\n'
               cat "$failed_checks_file"
@@ -2477,7 +2655,7 @@ jobs:
           }
 
           request_changes_for_merge_conflict_if_present() {
-            local pr_json merge_state mergeable base_ref head_ref body
+            local pr_json merge_state mergeable base_ref head_ref body change_graph
 
             if ! pr_json="$(gh pr view "$PR_NUMBER" --repo "$GH_REPOSITORY" --json baseRefName,headRefName,mergeStateStatus,mergeable 2>/dev/null)"; then
               return 1
@@ -2492,27 +2670,23 @@ jobs:
             base_ref="$(printf '%s\n' "$pr_json" | jq -r '.baseRefName // "unknown"')"
             head_ref="$(printf '%s\n' "$pr_json" | jq -r '.headRefName // "unknown"')"
             mergeable="$(printf '%s\n' "$pr_json" | jq -r '(.mergeable // "unknown") | tostring')"
+            change_graph="$(emit_change_flow_mermaid_graph "$merge_state")"
             body="$(printf '%s\n' \
               "## Pull request overview" \
               "" \
-              "OpenCode reviewed the current-head mergeability evidence and found merge conflicts before approval." \
+              "OpenCode reviewed the current-head mergeability evidence and changed-file flow before approval, then found merge conflicts on the affected path." \
               "" \
               "## Findings" \
               "" \
               "### 1. HIGH Merge Conflict Guidance - Resolve the PR branch against the latest base branch" \
               "- Problem: GitHub reports mergeStateStatus \`${merge_state}\` for this pull request." \
-              "- Root cause: Branch \`${head_ref}\` cannot be merged cleanly into \`${base_ref}\` without resolving conflicting edits." \
+              "- Root cause: Branch \`${head_ref}\` cannot be merged cleanly into \`${base_ref}\`; the changed-file flow below shows which review/runtime path is blocked by the conflict." \
               "- Fix: Merge or rebase the latest \`${base_ref}\` into \`${head_ref}\`, resolve conflict markers in the PR branch, rerun the focused checks, and push the same branch." \
               "- Regression test: Keep OpenCode approval gated on mergeability so model-output failures cannot approve a conflicted PR." \
               "" \
-              "\`\`\`mermaid" \
-              "flowchart LR" \
-              "  base[Base branch latest] --> sync[Merge or rebase base into PR branch]" \
-              "  head[PR branch] --> sync" \
-              "  sync --> resolve[Resolve conflict markers]" \
-              "  resolve --> verify[Rerun focused checks]" \
-              "  verify --> push[Push the same branch]" \
-              "\`\`\`" \
+              "## Change Flow Graph" \
+              "" \
+              "$change_graph" \
               "" \
               "- Result: REQUEST_CHANGES" \
               "- Reason: mergeStateStatus is \`${merge_state}\`; mergeable is \`${mergeable}\`." \
