@@ -334,6 +334,7 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "pull_request_target:" "opencode review workflow runs on the trusted PR trigger so merge-conflict PRs still get the standard review surface"
 	assert_file_contains "$workflow_file" "pull_request:" "opencode review workflow publishes a PR-associated required check while trusted review side effects stay on pull_request_target"
 	assert_file_contains "$workflow_file" "Wait for trusted OpenCode approval review" "opencode pull_request bridge only waits for a trusted same-head OpenCode approval"
+	assert_file_contains "$workflow_file" "Trusted OpenCode requested changes for head" "opencode pull_request bridge fails immediately when the trusted same-head review requested changes"
 	assert_file_contains "$workflow_file" "github.event_name == 'pull_request_target'" "opencode review side effects are limited to pull_request_target or manual workflow dispatch"
 	assert_file_contains "$workflow_file" "opencode-review-target:" "opencode trusted review job is separate from the pull_request bridge"
 	assert_file_contains "$workflow_file" "github.event.pull_request.head.repo.full_name == github.repository" "opencode review workflow limits pull_request_target review execution to same-repository PRs"
