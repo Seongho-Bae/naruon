@@ -2627,6 +2627,7 @@ jobs:
             if ! awk '
               function allowed(path) {
                 return path == ".github/workflows/opencode-review.yml" ||
+                  path == ".github/workflows/pr-governance.yml" ||
                   path == ".github/workflows/strix.yml" ||
                   path == "requirements-strix-ci.txt" ||
                   path == "requirements-strix-ci-hashes.txt" ||
