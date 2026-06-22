@@ -229,14 +229,6 @@ def preload_oidc_jwks() -> None:
 
 
 def _oidc_unverified_header(token: str) -> dict[str, Any]:
-    if settings.OIDC_ISSUER_URL:
-        try:
-            payload = _decode_cached_oidc_session_payload(token)
-            _reject_signed_session_admin_payload(payload)
-            return payload, "oidc"
-        except Exception:
-            pass
-
     try:
         header = jwt.get_unverified_header(token)
     except Exception:
@@ -400,13 +392,6 @@ def _verify_signed_session_payload(
 
 
 def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVerifier]:
-    if settings.OIDC_ISSUER_URL:
-        try:
-            payload = _decode_cached_oidc_session_payload(token)
-            _reject_signed_session_admin_payload(payload)
-            return payload, "oidc"
-        except Exception:
-            pass
 
     try:
         header = jwt.get_unverified_header(token)
