@@ -1379,7 +1379,9 @@ jobs:
             printf -- '- Workflow attempt: %s\n' "$RUN_ATTEMPT"
             printf -- "- Gate result: \`%s\` (exit %s)\n\n" "${gate_result:-UNKNOWN}" "$gate_status"
             cat "$comment_body_file"
-            append_mermaid_review_graph
+            if ! grep -Fq "## Change Flow Graph" "$comment_body_file"; then
+              append_mermaid_review_graph
+            fi
             append_merge_conflict_guidance
           } >"$overview_body_file"
 
@@ -1575,6 +1577,15 @@ jobs:
             printf '%s\n' "- Fix direction: merge or rebase \`origin/${base_ref}\` into \`${head_ref}\`, resolve conflict markers in the changed files, rerun the focused checks, then push the same branch."
           }
 
+          ensure_review_body_has_change_graph() {
+            local body="$1"
+
+            printf '%s\n' "$body"
+            if ! printf '%s\n' "$body" | grep -Fq "## Change Flow Graph"; then
+              append_mermaid_review_graph
+            fi
+          }
+
           update_review_overview() {
             local result="$1" body="$2"
             local gh_error_file
@@ -1591,7 +1602,9 @@ jobs:
               printf -- '- Workflow attempt: %s\n' "$RUN_ATTEMPT"
               printf -- "- Gate result: \`%s\` (approval step)\n\n" "$result"
               printf '%s\n' "$body"
-              append_mermaid_review_graph
+              if ! printf '%s\n' "$body" | grep -Fq "## Change Flow Graph"; then
+                append_mermaid_review_graph
+              fi
               append_merge_conflict_guidance
             } >"$overview_body_file"
 
@@ -1627,6 +1640,7 @@ jobs:
             local event="$1" body="$2"
             local gh_error_file
             local review_payload_file
+            body="$(ensure_review_body_has_change_graph "$body")"
             gh_error_file="$(mktemp)"
             review_payload_file="$(mktemp)"
             jq -n \
@@ -1793,10 +1807,14 @@ jobs:
           create_pull_review_with_payload() {
             local event="$1" body="$2" review_payload_file="$3" fallback_body_file="$4"
             local gh_error_file
+            local review_payload_with_graph_file
+            body="$(ensure_review_body_has_change_graph "$body")"
             gh_error_file="$(mktemp)"
-            if ! gh api -X POST "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input "$review_payload_file" >/dev/null 2>"$gh_error_file"; then
+            review_payload_with_graph_file="$(mktemp)"
+            jq --arg body "$body" '.body = $body' "$review_payload_file" >"$review_payload_with_graph_file"
+            if ! gh api -X POST "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --input "$review_payload_with_graph_file" >/dev/null 2>"$gh_error_file"; then
               warn_gh_publication_failure "pull review inline comments" "$gh_error_file"
-              rm -f "$gh_error_file"
+              rm -f "$gh_error_file" "$review_payload_with_graph_file"
               if [ -s "$fallback_body_file" ]; then
                 create_pull_review "$event" "$(cat "$fallback_body_file")"
               else
@@ -1804,7 +1822,7 @@ jobs:
               fi
               return 0
             fi
-            rm -f "$gh_error_file"
+            rm -f "$gh_error_file" "$review_payload_with_graph_file"
             update_review_overview "$event" "$body"
           }
 
