@@ -13,3 +13,6 @@
 ## 2024-05-24 - Ensure aria-busy accompanies disabled for async UI buttons
 **Learning:** Action buttons triggering asynchronous network operations that already implement `disabled={loading}` and visual spinners MUST also include an `aria-busy={loading}` attribute to correctly communicate the active loading state to screen reader users without requiring focus shifts.
 **Action:** When adding or auditing buttons for async operations like '동기화 중', '전송 중', or '검색 중', ensure `aria-busy={loadingVariable}` is explicitly added alongside existing spinner and disabled states.
+## 2025-06-23 - Add Missing `aria-busy` Attributes to Loading Action Buttons
+**Learning:** React components sometimes use `disabled={loadingState}` to disable buttons but forget to include `aria-busy={loadingState}` to properly announce to screen readers that the element is processing an action.
+**Action:** When adding or modifying buttons that trigger asynchronous operations, always verify that both `disabled` and `aria-busy` are synced to the loading state.
