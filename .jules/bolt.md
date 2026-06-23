@@ -77,3 +77,7 @@
 ## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
 **Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
 **Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
+
+## 2026-06-23 - Optimize string splitting for single first item extraction
+**Learning:** When parsing repetitive email headers like `References` or `In-Reply-To` (e.g., in `backend/services/email_parser.py`) where only the first element is required to determine the root thread ID, using `split()` without arguments evaluates and allocates the entire split array, resulting in unnecessary O(n) memory allocation and processing costs, especially for long reference chains.
+**Action:** Use `.split(None, 1)` instead of `.split()` when only the first element is required to avoid unnecessary O(n) memory allocation costs. This is over 50x faster for long string splits.

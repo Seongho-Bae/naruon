@@ -236,6 +236,7 @@ Test"""
     finally:
         os.unlink(temp_path)
 
+
 def test_parse_eml_mocked_oserror():
     with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
         with pytest.raises(
@@ -267,6 +268,7 @@ def test_sanitize_nul():
     assert _sanitize_nul(12.3) == "12.3"
     assert _sanitize_nul(True) == "True"
 
+
 def test_sanitize_display_text():
     from services.email_parser import _sanitize_display_text
 
@@ -279,7 +281,10 @@ def test_sanitize_display_text():
     # Strings with HTML tags
     assert _sanitize_display_text("<b>hello</b> world") == "hello world"
     assert _sanitize_display_text("<script>alert('xss')</script>") == ""
-    assert _sanitize_display_text("hello <img src=x onerror=alert(1)>world") == "hello world"
+    assert (
+        _sanitize_display_text("hello <img src=x onerror=alert(1)>world")
+        == "hello world"
+    )
 
     # Strings combining NUL and HTML
     assert _sanitize_display_text("<b>hello\x00</b>") == "hello"
@@ -293,3 +298,43 @@ def test_sanitize_display_text():
 
     # None value (falls back to _sanitize_nul which converts None to "")
     assert _sanitize_display_text(None) == ""
+
+
+def test_parse_eml_long_references():
+    references = " ".join([f"<ref{i}@test.com>" for i in range(100)])
+    eml_content = f"""Message-ID: <msg1@test.com>
+References: {references}
+From: test@test.com
+To: user@test.com
+Subject: Test
+
+Test""".encode("utf-8")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["thread_id"] == "<ref0@test.com>"
+    finally:
+        os.unlink(temp_path)
+
+
+def test_parse_eml_long_in_reply_to():
+    in_reply_to = " ".join([f"<ref{i}@test.com>" for i in range(100)])
+    eml_content = f"""Message-ID: <msg1@test.com>
+In-Reply-To: {in_reply_to}
+From: test@test.com
+To: user@test.com
+Subject: Test
+
+Test""".encode("utf-8")
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["thread_id"] == "<ref0@test.com>"
+    finally:
+        os.unlink(temp_path)

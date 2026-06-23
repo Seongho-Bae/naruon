@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 최적화
+- `backend/services/email_parser.py`에서 긴 이메일 헤더(`References`, `In-Reply-To`) 파싱 시 첫 번째 참조만 필요한 경우 `.split(None, 1)`을 사용하여 불필요한 전체 배열 할당 및 O(n) 메모리/처리 비용을 절감하도록 최적화했습니다.
+
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
