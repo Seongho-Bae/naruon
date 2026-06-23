@@ -1219,6 +1219,11 @@ jobs:
             surfaces_file="$(mktemp)"
             if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
               [ ! -s "$changed_files_file" ]; then
+              : >"$changed_files_file"
+              gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate \
+                --jq '.[].filename' >"$changed_files_file" 2>/dev/null || true
+            fi
+            if [ ! -s "$changed_files_file" ]; then
               printf '```mermaid\n'
               printf 'flowchart LR\n'
               printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
@@ -1455,6 +1460,11 @@ jobs:
             surfaces_file="$(mktemp)"
             if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
               [ ! -s "$changed_files_file" ]; then
+              : >"$changed_files_file"
+              gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate \
+                --jq '.[].filename' >"$changed_files_file" 2>/dev/null || true
+            fi
+            if [ ! -s "$changed_files_file" ]; then
               printf '```mermaid\n'
               printf 'flowchart LR\n'
               printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
