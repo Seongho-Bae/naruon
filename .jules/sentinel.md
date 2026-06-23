@@ -55,3 +55,7 @@
 **Vulnerability:** The API proxy's `sameOriginStateChangingRequest` function previously allowed state-changing requests if both `sec-fetch-site` and `origin` headers were missing, creating a potential CSRF vector if an attacker suppressed the Origin header.
 **Learning:** Default-allow fallbacks for missing security metadata can silently bypass critical protections, especially when relying solely on cookie-based authentication.
 **Prevention:** Always fail securely by defaulting to `false` when required origin/referer security metadata is absent, ensuring strict enforcement for state-changing operations.
+## 2026-06-23 - [Insecure XML Parsing Vulnerability (B314)]
+**Vulnerability:** Use of `xml.etree.ElementTree.fromstring` to parse untrusted XML. This standard library module is vulnerable to XML attacks (like XML bombs/billion laughs or external entity injection).
+**Learning:** Security scanners like Bandit will flag standard `xml.etree` parsing even in test files (`tests/test_dav_api.py`), because test utilities might run against arbitrary external data, be copy-pasted into production code, or establish insecure patterns as normalized within the codebase.
+**Prevention:** Always replace `xml.etree.ElementTree` with `defusedxml.ElementTree` when parsing XML to ensure safety from entity expansion attacks and to satisfy security scanning gates.
