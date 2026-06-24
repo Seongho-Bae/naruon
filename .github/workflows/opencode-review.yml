@@ -107,12 +107,12 @@ jobs:
             fi
 
             if [ "$review_state" = "CHANGES_REQUESTED" ]; then
-              echo "::error::Trusted OpenCode requested changes for head ${HEAD_SHA}; failing the bridge check instead of waiting for an approval that will not arrive."
-              exit 1
+              printf 'Trusted OpenCode currently requested changes for head %s (%s/%s); waiting for a same-head rerun or follow-up approval before failing the bridge check.\n' \
+                "$HEAD_SHA" "$attempt" "$attempts"
+            else
+              printf 'Waiting for trusted OpenCode approval for head %s (%s/%s, current=%s).\n' \
+                "$HEAD_SHA" "$attempt" "$attempts" "$review_state"
             fi
-
-            printf 'Waiting for trusted OpenCode approval for head %s (%s/%s, current=%s).\n' \
-              "$HEAD_SHA" "$attempt" "$attempts" "$review_state"
             if [ "$attempt" -lt "$attempts" ]; then
               sleep "$sleep_seconds"
             fi
@@ -1978,7 +1978,8 @@ jobs:
               if "${repo_root%/}/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "$evidence_file" "$repo_root"; then
                 return 0
               fi
-              printf 'OpenCode failed-check fallback helper exited non-zero; using inline fallback.\n' >&2
+              printf 'OpenCode failed-check fallback helper did not produce source-backed findings; leaving the PR review unchanged for rerun.\n' >&2
+              return 1
             fi
 
             extract_strix_failed_check_block() {
@@ -2145,7 +2146,8 @@ jobs:
             rm -f "$strix_evidence_file"
 
             if [ "$finding_index" -eq 0 ]; then
-              printf 'No deterministic missing-string markers were recognized. Use the failed-check evidence below to map each failed check to exact local source lines before approving.\n\n'
+              printf 'No automated source-backed fallback pattern matched this failed check; leaving the PR review unchanged for rerun.\n' >&2
+              return 1
             fi
           }
 
@@ -2153,12 +2155,19 @@ jobs:
             local failed_checks_file="$1"
             local evidence_file="$2"
             local body_file="$3"
+            local findings_file
+
+            findings_file="$(mktemp)"
+            if ! emit_line_specific_fallback_findings "$evidence_file" >"$findings_file"; then
+              rm -f "$findings_file"
+              return 1
+            fi
 
             {
               printf '## Pull request overview\n\n'
-              printf 'OpenCode reviewed the current-head bounded evidence and found failing GitHub Checks that need source-backed diagnosis before merge.\n\n'
+              printf 'OpenCode reviewed the current-head bounded evidence and found source-backed failed-check findings that must be addressed before merge.\n\n'
               printf -- '- Result: REQUEST_CHANGES\n'
-              printf -- "- Reason: one or more GitHub Checks failed on current head \`%s\`.\n" "$HEAD_SHA"
+              printf -- "- Reason: failed current-head checks were mapped to line-specific findings below for \`%s\`.\n" "$HEAD_SHA"
               printf -- "- Head SHA: \`%s\`\n" "$HEAD_SHA"
               printf -- '- Workflow run: %s\n' "$RUN_ID"
               printf -- '- Workflow attempt: %s\n\n' "$RUN_ATTEMPT"
@@ -2166,7 +2175,7 @@ jobs:
               cat "$failed_checks_file"
               printf '\n</details>\n\n'
               printf '## Findings\n\n'
-              emit_line_specific_fallback_findings "$evidence_file"
+              cat "$findings_file"
               printf '<details>\n<summary>Failed check evidence for line-specific fixes</summary>\n\n'
               if [ -s "$evidence_file" ]; then
                 sed -n '1,900p' "$evidence_file"
@@ -2175,6 +2184,7 @@ jobs:
               fi
               printf '\n</details>\n'
             } >"$body_file"
+            rm -f "$findings_file"
           }
 
           is_github_billing_lock_evidence() {
@@ -2977,9 +2987,12 @@ jobs:
 
               if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
                 create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
-              else
-                build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+              elif build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+              else
+                echo "::error::Failed GitHub Checks were present, but OpenCode could not derive source-backed line-specific findings after retries. Leaving the PR review unchanged so the current-head review can be rerun with better evidence."
+                echo "::endgroup::"
+                exit 1
               fi
               echo "::endgroup::"
               exit 0
@@ -3181,11 +3194,14 @@ jobs:
                   create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
                   echo "::endgroup::"
                   exit 0
-                else
-                  build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                elif build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                   echo "::endgroup::"
                   exit 0
+                else
+                  echo "::error::Failed GitHub Checks were present, but OpenCode could not derive source-backed line-specific findings after retries. Leaving the PR review unchanged so the current-head review can be rerun with better evidence."
+                  echo "::endgroup::"
+                  exit 1
                 fi
               fi
               unresolved_human_threads_file="$(mktemp)"
@@ -3248,9 +3264,12 @@ jobs:
                   publish_request_changes_from_control "$control_json"
                 elif run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
                   create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
-                else
-                  build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                elif build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                else
+                  echo "::error::Failed GitHub Checks were present, but OpenCode could not derive source-backed line-specific findings after retries. Leaving the PR review unchanged so the current-head review can be rerun with better evidence."
+                  echo "::endgroup::"
+                  exit 1
                 fi
               else
                 publish_request_changes_from_control "$control_json"
@@ -3278,9 +3297,12 @@ jobs:
                 fi
                 if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
                   create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
-                else
-                  build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"
+                elif build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
+                else
+                  echo "::error::Failed GitHub Checks were present, but OpenCode could not derive source-backed line-specific findings after retries. Leaving the PR review unchanged so the current-head review can be rerun with better evidence."
+                  echo "::endgroup::"
+                  exit 1
                 fi
               else
                 pending_checks_file="$(mktemp)"
