@@ -496,8 +496,7 @@ def test_pr_review_merge_scheduler_uses_minimal_token_permissions() -> None:
         "      actions: read\n"
         "      checks: read\n"
         "      contents: read\n"
-        "      pull-requests: write"
-        in workflow
+        "      pull-requests: write" in workflow
     )
     assert "actions: write" not in workflow
     assert "contents: write" not in workflow
