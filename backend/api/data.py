@@ -1,14 +1,11 @@
-
 from datetime import datetime, timezone
 import hashlib
-from typing import Literal, NamedTuple
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, or_, select
-from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
 from api.common.scopes import connector_scope_statement
@@ -48,21 +45,6 @@ RepositoryType = Literal[
     "attachment_repository",
     "document_repository",
 ]
-EmailScopeFilter = tuple[ColumnElement[bool], ColumnElement[bool]]
-AttachmentAssetRow = Row[tuple[Attachment, Email]]
-
-
-class EmailQualityStats(NamedTuple):
-    count: int
-    missing_thread_count: int
-    missing_fingerprint_count: int
-    embedded_count: int
-
-
-class AttachmentQualityStats(NamedTuple):
-    count: int
-    blank_content_count: int
-    embedded_count: int
 
 
 class DataRepositorySummary(BaseModel):
@@ -283,7 +265,9 @@ def _document_webdav_materialization_response(
     }
 
 
-def _document_webdav_runner_command(document: Document, intent_result: dict) -> dict[str, object]:
+def _document_webdav_runner_command(
+    document: Document, intent_result: dict
+) -> dict[str, object]:
     return {
         "action": "write_webdav",
         "account": intent_result["source_id"],
@@ -360,7 +344,7 @@ def _owner_scope_statement(model, auth_context: AuthContext):
     return statement.where(model.user_id == auth_context.user_id, organization_filter)
 
 
-def _email_scope_filter(auth_context: AuthContext) -> EmailScopeFilter:
+def _email_scope_filter(auth_context: AuthContext):
     if _can_read_org_scope(auth_context):
         organization_filter = Email.organization_id == auth_context.organization_id
         return (organization_filter, organization_filter)
@@ -499,9 +483,7 @@ def _repository_summaries(
     return repositories
 
 
-def _attachment_repository_assets(
-    rows: list[AttachmentAssetRow],
-) -> list[DataRepositoryAsset]:
+def _attachment_repository_assets(rows) -> list[DataRepositoryAsset]:
     assets: list[DataRepositoryAsset] = []
     for attachment, email in rows:
         content_chars = len((attachment.content or "").strip())
@@ -780,7 +762,9 @@ async def upload_data_document(
     )
 
 
-@router.post("/documents/{document_id}/reparse", response_model=DataDocumentActionResponse)
+@router.post(
+    "/documents/{document_id}/reparse", response_model=DataDocumentActionResponse
+)
 async def reparse_data_document(
     document_id: str,
     auth_context: AuthContext = Depends(get_auth_context),
@@ -866,7 +850,9 @@ async def create_document_webdav_materialization_intent(
             str(source_result.get("error_code") or ""),
             422,
         )
-        raise HTTPException(status_code=status_code, detail=source_result.get("message"))
+        raise HTTPException(
+            status_code=status_code, detail=source_result.get("message")
+        )
 
     result = _document_webdav_materialization_response(document, source_result)
     if request.execute_provider:
@@ -877,96 +863,6 @@ async def create_document_webdav_materialization_intent(
         )
         result = _merge_document_webdav_dispatch_result(result, dispatch_result)
     return DataDocumentWebdavMaterializationResponse(**result)
-
-
-async def _get_email_stats(
-    db: AsyncSession,
-    email_scope: EmailScopeFilter,
-) -> EmailQualityStats:
-    # ⚡ Bolt Optimization: Batching scalar counts using CASE
-    # Impact: Reduces 7 sequential database queries down to 2, drastically cutting
-    # latency from network roundtrips when fetching quality surface metrics.
-    email_stats_result = await db.execute(
-        select(
-            func.count(Email.id),
-            func.count(
-                case((or_(Email.thread_id.is_(None), Email.thread_id == ""), 1))
-            ),
-            func.count(
-                case((or_(Email.fingerprint.is_(None), Email.fingerprint == ""), 1))
-            ),
-            func.count(case((Email.embedding.is_not(None), 1))),
-        ).where(*email_scope)
-    )
-    email_stats = email_stats_result.one_or_none()
-    email_count = email_stats[0] if email_stats else 0
-    missing_thread_count = email_stats[1] if email_stats else 0
-    missing_fingerprint_count = email_stats[2] if email_stats else 0
-    embedded_email_count = email_stats[3] if email_stats else 0
-    return EmailQualityStats(
-        count=email_count,
-        missing_thread_count=missing_thread_count,
-        missing_fingerprint_count=missing_fingerprint_count,
-        embedded_count=embedded_email_count,
-    )
-
-
-async def _get_attachment_stats(
-    db: AsyncSession,
-    email_scope: EmailScopeFilter,
-) -> AttachmentQualityStats:
-    attachment_stats_result = await db.execute(
-        select(
-            func.count(Attachment.id),
-            func.count(
-                case(
-                    (
-                        or_(
-                            Attachment.content.is_(None),
-                            func.length(func.trim(Attachment.content)) == 0,
-                        ),
-                        1,
-                    )
-                )
-            ),
-            func.count(case((Attachment.embedding.is_not(None), 1))),
-        )
-        .join(Email)
-        .where(*email_scope)
-    )
-    attachment_stats = attachment_stats_result.one_or_none()
-    attachment_count = attachment_stats[0] if attachment_stats else 0
-    blank_attachment_count = attachment_stats[1] if attachment_stats else 0
-    embedded_attachment_count = attachment_stats[2] if attachment_stats else 0
-    return AttachmentQualityStats(
-        count=attachment_count,
-        blank_content_count=blank_attachment_count,
-        embedded_count=embedded_attachment_count,
-    )
-
-
-async def _get_attachment_assets(
-    db: AsyncSession,
-    email_scope: EmailScopeFilter,
-) -> list[AttachmentAssetRow]:
-    attachment_asset_result = await db.execute(
-        select(Attachment, Email)
-        .join(Email)
-        .where(*email_scope)
-        .order_by(Email.date.desc(), Attachment.filename.asc())
-        .limit(8)
-    )
-    return list(attachment_asset_result.all())
-
-
-async def _get_connector_events(
-    db: AsyncSession,
-    auth_context: AuthContext,
-) -> list[ConnectorSignalEvent]:
-    connector_statement = connector_scope_statement(auth_context)
-    if connector_statement is None:
-        return []
-    return await _scoped_rows(db, connector_statement)
 
 
 @router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
@@ -997,18 +893,62 @@ async def get_data_quality_surface(
     )
     email_scope = _email_scope_filter(auth_context)
 
-    email_stats = await _get_email_stats(db, email_scope)
-    attachment_stats = await _get_attachment_stats(db, email_scope)
-    email_count = email_stats.count
-    missing_thread_count = email_stats.missing_thread_count
-    missing_fingerprint_count = email_stats.missing_fingerprint_count
-    embedded_email_count = email_stats.embedded_count
-    attachment_count = attachment_stats.count
-    blank_attachment_count = attachment_stats.blank_content_count
-    embedded_attachment_count = attachment_stats.embedded_count
+    # ⚡ Bolt Optimization: Batching scalar counts using CASE
+    # Impact: Reduces 7 sequential database queries down to 2, drastically cutting
+    # latency from network roundtrips when fetching quality surface metrics.
+    email_stats_result = await db.execute(
+        select(
+            func.count(Email.id),
+            func.count(
+                case((or_(Email.thread_id.is_(None), Email.thread_id == ""), 1))
+            ),
+            func.count(
+                case((or_(Email.fingerprint.is_(None), Email.fingerprint == ""), 1))
+            ),
+            func.count(case((Email.embedding.is_not(None), 1))),
+        ).where(*email_scope)
+    )
+    email_stats = email_stats_result.one_or_none()
+    email_count = email_stats[0] if email_stats else 0
+    missing_thread_count = email_stats[1] if email_stats else 0
+    missing_fingerprint_count = email_stats[2] if email_stats else 0
+    embedded_email_count = email_stats[3] if email_stats else 0
 
-    connector_events = await _get_connector_events(db, auth_context)
-    attachment_asset_rows = await _get_attachment_assets(db, email_scope)
+    attachment_stats_result = await db.execute(
+        select(
+            func.count(Attachment.id),
+            func.count(
+                case(
+                    (
+                        or_(
+                            Attachment.content.is_(None),
+                            func.length(func.trim(Attachment.content)) == 0,
+                        ),
+                        1,
+                    )
+                )
+            ),
+            func.count(case((Attachment.embedding.is_not(None), 1))),
+        )
+        .join(Email)
+        .where(*email_scope)
+    )
+    attachment_stats = attachment_stats_result.one_or_none()
+    attachment_count = attachment_stats[0] if attachment_stats else 0
+    blank_attachment_count = attachment_stats[1] if attachment_stats else 0
+    embedded_attachment_count = attachment_stats[2] if attachment_stats else 0
+    connector_statement = connector_scope_statement(auth_context)
+    connector_events: list[ConnectorSignalEvent] = []
+    if connector_statement is not None:
+        connector_events = await _scoped_rows(db, connector_statement)
+    attachment_asset_result = await db.execute(
+        select(Attachment, Email)
+        .join(Email)
+        .where(*email_scope)
+        .order_by(Email.date.desc(), Attachment.filename.asc())
+        .limit(8)
+    )
+    attachment_asset_rows = list(attachment_asset_result.all())
 
     source_count = len(webdav_accounts) + len(project_folders)
     embedded_total = embedded_email_count + embedded_attachment_count

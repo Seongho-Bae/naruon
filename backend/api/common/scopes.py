@@ -1,5 +1,4 @@
 from sqlalchemy import select
-
 from api.auth import AuthContext
 from db.models import ConnectorSignalEvent
 
