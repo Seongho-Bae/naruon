@@ -355,6 +355,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
                   disabled={isWritebackActionDisabled}
+                  aria-busy={isWritebackLoading}
                   className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
                   새 일정 intent 점검
@@ -363,6 +364,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
                   disabled={isWritebackActionDisabled}
+                  aria-busy={isWritebackLoading}
                   className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   ETag 업데이트 점검
@@ -371,6 +373,7 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('update', true)}
                   disabled={isProviderExecutionDisabled}
+                  aria-busy={isWritebackLoading}
                   className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   ETag 실행 요청
