@@ -51,7 +51,7 @@ describe("DashboardLayout", () => {
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
-    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
+    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="판단 보조 빠른 실행"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]');
     const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (link) => link.textContent,
@@ -86,13 +86,13 @@ describe("DashboardLayout", () => {
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
     expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "일정", "더보기"]);
     expect(mobileQuickActionButton).not.toBeNull();
-    expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
+    expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-judgment-assist-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(container.textContent).not.toContain("준비 중");
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
-    expect(globalSearchInput?.getAttribute("type")).toBe("text");
+    expect(globalSearchInput?.getAttribute("type")).toBe("search");
     expect(globalSearchInput?.getAttribute("inputmode")).toBe("search");
     expect(globalSearchInput?.getAttribute("role")).toBe("searchbox");
     expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
@@ -187,7 +187,7 @@ describe("DashboardLayout", () => {
       mobileQuickActionButton?.click();
     });
 
-    expect(container.querySelector('#mobile-ai-action-menu')?.textContent ?? "").toContain("답장 초안");
+    expect(container.querySelector('#mobile-judgment-assist-action-menu')?.textContent ?? "").toContain("답장 초안");
 
     act(() => {
       container?.querySelector<HTMLButtonElement>('button[data-mobile-quick-action="create-task"]')?.click();
@@ -222,7 +222,7 @@ describe("DashboardLayout", () => {
 
     const input = container.querySelector<HTMLInputElement>("#global-search-input");
     expect(input).not.toBeNull();
-    expect(input?.getAttribute("type")).toBe("text");
+    expect(input?.getAttribute("type")).toBe("search");
     expect(input?.getAttribute("inputmode")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
 
