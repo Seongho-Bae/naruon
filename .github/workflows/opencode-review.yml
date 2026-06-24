@@ -3022,6 +3022,8 @@ jobs:
             if ! awk '
               function allowed(path) {
                 return path == ".github/workflows/opencode-review.yml" ||
+                  path == ".github/workflows/pr-governance.yml" ||
+                  path == ".github/workflows/pr-review-merge-scheduler.yml" ||
                   path == ".github/workflows/strix.yml" ||
                   path == "requirements-strix-ci.txt" ||
                   path == "requirements-strix-ci-hashes.txt" ||
@@ -3029,6 +3031,7 @@ jobs:
                   path == "scripts/ci/emit_opencode_failed_check_fallback_findings.sh" ||
                   path == "scripts/ci/opencode_review_approve_gate.sh" ||
                   path == "scripts/ci/opencode_review_normalize_output.py" ||
+                  path == "scripts/ci/pr_review_merge_scheduler.py" ||
                   path == "scripts/ci/strix_model_utils.sh" ||
                   path == "scripts/ci/strix_quick_gate.sh" ||
                   path == "scripts/ci/test_strix_quick_gate.sh" ||
@@ -3049,7 +3052,7 @@ jobs:
               cd "$source_root"
               if command -v actionlint >/dev/null 2>&1; then
                 workflow_files=()
-                for workflow_file in .github/workflows/opencode-review.yml .github/workflows/strix.yml; do
+                for workflow_file in .github/workflows/opencode-review.yml .github/workflows/pr-governance.yml .github/workflows/pr-review-merge-scheduler.yml .github/workflows/strix.yml; do
                   if [ -f "$workflow_file" ]; then
                     workflow_files+=("$workflow_file")
                   fi
@@ -3078,6 +3081,9 @@ jobs:
               fi
               if [ -f scripts/ci/opencode_review_normalize_output.py ]; then
                 python3 -m py_compile scripts/ci/opencode_review_normalize_output.py
+              fi
+              if [ -f scripts/ci/pr_review_merge_scheduler.py ]; then
+                python3 -m py_compile scripts/ci/pr_review_merge_scheduler.py
               fi
             ) >"$validation_log" 2>&1
             validation_status=$?
