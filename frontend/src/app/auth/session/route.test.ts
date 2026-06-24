@@ -183,6 +183,62 @@ describe("/auth/session route", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("returns anonymous claims when backend session verification returns non-OK", async () => {
+    const token = signedFixtureToken({
+      sub: "user-2",
+      org: "org-beta",
+      workspace: "workspace-beta",
+    });
+    const fetchMock = vi.fn(async () => new Response(null, { status: 500 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new NextRequest("https://app.naruon.net/auth/session", {
+      headers: { Cookie: `naruon_session=${token}` },
+    });
+
+    const response = await GET(request);
+
+    await expect(response.json()).resolves.toEqual({
+      authenticated: false,
+      claims: {
+        userId: null,
+        organizationId: null,
+        workspaceId: null,
+      },
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns anonymous claims when backend session verification throws", async () => {
+    const token = signedFixtureToken({
+      sub: "user-2",
+      org: "org-beta",
+      workspace: "workspace-beta",
+    });
+    const fetchMock = vi.fn(async () => {
+      throw new Error("network unavailable");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const request = new NextRequest("https://app.naruon.net/auth/session", {
+      headers: { Cookie: `naruon_session=${token}` },
+    });
+
+    const response = await GET(request);
+
+    await expect(response.json()).resolves.toEqual({
+      authenticated: false,
+      claims: {
+        userId: null,
+        organizationId: null,
+        workspaceId: null,
+      },
+    });
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("set-cookie")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects forged tokens that the backend verifier does not accept", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json(
       { detail: "Authentication required" },
