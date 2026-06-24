@@ -100,11 +100,15 @@ def test_container_images_use_pinned_node_runtimes() -> None:
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert_dockerfile_stage_from(root_dockerfile, "node:24-slim", "frontend-builder")
+    assert_dockerfile_stage_from(root_dockerfile, "node:26-slim", "frontend-builder")
     assert "FROM node:26-slim@sha256:" in frontend_dockerfile
     assert "docker.io/library/node:26-slim" in frontend_dockerfile
     assert "docker.io/library/node:26-slim" in docker_publish_workflow
     assert "Node 26 toolchain" in render_deployment
+    assert "node:24" not in root_dockerfile
+    assert "node:24" not in frontend_dockerfile
+    assert "node:24" not in docker_publish_workflow
+    assert "Node 24" not in render_deployment
     assert "node:22" not in root_dockerfile
     assert "node:22" not in frontend_dockerfile
     assert "node:22" not in docker_publish_workflow
