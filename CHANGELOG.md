@@ -2582,3 +2582,8 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+
+## [Unreleased]
+
+### Added (UI/UX)
+- 캘린더 레이아웃 내 의도 점검 버튼 (intent action) 들에 비동기 로딩 스피너 시각 피드백 추가
