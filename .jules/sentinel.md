@@ -55,3 +55,9 @@
 **Vulnerability:** The API proxy's `sameOriginStateChangingRequest` function previously allowed state-changing requests if both `sec-fetch-site` and `origin` headers were missing, creating a potential CSRF vector if an attacker suppressed the Origin header.
 **Learning:** Default-allow fallbacks for missing security metadata can silently bypass critical protections, especially when relying solely on cookie-based authentication.
 **Prevention:** Always fail securely by defaulting to `false` when required origin/referer security metadata is absent, ensuring strict enforcement for state-changing operations.
+
+## 2026-06-24 - Prevent URL-Encoded and Windows Path Traversal Bypass
+
+**Vulnerability:** Path traversal in `_dav_path_owner_user_id` could be bypassed using doubly URL-encoded sequences (for example, `%252e%252e%252f`) and Windows-style backslashes.
+**Learning:** Checking for traversal sequences after a single `/` split is insufficient if the input path can contain encoded payloads or alternative path separators.
+**Prevention:** Recursively unquote DAV paths until stable, standardize backslashes to forward slashes, and reject `.` or `..` path segments before extracting authorization scope.
