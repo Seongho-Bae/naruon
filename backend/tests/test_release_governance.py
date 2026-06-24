@@ -501,8 +501,7 @@ def test_pr_review_merge_scheduler_uses_minimal_token_permissions() -> None:
         "      actions: read\n"
         "      checks: read\n"
         "      contents: read\n"
-        "      pull-requests: write"
-        in workflow
+        "      pull-requests: write" in workflow
     )
     assert "actions: write" not in workflow
     assert "contents: write" not in workflow
@@ -983,10 +982,7 @@ def _assert_validation_fails_with(
     assert expected_error in validation.stdout, failure_output
 
 
-def test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct(
-    tmp_path: Path,
-) -> None:
-    agents = read_repo_text("AGENTS.md")
+def _setup_strix_failed_check_evidence(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo_root = tmp_path / "repo"
     auth_file = repo_root / "backend" / "app" / "auth.py"
     page_file = repo_root / "frontend" / "src" / "app" / "page.tsx"
@@ -1040,6 +1036,14 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         + "\n",
         encoding="utf-8",
     )
+    return repo_root, evidence_file, failed_checks_file
+
+
+def test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct(
+    tmp_path: Path,
+) -> None:
+    agents = read_repo_text("AGENTS.md")
+    repo_root, evidence_file, _ = _setup_strix_failed_check_evidence(tmp_path)
 
     fallback = _run_emit_opencode_failed_check_fallback(evidence_file, repo_root)
 
@@ -1058,6 +1062,12 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
     normalized_agents = " ".join(agents.split())
     assert "Strix logs may print the report's `Model ...` line after" in agents
     assert "not to a previous retry attempt" in normalized_agents
+
+
+def test_opencode_strix_failed_check_review_accepts_distinct_model_reports(
+    tmp_path: Path,
+) -> None:
+    _, evidence_file, failed_checks_file = _setup_strix_failed_check_evidence(tmp_path)
 
     good_control_file = tmp_path / "good-control.json"
     _assert_validation_succeeds(
@@ -1103,6 +1113,12 @@ Strix run failed for model 'deepseek/deepseek-r1-0528' after 206s (exit code 2).
         failed_checks_file,
         evidence_file,
     )
+
+
+def test_opencode_strix_failed_check_review_rejects_collapsed_model_reports(
+    tmp_path: Path,
+) -> None:
+    _, evidence_file, failed_checks_file = _setup_strix_failed_check_evidence(tmp_path)
 
     collapsed_control_file = tmp_path / "collapsed-control.json"
     _assert_validation_fails_with(
