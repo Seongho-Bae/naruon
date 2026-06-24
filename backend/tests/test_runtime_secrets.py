@@ -69,3 +69,20 @@ def test_validate_auth_session_hmac_secret_value_placeholder():
 def test_validate_auth_session_hmac_secret_value_rejects_strix_fixture():
     with pytest.raises(ValueError, match="placeholder terms"):
         validate_auth_session_hmac_secret_value("NaRuOnSeCrEtToKeN1234567890abcdef")
+
+
+def test_validate_auth_session_hmac_secret_value_accepts_multibyte_byte_length():
+    secret = "가ABCDEFGHIJKLMNOabcdefghij1234!"
+
+    assert len(secret) < 32
+    assert len(secret.encode("utf-8")) >= 32
+
+    validate_auth_session_hmac_secret_value(secret)
+
+
+def test_validate_auth_session_hmac_secret_value_multibyte_length():
+    with pytest.raises(ValueError, match="must be at least 32 bytes"):
+        validate_auth_session_hmac_secret_value("가나다라마바사아자차")
+
+    with pytest.raises(ValueError, match="at least three character classes"):
+        validate_auth_session_hmac_secret_value("가나다라마바사아자차카타파하")
