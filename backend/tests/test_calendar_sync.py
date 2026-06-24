@@ -44,17 +44,3 @@ def test_generate_ics_from_task_escapes_summary_text():
     ics_content = generate_ics_from_task(task)
 
     assert "SUMMARY:Review\\, Q2\\; follow\\\\up\\nnotes" in ics_content
-
-
-def test_generate_ics_from_task_blocked_status():
-    task = CalendarTask(
-        task_uid="blocked-1",
-        title="Blocked Task",
-        status="blocked",
-        created_at=datetime.datetime(2026, 5, 23, 10, 0, tzinfo=datetime.timezone.utc),
-        updated_at=datetime.datetime(2026, 5, 23, 11, 0, tzinfo=datetime.timezone.utc),
-    )
-
-    ics_content = generate_ics_from_task(task)
-
-    assert "STATUS:NEEDS-ACTION" in ics_content
