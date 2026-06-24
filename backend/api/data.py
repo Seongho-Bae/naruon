@@ -972,6 +972,16 @@ async def _get_attachment_assets(
     return list(attachment_asset_result.all())
 
 
+async def _get_connector_events(
+    db: AsyncSession,
+    auth_context: AuthContext,
+) -> list[ConnectorSignalEvent]:
+    connector_statement = _connector_scope_statement(auth_context)
+    if connector_statement is None:
+        return []
+    return await _scoped_rows(db, connector_statement)
+
+
 @router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
 async def get_data_quality_surface(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -1010,11 +1020,7 @@ async def get_data_quality_surface(
     blank_attachment_count = attachment_stats.blank_content_count
     embedded_attachment_count = attachment_stats.embedded_count
 
-    connector_statement = _connector_scope_statement(auth_context)
-    connector_events: list[ConnectorSignalEvent] = []
-    if connector_statement is not None:
-        connector_events = await _scoped_rows(db, connector_statement)
-
+    connector_events = await _get_connector_events(db, auth_context)
     attachment_asset_rows = await _get_attachment_assets(db, email_scope)
 
     source_count = len(webdav_accounts) + len(project_folders)
