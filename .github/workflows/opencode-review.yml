@@ -1351,6 +1351,10 @@ jobs:
             local merge_state="${1:-UNKNOWN}"
             local changed_files_file surfaces_file idx next_node
 
+            mermaid_label() {
+              printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\[/(/g; s/\]/)/g'
+            }
+
             changed_files_file="$(mktemp)"
             surfaces_file="$(mktemp)"
             if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
@@ -1362,8 +1366,8 @@ jobs:
             if [ ! -s "$changed_files_file" ]; then
               printf '```mermaid\n'
               printf 'flowchart LR\n'
-              printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
-              printf '  Risk --> Verify[Required checks]\n'
+              printf '  Evidence["OpenCode evidence"] --> Risk["Review risk"]\n'
+              printf '  Risk --> Verify["Required checks"]\n'
               printf '```\n'
               rm -f "$changed_files_file" "$surfaces_file"
               return 0
@@ -1423,20 +1427,23 @@ jobs:
 
             printf '```mermaid\n'
             printf 'flowchart LR\n'
-            printf '  PR[PR changed files] --> Evidence[OpenCode bounded evidence]\n'
+            printf '  PR["PR changed files"] --> Evidence["OpenCode bounded evidence"]\n'
             idx=1
             while IFS="$(printf '\t')" read -r surface impact verify; do
               [ -n "$surface" ] || continue
-              printf '  Evidence --> S%s[%s]\n' "$idx" "$surface"
-              printf '  S%s --> I%s[%s]\n' "$idx" "$idx" "$impact"
+              surface_label="$(mermaid_label "$surface")"
+              impact_label="$(mermaid_label "$impact")"
+              verify_label="$(mermaid_label "$verify")"
+              printf '  Evidence --> S%s["%s"]\n' "$idx" "$surface_label"
+              printf '  S%s --> I%s["%s"]\n' "$idx" "$idx" "$impact_label"
               if [ "$merge_state" = "DIRTY" ] || [ "$merge_state" = "CONFLICTING" ]; then
-                printf '  I%s --> Conflict[Merge conflict blocks this path]\n' "$idx"
+                printf '  I%s --> Conflict["Merge conflict blocks this path"]\n' "$idx"
                 next_node="Conflict"
               else
-                printf '  I%s --> Review[Main review risk]\n' "$idx"
+                printf '  I%s --> Review["Main review risk"]\n' "$idx"
                 next_node="Review"
               fi
-              printf '  %s --> V%s[%s]\n' "$next_node" "$idx" "$verify"
+              printf '  %s --> V%s["%s"]\n' "$next_node" "$idx" "$verify_label"
               idx=$((idx + 1))
             done <"$surfaces_file"
             printf '```\n'
@@ -1599,6 +1606,10 @@ jobs:
             local merge_state="${1:-UNKNOWN}"
             local changed_files_file surfaces_file idx next_node
 
+            mermaid_label() {
+              printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\[/(/g; s/\]/)/g'
+            }
+
             changed_files_file="$(mktemp)"
             surfaces_file="$(mktemp)"
             if ! gh pr diff "$PR_NUMBER" --repo "$GH_REPOSITORY" --name-only >"$changed_files_file" 2>/dev/null ||
@@ -1610,8 +1621,8 @@ jobs:
             if [ ! -s "$changed_files_file" ]; then
               printf '```mermaid\n'
               printf 'flowchart LR\n'
-              printf '  Evidence[OpenCode evidence] --> Risk[Review risk]\n'
-              printf '  Risk --> Verify[Required checks]\n'
+              printf '  Evidence["OpenCode evidence"] --> Risk["Review risk"]\n'
+              printf '  Risk --> Verify["Required checks"]\n'
               printf '```\n'
               rm -f "$changed_files_file" "$surfaces_file"
               return 0
@@ -1671,20 +1682,23 @@ jobs:
 
             printf '```mermaid\n'
             printf 'flowchart LR\n'
-            printf '  PR[PR changed files] --> Evidence[OpenCode bounded evidence]\n'
+            printf '  PR["PR changed files"] --> Evidence["OpenCode bounded evidence"]\n'
             idx=1
             while IFS="$(printf '\t')" read -r surface impact verify; do
               [ -n "$surface" ] || continue
-              printf '  Evidence --> S%s[%s]\n' "$idx" "$surface"
-              printf '  S%s --> I%s[%s]\n' "$idx" "$idx" "$impact"
+              surface_label="$(mermaid_label "$surface")"
+              impact_label="$(mermaid_label "$impact")"
+              verify_label="$(mermaid_label "$verify")"
+              printf '  Evidence --> S%s["%s"]\n' "$idx" "$surface_label"
+              printf '  S%s --> I%s["%s"]\n' "$idx" "$idx" "$impact_label"
               if [ "$merge_state" = "DIRTY" ] || [ "$merge_state" = "CONFLICTING" ]; then
-                printf '  I%s --> Conflict[Merge conflict blocks this path]\n' "$idx"
+                printf '  I%s --> Conflict["Merge conflict blocks this path"]\n' "$idx"
                 next_node="Conflict"
               else
-                printf '  I%s --> Review[Main review risk]\n' "$idx"
+                printf '  I%s --> Review["Main review risk"]\n' "$idx"
                 next_node="Review"
               fi
-              printf '  %s --> V%s[%s]\n' "$next_node" "$idx" "$verify"
+              printf '  %s --> V%s["%s"]\n' "$next_node" "$idx" "$verify_label"
               idx=$((idx + 1))
             done <"$surfaces_file"
             printf '```\n'
