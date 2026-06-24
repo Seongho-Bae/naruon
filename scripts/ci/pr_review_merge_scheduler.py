@@ -205,7 +205,7 @@ def review_author_login(review: dict[str, Any]) -> str:
 
 def is_opencode_review(review: dict[str, Any]) -> bool:
     """Return whether a review was authored by the OpenCode agent."""
-    return review_author_login(review) == "opencode-agent"
+    return review_author_login(review) in {"opencode-agent", "opencode-agent[bot]"}
 
 
 def current_head_review_state(pr: dict[str, Any], state: str) -> bool:
@@ -227,12 +227,6 @@ def latest_opencode_review(pr: dict[str, Any]) -> dict[str, Any] | None:
         if is_opencode_review(review):
             return review
     return None
-
-
-def latest_opencode_approved(pr: dict[str, Any]) -> bool:
-    """Return whether the newest OpenCode review is an approval."""
-    review = latest_opencode_review(pr)
-    return bool(review and (review.get("state") or "").upper() == "APPROVED")
 
 
 def has_current_head_approval(pr: dict[str, Any]) -> bool:
@@ -418,7 +412,7 @@ def inspect_pr(
         return Decision(
             number,
             "review_dispatch",
-            "current head has completed Strix evidence; same-head Strix and OpenCode dispatched",
+            "current head has completed Strix evidence; same-head OpenCode dispatched",
         )
 
     return Decision(number, "block", "current head has no OpenCode approval")
@@ -525,6 +519,15 @@ def self_test() -> None:
     assert has_current_head_approval(sample)
     sample["reviews"]["nodes"] = [sample["reviews"]["nodes"][-1]]
     assert not has_current_head_approval(sample)
+    sample["reviews"]["nodes"] = [
+        {
+            "state": "APPROVED",
+            "author": {"login": "opencode-agent[bot]"},
+            "body": "OpenCode Agent approved this head.",
+            "commit": {"oid": "abc"},
+        }
+    ]
+    assert has_current_head_approval(sample)
     sample["reviews"]["nodes"].append(
         {
             "state": "CHANGES_REQUESTED",
