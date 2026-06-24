@@ -65,3 +65,8 @@
 **Vulnerability:** `xml.etree.ElementTree.fromstring` was used to parse XML responses in tests (`backend/tests/test_dav_api.py`), triggering Bandit B314 (vulnerable to XML attacks).
 **Learning:** Even in test environments parsing trusted responses, standard XML parsers trigger security scanners because they are inherently vulnerable to XML external entity (XXE) and billion laughs attacks.
 **Prevention:** Always use `defusedxml` (`import defusedxml.ElementTree as ET`) as a drop-in replacement when parsing XML anywhere in the codebase to pass static analysis and enforce secure-by-default habits.
+
+## 2026-06-24 - Missing Auth Session Verification for OIDC
+**Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
+**Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
+**Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
