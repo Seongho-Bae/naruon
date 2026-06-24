@@ -16,6 +16,8 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 OCI_PREDEFINED_IMAGE_ANNOTATION_KEYS = {
@@ -190,7 +192,7 @@ def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None
     assert "Seongho Bae (@seonghobae)" in changelog
 
 
-def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
+def test_github_actions_are_pinned_to_exact_sha() -> None:
     assert WORKFLOW_DIR.exists(), (
         "required governance artifact is missing: .github/workflows"
     )
@@ -219,8 +221,63 @@ def test_governed_workflows_do_not_use_unpinned_major_only_actions() -> None:
                     f"{workflow_path.relative_to(REPO_ROOT)}:{line_number}:{line.strip()}"
                 )
 
-    assert unpinned_major_refs == []
-    assert missing_version_comments == []
+    assert unpinned_major_refs == [], "\n".join(unpinned_major_refs)
+    assert missing_version_comments == [], "\n".join(missing_version_comments)
+
+
+def test_github_actions_unpinned_major_refs_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_root = tmp_path / "repo"
+    workflow_dir = repo_root / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    workflow_file = workflow_dir / "bad-action.yml"
+    workflow_file.write_text(
+        "\n".join(
+            [
+                "name: bad action refs",
+                "jobs:",
+                "  test:",
+                "    runs-on: ubuntu-latest",
+                "    steps:",
+                "      - uses: actions/checkout@v4",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    this_module = sys.modules[__name__]
+    monkeypatch.setattr(this_module, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(this_module, "WORKFLOW_DIR", workflow_dir)
+
+    with pytest.raises(AssertionError) as exc_info:
+        test_github_actions_are_pinned_to_exact_sha()
+
+    message = str(exc_info.value)
+    assert ".github/workflows/bad-action.yml:6:- uses: actions/checkout@v4" in message
+
+    workflow_file.write_text(
+        "\n".join(
+            [
+                "name: missing version comment",
+                "jobs:",
+                "  test:",
+                "    runs-on: ubuntu-latest",
+                "    steps:",
+                "      - uses: actions/setup-python@abcdef1234567890abcdef1234567890abcdef12",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError) as exc_info:
+        test_github_actions_are_pinned_to_exact_sha()
+
+    message = str(exc_info.value)
+    assert (
+        ".github/workflows/bad-action.yml:6:- uses: "
+        "actions/setup-python@abcdef1234567890abcdef1234567890abcdef12"
+    ) in message
 
 
 def test_bandit_security_scan_does_not_continue_on_error() -> None:
