@@ -13,8 +13,14 @@ from core.url_validation import (
 )
 
 def test_parse_allowed_hosts():
-    assert parse_allowed_hosts("example.com, TEST.COM. , [2001:db8::1]") == frozenset({"example.com", "test.com", "2001:db8::1"})
+    assert parse_allowed_hosts("example.com, TEST.COM. , [2001:db8::1]") == frozenset(
+        {"example.com", "test.com", "2001:db8::1"}
+    )
     assert parse_allowed_hosts("") == frozenset()
+    assert parse_allowed_hosts("   ") == frozenset()
+    assert parse_allowed_hosts("example.com,, example.com , example.net") == frozenset(
+        {"example.com", "example.net"}
+    )
 
 def test_normalize_host():
     assert _normalize_host(" Example.COM. ") == "example.com"
