@@ -239,6 +239,7 @@ def test_build_auth_context_accepts_signed_bearer_session():
         workspace_id="workspace-org-acme",
         session_verifier="hmac",
     )
+    assert context.session_verifier == "hmac"
 
 
 def test_build_auth_context_rejects_missing_auth():
