@@ -533,6 +533,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "MODEL: github-models/openai/gpt-5" "opencode review tries GitHub Models GPT-5 first"
 	assert_file_contains "$workflow_file" "MODEL: github-models/deepseek/deepseek-r1-0528" "opencode review falls back to a reachable DeepSeek R1 reasoning model"
 	assert_file_contains "$workflow_file" "MODEL: github-models/deepseek/deepseek-v3-0324" "opencode review has a second reachable DeepSeek V3 fallback model"
+	assert_file_contains "$workflow_file" 'OPENCODE_MODEL_CANDIDATES: "github-models/openai/o3 github-models/openai/o4-mini"' "opencode review has an o-series fallback after DeepSeek failures"
+	assert_file_contains "$workflow_file" "OPENCODE_O_SERIES_FALLBACK_OUTPUT_FILE" "opencode review publish and approval gates can consume o-series fallback output"
 	assert_file_contains "$workflow_file" "Publish bounded OpenCode review comment" "opencode review workflow publishes the agent control comment for the approval gate"
 	assert_file_contains "$workflow_file" "statusCheckRollup" "opencode review workflow reads current-head GitHub Checks before approval"
 	assert_file_contains "$workflow_file" "OPENCODE_FAILED_CHECK_EVIDENCE_FILE" "opencode review workflow persists failed-check evidence across review and approval steps"
