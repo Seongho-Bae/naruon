@@ -465,6 +465,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'This fallback is not used for workflow, source-code, script, dependency, infrastructure, configuration, or lockfile changes.' "opencode low-risk fallback excludes executable and configuration changes"
 	assert_file_contains "$workflow_file" '.github/workflows' "opencode low-risk fallback explicitly excludes workflow changes"
 	assert_file_contains "$workflow_file" 'approve_review_tooling_bootstrap_after_model_failure()' "opencode approval has a deterministic fallback for review-tooling bootstrap failures"
+	assert_file_contains "$workflow_file" 'git -C "$source_root" rev-parse --is-inside-work-tree' "opencode review-tooling bootstrap fallback accepts PR head git worktrees with .git files"
+	assert_file_contains "$workflow_file" 'Review-tooling bootstrap fallback skipped:' "opencode review-tooling bootstrap fallback logs why deterministic approval did not apply"
 	assert_file_contains "$workflow_file" 'Deterministic review-tooling bootstrap fallback approval was used' "opencode review-tooling bootstrap fallback explains model-output failure approval"
 	assert_file_contains "$workflow_file" 'scripts/ci/strix_quick_gate.sh' "opencode review-tooling bootstrap fallback is scoped to the Strix/OpenCode review bundle"
 	assert_file_contains "$workflow_file" '.github/workflows/pr-governance.yml' "opencode review-tooling bootstrap fallback covers PR governance workflow changes"

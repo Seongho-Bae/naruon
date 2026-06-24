@@ -3003,7 +3003,8 @@ jobs:
             local validation_status=0
             local source_root="${OPENCODE_SOURCE_WORKDIR:-}"
 
-            if [ -z "$source_root" ] || [ ! -d "$source_root/.git" ]; then
+            if [ -z "$source_root" ] || ! git -C "$source_root" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+              printf 'Review-tooling bootstrap fallback skipped: PR-head source worktree is unavailable at %s.\n' "${source_root:-<empty>}" >&2
               return 1
             fi
 
@@ -3011,10 +3012,12 @@ jobs:
             validation_log="$(mktemp)"
             if ! gh api -X GET "repos/${GH_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate \
               --jq '.[].filename' >"$changed_files_file"; then
+              printf 'Review-tooling bootstrap fallback skipped: changed file list could not be read from GitHub.\n' >&2
               rm -f "$changed_files_file" "$validation_log"
               return 1
             fi
             if [ ! -s "$changed_files_file" ]; then
+              printf 'Review-tooling bootstrap fallback skipped: changed file list is empty.\n' >&2
               rm -f "$changed_files_file" "$validation_log"
               return 1
             fi
@@ -3043,6 +3046,8 @@ jobs:
                 }
               }
             ' "$changed_files_file"; then
+              printf 'Review-tooling bootstrap fallback skipped: changed files include paths outside the review-tooling bootstrap allowlist:\n' >&2
+              sed 's/^/- /' "$changed_files_file" >&2 || true
               rm -f "$changed_files_file" "$validation_log"
               return 1
             fi
@@ -3089,6 +3094,8 @@ jobs:
             validation_status=$?
             set -e
             if [ "$validation_status" -ne 0 ]; then
+              printf 'Review-tooling bootstrap fallback skipped: static validation failed:\n' >&2
+              sed -n '1,120p' "$validation_log" >&2 || true
               rm -f "$changed_files_file" "$validation_log"
               return 1
             fi
