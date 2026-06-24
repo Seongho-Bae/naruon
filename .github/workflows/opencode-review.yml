@@ -2655,7 +2655,7 @@ jobs:
             (
               cd "$source_root"
               if command -v actionlint >/dev/null 2>&1; then
-                actionlint -shellcheck= -pyflakes= .github/workflows/opencode-review.yml .github/workflows/strix.yml
+                actionlint -shellcheck= -pyflakes= .github/workflows/opencode-review.yml .github/workflows/strix.yml .github/workflows/pr-governance.yml
               else
                 printf 'actionlint unavailable; skipped workflow schema validation.\n'
               fi
