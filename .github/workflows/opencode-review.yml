@@ -2547,7 +2547,7 @@ jobs:
               --workflow strix.yml \
               --commit "$HEAD_SHA" \
               --limit 200 \
-              --json databaseId,workflowName,status,conclusion,url,event,headSha >"$runs_json"; then
+              --json databaseId,workflowName,status,conclusion,url,event,headSha,createdAt >"$runs_json"; then
               rm -f "$runs_json"
               return 1
             fi
@@ -2578,6 +2578,7 @@ jobs:
                 ' "$runs_json" >"$output_file"
                 ;;
               pending)
+                pending_candidates_file="$(mktemp)"
                 jq -r --arg head_sha "$HEAD_SHA" '
                   (. // []) as $runs
                   | ([
@@ -2594,10 +2595,41 @@ jobs:
                       | select((.event // "") == "pull_request_target" or (.event // "") == "workflow_dispatch")
                       | select((.status // "") != "completed")
                       | select((.databaseId // .id // 0) > $newest_success_run_id)
-                      | "- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.url // .html_url // "") != "" then " (" + (.url // .html_url) + ")" else "" end)
+                      | [
+                          ((.databaseId // .id // 0) | tostring),
+                          (.status // "unknown"),
+                          (.createdAt // .created_at // ""),
+                          ("- Strix Security Scan/strix workflow run: " + (.status // "unknown") + (if (.url // .html_url // "") != "" then " (" + (.url // .html_url) + ")" else "" end))
+                        ]
+                      | @tsv
                     )
                   | .[]
-                ' "$runs_json" >"$output_file"
+                ' "$runs_json" >"$pending_candidates_file"
+
+                : >"$output_file"
+                while IFS=$'\t' read -r run_id run_status run_created_at pending_line; do
+                  if [ -z "$run_id" ]; then
+                    continue
+                  fi
+
+                  jobs_total=""
+                  if jobs_total="$(gh api -X GET "repos/${GH_REPOSITORY}/actions/runs/${run_id}/jobs" --jq '.total_count // 0' 2>/dev/null)"; then
+                    no_job_grace_seconds="${STRIX_PENDING_NO_JOB_GRACE_SECONDS:-120}"
+                    run_created_epoch=0
+                    now_epoch="$(date -u +%s)"
+                    if [ -n "$run_created_at" ]; then
+                      run_created_epoch="$(date -u -d "$run_created_at" +%s 2>/dev/null || printf '0')"
+                    fi
+                    run_age_seconds=$((now_epoch - run_created_epoch))
+                    if [ "${jobs_total:-0}" -eq 0 ] && [ "$run_age_seconds" -ge "$no_job_grace_seconds" ]; then
+                      printf 'Ignoring no-job pending Strix workflow run %s after %ss grace period.\n' "$run_id" "$no_job_grace_seconds" >&2
+                      continue
+                    fi
+                  fi
+
+                  printf '%s\n' "$pending_line" >>"$output_file"
+                done <"$pending_candidates_file"
+                rm -f "$pending_candidates_file"
                 ;;
               *)
                 rm -f "$runs_json"

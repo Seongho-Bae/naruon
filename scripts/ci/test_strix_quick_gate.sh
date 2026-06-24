@@ -630,6 +630,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper did not produce source-backed findings; leaving the PR review unchanged for rerun." "opencode failed-check fallback avoids generic review comments when helper output is not source-backed"
 	assert_file_contains "$workflow_file" "OpenCode failed-check fallback helper returned non-source-backed generic output; leaving the PR review unchanged for rerun." "opencode failed-check fallback rejects stale helper scripts that exit zero with generic no-evidence text"
 	assert_file_contains "$workflow_file" "could not derive source-backed line-specific findings after retries" "opencode failed-check fallback fails the check instead of posting URL-only request-changes reviews"
+	assert_file_contains "$workflow_file" "STRIX_PENDING_NO_JOB_GRACE_SECONDS" "opencode approval waits only for pending Strix runs that create jobs after a grace period"
+	assert_file_contains "$workflow_file" "Ignoring no-job pending Strix workflow run" "opencode approval does not block indefinitely on no-job pending Strix workflow runs"
 	assert_file_not_contains "$workflow_file" "OpenCode failed-check fallback helper exited non-zero; using inline fallback." "opencode failed-check fallback must not silently downgrade helper failures to generic inline fallback reviews"
 	assert_file_contains "$workflow_file" "Do not depend on Copilot Review, CodeRabbitAI, or any human reviewer" "opencode review format is independent of other review agents"
 	assert_file_contains "$REPO_ROOT/scripts/ci/emit_opencode_failed_check_fallback_findings.sh" "emit_strix_report_findings" "failed-check fallback emits every Strix vulnerability report as a separate finding"
