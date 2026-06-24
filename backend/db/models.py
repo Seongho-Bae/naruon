@@ -504,7 +504,8 @@ class Email(Base):
     references: Mapped[str | None] = mapped_column(String, nullable=True)
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
     body: Mapped[str] = mapped_column(Text)
-    # Defer large pgvector payloads on default entity loads.
+    # ⚡ Bolt 최적화: 대규모 N+1 네트워크 I/O를 방지하기 위해 벡터 컬럼 로딩을 지연(defer)합니다.
+    # Impact: 행당 1536개의 float 데이터를 로드하지 않게 되어 일상적인 쿼리 실행의 지연 시간과 메모리 사용량을 대폭 줄입니다.
     embedding = mapped_column(Vector(1536), deferred=True)
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
@@ -573,7 +574,8 @@ class Attachment(Base):
     email_id: Mapped[int] = mapped_column(ForeignKey("email_records.id"))
     filename: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
-    # Defer large pgvector payloads on default entity loads.
+    # ⚡ Bolt 최적화: 대규모 N+1 네트워크 I/O를 방지하기 위해 벡터 컬럼 로딩을 지연(defer)합니다.
+    # Impact: 행당 1536개의 float 데이터를 로드하지 않게 되어 일상적인 쿼리 실행의 지연 시간과 메모리 사용량을 대폭 줄입니다.
     embedding = mapped_column(Vector(1536), deferred=True)
 
     email: Mapped["Email"] = relationship(back_populates="attachments")

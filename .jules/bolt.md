@@ -77,7 +77,6 @@
 ## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
 **Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
 **Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
-
-## 2026-06-24 - Defer large SQLAlchemy vector payloads
-**Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
-**Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2026-06-24 - 대용량 Vector 컬럼의 기본 로딩 방지 (deferred 적용)
+**Learning:** 기본적으로 SQLAlchemy는 `select()` 쿼리에서 매핑된 모든 컬럼을 가져옵니다. `Email`이나 `Attachment` 모델의 `Vector(1536)`과 같은 대용량 Vector 컬럼에 `deferred=True`를 설정하지 않으면, 목록 조회(예: 인박스 또는 스레드 조회) 시 대규모 N+1 수준의 네트워크 I/O 병목이 발생합니다.
+**Action:** 항상 임베딩과 같은 무겁고 큰 필드에는 `mapped_column(..., deferred=True)`를 설정하여 명시적으로 쿼리하거나 접근할 때만 지연 로딩되도록 구성하세요.

@@ -15,8 +15,6 @@ review comments, and SHA-256 evidence remain reproducible.
   stable repository path and SHA-256 digest.
 - `asset-overviews-2026-06-21/`: rendered contact sheets and a manifest for
   quickly reviewing every current UI/UX asset without changing source paths.
-- `individual-assets-2026-06-22/`: deterministic per-image crop assets,
-  manifest rows, and exact-alias mapping for component-level reuse.
 
 ## Agent Workflow
 
@@ -30,9 +28,6 @@ review comments, and SHA-256 evidence remain reproducible.
 4. Do not duplicate long descriptions only because filenames differ. Compare
    hashes and use the alias table in `naruon-ui-ux-mapping.md` when two assets
    represent the same UI concept.
-5. Use `individual-assets-2026-06-22/manifest.tsv` when a smaller screen,
-   panel, state, or annotation crop is easier to inspect than a full source
-   image.
 
 ## Storage Rules
 
