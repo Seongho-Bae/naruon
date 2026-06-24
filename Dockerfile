@@ -24,18 +24,10 @@ EXPOSE 8000
 CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]
 
 # Stage 2: Build Frontend
-FROM node:26-slim@sha256:191ef878ecb351d68b78219593de18bd8942afd59af59f29960dc4b24805a3f1 AS frontend-builder
+FROM node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a AS frontend-builder
 WORKDIR /app
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
-ENV PNPM_VERSION=11.5.3
-ENV PNPM_INTEGRITY=sha512-esHJGTQcITo03A0Cr7cUPFwmrCbujEeC3uqCG4rGTSE0oIH9iUHa5uKbu0j1jfwrf7zuzMB8svCdIZ00Kklp7Q==
-RUN node -e "const crypto=require('node:crypto');const fs=require('node:fs');const https=require('node:https');const url='https://registry.npmjs.org/pnpm/-/pnpm-'+process.env.PNPM_VERSION+'.tgz';https.get(url,(res)=>{if(res.statusCode!==200){throw new Error('pnpm download failed: '+res.statusCode)}const chunks=[];res.on('data',(chunk)=>chunks.push(chunk));res.on('end',()=>{const data=Buffer.concat(chunks);const digest='sha512-'+crypto.createHash('sha512').update(data).digest('base64');if(digest!==process.env.PNPM_INTEGRITY){throw new Error('pnpm integrity mismatch')}fs.writeFileSync('/tmp/pnpm.tgz',data);});}).on('error',(error)=>{throw error;});"
-RUN mkdir -p /opt/pnpm \
-    && tar -xzf /tmp/pnpm.tgz -C /opt/pnpm --strip-components=1 \
-    && chmod +x /opt/pnpm/bin/pnpm.cjs /opt/pnpm/bin/pnpx.cjs \
-    && ln -sf /opt/pnpm/bin/pnpm.cjs /usr/local/bin/pnpm \
-    && ln -sf /opt/pnpm/bin/pnpx.cjs /usr/local/bin/pnpx \
-    && rm /tmp/pnpm.tgz
+RUN corepack enable pnpm
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.pnpmfile.cjs ./
 RUN pnpm install --frozen-lockfile
 COPY frontend ./

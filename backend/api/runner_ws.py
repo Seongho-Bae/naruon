@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 import uuid
 
+from runner.utils.dispatch import _dispatch_error
 from fastapi import (
     APIRouter,
     HTTPException,
@@ -22,7 +23,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from api.auth import AuthContext, build_auth_context
 from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import AsyncSessionLocal
-from runner.utils.dispatch import dispatch_error
 from services.provider_writeback_retry_service import (
     is_retryable_provider_writeback_failure,
     schedule_provider_writeback_retry_safely,
@@ -301,7 +301,7 @@ async def _dispatch_error_with_retry(
     runner_request_id: str | None,
     schedule_retry: bool,
 ) -> dict[str, Any]:
-    result = dispatch_error(error_code)
+    result = _dispatch_error(error_code)
     return await _dispatch_response_with_retry(
         organization_id=organization_id,
         workspace_id=workspace_id,

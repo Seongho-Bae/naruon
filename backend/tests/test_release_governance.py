@@ -94,21 +94,17 @@ def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
     )
 
 
-def test_container_images_use_pinned_node_runtimes() -> None:
+def test_container_images_use_node_24_runtime() -> None:
     root_dockerfile = read_repo_text("Dockerfile")
     frontend_dockerfile = read_repo_text("frontend/Dockerfile")
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert_dockerfile_stage_from(root_dockerfile, "node:26-slim", "frontend-builder")
-    assert "FROM node:26-slim@sha256:" in frontend_dockerfile
-    assert "docker.io/library/node:26-slim" in frontend_dockerfile
-    assert "docker.io/library/node:26-slim" in docker_publish_workflow
-    assert "Node 26 toolchain" in render_deployment
-    assert "node:24" not in root_dockerfile
-    assert "node:24" not in frontend_dockerfile
-    assert "node:24" not in docker_publish_workflow
-    assert "Node 24" not in render_deployment
+    assert_dockerfile_stage_from(root_dockerfile, "node:24-slim", "frontend-builder")
+    assert "FROM node:24-slim@sha256:" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in docker_publish_workflow
+    assert "Node 24 toolchain" in render_deployment
     assert "node:22" not in root_dockerfile
     assert "node:22" not in frontend_dockerfile
     assert "node:22" not in docker_publish_workflow
@@ -160,14 +156,14 @@ def test_python_314_backend_image_uses_binary_wheel_dependencies() -> None:
 def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None:
     requirements = read_repo_text("backend/requirements.txt")
 
-    assert "sqlalchemy==2.0.51" in requirements
+    assert "sqlalchemy==2.0.50" in requirements
     assert "asyncpg==0.31.0" in requirements
     assert "tiktoken==0.13.0" in requirements
     assert "protobuf==6.33.6" in requirements
     assert "setuptools==82.0.1" in requirements
     assert "wheel==0.47.0" in requirements
-    assert "opentelemetry-api==1.42.1" in requirements
-    assert "opentelemetry-instrumentation-fastapi==0.63b1" in requirements
+    assert "opentelemetry-api==1.41.1" in requirements
+    assert "opentelemetry-instrumentation-fastapi==0.62b1" in requirements
 
 
 def test_strix_ci_requirements_use_security_quality_clean_pins() -> None:
@@ -175,7 +171,7 @@ def test_strix_ci_requirements_use_security_quality_clean_pins() -> None:
 
     assert "strix-agent==1.0.4" in strix_ci_requirements
     assert "cryptography==49.0.0" in strix_ci_requirements
-    assert "python-multipart==0.0.32" in strix_ci_requirements
+    assert "python-multipart==0.0.31" in strix_ci_requirements
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:

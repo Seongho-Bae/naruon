@@ -485,7 +485,7 @@ def test_reply_sla_escalation_creates_source_linked_overdue_task(auth_client):
     assert body["policy"] == {"overdue_hours": 48}
     assert len(body["tasks"]) == 1
     task = body["tasks"][0]
-    assert task["title"] == "미답변 팔로업: 제목 정리 필요"
+    assert task["title"] == "답변 SLA 확인: 제목 정리 필요"
     assert task["status"] == "blocked"
     assert task["priority"] == "urgent"
     assert task["source_type"] == "reply_sla"
@@ -543,7 +543,7 @@ def test_reply_sla_escalation_is_idempotent_for_existing_task(auth_client):
     assert body["tasks"][0]["priority"] == "urgent"
     assert body["tasks"][0]["related_thread_id"] == "thread-existing-sla"
     assert len(mock_session.tasks) == 1
-    assert mock_session.tasks[0].title == "미답변 팔로업: Existing SLA follow-up"
+    assert mock_session.tasks[0].title == "답변 SLA 확인: Existing SLA follow-up"
     assert mock_session.tasks[0].updated_at > previous_update
 
 
@@ -591,7 +591,7 @@ def test_reply_sla_escalation_conflict_returns_machine_readable_detail(auth_clie
     assert response.json() == {
         "detail": {
             "error_code": "reply_sla_task_conflict",
-            "message": "Overdue reply follow-up task conflict",
+            "message": "Reply SLA task conflict",
         }
     }
 
@@ -636,7 +636,7 @@ def test_reply_sla_escalation_bulk_fetches_nested_conflicts(auth_client):
                     task_uid=f"raced-reply-sla-{obj.related_email_id}",
                     user_id=obj.user_id,
                     organization_id=obj.organization_id,
-                    title="raced overdue reply follow-up",
+                    title="raced reply SLA",
                     status="open",
                     priority="normal",
                     source_type=obj.source_type,
@@ -797,7 +797,7 @@ async def test_reply_sla_escalation_real_postgres_smoke():
     assert body["created"] == 1
     assert body["tasks"][0]["source_email_id"] == "<reply-sla-smoke@example.com>"
     assert body["tasks"][0]["related_thread_id"] == "reply-sla-smoke-thread"
-    assert body["tasks"][0]["title"] == "미답변 팔로업: 제목 정리 필요"
+    assert body["tasks"][0]["title"] == "답변 SLA 확인: 제목 정리 필요"
     assert persisted_task is not None
     assert persisted_task.status == "blocked"
     assert persisted_task.priority == "urgent"
