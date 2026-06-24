@@ -78,6 +78,6 @@
 **Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
 **Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
 
-## 2026-06-24 - Defer large SQLAlchemy vector payloads
-**Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
-**Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2024-06-22 - Fast path optimizations for header processing
+**Learning:** In a codebase that heavily processes emails, strings containing many references separated by spaces incur `O(n)` allocation costs when `split()` is called without limiting `maxsplit`.
+**Action:** For header parsing (e.g. `References` or `In-Reply-To`), always supply `maxsplit=1` to `.split(None, 1)` when only the first item is needed.

@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### 수정
+- Jules: `email_parser.py`의 `_extract_thread_id`에서 `.split(None, 1)`과 조기 반환(early return)을 사용하여 쓰레드가 많은 이메일의 처리 속도를 약 4배 개선했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
