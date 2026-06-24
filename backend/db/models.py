@@ -139,7 +139,6 @@ class SecurityAuditEvent(Base):
         ),
     )
 
-
 class LLMProvider(Base):
     __tablename__ = "llm_providers"
     __table_args__ = (
@@ -341,6 +340,7 @@ class PromptTemplate(Base):
         ),
     )
 
+
     id: Mapped[int] = mapped_column(primary_key=True)
     prompt_uid: Mapped[str] = mapped_column(
         String,
@@ -469,6 +469,7 @@ class AgentRunRecord(Base):
 
 class Email(Base):
     __tablename__ = "email_records"
+
     __table_args__ = (
         UniqueConstraint(
             "user_id",
@@ -483,6 +484,15 @@ class Email(Base):
             "date",
         ),
     )
+
+    @classmethod
+    def owner_filters(cls, user_id: str, organization_id: str | None):
+        organization_filter = (
+            cls.organization_id == organization_id
+            if organization_id is not None
+            else cls.organization_id.is_(None)
+        )
+        return (cls.user_id == user_id, organization_filter)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # Owner scope columns are intentionally plaintext and indexed: signed-session
