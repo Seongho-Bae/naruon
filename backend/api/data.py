@@ -12,6 +12,9 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
 from api.runner_ws import manager as runner_manager
+from api.security import (
+    _connector_scope_statement as _security_connector_scope_statement,
+)
 from core.config import settings
 from db.models import (
     Attachment,
@@ -369,20 +372,6 @@ def _email_scope_filter(auth_context: AuthContext) -> EmailScopeFilter:
         else Email.organization_id.is_(None)
     )
     return (Email.user_id == auth_context.user_id, organization_filter)
-
-
-def _connector_scope_statement(auth_context: AuthContext):
-    if auth_context.organization_id is None:
-        return None
-    return (
-        select(ConnectorSignalEvent)
-        .where(
-            ConnectorSignalEvent.organization_id == auth_context.organization_id,
-            ConnectorSignalEvent.workspace_id == auth_context.workspace_id,
-        )
-        .order_by(ConnectorSignalEvent.observed_at.desc())
-        .limit(8)
-    )
 
 
 async def _scoped_rows(db: AsyncSession, statement):
@@ -976,7 +965,7 @@ async def _get_connector_events(
     db: AsyncSession,
     auth_context: AuthContext,
 ) -> list[ConnectorSignalEvent]:
-    connector_statement = _connector_scope_statement(auth_context)
+    connector_statement = _security_connector_scope_statement(auth_context)
     if connector_statement is None:
         return []
     return await _scoped_rows(db, connector_statement)
