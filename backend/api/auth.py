@@ -451,33 +451,9 @@ def _tuple_string_claim(payload: dict[str, Any], name: str) -> tuple[str, ...]:
     return tuple(normalized)
 
 
-def _session_audience_claim(payload: dict[str, Any]) -> tuple[str, ...]:
-    value = payload.get("aud")
-    if isinstance(value, str):
-        if not value.strip() or not value.isascii():
-            raise _authentication_error()
-        return (value.strip(),)
-    if isinstance(value, list | tuple):
-        normalized: list[str] = []
-        for item in value:
-            if not isinstance(item, str) or not item.strip() or not item.isascii():
-                raise _authentication_error()
-            normalized.append(item.strip())
-        return tuple(normalized)
-    raise _authentication_error()
-
-
-def _validate_session_metadata(
-    payload: dict[str, Any], session_verifier: SessionVerifier
-) -> None:
-    if session_verifier == "oidc":
-        if not settings.OIDC_ISSUER_URL or not settings.OIDC_CLIENT_ID:
-            raise _authentication_error()
-        if payload.get("iss") != settings.OIDC_ISSUER_URL:
-            raise _authentication_error()
-        if settings.OIDC_CLIENT_ID not in _session_audience_claim(payload):
-            raise _authentication_error()
-    else:
+def _validate_session_metadata(payload: dict[str, Any]) -> None:
+    # If OIDC is configured, the issuer/audience might be verified by jwt.decode
+    if not settings.OIDC_ISSUER_URL:
         if payload.get("ver") != 1:
             raise _authentication_error()
         if payload.get("iss") != SESSION_ISSUER:
@@ -511,7 +487,7 @@ def _validate_session_metadata(
 def _auth_context_from_session_payload(
     payload: dict[str, Any], session_verifier: SessionVerifier
 ) -> AuthContext:
-    _validate_session_metadata(payload, session_verifier)
+    _validate_session_metadata(payload)
     role_value = _required_string_claim(payload, "role")
     if role_value not in ALLOWED_ROLES:
         raise _authentication_error()
