@@ -77,3 +77,6 @@
 ## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
 **Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
 **Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
+## 2026-06-21 - Test Coverage for Exception Handling in Parsing
+**Learning:** Exception handling paths (like `except ValueError` when parsing ports) must be explicitly tested. Without coverage for these paths, invalid inputs might fail silently or crash the application in unexpected ways.
+**Action:** Always identify exception handling blocks in new or modified code and construct test cases specifically designed to trigger those exceptions and assert the expected error handling behavior.
