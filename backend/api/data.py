@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 import hashlib
 from typing import Literal, NamedTuple
@@ -283,7 +282,9 @@ def _document_webdav_materialization_response(
     }
 
 
-def _document_webdav_runner_command(document: Document, intent_result: dict) -> dict[str, object]:
+def _document_webdav_runner_command(
+    document: Document, intent_result: dict
+) -> dict[str, object]:
     return {
         "action": "write_webdav",
         "account": intent_result["source_id"],
@@ -667,6 +668,103 @@ def _embedding_collections(
     ]
 
 
+def _check_thread_id_integrity(
+    email_count: int, missing_thread_count: int
+) -> DataQualityCheck:
+    return DataQualityCheck(
+        check_key="thread_id_integrity",
+        display_name="Thread id integrity",
+        status_code=_quality_status(email_count, missing_thread_count),
+        issue_count=missing_thread_count,
+        total_count=email_count,
+        evidence_source="emails.thread_id",
+        detail_text=_quality_detail(
+            total_count=email_count,
+            issue_count=missing_thread_count,
+            ready_text="All scoped emails have canonical thread ids.",
+            empty_text="No scoped emails are available yet.",
+            issue_text="Some scoped emails need canonical thread ids.",
+        ),
+        provider_write_executed=False,
+    )
+
+
+def _check_dedupe_fingerprint(
+    email_count: int, missing_fingerprint_count: int
+) -> DataQualityCheck:
+    return DataQualityCheck(
+        check_key="dedupe_fingerprint",
+        display_name="Dedupe fingerprint",
+        status_code=_quality_status(email_count, missing_fingerprint_count),
+        issue_count=missing_fingerprint_count,
+        total_count=email_count,
+        evidence_source="emails.fingerprint",
+        detail_text=_quality_detail(
+            total_count=email_count,
+            issue_count=missing_fingerprint_count,
+            ready_text="All scoped emails have duplicate-detection fingerprints.",
+            empty_text="No scoped emails are available yet.",
+            issue_text="Some scoped emails need duplicate-detection fingerprints.",
+        ),
+        provider_write_executed=False,
+    )
+
+
+def _check_attachment_content(
+    attachment_count: int, blank_attachment_count: int
+) -> DataQualityCheck:
+    return DataQualityCheck(
+        check_key="attachment_content",
+        display_name="Attachment content",
+        status_code=_quality_status(attachment_count, blank_attachment_count),
+        issue_count=blank_attachment_count,
+        total_count=attachment_count,
+        evidence_source="attachments.content",
+        detail_text=_quality_detail(
+            total_count=attachment_count,
+            issue_count=blank_attachment_count,
+            ready_text="All scoped attachments have extracted content.",
+            empty_text="No scoped attachments are available yet.",
+            issue_text="Some scoped attachments need extracted content.",
+        ),
+        provider_write_executed=False,
+    )
+
+
+def _check_source_registry_coverage(source_count: int) -> DataQualityCheck:
+    return DataQualityCheck(
+        check_key="source_registry",
+        display_name="Source registry coverage",
+        status_code="pass" if source_count > 0 else "pending",
+        issue_count=0 if source_count > 0 else 1,
+        total_count=max(1, source_count),
+        evidence_source="webdav_accounts, project_folders",
+        detail_text=(
+            "Customer-owned repositories are visible."
+            if source_count > 0
+            else "No customer-owned repositories are visible yet."
+        ),
+        provider_write_executed=False,
+    )
+
+
+def _check_connector_signal_coverage(connector_event_count: int) -> DataQualityCheck:
+    return DataQualityCheck(
+        check_key="connector_signal",
+        display_name="Connector signal coverage",
+        status_code="pass" if connector_event_count > 0 else "pending",
+        issue_count=0 if connector_event_count > 0 else 1,
+        total_count=max(1, connector_event_count),
+        evidence_source="connector_signal_events",
+        detail_text=(
+            "Connector evidence is visible for this workspace."
+            if connector_event_count > 0
+            else "Connector jobs have not emitted workspace evidence yet."
+        ),
+        provider_write_executed=False,
+    )
+
+
 def _quality_checks(
     *,
     email_count: int,
@@ -678,82 +776,20 @@ def _quality_checks(
     connector_event_count: int,
 ) -> list[DataQualityCheck]:
     return [
-        DataQualityCheck(
-            check_key="thread_id_integrity",
-            display_name="Thread id integrity",
-            status_code=_quality_status(email_count, missing_thread_count),
-            issue_count=missing_thread_count,
-            total_count=email_count,
-            evidence_source="emails.thread_id",
-            detail_text=_quality_detail(
-                total_count=email_count,
-                issue_count=missing_thread_count,
-                ready_text="All scoped emails have canonical thread ids.",
-                empty_text="No scoped emails are available yet.",
-                issue_text="Some scoped emails need canonical thread ids.",
-            ),
-            provider_write_executed=False,
+        _check_thread_id_integrity(
+            email_count=email_count,
+            missing_thread_count=missing_thread_count,
         ),
-        DataQualityCheck(
-            check_key="dedupe_fingerprint",
-            display_name="Dedupe fingerprint",
-            status_code=_quality_status(email_count, missing_fingerprint_count),
-            issue_count=missing_fingerprint_count,
-            total_count=email_count,
-            evidence_source="emails.fingerprint",
-            detail_text=_quality_detail(
-                total_count=email_count,
-                issue_count=missing_fingerprint_count,
-                ready_text="All scoped emails have duplicate-detection fingerprints.",
-                empty_text="No scoped emails are available yet.",
-                issue_text="Some scoped emails need duplicate-detection fingerprints.",
-            ),
-            provider_write_executed=False,
+        _check_dedupe_fingerprint(
+            email_count=email_count,
+            missing_fingerprint_count=missing_fingerprint_count,
         ),
-        DataQualityCheck(
-            check_key="attachment_content",
-            display_name="Attachment content",
-            status_code=_quality_status(attachment_count, blank_attachment_count),
-            issue_count=blank_attachment_count,
-            total_count=attachment_count,
-            evidence_source="attachments.content",
-            detail_text=_quality_detail(
-                total_count=attachment_count,
-                issue_count=blank_attachment_count,
-                ready_text="All scoped attachments have extracted content.",
-                empty_text="No scoped attachments are available yet.",
-                issue_text="Some scoped attachments need extracted content.",
-            ),
-            provider_write_executed=False,
+        _check_attachment_content(
+            attachment_count=attachment_count,
+            blank_attachment_count=blank_attachment_count,
         ),
-        DataQualityCheck(
-            check_key="source_registry",
-            display_name="Source registry coverage",
-            status_code="pass" if source_count > 0 else "pending",
-            issue_count=0 if source_count > 0 else 1,
-            total_count=max(1, source_count),
-            evidence_source="webdav_accounts, project_folders",
-            detail_text=(
-                "Customer-owned repositories are visible."
-                if source_count > 0
-                else "No customer-owned repositories are visible yet."
-            ),
-            provider_write_executed=False,
-        ),
-        DataQualityCheck(
-            check_key="connector_signal",
-            display_name="Connector signal coverage",
-            status_code="pass" if connector_event_count > 0 else "pending",
-            issue_count=0 if connector_event_count > 0 else 1,
-            total_count=max(1, connector_event_count),
-            evidence_source="connector_signal_events",
-            detail_text=(
-                "Connector evidence is visible for this workspace."
-                if connector_event_count > 0
-                else "Connector jobs have not emitted workspace evidence yet."
-            ),
-            provider_write_executed=False,
-        ),
+        _check_source_registry_coverage(source_count),
+        _check_connector_signal_coverage(connector_event_count),
     ]
 
 
@@ -780,7 +816,9 @@ async def upload_data_document(
     )
 
 
-@router.post("/documents/{document_id}/reparse", response_model=DataDocumentActionResponse)
+@router.post(
+    "/documents/{document_id}/reparse", response_model=DataDocumentActionResponse
+)
 async def reparse_data_document(
     document_id: str,
     auth_context: AuthContext = Depends(get_auth_context),
@@ -866,7 +904,9 @@ async def create_document_webdav_materialization_intent(
             str(source_result.get("error_code") or ""),
             422,
         )
-        raise HTTPException(status_code=status_code, detail=source_result.get("message"))
+        raise HTTPException(
+            status_code=status_code, detail=source_result.get("message")
+        )
 
     result = _document_webdav_materialization_response(document, source_result)
     if request.execute_provider:
