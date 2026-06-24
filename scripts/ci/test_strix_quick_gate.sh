@@ -2967,7 +2967,7 @@ EOS
 		echo "Penetration test failed: unmapped critical finding with arbitrary backticked file mention"
 		exit 1
 		;;
-	pr-critical-unmapped)
+	pr-critical-unmapped | pr-critical-unmapped-pr-scope)
 		mkdir -p "$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities"
 		cat >"$STRIX_REPORTS_DIR/fake-pr-unmapped/vulnerabilities/vuln-0001.md" <<'EOS'
 Severity: CRITICAL
@@ -3511,6 +3511,9 @@ EOS
 		touch "$repo_root_dir/docker-compose.yml"
 		touch "$repo_root_dir/render.yaml"
 		echo '0.0.0' >"$repo_root_dir/VERSION"
+	elif [ "$scenario" = "pr-critical-unmapped-pr-scope" ]; then
+		mkdir -p "$repo_root_dir/.github/workflows"
+		echo 'name: OpenCode Review' >"$repo_root_dir/.github/workflows/opencode-review.yml"
 	elif [ "$scenario" = "pr-large-scope-full-set" ]; then
 		mkdir -p "$repo_root_dir/backend/large-scope"
 		local large_scope_index
@@ -8313,6 +8316,30 @@ run_gate_case "pr-critical-unmapped" \
 	"0" \
 	"pull_request" \
 	"sync-module-system/smart-crawling-biz/src/main/java/org/empasy/sync/modules/system/controller/SysPositionController.java"
+
+run_gate_case "pr-critical-unmapped-pr-scope" \
+	"openai/gpt-4o-mini" \
+	"" \
+	"0" \
+	"Strix emitted PR-scope findings without mappable source locations; treating them as diagnostic because no changed-file intersection can be established." \
+	"1" \
+	"openai/gpt-4o-mini" \
+	"https://example.invalid" \
+	"vertex_ai" \
+	"__DEFAULT__" \
+	"" \
+	"0" \
+	"CRITICAL" \
+	"0" \
+	"__PR_SCOPE__" \
+	"" \
+	"1200" \
+	"0" \
+	"pull_request" \
+	".github/workflows/opencode-review.yml" \
+	"" \
+	"" \
+	"0"
 
 run_gate_case "pr-critical-unmapped-narrative-target" \
 	"openai/gpt-4o-mini" \
