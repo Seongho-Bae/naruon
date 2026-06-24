@@ -94,21 +94,17 @@ def test_container_images_cover_all_oci_predefined_image_annotations() -> None:
     )
 
 
-def test_container_images_use_pinned_node_runtimes() -> None:
+def test_container_images_use_node_24_runtime() -> None:
     root_dockerfile = read_repo_text("Dockerfile")
     frontend_dockerfile = read_repo_text("frontend/Dockerfile")
     docker_publish_workflow = read_repo_text(".github/workflows/docker-publish.yml")
     render_deployment = read_repo_text("docs/operations/render-deployment.md")
 
-    assert_dockerfile_stage_from(root_dockerfile, "node:26-slim", "frontend-builder")
-    assert "FROM node:26-slim@sha256:" in frontend_dockerfile
-    assert "docker.io/library/node:26-slim" in frontend_dockerfile
-    assert "docker.io/library/node:26-slim" in docker_publish_workflow
-    assert "Node 26 toolchain" in render_deployment
-    assert "node:24" not in root_dockerfile
-    assert "node:24" not in frontend_dockerfile
-    assert "node:24" not in docker_publish_workflow
-    assert "Node 24" not in render_deployment
+    assert_dockerfile_stage_from(root_dockerfile, "node:24-slim", "frontend-builder")
+    assert "FROM node:24-slim@sha256:" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in frontend_dockerfile
+    assert "docker.io/library/node:24-slim" in docker_publish_workflow
+    assert "Node 24 toolchain" in render_deployment
     assert "node:22" not in root_dockerfile
     assert "node:22" not in frontend_dockerfile
     assert "node:22" not in docker_publish_workflow
