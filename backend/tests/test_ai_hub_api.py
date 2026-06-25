@@ -676,6 +676,7 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
         )
     )
     app.dependency_overrides[get_db] = override_real_db
+    app.dependency_overrides[get_readonly_db] = override_real_db
     try:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
