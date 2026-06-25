@@ -1484,6 +1484,7 @@ jobs:
           set -euo pipefail
           echo "::group::OpenCode Review Approval Gate"
           echo "PR=#${PR_NUMBER} head_sha=${HEAD_SHA} run_id=${RUN_ID} run_attempt=${RUN_ATTEMPT}"
+          OPENCODE_EXIT_CODE=0
           approval_token_source="configured"
           if [ -n "${OPENCODE_APP_TOKEN:-}" ]; then
             export GH_TOKEN="$OPENCODE_APP_TOKEN"
@@ -1693,6 +1694,7 @@ jobs:
             local event="$1" body="$2"
             local gh_error_file
             local review_payload_file
+            [ "$event" = "REQUEST_CHANGES" ] && OPENCODE_EXIT_CODE=1 || true
             body="$(ensure_review_body_has_change_graph "$body")"
             gh_error_file="$(mktemp)"
             review_payload_file="$(mktemp)"
@@ -1861,6 +1863,7 @@ jobs:
             local event="$1" body="$2" review_payload_file="$3" fallback_body_file="$4"
             local gh_error_file
             local review_payload_with_graph_file
+            [ "$event" = "REQUEST_CHANGES" ] && OPENCODE_EXIT_CODE=1 || true
             body="$(ensure_review_body_has_change_graph "$body")"
             gh_error_file="$(mktemp)"
             review_payload_with_graph_file="$(mktemp)"
@@ -3045,7 +3048,7 @@ jobs:
           if [ "$live_head_sha" != "$HEAD_SHA" ]; then
             echo "stale OpenCode run: event head=${HEAD_SHA}, live head=${live_head_sha}; skipping review side effects."
             echo "::endgroup::"
-            exit 0
+            exit "$OPENCODE_EXIT_CODE"
           fi
 
           opencode_review_outcome="${OPENCODE_PRIMARY_OUTCOME:-unknown}"
@@ -3077,7 +3080,7 @@ jobs:
 
               if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
 
               if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
@@ -3090,7 +3093,7 @@ jobs:
                 exit 1
               fi
               echo "::endgroup::"
-              exit 0
+              exit "$OPENCODE_EXIT_CODE"
             fi
 
             pending_checks_file="$(mktemp)"
@@ -3125,7 +3128,7 @@ jobs:
               fi
             fi
             echo "::endgroup::"
-            exit 0
+            exit "$OPENCODE_EXIT_CODE"
           fi
 
           selected_review_output_file=""
@@ -3207,14 +3210,14 @@ jobs:
           if [ "$gate_result" = "MISSING_SENTINEL" ] && [ -z "$comment_body" ]; then
             request_changes_for_gate_failure "No current-run OpenCode sentinel comment was found."
             echo "::endgroup::"
-            exit 0
+            exit "$OPENCODE_EXIT_CODE"
           fi
 
           case "$gate_result" in
             APPROVE)
               if request_changes_for_merge_conflict_if_present; then
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               pending_checks_file="$(mktemp)"
               set +e
@@ -3242,14 +3245,14 @@ jobs:
                   "- Workflow attempt: ${RUN_ATTEMPT}")"
                 create_pull_review "REQUEST_CHANGES" "$body"
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               if [ "$pending_wait_status" -ne 0 ]; then
                 failed_check_review_body_file="$(mktemp)"
                 build_pending_check_body "$pending_checks_file" "$failed_check_review_body_file"
                 create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               failed_checks_file="$(mktemp)"
               if ! collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file"; then
@@ -3273,7 +3276,7 @@ jobs:
                   "- Workflow attempt: ${RUN_ATTEMPT}")"
                 create_pull_review "REQUEST_CHANGES" "$body"
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               if [ -s "$failed_checks_file" ]; then
                 failed_check_evidence_file="$(mktemp)"
@@ -3285,16 +3288,16 @@ jobs:
                 fi
                 if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   echo "::endgroup::"
-                  exit 0
+                  exit "$OPENCODE_EXIT_CODE"
                 fi
                 if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
                   create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
                   echo "::endgroup::"
-                  exit 0
+                  exit "$OPENCODE_EXIT_CODE"
                 elif build_failed_check_fallback_body "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   create_pull_review "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")"
                   echo "::endgroup::"
-                  exit 0
+                  exit "$OPENCODE_EXIT_CODE"
                 else
                   echo "::error::Failed GitHub Checks were present, but OpenCode could not derive source-backed line-specific findings after retries. Leaving the PR review unchanged so the current-head review can be rerun with better evidence."
                   echo "::endgroup::"
@@ -3307,13 +3310,13 @@ jobs:
                 build_human_thread_lookup_failure_body "$human_thread_review_body_file"
                 create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               if [ -s "$unresolved_human_threads_file" ]; then
                 build_unresolved_human_threads_body "$unresolved_human_threads_file" "$human_thread_review_body_file"
                 create_pull_review "REQUEST_CHANGES" "$(cat "$human_thread_review_body_file")"
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
               summary="$(jq -r '.summary' "$control_json")"
               reason="$(jq -r '.reason' "$control_json")"
@@ -3345,7 +3348,7 @@ jobs:
               if ! collect_github_checks_with_retry collect_failed_github_checks "$failed_checks_file"; then
                 request_changes_for_gate_failure "GitHub Checks statusCheckRollup could not be read before validating OpenCode REQUEST_CHANGES against current-head failed checks."
                 echo "::endgroup::"
-                exit 0
+                exit "$OPENCODE_EXIT_CODE"
               fi
 
               if [ -s "$failed_checks_file" ]; then
@@ -3355,7 +3358,7 @@ jobs:
                 fi
                 if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   echo "::endgroup::"
-                  exit 0
+                  exit "$OPENCODE_EXIT_CODE"
                 fi
                 if scripts/ci/validate_opencode_failed_check_review.sh "$control_json" "$failed_checks_file" "$failed_check_evidence_file"; then
                   publish_request_changes_from_control "$control_json"
@@ -3390,7 +3393,7 @@ jobs:
                 fi
                 if comment_for_billing_lock_if_present "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file"; then
                   echo "::endgroup::"
-                  exit 0
+                  exit "$OPENCODE_EXIT_CODE"
                 fi
                 if run_failed_check_diagnosis "$failed_checks_file" "$failed_check_evidence_file" "$failed_check_review_body_file" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"; then
                   create_pull_review_with_payload "REQUEST_CHANGES" "$(cat "$failed_check_review_body_file")" "$failed_check_review_payload_file" "$failed_check_inline_failure_body_file"
@@ -3439,3 +3442,4 @@ jobs:
               ;;
           esac
           echo "::endgroup::"
+          exit "$OPENCODE_EXIT_CODE"

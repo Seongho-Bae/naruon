@@ -152,6 +152,7 @@ run_gate() {
   local temp_dir="$2"
   mkdir -p "$temp_dir/bin"
   make_fake_gh "$temp_dir/bin"
+  local exit_code=0
   GH_LOG="$temp_dir/gh.log" \
   GH_SCENARIO="$scenario" \
   PATH="$temp_dir/bin:$PATH" \
@@ -161,7 +162,8 @@ run_gate() {
   TARGET_PR_NUMBER="42" \
   DIRECT_PR_NUMBER="" \
   WORKFLOW_RUN_PR_NUMBER="" \
-    bash "$script" > "$temp_dir/output.txt"
+    bash "$script" > "$temp_dir/output.txt" || exit_code=$?
+  printf '%d\n' "$exit_code" > "$temp_dir/exit_code.txt"
 }
 
 assert_in_file() {
@@ -181,6 +183,30 @@ assert_not_in_file() {
   fi
 }
 
+assert_exit_nonzero() {
+  local temp_dir="$1"
+  local code
+  code="$(<"$temp_dir/exit_code.txt")"
+  if [ "$code" -eq 0 ]; then
+    printf 'expected non-zero exit code but got 0 in %s\n' "$temp_dir" >&2
+    cat "$temp_dir/output.txt" >&2 || true
+    cat "$temp_dir/gh.log" >&2 || true
+    return 1
+  fi
+}
+
+assert_exit_zero() {
+  local temp_dir="$1"
+  local code
+  code="$(<"$temp_dir/exit_code.txt")"
+  if [ "$code" -ne 0 ]; then
+    printf 'expected exit code 0 but got %d in %s\n' "$code" "$temp_dir" >&2
+    cat "$temp_dir/output.txt" >&2 || true
+    cat "$temp_dir/gh.log" >&2 || true
+    return 1
+  fi
+}
+
 assert_no_comment_or_merge_for_pending_checks() {
   local temp_dir
   temp_dir="$(mktemp -d)"
@@ -189,6 +215,7 @@ assert_no_comment_or_merge_for_pending_checks() {
   assert_in_file 'Waiting for 1 required check' "$temp_dir/output.txt"
   assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_startup_failure_creates_marker_comment() {
@@ -199,6 +226,7 @@ assert_startup_failure_creates_marker_comment() {
   assert_in_file 'Required check `Application CI` is STARTUP_FAILURE' "$temp_dir/gh.log"
   assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_failed_checks_create_marker_comment() {
@@ -210,6 +238,7 @@ assert_failed_checks_create_marker_comment() {
   assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
   assert_in_file 'Application CI' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_existing_marker_comment_is_patched() {
@@ -219,6 +248,7 @@ assert_existing_marker_comment_is_patched() {
 
   assert_in_file 'api --method PATCH repos/owner/repo/issues/comments/555' "$temp_dir/gh.log"
   assert_not_in_file 'repos/owner/repo/issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_coderabbit_pending_waits_without_hard_comment() {
@@ -229,6 +259,7 @@ assert_coderabbit_pending_waits_without_hard_comment() {
   assert_in_file 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
   assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_missing_coderabbit_waits_without_hard_comment() {
@@ -239,6 +270,7 @@ assert_missing_coderabbit_waits_without_hard_comment() {
   assert_in_file 'Waiting for current-head CodeRabbit evidence' "$temp_dir/output.txt"
   assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_coderabbit_failure_creates_marker_comment() {
@@ -249,6 +281,7 @@ assert_coderabbit_failure_creates_marker_comment() {
   assert_in_file 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
   assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_coderabbit_neutral_without_skip_evidence_blocks() {
@@ -258,6 +291,7 @@ assert_coderabbit_neutral_without_skip_evidence_blocks() {
 
   assert_in_file 'Current-head CodeRabbit check has a blocking conclusion' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_coderabbit_review_skipped_neutral_is_ready_without_merge() {
@@ -268,6 +302,7 @@ assert_coderabbit_review_skipped_neutral_is_ready_without_merge() {
   assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
   assert_not_in_file 'issues/42/comments -f body' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_coderabbit_blocking_issue_comment_blocks() {
@@ -277,6 +312,7 @@ assert_coderabbit_blocking_issue_comment_blocks() {
 
   assert_in_file 'Current-head CodeRabbit issue comment has blocking warning/failure evidence' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_coderabbit_stale_issue_comment_does_not_block() {
@@ -287,6 +323,7 @@ assert_coderabbit_stale_issue_comment_does_not_block() {
   assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
   assert_not_in_file 'Current-head CodeRabbit issue comment' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_coderabbit_current_review_comment_blocks() {
@@ -296,6 +333,7 @@ assert_coderabbit_current_review_comment_blocks() {
 
   assert_in_file 'Current-head CodeRabbit review comment has blocking warning/failure evidence' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_coderabbit_stale_review_comment_does_not_block() {
@@ -306,6 +344,7 @@ assert_coderabbit_stale_review_comment_does_not_block() {
   assert_in_file 'PR governance metadata gate is ready' "$temp_dir/output.txt"
   assert_not_in_file 'Current-head CodeRabbit review comment' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_changes_requested_creates_marker_comment() {
@@ -316,6 +355,7 @@ assert_changes_requested_creates_marker_comment() {
   assert_in_file 'Review decision is CHANGES_REQUESTED' "$temp_dir/gh.log"
   assert_in_file '<!-- pr-governance:metadata-gate -->' "$temp_dir/gh.log"
   assert_not_in_file '^pr merge' "$temp_dir/gh.log"
+  assert_exit_nonzero "$temp_dir"
 }
 
 assert_passing_gate_is_metadata_only_without_merge() {
@@ -328,6 +368,7 @@ assert_passing_gate_is_metadata_only_without_merge() {
   assert_not_in_file 'checkout' "$temp_dir/gh.log"
   assert_not_in_file 'dismiss' "$temp_dir/gh.log"
   assert_not_in_file 'continue-on-error' "$temp_dir/gh.log"
+  assert_exit_zero "$temp_dir"
 }
 
 assert_no_comment_or_merge_for_pending_checks
