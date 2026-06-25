@@ -1,4 +1,6 @@
 ## [Unreleased]
+### UI/UX 개선
+- `CalendarLayout`의 일정 쓰기(Writeback) 액션 버튼들에 로딩 스피너(`Loader2`)를 추가하여 비동기 작업 시 즉각적인 시각적 피드백을 제공합니다.
 
 ## [0.14.4] - 2026-06-18
 
