@@ -85,7 +85,3 @@
 ## 2024-06-25 - [Optimize Email Grouping]
 **Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
 **Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
-
-## 2024-06-25 - [Optimize Email Grouping]
-**Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
-**Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
