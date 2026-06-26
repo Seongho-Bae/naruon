@@ -376,6 +376,16 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
     if settings.OIDC_ISSUER_URL:
         if jwks_client is None:
             raise _authentication_error()
+
+        # Verify algorithm before trying to decode
+        try:
+            header = jwt.get_unverified_header(token)
+        except jwt.PyJWTError:
+            raise _authentication_error() from None
+
+        if header.get("alg") != "RS256":
+            raise _authentication_error()
+
         try:
             payload = _decode_cached_oidc_session_payload(token)
             _reject_signed_session_admin_payload(payload)
