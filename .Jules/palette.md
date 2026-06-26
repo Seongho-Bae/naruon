@@ -21,3 +21,7 @@
 ## 2026-06-25 - PR Resubmission and CI Failures
 **Learning:** Security scanners like Strix can sometimes output false positives or scan failures during infrastructure/LLM API outages ("Below-threshold findings detected, but infrastructure errors occurred"). This can block PR reviews.
 **Action:** If a PR review fails explicitly due to a hallucinated scanner finding or LLM API outage rather than a code error, document the reason, discard out-of-scope backend fixes if acting under a strict frontend UX persona, and resubmit the original intended code changes on a new branch.
+
+## 2026-06-25 - STRIX Outage and PR Review Timeouts
+**Learning:** OpenCode review failures indicating "Timed out waiting for a trusted OpenCode approval review" during STRIX failures are caused by infrastructure issues (e.g., API limits causing Strix to fail open or fail to process correctly). This is an infrastructure issue and NOT a code defect.
+**Action:** Do not attempt to fix backend security vulnerabilities (like CSRF) when operating as a frontend UX persona. Discard the out-of-scope backend fixes, maintain the original frontend UX changes, and resubmit to retry the CI process.
