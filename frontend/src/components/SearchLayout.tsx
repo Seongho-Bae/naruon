@@ -188,7 +188,7 @@ function SenderDagPanel({
           </div>
         ) : null}
         {captureStatus === "error" ? (
-          <p className="mt-2 text-xs font-bold text-destructive">
+          <p role="alert" className="mt-2 text-xs font-bold text-destructive">
             발신자 관계 캡처에 실패했습니다.
           </p>
         ) : null}
