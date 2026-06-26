@@ -17,3 +17,7 @@
 ## 2026-06-25 - Add loading state to CalendarLayout writeback intent buttons
 **Learning:** Async calendar writeback operations in `CalendarLayout.tsx` were missing clear visual loading indicators, leaving the user unsure if the action was being processed. Adding a spinning `Loader2` icon to the buttons during the `isWritebackLoading` state provides immediate feedback, aligning with a11y `aria-busy` states already present.
 **Action:** Always complement `aria-busy={true}` with a visual loading indicator (like `Loader2 animate-spin`) on action buttons for better immediate user feedback during async operations.
+
+## 2026-06-25 - PR Resubmission and CI Failures
+**Learning:** Security scanners like Strix can sometimes output false positives or scan failures during infrastructure/LLM API outages ("Below-threshold findings detected, but infrastructure errors occurred"). This can block PR reviews.
+**Action:** If a PR review fails explicitly due to a hallucinated scanner finding or LLM API outage rather than a code error, document the reason, discard out-of-scope backend fixes if acting under a strict frontend UX persona, and resubmit the original intended code changes on a new branch.
