@@ -380,8 +380,10 @@ def _verify_signed_session_token(token: str) -> tuple[dict[str, Any], SessionVer
             payload = _decode_cached_oidc_session_payload(token)
             _reject_signed_session_admin_payload(payload)
             return payload, "oidc"
-        except Exception:
-            raise _authentication_error() from None
+        except Exception as e:
+            logger.error(f"OIDC verification failed: {e}")
+            raise _authentication_error() from e
+
 
     try:
         header = jwt.get_unverified_header(token)
