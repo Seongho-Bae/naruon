@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -534,22 +534,12 @@ async def import_email_files(
     uploads: list[EmailImportUpload] = []
     for upload in files:
         normalized_filename = upload.filename.lower().strip() if upload.filename else ""
-        if not upload.filename:
+        if not upload.filename or not (
+            normalized_filename.endswith(".eml")
+            or normalized_filename.endswith(".zip")
+            or normalized_filename.endswith(".mbox")
+        ):
             raise HTTPException(status_code=400, detail="invalid_file_type")
-
-        parts = normalized_filename.split(".")
-        if len(parts) < 2:
-            raise HTTPException(status_code=400, detail="invalid_file_type")
-
-        valid_extensions = {".eml", ".zip", ".mbox"}
-        ext = f".{parts[-1]}"
-        if ext not in valid_extensions:
-            raise HTTPException(status_code=400, detail="invalid_file_type")
-
-        dangerous_exts = {".exe", ".sh", ".bat", ".cmd", ".vbs", ".ps1", ".js", ".scr"}
-        for part in parts[1:]:
-            if f".{part}" in dangerous_exts:
-                raise HTTPException(status_code=400, detail="invalid_file_type")
 
         content = await upload.read(MAX_IMPORT_UPLOAD_BYTES + 1)
         if len(content) > MAX_IMPORT_UPLOAD_BYTES:
@@ -662,13 +652,6 @@ class SendEmailRequest(BaseModel):
     body: str
     in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None
-
-    @field_validator("subject", "in_reply_to", "references", "to", mode="before")
-    @classmethod
-    def no_crlf_str(cls, v):
-        if isinstance(v, str) and (chr(10) in v or chr(13) in v):
-            raise ValueError("CR/LF characters are not allowed in email headers")
-        return v
 
 
 @router.post("/send")
