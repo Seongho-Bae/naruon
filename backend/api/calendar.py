@@ -20,7 +20,7 @@ from services.calendar_service import (
     validate_calendar_todo_text,
 )
 from services.calendar_sync import CalendarTask, generate_ics_from_task
-from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
+from services.exceptions import CalendarServiceError, UnsafeCalendarActionItemError
 
 router = APIRouter(prefix="/api/calendar")
 logger = logging.getLogger(__name__)
@@ -316,7 +316,7 @@ async def sync_todos(
         safe_todos = [validate_calendar_todo_text(todo) for todo in request.todos]
         results = await create_calendar_events_batch(safe_todos, user_token)
         return {"synced": len(results), "events": list(results)}
-    except UnsafeCalendarTodoError:
+    except UnsafeCalendarActionItemError:
         raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
     except CalendarServiceError as e:
         logger.warning(

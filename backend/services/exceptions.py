@@ -40,7 +40,7 @@ class CalendarServiceError(Exception):
     pass
 
 
-class UnsafeCalendarTodoError(CalendarServiceError):
+class UnsafeCalendarActionItemError(CalendarServiceError):
     """Raised when calendar todo text is unsafe for writeback."""
 
     pass
