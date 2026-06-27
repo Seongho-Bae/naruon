@@ -55,3 +55,6 @@
 ## 2026-06-21 - Mocking new Lucide icons in tests
 **Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
 **Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.
+## 2026-06-27 - 검색 입력 필드 크로스 브라우저 호환성 개선
+**Learning:** `<input type="search">`는 크로스 브라우저(특히 Safari/WebKit 계열)에서 강제적인 기본 스타일(예: 삭제 버튼)이 적용되어 디자인 시스템과의 일관성을 깨뜨리고, 스타일 덮어쓰기(`[&::-webkit-search-cancel-button]:hidden`)가 항상 안정적으로 동작하지 않습니다.
+**Action:** 일관된 검색 입력 UX를 보장하기 위해 `<input type="text" inputMode="search" role="searchbox">` 조합을 사용하여 브라우저 기본 스타일 간섭을 방지하고 커스텀 디자인과 스크린 리더 호환성을 모두 유지합니다.
