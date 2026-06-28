@@ -364,7 +364,7 @@ export function DashboardLayout({
             <input
               id="global-search-input"
               ref={globalSearchInputRef}
-              className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground "
+              className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground"
               inputMode="search"
               role="searchbox"
               value={globalSearchQuery}
