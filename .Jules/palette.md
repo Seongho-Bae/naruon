@@ -13,6 +13,6 @@
 ## 2024-05-24 - Ensure aria-busy accompanies disabled for async UI buttons
 **Learning:** Action buttons triggering asynchronous network operations that already implement `disabled={loading}` and visual spinners MUST also include an `aria-busy={loading}` attribute to correctly communicate the active loading state to screen reader users without requiring focus shifts.
 **Action:** When adding or auditing buttons for async operations like '동기화 중', '전송 중', or '검색 중', ensure `aria-busy={loadingVariable}` is explicitly added alongside existing spinner and disabled states.
-## 2024-06-27 - Apply aria-busy to Prompt Studio Action Buttons
+## 2026-06-27 - Apply aria-busy to Prompt Studio Action Buttons
 **Learning:** Adding the `aria-busy` attribute to buttons that trigger asynchronous operations (like prompt generation or saving) greatly improves the experience for users relying on assistive technologies by actively signaling processing state.
 **Action:** Always include `aria-busy={isLoading}` on components that initiate asynchronous tasks.
