@@ -253,7 +253,7 @@ export function EmailList({
           ) : error ? (
             <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
           ) : emails.length === 0 ? (
-            <div role="status" aria-live="polite" className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 p-8 text-center text-sm text-muted-foreground">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 p-8 text-center text-sm text-muted-foreground">
               <p className="font-bold text-foreground">{searchQuery ? '검색 결과가 없습니다' : folderCopy.emptyTitle}</p>
               <p className="mt-1 max-w-[200px] text-xs leading-5">{searchQuery ? '다른 검색어를 입력하거나 검색을 초기화해보세요.' : folderCopy.emptyBody}</p>
               {searchQuery && (
