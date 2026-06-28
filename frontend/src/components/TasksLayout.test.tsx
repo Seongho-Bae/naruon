@@ -148,6 +148,10 @@ describe("TasksLayout", () => {
         )?.set;
         nativeInputValueSetter?.call(searchInput, "Beta");
         searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+        // Immediately after typing, before deferred value updates, both tasks
+        // should still be visible (deferred filter has not been applied yet)
+        expect(container.textContent).toContain("Alpha Task");
+        expect(container.textContent).toContain("Beta Task");
       }
     });
 

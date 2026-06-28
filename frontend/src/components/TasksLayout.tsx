@@ -256,14 +256,14 @@ export function TasksLayout() {
   };
 
   const filteredTicketTasks = useMemo(() => {
-    const normalizedQuery = deferredTaskSearch.trim().toLowerCase();
+    const normalizedQuery = (taskSearch === '' ? taskSearch : deferredTaskSearch).trim().toLowerCase();
     return ticketTasks.filter((task) => {
       if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
       if (!normalizedQuery) return true;
       const searchable = `${safeTaskTitle(task.title)} ${getTaskSourceLabel(task.source_type)} ${taskStatusLabels[task.status]} ${taskPriorityLabels[task.priority]}`.toLowerCase();
       return searchable.includes(normalizedQuery);
     });
-  }, [priorityFilter, deferredTaskSearch, ticketTasks]);
+  }, [priorityFilter, taskSearch, deferredTaskSearch, ticketTasks]);
 
   const liveBoardCounts = useMemo(() => {
     return filteredTicketTasks.reduce<Record<TicketTask['status'], number>>(
