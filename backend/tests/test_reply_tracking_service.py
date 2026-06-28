@@ -196,10 +196,6 @@ def test_detect_reply_tracking_empty_body():
 
 
 def test_thread_reply_candidate_is_chronological_optimization():
-    import datetime
-
-    dt = datetime.datetime.now(datetime.timezone.utc)
-
     older_sent = make_email(
         "sent_older",
         sender="Me <me@example.com>",
