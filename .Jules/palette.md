@@ -33,3 +33,7 @@
 ## 2026-06-25 - Prevent DOMPurify hallucinations
 **Learning:** Security scanners sometimes mistakenly flag simple dictionary lookups (e.g. mapping string keys to predefined localized strings) or hardcoded static state string renderings as XSS vulnerabilities, demanding the addition of `DOMPurify`.
 **Action:** When a scanner incorrectly flags a React component for XSS in an area rendering strictly static dictionary lookups (`getProtocolLabel(source.protocol)`) or hardcoded state strings (`selectedDetailEvent?.description`), do NOT introduce heavy dependencies like `DOMPurify`. The STRIX finding is a false positive because the underlying data is hardcoded mock data in the component state, not unsanitized user input. Discard the hallucinated security fix requests if acting strictly as a frontend UX agent.
+
+## 2026-06-25 - Simplify Writeback Success Messages
+**Learning:** Rendering raw system architecture details (like specific protocols, ETag requirements, and writeback modes) in the UI upon successful operations creates information disclosure vulnerabilities (as flagged by STRIX) and degrades UX with unnecessary technical jargon.
+**Action:** Replace detailed technical breakdowns in success states with concise, user-friendly messages (e.g., "요청이 성공적으로 처리되었습니다.") to improve both security (reducing information disclosure) and usability.
