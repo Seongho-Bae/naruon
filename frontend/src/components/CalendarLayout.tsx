@@ -167,6 +167,7 @@ function getApiErrorStatus(error: unknown) {
 export function CalendarLayout() {
   const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
+  const [activeWritebackAction, setActiveWritebackAction] = useState<'create' | 'update' | 'update-execute' | null>(null);
   const [writebackResult, setWritebackResult] = useState<CalendarWritebackIntentResponse | null>(null);
   const [writebackSources, setWritebackSources] = useState<CalendarWritebackSource[]>([]);
   const [sourceLoadStatus, setSourceLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -231,6 +232,7 @@ export function CalendarLayout() {
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
+    const actionKey: 'create' | 'update' | 'update-execute' = action === 'create' ? 'create' : executeProvider ? 'update-execute' : 'update';
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -241,6 +243,7 @@ export function CalendarLayout() {
       setWritebackStatus('no_source');
       return;
     }
+    setActiveWritebackAction(actionKey);
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
@@ -265,6 +268,8 @@ export function CalendarLayout() {
       } else {
         setWritebackStatus('error');
       }
+    } finally {
+      setActiveWritebackAction(null);
     }
   }, [isSourceRegistryReady, selectedWritebackSource, sourceLoadStatus]);
 
@@ -358,8 +363,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
-                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '점검 중' : '새 일정 intent 점검'}
+                  {activeWritebackAction === 'create' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {activeWritebackAction === 'create' ? '점검 중' : '새 일정 intent 점검'}
                 </button>
                 <button
                   type="button"
@@ -368,8 +373,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '업데이트 중' : 'ETag 업데이트 점검'}
+                  {activeWritebackAction === 'update' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {activeWritebackAction === 'update' ? '업데이트 중' : 'ETag 업데이트 점검'}
                 </button>
                 <button
                   type="button"
@@ -378,8 +383,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '요청 중' : 'ETag 실행 요청'}
+                  {activeWritebackAction === 'update-execute' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {activeWritebackAction === 'update-execute' ? '요청 중' : 'ETag 실행 요청'}
                 </button>
               </div>
             </div>
