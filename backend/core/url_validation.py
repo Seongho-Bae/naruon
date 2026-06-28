@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """Validation helpers for outbound HTTPS configuration."""
+
+from __future__ import annotations
 
 import ipaddress
 import socket
