@@ -55,6 +55,6 @@
 ## 2026-06-21 - Mocking new Lucide icons in tests
 **Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
 **Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.
-## 2024-06-27 - 검색 결과 없음 Empty State 개선
+## 2026-06-27 - 검색 결과 없음 Empty State 개선
 **Learning:** 검색이나 필터링 결과가 없을 때 사용자가 다시 원래 상태로 쉽게 돌아갈 수 있도록 시각적인 텍스트뿐만 아니라, 명확하고 접근하기 쉬운 액션(예: "검색어 초기화" 버튼)을 Empty State 내부에 배치하는 것이 사용자 프러스트레이션을 줄이는 데 매우 효과적임을 배웠습니다.
 **Action:** 앞으로 리스트나 검색 결과의 Empty State를 구현할 때는 항상 상태를 벗어날 수 있는 명확한 Call-to-Action(CTA) 버튼을 시각적인 피드백과 함께 추가하겠습니다.
