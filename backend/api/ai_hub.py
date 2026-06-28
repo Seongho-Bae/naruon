@@ -423,10 +423,10 @@ async def _list_agent_run_records(
 @router.get("/workflows", response_model=list[AiHubWorkflowCard])
 async def list_ai_hub_workflows(
     auth_context: AuthContext = Depends(get_auth_context),
-    # ⚡ Bolt: Use get_readonly_db for read-only operations to reduce load on the primary DB
-    # Expected impact: Frees up connections on the primary DB instance, improving write performance
     db: AsyncSession = Depends(get_readonly_db),
 ) -> list[AiHubWorkflowCard]:
+    # ⚡ Bolt: Use get_readonly_db for read-only operations; falls back to primary DB
+    # when READONLY_DATABASE_URL is unset. Reduces connection load on the primary.
     workflows = await _list_workflow_definitions(db, auth_context)
     return [_workflow_card_from_definition(workflow) for workflow in workflows]
 
@@ -469,10 +469,10 @@ async def create_ai_hub_workflow(
 @router.get("/runs", response_model=list[AiHubRunEvent])
 async def list_ai_hub_runs(
     auth_context: AuthContext = Depends(get_auth_context),
-    # ⚡ Bolt: Use get_readonly_db to route queries to read replica
-    # Expected impact: Frees up connections on the primary DB instance, improving write performance
     db: AsyncSession = Depends(get_readonly_db),
 ) -> list[AiHubRunEvent]:
+    # ⚡ Bolt: Use get_readonly_db for read-only operations; falls back to primary DB
+    # when READONLY_DATABASE_URL is unset. Reduces connection load on the primary.
     run_records = await _list_agent_run_records(db, auth_context)
     return [_run_event_from_record(run_record) for run_record in run_records]
 
@@ -480,10 +480,10 @@ async def list_ai_hub_runs(
 @router.get("/surface", response_model=AiHubSurfaceResponse)
 async def get_ai_hub_surface(
     auth_context: AuthContext = Depends(get_auth_context),
-    # ⚡ Bolt: Use get_readonly_db to route queries to read replica
-    # Expected impact: Frees up connections on the primary DB instance, improving write performance
     db: AsyncSession = Depends(get_readonly_db),
 ) -> AiHubSurfaceResponse:
+    # ⚡ Bolt: Use get_readonly_db for read-only operations; falls back to primary DB
+    # when READONLY_DATABASE_URL is unset. Reduces connection load on the primary.
     prompts = await _list_prompts(db, auth_context)
     providers = await _list_providers(db, auth_context)
     audit_events = await _list_audit_events(db, auth_context)

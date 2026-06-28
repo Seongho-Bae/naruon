@@ -13,7 +13,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
-from db.session import get_readonly_db
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from api.auth import SESSION_AUDIENCE, SESSION_ISSUER
@@ -26,7 +25,7 @@ from db.models import (
     SecurityAuditEvent,
     WorkflowDefinition,
 )
-from db.session import get_db
+from db.session import get_db, get_readonly_db
 from main import app
 
 TEST_SESSION_HMAC_SECRET = "ai-hub-surface-hmac-value-20260529-32"  # noqa: S105
