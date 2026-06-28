@@ -69,13 +69,25 @@ function sameOriginStateChangingRequest(request: NextRequest): boolean {
   if (fetchSite === "cross-site") return false;
 
   const origin = request.headers.get("origin");
-  if (!origin) return true;
-
-  try {
-    return requestOriginCandidates(request).has(new URL(origin).origin);
-  } catch {
-    return false;
+  if (origin) {
+    try {
+      return requestOriginCandidates(request).has(new URL(origin).origin);
+    } catch {
+      return false;
+    }
   }
+
+  const referer = request.headers.get("referer");
+  if (referer) {
+    try {
+      return requestOriginCandidates(request).has(new URL(referer).origin);
+    } catch {
+      return false;
+    }
+  }
+
+  // Fail securely if neither Origin nor Referer is present
+  return false;
 }
 
 function csrfRejectedResponse() {

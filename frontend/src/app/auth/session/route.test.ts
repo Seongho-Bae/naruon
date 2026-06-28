@@ -53,6 +53,7 @@ describe("/auth/session route", () => {
       new NextRequest("https://app.naruon.net/auth/session", {
         method: "POST",
         headers: {
+          Origin: "https://app.naruon.net",
           Cookie: "naruon_session=attacker-fixed-session",
         },
         body: JSON.stringify({ access_token: token }),
@@ -131,7 +132,7 @@ describe("/auth/session route", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const request = new NextRequest("https://app.naruon.net/auth/session", {
-      headers: { Cookie: `naruon_session=${token}` },
+      headers: { Origin: "https://app.naruon.net", Cookie: `naruon_session=${token}` },
     });
 
     const response = await GET(request);
@@ -163,6 +164,7 @@ describe("/auth/session route", () => {
 
     const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
       method: "POST",
+      headers: { Origin: "https://app.naruon.net" },
       body: JSON.stringify({ access_token: forgedToken }),
     }));
 
@@ -206,6 +208,7 @@ describe("/auth/session route", () => {
 
     const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
       method: "POST",
+      headers: { Origin: "https://app.naruon.net" },
       body: JSON.stringify({ access_token: token }),
     }));
 
@@ -223,6 +226,7 @@ describe("/auth/session route", () => {
 
     const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
       method: "POST",
+      headers: { Origin: "https://app.naruon.net" },
       body: JSON.stringify({ access_token: "<script>alert(1)</script>" }),
     }));
 
@@ -247,6 +251,7 @@ describe("/auth/session route", () => {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
         method: "POST",
+        headers: { Origin: "https://app.naruon.net" },
         body: JSON.stringify({ access_token: token }),
       }));
 
@@ -255,6 +260,7 @@ describe("/auth/session route", () => {
 
     const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
       method: "POST",
+      headers: { Origin: "https://app.naruon.net" },
       body: JSON.stringify({ access_token: token }),
     }));
 
@@ -288,9 +294,53 @@ describe("/auth/session route", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("rejects state changing requests if both origin and referer are absent", async () => {
+    const token = signedFixtureToken({ sub: "user-1", org: "org-acme" });
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error_code: "csrf_origin_rejected",
+      message: "Cross-site session updates are not allowed",
+    });
+  });
+
+  it("accepts state changing requests if origin is missing but valid referer is present", async () => {
+    const token = signedFixtureToken({ sub: "user-1", org: "org-acme", workspace: "workspace-acme", exp: Math.floor(Date.now() / 1000) + 300 });
+    vi.stubGlobal("fetch", vi.fn(async () => verifiedSessionResponse()));
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      headers: {
+        Referer: "https://app.naruon.net/dashboard",
+        Cookie: "naruon_session=attacker-fixed-session",
+      },
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(200);
+  });
+
+  it("rejects state changing requests if origin is missing and referer has invalid URL", async () => {
+    const token = signedFixtureToken({ sub: "user-1", org: "org-acme" });
+
+    const response = await POST(new NextRequest("https://app.naruon.net/auth/session", {
+      method: "POST",
+      headers: { Referer: "invalid-url" },
+      body: JSON.stringify({ access_token: token }),
+    }));
+
+    expect(response.status).toBe(403);
+  });
+
   it("expires the session cookie on logout", async () => {
     const response = await DELETE(new NextRequest("https://app.naruon.net/auth/session", {
       method: "DELETE",
+      headers: { Origin: "https://app.naruon.net" },
     }));
 
     expect(response.status).toBe(200);
