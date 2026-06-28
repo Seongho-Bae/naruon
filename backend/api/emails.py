@@ -328,7 +328,8 @@ async def get_emails(
                 reply_count=reply_counts[group_key],
                 is_self_sent=message_is_self_sent(email, user_addresses),
                 requires_reply=thread_requires_reply(
-                    thread_messages[group_key],
+                    # ⚡ Bolt: Reverse the list so it passes oldest-to-newest to thread_requires_reply
+                    thread_messages[group_key][::-1],
                     user_addresses,
                 ),
             )
