@@ -55,6 +55,3 @@
 ## 2026-06-21 - Mocking new Lucide icons in tests
 **Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
 **Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.
-## 2024-06-26 - Add visual loading indicators to Calendar writeback actions
-**Learning:** Users with screen readers may know a button is busy via aria-busy, but sighted users also need visual feedback (like a spinner) to prevent confusion and duplicate clicks during async network operations.
-**Action:** Always pair aria-busy with a visual loading indicator (e.g. animate-spin) and updated button text for all async action buttons. When multiple buttons share a loading boolean, track the active action key per button so only the clicked button shows loading copy.

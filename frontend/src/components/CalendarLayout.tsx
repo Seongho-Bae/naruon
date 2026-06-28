@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X, Loader2 } from 'lucide-react';
 
+import { toSafeReactText } from '@/lib/safe-text';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 
@@ -167,7 +168,6 @@ function getApiErrorStatus(error: unknown) {
 export function CalendarLayout() {
   const [viewMode, setViewMode] = useState<'월간 캘린더' | '주간 캘린더' | '일정 상세' | '회의 조율' | '일정 후보'>('월간 캘린더');
   const [writebackStatus, setWritebackStatus] = useState<WritebackStatus>('idle');
-  const [activeWritebackAction, setActiveWritebackAction] = useState<'create' | 'update' | 'update-execute' | null>(null);
   const [writebackResult, setWritebackResult] = useState<CalendarWritebackIntentResponse | null>(null);
   const [writebackSources, setWritebackSources] = useState<CalendarWritebackSource[]>([]);
   const [sourceLoadStatus, setSourceLoadStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -232,7 +232,6 @@ export function CalendarLayout() {
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
-    const actionKey: 'create' | 'update' | 'update-execute' = action === 'create' ? 'create' : executeProvider ? 'update-execute' : 'update';
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -243,7 +242,6 @@ export function CalendarLayout() {
       setWritebackStatus('no_source');
       return;
     }
-    setActiveWritebackAction(actionKey);
     setWritebackStatus('loading');
     setWritebackResult(null);
     try {
@@ -268,8 +266,6 @@ export function CalendarLayout() {
       } else {
         setWritebackStatus('error');
       }
-    } finally {
-      setActiveWritebackAction(null);
     }
   }, [isSourceRegistryReady, selectedWritebackSource, sourceLoadStatus]);
 
@@ -363,8 +359,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
-                  {activeWritebackAction === 'create' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {activeWritebackAction === 'create' ? '점검 중' : '새 일정 intent 점검'}
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? '점검 중' : '새 일정 intent 점검'}
                 </button>
                 <button
                   type="button"
@@ -373,8 +369,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  {activeWritebackAction === 'update' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {activeWritebackAction === 'update' ? '업데이트 중' : 'ETag 업데이트 점검'}
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? '업데이트 중' : 'ETag 업데이트 점검'}
                 </button>
                 <button
                   type="button"
@@ -383,8 +379,8 @@ export function CalendarLayout() {
                   aria-busy={isWritebackLoading}
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  {activeWritebackAction === 'update-execute' && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {activeWritebackAction === 'update-execute' ? '요청 중' : 'ETag 실행 요청'}
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? '요청 중' : 'ETag 실행 요청'}
                 </button>
               </div>
             </div>
@@ -509,7 +505,7 @@ export function CalendarLayout() {
                       <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
                       {dayEvents.map((event) => (
                         <div key={event.id} className={`mt-1 rounded px-1.5 py-1 text-[10px] font-semibold leading-tight sm:px-2 sm:text-xs ${event.monthClassName}`}>
-                          {event.time}<span className="hidden sm:inline"> {event.title}</span>
+                          {event.time}<span className="hidden sm:inline"> {toSafeReactText(event.title)}</span>
                         </div>
                       ))}
                     </div>
@@ -525,8 +521,8 @@ export function CalendarLayout() {
                 {visibleWeekEvents.map((event) => (
                   <article key={event.id} className="rounded-xl border border-border bg-background p-4">
                     <p className="text-xs font-black text-primary">{event.day}</p>
-                    <h4 className="mt-2 text-sm font-bold">{event.title}</h4>
-                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{event.source}</p>
+                    <h4 className="mt-2 text-sm font-bold">{toSafeReactText(event.title)}</h4>
+                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{toSafeReactText(event.source)}</p>
                   </article>
                 ))}
                 {visibleWeekEvents.length === 0 && (
@@ -539,11 +535,11 @@ export function CalendarLayout() {
           )}
           {viewMode === '일정 상세' && (
             <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} 상세` : '일정 상세'}</h3>
+              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} 상세` : '일정 상세'}</h3>
               <dl className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
-                  <dd className="mt-2 text-sm font-bold">{selectedDetailEvent ? `${selectedDetailEvent.source} · 충돌 토큰 확인` : '표시 중인 원본 없음'}</dd>
+                  <dd className="mt-2 text-sm font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.source)} · 충돌 토큰 확인` : '표시 중인 원본 없음'}</dd>
                 </div>
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">충돌 제어</dt>
@@ -588,8 +584,8 @@ export function CalendarLayout() {
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {visibleCandidateEvents.map((event) => (
                   <article key={event.id} className="rounded-xl border border-border bg-background p-4">
-                    <h4 className="text-sm font-bold">{event.title}</h4>
-                    <p className="mt-2 text-xs text-muted-foreground">{event.source}</p>
+                    <h4 className="text-sm font-bold">{toSafeReactText(event.title)}</h4>
+                    <p className="mt-2 text-xs text-muted-foreground">{toSafeReactText(event.source)}</p>
                     <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{event.mode}</p>
                   </article>
                 ))}
@@ -621,9 +617,9 @@ export function CalendarLayout() {
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
-            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
+            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
         </div>
 
         <div className="mt-6 space-y-5">
@@ -655,7 +651,7 @@ export function CalendarLayout() {
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-sm font-semibold mb-1">설명</p>
-              <p className="text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '표시할 일정 설명이 없습니다.'}</p>
+              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '표시할 일정 설명이 없습니다.'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-start">
