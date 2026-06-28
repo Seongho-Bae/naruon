@@ -1,0 +1,19 @@
+[tool.coverage.run]
+source = ["coverage_contract"]
+
+[tool.interrogate]
+exclude = [
+    "backend",
+    "connector",
+    "docs",
+    "scripts",
+    "tests",
+]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-module = false
+ignore-nested-functions = true
+ignore-private = true
+ignore-property-decorators = true
+ignore-semiprivate = true
