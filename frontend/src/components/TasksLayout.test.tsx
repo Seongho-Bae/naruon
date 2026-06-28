@@ -96,6 +96,39 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("거래처 회신 준비");
   });
 
+  it("keeps untrusted task titles on the React text-node path", async () => {
+    const task = {
+      id: "task-xss-1",
+      title: '<img src=x onerror="alert(document.cookie)"> 긴급 확인',
+      status: "open",
+      priority: "urgent",
+      source_type: "email",
+      source_email_id: "mail-xss-1",
+      related_thread_id: "thread-xss-1",
+      updated_at: "2026-06-18T05:00:00Z",
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/tasks")) return Promise.resolve(jsonResponse([task]));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksLayout />);
+    });
+    await flushAsyncWork();
+
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("[onerror]")).toBeNull();
+    expect(container.textContent).toContain('img src=x onerror="alert(document.cookie)" 긴급 확인');
+    expect(container.textContent).not.toContain("<img");
+  });
+
   it("filters tasks using search input and uses deferred value", async () => {
     const tasks = [
       {

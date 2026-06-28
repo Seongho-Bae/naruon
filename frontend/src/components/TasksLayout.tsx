@@ -86,12 +86,24 @@ function getApiErrorStatus(error: unknown) {
 }
 
 function safeTaskTitle(title: string) {
-  const displayTitle = toSafeReactText(title, '제목 없는 작업')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/[<>]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return displayTitle || '제목 없는 작업';
+  const safeText = toSafeReactText(title, '제목 없는 작업');
+  let displayTitle = '';
+  let previousWasWhitespace = true;
+
+  for (const character of safeText) {
+    const normalizedCharacter = character === '<' || character === '>' ? ' ' : character;
+    if (normalizedCharacter.trim() === '') {
+      if (!previousWasWhitespace) {
+        displayTitle += ' ';
+      }
+      previousWasWhitespace = true;
+      continue;
+    }
+    displayTitle += normalizedCharacter;
+    previousWasWhitespace = false;
+  }
+
+  return displayTitle.trim() || '제목 없는 작업';
 }
 
 function formatTaskTimestamp(value: string | null | undefined) {
