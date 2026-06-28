@@ -81,3 +81,6 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2024-05-18 - Defer expensive list filtering to keep UI responsive
+**Learning:** Filtering large task arrays in React components synchronously on every keystroke (`taskSearch`) can block the main thread and cause input lag. The `ticketTasks` array can grow large, causing `useMemo` to re-execute frequently.
+**Action:** Use React's `useDeferredValue` hook to defer the search string used for filtering. This allows the input component to render immediately for a smooth typing experience while delaying the expensive filtering operation until the browser is idle.

@@ -27,7 +27,7 @@ async function flushAsyncWork() {
   for (let index = 0; index < 5; index += 1) {
     await act(async () => {
       await Promise.resolve();
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 10)); // increased timeout for useDeferredValue to settle
     });
   }
 }
@@ -94,5 +94,67 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("작업 설명");
     expect(container.textContent).toContain("관련 메일 열기");
     expect(container.textContent).toContain("거래처 회신 준비");
+  });
+
+  it("filters tasks using search input and uses deferred value", async () => {
+    const tasks = [
+      {
+        id: "task-1",
+        title: "Alpha Task",
+        status: "open",
+        priority: "normal",
+        source_type: "email",
+        updated_at: "2026-06-18T05:00:00Z",
+      },
+      {
+        id: "task-2",
+        title: "Beta Task",
+        status: "in_progress",
+        priority: "high",
+        source_type: "calendar",
+        updated_at: "2026-06-18T06:00:00Z",
+      }
+    ];
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/tasks")) return Promise.resolve(jsonResponse(tasks));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksLayout />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("Alpha Task");
+    expect(container.textContent).toContain("Beta Task");
+
+    const searchInput = container.querySelector<HTMLInputElement>("input[type='search']");
+    expect(searchInput).not.toBeNull();
+
+    // Type "Beta"
+    await act(async () => {
+      if (searchInput) {
+        // use fireEvent/dispatchEvent pattern properly for react 19
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype,
+          "value"
+        )?.set;
+        nativeInputValueSetter?.call(searchInput, "Beta");
+        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+
+    // Defer
+    await flushAsyncWork();
+
+    expect(container.textContent).not.toContain("Alpha Task");
+    expect(container.textContent).toContain("Beta Task");
   });
 });
