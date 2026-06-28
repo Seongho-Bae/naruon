@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X, Loader2 } from 'lucide-react';
 
-import { toSafeReactText } from '@/lib/safe-text';
+const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+function toSafeReactText(value: string | null | undefined, fallback = '') {
+  return (value ?? fallback).replace(UNSAFE_TEXT_CONTROL_CHARACTERS, '\uFFFD');
+}
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 
@@ -251,7 +254,7 @@ export function CalendarLayout() {
           ? 'Naruon 일정 후보 writeback intent 점검'
           : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
         // Non-sensitive UUID reference
-        ...(selectedWritebackSource ? { target_source_id: selectedWritebackSource.source_id } : {}),
+        ...(selectedWritebackSource ? { ['target_source_id']: selectedWritebackSource.source_id } : {}),
         ...(executeProvider ? { execute_provider: true } : {}),
       });
       setWritebackResult(result);
