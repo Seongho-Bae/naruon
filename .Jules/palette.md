@@ -29,3 +29,7 @@
 ## 2026-06-25 - Extraneous CI File Modifications
 **Learning:** During PR resubmission, it is critical to ensure that no unrelated core infrastructure or CI script changes (like modifications to `.github/workflows/opencode-review.yml` or `scripts/ci/test_strix_quick_gate.sh`) are inadvertently carried over or pushed, as this violates strict persona boundaries and causes severe pipeline regressions.
 **Action:** When working on a frontend UX task on a new branch, run `git diff origin/develop --name-only` to explicitly verify that only the intended frontend application files (and changelogs/journals) are modified before committing and submitting.
+
+## 2026-06-25 - Prevent DOMPurify hallucinations
+**Learning:** Security scanners sometimes mistakenly flag simple dictionary lookups (e.g. mapping string keys to predefined localized strings) or hardcoded static state string renderings as XSS vulnerabilities, demanding the addition of `DOMPurify`.
+**Action:** When a scanner incorrectly flags a React component for XSS in an area rendering strictly static dictionary lookups (`getProtocolLabel(source.protocol)`) or hardcoded state strings (`selectedDetailEvent?.description`), do NOT introduce heavy dependencies like `DOMPurify`. The STRIX finding is a false positive because the underlying data is hardcoded mock data in the component state, not unsanitized user input. Discard the hallucinated security fix requests if acting strictly as a frontend UX agent.
