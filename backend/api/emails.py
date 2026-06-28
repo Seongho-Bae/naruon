@@ -1,5 +1,4 @@
 from collections import defaultdict
-from threading import Lock
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
@@ -7,7 +6,6 @@ from db.session import get_db
 from db.models import Email
 from pydantic import BaseModel, EmailStr, Field
 import datetime
-import time
 from typing import Literal
 from services.email_client import (
     EmailMessageParams,

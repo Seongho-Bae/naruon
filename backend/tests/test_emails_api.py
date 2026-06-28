@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from pydantic import SecretStr
 
-from api import emails as emails_api
 from api.auth import get_auth_context as auth_get_auth_context
 from core.config import settings
 from db.models import Email, LLMProvider
@@ -1970,17 +1969,17 @@ def test_enforce_send_email_rate_limit_coverage():
 
 
 def test_untested_email_api_lines():
-    from api.emails import _enforce_send_email_rate_limit, thread_matches_folder, _email_message_lookup_values, _safe_email_display_text
+    from api.emails import _enforce_send_email_rate_limit, thread_matches_folder, _email_message_lookup_values
     from db.models import Email
 
     _enforce_send_email_rate_limit(None)
 
-    assert thread_matches_folder([], set(), "inbox") == True
+    assert thread_matches_folder([], set(), "inbox")
 
     e_sent = Email(id=1, sender="testuser@example.com")
     e_recv = Email(id=2, sender="other@example.com")
-    assert thread_matches_folder([e_sent, e_recv], {"testuser@example.com"}, "sent") == True
-    assert thread_matches_folder([e_recv], {"testuser@example.com"}, "sent") == False
+    assert thread_matches_folder([e_sent, e_recv], {"testuser@example.com"}, "sent")
+    assert not thread_matches_folder([e_recv], {"testuser@example.com"}, "sent")
 
     assert _email_message_lookup_values(Email(id=3, message_id=None)) == set()
     assert _email_message_lookup_values(Email(id=4, message_id="<test@example>")) == {"test@example", "<test@example>"}
@@ -1990,7 +1989,6 @@ async def test_untested_email_api_lines_2():
     from api.emails import _fetch_existing_emails_for_candidates, _build_email_lookup_dicts
     from db.models import Email
 
-    import asyncio
     assert await _fetch_existing_emails_for_candidates(None, None, [], []) == []
 
     e_fp = Email(id=5, message_id=None, subject=None, sender=None, date=None, fingerprint="db_fp_123")
