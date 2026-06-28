@@ -90,7 +90,9 @@ def thread_reply_candidate(
     ordered_messages = (
         reversed(thread_messages)
         if is_chronological
-        else sorted(thread_messages, key=lambda item: item.date, reverse=True)
+        else sorted(
+            thread_messages, key=lambda item: (item.date, item.id or 0), reverse=True
+        )
     )
 
     latest_external_date = None
@@ -153,7 +155,7 @@ async def check_missing_replies(
             organization_filter,
             Email.date > recent_limit,
         )
-        .order_by(Email.date.asc())
+        .order_by(Email.date.asc(), Email.id.asc())
     )
     result = await session.execute(stmt)
     emails = result.scalars().all()
