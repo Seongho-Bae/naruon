@@ -78,12 +78,20 @@ def detect_reply_tracking(body: str | None) -> bool:
 
 
 def thread_reply_candidate(
-    thread_messages: list[Email], user_addresses: set[str]
+    thread_messages: list[Email],
+    user_addresses: set[str],
+    is_chronological: bool = False,
 ) -> Email | None:
     if not user_addresses:
         return None
 
-    ordered_messages = sorted(thread_messages, key=lambda item: item.date, reverse=True)
+    # ⚡ Bolt: If the database implicitly returned results chronologically (`is_chronological=True`),
+    # iterating over the array backwards avoids O(N log N) `sorted()` overhead.
+    ordered_messages = (
+        reversed(thread_messages)
+        if is_chronological
+        else sorted(thread_messages, key=lambda item: item.date, reverse=True)
+    )
 
     latest_external_date = None
     for message in ordered_messages:
@@ -158,7 +166,9 @@ async def check_missing_replies(
 
     flagged = []
     for thread_messages in threads.values():
-        candidate = thread_reply_candidate(thread_messages, user_addresses)
+        candidate = thread_reply_candidate(
+            thread_messages, user_addresses, is_chronological=True
+        )
         if candidate is not None:
             flagged.append(candidate)
 
