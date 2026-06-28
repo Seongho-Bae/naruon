@@ -37,6 +37,29 @@ MAX_IMPORT_UPLOAD_BYTES = 20 * 1024 * 1024
 MAX_IMPORT_EML_FILES = 100
 MAX_IMPORT_EMAILS_PER_OWNER = 1000
 EMAIL_IMPORT_QUOTA_LOCK_NAMESPACE = "naruon-email-import-quota"
+BLOCKED_ATTACHMENT_SUFFIXES = frozenset(
+    {
+        ".apk",
+        ".app",
+        ".bat",
+        ".cmd",
+        ".com",
+        ".dll",
+        ".dmg",
+        ".exe",
+        ".hta",
+        ".iso",
+        ".jar",
+        ".js",
+        ".msi",
+        ".pkg",
+        ".ps1",
+        ".scr",
+        ".sh",
+        ".vbs",
+        ".wsf",
+    }
+)
 logger = logging.getLogger(__name__)
 
 EmailImportItemStatus = Literal["imported", "skipped_duplicate", "failed"]
@@ -87,10 +110,20 @@ class EmailImportResult:
 
 
 def _safe_upload_filename(filename: str) -> str:
-    name = Path(filename or "upload").name.strip()
+    normalized = str(filename or "upload").replace("\\", "/")
+    name = Path(normalized).name.strip()
     if name in {".", ".."}:
         return "upload"
     return name or "upload"
+
+
+def _safe_attachment_filename(filename: object) -> str:
+    safe_name = _safe_upload_filename(str(filename or "attachment.txt"))
+    suffix = Path(safe_name).suffix.lower()
+    if suffix and suffix in BLOCKED_ATTACHMENT_SUFFIXES:
+        attachment_stem = Path(safe_name).stem.strip() or "attachment"
+        return f"{attachment_stem}.txt"
+    return safe_name
 
 
 def _safe_item_filename(upload_name: str, eml_path: Path | None = None) -> str:
@@ -288,7 +321,7 @@ async def _import_single_eml(
     for attachment_index, attachment in enumerate(attachment_payloads, start=1):
         email_obj.attachments.append(
             Attachment(
-                filename=str(attachment.get("filename") or "attachment.txt"),
+                filename=_safe_attachment_filename(attachment.get("filename")),
                 content=str(attachment.get("content") or ""),
                 embedding=(
                     fitted_embeddings[attachment_index]

@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,7 @@ from services.email_import_service import (
         ("", "upload"),
         (None, "upload"),
         ("/some/path/file.zip", "file.zip"),
+        ("..\\windows\\file.zip", "file.zip"),
         ("  spaced.zip  ", "spaced.zip"),
         ("/", "upload"),
         (".", "upload"),
@@ -53,6 +54,18 @@ def test_safe_upload_filename(input_name, expected):
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert email_import_module._safe_item_filename(upload_name, eml_path) == expected
+
+
+@pytest.mark.parametrize(
+    "filename,expected",
+    [
+        ("../../payload.sh", "payload.txt"),
+        ("..\\..\\payload.exe", "payload.txt"),
+        ("notes.txt", "notes.txt"),
+    ],
+)
+def test_safe_attachment_filename(filename, expected):
+    assert email_import_module._safe_attachment_filename(filename) == expected
 
 
 @pytest.mark.asyncio
@@ -160,6 +173,67 @@ async def test_import_single_eml_rejects_symlink(tmp_path):
     assert result.status == "failed"
     assert result.reason_code == "parse_failed"
     session.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_import_single_eml_sanitizes_attachment_filenames(monkeypatch, tmp_path):
+    eml_path = tmp_path / "message.eml"
+    eml_path.write_bytes(b"From: a@example.com\nTo: b@example.com\n\nbody")
+    session = AsyncMock(spec=AsyncSession)
+    session.commit = AsyncMock()
+    session.execute = AsyncMock()
+    session.add = Mock()
+
+    async def fake_assign_thread_id(*args, **kwargs):
+        return "thread-1"
+
+    async def fake_generate_import_embeddings(*args, **kwargs):
+        return [[0.0] * EMBEDDING_DIMENSION, [0.0] * EMBEDDING_DIMENSION]
+
+    monkeypatch.setattr(
+        email_import_module,
+        "_read_and_parse_eml",
+        lambda path: (
+            b"raw-eml",
+            {
+                "message_id": "<msg-1@test.com>",
+                "thread_id": None,
+                "sender": "a@example.com",
+                "reply_to": None,
+                "recipients": "b@example.com",
+                "subject": "Subject",
+                "in_reply_to": None,
+                "references": None,
+                "date": None,
+                "body": "Body",
+                "attachments": [
+                    {"filename": "..\\..\\payload.exe", "content": "echo hello"}
+                ],
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        email_import_module.asyncio, "to_thread", AsyncMock(side_effect=lambda func, *args: func(*args))
+    )
+    monkeypatch.setattr(email_import_module, "_find_existing_email", AsyncMock(return_value=None))
+    monkeypatch.setattr(email_import_module, "assign_thread_id", fake_assign_thread_id)
+    monkeypatch.setattr(
+        email_import_module,
+        "_generate_import_embeddings",
+        fake_generate_import_embeddings,
+    )
+
+    result = await email_import_module._import_single_eml(
+        session,
+        eml_path=eml_path,
+        display_filename="message.eml",
+        user_id="user-1",
+        organization_id="org-1",
+    )
+
+    assert result.status == "imported"
+    added_email = session.add.call_args.args[0]
+    assert added_email.attachments[0].filename == "payload.txt"
 
 
 @pytest.mark.asyncio

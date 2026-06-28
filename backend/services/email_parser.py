@@ -2,6 +2,7 @@ from email import message_from_binary_file, message_from_bytes, policy
 from email.message import Message
 from pathlib import Path
 import datetime
+import re
 from email.utils import formataddr, getaddresses
 from email.utils import parsedate_to_datetime
 from typing import TypedDict
@@ -25,6 +26,12 @@ class EmailData(TypedDict):
     attachments: list[dict]
 
 
+_HEADER_CONTROL_TRANSLATION = str.maketrans({"\r": " ", "\n": " ", "\t": " "})
+_EMAIL_ADDRESS_PATTERN = re.compile(
+    r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z0-9-]{2,}"
+)
+
+
 def _sanitize_nul(text: str) -> str:
     """Removes NUL characters from strings, which are invalid in PostgreSQL text fields."""
     if not isinstance(text, str):
@@ -36,18 +43,42 @@ def _sanitize_display_text(text: str) -> str:
     return strip_html_markup(_sanitize_nul(text))
 
 
+def _sanitize_header_text(text: str) -> str:
+    return _sanitize_nul(text).translate(_HEADER_CONTROL_TRANSLATION)
+
+
+def _sanitize_addr_spec(address: str) -> str:
+    sanitized = _sanitize_header_text(address).strip().strip("<>").strip()
+    if not sanitized:
+        return ""
+    if _EMAIL_ADDRESS_PATTERN.fullmatch(sanitized) is None:
+        return ""
+    return sanitized
+
+
+def _extract_first_address(text: str) -> str:
+    match = _EMAIL_ADDRESS_PATTERN.search(_sanitize_header_text(text))
+    if match is None:
+        return ""
+    return match.group(0)
+
+
 def _sanitize_address_display_text(text: str) -> str:
+    sanitized_text = _sanitize_header_text(text)
     sanitized_parts: list[str] = []
-    for display_name, address in getaddresses([text]):
+    for display_name, address in getaddresses([sanitized_text]):
         safe_display_name = _sanitize_display_text(display_name).strip()
-        safe_address = _sanitize_nul(address).strip()
+        safe_address = _sanitize_addr_spec(address)
         if safe_address:
             sanitized_parts.append(formataddr((safe_display_name, safe_address)))
         elif safe_display_name:
             sanitized_parts.append(safe_display_name)
     if sanitized_parts:
         return ", ".join(sanitized_parts)
-    return _sanitize_display_text(text)
+    fallback_address = _extract_first_address(sanitized_text)
+    if fallback_address:
+        return fallback_address
+    return _sanitize_display_text(sanitized_text)
 
 
 def _process_multipart_body(msg: Message) -> tuple[str, str, list[dict]]:

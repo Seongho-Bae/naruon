@@ -106,6 +106,34 @@ Plain body"""
         os.unlink(temp_path)
 
 
+def test_parse_eml_strips_header_injection_from_address_fields():
+    eml_content = b"""Message-ID: <header-injection@test.com>
+From: attacker@example.com
+ Bcc: victim@example.com
+To: recipient@example.com
+ Cc: hidden@example.com
+Reply-To: reply@example.com
+ Subject: injected
+Subject: Header injection
+Date: Mon, 27 Apr 2026 10:00:00 +0000
+
+Plain body"""
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".eml") as f:
+        f.write(eml_content)
+        temp_path = f.name
+
+    try:
+        parsed = parse_eml(temp_path)
+        assert parsed["sender"] == "attacker@example.com"
+        assert parsed["recipients"] == "recipient@example.com"
+        assert parsed["reply_to"] == "reply@example.com"
+        assert "victim@example.com" not in parsed["sender"]
+        assert "hidden@example.com" not in parsed["recipients"]
+    finally:
+        os.unlink(temp_path)
+
+
 def test_parse_eml_strips_active_html_from_attachment_display_fields():
     eml_content = b"""Message-ID: <attachment-xss@test.com>
 From: sender@test.com

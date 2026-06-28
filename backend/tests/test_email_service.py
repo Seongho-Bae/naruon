@@ -32,7 +32,7 @@ class TestEmailService:
 
         fingerprint = generate_email_fingerprint(email_data)
 
-        raw_str = f"test@example.com|Hello|2023-01-01T12:00:00|{'A' * 500}"
+        raw_str = f"test@example.com|Hello|2023-01-01T12:00:00|{long_body}"
         expected = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
         assert fingerprint == expected
 
@@ -133,3 +133,19 @@ class TestEmailService:
         }
 
         assert process_self_to_self(email_data, "invalid-email") is False
+
+    def test_process_self_to_self_normalizes_plus_addressing(self):
+        email_data = {
+            "sender": "User+archive@example.com",
+            "recipients": ["user@example.com"],
+        }
+
+        assert process_self_to_self(email_data, "user@example.com") is True
+
+    def test_process_self_to_self_normalizes_fullwidth_email_forms(self):
+        email_data = {
+            "sender": "\uff55\uff53\uff45\uff52\uff0bnotes\uff20example.com",
+            "recipients": ["user@example.com"],
+        }
+
+        assert process_self_to_self(email_data, "user@example.com") is True
