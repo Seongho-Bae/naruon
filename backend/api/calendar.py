@@ -317,7 +317,7 @@ async def sync_todos(
         results = await create_calendar_events_batch(safe_todos, user_token)
         return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarActionItemError:
-        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
+        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar action item text")
     except CalendarServiceError as e:
         logger.warning(
             "Calendar service error during sync_todos",
