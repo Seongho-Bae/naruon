@@ -619,7 +619,7 @@ export function CalendarLayout() {
             <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
             <h2 className="text-xl font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description, '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.')}</p>
         </div>
 
         <div className="mt-6 space-y-5">
@@ -651,7 +651,7 @@ export function CalendarLayout() {
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-sm font-semibold mb-1">설명</p>
-              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '표시할 일정 설명이 없습니다.'}</p>
+              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description, '표시할 일정 설명이 없습니다.')}</p>
             </div>
           </div>
           <div className="flex gap-3 items-start">
