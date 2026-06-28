@@ -1,5 +1,3 @@
-import re
-
 with open('backend/api/emails.py', 'r') as f:
     content = f.read()
 
