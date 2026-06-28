@@ -29,6 +29,8 @@ PROMPT_TEST_SYSTEM_MESSAGE = (
 
 
 class PromptCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(min_length=1, max_length=100)
     description: Optional[str] = Field(default=None, max_length=1000)
     content: str = Field(min_length=1, max_length=PROMPT_TEST_MAX_CONTENT_CHARS)

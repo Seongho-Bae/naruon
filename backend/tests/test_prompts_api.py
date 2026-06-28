@@ -171,6 +171,23 @@ def test_prompt_crud_validation(auth_client):
     )
     assert resp.status_code == 422
 
+
+def test_prompt_create_rejects_unexpected_identifier_fields(auth_client):
+    response = auth_client.post(
+        "/api/prompts",
+        json={
+            "id": 999,
+            "prompt_uid": "prompt_other_user",
+            "title": "Test Prompt",
+            "content": "Summarize this: {{email}}",
+            "is_shared": False,
+        },
+    )
+
+    assert response.status_code == 422
+    assert mock_session.items == []
+
+
 def test_prompt_crud(auth_client):
     # Create
     resp = auth_client.post(
