@@ -18,7 +18,7 @@ logger = logging.getLogger("naruon.connector")
 
 
 class ConnectorConfigError(ValueError):
-    pass
+    """Raised when required connector environment configuration is missing or invalid."""
 
 
 def _required_env(environ: Mapping[str, str], name: str) -> str:
@@ -37,6 +37,7 @@ def _target_ws_url(environ: Mapping[str, str], registration_token: str) -> str:
 
 
 def build_connector(environ: Mapping[str, str] = os.environ) -> SelfHostedConnector:
+    """Build a SelfHostedConnector from the given environment variable mapping."""
     registration_token = _required_env(environ, "NARUON_REGISTRATION_TOKEN")
     session_token = _required_env(environ, "NARUON_SESSION_TOKEN")
     return SelfHostedConnector(
@@ -46,12 +47,14 @@ def build_connector(environ: Mapping[str, str] = os.environ) -> SelfHostedConnec
 
 
 async def amain(environ: Mapping[str, str] = os.environ) -> int:
+    """Connect the self-hosted runner and return 0 on clean disconnection."""
     connector = build_connector(environ)
     await connector.connect()
     return 0
 
 
 def main() -> int:
+    """Configure logging, run the async connector, and return a POSIX exit code."""
     logging.basicConfig(level=os.environ.get("NARUON_CONNECTOR_LOG_LEVEL", "INFO"))
     try:
         return asyncio.run(amain())
@@ -62,5 +65,5 @@ def main() -> int:
         return 130
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

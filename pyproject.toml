@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.coverage.run]
+source = ["connector"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+
+[tool.interrogate]
+exclude = ["backend", "tests", "scripts", "frontend", "docs"]
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+ignore-module = true
+fail-under = 100
