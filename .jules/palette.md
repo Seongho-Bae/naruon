@@ -55,3 +55,23 @@
 ## 2026-06-21 - Mocking new Lucide icons in tests
 **Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
 **Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.
+
+## 2024-05-24 - Add `aria-busy` to async operation buttons
+**Learning:** Action buttons triggering asynchronous network operations need an `aria-busy` attribute, alongside `disabled` state and visual indicators, to correctly communicate their loading state to screen reader users.
+**Action:** Add `aria-busy={isLoading}` to action buttons alongside existing spinner and disabled states for network interactions.
+
+## 2024-05-24 - Refresh button loading states
+**Learning:** Adding explicit visual indicators (like `animate-spin`) and `aria-busy` to buttons alongside `disabled` states prevents multiple clicks and effectively communicates asynchronous loading to screen readers.
+**Action:** When creating action buttons for async operations like '새로고침' (Refresh), always include `disabled={loading}`, `aria-busy={loading}`, adjust opacity (`disabled:opacity-60`), change cursor (`disabled:cursor-not-allowed`), spin icons, and update text to '새로고침 중'.
+
+## 2024-05-17 - Update UI Terminology Mapping
+**Learning:** Blind, global string replacement (regex) for translating or standardizing Korean UI terms can lead to semantical breaks. For example, blindly replacing "할 일" to "실행 항목" breaks other valid Korean words containing "할 일" such as "표시할 일정" (changing it to "표시실행 항목정"). Similarly, replacing "검색" with "맥락 검색" indiscriminately can lead to redundant strings like "맥락 맥락 검색".
+**Action:** When updating localization strings or terminology across a large codebase, apply context-aware parsing or careful target-word bound replacements rather than naive global string matching. Always manually verify the `git diff` for readability and semantical correctness after applying bulk string manipulations.
+
+## 2024-05-24 - Ensure aria-busy accompanies disabled for async UI buttons
+**Learning:** Action buttons triggering asynchronous network operations that already implement `disabled={loading}` and visual spinners MUST also include an `aria-busy={loading}` attribute to correctly communicate the active loading state to screen reader users without requiring focus shifts.
+**Action:** When adding or auditing buttons for async operations like '동기화 중', '전송 중', or '검색 중', ensure `aria-busy={loadingVariable}` is explicitly added alongside existing spinner and disabled states.
+
+## 2024-05-24 - Ensure error messages use role="alert"
+**Learning:** Dynamically rendered error messages (like capture failure states) need a `role="alert"` attribute so that screen readers announce them immediately when they appear in the DOM.
+**Action:** Always add `role="alert"` to `<p>` or `<div>` elements that render temporary or state-driven error text, particularly when it occurs asynchronously outside of standard form validation.
