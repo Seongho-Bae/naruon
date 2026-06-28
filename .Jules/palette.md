@@ -25,3 +25,7 @@
 ## 2026-06-25 - OpenCode deterministic fallback
 **Learning:** The `opencode-review` CI workflow will fail closed if the underlying LLM API times out or returns a 429 Too Many Requests error, unless the PR only contains 'low risk' files (like `.md` or `.txt`). Modifying any `.py` or `.tsx` file prevents the deterministic fallback from approving the PR during an API outage.
 **Action:** Do not attempt to bypass `opencode-review` API timeouts by rewriting the CI workflow. Instead, wait and resubmit the original PR code to retry the review process when the underlying APIs recover.
+
+## 2026-06-25 - Extraneous CI File Modifications
+**Learning:** During PR resubmission, it is critical to ensure that no unrelated core infrastructure or CI script changes (like modifications to `.github/workflows/opencode-review.yml` or `scripts/ci/test_strix_quick_gate.sh`) are inadvertently carried over or pushed, as this violates strict persona boundaries and causes severe pipeline regressions.
+**Action:** When working on a frontend UX task on a new branch, run `git diff origin/develop --name-only` to explicitly verify that only the intended frontend application files (and changelogs/journals) are modified before committing and submitting.
