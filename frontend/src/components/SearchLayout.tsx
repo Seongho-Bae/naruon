@@ -509,7 +509,7 @@ export function SearchLayout() {
             <input
               id="search-input"
               ref={searchInputRef}
-              type="search"
+              type="text"
               inputMode="search"
               role="searchbox"
               aria-label="맥락 검색어 입력"

@@ -370,7 +370,7 @@ export function DashboardLayout({
               value={globalSearchQuery}
               onChange={(event) => setGlobalSearchQuery(event.target.value)}
               placeholder="맥락, 사람, 파일, 판단 포인트 맥락 검색..."
-              type="search"
+              type="text"
             />
             {globalSearchQuery ? (
               <button
