@@ -470,6 +470,8 @@ assert_opencode_review_uses_codegraph_and_gpt5_fallback() {
 	assert_file_contains "$workflow_file" 'Deterministic review-tooling bootstrap fallback approval was used' "opencode review-tooling bootstrap fallback explains model-output failure approval"
 	assert_file_contains "$workflow_file" 'scripts/ci/strix_quick_gate.sh' "opencode review-tooling bootstrap fallback is scoped to the Strix/OpenCode review bundle"
 	assert_file_contains "$workflow_file" '.github/workflows/pr-governance.yml' "opencode review-tooling bootstrap fallback covers PR governance workflow changes"
+	assert_file_contains "$workflow_file" 'scripts/ci/pr_governance_gate.sh' "opencode review-tooling bootstrap fallback covers PR governance gate script changes"
+	assert_file_contains "$workflow_file" 'scripts/ci/test_pr_governance_gate.sh' "opencode review-tooling bootstrap fallback validates PR governance gate tests"
 	assert_file_contains "$workflow_file" '.github/workflows/pr-review-merge-scheduler.yml' "opencode review-tooling bootstrap fallback covers PR review scheduler workflow changes"
 	assert_file_contains "$workflow_file" 'scripts/ci/pr_review_merge_scheduler.py' "opencode review-tooling bootstrap fallback covers PR review scheduler code changes"
 	assert_file_contains "$workflow_file" 'optional actionlint when installed, bash syntax checks for review shell scripts, and Python bytecode compilation' "opencode review-tooling bootstrap fallback runs local static validation"
