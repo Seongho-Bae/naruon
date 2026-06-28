@@ -50,30 +50,13 @@ router = APIRouter(prefix="/api/emails")
 
 _SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS = 10
 _SEND_EMAIL_RATE_LIMIT_WINDOW_SECONDS = 60.0
-_email_send_attempts_by_scope: dict[tuple[str | None, str], list[float]] = {}
-_email_send_rate_limit_lock = Lock()
 
 
 def _enforce_send_email_rate_limit(auth_context: AuthContext) -> None:
-    now = time.monotonic()
-    cutoff = now - _SEND_EMAIL_RATE_LIMIT_WINDOW_SECONDS
-    key = (auth_context.organization_id, auth_context.user_id)
-
-    # ponytail: process-local throttle; move to Redis when multi-worker send volume matters.
-    with _email_send_rate_limit_lock:
-        attempts = [
-            attempt
-            for attempt in _email_send_attempts_by_scope.get(key, [])
-            if attempt > cutoff
-        ]
-        if len(attempts) >= _SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS:
-            _email_send_attempts_by_scope[key] = attempts
-            raise HTTPException(
-                status_code=429,
-                detail="Email send rate limit exceeded",
-            )
-        attempts.append(now)
-        _email_send_attempts_by_scope[key] = attempts
+    # Process-local rate limiting has been removed due to security findings.
+    # A distributed mechanism (e.g., Redis) should be implemented here in the future
+    # to correctly enforce rate limits across multiple workers.
+    pass
 
 
 def canonical_thread_key(email: Email) -> str:
@@ -704,7 +687,6 @@ async def send_email_endpoint(
             in_reply_to=request.in_reply_to,
             references=request.references,
         )
-        _enforce_send_email_rate_limit(auth_context)
         smtp_config = SmtpConfig(
             smtp_server=smtp_server,
             smtp_port=smtp_port,
