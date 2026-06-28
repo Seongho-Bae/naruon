@@ -82,8 +82,14 @@ def test_dav_rejects_missing_auth():
 
 
 def test_dav_route_uses_signed_session_dependency():
-    for route in app.routes:
-        if isinstance(route, APIRoute) and route.path == "/dav/{path:path}":
+    def get_routes(r):
+        if hasattr(r, "routes"):
+            for child in r.routes:
+                yield from get_routes(child)
+        else:
+            yield r
+    for route in get_routes(app):
+        if getattr(route, "path", "") == "/dav/{path:path}":
             dependencies = {dependency.dependency for dependency in route.dependencies}
             assert get_auth_context in dependencies
             return
