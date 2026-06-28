@@ -438,7 +438,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                     type="button"
                     aria-label="홈에서 보낸 메일 미답변 팔로업 작업 생성"
                     disabled={loading || pendingReplyCount === 0 || replySlaStatus === 'loading'}
-                    aria-busy={loading || replySlaStatus === 'loading'}
                     onClick={() => void handleReplySlaEscalation()}
                     className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
@@ -967,7 +966,7 @@ export function WorkspaceHome({
           </section>
           <section
             id="mobile-actions"
-            aria-label="모바일 판단 보조 실행"
+            aria-label="모바일 AI 실행"
             role="region"
             className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]`}
           >

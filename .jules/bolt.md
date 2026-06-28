@@ -81,7 +81,3 @@
 ## 2026-06-23 - DB 정렬 결과 활용을 통한 불필요한 O(N log N) 정렬 제거
 **Learning:** `thread_reply_candidate` 함수는 이메일을 최근 날짜순으로 검사하기 위해 매번 Python의 `sorted(..., reverse=True)`(시간 복잡도 `O(N log N)`)를 수행했습니다. 그러나 이 함수를 주로 호출하는 `check_missing_replies` 함수는 이미 데이터베이스에서 `order_by(Email.date.asc())`로 엄격하게 정렬된 결과를 가져옵니다. 따라서 이를 다시 정렬하는 것은 대규모 이메일 스레드 처리 시 불필요한 성능 저하를 일으킵니다.
 **Action:** 이미 정렬이 보장된 데이터를 처리하는 공통 헬퍼 함수의 경우, `is_chronological`과 같은 컨텍스트 매개변수를 추가하여 불필요한 `sorted()` 호출을 건너뛰고 단순히 `reversed()`를 사용해 `O(N)` 성능을 확보하도록 최적화해야 합니다.
-
-## 2026-06-24 - Defer large SQLAlchemy vector payloads
-**Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
-**Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
