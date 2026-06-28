@@ -14,6 +14,8 @@ def _version_file_candidates() -> tuple[Path, ...]:
 
 @lru_cache(maxsize=1)
 def get_release_version() -> str:
+    """Return the release version recorded in the nearest VERSION file."""
+
     for version_file in _version_file_candidates():
         if version_file.exists():
             return version_file.read_text(encoding="utf-8").strip()

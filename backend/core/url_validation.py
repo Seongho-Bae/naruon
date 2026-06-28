@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+"""Validation helpers for outbound HTTPS configuration."""
+
 import ipaddress
 import socket
 from dataclasses import dataclass
@@ -8,6 +10,8 @@ from urllib.parse import urlsplit
 
 @dataclass(frozen=True)
 class ValidatedHTTPSURLHost:
+    """Normalized HTTPS host details after allowlist and DNS validation."""
+
     normalized_url: str
     hostname: str
     port: int
@@ -15,6 +19,8 @@ class ValidatedHTTPSURLHost:
 
 
 def parse_allowed_hosts(raw_hosts: str) -> frozenset[str]:
+    """Parse a comma-separated allowlist into normalized host names."""
+
     hosts: set[str] = set()
     for raw_host in raw_hosts.split(","):
         host = _normalize_host(raw_host)
@@ -29,6 +35,8 @@ def validate_https_url_host(
     allowed_hosts: frozenset[str],
     allowed_hosts_setting_name: str,
 ) -> None:
+    """Validate an HTTPS URL against an allowlist and routable-host policy."""
+
     validate_https_url_host_details(
         setting_name,
         url_value,
@@ -43,6 +51,8 @@ def validate_https_url_host_details(
     allowed_hosts: frozenset[str],
     allowed_hosts_setting_name: str,
 ) -> ValidatedHTTPSURLHost:
+    """Return normalized HTTPS host details after validation succeeds."""
+
     parsed = urlsplit(url_value)
     if parsed.scheme.lower() != "https":
         raise ValueError(f"{setting_name} must use https")

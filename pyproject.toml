@@ -1,0 +1,42 @@
+[tool.coverage.run]
+include = [
+    "backend/core/__init__.py",
+    "backend/core/exceptions.py",
+    "backend/core/runtime_secrets.py",
+    "backend/core/url_validation.py",
+    "backend/core/version.py",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+include = [
+    "backend/core/__init__.py",
+    "backend/core/exceptions.py",
+    "backend/core/runtime_secrets.py",
+    "backend/core/url_validation.py",
+    "backend/core/version.py",
+]
+
+[tool.interrogate]
+exclude = [
+    "backend/alembic",
+    "backend/api",
+    "backend/db",
+    "backend/import_fixtures.py",
+    "backend/main.py",
+    "backend/runner",
+    "backend/schema",
+    "backend/scripts",
+    "backend/services",
+    "backend/tests",
+    "backend/core/config.py",
+    "backend/core/rbac.py",
+    "backend/core/telemetry.py",
+    "connector",
+    "docs",
+    "scripts",
+    "tests",
+]
+ignore-semiprivate = true
+fail-under = 100
