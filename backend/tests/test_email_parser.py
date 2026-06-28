@@ -293,3 +293,25 @@ def test_sanitize_display_text():
 
     # None value (falls back to _sanitize_nul which converts None to "")
     assert _sanitize_display_text(None) == ""
+
+
+def test_sanitize_address_display_text_strips_crlf():
+    """CRLF sequences in address fields must be stripped to prevent header injection (CWE-93)."""
+    from services.email_parser import _sanitize_address_display_text
+
+    # CR+LF in display name must not survive into output
+    malicious = "Attacker\r\nBcc: victim@example.com <attacker@example.com>"
+    result = _sanitize_address_display_text(malicious)
+    assert "\r" not in result
+    assert "\n" not in result
+
+    # Bare CR in address must be removed
+    cr_only = "user\r@example.com"
+    result_cr = _sanitize_address_display_text(cr_only)
+    assert "\r" not in result_cr
+
+    # Clean addresses must pass through unchanged
+    clean = "Alice <alice@example.com>, Bob <bob@example.com>"
+    result_clean = _sanitize_address_display_text(clean)
+    assert "alice@example.com" in result_clean
+    assert "bob@example.com" in result_clean

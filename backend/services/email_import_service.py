@@ -288,7 +288,7 @@ async def _import_single_eml(
     for attachment_index, attachment in enumerate(attachment_payloads, start=1):
         email_obj.attachments.append(
             Attachment(
-                filename=str(attachment.get("filename") or "attachment.txt"),
+                filename=_safe_upload_filename(str(attachment.get("filename") or "attachment.txt")),
                 content=str(attachment.get("content") or ""),
                 embedding=(
                     fitted_embeddings[attachment_index]

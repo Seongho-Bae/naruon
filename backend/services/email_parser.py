@@ -36,18 +36,23 @@ def _sanitize_display_text(text: str) -> str:
     return strip_html_markup(_sanitize_nul(text))
 
 
+def _strip_crlf(text: str) -> str:
+    """Removes CR and LF characters to prevent email header injection (CWE-93)."""
+    return text.replace("\r", "").replace("\n", "")
+
+
 def _sanitize_address_display_text(text: str) -> str:
     sanitized_parts: list[str] = []
     for display_name, address in getaddresses([text]):
-        safe_display_name = _sanitize_display_text(display_name).strip()
-        safe_address = _sanitize_nul(address).strip()
+        safe_display_name = _strip_crlf(_sanitize_display_text(display_name).strip())
+        safe_address = _strip_crlf(_sanitize_nul(address).strip())
         if safe_address:
             sanitized_parts.append(formataddr((safe_display_name, safe_address)))
         elif safe_display_name:
             sanitized_parts.append(safe_display_name)
     if sanitized_parts:
         return ", ".join(sanitized_parts)
-    return _sanitize_display_text(text)
+    return _strip_crlf(_sanitize_display_text(text))
 
 
 def _process_multipart_body(msg: Message) -> tuple[str, str, list[dict]]:

@@ -21,7 +21,7 @@ class TestEmailService:
         expected = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
         assert fingerprint == expected
 
-    def test_generate_email_fingerprint_long_body(self):
+    def test_generate_email_fingerprint_long_body_uses_full_content(self):
         long_body = "A" * 1000
         email_data = {
             "sender": "test@example.com",
@@ -32,9 +32,28 @@ class TestEmailService:
 
         fingerprint = generate_email_fingerprint(email_data)
 
-        raw_str = f"test@example.com|Hello|2023-01-01T12:00:00|{'A' * 500}"
+        raw_str = f"test@example.com|Hello|2023-01-01T12:00:00|{'A' * 1000}"
         expected = hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
         assert fingerprint == expected
+
+    def test_generate_email_fingerprint_long_body_differs_beyond_500_chars(self):
+        prefix = "A" * 500
+        email_data_1 = {
+            "sender": "test@example.com",
+            "subject": "Hello",
+            "date": "2023-01-01T12:00:00",
+            "body": prefix + "Unique content 1",
+        }
+        email_data_2 = {
+            "sender": "test@example.com",
+            "subject": "Hello",
+            "date": "2023-01-01T12:00:00",
+            "body": prefix + "Unique content 2",
+        }
+
+        fp1 = generate_email_fingerprint(email_data_1)
+        fp2 = generate_email_fingerprint(email_data_2)
+        assert fp1 != fp2, "Emails with different content beyond 500 chars must produce different fingerprints"
 
     def test_generate_email_fingerprint_empty_dict(self):
         fingerprint = generate_email_fingerprint({})
@@ -133,3 +152,13 @@ class TestEmailService:
         }
 
         assert process_self_to_self(email_data, "invalid-email") is False
+
+    def test_process_self_to_self_unicode_homoglyph_rejected(self):
+        """Cyrillic homoglyph addresses must not bypass self-to-self detection (CWE-178)."""
+        cyrillic_sender = "u\u0455er@example.com"  # Cyrillic 'ѕ'
+        email_data = {
+            "sender": cyrillic_sender,
+            "recipients": ["user@example.com"],
+        }
+
+        assert process_self_to_self(email_data, "user@example.com") is False
