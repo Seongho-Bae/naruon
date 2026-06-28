@@ -1,0 +1,11 @@
+[tool.coverage.run]
+source = ["coverage_contract"]
+
+[tool.interrogate]
+fail-under = 100
+exclude = [
+  "backend",
+  "connector",
+  "docs",
+  "scripts",
+]
