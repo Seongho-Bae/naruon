@@ -1,15 +1,19 @@
+"""Support backend core rbac."""
+
 import enum
 from typing import Dict, Any
 from pydantic import BaseModel
 from api.auth import RoleName
 
 class ResourceAction(str, enum.Enum):
+    """Represent resource action."""
     READ = "read"
     WRITE = "write"
     DELETE = "delete"
     ADMIN = "admin"
 
 class AbacPolicy(BaseModel):
+    """Represent abac policy."""
     policy_id: str
     resource_type: str
     action: ResourceAction

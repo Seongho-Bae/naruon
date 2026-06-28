@@ -1,3 +1,5 @@
+"""Support backend api webdav."""
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,12 +20,14 @@ WEB_DAV_ERROR_STATUS_CODES = {
 }
 
 class WebdavAccountResponse(BaseModel):
+    """Represent a response payload for webdav account."""
     source_id: str
     display_label: str
     writeback_enabled: bool
     etag: str | None = None
 
 class ProjectFolderResponse(BaseModel):
+    """Represent a response payload for project folder."""
     folder_uid: str
     project_name: str
     webdav_path: str
@@ -31,11 +35,13 @@ class ProjectFolderResponse(BaseModel):
     organization_id: str | None
 
 class WritebackIntentRequest(BaseModel):
+    """Represent a request payload for writeback intent."""
     model_config = ConfigDict(extra="forbid")
 
     target_source_id: str | None = None
 
 class WritebackIntentResponse(BaseModel):
+    """Represent a response payload for writeback intent."""
     intent: str
     source_id: str | None
     target_label: str | None
@@ -46,6 +52,7 @@ class WritebackIntentResponse(BaseModel):
     message: str | None = None
 
 class KnowledgeMaterializationIntentRequest(BaseModel):
+    """Represent a request payload for knowledge materialization intent."""
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str
@@ -53,6 +60,7 @@ class KnowledgeMaterializationIntentRequest(BaseModel):
     execute_provider: bool = False
 
 class KnowledgeMaterializationIntentResponse(BaseModel):
+    """Represent a response payload for knowledge materialization intent."""
     intent: str
     status: str
     task_id: str
@@ -77,6 +85,7 @@ async def get_webdav_accounts(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return webdav accounts."""
     user_id = auth_context.user_id
     return await webdav_service.get_connected_accounts_from_db(
         db,
@@ -90,6 +99,7 @@ async def get_project_folders(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return project folders."""
     user_id = auth_context.user_id
     return await webdav_service.get_project_folders_from_db(
         db,
@@ -103,6 +113,7 @@ async def get_webdav_writeback_intent(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return webdav writeback intent."""
     user_id = auth_context.user_id
     result = await webdav_service.determine_webdav_writeback_intent_from_db(
         db,
@@ -124,6 +135,7 @@ async def get_knowledge_materialization_intent(
     auth_context: AuthContext = Depends(get_auth_context),
     db: AsyncSession = Depends(get_db),
 ):
+    """Return knowledge materialization intent."""
     result = await webdav_service.determine_knowledge_materialization_intent_from_db(
         db,
         auth_context.user_id,

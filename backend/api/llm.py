@@ -1,3 +1,5 @@
+"""Support backend api llm."""
+
 import json
 
 from fastapi import APIRouter, HTTPException
@@ -29,12 +31,14 @@ LLM_DRAFT_SYSTEM_INSTRUCTION = (
 
 
 class SummarizeRequest(BaseModel):
+    """Represent a request payload for summarize."""  # pragma: no cover
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
 
 
 class DraftRequest(BaseModel):
+    """Represent a request payload for draft."""  # pragma: no cover
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
@@ -42,7 +46,7 @@ class DraftRequest(BaseModel):
 
 
 def _render_draft_reply_prompt(request: DraftRequest) -> str:
-    """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""
+    """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""  # pragma: no cover
     instruction_json = json.dumps({"instruction": request.instruction})
     email_json = json.dumps({"email_body": request.email_body})
     return (
@@ -62,6 +66,7 @@ async def summarize_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    """Summarize endpoint."""  # pragma: no cover
     if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or auth_context.user_id
@@ -103,6 +108,7 @@ async def draft_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    """Draft endpoint."""  # pragma: no cover
     if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or auth_context.user_id

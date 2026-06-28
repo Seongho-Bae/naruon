@@ -1,3 +1,5 @@
+"""Support backend core runtime_secrets."""
+
 import math
 from collections import Counter
 
@@ -36,6 +38,7 @@ def _shannon_entropy_bits(secret: str) -> float:
 
 
 def validate_auth_session_hmac_secret_value(secret: str) -> None:
+    """Validate auth session hmac secret value."""
     if not secret:
         raise ValueError(
             "AUTH_SESSION_HMAC_SECRET must be at least 32 bytes in all environments"

@@ -1,3 +1,5 @@
+"""Support backend api runtime_config."""
+
 from fastapi import APIRouter
 from pydantic import BaseModel
 
@@ -7,6 +9,7 @@ router = APIRouter(prefix="/api/runtime-config", tags=["runtime-config"])
 
 
 class RuntimeConfigResponse(BaseModel):
+    """Represent a response payload for runtime config."""
     product_name: str
     version: str
     features: dict[str, bool]
@@ -15,6 +18,7 @@ class RuntimeConfigResponse(BaseModel):
 @router.get("", response_model=RuntimeConfigResponse)
 async def get_runtime_config():
     # Return basic non-secret configuration
+    """Return runtime config."""
     return RuntimeConfigResponse(
         product_name="Naruon",
         version=get_release_version(),

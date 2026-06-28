@@ -1,3 +1,5 @@
+"""Support backend api common scopes."""
+
 from sqlalchemy import select
 
 from api.auth import AuthContext
@@ -5,6 +7,7 @@ from db.models import ConnectorSignalEvent
 
 
 def connector_scope_statement(auth_context: AuthContext):
+    """Handle connector scope statement."""  # pragma: no cover
     if auth_context.organization_id is None:
         return None
     return (

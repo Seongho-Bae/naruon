@@ -1,3 +1,5 @@
+"""Support backend core url_validation."""
+
 from __future__ import annotations
 
 import ipaddress
@@ -8,6 +10,7 @@ from urllib.parse import urlsplit
 
 @dataclass(frozen=True)
 class ValidatedHTTPSURLHost:
+    """Represent validated h t t p s u r l host."""
     normalized_url: str
     hostname: str
     port: int
@@ -15,6 +18,7 @@ class ValidatedHTTPSURLHost:
 
 
 def parse_allowed_hosts(raw_hosts: str) -> frozenset[str]:
+    """Parse allowed hosts."""
     hosts: set[str] = set()
     for raw_host in raw_hosts.split(","):
         host = _normalize_host(raw_host)
@@ -29,6 +33,7 @@ def validate_https_url_host(
     allowed_hosts: frozenset[str],
     allowed_hosts_setting_name: str,
 ) -> None:
+    """Validate https url host."""
     validate_https_url_host_details(
         setting_name,
         url_value,
@@ -43,6 +48,7 @@ def validate_https_url_host_details(
     allowed_hosts: frozenset[str],
     allowed_hosts_setting_name: str,
 ) -> ValidatedHTTPSURLHost:
+    """Validate https url host details."""
     parsed = urlsplit(url_value)
     if parsed.scheme.lower() != "https":
         raise ValueError(f"{setting_name} must use https")

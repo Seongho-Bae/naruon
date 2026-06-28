@@ -1,3 +1,5 @@
+"""Support backend api session."""
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
@@ -8,6 +10,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class SessionResponse(BaseModel):
+    """Represent a response payload for session."""
     user_id: str
     organization_id: str | None
     workspace_id: str
@@ -17,6 +20,7 @@ class SessionResponse(BaseModel):
 async def current_session(
     auth_context: AuthContext = Depends(get_auth_context),
 ) -> SessionResponse:
+    """Return the current session."""
     return SessionResponse(
         user_id=auth_context.user_id,
         organization_id=auth_context.organization_id,

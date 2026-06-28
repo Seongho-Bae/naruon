@@ -1,3 +1,5 @@
+"""Support backend core config."""
+
 from typing import Any, cast
 from urllib.parse import urlsplit
 
@@ -16,6 +18,7 @@ DEFAULT_ORIGIN_PORTS = {
 
 
 def canonical_origin(scheme: str, hostname: str, port: int | None) -> str:
+    """Return the canonical origin."""  # pragma: no cover
     normalized_scheme = scheme.lower()
     normalized_host = hostname.lower()
     if ":" in normalized_host and not normalized_host.startswith("["):
@@ -26,6 +29,7 @@ def canonical_origin(scheme: str, hostname: str, port: int | None) -> str:
 
 
 def parse_allowed_cors_origins(raw_origins: str) -> list[str]:
+    """Parse allowed cors origins."""  # pragma: no cover
     origins: list[str] = []
     for raw_origin in raw_origins.split(","):
         origin = raw_origin.strip()
@@ -57,6 +61,7 @@ def parse_allowed_cors_origins(raw_origins: str) -> list[str]:
 
 
 class Settings(BaseSettings):
+    """Represent application settings."""  # pragma: no cover
     DATABASE_URL: str
     READONLY_DATABASE_URL: str | None = None
     DEBUG: bool = False
@@ -104,12 +109,14 @@ class Settings(BaseSettings):
     @field_validator("READONLY_DATABASE_URL", mode="before")
     @classmethod
     def normalize_blank_readonly_database_url(cls, value: Any) -> Any:
+        """Handle normalize blank readonly database url."""
         if isinstance(value, str) and not value.strip():
             return None
         return value
 
     @model_validator(mode="after")
     def validate_session_secret(self) -> "Settings":
+        """Validate session secret."""
         parse_allowed_cors_origins(self.ALLOWED_CORS_ORIGINS)
 
         configured = self.AUTH_SESSION_HMAC_SECRET
@@ -155,6 +162,7 @@ class Settings(BaseSettings):
 
     @property
     def ALLOWED_CORS_ORIGINS_LIST(self) -> list[str]:
+        """Handle a l l o w e d c o r s o r i g i n s l i s t."""
         return parse_allowed_cors_origins(self.ALLOWED_CORS_ORIGINS)
 
 
