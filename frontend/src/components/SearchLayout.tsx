@@ -511,6 +511,7 @@ export function SearchLayout() {
               ref={searchInputRef}
               type="text"
               inputMode="search"
+              enterKeyHint="search"
               role="searchbox"
               aria-label="맥락 검색어 입력"
               value={query}

@@ -139,6 +139,7 @@ describe("TasksPage", () => {
     expect(taskSearchInput).not.toBeNull();
     expect(taskSearchInput?.type).toBe("text");
     expect(taskSearchInput?.inputMode).toBe("search");
+    expect(taskSearchInput?.getAttribute("enterkeyhint")).toBe("search");
     expect(taskSearchInput?.getAttribute("role")).toBe("searchbox");
     await act(async () => {
       if (!taskSearchInput) return;

@@ -94,6 +94,7 @@ describe("DashboardLayout", () => {
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
     expect(globalSearchInput?.getAttribute("type")).toBe("text");
     expect(globalSearchInput?.getAttribute("inputmode")).toBe("search");
+    expect(globalSearchInput?.getAttribute("enterkeyhint")).toBe("search");
     expect(globalSearchInput?.getAttribute("role")).toBe("searchbox");
     expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
     expect(headerActionGroup?.className).toContain("lg:flex");
@@ -224,6 +225,7 @@ describe("DashboardLayout", () => {
     expect(input).not.toBeNull();
     expect(input?.getAttribute("type")).toBe("text");
     expect(input?.getAttribute("inputmode")).toBe("search");
+    expect(input?.getAttribute("enterkeyhint")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
 
     act(() => {

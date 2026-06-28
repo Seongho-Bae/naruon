@@ -328,6 +328,7 @@ export function TasksLayout() {
               id="task-search-input"
               type="text"
               inputMode="search"
+              enterKeyHint="search"
               role="searchbox"
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
