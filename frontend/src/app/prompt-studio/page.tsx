@@ -22,10 +22,18 @@ export default function PromptStudioPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const requirePromptSession = async () => {
+    const claims = await apiClient.getServerSessionClaims();
+    if (!claims.userId || !claims.organizationId) {
+      throw new Error('프롬프트 작업에는 서명된 사용자 세션이 필요합니다.');
+    }
+  };
+
   const handleTest = async () => {
     setTesting(true);
     setError(null);
     try {
+      await requirePromptSession();
       const data = await apiClient.post<{ result?: string }>('/api/prompts/test', {
         content: formData.content,
         variables: { email: testVariable }
@@ -42,6 +50,7 @@ export default function PromptStudioPage() {
     setSaving(true);
     setError(null);
     try {
+      await requirePromptSession();
       await apiClient.post<{ result?: string }>('/api/prompts', formData);
       alert("성공적으로 저장되었습니다.");
     } catch (err: unknown) {
