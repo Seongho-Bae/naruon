@@ -644,7 +644,7 @@ async def get_email_thread(
 
 class SendEmailRequest(BaseModel):
     to: EmailStr
-    subject: str = Field(..., max_length=256, pattern=r"^[^\r\n]*$")
+    subject: str
     body: str
     in_reply_to: str | None = None  # O3: email threading support
     references: str | None = None

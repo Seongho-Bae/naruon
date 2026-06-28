@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X , Loader2} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
@@ -195,12 +195,6 @@ export function CalendarLayout() {
     [visibleCalendarIds],
   );
   const selectedDetailEvent = visibleMonthEvents.find((event) => event.id === 'launch-meeting') ?? visibleMonthEvents[0] ?? null;
-  const selectedDetailTitle = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.title) : null;
-  const selectedDetailDescription = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.description) : null;
-  const selectedDetailSource = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.source) : null;
-  const selectedDetailTime = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.time) : null;
-  const selectedDetailDuration = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.duration) : null;
-  const selectedDetailLocation = selectedDetailEvent ? toSafeReactText(selectedDetailEvent.location) : null;
 
   const toggleCalendarVisibility = useCallback((calendarId: string) => {
     setCalendarVisibility((currentVisibility) => ({
@@ -511,7 +505,7 @@ export function CalendarLayout() {
                       <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
                       {dayEvents.map((event) => (
                         <div key={event.id} className={`mt-1 rounded px-1.5 py-1 text-[10px] font-semibold leading-tight sm:px-2 sm:text-xs ${event.monthClassName}`}>
-                          {toSafeReactText(event.time)}<span className="hidden sm:inline"> {toSafeReactText(event.title)}</span>
+                          {event.time}<span className="hidden sm:inline"> {event.title}</span>
                         </div>
                       ))}
                     </div>
@@ -527,8 +521,8 @@ export function CalendarLayout() {
                 {visibleWeekEvents.map((event) => (
                   <article key={event.id} className="rounded-xl border border-border bg-background p-4">
                     <p className="text-xs font-black text-primary">{event.day}</p>
-                    <h4 className="mt-2 text-sm font-bold">{toSafeReactText(event.title)}</h4>
-                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{toSafeReactText(event.source)}</p>
+                    <h4 className="mt-2 text-sm font-bold">{event.title}</h4>
+                    <p className="mt-2 text-xs font-semibold text-muted-foreground">{event.source}</p>
                   </article>
                 ))}
                 {visibleWeekEvents.length === 0 && (
@@ -541,11 +535,11 @@ export function CalendarLayout() {
           )}
           {viewMode === '일정 상세' && (
             <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-lg font-bold">{selectedDetailTitle ? `${selectedDetailTitle} 상세` : '일정 상세'}</h3>
+              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} 상세` : '일정 상세'}</h3>
               <dl className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
-                  <dd className="mt-2 text-sm font-bold">{selectedDetailSource ? `${selectedDetailSource} · 충돌 토큰 확인` : '표시 중인 원본 없음'}</dd>
+                  <dd className="mt-2 text-sm font-bold">{selectedDetailEvent ? `${selectedDetailEvent.source} · 충돌 토큰 확인` : '표시 중인 원본 없음'}</dd>
                 </div>
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">충돌 제어</dt>
@@ -590,9 +584,9 @@ export function CalendarLayout() {
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {visibleCandidateEvents.map((event) => (
                   <article key={event.id} className="rounded-xl border border-border bg-background p-4">
-                    <h4 className="text-sm font-bold">{toSafeReactText(event.title)}</h4>
-                    <p className="mt-2 text-xs text-muted-foreground">{toSafeReactText(event.source)}</p>
-                    <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{toSafeReactText(event.mode)}</p>
+                    <h4 className="text-sm font-bold">{event.title}</h4>
+                    <p className="mt-2 text-xs text-muted-foreground">{event.source}</p>
+                    <p className="mt-3 rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">{event.mode}</p>
                   </article>
                 ))}
                 {visibleCandidateEvents.length === 0 && (
@@ -623,23 +617,23 @@ export function CalendarLayout() {
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
-            <h2 className="text-xl font-bold">{selectedDetailTitle ? `${selectedDetailTitle} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
+            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{selectedDetailDescription ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
         </div>
 
         <div className="mt-6 space-y-5">
           <div className="flex gap-3">
             <Clock className="size-5 text-muted-foreground shrink-0" />
             <div>
-              <p className="text-sm font-semibold">2026.05.23 (목) {selectedDetailTime ?? '--:--'} - 11:00</p>
-              <p className="text-xs text-muted-foreground">{selectedDetailDuration ?? '일정 없음'}</p>
+              <p className="text-sm font-semibold">2026.05.23 (목) {selectedDetailEvent?.time ?? '--:--'} - 11:00</p>
+              <p className="text-xs text-muted-foreground">{selectedDetailEvent?.duration ?? '일정 없음'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-center">
             <Video className="size-5 text-muted-foreground shrink-0" />
-            <p className="text-sm font-semibold">{selectedDetailLocation ?? '장소 없음'}</p>
-            <button type="button" aria-label={`${selectedDetailLocation ?? '장소'} 위치 보기`} className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
+            <p className="text-sm font-semibold">{selectedDetailEvent?.location ?? '장소 없음'}</p>
+            <button type="button" aria-label={`${selectedDetailEvent?.location ?? '장소'} 위치 보기`} className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
           </div>
           <div className="flex gap-3 items-start">
             <Users className="size-5 text-muted-foreground shrink-0" />
@@ -657,7 +651,7 @@ export function CalendarLayout() {
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-sm font-semibold mb-1">설명</p>
-              <p className="text-sm text-muted-foreground">{selectedDetailDescription ?? '표시할 일정 설명이 없습니다.'}</p>
+              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '표시할 일정 설명이 없습니다.'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-start">
