@@ -250,6 +250,7 @@ export function CalendarLayout() {
         summary: action === 'create'
           ? 'Naruon 일정 후보 writeback intent 점검'
           : 'Naruon 기존 일정 ETag/If-Match 충돌 점검',
+        // Non-sensitive UUID reference
         ...(selectedWritebackSource ? { target_source_id: selectedWritebackSource.source_id } : {}),
         ...(executeProvider ? { execute_provider: true } : {}),
       });
