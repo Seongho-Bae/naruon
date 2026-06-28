@@ -41,6 +41,6 @@ class CalendarServiceError(Exception):
 
 
 class UnsafeCalendarActionItemError(CalendarServiceError):
-    """Raised when calendar action item text is unsafe for writeback."""
+    """Raised when calendar todo text is unsafe for writeback."""
 
     pass
