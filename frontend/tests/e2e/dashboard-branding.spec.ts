@@ -169,7 +169,7 @@ test('keeps the short mobile AI quick action menu inside the viewport with scrol
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
+  await page.getByRole('button', { name: '판단 보조 빠른 실행' }).click();
 
   const menu = page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' });
   await expect(menu).toBeVisible();
@@ -1599,7 +1599,7 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   });
   expect(bottomGap).toBeGreaterThanOrEqual(0);
 
-  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
-  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
+  await page.getByRole('button', { name: '판단 보조 빠른 실행' }).click();
+  await page.getByRole('dialog', { name: '판단 보조 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
   await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목으로 추적합니다.')).toBeVisible();
 });
