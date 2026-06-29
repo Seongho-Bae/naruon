@@ -68,7 +68,7 @@ const mobileWorkspaceMenuItems = [
   { label: '받은편지함', description: '메일 스레드', icon: Inbox, href: '#mobile-inbox', view: 'inbox' as const },
   { label: '맥락 검색', description: '메일, 첨부, 일정, 사람 맥락 검색', icon: Search, href: '#mobile-search', view: 'search' as const },
   { label: '일정 연결', description: '일정 반영 후보', icon: CalendarDays, href: '#mobile-calendar', view: 'calendar' as const },
-  { label: 'AI 실행', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
+  { label: '판단 보조', description: '관계 맥락과 실행 항목', icon: Sparkles, href: '#mobile-actions', view: 'actions' as const },
 ];
 
 const headerActions = [
@@ -635,7 +635,7 @@ export function DashboardLayout({
         })}
         <button
           type="button"
-          aria-label="AI 빠른 실행"
+          aria-label="빠른 실행"
           aria-haspopup="dialog"
           aria-controls="mobile-ai-action-menu"
           popoverTarget="mobile-ai-action-menu"
@@ -665,13 +665,13 @@ export function DashboardLayout({
       <div
         id="mobile-ai-action-menu"
         role="dialog"
-        aria-label="AI 빠른 실행 메뉴"
+        aria-label="빠른 실행 메뉴"
         popover="auto"
         className="fixed inset-x-5 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-[70] max-h-[calc(100dvh-8rem-env(safe-area-inset-bottom))] overflow-y-auto overscroll-contain rounded-3xl border border-border bg-card/98 p-4 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop:bg-transparent lg:hidden"
       >
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <p className="text-sm font-black text-foreground">AI 빠른 실행</p>
+              <p className="text-sm font-black text-foreground">빠른 실행</p>
               <p className="mt-1 text-xs text-muted-foreground">메일 맥락을 바로 실행으로 전환합니다.</p>
             </div>
             <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">Naruon AI</span>

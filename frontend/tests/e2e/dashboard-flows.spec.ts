@@ -18,7 +18,7 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await page.getByRole('button', { name: '일정 반영' }).last().click();
   await expect(page.getByText('2개 일정 반영 의도를 선택한 원본 계정에 요청했습니다.')).toBeVisible();
 
-  await page.getByRole('button', { name: 'AI 답장 초안' }).last().click();
+  await page.getByRole('button', { name: '답장 초안' }).last().click();
   await expect(page.getByRole('textbox', { name: '답장 초안' })).toHaveValue('검토 후 일정과 우선순위를 정리해 공유드리겠습니다.');
 
   await page.getByRole('button', { name: '답장 보내기' }).click();

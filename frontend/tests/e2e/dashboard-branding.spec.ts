@@ -169,9 +169,9 @@ test('keeps the short mobile AI quick action menu inside the viewport with scrol
   await mockDashboardApi(page);
 
   await page.goto('/');
-  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
+  await page.getByRole('button', { name: '빠른 실행' }).click();
 
-  const menu = page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' });
+  const menu = page.getByRole('dialog', { name: '빠른 실행 메뉴' });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole('button', { name: '실행 항목 생성' })).toBeVisible();
   const bounds = await menu.evaluate((element) => {
@@ -195,17 +195,17 @@ test('renders compact mobile navigation without hover-only controls', async ({ p
   await expect(page.getByRole('navigation', { name: 'Mobile workspace sections' })).toBeVisible();
   await expect(page.getByRole('link', { name: '받은편지함' })).toBeVisible();
   await expect(page.getByRole('link', { name: '맥락 검색' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'AI 빠른 실행' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '빠른 실행' })).toBeVisible();
   await expect(page.getByRole('link', { name: '일정' })).toBeVisible();
   await expect(page.getByRole('link', { name: '더보기' })).toBeVisible();
   await expect(page.getByRole('button', { name: '워크스페이스 메뉴 열기' })).toBeVisible();
 
-  const mobileAiButton = page.getByRole('button', { name: 'AI 빠른 실행' });
+  const mobileAiButton = page.getByRole('button', { name: '빠른 실행' });
   await mobileAiButton.click();
-  await expect(page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '빠른 실행 메뉴' })).toBeVisible();
   await expect(page.getByRole('button', { name: '답장 초안' })).toBeVisible();
   await page.getByRole('link', { name: '더보기' }).click();
-  await expect(page.getByRole('region', { name: '모바일 AI 실행' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '모바일 판단 보조' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '관계 맥락' })).toBeVisible();
 
   await page.getByRole('link', { name: '맥락 검색' }).click();
@@ -1599,7 +1599,7 @@ test('keeps selected mobile email detail and actions above the bottom navigation
   });
   expect(bottomGap).toBeGreaterThanOrEqual(0);
 
-  await page.getByRole('button', { name: 'AI 빠른 실행' }).click();
-  await page.getByRole('dialog', { name: 'AI 빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
+  await page.getByRole('button', { name: '빠른 실행' }).click();
+  await page.getByRole('dialog', { name: '빠른 실행 메뉴' }).getByRole('button', { name: '실행 항목 생성' }).click();
   await expect(detailRegion.getByText('2개 실행 항목을 티켓형 실행 항목으로 추적합니다.')).toBeVisible();
 });

@@ -48,7 +48,7 @@ export function DecisionPointCard({
                     confidence >= 50 ? 'bg-amber-50 text-amber-700 border-amber-200' : 
                     'bg-red-50 text-red-700 border-red-200'
                   }`}
-                  title="AI 판단 확신도"
+                  title="판단 확신도"
                 >
                   <span className="mr-1">신뢰도</span>
                   {confidence}%

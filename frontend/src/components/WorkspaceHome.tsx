@@ -966,7 +966,7 @@ export function WorkspaceHome({
           </section>
           <section
             id="mobile-actions"
-            aria-label="모바일 AI 실행"
+            aria-label="모바일 판단 보조"
             role="region"
             className={`mobile-workspace-panel mobile-workspace-panel-actions h-full ${effectiveMobileView === 'actions' ? 'flex' : 'hidden'} flex-col overflow-y-auto bg-gradient-to-b from-primary/5 via-background to-emerald-500/5 p-4 pb-[calc(7rem+env(safe-area-inset-bottom))]`}
           >

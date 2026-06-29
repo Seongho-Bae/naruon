@@ -51,7 +51,7 @@ describe("DashboardLayout", () => {
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
-    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
+    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="빠른 실행"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]');
     const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (link) => link.textContent,
