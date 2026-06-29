@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -106,7 +107,22 @@ def gh_graphql(query: str, **fields: str | int) -> dict[str, Any]:
     for key, value in fields.items():
         flag = "-F" if isinstance(value, int) else "-f"
         cmd.extend([flag, f"{key}={value}"])
-    return json.loads(run(cmd, stdin=query))
+    last_error = ""
+    for attempt in range(1, 4):
+        try:
+            return json.loads(run(cmd, stdin=query))
+        except RuntimeError as exc:
+            last_error = str(exc)
+            if (
+                "HTTP 5" not in last_error
+                and "timed out" not in last_error.lower()
+                and "temporarily unavailable" not in last_error.lower()
+            ):
+                raise
+            if attempt >= 3:
+                break
+            time.sleep(attempt * 2)
+    raise RuntimeError(f"Failed GraphQL query after retries: {last_error}")
 
 
 def fetch_open_prs(repo: str, max_prs: int) -> list[dict[str, Any]]:
@@ -310,8 +326,6 @@ def dispatch_opencode_review(repo: str, workflow: str, pr: dict[str, Any], *, dr
             f"pr_base_ref={pr['baseRefName']}",
             "-f",
             f"pr_base_sha={pr['baseRefOid']}",
-            "-f",
-            f"pr_head_ref={pr['headRefName']}",
             "-f",
             f"pr_head_sha={pr['headRefOid']}",
         ]
