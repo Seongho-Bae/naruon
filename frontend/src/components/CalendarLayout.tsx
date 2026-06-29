@@ -1,7 +1,8 @@
 "use client";
+import { toSafeReactText } from "@/lib/safe-text";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
@@ -136,26 +137,9 @@ function getEtagLabel(value: string | null) {
   return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
 }
 
-function getIntentProtocolLabel(protocol: string) {
-  return `${getProtocolLabel(protocol)} 선택됨`;
-}
 
-function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_mode']) {
-  return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
-}
 
-function getProviderExecutionLabel(result: CalendarWritebackIntentResponse) {
-  if (result.provider_write_executed) return '외부 원본 쓰기 완료';
-  if (result.retry_item_uid || result.status === 'queued') return '커넥터 실행 요청 접수';
-  if (result.error_code) return '커넥터 실행 실패';
-  return '의도만 기록';
-}
 
-function getProviderRetryLabel(result: CalendarWritebackIntentResponse) {
-  if (result.retry_item_uid || result.status === 'queued') return '재시도 대기';
-  if (result.provider_write_executed) return '재시도 없음';
-  return '실행 요청 없음';
-}
 
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
@@ -231,6 +215,9 @@ export function CalendarLayout() {
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
+    if (action !== 'create' && action !== 'update') {
+      return;
+    }
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -355,24 +342,30 @@ export function CalendarLayout() {
                   type="button"
                   onClick={() => void requestWritebackIntent('create')}
                   disabled={isWritebackActionDisabled}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                  aria-busy={isWritebackLoading}
+                  className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
+                  {isWritebackLoading && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
                   새 일정 intent 점검
                 </button>
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
                   disabled={isWritebackActionDisabled}
-                  className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  aria-busy={isWritebackLoading}
+                  className="inline-flex items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
+                  {isWritebackLoading && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
                   ETag 업데이트 점검
                 </button>
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update', true)}
                   disabled={isProviderExecutionDisabled}
-                  className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  aria-busy={isWritebackLoading}
+                  className="inline-flex items-center justify-center rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
+                  {isWritebackLoading && <Loader2 className="mr-2 size-4 animate-spin" aria-hidden="true" />}
                   ETag 실행 요청
                 </button>
               </div>
@@ -450,36 +443,7 @@ export function CalendarLayout() {
                 <p className="font-bold text-red-700">일정 반영 의도 점검에 실패했습니다.</p>
               )}
               {writebackStatus === 'success' && writebackResult && (
-                <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
-                  <div>
-                    <dt className="font-black text-muted-foreground">반영 방식</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">원본 종류</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">대상 원본</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">충돌 검사</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">감사 근거</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">커넥터 실행</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">재시도 상태</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
-                  </div>
-                </dl>
+                <div className="text-sm font-bold text-green-700 bg-green-50 border border-green-200 p-4 rounded-lg">요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.</div>
               )}
             </div>
           </section>
@@ -528,7 +492,7 @@ export function CalendarLayout() {
           )}
           {viewMode === '일정 상세' && (
             <section aria-label="일정 상세" className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} 상세` : '일정 상세'}</h3>
+              <h3 className="text-lg font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} 상세` : '일정 상세'}</h3>
               <dl className="mt-4 grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-border bg-background p-4">
                   <dt className="text-xs font-black text-muted-foreground">원본 계정</dt>
@@ -547,7 +511,7 @@ export function CalendarLayout() {
                 <h3 className="text-lg font-bold mb-4">회의 조율</h3>
                 <p className="text-sm text-muted-foreground mb-4">참석자들의 캘린더(CalDAV)를 종합 분석하여 최적의 시간을 제안합니다.</p>
                 <div className="grid gap-3 max-w-lg">
-                  <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors">
+                  <button type="button" className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 hover:bg-primary/10 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
                     <div className="flex items-center gap-3">
                       <span className="grid size-8 place-items-center rounded-lg bg-primary/20 text-primary font-bold">1안</span>
                       <div className="text-left">
@@ -610,9 +574,9 @@ export function CalendarLayout() {
         <div className="mt-6">
           <div className="flex items-center gap-3">
             <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
-            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
+            <h2 className="text-xl font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
         </div>
 
         <div className="mt-6 space-y-5">
@@ -644,7 +608,7 @@ export function CalendarLayout() {
             <CalendarDays className="size-5 text-muted-foreground shrink-0" />
             <div>
               <p className="text-sm font-semibold mb-1">설명</p>
-              <p className="text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '표시할 일정 설명이 없습니다.'}</p>
+              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description) ?? '표시할 일정 설명이 없습니다.'}</p>
             </div>
           </div>
           <div className="flex gap-3 items-start">
