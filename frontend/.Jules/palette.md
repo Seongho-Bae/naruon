@@ -10,14 +10,6 @@
 **Learning:** Investigating unused import reports should first verify the current file because the codebase may already have evolved. The repo lint entrypoint is `eslint`, and the focused check for this investigation was `npx eslint src/components/WorkspaceHome.tsx`.
 **Action:** Use the focused `npx eslint src/components/WorkspaceHome.tsx` check when confirming WorkspaceHome import health, and reserve broader `eslint` runs for full frontend lint validation.
 
-## 2024-06-24 - Calendar layout intent action loading feedback
+## 2026-06-24 - Calendar layout intent action loading feedback
 **Learning:** UX feedback shouldn't be forgotten when abstract asynchronous API tasks are handled on secondary pages (like calendar sync coordination). Intent check buttons often block UI interaction context without showing spinning indicators, causing confusion.
 **Action:** When inspecting async trigger `<button>` tags specifically using `aria-busy={isLoading}`, make sure there is a complimentary visual indicator like a `lucide-react` `Loader2` element dynamically shown alongside the text.
-
-## 2024-06-28 - CalendarLayout XSS Prevention
-**Learning:** React dynamically renders text without escaping when using certain string concatenations or unsafe patterns, which can lead to Strix XSS findings if calendar data (title, description) from an external source is rendered.
-**Action:** Always wrap dynamically rendered strings from external sources with `toSafeReactText()` before displaying them in UI components.
-
-## 2024-06-28 - CalendarLayout XSS Prevention
-**Learning:** React dynamically renders text without escaping when using certain string concatenations or unsafe patterns, which can lead to Strix XSS findings if calendar data (title, description) from an external source is rendered.
-**Action:** Always wrap dynamically rendered strings from external sources with `toSafeReactText()` before displaying them in UI components.
