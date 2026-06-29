@@ -81,3 +81,6 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2025-02-28 - Optimize dictionary membership checks in list comprehensions
+**Learning:** In `backend/api/emails.py`, filtering `grouped.items()` using `has_sent_message.get(group_key, False)` incurs overhead due to the `.get()` method call and default value evaluation. Because `has_sent_message` only stores keys where the condition is truthy, explicit membership checking is functionally equivalent and faster.
+**Action:** Use `key in dict` instead of `dict.get(key, False)` when the dictionary only tracks positive boolean assertions, which avoids method overhead in tight loops or list comprehensions.

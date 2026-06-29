@@ -307,10 +307,12 @@ async def get_emails(
                 has_sent_message[group_key] = True
 
     if is_sent_folder:
+        # ⚡ Bolt: Check dictionary membership using `in` instead of `.get()` with a default value.
+        # Since `has_sent_message` only stores keys where the value is True, `in` is faster and allocates less.
         visible_groups = [
             email
             for group_key, email in grouped.items()
-            if has_sent_message.get(group_key, False)
+            if group_key in has_sent_message
         ]
     else:
         visible_groups = list(grouped.values())
