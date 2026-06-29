@@ -281,26 +281,26 @@ async def get_emails(
         .limit(candidate_window)
     )
     emails = list(result.scalars().all())
-    # ⚡ Bolt: Reverse the list in-place (O(N)) instead of sorting (O(N log N)).
-    # The database already sorted the records by date descending, so reversing it
-    # yields chronological order without redundant sorting overhead.
-    emails.reverse()
 
     grouped = {}
     # ⚡ Bolt: Use defaultdict to avoid redundant membership checks and dictionary access overhead.
-    # Also removed the date comparison since emails are pre-sorted oldest to newest.
     reply_counts = defaultdict(int)
     thread_messages = defaultdict(list)
     has_sent_message = {}
 
     is_sent_folder = folder == "sent"
 
+    # ⚡ Bolt: Iterate through database results directly in DESC order.
+    # We record the first email seen for each group (which is the newest) and avoid
+    # the O(N log N) sorted() call at the end since Python dict preserves insertion order.
     for email in emails:
         group_key = canonical_thread_key(email)
 
         thread_messages[group_key].append(email)
         reply_counts[group_key] += 1
-        grouped[group_key] = email
+
+        if group_key not in grouped:
+            grouped[group_key] = email
 
         if is_sent_folder and group_key not in has_sent_message:
             if message_is_from_user(email, user_addresses):
@@ -314,7 +314,14 @@ async def get_emails(
         ]
     else:
         visible_groups = list(grouped.values())
-    sorted_groups = sorted(visible_groups, key=lambda x: x.date, reverse=True)[:limit]
+
+    sorted_groups = visible_groups[:limit]
+
+    # ⚡ Bolt: Reverse the accumulated message arrays to preserve expected oldest-to-newest
+    # chronological API response ordering, which shifted when we reversed the main traversal.
+    # This O(M) in-place reversal per thread is significantly faster than O(N log N) global sorts.
+    for msgs in thread_messages.values():
+        msgs.reverse()
 
     items = []
     for email in sorted_groups:
