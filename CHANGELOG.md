@@ -1,4 +1,5 @@
 ## [Unreleased]
+- `backend/tests/test_tenant_config_api.py` 내의 `test_create_read_pop3_postgres_smoke` 함수의 복잡한 설정 로직을 `pytest` fixture로 분리하여 코드 가독성과 유지보수성을 개선했습니다.
 
 ## [0.14.4] - 2026-06-18
 
