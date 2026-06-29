@@ -192,8 +192,7 @@ async def _process_fallback_escalation(
     if new_tasks:
         try:
             async with db.begin_nested():
-                for _, _, task in new_tasks:
-                    db.add(task)
+                db.add_all(task for _, _, task in new_tasks)
                 await db.flush()
             created_count += len(new_tasks)
         except IntegrityError:

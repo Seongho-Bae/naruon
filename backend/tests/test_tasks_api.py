@@ -237,6 +237,10 @@ class MockTaskSession:
             obj.updated_at = now
             self.tasks.append(obj)
 
+    def add_all(self, objects):
+        for obj in objects:
+            self.add(obj)
+
     async def commit(self):
         pass
 
