@@ -54,6 +54,15 @@ _email_send_attempts_by_scope: dict[tuple[str | None, str], list[float]] = {}
 _email_send_rate_limit_lock = Lock()
 
 
+def _prune_expired_email_send_attempts(cutoff: float) -> None:
+    for key, attempts in list(_email_send_attempts_by_scope.items()):
+        fresh_attempts = [attempt for attempt in attempts if attempt > cutoff]
+        if fresh_attempts:
+            _email_send_attempts_by_scope[key] = fresh_attempts
+        else:
+            del _email_send_attempts_by_scope[key]
+
+
 def _enforce_send_email_rate_limit(auth_context: AuthContext) -> None:
     now = time.monotonic()
     cutoff = now - _SEND_EMAIL_RATE_LIMIT_WINDOW_SECONDS
@@ -61,11 +70,8 @@ def _enforce_send_email_rate_limit(auth_context: AuthContext) -> None:
 
     # ponytail: process-local throttle; move to Redis when multi-worker send volume matters.
     with _email_send_rate_limit_lock:
-        attempts = [
-            attempt
-            for attempt in _email_send_attempts_by_scope.get(key, [])
-            if attempt > cutoff
-        ]
+        _prune_expired_email_send_attempts(cutoff)
+        attempts = _email_send_attempts_by_scope.get(key, [])
         if len(attempts) >= _SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS:
             _email_send_attempts_by_scope[key] = attempts
             raise HTTPException(
