@@ -81,20 +81,11 @@ class Decision:
 
 def run(args: list[str], *, stdin: str | None = None) -> str:
     """Run a command and return stdout, raising with stderr on failure."""
-    # Retry GraphQL queries up to 3 times on 502 Bad Gateway
     import time
     max_retries = 3
     for attempt in range(max_retries):
-        # Retry GraphQL queries up to 3 times on 502 Bad Gateway
-    import time
-    max_retries = 5
-    for attempt in range(max_retries):
         process = subprocess.run(args, input=stdin, capture_output=True, text=True)
         if process.returncode == 0 or ("HTTP 502" not in process.stderr and "Bad Gateway" not in process.stderr) or attempt == max_retries - 1:
-            break
-        print(f"Retrying after 502 Bad Gateway... (attempt {attempt + 1}/{max_retries})")
-        time.sleep(10)
-        if process.returncode == 0 or "HTTP 502" not in process.stderr or attempt == max_retries - 1:
             break
         print(f"Retrying after 502 Bad Gateway... (attempt {attempt + 1}/{max_retries})")
         time.sleep(5)
@@ -278,7 +269,7 @@ def failed_status_checks(pr: dict[str, Any]) -> list[str]:
     return failed
 
 
-def enable_auto_merge(repo: str, pr: dict[str, Any], *, dry_run: bool) -> None:
+def enable_auto_merge(repo: str, pr: dict[str, Any], user: str = "AuthenticatedUser", *, dry_run: bool) -> None:
     """Enable merge-commit auto-merge for a PR at its current head."""
     number = str(pr["number"])
     head = pr["headRefOid"]
