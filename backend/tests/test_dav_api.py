@@ -275,3 +275,14 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
     assert all("\x1b[31m" not in message for message in dav_messages)
     assert all("\n" not in message for message in dav_messages)
     assert any("\\x1b[31minjected\\n\\r" in message for message in dav_messages)
+
+
+def test_dav_rejects_url_encoded_path_traversal(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request(
+            "PROPFIND",
+            "/dav/user123/..%2fother_user/projects",
+            headers={**AUTH_HEADERS, "Depth": "1"},
+        )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "DAV path must include an owner user"

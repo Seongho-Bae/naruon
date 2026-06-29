@@ -1,5 +1,6 @@
 import logging
 from html import escape as escape_xml_text
+from urllib.parse import unquote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +15,7 @@ router = APIRouter(prefix="/dav", tags=["dav"])
 
 
 def _dav_path_owner_user_id(path: str) -> str | None:
-    if ".." in path.split("/"):
+    if ".." in path.split("/") or ".." in unquote(path).split("/"):
         return None
     normalized_path = path.strip("/")
     if not normalized_path:
