@@ -1,0 +1,20 @@
+▲ Next.js 16.2.9 (webpack)
+- Local:         http://localhost:18080
+- Network:       http://192.168.0.2:18080
+✓ Ready in 588ms
+- Experiments (use with caution):
+  · cpus: 2
+  · staticGenerationMaxConcurrency: 2
+  · staticGenerationMinPagesPerWorker: 50
+
+○ Compiling / ...
+ GET / 200 in 7.0s (next.js: 5.9s, application-code: 1088ms)
+ GET / 200 in 444ms (next.js: 39ms, application-code: 405ms)
+ GET / 200 in 200ms (next.js: 3ms, application-code: 197ms)
+ GET / 200 in 244ms (next.js: 7ms, application-code: 237ms)
+ GET / 200 in 129ms (next.js: 3ms, application-code: 126ms)
+ GET / 200 in 127ms (next.js: 4ms, application-code: 123ms)
+ GET / 200 in 98ms (next.js: 3ms, application-code: 95ms)
+ GET / 200 in 89ms (next.js: 3ms, application-code: 86ms)
+ GET / 200 in 101ms (next.js: 4ms, application-code: 96ms)
+[?25h
