@@ -504,7 +504,9 @@ class Email(Base):
     references: Mapped[str | None] = mapped_column(String, nullable=True)
     date: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), index=True)
     body: Mapped[str] = mapped_column(Text)
-    embedding = mapped_column(Vector(1536))
+    # ⚡ Bolt Optimization: Defer fetching massive Vector(1536) columns by default
+    # Impact: Eliminates significant network I/O and memory bloat on full-table queries
+    embedding = mapped_column(Vector(1536), deferred=True)
     attachments: Mapped[list["Attachment"]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
@@ -572,7 +574,9 @@ class Attachment(Base):
     email_id: Mapped[int] = mapped_column(ForeignKey("email_records.id"))
     filename: Mapped[str] = mapped_column(String)
     content: Mapped[str] = mapped_column(Text)
-    embedding = mapped_column(Vector(1536))
+    # ⚡ Bolt Optimization: Defer fetching massive Vector(1536) columns by default
+    # Impact: Eliminates significant network I/O and memory bloat on full-table queries
+    embedding = mapped_column(Vector(1536), deferred=True)
 
     email: Mapped["Email"] = relationship(back_populates="attachments")
 

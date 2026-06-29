@@ -77,3 +77,6 @@
 ## 2026-06-20 - Optimize N+1 Query in ReplySlaScheduler Loop
 **Learning:** Sequential await loops on query results cause N+1 query and execution blocking issues.
 **Action:** Use asyncio.gather to concurrently process independent tasks instead of a for-loop await block to improve throughput significantly.
+## 2026-06-24 - Deferred Columns를 활용한 데이터베이스 I/O 병목 현상 방지
+**Learning:** 기본적으로 SQLAlchemy 쿼리는 매핑된 모든 컬럼을 가져옵니다. 모델에 `Vector(1536)`와 같은 대용량 컬럼(예: `Email.embedding` 또는 `Attachment.embedding`)이 포함되어 있으면 임베딩 데이터가 필요하지 않은 경우에도 모든 `select(Model)` 호출 시 대규모 네트워크 I/O 및 메모리 낭비가 발생합니다.
+**Action:** 벡터나 대용량 BLOB과 같이 자주 접근하지 않는 큰 컬럼은 항상 `deferred=True`로 구성하세요 (예: `mapped_column(Vector(1536), deferred=True)`). 이렇게 하면 명시적으로 요청하거나 접근할 때만 데이터를 가져오게 되어 기본 쿼리 지연 시간을 크게 줄일 수 있습니다.
