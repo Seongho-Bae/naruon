@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
+import { ChevronLeft, Loader2, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
@@ -356,27 +356,30 @@ export function CalendarLayout() {
                   onClick={() => void requestWritebackIntent('create')}
                   disabled={isWritebackActionDisabled}
                   aria-busy={isWritebackLoading}
-                  className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
-                  새 일정 intent 점검
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? "점검 중" : "새 일정 intent 점검"}
                 </button>
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update')}
                   disabled={isWritebackActionDisabled}
                   aria-busy={isWritebackLoading}
-                  className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  ETag 업데이트 점검
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? "점검 중" : "ETag 업데이트 점검"}
                 </button>
                 <button
                   type="button"
                   onClick={() => void requestWritebackIntent('update', true)}
                   disabled={isProviderExecutionDisabled}
                   aria-busy={isWritebackLoading}
-                  className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className="inline-flex items-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
-                  ETag 실행 요청
+                  {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                  {isWritebackLoading ? "요청 중" : "ETag 실행 요청"}
                 </button>
               </div>
             </div>
