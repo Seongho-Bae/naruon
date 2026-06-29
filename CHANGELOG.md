@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### 추가
+- Seongho Bae (@seonghobae): `safe_webdav_source_label` 함수의 검증을 강화하기 위해 유효한 문자열, None, 빈 문자열 등 다양한 입력값에 대한 테스트 케이스를 `backend/tests/test_webdav_service_unit.py`에 추가했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
