@@ -2,6 +2,7 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Filter, User, CalendarDays, Inbox, AlertCircle, X } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 import { apiClient } from '@/lib/api-client';
 import { toSafeReactText } from '@/lib/safe-text';
@@ -86,24 +87,11 @@ function getApiErrorStatus(error: unknown) {
 }
 
 function safeTaskTitle(title: string) {
-  const safeText = toSafeReactText(title, '제목 없는 작업');
-  let displayTitle = '';
-  let previousWasWhitespace = true;
-
-  for (const character of safeText) {
-    const normalizedCharacter = character === '<' || character === '>' ? ' ' : character;
-    if (normalizedCharacter.trim() === '') {
-      if (!previousWasWhitespace) {
-        displayTitle += ' ';
-      }
-      previousWasWhitespace = true;
-      continue;
-    }
-    displayTitle += normalizedCharacter;
-    previousWasWhitespace = false;
-  }
-
-  return displayTitle.trim() || '제목 없는 작업';
+  const cleanTitle = DOMPurify.sanitize(title, { ALLOWED_TAGS: [], KEEP_CONTENT: true }).replace(/<[^>]*>?/gm, '');
+  const displayTitle = toSafeReactText(cleanTitle, '제목 없는 작업')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return displayTitle || '제목 없는 작업';
 }
 
 function formatTaskTimestamp(value: string | null | undefined) {
@@ -268,14 +256,14 @@ export function TasksLayout() {
   };
 
   const filteredTicketTasks = useMemo(() => {
-    const normalizedQuery = (taskSearch === '' ? taskSearch : deferredTaskSearch).trim().toLowerCase();
+    const normalizedQuery = deferredTaskSearch.trim().toLowerCase();
     return ticketTasks.filter((task) => {
       if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
       if (!normalizedQuery) return true;
       const searchable = `${safeTaskTitle(task.title)} ${getTaskSourceLabel(task.source_type)} ${taskStatusLabels[task.status]} ${taskPriorityLabels[task.priority]}`.toLowerCase();
       return searchable.includes(normalizedQuery);
     });
-  }, [priorityFilter, taskSearch, deferredTaskSearch, ticketTasks]);
+  }, [priorityFilter, deferredTaskSearch, ticketTasks]);
 
   const liveBoardCounts = useMemo(() => {
     return filteredTicketTasks.reduce<Record<TicketTask['status'], number>>(

@@ -95,7 +95,7 @@ describe("TasksPage", () => {
       },
       {
         id: "task-webdav-markup",
-        title: "<script>문서 원본 검토</script>",
+        title: "<img src=x onerror=alert(1)>문서 원본 검토",
         status: "blocked",
         priority: "normal",
         source_type: "webdav",

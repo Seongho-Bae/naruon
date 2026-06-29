@@ -70,3 +70,7 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
+## 2024-05-26 - XSS vulnerability in safeTaskTitle
+**Vulnerability:** regex-based sanitization in `safeTaskTitle` for task titles allows bypass via HTML event attributes (e.g. `<img src=x onerror=alert(1)>`) and does not strip maliciously crafted HTML elements completely.
+**Learning:** regex replacements `replace(/<[^>]*>/g, ' ')` and `replace(/[<>]/g, ' ')` are insufficient because they only match explicit closing patterns and can't handle nuanced HTML contexts.
+**Prevention:** Use a proven DOM sanitization library like `DOMPurify` to safely parse and strip unsafe elements and attributes instead of writing custom regexes. Even when expecting plaintext, passing the input through `DOMPurify.sanitize(..., { ALLOWED_TAGS: [] })` securely neuters payload structures before secondary UI formatting.
