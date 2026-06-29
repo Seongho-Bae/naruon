@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+- `backend/api/search.py` 파일의 `build_reply_counts_subquery` 함수에 대한 테스트 코드(`backend/tests/test_search.py`) 추가. 이 테스트는 복잡한 mocking 없이 SQLAlchemy 쿼리 문자열을 통해 `user_id` 및 `organization_id` 필터가 정상적으로 적용되는지 검증합니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
