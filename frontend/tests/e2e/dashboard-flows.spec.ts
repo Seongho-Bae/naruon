@@ -32,8 +32,8 @@ test('submits branded inbox search against the search API', async ({ page }, tes
   await page.goto('/');
   await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
-  await desktopWorkspace.getByLabel('메일 검색').fill('출시');
-  await desktopWorkspace.getByRole('button', { name: '검색' }).click();
+  await desktopWorkspace.getByLabel('메일 맥락 검색').fill('출시');
+  await desktopWorkspace.getByRole('button', { name: '맥락 검색' }).click();
 
   await expect(desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
 });
