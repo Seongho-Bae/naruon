@@ -25,7 +25,7 @@ from db.models import (
     SecurityAuditEvent,
     WorkflowDefinition,
 )
-from db.session import get_db
+from db.session import get_db, get_readonly_db
 from main import app
 
 TEST_SESSION_HMAC_SECRET = "ai-hub-surface-hmac-value-20260529-32"  # noqa: S105
@@ -306,6 +306,7 @@ def _request_with_signed_session(
 
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = scoped_db
+    app.dependency_overrides[get_readonly_db] = scoped_db
     try:
         token = _signed_session_token(
             _valid_session_payload(**payload_overrides),

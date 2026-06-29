@@ -81,3 +81,7 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+
+## 2026-06-28 - Optimize Read-Heavy Dashboard with get_readonly_db
+**Learning:** The AI Hub dashboard endpoint (`get_ai_hub_surface`) was executing multiple sequential `select()` queries against the primary database. By switching the database session dependency from `get_db` to `get_readonly_db`, we can effectively offload these read-only analytical queries to a read replica, reducing load on the primary database.
+**Action:** For read-only dashboard endpoints that execute multiple queries, always use `Depends(get_readonly_db)` instead of the primary session to scale read capacity.

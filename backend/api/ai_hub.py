@@ -15,7 +15,7 @@ from db.models import (
     SecurityAuditEvent,
     WorkflowDefinition,
 )
-from db.session import get_db
+from db.session import get_db, get_readonly_db
 from services.llm_provider_readiness import (
     is_llm_provider_configured,
     llm_provider_model_label,
@@ -476,7 +476,7 @@ async def list_ai_hub_runs(
 @router.get("/surface", response_model=AiHubSurfaceResponse)
 async def get_ai_hub_surface(
     auth_context: AuthContext = Depends(get_auth_context),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_readonly_db),
 ) -> AiHubSurfaceResponse:
     prompts = await _list_prompts(db, auth_context)
     providers = await _list_providers(db, auth_context)
