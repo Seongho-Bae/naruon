@@ -159,10 +159,15 @@ async def create_calendar_events_batch(todo_texts: list[str], user_token: dict) 
         service = build("calendar", "v3", credentials=creds)
         now = datetime.datetime.now(datetime.timezone.utc)
 
-        created_events: list[dict] = []
+        tasks = []
         for start in range(0, len(safe_todo_texts), GOOGLE_CALENDAR_BATCH_MAX_REQUESTS):
             chunk = safe_todo_texts[start : start + GOOGLE_CALENDAR_BATCH_MAX_REQUESTS]
-            created_events.extend(await _execute_calendar_event_batch(service, chunk, now))
+            tasks.append(_execute_calendar_event_batch(service, chunk, now))
+
+        chunks_results = await asyncio.gather(*tasks)
+        created_events: list[dict] = []
+        for chunk_result in chunks_results:
+            created_events.extend(chunk_result)
         return created_events
     except UnsafeCalendarTodoError:
         raise
