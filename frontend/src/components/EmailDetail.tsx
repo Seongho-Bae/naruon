@@ -401,7 +401,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "동기화 중" : "일정 반영"}
+                    {isSyncing ? "일정 반영 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
