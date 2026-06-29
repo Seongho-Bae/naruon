@@ -7,12 +7,12 @@ workflow governance before a release branch can land.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
-import importlib.util
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -1209,18 +1209,7 @@ def test_opencode_strix_failed_check_review_rejects_collapsed_model_reports(
     )
 
 
-def test_opencode_strix_failed_check_review_model_before_title_attributed_correctly(
-    tmp_path: Path,
-) -> None:
-    """Model line appearing before Title inside a report window must override
-    a prior failed-model mention from the same window header.
-
-    This complements test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct
-    which covers Model appearing *after* code locations.  Together the two tests
-    ensure both orderings (Model-before-Title and Model-after-Code-Locations) are
-    handled correctly regardless of a prior 'Strix run failed for model' line in
-    the same window.
-    """
+def _setup_model_before_title_evidence(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo_root = tmp_path / "repo"
     auth_file = repo_root / "backend" / "app" / "auth.py"
     auth_file.parent.mkdir(parents=True)
@@ -1253,6 +1242,22 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         + "\n",
         encoding="utf-8",
     )
+    return repo_root, evidence_file, failed_checks_file
+
+
+def test_opencode_strix_failed_check_review_model_before_title_emits_fallback(
+    tmp_path: Path,
+) -> None:
+    """Model line appearing before Title inside a report window must override
+    a prior failed-model mention from the same window header.
+
+    This complements test_opencode_strix_failed_check_review_keeps_late_model_reports_distinct
+    which covers Model appearing *after* code locations.  Together the two tests
+    ensure both orderings (Model-before-Title and Model-after-Code-Locations) are
+    handled correctly regardless of a prior 'Strix run failed for model' line in
+    the same window.
+    """
+    repo_root, evidence_file, _ = _setup_model_before_title_evidence(tmp_path)
 
     fallback = _run_emit_opencode_failed_check_fallback(evidence_file, repo_root)
 
@@ -1260,6 +1265,12 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         "Strix report from deepseek/deepseek-r1-0528: Auth Bypass via Header"
     ) in fallback.stdout
     assert "openai/gpt-5" not in fallback.stdout
+
+
+def test_opencode_strix_failed_check_review_accepts_model_before_title_attribution(
+    tmp_path: Path,
+) -> None:
+    _, evidence_file, failed_checks_file = _setup_model_before_title_evidence(tmp_path)
 
     good_control_file = tmp_path / "good-control.json"
     _assert_validation_succeeds(
@@ -1289,6 +1300,12 @@ Strix run failed for model 'openai/gpt-5' after 145s (exit code 1).
         failed_checks_file,
         evidence_file,
     )
+
+
+def test_opencode_strix_failed_check_review_rejects_wrong_model_before_title_attribution(
+    tmp_path: Path,
+) -> None:
+    _, evidence_file, failed_checks_file = _setup_model_before_title_evidence(tmp_path)
 
     wrong_attribution_file = tmp_path / "wrong-control.json"
     _assert_validation_fails_with(

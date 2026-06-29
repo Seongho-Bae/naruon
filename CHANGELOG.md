@@ -2582,3 +2582,8 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+
+## [Unreleased]
+
+### 변경됨 (Changed)
+- `backend/tests/test_release_governance.py`에 있는 복잡하고 긴 테스트 함수(`test_opencode_strix_failed_check_review_model_before_title_attributed_correctly`)를 공통 셋업 헬퍼 함수(`_setup_model_before_title_evidence`)와 3개의 명확하고 작은 테스트 함수로 분리하여 코드의 유지보수성과 가독성을 향상시켰습니다.
