@@ -81,3 +81,7 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+
+## 2026-06-29 - Optimize multiple sequential COUNT aggregations into one query using CASE
+**Learning:** Sequential scalar `func.count()` aggregations on the same table trigger multiple individual database queries (an N+1 equivalent pattern on aggregations) when using SQLAlchemy async sessions because `asyncio.gather` is unsafe on a single session. This creates unnecessary network roundtrips and increases latency.
+**Action:** Always batch independent counts on the same table into a single `select` query by using conditional aggregation like `func.count(case((condition, 1)))`. When testing, remember to update mock query response structures (like `MockAsyncSession` and `MockResult`) to return the expected tuple format and handle methods like `.one_or_none()`.

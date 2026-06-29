@@ -80,6 +80,9 @@ class MockResult:
     def all(self):
         return self.obj if isinstance(self.obj, list) else []
 
+    def one_or_none(self):
+        return self.obj
+
 
 class MockAsyncSession:
     def __init__(self):
@@ -94,7 +97,31 @@ class MockAsyncSession:
             return MockResult(self.runner)
         if self.execute_calls == 2:
             return MockResult(self.events)
-        return MockResult(self.retry_items)
+
+        # Calculate counts dynamically based on self.retry_items
+        pending_count = sum(
+            1 for item in self.retry_items if item.retry_state == "pending"
+        )
+        running_count = sum(
+            1 for item in self.retry_items if item.retry_state == "running"
+        )
+        failed_count = sum(
+            1 for item in self.retry_items if item.retry_state.startswith("failed")
+        )
+
+        pending_items = [
+            item for item in self.retry_items if item.retry_state == "pending"
+        ]
+        next_retry_candidates = sorted(
+            item.next_retry_at
+            for item in pending_items
+            if item.next_retry_at is not None
+        )
+        min_next_retry_at = next_retry_candidates[0] if next_retry_candidates else None
+
+        return MockResult(
+            (pending_count, running_count, failed_count, min_next_retry_at)
+        )
 
 
 @pytest.fixture(autouse=True)
