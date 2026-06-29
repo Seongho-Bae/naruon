@@ -1992,3 +1992,38 @@ def test_email_owner_filters():
         str(filters2[1].compile(compile_kwargs={"literal_binds": True}))
         == "email_records.organization_id IS NULL"
     )
+
+def test_find_matches_for_candidates_perf_optim_handles_missing_lookups():
+    """
+    Test to guarantee 100% coverage on the bolt performance optimization in
+    _find_matches_for_candidates where candidate_lookups might theoretically miss keys.
+    """
+    from api.emails import _find_matches_for_candidates
+    from services.email_dedupe_service import EmailDedupeCandidate
+    import datetime
+
+    candidate = EmailDedupeCandidate(
+        candidate_key="missing_key_candidate",
+        message_id="<missing@example.com>",
+        date=datetime.datetime.now(),
+        sender="test@test.com",
+        recipients="test2@test.com",
+        subject="Subject",
+        body="Body"
+    )
+
+    candidates = [candidate]
+    by_message_id = {}
+    by_fingerprint = {}
+    candidate_lookups = {}
+    candidate_fingerprints = {}
+
+    updates = _find_matches_for_candidates(
+        candidates,
+        by_message_id,
+        by_fingerprint,
+        candidate_lookups,
+        candidate_fingerprints,
+    )
+
+    assert updates == []

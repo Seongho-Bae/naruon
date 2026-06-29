@@ -81,3 +81,7 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+
+## 2026-06-25 - Avoid redundant default argument allocations in dict.get()
+**Learning:** In Python, default arguments in functions like `dict.get(key, set())` or `dict.get(key, [])` are eagerly evaluated on every loop iteration, regardless of whether the key exists. Inside a tight loop (such as iterating over large lists of candidates or emails), this leads to continuous, unnecessary memory allocations and garbage collection overhead.
+**Action:** When performing dictionary lookups in tight loops, avoid passing dynamic default instances. Instead, use a conditional check: `val = my_dict.get(key); if val: ...` to safely handle missing keys without redundant object creation.

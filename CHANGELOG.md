@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### 성능 개선
+- O(N)의 set() 객체 생성을 발생시키던 `candidate_lookups.get`의 기본 인자 평가를 조건문으로 대체하여 `_find_matches_for_candidates`의 성능을 개선했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
