@@ -43,6 +43,11 @@ CodeRabbit/robot-review evidence. Human review is not awaited by default.
   unrelated scanner is temporarily failing.
 - Bypass actors must not be configured for routine delivery.
 - Security workflows and scanners are required gates, not optional paths.
+- PR Review Merge Scheduler is supplied by the organization required workflow
+  from `ContextualWisdomLab/.github`; this repository must not carry a
+  repo-local `.github/workflows/pr-review-merge-scheduler.yml` copy. Mechanical
+  branch update, auto-merge, and merge actions run as the target repository's
+  `github-actions[bot]` through that central workflow.
 
 ## Evidence commands
 
