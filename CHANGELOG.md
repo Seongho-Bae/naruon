@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### 수정
+- Next.js의 기본 `X-Powered-By` 응답 헤더를 비활성화하여 기술 스택 정보가 노출되는 취약점(Information Disclosure)을 완화했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
