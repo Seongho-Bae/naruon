@@ -7,6 +7,7 @@ from core.config import settings
 from core.exceptions import LLMServiceError
 from services import llm_provider_urls as provider_urls
 from services.llm_service import (
+translate_email_body,
     extract_todos_and_summary,
     draft_reply,
     ExtractionResult,
@@ -670,3 +671,58 @@ async def test_draft_reply_api_error(mock_openai):
 
     with pytest.raises(LLMServiceError, match="LLM API error during drafting"):
         await draft_reply("Test email", "Draft a positive reply", "test-key")
+
+@pytest.mark.asyncio
+async def test_translate_email_body_success(mock_openai):
+    mock_response = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = "번역된 메일입니다."
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_response.choices = [mock_choice]
+    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    result = await translate_email_body(
+        "This is an email.",
+        "Korean",
+        "test-key"
+    )
+
+    assert result == "번역된 메일입니다."
+    mock_openai.chat.completions.create.assert_called_once()
+    kwargs = mock_openai.chat.completions.create.call_args.kwargs
+    assert kwargs["model"] == settings.OPENAI_MODEL
+    assert kwargs["temperature"] == 0.3
+
+@pytest.mark.asyncio
+async def test_translate_email_body_api_error(mock_openai):
+    mock_openai.chat.completions.create = AsyncMock(side_effect=Exception("API Error"))
+
+    with pytest.raises(LLMServiceError, match="LLM API error during translation"):
+        await translate_email_body("Test email", "Korean", "test-key")
+
+@pytest.mark.asyncio
+async def test_translate_email_body_missing_api_key():
+    with pytest.raises(ValueError, match="API Key is not set"):
+        await translate_email_body("Test email", "Korean", "")
+
+@pytest.mark.asyncio
+async def test_translate_email_body_uses_selected_provider_model(mock_openai):
+    mock_response = MagicMock()
+    mock_message = MagicMock()
+    mock_message.content = "Gemma translation"
+    mock_choice = MagicMock()
+    mock_choice.message = mock_message
+    mock_response.choices = [mock_choice]
+
+    mock_openai.chat.completions.create = AsyncMock(return_value=mock_response)
+
+    result = await translate_email_body(
+        "Test email",
+        "Korean",
+        "test-key",
+        model="gemma4",
+    )
+
+    assert result == "Gemma translation"
+    assert mock_openai.chat.completions.create.call_args.kwargs["model"] == "gemma4"

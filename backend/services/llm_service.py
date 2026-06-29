@@ -80,7 +80,56 @@ async def extract_todos_and_summary(
     return parsed
 
 
+
+async def translate_email_body(
+    email_body: str,
+    target_language: str,
+    openai_api_key: str,
+    base_url: str | None = None,
+    model: str | None = None,
+) -> str:
+    if not openai_api_key:
+        raise ValueError("API Key is not set")
+
+    configured_base_url = base_url if base_url is not None else settings.OPENAI_BASE_URL
+    validated_base_url, http_client = await build_llm_provider_http_client(
+        configured_base_url
+    )
+    selected_model = model or settings.OPENAI_MODEL
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"You are an expert translator. Translate the given email body into {target_language}. "
+                "Preserve the original tone, formatting, and any professional nuances. "
+                "Output ONLY the translated text without any conversational fillers."
+            ),
+        },
+        {"role": "user", "content": email_body},
+    ]
+
+    client = AsyncOpenAI(
+        api_key=openai_api_key,
+        base_url=validated_base_url,
+        http_client=http_client,
+    )
+    try:
+        response = await client.chat.completions.create(
+            model=selected_model,
+            messages=messages,
+            temperature=0.3,
+        )
+    except Exception as e:
+        logger.error(f"Error calling LLM API for translation: {e}")
+        raise LLMServiceError(f"LLM API error during translation: {e}") from e
+    finally:
+        await client.close()
+
+    content = response.choices[0].message.content
+    return content if content is not None else ""
+
 async def draft_reply(
+
     email_body: str,
     instruction: str,
     openai_api_key: str,

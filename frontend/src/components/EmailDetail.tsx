@@ -64,6 +64,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   const [threadError, setThreadError] = useState<string | null>(null);
 
   const [draft, setDraft] = useState<string>('');
+  const [translation, setTranslation] = useState<string | null>(null);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translationError, setTranslationError] = useState<string | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSending, setIsSending] = useState(false);
   
@@ -177,6 +180,25 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
     return () => { isMounted = false; };
   }, [emailId, fetchThread]);
+
+  const handleTranslate = useCallback(async () => {
+    if (!email) return;
+    const actionEmailId = email.id;
+    const isCurrentEmail = () => currentEmailIdRef.current === actionEmailId;
+    setIsTranslating(true);
+    setTranslationError(null);
+    try {
+      const data = await apiClient.post<{ translation: string }>('/api/llm/translate', { email_body: email.body, target_language: 'Korean' });
+      if (!isCurrentEmail()) return;
+      setTranslation(data.translation || null);
+    } catch (err) {
+      if (!isCurrentEmail()) return;
+      console.error("Error translating email:", err);
+      setTranslationError("번역을 수행하지 못했습니다.");
+    } finally {
+      if (isCurrentEmail()) setIsTranslating(false);
+    }
+  }, [email]);
 
   const handleDraftReply = useCallback(async () => {
     if (!email) return;
@@ -334,7 +356,20 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             <AvatarFallback>{safeEmailSender ? safeEmailSender.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
           </Avatar>
           <div className="grid min-w-0 flex-1 gap-1">
-            <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{safeEmailSubject}</div>
+            <div className="flex items-start justify-between gap-4 w-full">
+              <div className="break-words text-lg font-black tracking-tight text-foreground xl:text-xl">{safeEmailSubject}</div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                aria-busy={isTranslating}
+                className="shrink-0 rounded-xl px-3 h-8 text-xs font-bold shadow-sm"
+              >
+                {isTranslating && <Loader2 className="mr-2 h-3 w-3 animate-spin" aria-hidden="true" />}
+                {isTranslating ? "번역 중" : "번역"}
+              </Button>
+            </div>
             <div className="line-clamp-1 text-xs">
               <span className="text-muted-foreground">{safeEmailSender}</span>
             </div>
@@ -484,6 +519,17 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     </div>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
+                  {msg.id === email.id && translationError && (
+                    <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                      {translationError}
+                    </div>
+                  )}
+                  {msg.id === email.id && translation && (
+                    <div className="mb-6 rounded-2xl bg-secondary/40 p-4 border border-border">
+                      <p className="text-xs font-bold text-primary mb-2">한국어 번역 결과</p>
+                      <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(translation)}</div>
+                    </div>
+                  )}
                   <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
                 </div>
               ))}

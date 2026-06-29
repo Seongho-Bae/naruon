@@ -9,6 +9,7 @@ from api.auth import AuthContext, get_auth_context
 from services.llm_service import (
     extract_todos_and_summary,
     draft_reply,
+    translate_email_body,
     ExtractionResult,
 )
 from core.exceptions import LLMServiceError
@@ -41,7 +42,15 @@ class DraftRequest(BaseModel):
     instruction: str = Field(min_length=1, max_length=LLM_DRAFT_INSTRUCTION_MAX_CHARS)
 
 
-def _render_draft_reply_prompt(request: DraftRequest) -> str:
+
+class TranslateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
+    target_language: str = Field(min_length=1, max_length=50, default="Korean")
+
+def _render_draft_reply_prompt(
+request: DraftRequest) -> str:
     """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""
     instruction_json = json.dumps({"instruction": request.instruction})
     email_json = json.dumps({"email_body": request.email_body})
@@ -124,6 +133,47 @@ async def draft_endpoint(
             model=runtime_provider.chat_model,
         )
         return {"draft": reply}
+    except LLMServiceError:
+        raise HTTPException(
+            status_code=500,
+            detail="An internal server error occurred while processing the request.",
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="An internal server error occurred while processing the request.",
+        )
+
+@router.post("/translate")
+async def translate_endpoint(
+    request: TranslateRequest,
+    user_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+    auth_context: AuthContext = Depends(get_auth_context),
+):
+    if user_id and user_id != auth_context.user_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    target_user_id = user_id or auth_context.user_id
+
+    try:
+        runtime_provider = await resolve_runtime_llm_provider(
+            db,
+            user_id=target_user_id,
+            organization_id=auth_context.organization_id,
+        )
+        if runtime_provider is None:
+            raise HTTPException(status_code=400, detail="OpenAI API key not configured")
+
+        translation = await translate_email_body(
+            request.email_body,
+            request.target_language,
+            runtime_provider.api_key,
+            base_url=runtime_provider.base_url,
+            model=runtime_provider.chat_model,
+        )
+        return {"translation": translation}
     except LLMServiceError:
         raise HTTPException(
             status_code=500,
