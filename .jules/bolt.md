@@ -81,6 +81,10 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2026-06-25 - Use Read Replica for Backend Dashboards
+**Learning:** High-traffic backend dashboards pulling read-heavy analytics (like workflows, agent runs, and surfaces in `backend/api/ai_hub.py`) needlessly bottleneck the primary database when scaling. Because real-time consistency on historical audit/run records isn't critical, using `get_readonly_db` directly mitigates primary database load effectively.
+**Action:** Default to `get_readonly_db` for GET endpoints that do analytical queries or display aggregate historical state instead of tracking writes.
+
 ## 2026-06-28 - Terminology Alignment in End-to-End Tests
 **Learning:** When UI terminology rules change, end-to-end tests relying on exact text matches (like `getByRole('button', { name: 'AI 답장 초안' })` or `getByText('2개 실행 항목')`) will fail. Moreover, some UI elements render dynamic list structures rather than aggregated summary strings, meaning exact assertions on previously aggregated strings must be updated to reflect the new DOM structure.
 **Action:** When updating application UI terminology to match a specification, systematically audit and update all corresponding string literals, aria-labels, and assertions in both unit and E2E tests using search tools. For dynamic data mapped into lists, adjust test assertions to verify the presence of individual mapped items rather than outdated summary counters.
