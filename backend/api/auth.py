@@ -274,6 +274,8 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
 def _reject_unsupported_critical_headers(header: dict[str, Any]) -> None:
     if "crit" in header:
         raise _authentication_error()
+    if header.get("alg") == "none":
+        raise _authentication_error()
 
 
 def _session_secret_bytes() -> bytes:

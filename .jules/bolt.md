@@ -89,3 +89,8 @@
 ## 2026-06-25 - Use type="search" for Semantic HTML and Mobile Optimization
 **Learning:** For search inputs across the frontend (`SearchLayout.tsx`, `TasksLayout.tsx`, `EmailList.tsx`), `type="text"` with `inputMode="search"` does not trigger the correct native browser styling and mobile keyboard states (like a specific "Search" button on the virtual keyboard). We need to properly define the semantic type as `type="search"`. Additionally, when using `type="search"`, WebKit-based browsers inject a native clear button (an 'X' inside the input) that overlays custom React-based clear buttons.
 **Action:** When implementing search fields, always use `type="search"`. To hide the native browser clear button (which prevents double 'X' buttons when using custom React clear logic), apply the tailwind class `[&::-webkit-search-cancel-button]:hidden` to the input element.
+
+## 2026-06-25 - Avoid JWT Algorithm Confusion Attacks
+**Vulnerability:** The authentication module was vulnerable to an algorithm confusion attack where an attacker could bypass signature verification by crafting a JWT token and setting the 'alg' header to 'none'.
+**Learning:** The JWT validation function did not explicitly reject the 'none' algorithm. This allows an attacker to supply a forged token without a valid signature, potentially gaining unauthorized access.
+**Prevention:** Explicitly check for and reject the 'none' algorithm (e.g. `if header.get("alg") == "none":`) during initial JWT header inspection.
