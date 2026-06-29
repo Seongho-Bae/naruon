@@ -1632,11 +1632,10 @@ jobs:
 
           ensure_review_body_has_change_graph() {
             local body="$1"
-
-            printf '%s\n' "$body"
             if ! printf '%s\n' "$body" | grep -Fq "## Change Flow Graph"; then
-              append_mermaid_review_graph
+              body="$(printf '%s\n\n' "$body"; append_mermaid_review_graph || true)"
             fi
+            printf '%s\n' "$body"
           }
 
           update_review_overview() {

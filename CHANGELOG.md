@@ -1,8 +1,5 @@
 ## [Unreleased]
 
-### 변경 사항 (Changed)
-- Prompt Studio의 비동기 작업 버튼('실행', '프롬프트 저장')이 로딩 중일 때 `aria-busy` 속성을 가지도록 개선하여 스크린 리더 접근성을 향상했습니다.
-
 ## [0.14.4] - 2026-06-18
 
 ### 추가
@@ -2586,3 +2583,10 @@
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
 
+## [Unreleased]
+
+### 변경 사항 (Changed)
+- Prompt Studio의 비동기 작업 버튼('실행', '프롬프트 저장')이 로딩 중일 때 `aria-busy` 속성을 가지도록 개선하여 스크린 리더 접근성을 향상했습니다.
+
+### 보안 수정 (Security)
+- (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.

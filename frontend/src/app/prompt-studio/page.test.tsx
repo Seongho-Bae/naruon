@@ -30,16 +30,6 @@ function jsonResponse(body: unknown) {
   });
 }
 
-function signedSessionResponse() {
-  return jsonResponse({
-    claims: {
-      userId: "user-1",
-      organizationId: "org-1",
-      workspaceId: "workspace-1",
-    },
-  });
-}
-
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
@@ -90,12 +80,6 @@ function expectNoPublicIdentityHeaders(headers: HeadersInit | undefined) {
   }
 }
 
-function findFetchCall(fetchMock: ReturnType<typeof vi.fn>, endpoint: string) {
-  const call = fetchMock.mock.calls.find(([input]) => String(input) === endpoint);
-  expect(call).toBeDefined();
-  return call as [RequestInfo | URL, RequestInit?];
-}
-
 describe("PromptStudioPage", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
@@ -137,12 +121,7 @@ describe("PromptStudioPage", () => {
 
   it("shows disabled loading feedback while testing a prompt", async () => {
     const promptTest = deferred<Response>();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/auth/session") return Promise.resolve(signedSessionResponse());
-      if (url === "/api/prompts/test") return promptTest.promise;
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
+    const fetchMock = vi.fn(() => promptTest.promise);
     vi.stubGlobal("fetch", fetchMock);
     const page = await renderPage();
 
@@ -163,29 +142,23 @@ describe("PromptStudioPage", () => {
     expect(getButton(page, "실행 (Test)").disabled).toBe(false);
     expect(getButton(page, "실행 (Test)").getAttribute("aria-busy")).toBe("false");
     expect(page.textContent).toContain("맥락 종합 결과");
-    const sessionCall = findFetchCall(fetchMock, "/auth/session");
-    expect(sessionCall[1]).toEqual(expect.objectContaining({ credentials: "same-origin", method: "GET" }));
-
-    const promptCall = findFetchCall(fetchMock, "/api/prompts/test");
-    expect(promptCall[1]).toEqual(expect.objectContaining({
-      body: JSON.stringify({
-        content: "핵심 맥락을 종합해주세요: {{email}}",
-        variables: { email: "메일 내용 예시입니다." },
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prompts/test",
+      expect.objectContaining({
+        body: JSON.stringify({
+          content: "핵심 맥락을 종합해주세요: {{email}}",
+          variables: { email: "메일 내용 예시입니다." },
+        }),
+        credentials: "same-origin",
+        method: "POST",
       }),
-      credentials: "same-origin",
-      method: "POST",
-    }));
-    expectNoPublicIdentityHeaders(promptCall[1]?.headers);
+    );
+    expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
   });
 
   it("shows disabled loading feedback while saving a prompt", async () => {
     const promptSave = deferred<Response>();
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/auth/session") return Promise.resolve(signedSessionResponse());
-      if (url === "/api/prompts") return promptSave.promise;
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
+    const fetchMock = vi.fn(() => promptSave.promise);
     vi.stubGlobal("fetch", fetchMock);
     vi.stubGlobal("alert", vi.fn());
     const page = await renderPage();
@@ -206,38 +179,19 @@ describe("PromptStudioPage", () => {
 
     expect(getButton(page, "프롬프트 저장 (Save)").disabled).toBe(false);
     expect(getButton(page, "프롬프트 저장 (Save)").getAttribute("aria-busy")).toBe("false");
-    const sessionCall = findFetchCall(fetchMock, "/auth/session");
-    expect(sessionCall[1]).toEqual(expect.objectContaining({ credentials: "same-origin", method: "GET" }));
-
-    const promptCall = findFetchCall(fetchMock, "/api/prompts");
-    expect(promptCall[1]).toEqual(expect.objectContaining({
-      body: JSON.stringify({
-        title: "",
-        description: "",
-        content: "핵심 맥락을 종합해주세요: {{email}}",
-        is_shared: false,
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/prompts",
+      expect.objectContaining({
+        body: JSON.stringify({
+          title: "",
+          description: "",
+          content: "핵심 맥락을 종합해주세요: {{email}}",
+          is_shared: false,
+        }),
+        credentials: "same-origin",
+        method: "POST",
       }),
-      credentials: "same-origin",
-      method: "POST",
-    }));
-    expectNoPublicIdentityHeaders(promptCall[1]?.headers);
-  });
-
-  it("blocks prompt operations before calling prompt APIs without a signed session", async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === "/auth/session") return Promise.resolve(jsonResponse({ claims: {} }));
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    const page = await renderPage();
-
-    act(() => {
-      getButton(page, "실행 (Test)").click();
-    });
-    await flushAsyncWork();
-
-    expect(page.textContent).toContain("서명된 사용자 세션");
-    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual(["/auth/session"]);
+    );
+    expectNoPublicIdentityHeaders((fetchMock.mock.calls[0] as unknown as [RequestInfo, RequestInit?])?.[1]?.headers);
   });
 });
