@@ -415,6 +415,12 @@ def inspect_pr(
             return Decision(number, "wait", "current head is approved; auto-merge already enabled")
         if not enable_auto_merge_flag:
             return Decision(number, "wait", "current head is approved; auto-merge disabled by scheduler inputs")
+        approved_commit = None
+        for node in pr.get("reviews", {}).get("nodes", []):
+            if node.get("state") == "APPROVED":
+                approved_commit = node.get("commit", {}).get("oid")
+        if pr["headRefOid"] != approved_commit:
+            return Decision(number, "block", "PR branch modified after approval")
         enable_auto_merge(repo, pr, dry_run=dry_run)
         return Decision(number, "auto_merge", "current head is approved; auto-merge enabled")
 
