@@ -70,3 +70,7 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
+## 2024-05-29 - Missing Cache-Control Headers in API Responses
+**Vulnerability:** FastAPIs responses containing sensitive user data (like emails, settings, or authentication context) lacked `Cache-Control: no-store` headers, meaning intermediate proxies or browsers might cache the sensitive information.
+**Learning:** Even with strict CORS and CSP headers, standard security headers must also disable caching for APIs dealing with authenticated/sensitive data to prevent unintended data leakage.
+**Prevention:** Ensure `response.headers["Cache-Control"] = "no-store"` is set globally on all state-changing or sensitive API routes (e.g., via a global middleware like `add_security_headers`).
