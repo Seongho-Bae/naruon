@@ -376,9 +376,6 @@ def test_translate_wrong_user_returns_403(mock_translate, client):
     )
     assert resp.status_code == 403
     assert resp.json() == {"detail": "Not authorized"}
-import pytest
-from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
 
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 def test_summarize_generic_error_returns_500(mock_extract, client):
@@ -401,9 +398,6 @@ def test_draft_generic_error_returns_500(mock_draft, client):
     )
     assert resp.status_code == 500
     assert resp.json() == {"detail": "An internal server error occurred while processing the request."}
-import pytest
-from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
 
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 def test_summarize_http_exception(mock_extract, client):
