@@ -42,15 +42,14 @@ class DraftRequest(BaseModel):
     instruction: str = Field(min_length=1, max_length=LLM_DRAFT_INSTRUCTION_MAX_CHARS)
 
 
-
 class TranslateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
     target_language: str = Field(min_length=1, max_length=50, default="Korean")
 
-def _render_draft_reply_prompt(
-request: DraftRequest) -> str:
+
+def _render_draft_reply_prompt(request: DraftRequest) -> str:
     """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""
     instruction_json = json.dumps({"instruction": request.instruction})
     email_json = json.dumps({"email_body": request.email_body})
@@ -145,6 +144,7 @@ async def draft_endpoint(
             status_code=500,
             detail="An internal server error occurred while processing the request.",
         )
+
 
 @router.post("/translate")
 async def translate_endpoint(
