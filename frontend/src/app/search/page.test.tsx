@@ -439,9 +439,8 @@ describe("SearchPage", () => {
 
     const input = container.querySelector("#search-input") as HTMLInputElement | null;
     expect(input).not.toBeNull();
-    expect(input?.type).toBe("text");
+    expect(input?.type).toBe("search");
     expect(input?.getAttribute("inputmode")).toBe("search");
-    expect(input?.getAttribute("enterkeyhint")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
     expect(
       container.querySelector('button[aria-label="맥락 검색어 지우기"]'),

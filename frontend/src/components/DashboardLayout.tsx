@@ -366,12 +366,11 @@ export function DashboardLayout({
               ref={globalSearchInputRef}
               className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
               inputMode="search"
-              enterKeyHint="search"
               role="searchbox"
               value={globalSearchQuery}
               onChange={(event) => setGlobalSearchQuery(event.target.value)}
               placeholder="맥락, 사람, 파일, 판단 포인트 맥락 검색..."
-              type="text"
+              type="search"
             />
             {globalSearchQuery ? (
               <button

@@ -509,9 +509,8 @@ export function SearchLayout() {
             <input
               id="search-input"
               ref={searchInputRef}
-              type="text"
+              type="search"
               inputMode="search"
-              enterKeyHint="search"
               role="searchbox"
               aria-label="맥락 검색어 입력"
               value={query}

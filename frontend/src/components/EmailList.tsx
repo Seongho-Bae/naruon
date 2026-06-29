@@ -220,9 +220,8 @@ export function EmailList({
               placeholder="메일, 사람, 키워드 맥락 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              type="text"
+              type="search"
               inputMode="search"
-              enterKeyHint="search"
               role="searchbox"
               className="h-10 rounded-xl [&::-webkit-search-cancel-button]:hidden border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
             />
