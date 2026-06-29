@@ -2582,3 +2582,8 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+
+## [Unreleased]
+
+### Changed
+- `backend/tests/test_webdav_api.py`의 복잡한 테스트 함수들을 리팩토링하여 데이터베이스 연결 확인 및 클라이언트 설정 로직을 재사용 가능한 헬퍼 함수로 분리했습니다.
