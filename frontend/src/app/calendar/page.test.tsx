@@ -75,7 +75,7 @@ describe("CalendarPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders monthly weekly detail coordination candidate and CalDAV writeback workspaces", () => {
+  it("renders monthly weekly detail coordination candidate and CalDAV writeback workspaces", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(calendarSourceList)));
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -84,6 +84,8 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+
+    await flushAsyncWork();
 
     expect(container.textContent).toContain("새 일정");
     expect(container.textContent).toContain("고객 원본 일정 반영 의도");
@@ -361,6 +363,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     await act(async () => {

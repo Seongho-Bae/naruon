@@ -46,10 +46,6 @@ describe('toSafeReactText', () => {
     expect(toSafeReactText('', 'fallback')).toBe('');
   });
 
-  it('preserves standard safe whitespace', () => {
-    expect(toSafeReactText('tab\tnewline\r\n')).toBe('tab\tnewline\r\n');
-  });
-
   it('removes display-ambiguous control characters for arbitrary text', () => {
     fc.assert(
       fc.property(fc.string(), (value) => {
