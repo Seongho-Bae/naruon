@@ -2582,3 +2582,6 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+## [Unreleased]
+### 변경 사항
+- O(N log N) 복잡도를 가지는 중복된 목록 정렬 로직을 딕셔너리 삽입 순서를 통해 O(N)으로 개선하여 `get_emails` API 성능을 향상시켰습니다.

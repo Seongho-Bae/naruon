@@ -81,3 +81,7 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+
+## 2026-06-26 - Eliminate Redundant Database Result Sorting in Loops
+**Learning:** In `get_emails`, a list of potentially thousands of emails queried sequentially `DESC` by date was being explicitly reversed and later re-sorted `DESC` with `sorted()` because iterating over threads backwards overwrote the thread root key dictionary, placing oldest keys at the end. Because Python dictionaries retain insertion order, we can omit both list traversal sorts entirely.
+**Action:** When grouping database models retrieved via an `ORDER BY date DESC` limit into dictionaries mapping to the most recent instance, iterate through the result sequentially and check `if group_key not in grouped:`. The first element added is naturally the most recent, and dictionary insertion order inherently produces the properly grouped chronological `DESC` order with O(N) linear time and no sorting operations.
