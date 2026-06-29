@@ -55,3 +55,7 @@
 ## 2026-06-21 - Mocking new Lucide icons in tests
 **Learning:** Adding a new icon from `lucide-react` (like `Loader2`) to a component without updating the corresponding test file's `vi.mock("lucide-react", ...)` block causes Vitest to throw a "No export is defined on the lucide-react mock" error.
 **Action:** When adding new `lucide-react` icons, always grep for `vi.mock("lucide-react"` in the `frontend/src/` directory to find and update the relevant test files.
+
+## 2026-06-22 - 커스텀 지우기 버튼이 있는 검색 입력 필드에 type="text" 적용
+**Learning:** 여러 레이아웃 컴포넌트(`EmailList`, `DashboardLayout`, `TasksLayout`, `SearchLayout`)에서 커스텀 지우기 버튼과 함께 `type="search"`를 사용하고 있는 것을 확인했습니다. 이는 네이티브 WebKit 컨트롤을 강제하기 때문에 크로스 브라우저 스타일링 규칙에 위배됩니다.
+**Action:** 커스텀 지우기 기능이 포함된 검색 입력 필드에서 `type="search"`를 `type="text" inputMode="search" role="searchbox"`로 전역 변경하여 접근성 의미론을 유지하면서도 일관된 스타일링을 보장하도록 수정했습니다.

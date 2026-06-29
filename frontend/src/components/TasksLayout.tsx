@@ -326,7 +326,7 @@ export function TasksLayout() {
             <input
               ref={taskSearchInputRef}
               id="task-search-input"
-              type="search"
+              type="text"
               inputMode="search"
               role="searchbox"
               value={taskSearch}
