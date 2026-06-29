@@ -84,3 +84,15 @@
 ## 2024-05-18 - Defer expensive list filtering to keep UI responsive
 **Learning:** Filtering large task arrays in React components synchronously on every keystroke (`taskSearch`) can block the main thread and cause input lag. The `ticketTasks` array can grow large, causing `useMemo` to re-execute frequently.
 **Action:** Use React's `useDeferredValue` hook to defer the search string used for filtering. This allows the input component to render immediately for a smooth typing experience while delaying the expensive filtering operation until the browser is idle.
+
+## 2026-06-25 - [Optimize Email Grouping]
+**Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
+**Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
+
+## 2026-06-25 - Use Read Replica for Backend Dashboards
+**Learning:** High-traffic backend dashboards pulling read-heavy analytics (like workflows, agent runs, and surfaces in `backend/api/ai_hub.py`) needlessly bottleneck the primary database when scaling. Because real-time consistency on historical audit/run records isn't critical, using `get_readonly_db` directly mitigates primary database load effectively.
+**Action:** Default to `get_readonly_db` for GET endpoints that do analytical queries or display aggregate historical state instead of tracking writes.
+
+## 2026-06-28 - Terminology Alignment in End-to-End Tests
+**Learning:** When UI terminology rules change, end-to-end tests relying on exact text matches (like `getByRole('button', { name: 'AI 답장 초안' })` or `getByText('2개 실행 항목')`) will fail. Moreover, some UI elements render dynamic list structures rather than aggregated summary strings, meaning exact assertions on previously aggregated strings must be updated to reflect the new DOM structure.
+**Action:** When updating application UI terminology to match a specification, systematically audit and update all corresponding string literals, aria-labels, and assertions in both unit and E2E tests using search tools. For dynamic data mapped into lists, adjust test assertions to verify the presence of individual mapped items rather than outdated summary counters.
