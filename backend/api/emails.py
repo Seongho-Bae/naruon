@@ -303,7 +303,6 @@ async def get_emails(
     for email in emails:
         group_key = canonical_thread_key(email)
 
-        # thread_messages will be populated newest-first. We'll reverse it later when needed.
         thread_messages[group_key].append(email)
         reply_counts[group_key] += 1
 

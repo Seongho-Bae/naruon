@@ -81,7 +81,7 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
-## 2024-06-25 - [Optimize Email Grouping]
+## 2026-06-25 - [Optimize Email Grouping]
 **Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
 **Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
 
