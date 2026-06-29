@@ -2582,3 +2582,8 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
+
+## [Unreleased]
+
+### 보안 (Security)
+- `backend/runner/local_dav_adapters.py` 내 HTTP 클라이언트(`_default_http_client`) 초기화 시 환경 변수 신뢰(`trust_env=False`)를 비활성화하여 잠재적인 SSRF 및 프록시 우회 취약점을 수정했습니다.
