@@ -81,3 +81,11 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+
+## 2026-06-25 - Avoid O(N log N) sorting for early candidate tracking in tight loops
+**Learning:** `thread_reply_candidate` previously sorted entire email threads to find the latest valid candidate message and latest external date. Sorting requires $O(N \log N)$ operations and unnecessary memory allocation, which degrades performance across thousands of threads despite Python's fast sorting capabilities. It was refactored into a single linear $O(N)$ traversal over the elements keeping track of the latest matching criteria.
+**Action:** When finding extremes (max/min by date, latest items fulfilling a condition) in an array, evaluate candidates linearly inside a single pass rather than running an unbounded sort.
+
+## 2026-06-25 - Use type="search" for Semantic HTML and Mobile Optimization
+**Learning:** For search inputs across the frontend (`SearchLayout.tsx`, `TasksLayout.tsx`, `EmailList.tsx`), `type="text"` with `inputMode="search"` does not trigger the correct native browser styling and mobile keyboard states (like a specific "Search" button on the virtual keyboard). We need to properly define the semantic type as `type="search"`. Additionally, when using `type="search"`, WebKit-based browsers inject a native clear button (an 'X' inside the input) that overlays custom React-based clear buttons.
+**Action:** When implementing search fields, always use `type="search"`. To hide the native browser clear button (which prevents double 'X' buttons when using custom React clear logic), apply the tailwind class `[&::-webkit-search-cancel-button]:hidden` to the input element.

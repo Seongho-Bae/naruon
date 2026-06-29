@@ -83,24 +83,23 @@ def thread_reply_candidate(
     if not user_addresses:
         return None
 
-    ordered_messages = sorted(thread_messages, key=lambda item: item.date, reverse=True)
-
+    # ⚡ Bolt: Find candidate and latest external date in O(N) without sorting.
     latest_external_date = None
-    for message in ordered_messages:
+    latest_candidate: Email | None = None
+
+    for message in thread_messages:
         is_from_user = message_is_from_user(message, user_addresses)
 
         if not is_from_user:
             if latest_external_date is None or message.date > latest_external_date:
                 latest_external_date = message.date
-            continue
+        elif not message_is_self_sent(message, user_addresses):
+            if (latest_candidate is None or message.date > latest_candidate.date) and detect_reply_tracking(message.body):
+                latest_candidate = message
 
-        if is_from_user and not message_is_self_sent(message, user_addresses):
-            has_later_external_reply = (
-                latest_external_date is not None and latest_external_date > message.date
-            )
-            if not has_later_external_reply:
-                if detect_reply_tracking(message.body):
-                    return message
+    if latest_candidate is not None:
+        if latest_external_date is None or latest_candidate.date >= latest_external_date:
+            return latest_candidate
 
     return None
 
