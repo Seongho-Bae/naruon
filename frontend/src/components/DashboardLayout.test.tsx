@@ -264,7 +264,7 @@ describe("DashboardLayout", () => {
     ).map((link) => link.getAttribute("href"));
 
     expect(mobileHrefs).toEqual(desktopHrefs);
-    expect(mobileHrefs).toEqual(["/", "/mail", "/calendar", "/tasks", "/projects", "/search", "/ai-hub", "/data", "/security", "/settings"]);
+    expect(mobileHrefs).toEqual(["/", "/mail", "/calendar", "/tasks", "/projects", "/search", "/ai-hub", "/tools", "/data", "/security", "/settings"]);
   });
 
   it("keeps query-based mail shortcuts mutually exclusive in the mobile drawer", () => {

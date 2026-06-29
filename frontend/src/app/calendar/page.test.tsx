@@ -75,7 +75,7 @@ describe("CalendarPage", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders monthly weekly detail coordination candidate and CalDAV writeback workspaces", () => {
+  it("renders monthly weekly detail coordination candidate and CalDAV writeback workspaces", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => jsonResponse(calendarSourceList)));
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -84,6 +84,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
 
     expect(container.textContent).toContain("새 일정");
     expect(container.textContent).toContain("고객 원본 일정 반영 의도");
@@ -103,6 +104,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
     await flushAsyncWork();
 
     expect(container.textContent).toContain("제품 리뷰");
@@ -181,6 +183,7 @@ describe("CalendarPage", () => {
       root?.render(<CalendarPage />);
     });
     await flushAsyncWork();
+    await flushAsyncWork();
     expect(container.textContent).toContain("일정 원본 1");
     expect(container.textContent).toContain("충돌 토큰 있음");
     expect(container.textContent).not.toContain("Customer CalDAV");
@@ -248,6 +251,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
     await flushAsyncWork();
 
     const teamSourceButton = container.querySelector<HTMLButtonElement>(
@@ -331,6 +335,7 @@ describe("CalendarPage", () => {
       root?.render(<CalendarPage />);
     });
     await flushAsyncWork();
+    await flushAsyncWork();
 
     const executeButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("ETag 실행 요청"));
     expect(executeButton).toBeTruthy();
@@ -361,6 +366,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     await act(async () => {
@@ -388,6 +394,7 @@ describe("CalendarPage", () => {
       root?.render(<CalendarPage />);
     });
     await flushAsyncWork();
+    await flushAsyncWork();
 
     const button = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
     await act(async () => {
@@ -413,6 +420,7 @@ describe("CalendarPage", () => {
     act(() => {
       root?.render(<CalendarPage />);
     });
+    await flushAsyncWork();
     await flushAsyncWork();
 
     const createButton = Array.from(container.querySelectorAll("button")).find((node) => node.textContent?.includes("새 일정 intent 점검"));
