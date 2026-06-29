@@ -70,3 +70,8 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
+
+## 2026-06-25 - [Fix Subprocess Path Execution Vulnerability in Tests]
+**Vulnerability:** Found an instance of `shutil.which("bash")` being called directly inside a `subprocess.run` block rather than using the centralized `_bash_executable()` helper in `backend/tests/test_release_governance.py`. This could potentially mask issues if `shutil.which` returns `None` and triggers Bandit B607/B603.
+**Learning:** Reusing shared, safe helper functions like `_bash_executable()` ensures that external command execution is always bound to absolute paths and handles `None` cases properly, mitigating path injection risks.
+**Prevention:** Always refactor redundant `subprocess.run` blocks to use established helper methods that enforce absolute paths and perform necessary existence assertions.

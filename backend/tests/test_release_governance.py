@@ -502,19 +502,7 @@ def test_opencode_billing_lock_failed_checks_publish_neutral_comment(
         encoding="utf-8",
     )
 
-    fallback = subprocess.run(  # nosec B603
-        [
-            shutil.which("bash"),
-            str(
-                REPO_ROOT / "scripts/ci/emit_opencode_failed_check_fallback_findings.sh"
-            ),
-            str(evidence_file),
-            str(repo_root),
-        ],
-        text=True,
-        capture_output=True,
-        check=True,
-    )
+    fallback = _run_emit_opencode_failed_check_fallback(evidence_file, repo_root)
 
     assert (
         "GitHub Actions billing lock blocked current-head check evidence"

@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### 보안
+- Jules: `backend/tests/test_release_governance.py` 파일 내에 `subprocess.run` 호출 시 부분적인 실행 경로(partial executable path)가 사용되던 취약점(Bandit B607, B603)을 수정하여, 항상 일관되게 선언된 `_bash_executable()` 절대 경로 헬퍼를 사용하도록 중복 코드를 리팩토링했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
