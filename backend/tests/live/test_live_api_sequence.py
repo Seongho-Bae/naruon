@@ -101,7 +101,6 @@ def read_json(
             request_path = parsed_url.path or "/"
             if parsed_url.query:
                 request_path = f"{request_path}?{parsed_url.query}"
-            request_origin = f"{parsed_url.scheme}://{parsed_url.netloc}"
             connection = connection_cls(
                 parsed_url.hostname,
                 parsed_url.port,
@@ -111,8 +110,6 @@ def read_json(
                 headers = {
                     "Authorization": f"Bearer {token}",
                     "Cookie": f"{SESSION_COOKIE_NAME}={token}",
-                    "Origin": request_origin,
-                    "Referer": f"{request_origin}/",
                 }
                 if request_body is not None:
                     headers["Content-Type"] = "application/json"
@@ -178,7 +175,7 @@ def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
 
 def test_live_harness_avoids_broad_url_opener_pattern() -> None:
     source = Path(__file__).read_text(encoding="utf-8")
-    unsafe_terms = ("urllib" ".request", "url" "open")
+    unsafe_terms = ("urllib" + ".request", "url" + "open")
 
     for unsafe_term in unsafe_terms:
         assert unsafe_term not in source

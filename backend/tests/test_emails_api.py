@@ -1931,6 +1931,7 @@ async def test_get_pending_replies(client: AsyncClient, db_session):
 
 
 def test_email_owner_filters():
+    from api.emails import email_owner_filters
     from api.auth import AuthContext
 
     # Test with organization_id
@@ -1941,7 +1942,7 @@ def test_email_owner_filters():
         group_ids=(),
         workspace_id="ws-789",
     )
-    filters1 = Email.owner_filters(ctx1.user_id, ctx1.organization_id)
+    filters1 = email_owner_filters(ctx1)
 
     assert len(filters1) == 2
     assert (
@@ -1961,7 +1962,7 @@ def test_email_owner_filters():
         group_ids=(),
         workspace_id="ws-789",
     )
-    filters2 = Email.owner_filters(ctx2.user_id, ctx2.organization_id)
+    filters2 = email_owner_filters(ctx2)
 
     assert len(filters2) == 2
     assert (
