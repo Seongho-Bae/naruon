@@ -140,6 +140,24 @@ def test_dav_owner_parser_rejects_double_encoded_traversal():
     assert owner_user_id is None
 
 
+def test_dav_normalization_exceeds_limit(dev_auth_dependency_overrides, monkeypatch):
+    from fastapi import HTTPException
+    import pytest
+    from api.dav import _normalize_dav_authorization_path
+    import api.dav
+
+    def fake_unquote(string, *args, **kwargs):
+        return string + "%"
+
+    monkeypatch.setattr(api.dav, "unquote", fake_unquote)
+
+    with pytest.raises(HTTPException) as exc:
+        _normalize_dav_authorization_path("test")
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "DAV path decoding limit exceeded"
+
+
 def test_dav_rejects_double_encoded_traversal(dev_auth_dependency_overrides):
     with TestClient(app) as client:
         response = client.request(
