@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### 성능 향상 (Performance)
+- N+1 쿼리 최적화: `sync_webdav_folders` 함수에서 WebdavAccount의 전체 ORM 모델을 메모리에 로드하는 방식(`res.scalars().all()`)에서 필요한 칼럼(`server_url`, `source_uid`)만 직접 조회(`select(WebdavAccount.server_url, WebdavAccount.source_uid)`)하는 방식으로 수정하여 대규모 디렉토리 구조나 계정이 존재할 때의 DB 부하와 메모리 사용량을 크게 낮췄습니다.
+
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가

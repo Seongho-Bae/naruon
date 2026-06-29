@@ -46,7 +46,7 @@ async def test_webdav_file_listing_and_sync():
     account_mock.server_url = "https://webdav.example.com"
     
     execute_res = MagicMock()
-    execute_res.scalars.return_value.all.return_value = [account_mock]
+    execute_res.all.return_value = [(account_mock.server_url, account_mock.source_uid)]
     session_mock.execute.return_value = execute_res
     
     with patch("services.webdav_service.logger") as logger_mock:
@@ -77,7 +77,7 @@ async def test_webdav_sync_skips_hostless_https_url():
     account_mock.server_url = "https:///missing-host"
 
     execute_res = MagicMock()
-    execute_res.scalars.return_value.all.return_value = [account_mock]
+    execute_res.all.return_value = [(account_mock.server_url, account_mock.source_uid)]
     session_mock.execute.return_value = execute_res
 
     with patch("services.webdav_service.logger") as logger_mock:
@@ -109,7 +109,7 @@ async def test_webdav_sync_skips_non_https_url():
     account_mock.server_url = "http://webdav.example.com"
 
     execute_res = MagicMock()
-    execute_res.scalars.return_value.all.return_value = [account_mock]
+    execute_res.all.return_value = [(account_mock.server_url, account_mock.source_uid)]
     session_mock.execute.return_value = execute_res
 
     with patch("services.webdav_service.logger") as logger_mock:
