@@ -813,15 +813,17 @@ export function DataLayout() {
                         type="button"
                         onClick={() => void requestDocumentAction('reparse')}
                         disabled={isDocumentActionLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        <RefreshCw className="size-4" />
+                        <RefreshCw className={`size-4 ${isDocumentActionLoading ? 'animate-spin' : ''}`} />
                         재파싱 실행
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('embedding-regeneration-intent')}
                         disabled={isDocumentActionLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
                         <Database className="size-4" />
@@ -831,6 +833,7 @@ export function DataLayout() {
                         type="button"
                         onClick={() => void requestDocumentAction('hwp-conversion-intent')}
                         disabled={isDocumentActionLoading}
+                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
                         <FileText className="size-4" />
@@ -956,8 +959,10 @@ export function DataLayout() {
                     type="button"
                     onClick={() => void requestUniqueThreadIntent()}
                     disabled={isUniqueThreadLoading}
-                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto"
+                    aria-busy={isUniqueThreadLoading}
+                    className="w-full whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60 sm:w-auto flex items-center justify-center gap-2"
                   >
+                    {isUniqueThreadLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : null}
                     중복 메일 스레드 의도 점검
                   </button>
                 </div>
