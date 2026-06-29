@@ -70,3 +70,8 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
+
+## 2026-06-25 - Incorrect UI Terminology Handling in Tests
+**Vulnerability:** UI terminology mapping rules were not properly reflected in `EmailDetail.test.tsx`, meaning the test was passing incorrect english keywords like "Summary" and "Tasks" that shouldn't be exposed on the frontend.
+**Learning:** We need to keep our assertions in sync with terminology rules from `AGENTS.md` and `docs/ui-ux/naruon-ui-ux-mapping.md`, replacing English terms with their Korean counterparts in assertions. Additionally, when writing new test cases, avoid copying existing state variables (like `container` and `root`) in testing files, and use the correct mocking setup. Ensure proper clean up for tests.
+**Prevention:** Always verify terminology rules by running `grep` before committing changes to React components and related unit tests, enforcing localized text definitions.
