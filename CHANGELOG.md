@@ -1,7 +1,7 @@
 ## [Unreleased]
 
 ### 보안
-- 브라우저 패스워드 관리자가 API 키나 SMTP/IMAP 외부 설정 비밀번호를 잘못된 애플리케이션 계정 정보로 자동 완성하거나 저장하라고 묻는 현상을 방지하기 위해 모든 민감한 설정 입력 필드에 `autoComplete="new-password"` 속성을 추가했습니다.
+- Scorecard 보안 룰을 만족시키기 위해 `pr-review-merge-scheduler.yml` GitHub 워크플로우에 `permissions: contents: read`를 전역으로 명시하여 최소 권한 원칙을 적용했습니다.
 
 ## [0.14.4] - 2026-06-18
 
