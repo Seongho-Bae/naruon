@@ -560,6 +560,9 @@ describe("SettingsLayout", () => {
     expect(container.textContent).not.toContain("etag-caldav-primary");
     expect(container.textContent).toContain("저장된 secret 유지");
     expect(container.textContent).toContain("Naruon은 메일함 용량이나 SMTP/IMAP 서버를 제공하지 않습니다");
+    for (const inputId of ["smtp-password", "imap-password", "pop3-password", "oauth-client-secret"]) {
+      expect(container.querySelector<HTMLInputElement>(`#${inputId}`)?.getAttribute("autocomplete")).toBe("new-password");
+    }
 
     const saveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "계정 설정 저장");
     expect(saveButton).toBeTruthy();
@@ -639,6 +642,9 @@ describe("SettingsLayout", () => {
     expect(container.textContent).not.toContain("Endpoint");
     expect(container.textContent).not.toContain("Local API key override");
     expect(container.textContent).not.toContain("sk-");
+    for (const inputId of ["commercial-api-key", "local-api-key"]) {
+      expect(container.querySelector<HTMLInputElement>(`#${inputId}`)?.getAttribute("autocomplete")).toBe("new-password");
+    }
 
     const localRegisterButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("Gemma4 로컬 모델 등록"));
     expect(localRegisterButton).toBeTruthy();
