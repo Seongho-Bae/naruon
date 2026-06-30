@@ -137,6 +137,10 @@ function getEtagLabel(value: string | null) {
   return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
 }
 
+const calendarWritebackIntentHeaders = {
+  'X-Naruon-CSRF-Intent': 'calendar-writeback',
+};
+
 
 
 
@@ -239,6 +243,8 @@ export function CalendarLayout() {
         // Non-sensitive UUID reference
         ...(selectedWritebackSource ? { ['target_source_id']: selectedWritebackSource.source_id } : {}),
         ...(executeProvider ? { execute_provider: true } : {}),
+      }, {
+        headers: calendarWritebackIntentHeaders,
       });
       setWritebackResult(result);
       setWritebackStatus('success');
@@ -347,7 +353,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  새 일정 intent 점검
+                  {isWritebackLoading ? "점검 중" : "새 일정 intent 점검"}
                 </button>
                 <button
                   type="button"
@@ -357,7 +363,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  ETag 업데이트 점검
+                  {isWritebackLoading ? "점검 중" : "ETag 업데이트 점검"}
                 </button>
                 <button
                   type="button"
@@ -367,7 +373,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  ETag 실행 요청
+                  {isWritebackLoading ? "요청 중" : "ETag 실행 요청"}
                 </button>
               </div>
             </div>
