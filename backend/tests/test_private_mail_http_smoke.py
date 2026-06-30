@@ -1,3 +1,4 @@
+import json
 from zipfile import ZipFile
 
 import pytest
@@ -272,6 +273,92 @@ def test_fetch_inbox_snapshot_does_not_wait_when_min_count_is_zero(monkeypatch):
     )
     assert count == 0
     assert len(calls) == 1
+
+
+def test_fetch_search_snapshot_retries_until_results(monkeypatch):
+    calls: list[dict[str, object]] = []
+
+    def fake_request_json_with_retry(
+        base_url: str,
+        token: str,
+        method: str,
+        path: str,
+        *,
+        body: bytes,
+        content_type: str | None = None,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        use_cookie_only: bool = False,
+    ) -> dict[str, object]:
+        payload = json.loads(body.decode())
+        calls.append(
+            {
+                "method": method,
+                "path": path,
+                "query": payload["query"],
+                "limit": payload["limit"],
+                "content_type": content_type,
+                "use_cookie_only": use_cookie_only,
+            }
+        )
+        if len(calls) == 1:
+            return {"results": []}
+        return {"results": [{"id": "mail-001"}]}
+
+    monkeypatch.setattr(smoke, "_request_json_with_retry", fake_request_json_with_retry)
+    data, count = smoke._fetch_search_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        "hello",
+        attempts=3,
+        delay_seconds=0.0,
+        limit=3,
+    )
+
+    assert count == 1
+    assert data["results"] == [{"id": "mail-001"}]
+    assert len(calls) == 2
+    assert calls[0]["method"] == "POST"
+    assert calls[0]["path"] == "/api/search"
+    assert calls[0]["query"] == "hello"
+    assert calls[0]["limit"] == 3
+    assert calls[0]["content_type"] == "application/json"
+    assert calls[0]["use_cookie_only"] is False
+
+
+def test_fetch_search_snapshot_respects_cookie_only(monkeypatch):
+    calls: list[bool] = []
+
+    def fake_request_json_with_retry(
+        base_url: str,
+        token: str,
+        method: str,
+        path: str,
+        *,
+        body: bytes,
+        content_type: str | None = None,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+        use_cookie_only: bool = False,
+    ) -> dict[str, object]:
+        calls.append(use_cookie_only)
+        return {"results": []}
+
+    monkeypatch.setattr(smoke, "_request_json_with_retry", fake_request_json_with_retry)
+    _, count = smoke._fetch_search_snapshot(
+        "http://127.0.0.1:3000",
+        "token",
+        "korean",
+        attempts=1,
+        delay_seconds=0.0,
+        use_cookie_only=True,
+        limit=3,
+    )
+
+    assert count == 0
+    assert calls == [True]
 
 
 def test_fetch_inbox_snapshot_uses_cookie_only_mode_when_requested(monkeypatch):

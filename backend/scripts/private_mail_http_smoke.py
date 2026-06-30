@@ -527,6 +527,42 @@ def _fetch_inbox_snapshot(
     return last_data, 0
 
 
+def _fetch_search_snapshot(
+    base_url: str,
+    token: str,
+    query: str,
+    *,
+    attempts: int,
+    delay_seconds: float,
+    timeout: float = 120.0,
+    use_cookie_only: bool = False,
+    limit: int = 3,
+) -> tuple[dict[str, object], int]:
+    """Fetch /api/search repeatedly until query results are available."""
+    last_data: dict[str, object] = {}
+    for attempt in range(attempts):
+        data = _request_json_with_retry(
+            base_url,
+            token,
+            "POST",
+            "/api/search",
+            body=json.dumps({"query": query, "limit": limit}).encode(),
+            content_type="application/json",
+            attempts=1,
+            delay_seconds=0.0,
+            timeout=timeout,
+            use_cookie_only=use_cookie_only,
+        )
+        results = data.get("results")
+        count = len(results) if isinstance(results, list) else 0
+        last_data = data
+        if count > 0 or attempt == attempts - 1:
+            return data, count
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+    return last_data, 0
+
+
 def _check_frontend_session(base_url: str, token: str) -> dict[str, object] | None:
     try:
         data = _post_json_with_retry(
@@ -763,28 +799,36 @@ def main() -> None:
             )
 
         search_counts: dict[str, int] = {}
+        frontend_search_counts: dict[str, int] = {}
         first_result_id = None
         for index, query in enumerate(args.query, start=1):
-            search = None
-            for _ in range(args.search_retry_attempts):
-                search = _post_json_with_retry(
-                    api_base_url,
+            api_search, api_results_count = _fetch_search_snapshot(
+                api_base_url,
+                token,
+                query,
+                attempts=args.search_retry_attempts,
+                delay_seconds=args.search_retry_delay_seconds,
+                timeout=300.0,
+            )
+            search_counts[f"query_{index}"] = api_results_count
+            if args.require_browser_visible:
+                frontend_search, frontend_results_count = _fetch_search_snapshot(
+                    frontend_base_url,
                     token,
-                    "/api/search",
-                    {"query": query, "limit": 3},
-                    attempts=1,
-                    delay_seconds=0.0,
+                    query,
+                    attempts=args.search_retry_attempts,
+                    delay_seconds=args.search_retry_delay_seconds,
                     timeout=300.0,
+                    use_cookie_only=True,
                 )
-                results = search.get("results", [])
-                if results:
-                    break
-                if _ < args.search_retry_attempts - 1 and args.search_retry_delay_seconds > 0:
-                    time.sleep(args.search_retry_delay_seconds)
-            if search is None:
-                raise RuntimeError("unreachable")
-            results = search.get("results", [])
-            search_counts[f"query_{index}"] = len(results) if isinstance(results, list) else 0
+                frontend_search_counts[f"query_{index}"] = frontend_results_count
+                if api_results_count > 0 and frontend_results_count == 0:
+                    raise SystemExit(
+                        f"browser search mismatch: query={query!r} api_results={api_results_count} "
+                        f"frontend_results={frontend_results_count}"
+                    )
+
+            results = api_search.get("results", [])
             if first_result_id is None and isinstance(results, list) and results:
                 first = results[0]
                 if isinstance(first, dict):
@@ -832,7 +876,8 @@ def main() -> None:
             f"skipped={totals['skipped']} failed={totals['failed']} "
             f"attachments={totals['attachments']} inbox_visible={email_count} "
             f"frontend_inbox_visible={frontend_inbox_count} "
-            f"search_counts={search_counts} reason_counts={dict(reasons)} "
+            f"search_counts={search_counts} frontend_search_counts={frontend_search_counts} "
+            f"reason_counts={dict(reasons)} "
             f"llm={llm_status} draft={draft_status}"
         )
         _print_session_sync_hints(
