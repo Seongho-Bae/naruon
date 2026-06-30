@@ -1,18 +1,18 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from api.auth import AuthContext, get_auth_context
-from core.exceptions import LLMServiceError
+from fastapi import Depends
 from db.session import get_db
-from services.llm_provider_selection import resolve_runtime_llm_provider
+from api.auth import AuthContext, get_auth_context
 from services.llm_service import (
-    ExtractionResult,
-    draft_reply,
     extract_todos_and_summary,
+    draft_reply,
+    ExtractionResult,
 )
+from core.exceptions import LLMServiceError
+from services.llm_provider_selection import resolve_runtime_llm_provider
 
 router = APIRouter(prefix="/api/llm")
 

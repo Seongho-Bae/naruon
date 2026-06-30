@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List
+from typing import Dict, Any, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +20,8 @@ async def sync_webdav_folders(session, user_id: str, organization_id: str | None
     """
     Fetch folder structures for all WebDAV accounts of the user.
     """
-    from urllib.parse import urlsplit
-
     from core.url_validation import _reject_unsafe_ip_literal
+    from urllib.parse import urlsplit
 
     logger.info(f"Syncing WebDAV folders for user {user_id}")
     organization_filter = (

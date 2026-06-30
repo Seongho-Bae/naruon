@@ -1,22 +1,14 @@
 from typing import Literal
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class SelfHostedConnectorRegistrationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    connector_id: str = Field(
-        ..., description="Unique identifier for the self-hosted connector"
-    )
-    public_key: str = Field(
-        ..., description="Public key for mTLS or secure payload exchange"
-    )
-    supported_protocols: list[Literal["imap", "smtp", "pop3", "caldav", "webdav"]] = (
-        Field(
-            default_factory=list,
-            description="Protocols supported by this connector instance",
-        )
+    connector_id: str = Field(..., description="Unique identifier for the self-hosted connector")
+    public_key: str = Field(..., description="Public key for mTLS or secure payload exchange")
+    supported_protocols: list[Literal["imap", "smtp", "pop3", "caldav", "webdav"]] = Field(
+        default_factory=list, description="Protocols supported by this connector instance"
     )
     capabilities: list[str] = Field(default_factory=list)
 

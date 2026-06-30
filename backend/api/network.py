@@ -1,13 +1,11 @@
-import re
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from api.auth import AuthContext, get_auth_context
-from db.models import Email
+from sqlalchemy import select
 from db.session import get_db
+from db.models import Email
+from api.auth import AuthContext, get_auth_context
+import re
 
 router = APIRouter(prefix="/api/network")
 

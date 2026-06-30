@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
+
 SESSION_COOKIE_NAME = "naruon_session"
 DEFAULT_LIVE_HTTP_TIMEOUT_SECONDS = 30.0
 
@@ -68,7 +69,9 @@ def _live_http_timeout_seconds() -> float:
     try:
         timeout_seconds = float(configured)
     except ValueError as exc:
-        raise AssertionError("LIVE_E2E_HTTP_TIMEOUT_SECONDS must be a number") from exc
+        raise AssertionError(
+            "LIVE_E2E_HTTP_TIMEOUT_SECONDS must be a number"
+        ) from exc
     if timeout_seconds <= 0:
         raise AssertionError("LIVE_E2E_HTTP_TIMEOUT_SECONDS must be positive")
     return timeout_seconds
@@ -162,7 +165,7 @@ def test_live_search_handles_local_embedding_dimension() -> None:
 
 def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
     live_root = Path(__file__).resolve().parent
-    forbidden_terms = ("TestClient", "ASGITransport", "unittest.mock")
+    forbidden_terms = ("Test" "Client", "ASGI" "Transport", "unittest" ".mock")
     offenders: list[str] = []
     for path in sorted(live_root.glob("*.py")):
         if path.name == "test_live_api_sequence.py":
@@ -175,7 +178,7 @@ def test_live_harness_forbids_in_process_clients_and_mocks() -> None:
 
 def test_live_harness_avoids_broad_url_opener_pattern() -> None:
     source = Path(__file__).read_text(encoding="utf-8")
-    unsafe_terms = ("urllib.request", "urlopen")
+    unsafe_terms = ("urllib" ".request", "url" "open")
 
     for unsafe_term in unsafe_terms:
         assert unsafe_term not in source

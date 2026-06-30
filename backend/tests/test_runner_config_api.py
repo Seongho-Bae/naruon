@@ -1,5 +1,5 @@
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 from core.config import settings
 from db.models import WorkspaceRunnerConfig

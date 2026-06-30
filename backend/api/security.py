@@ -13,7 +13,7 @@ from api.auth import (
     get_auth_context,
     is_admin_role,
 )
-from core.config import settings
+from api.common.scopes import connector_scope_statement
 from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
@@ -21,6 +21,7 @@ from db.models import (
     WebdavAccount,
 )
 from db.session import get_db
+from core.config import settings
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
 router = APIRouter(prefix="/api/security", tags=["security"])
@@ -124,7 +125,10 @@ def _evidence_label(evidence_source: str) -> str:
 
 
 def _can_read_org_scope(auth_context: AuthContext) -> bool:
-    return is_admin_role(auth_context.role) and auth_context.organization_id is not None
+    return (
+        is_admin_role(auth_context.role)
+        and auth_context.organization_id is not None
+    )
 
 
 def _webdav_scope_statement(auth_context: AuthContext):
@@ -172,20 +176,6 @@ def _calendar_scope_statement(auth_context: AuthContext):
     return statement.where(
         CalendarWritebackSource.user_id == auth_context.user_id,
         organization_filter,
-    )
-
-
-def _connector_scope_statement(auth_context: AuthContext):
-    if auth_context.organization_id is None:
-        return None
-    return (
-        select(ConnectorSignalEvent)
-        .where(
-            ConnectorSignalEvent.organization_id == auth_context.organization_id,
-            ConnectorSignalEvent.workspace_id == auth_context.workspace_id,
-        )
-        .order_by(ConnectorSignalEvent.observed_at.desc())
-        .limit(8)
     )
 
 
@@ -289,9 +279,7 @@ def _webdav_source(
         source_type="webdav_repository",
         source_label="WebDAV repository",
         scope_kind=_scope_kind(account.organization_id),
-        capabilities=["read", "write", "etag"]
-        if account.writeback_enabled
-        else ["read"],
+        capabilities=["read", "write", "etag"] if account.writeback_enabled else ["read"],
         writeback_enabled=bool(account.writeback_enabled),
         policy_decision=decision,
         last_observed_at=_datetime_to_utc_iso(account.created_at),
@@ -452,7 +440,7 @@ async def get_access_surface(
     webdav_result = await db.execute(_webdav_scope_statement(auth_context))
     calendar_result = await db.execute(_calendar_scope_statement(auth_context))
     audit_result = await db.execute(_durable_audit_scope_statement(auth_context))
-    connector_statement = _connector_scope_statement(auth_context)
+    connector_statement = connector_scope_statement(auth_context)
     connector_events: list[ConnectorSignalEvent] = []
     if connector_statement is not None:
         connector_result = await db.execute(connector_statement)

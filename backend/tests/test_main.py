@@ -1,5 +1,5 @@
-import pytest
 from fastapi.testclient import TestClient
+import pytest
 
 import main
 from core.config import settings

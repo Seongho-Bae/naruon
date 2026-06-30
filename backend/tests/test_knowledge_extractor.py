@@ -1,10 +1,8 @@
-from unittest.mock import AsyncMock
-
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.models import Email, TicketTask
 from services.knowledge_extractor import extract_knowledge_from_self_sent
+from sqlalchemy.ext.asyncio import AsyncSession
+from unittest.mock import AsyncMock
 
 
 class _ScalarResult:
@@ -36,18 +34,20 @@ async def test_extract_knowledge_from_self_sent():
     # Mock db session
     db = AsyncMock(spec=AsyncSession)
     db.execute.return_value = _ScalarResult()
-
+    
     # Mock self-sent email
     email = _make_email()
-
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
-
+    
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
+    
     assert task is not None
     assert task.title == "Memo: Buy milk"
     assert task.source_type == "self_sent_knowledge"
     assert task.related_email_id == 1
     assert task.related_thread_id == "thread1"
-
+    
     # Verify it was added and committed
     db.add.assert_called_once_with(task)
     db.commit.assert_awaited_once()
@@ -58,7 +58,9 @@ async def test_extract_knowledge_from_self_sent_skips_non_self_address():
     db = AsyncMock(spec=AsyncSession)
     email = _make_email(recipients="teammate@example.com")
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is None
     db.execute.assert_not_awaited()
@@ -99,7 +101,9 @@ async def test_extract_knowledge_from_self_sent_sanitizes_markup_title():
         body="<h1>Quarter plan</h1>",
     )
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is not None
     assert task.title == "Memo: Quarter plan"
@@ -115,7 +119,9 @@ async def test_extract_knowledge_from_self_sent_requires_tenant_owned_address():
         recipients="other@example.com",
     )
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is None
     db.execute.assert_not_awaited()
@@ -129,7 +135,9 @@ async def test_extract_knowledge_from_self_sent_allows_subject_only_note():
     db.execute.return_value = _ScalarResult()
     email = _make_email(body="")
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is not None
     assert task.title == "Memo: Buy milk"
@@ -182,7 +190,9 @@ async def test_extract_knowledge_from_self_sent_rejects_empty_sender():
     db = AsyncMock(spec=AsyncSession)
     email = _make_email(sender="")
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is None
     db.execute.assert_not_awaited()
@@ -199,7 +209,9 @@ async def test_extract_knowledge_from_self_sent_uses_plain_text_body_title():
         body="<h1>Quarter plan</h1>\n<script>alert('x')</script>",
     )
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is not None
     assert task.title == "Memo: Quarter plan"
@@ -212,7 +224,9 @@ async def test_extract_knowledge_from_self_sent_skips_unsaved_email():
     db = AsyncMock(spec=AsyncSession)
     email = _make_email(id=None)
 
-    task = await extract_knowledge_from_self_sent(db, email, ["testuser@example.com"])
+    task = await extract_knowledge_from_self_sent(
+        db, email, ["testuser@example.com"]
+    )
 
     assert task is None
     db.execute.assert_not_awaited()

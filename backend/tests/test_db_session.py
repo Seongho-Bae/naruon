@@ -25,9 +25,7 @@ def test_readonly_session_uses_replica_url_when_configured(monkeypatch):
     def fake_sessionmaker(engine, *, expire_on_commit=False):
         return SimpleNamespace(engine=engine, expire_on_commit=expire_on_commit)
 
-    monkeypatch.setattr(
-        "sqlalchemy.ext.asyncio.create_async_engine", fake_create_async_engine
-    )
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", fake_create_async_engine)
     monkeypatch.setattr("sqlalchemy.ext.asyncio.async_sessionmaker", fake_sessionmaker)
 
     import core.config as config
@@ -48,10 +46,7 @@ def test_readonly_session_uses_replica_url_when_configured(monkeypatch):
         "postgresql+asyncpg://primary/db",
         "postgresql+asyncpg://replica/db",
     ]
-    assert (
-        reloaded.AsyncReadOnlySessionLocal.engine.url
-        == "postgresql+asyncpg://replica/db"
-    )
+    assert reloaded.AsyncReadOnlySessionLocal.engine.url == "postgresql+asyncpg://replica/db"
 
 
 def test_readonly_session_falls_back_to_primary_url_without_replica(monkeypatch):
@@ -64,9 +59,7 @@ def test_readonly_session_falls_back_to_primary_url_without_replica(monkeypatch)
     def fake_sessionmaker(engine, *, expire_on_commit=False):
         return SimpleNamespace(engine=engine, expire_on_commit=expire_on_commit)
 
-    monkeypatch.setattr(
-        "sqlalchemy.ext.asyncio.create_async_engine", fake_create_async_engine
-    )
+    monkeypatch.setattr("sqlalchemy.ext.asyncio.create_async_engine", fake_create_async_engine)
     monkeypatch.setattr("sqlalchemy.ext.asyncio.async_sessionmaker", fake_sessionmaker)
 
     import core.config as config
@@ -87,8 +80,5 @@ def test_readonly_session_falls_back_to_primary_url_without_replica(monkeypatch)
         "postgresql+asyncpg://primary/db",
         "postgresql+asyncpg://primary/db",
     ]
-    assert (
-        reloaded.AsyncReadOnlySessionLocal.engine.url
-        == "postgresql+asyncpg://primary/db"
-    )
+    assert reloaded.AsyncReadOnlySessionLocal.engine.url == "postgresql+asyncpg://primary/db"
     assert hasattr(reloaded, "get_readonly_db")

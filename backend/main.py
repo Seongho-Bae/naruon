@@ -2,35 +2,34 @@ import os
 from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI
+from fastapi import Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from prometheus_fastapi_instrumentator import Instrumentator
-
-from api.accounts import router as accounts_router
-from api.ai_hub import router as ai_hub_router
 from api.auth import get_auth_context, preload_oidc_jwks
-from api.calendar import router as calendar_router
-from api.data import router as data_router
-from api.dav import router as dav_router
-from api.emails import router as emails_router
+from api.search import router as search_router
 from api.llm import router as llm_router
-from api.llm_providers import router as llm_providers_router
+from api.calendar import router as calendar_router
 from api.network import router as network_router
-from api.observability import router as observability_router
-from api.ontology import router as ontology_router
-from api.prompts import router as prompts_router
+from api.emails import router as emails_router
 from api.runner_config import router as runner_config_router
+from api.tenant_config import router as tenant_config_router
+from api.runtime_config import router as runtime_config_router
+from api.llm_providers import router as llm_providers_router
+from api.prompts import router as prompts_router
+from api.tasks import router as tasks_router
+from api.tools import router as tools_router
+from api.ontology import router as ontology_router
+from api.observability import router as observability_router
 from api.runner_ws import manager as runner_manager
 from api.runner_ws import router as runner_ws_router
-from api.runtime_config import router as runtime_config_router
-from api.search import router as search_router
-from api.security import router as security_router
-from api.session import router as auth_session_router
-from api.tasks import router as tasks_router
-from api.tenant_config import router as tenant_config_router
-from api.tools import router as tools_router
+from api.dav import router as dav_router
+from api.accounts import router as accounts_router
 from api.webdav import router as webdav_router
+from api.security import router as security_router
+from api.data import router as data_router
+from api.ai_hub import router as ai_hub_router
+from api.session import router as auth_session_router
 from core.config import canonical_origin, settings
 from core.telemetry import setup_telemetry
 from core.version import get_release_version
@@ -38,6 +37,7 @@ from services.imap_worker import ImapSyncWorker
 from services.pop3_worker import Pop3SyncWorker
 from services.provider_writeback_retry_service import ProviderWritebackRetryWorker
 from services.reply_sla_scheduler import ReplySlaScheduler
+from prometheus_fastapi_instrumentator import Instrumentator
 
 imap_worker = ImapSyncWorker()
 pop3_worker = Pop3SyncWorker()
@@ -219,9 +219,9 @@ app.include_router(runtime_config_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(llm_providers_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(prompts_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(tasks_router, dependencies=PRIVATE_API_DEPENDENCIES)
+app.include_router(tools_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(ontology_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(observability_router, dependencies=PRIVATE_API_DEPENDENCIES)
-app.include_router(tools_router, tags=["Tools"])
 app.include_router(runner_ws_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(dav_router, dependencies=PRIVATE_API_DEPENDENCIES)
 app.include_router(accounts_router, dependencies=PRIVATE_API_DEPENDENCIES)

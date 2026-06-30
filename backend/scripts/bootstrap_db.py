@@ -93,7 +93,8 @@ def _get_add_columns_statements() -> list[Executable]:
             "ADD COLUMN IF NOT EXISTS organization_id varchar"
         ),
         _static_bootstrap_sql(
-            "ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS workspace_id varchar"
+            "ALTER TABLE prompt_templates "
+            "ADD COLUMN IF NOT EXISTS workspace_id varchar"
         ),
     ]
 

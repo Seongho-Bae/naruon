@@ -1,11 +1,11 @@
 import asyncio
 import inspect
-import os
 import socket
 
 import pytest
-
 import services.email_client as email_client
+
+import os
 
 TEST_SMTP_PASSWORD = os.environ.get("TEST_SMTP_PASSWORD", "dummy-smtp-password")
 

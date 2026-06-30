@@ -1,11 +1,9 @@
-from datetime import datetime, timezone
-
 import pytest
 from fastapi.testclient import TestClient
-
+from datetime import datetime, timezone
+from main import app
 from db.models import Email, SenderRelationship
 from db.session import get_db
-from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 

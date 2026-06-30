@@ -5,14 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models import TenantConfig
+from db.session import get_db
 from api.auth import (
     AuthContext,
     get_auth_context,
     get_current_user_role,
     is_admin_role,
 )
-from db.models import TenantConfig
-from db.session import get_db
+from services.tenant_config_scope import (
+    get_scoped_tenant_config,
+    new_scoped_tenant_config,
+)
 from services.access_policy import (
     AccessRequest,
     PolicyRoleName,
@@ -28,17 +32,15 @@ from services.email_client import (
     validate_smtp_host,
     validate_smtp_port,
 )
-from services.tenant_config_scope import (
-    get_scoped_tenant_config,
-    new_scoped_tenant_config,
-)
 
 router = APIRouter(prefix="/api/config")
 logger = logging.getLogger(__name__)
 
 
 @router.get("/global")
-async def get_global_config(role: str = Depends(get_current_user_role)):
+async def get_global_config(
+    role: str = Depends(get_current_user_role)
+):
     if not is_admin_role(role):
         raise HTTPException(status_code=403, detail="Not enough privileges")
     return {"status": "ok", "global_settings": {}}
@@ -143,7 +145,9 @@ def ensure_mailbox_config_self_access(
         raise HTTPException(status_code=403, detail=forbidden_detail)
 
 
-def _field_value(config_data: dict, db_config: TenantConfig | None, field_name: str):
+def _field_value(
+    config_data: dict, db_config: TenantConfig | None, field_name: str
+):
     if field_name in config_data:
         return config_data[field_name]
     if db_config is not None:
@@ -164,9 +168,7 @@ def _validate_smtp_config(smtp_server: str | None, smtp_port: int | None) -> Non
             "SMTP configuration validation failed",
             extra={"error_type": type(exc).__name__},
         )
-        raise HTTPException(
-            status_code=400, detail="Invalid SMTP configuration"
-        ) from exc
+        raise HTTPException(status_code=400, detail="Invalid SMTP configuration") from exc
 
 
 def _validate_imap_config(imap_server: str | None, imap_port: int | None) -> None:

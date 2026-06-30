@@ -65,3 +65,4 @@ def email_strong_fingerprint(email_row: Email) -> str | None:
         date=email_row.date,
         body=email_row.body,
     )
+

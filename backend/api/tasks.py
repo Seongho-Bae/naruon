@@ -163,7 +163,7 @@ async def create_reply_sla_escalations(
             detail={
                 "error_code": "reply_sla_task_conflict",
                 "message": "Overdue reply follow-up task conflict",
-            },
+            }
         ) from None
     return _reply_sla_response(escalation_result)
 
@@ -184,7 +184,6 @@ def _build_task_query(auth_context: AuthContext):
             TicketTask.organization_id == auth_context.organization_id,
         )
     )
-
 
 @router.get("", response_model=list[TicketTaskResponse])
 async def list_ticket_tasks(

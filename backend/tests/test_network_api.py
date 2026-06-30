@@ -1,11 +1,9 @@
-from unittest.mock import patch
-
 import pytest
 from fastapi.testclient import TestClient
-
-from api.network import extract_emails
-from db.session import get_db
 from main import app
+from db.session import get_db
+from unittest.mock import patch
+from api.network import extract_emails
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -165,7 +163,6 @@ def test_network_graph_query_is_scoped_to_current_user():
     assert "email_records.user_id" in query_text
     assert "email_records.organization_id" in query_text
 
-
 def test_extract_emails_valid():
     assert extract_emails("foo@example.com") == ["foo@example.com"]
     assert extract_emails("User <foo.bar@example.co.uk>") == ["foo.bar@example.co.uk"]
@@ -174,14 +171,12 @@ def test_extract_emails_valid():
     assert extract_emails("Mixed case: Foo@Bar.com") == ["Foo@Bar.com"]
     assert extract_emails("123@numbers.com") == ["123@numbers.com"]
 
-
 def test_extract_emails_invalid():
     assert extract_emails("not_an_email") == []
     assert extract_emails("foo@bar") == []
     assert extract_emails("foo@.com") == []
     assert extract_emails("@domain.com") == []
     assert extract_emails("foo@bar.") == []
-
 
 def test_extract_emails_empty_or_none():
     assert extract_emails("") == []

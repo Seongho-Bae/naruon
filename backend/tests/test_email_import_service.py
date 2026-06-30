@@ -6,12 +6,12 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import services.email_import_service as email_import_module
+from services.exceptions import EmailParseError, EmbeddingGenerationError
 from services.email_import_service import (
     EMBEDDING_DIMENSION,
     EmailImportEmbeddingProvider,
     _generate_import_embeddings,
 )
-from services.exceptions import EmailParseError, EmbeddingGenerationError
 
 
 @pytest.mark.parametrize(
@@ -25,8 +25,8 @@ from services.exceptions import EmailParseError, EmbeddingGenerationError
         ("/", "upload"),
         (".", "upload"),
         ("..", "upload"),
-        ("/tmp/..", "upload"),
-    ],
+        ("/tmp/..", "upload"),  # nosec B108
+    ]
 )
 def test_safe_upload_filename(input_name, expected):
     assert email_import_module._safe_upload_filename(input_name) == expected
@@ -39,19 +39,17 @@ def test_safe_upload_filename(input_name, expected):
         ("my_archive.zip", None, "my_archive.zip"),
         ("", None, "upload"),
         ("/path/to/my_archive.zip", None, "my_archive.zip"),
+
         # matching eml_path
         ("my_file.eml", Path("my_file.eml"), "my_file.eml"),
         ("/path/my_file.eml", Path("/other/path/my_file.eml"), "my_file.eml"),
         ("  my_file.eml  ", Path("my_file.eml"), "my_file.eml"),
+
         # differing eml_path
         ("my_archive.zip", Path("email_1.eml"), "my_archive.zip:email_1.eml"),
-        (
-            "/path/my_archive.zip",
-            Path("/some/folder/email_1.eml"),
-            "my_archive.zip:email_1.eml",
-        ),
+        ("/path/my_archive.zip", Path("/some/folder/email_1.eml"), "my_archive.zip:email_1.eml"),
         ("", Path("email_1.eml"), "upload:email_1.eml"),
-    ],
+    ]
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert email_import_module._safe_item_filename(upload_name, eml_path) == expected
@@ -72,7 +70,9 @@ async def test_import_single_eml_offloads_read_and_parse(monkeypatch, tmp_path):
         calls.append(("to_thread", func, args))
         return func(*args)
 
-    monkeypatch.setattr(email_import_module, "_read_and_parse_eml", fake_read_and_parse)
+    monkeypatch.setattr(
+        email_import_module, "_read_and_parse_eml", fake_read_and_parse
+    )
     monkeypatch.setattr(email_import_module.asyncio, "to_thread", fake_to_thread)
 
     result = await email_import_module._import_single_eml(

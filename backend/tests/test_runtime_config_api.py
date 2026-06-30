@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -79,7 +79,7 @@ def test_runtime_config_returns_non_secret_data(client):
 
 @pytest.mark.asyncio
 async def test_get_runtime_config_direct():
-    from api.runtime_config import RuntimeConfigResponse, get_runtime_config
+    from api.runtime_config import get_runtime_config, RuntimeConfigResponse
 
     response = await get_runtime_config()
     assert isinstance(response, RuntimeConfigResponse)

@@ -1,10 +1,7 @@
 import enum
-from typing import Any, Dict
-
+from typing import Dict, Any
 from pydantic import BaseModel
-
 from api.auth import RoleName
-
 
 class ResourceAction(str, enum.Enum):
     READ = "read"
@@ -12,13 +9,11 @@ class ResourceAction(str, enum.Enum):
     DELETE = "delete"
     ADMIN = "admin"
 
-
 class AbacPolicy(BaseModel):
     policy_id: str
     resource_type: str
     action: ResourceAction
     conditions: Dict[str, Any]  # e.g. {"department": "sales", "clearance": "high"}
-
 
 def check_tenant_access(user_role: RoleName, required_role: RoleName) -> bool:
     """
@@ -36,14 +31,13 @@ def check_tenant_access(user_role: RoleName, required_role: RoleName) -> bool:
         "tenant_admin": 2,
         "organization_admin": 2,
         "system_admin": 3,
-        "platform_admin": 3,
+        "platform_admin": 3
     }
-
+    
     if user_role not in hierarchy or required_role not in hierarchy:
         return False
-
+        
     return hierarchy[user_role] >= hierarchy[required_role]
-
 
 def evaluate_abac_policy(user_attributes: Dict[str, Any], policy: AbacPolicy) -> bool:
     """

@@ -5,9 +5,9 @@ Revises:
 Create Date: 2026-06-15 00:00:00.000000
 """
 
+from alembic import op
 from sqlalchemy import text
 
-from alembic import op
 from db.models import Base
 from scripts.bootstrap_db import schema_backfill_sql
 

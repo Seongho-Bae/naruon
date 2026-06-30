@@ -1,8 +1,6 @@
 import pytest
-
 from db.models import TenantConfig
 from services.imap_worker import ImapSyncWorker
-
 
 @pytest.mark.asyncio
 async def test_imap_worker_skips_disallowed_destination(monkeypatch):

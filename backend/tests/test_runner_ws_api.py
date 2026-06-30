@@ -1,5 +1,5 @@
-import asyncio
 import base64
+import asyncio
 import hashlib
 import hmac
 import json
@@ -8,7 +8,6 @@ import time
 
 import pytest
 from fastapi import WebSocketException, status
-from fastapi.routing import APIWebSocketRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from starlette.websockets import WebSocketDisconnect
@@ -186,8 +185,14 @@ def test_runner_ws_rejects_missing_auth():
 
 
 def test_runner_ws_route_uses_signed_session_dependency():
-    for route in app.routes:
-        if isinstance(route, APIWebSocketRoute) and route.path == "/ws/runner/{token}":
+    def get_routes(r):
+        if hasattr(r, "routes"):
+            for child in r.routes:
+                yield from get_routes(child)
+        else:
+            yield r
+    for route in get_routes(app):
+        if getattr(route, "path", "") == "/ws/runner/{token}":
             dependencies = {dependency.dependency for dependency in route.dependencies}
             assert get_auth_context in dependencies
             return
@@ -214,9 +219,7 @@ def test_runner_ws_accepts_signed_session_and_registered_token(monkeypatch):
             assert snapshot.active_connection_count == 1
             assert snapshot.last_seen_at is not None
             assert snapshot.last_disconnect_at is None
-            assert "nrn_registered-token" not in str(
-                runner_ws.manager.connection_records
-            )
+            assert "nrn_registered-token" not in str(runner_ws.manager.connection_records)
 
     snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
     assert snapshot.connection_state == "not_connected"
@@ -265,7 +268,9 @@ async def test_runner_manager_records_durable_signal_events(monkeypatch):
         "heartbeat",
         "disconnected",
     ]
-    assert {event["signal_key"] for event in recorded_events} == {"connector_heartbeat"}
+    assert {event["signal_key"] for event in recorded_events} == {
+        "connector_heartbeat"
+    }
     assert all(event["organization_id"] == "org-acme" for event in recorded_events)
     assert all(
         event["workspace_id"] == "workspace-org-acme" for event in recorded_events
@@ -468,9 +473,7 @@ async def test_runner_manager_dispatch_fails_closed_without_active_runner(monkey
 
 
 @pytest.mark.asyncio
-async def test_runner_manager_schedules_retry_when_runner_response_times_out(
-    monkeypatch,
-):
+async def test_runner_manager_schedules_retry_when_runner_response_times_out(monkeypatch):
     scheduled_retries: list[dict[str, object]] = []
 
     async def capture_provider_writeback_retry(**retry):

@@ -8,15 +8,16 @@ from sqlalchemy import select
 
 from db.models import Email, TenantConfig
 from db.session import AsyncSessionLocal
-from services.email_client import validate_imap_destination
-from services.email_dedupe_service import strong_email_fingerprint
-from services.email_parser import EmailData, parse_eml_bytes
-from services.exceptions import EmailParseError
+from services.email_parser import EmailData
 from services.knowledge_extractor import (
     extract_knowledge_from_self_sent,
     is_self_sent_email,
 )
+from services.email_client import validate_imap_destination
+from services.email_parser import parse_eml_bytes
+from services.exceptions import EmailParseError
 from services.threading_service import assign_thread_id, generate_email_fingerprint
+from services.email_dedupe_service import strong_email_fingerprint
 
 
 async def process_fetched_email(
@@ -95,7 +96,6 @@ async def process_fetched_email(
         await extract_knowledge_from_self_sent(session, new_email, owner_addresses)
     return new_email
 
-
 logger = logging.getLogger(__name__)
 MAX_IMAP_FETCH_MESSAGES = 10
 
@@ -145,17 +145,15 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(
-                select(TenantConfig).where(TenantConfig.imap_server.isnot(None))
-            )
+            result = await session.execute(select(TenantConfig).where(TenantConfig.imap_server.isnot(None)))
             configs = result.scalars().all()
-
+            
         tasks = []
         for config in configs:
             if not config.imap_server or not config.imap_port:
                 continue
             tasks.append(self._sync_tenant(config))
-
+            
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -171,7 +169,7 @@ class ImapSyncWorker:
                 config.user_id,
             )
             return 0
-
+        
         logger.info(
             "Connecting to IMAP server %s:%s for user %s",
             imap_server,
@@ -206,7 +204,6 @@ class ImapSyncWorker:
         if imap_server is None or imap_port is None:
             imap_server, imap_port = self._validated_destination(config)
         import ssl
-
         ssl_context = ssl.create_default_context()
         imap_client = aioimaplib.IMAP4_SSL(
             imap_server, imap_port, ssl_context=ssl_context
@@ -340,4 +337,6 @@ class ImapSyncWorker:
         header_block = value.split(b"\r\n\r\n", maxsplit=1)[0]
         if header_block == value:
             header_block = value.split(b"\n\n", maxsplit=1)[0]
-        return b":" in header_block and (b"\r\n\r\n" in value or b"\n\n" in value)
+        return b":" in header_block and (
+            b"\r\n\r\n" in value or b"\n\n" in value
+        )

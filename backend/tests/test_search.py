@@ -1,12 +1,10 @@
 import datetime
-from unittest.mock import AsyncMock, patch
-
 import pytest
+from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
-
 from db.models import LLMProvider
-from db.session import get_db, get_readonly_db
 from main import app
+from db.session import get_db, get_readonly_db
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
@@ -286,7 +284,8 @@ def test_search_uses_primary_config_session_and_readonly_search_session(
         "llm_providers" in str(stmt).lower() for stmt in config_session.statements
     )
     assert all(
-        "combined_search" not in str(stmt).lower() for stmt in config_session.statements
+        "combined_search" not in str(stmt).lower()
+        for stmt in config_session.statements
     )
     assert "combined_search" in str(search_session.statements[-1]).lower()
 

@@ -1,19 +1,19 @@
-from typing import List
-
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-router = APIRouter()
+router = APIRouter(prefix="/api", tags=["tools"])
 
 
 class ToolInfo(BaseModel):
+    """Workspace automation tool metadata returned to the tools catalog UI."""
+
     name: str = Field(..., description="도구의 이름")
     description: str = Field(..., description="도구에 대한 상세 설명")
     category: str = Field(..., description="도구의 분류 (예: 이메일, 일정, 분석 등)")
 
 
-@router.get("/tools", response_model=List[ToolInfo])
-def get_tools():
+@router.get("/tools", response_model=list[ToolInfo])
+def get_tools() -> list[ToolInfo]:
     """
     Naruon AI 이메일 워크스페이스에서 사용할 수 있는 분석 및 실행 도구 목록을 반환합니다.
     """

@@ -1,15 +1,15 @@
 import base64
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
 import time
 import uuid
-from datetime import datetime, timezone
 
 import asyncpg
+from fastapi.testclient import TestClient
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -241,8 +241,8 @@ def mock_db():
         [
             [_webdav_account("webdav_src_primary")],
             [_project_folder("webdav_folder_roadmap")],
-            (4, 1, 2, 3),  # email stats
-            (3, 1, 1),  # attachment stats
+            (4, 1, 2, 3), # email stats
+            (3, 1, 1), # attachment stats
             [_connector_event("connector_evt_data_quality")],
             [
                 (_attachment("roadmap.pdf", "extracted attachment text"), ready_email),
@@ -328,10 +328,7 @@ def test_data_quality_surface_returns_source_backed_counts_without_secrets(mock_
     assert data["repository_assets"][0]["asset_key"].startswith("asset_")
     assert data["repository_assets"][0]["thread_key"].startswith("thread_")
     assert data["repository_assets"][1]["state_code"] == "needs_attention"
-    assert (
-        data["repository_assets"][1]["source_label"]
-        == "scriptQuarterly source pack/script"
-    )
+    assert data["repository_assets"][1]["source_label"] == "scriptQuarterly source pack/script"
 
     serialized = response.text
     for forbidden in (
@@ -380,9 +377,7 @@ def test_data_quality_surface_rejects_public_identity_headers_without_signed_ses
 
 def test_member_data_quality_queries_are_owner_scoped(mock_db):
     token = _signed_session_token(
-        _valid_session_payload(
-            sub="member", role="member", workspace="workspace-member"
-        )
+        _valid_session_payload(sub="member", role="member", workspace="workspace-member")
     )
     client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
     try:
@@ -433,7 +428,8 @@ def test_data_quality_surface_includes_workspace_document_assets(mock_db):
     assert response.status_code == 200, response.text
     data = response.json()
     repositories_by_type = {
-        repository["repository_type"]: repository for repository in data["repositories"]
+        repository["repository_type"]: repository
+        for repository in data["repositories"]
     }
     assert repositories_by_type["document_repository"] == {
         "source_id": "document_repository",
@@ -488,7 +484,7 @@ def test_data_document_upload_creates_workspace_scoped_document(mock_db):
     assert data == {
         "document_id": "doc_mock_1",
         "workspace_id": "workspace-org-acme",
-        "document_name": "broadmap.md/b",
+            "document_name": "broadmap.md/b",
         "document_type": "text/markdown",
         "document_status": "uploaded",
         "content_chars": 18,
@@ -546,9 +542,7 @@ def test_data_document_actions_are_workspace_scoped_and_intent_only(mock_db):
     embedding_data = embedding_response.json()
     assert embedding_data["document_status"] == "embedding_pending"
     assert embedding_data["provider_write_executed"] is False
-    assert (
-        embedding_data["audit_event"] == "data.document.embedding_regeneration_intent"
-    )
+    assert embedding_data["audit_event"] == "data.document.embedding_regeneration_intent"
 
     assert hwp_response.status_code == 200, hwp_response.text
     hwp_data = hwp_response.json()
@@ -590,9 +584,7 @@ def test_data_document_webdav_materialization_executes_source_backed_write(
             "provider_write_executed": True,
         }
 
-    monkeypatch.setattr(
-        data_api.runner_manager, "dispatch_command", fake_dispatch_command
-    )
+    monkeypatch.setattr(data_api.runner_manager, "dispatch_command", fake_dispatch_command)
     token = _signed_session_token(_valid_session_payload())
     client, previous_secret, original_overrides = _with_signed_auth(mock_db, token)
     try:
@@ -685,9 +677,7 @@ def test_data_document_webdav_materialization_rejects_empty_document(mock_db):
         _restore_overrides(previous_secret, original_overrides)
 
     assert response.status_code == 422
-    assert (
-        response.json()["detail"] == "Workspace document has no materializable content."
-    )
+    assert response.json()["detail"] == "Workspace document has no materializable content."
 
 
 @pytest.mark.asyncio

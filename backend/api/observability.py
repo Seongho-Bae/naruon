@@ -121,9 +121,7 @@ def _latest_event_time(
     return None
 
 
-def _check_org_admin(
-    auth_context: AuthContext = Depends(get_auth_context),
-) -> AuthContext:
+def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
     if not is_admin_role(auth_context.role):
         raise HTTPException(
             status_code=403,
@@ -313,9 +311,7 @@ def _operational_signals(
         OperationalSignal(
             signal_key="connector_heartbeat",
             display_name="Connector heartbeat",
-            state="enabled"
-            if connector.connection_state == "connected"
-            else connector.registration_state,
+            state="enabled" if connector.connection_state == "connected" else connector.registration_state,
             evidence_source="runner WebSocket manager and workspace_runner_configs.registration_token",
             detail="Live heartbeat uses active outbound runner sockets and durable connector_signal_events history.",
         ),

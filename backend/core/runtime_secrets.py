@@ -1,6 +1,7 @@
 import math
 from collections import Counter
 
+
 MIN_AUTH_SESSION_HMAC_SECRET_BYTES = 32
 MIN_AUTH_SESSION_HMAC_SECRET_UNIQUE_CHARS = 12
 MIN_AUTH_SESSION_HMAC_SECRET_CHARACTER_CLASSES = 3
@@ -26,7 +27,10 @@ def _shannon_entropy_bits(secret: str) -> float:
     length = len(secret)
     counts = Counter(secret)
     return (
-        -sum((count / length) * math.log2(count / length) for count in counts.values())
+        -sum(
+            (count / length) * math.log2(count / length)
+            for count in counts.values()
+        )
         * length
     )
 

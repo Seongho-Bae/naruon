@@ -1,15 +1,15 @@
 import base64
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import json
 import time
 import uuid
-from datetime import datetime, timezone
 
 import asyncpg
+from fastapi.testclient import TestClient
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -731,12 +731,16 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
             )
             await conn.execute(
                 text(
-                    "DELETE FROM connector_signal_events WHERE event_uid = :event_uid"
+                    "DELETE FROM connector_signal_events "
+                    "WHERE event_uid = :event_uid"
                 ),
                 {"event_uid": event_uid},
             )
             await conn.execute(
-                text("DELETE FROM security_audit_events WHERE event_uid = :event_uid"),
+                text(
+                    "DELETE FROM security_audit_events "
+                    "WHERE event_uid = :event_uid"
+                ),
                 {"event_uid": audit_uid},
             )
         await engine.dispose()

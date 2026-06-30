@@ -1,10 +1,9 @@
 import openai
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from openai import AsyncOpenAI
-
 from core.config import settings
-from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_urls import build_llm_provider_http_client
+from services.exceptions import EmbeddingGenerationError
 
 STORAGE_EMBEDDING_DIMENSION = 1536
 

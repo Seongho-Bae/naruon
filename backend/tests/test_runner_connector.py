@@ -297,9 +297,7 @@ async def test_handle_message_reports_unknown_action():
     connector._handle_send_smtp = AsyncMock()
     connector.send_response = AsyncMock()
 
-    await connector.handle_message(
-        json.dumps({"action": "sync_unknown", "account": "mailbox-1"})
-    )
+    await connector.handle_message(json.dumps({"action": "sync_unknown", "account": "mailbox-1"}))
 
     connector._handle_fetch_imap.assert_not_awaited()
     connector._handle_send_smtp.assert_not_awaited()

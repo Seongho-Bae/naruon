@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.session import get_db
 from api.auth import AuthContext, get_auth_context, is_system_admin_role
 from api.tenant_config import (
     MAILBOX_MANAGE_FORBIDDEN,
@@ -9,7 +10,6 @@ from api.tenant_config import (
     ensure_mailbox_config_self_access,
     validate_mail_config_update,
 )
-from db.session import get_db
 from services.tenant_config_scope import (
     get_scoped_tenant_config,
     new_scoped_tenant_config,
@@ -20,7 +20,6 @@ router = APIRouter(prefix="/api/accounts", tags=["accounts"])
 MAILBOX_ACCOUNT_SETTINGS_FORBIDDEN = (
     "Mailbox account settings require a scoped user session"
 )
-
 
 class TenantConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -39,7 +38,6 @@ class TenantConfigUpdate(BaseModel):
     oauth_client_id: str | None = None
     oauth_client_secret: str | None = None
     oauth_redirect_uri: str | None = None
-
 
 class TenantConfigResponse(BaseModel):
     user_id: str
@@ -110,12 +108,11 @@ async def get_tenant_config(
 
     return _tenant_config_response(config)
 
-
 @router.put("/config", response_model=TenantConfigResponse)
 async def update_tenant_config(
     update_data: TenantConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    auth_ctx: AuthContext = Depends(get_auth_context),
+    auth_ctx: AuthContext = Depends(get_auth_context)
 ):
     _ensure_mailbox_account_owner_session(auth_ctx, MAILBOX_MANAGE_FORBIDDEN)
     config = await get_scoped_tenant_config(
@@ -131,7 +128,6 @@ async def update_tenant_config(
         db.add(config)
 
     from api.tenant_config import SECRET_FIELDS
-
     update_dict = update_data.model_dump(exclude_unset=True)
     validate_mail_config_update(update_dict, config)
     for key, value in update_dict.items():

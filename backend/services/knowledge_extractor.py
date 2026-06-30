@@ -1,10 +1,8 @@
 import logging
-from collections.abc import Iterable
 from email import utils as email_utils
-
+from collections.abc import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from db.models import Email, TicketTask
 from services.email_service import process_self_to_self
 from services.text_safety import strip_html_markup
@@ -77,8 +75,7 @@ async def _existing_knowledge_task(db: AsyncSession, email: Email) -> TicketTask
     if email.id is None:
         return None
     result = await db.execute(
-        select(TicketTask)
-        .where(
+        select(TicketTask).where(
             TicketTask.user_id == email.user_id,
             TicketTask.organization_id == email.organization_id,
             TicketTask.related_email_id == email.id,

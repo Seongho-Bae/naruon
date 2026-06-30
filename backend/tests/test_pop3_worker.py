@@ -1,7 +1,6 @@
 import asyncio
-from unittest.mock import MagicMock, patch
-
 import pytest
+from unittest.mock import MagicMock, patch
 
 from db.models import TenantConfig
 from services.pop3_worker import Pop3SyncWorker

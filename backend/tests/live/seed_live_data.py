@@ -7,7 +7,8 @@ import datetime as dt
 import sys
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete
+from sqlalchemy import select
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 if str(BACKEND_ROOT) not in sys.path:
@@ -23,6 +24,7 @@ from db.models import (  # noqa: E402
     Workspace,
 )
 from db.session import AsyncSessionLocal  # noqa: E402
+
 
 THREAD_ID = "<live-e2e-root@example.test>"
 LIVE_E2E_USER_ID = "testuser"

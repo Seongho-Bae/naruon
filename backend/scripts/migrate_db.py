@@ -8,9 +8,8 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-from alembic.config import Config  # noqa: E402
-
 from alembic import command  # noqa: E402
+from alembic.config import Config  # noqa: E402
 
 
 def alembic_config() -> Config:

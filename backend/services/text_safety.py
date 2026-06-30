@@ -255,7 +255,9 @@ def _check_html_tag_at(decoded: str, cursor: int) -> tuple[bool, int]:
 
     closing = decoded.find(">", tag_start + 1)
     if tag_start < len(decoded) and decoded[tag_start].isalpha():
-        tag_content = decoded[tag_start : closing if closing != -1 else None].strip()
+        tag_content = decoded[
+            tag_start : closing if closing != -1 else None
+        ].strip()
         next_cursor = closing + 1 if closing != -1 else len(decoded)
 
         if _looks_like_angle_email(tag_content):
@@ -390,6 +392,15 @@ def _strip_tag_like_segments(value: str) -> str:
     return "".join(parts)
 
 
+def _normalize_plain_text(value: str) -> str:
+    lines = []
+    for line in value.splitlines():
+        normalized_line = " ".join(_strip_tag_like_segments(line).split())
+        if normalized_line:
+            lines.append(normalized_line)
+    return "\n".join(lines).strip()
+
+
 class _PlainTextHTMLParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -432,27 +443,25 @@ class _PlainTextHTMLParser(HTMLParser):
             self._parts.append(_strip_tag_like_segments(data))
 
     def get_text(self) -> str:
-        lines = []
-        for line in "".join(self._parts).splitlines():
-            normalized_line = " ".join(line.split())
-            if normalized_line:
-                lines.append(normalized_line)
-        return "\n".join(lines).strip()
+        return _normalize_plain_text("".join(self._parts))
 
 
 def strip_html_markup(value: str) -> str:
+    if "<" not in value and "&" not in value:
+        return _normalize_plain_text(value)
+
     decoded = _decode_entities(value)
     masked, placeholders = _mask_angle_emails(decoded)
     parser = _PlainTextHTMLParser()
     parser.feed(masked)
     parser.close()
     text = parser.get_text()
-
+    
     cleaned_lines = []
     for line in text.splitlines():
         cleaned_lines.append(_strip_tag_like_segments(line))
     text = "\n".join(cleaned_lines).strip()
-
+    
     for token, original in placeholders.items():
         text = text.replace(token, original)
     return text

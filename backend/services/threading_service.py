@@ -1,18 +1,17 @@
-import hashlib
-import re
 import uuid
-
-from sqlalchemy import select
+import re
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from sqlalchemy import select
 from db.models import Email
 from services.email_parser import EmailData
+
+
+import hashlib
 
 # ⚡ Bolt Optimization: Pre-compile reference extraction regex
 # Impact: Eliminates redundant inline compilation/caching overhead during repetitive
 # email header processing, yielding a measurable speedup when handling long reference lists.
 REFERENCE_PATTERN = re.compile(r"<([^>]+)>")
-
 
 def generate_email_fingerprint(
     subject: str | None,
@@ -60,15 +59,6 @@ def extract_reference_ids(value: str | None) -> list[str]:
     return normalized_refs
 
 
-def email_owner_filters(user_id: str, organization_id: str | None):
-    organization_filter = (
-        Email.organization_id == organization_id
-        if organization_id is not None
-        else Email.organization_id.is_(None)
-    )
-    return (Email.user_id == user_id, organization_filter)
-
-
 async def _find_existing_thread_ids(
     session: AsyncSession,
     message_ids: list[str],
@@ -89,7 +79,7 @@ async def _find_existing_thread_ids(
 
     result = await session.execute(
         select(Email.message_id, Email.thread_id).where(
-            *email_owner_filters(user_id, organization_id),
+            *Email.owner_filters(user_id, organization_id),
             Email.message_id.in_(target_ids),
         )
     )

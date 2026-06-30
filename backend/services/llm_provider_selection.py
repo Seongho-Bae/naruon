@@ -13,6 +13,7 @@ from services.llm_provider_readiness import (
 )
 from services.tenant_config_scope import get_scoped_tenant_config
 
+
 ProviderSource = Literal["llm_provider", "tenant_config"]
 LOCAL_PROVIDER_API_KEY = "local-provider"
 

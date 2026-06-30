@@ -2,9 +2,9 @@ import asyncio
 import datetime
 import json
 import logging
-import uuid
 from collections.abc import Awaitable, Callable
 from typing import Any
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,9 +78,7 @@ class ProviderWritebackRetryWorker:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.error(
-                    "Error in ProviderWritebackRetryWorker loop", exc_info=True
-                )
+                logger.error("Error in ProviderWritebackRetryWorker loop", exc_info=True)
 
             if self._is_running:
                 try:

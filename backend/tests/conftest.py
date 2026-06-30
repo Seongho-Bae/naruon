@@ -11,10 +11,9 @@ os.environ.setdefault("ALLOWED_POP3_HOSTS", "pop3.example.com")
 os.environ.setdefault("ALLOWED_CORS_ORIGINS", "http://localhost:3000")
 os.environ.setdefault("DISABLE_BACKGROUND_WORKERS", "1")
 
-from typing import cast
-
 import pytest
 from fastapi import Header, HTTPException
+from typing import cast
 
 from api.auth import AuthContext, RoleName, get_auth_context, get_current_user
 from main import app

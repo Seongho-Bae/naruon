@@ -3,10 +3,10 @@ import hashlib
 import hmac
 import json
 import logging
-import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+import uuid
 
 from fastapi import (
     APIRouter,
@@ -22,6 +22,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from api.auth import AuthContext, build_auth_context
 from db.models import ConnectorSignalEvent, WorkspaceRunnerConfig
 from db.session import AsyncSessionLocal
+from runner.utils.dispatch import dispatch_error
 from services.provider_writeback_retry_service import (
     is_retryable_provider_writeback_failure,
     schedule_provider_writeback_retry_safely,
@@ -251,15 +252,11 @@ class ConnectionManager:
             if candidate
         ]
         if active_records:
-            last_seen_candidates.extend(
-                record.connected_at for record in active_records
-            )
+            last_seen_candidates.extend(record.connected_at for record in active_records)
         last_seen_at = max(last_seen_candidates) if last_seen_candidates else None
         return RunnerConnectionSnapshot(
             organization_id=organization_id,
-            workspace_id=active_records[0].workspace_id
-            if active_records
-            else workspace_id,
+            workspace_id=active_records[0].workspace_id if active_records else workspace_id,
             connection_state="connected" if active_count else "not_connected",
             active_connection_count=active_count,
             last_seen_at=last_seen_at,
@@ -295,15 +292,6 @@ def _policy_violation() -> WebSocketException:
     return WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
 
 
-def _dispatch_error(error_code: str) -> dict[str, Any]:
-    return {
-        "status": "error",
-        "error": error_code,
-        "error_code": error_code,
-        "provider_write_executed": False,
-    }
-
-
 async def _dispatch_error_with_retry(
     *,
     organization_id: str,
@@ -313,7 +301,7 @@ async def _dispatch_error_with_retry(
     runner_request_id: str | None,
     schedule_retry: bool,
 ) -> dict[str, Any]:
-    result = _dispatch_error(error_code)
+    result = dispatch_error(error_code)
     return await _dispatch_response_with_retry(
         organization_id=organization_id,
         workspace_id=workspace_id,
