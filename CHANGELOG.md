@@ -2,6 +2,7 @@
 ### UI/UX 개선
 - `CalendarLayout`의 성공 상태에서 기술적 세부 정보 대신 사용자 친화적인 메시지를 표시하도록 개선하여 불필요한 정보 노출을 방지했습니다.
 - `CalendarLayout`의 일정 쓰기(Writeback) 액션 버튼들에 로딩 스피너(`Loader2`)를 추가하여 비동기 작업 시 즉각적인 시각적 피드백을 제공합니다.
+- Prompt Studio의 비동기 작업 버튼('실행', '프롬프트 저장')이 로딩 중일 때 `aria-busy` 속성을 가지도록 개선하여 스크린 리더 접근성을 향상했습니다.
 
 ### 성능 개선 (Performance)
 
@@ -9,14 +10,14 @@
 
 ### 보안 패치 (Security)
 
+- (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.
 - **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
 - **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.
 
-### Added
+### 추가
+
 - 백엔드에 다국어 이메일 본문을 번역할 수 있는 LLM 기반 `POST /api/llm/translate` 엔드포인트를 추가했습니다.
 - 프론트엔드의 이메일 상세 정보 뷰(`EmailDetail.tsx`)에 메일 원문을 한국어로 번역하는 '번역' 액션 버튼 및 번역 결과 UI를 추가했습니다.
-
-
 
 ## [0.14.4] - 2026-06-18
 

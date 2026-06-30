@@ -77,10 +77,10 @@ function deferred<T>(): Deferred<T> {
 }
 
 function jsonResponse(body: unknown) {
-  return {
-    ok: true,
-    json: async () => body,
-  };
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 async function flushAsyncWork() {
@@ -100,32 +100,38 @@ async function waitForCondition(condition: () => boolean) {
 }
 
 describe("EmailDetail", () => {
+  let root: Root | null = null;
+  let container: HTMLDivElement | null = null;
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount());
+    }
+    root = null;
+    container?.remove();
+    container = null;
+    vi.unstubAllGlobals();
+  });
 
   it("translates email content when the Translate button is clicked", async () => {
-    let translateResolver: (value: Response) => void;
-    const translatePromise = new Promise<Response>((resolve) => {
-      translateResolver = resolve;
-    });
+    const translation = deferred<Response>();
 
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       if (url.endsWith("/api/emails/1")) {
         return jsonResponse({
           id: 1,
           subject: "Test Subject",
           sender: "test@example.com",
           body: "Hello World",
-          received_at: "2026-05-18T10:00:00Z",
-          thread_id: "thread-1"
+          date: "2026-05-18T10:00:00Z",
+          thread_id: "thread-1",
         });
-      }
-      if (url.endsWith("/api/emails/thread-1")) {
-        return jsonResponse([{ id: 1 }]);
       }
       if (url.endsWith("/api/llm/summarize")) {
         return jsonResponse({ summary: "Summary", todos: [] });
       }
       if (url.endsWith("/api/llm/translate")) {
-        return translatePromise;
+        return translation.promise;
       }
       return jsonResponse({});
     }));
@@ -136,32 +142,34 @@ describe("EmailDetail", () => {
     await act(async () => { root?.render(<EmailDetail emailId={1} />); });
     await flushAsyncWork();
 
-    const translateButton = Array.from(container?.querySelectorAll('button') || []).find(b => b.textContent?.includes('번역'));
+    const translateButton = Array.from(container?.querySelectorAll("button") || []).find((button) => button.textContent?.includes("번역"));
     expect(translateButton).toBeDefined();
 
     act(() => { translateButton?.click(); });
 
     await act(async () => {
-      translateResolver(jsonResponse({ translation: "안녕하세요 세계" }));
-      await translatePromise;
+      translation.resolve(jsonResponse({ translation: "<script>alert(1)</script>안녕하세요 세계" }));
+      await translation.promise;
     });
     await flushAsyncWork();
+
+    expect(container?.textContent).toContain("한국어 번역 결과");
+    expect(container?.textContent).toContain("안녕하세요 세계");
+    expect(container?.textContent).not.toContain("alert(1)");
+    expect(container?.querySelector("script")).toBeNull();
   });
 
   it("handles translation errors gracefully", async () => {
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       if (url.endsWith("/api/emails/1")) {
         return jsonResponse({
           id: 1,
           subject: "Test Subject",
           sender: "test@example.com",
           body: "Hello World",
-          received_at: "2026-05-18T10:00:00Z",
-          thread_id: "thread-1"
+          date: "2026-05-18T10:00:00Z",
+          thread_id: "thread-1",
         });
-      }
-      if (url.endsWith("/api/emails/thread-1")) {
-        return jsonResponse([{ id: 1 }]);
       }
       if (url.endsWith("/api/llm/summarize")) {
         return jsonResponse({ summary: "Summary", todos: [] });
@@ -178,23 +186,13 @@ describe("EmailDetail", () => {
     await act(async () => { root?.render(<EmailDetail emailId={1} />); });
     await flushAsyncWork();
 
-    const translateButton = Array.from(container?.querySelectorAll('button') || []).find(b => b.textContent?.includes('번역'));
+    const translateButton = Array.from(container?.querySelectorAll("button") || []).find((button) => button.textContent?.includes("번역"));
+    expect(translateButton).toBeDefined();
 
     act(() => { translateButton?.click(); });
     await flushAsyncWork();
-  });
 
-  let root: Root | null = null;
-  let container: HTMLDivElement | null = null;
-
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount());
-    }
-    root = null;
-    container?.remove();
-    container = null;
-    vi.unstubAllGlobals();
+    expect(container?.textContent).toContain("번역을 수행하지 못했습니다.");
   });
 
   it("renders untrusted detail fields as plain display text without markup", async () => {

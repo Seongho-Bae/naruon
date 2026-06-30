@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Loader2, MessagesSquare } from "lucide-react";
+import DOMPurify from "dompurify";
 import { DecisionPointCard } from "@/components/DecisionPointCard";
 import {
   buildThreadUrl,
@@ -69,7 +70,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
   const [translationError, setTranslationError] = useState<string | null>(null);
   const [isDrafting, setIsDrafting] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  
+
   const [draftError, setDraftError] = useState<string | null>(null);
   const [sendStatus, setSendStatus] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [instruction, setInstruction] = useState('정중하게 답장해줘');
@@ -122,7 +123,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
   useEffect(() => {
     if (!emailId) return;
-    
+
     let isMounted = true;
 
     const fetchData = async () => {
@@ -135,6 +136,9 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       setLlmData(null);
       setLlmError(null);
       setDraft('');
+      setTranslation(null);
+      setTranslationError(null);
+      setIsTranslating(false);
       setDraftError(null);
       setSendStatus(null);
       setIsDrafting(false);
@@ -146,7 +150,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
 
       try {
         const emailJson = await apiClient.get<EmailData>(`/api/emails/${emailId}`);
-        
+
         if (!isMounted) return;
         setEmail(emailJson);
         setLoading(false); // Stop loading immediately so the user can read the email
@@ -393,7 +397,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
       <Separator />
       <ScrollArea className="flex-1">
         <div className="flex flex-col gap-6 bg-background/50 p-6 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-6">
-          
+
           <DecisionPointCard
             title="맥락 종합"
             icon={<span aria-hidden="true">✦</span>}
@@ -436,7 +440,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "동기화 중" : "일정 반영"}
+                    {isSyncing ? "일정 반영 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
@@ -480,7 +484,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           </DecisionPointCard>
 
           <Separator />
-          
+
           <div className="space-y-4 rounded-2xl border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -527,10 +531,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                   {msg.id === email.id && translation && (
                     <div className="mb-6 rounded-2xl bg-secondary/40 p-4 border border-border">
                       <p className="text-xs font-bold text-primary mb-2">한국어 번역 결과</p>
-                      <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(translation)}</div>
+                      <div className="text-sm leading-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(toMailBodyText(translation)) }}></div>
                     </div>
                   )}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(toMailBodyText(msg.body)) }}></div>
                 </div>
               ))}
             </div>
@@ -551,8 +555,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                   className="h-10 rounded-xl border-purple-500/20 bg-purple-500/5 text-xs"
                 />
               </div>
-              <Button 
-                onClick={handleDraftReply} 
+              <Button
+                onClick={handleDraftReply}
                 disabled={isDrafting || !instruction}
                 aria-busy={isDrafting}
                 variant="outline"
@@ -563,11 +567,11 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 {isDrafting ? "초안 작성 중" : "답장 초안 생성"}
               </Button>
             </div>
-            
+
             {draftError && <p role="alert" className="text-sm text-red-500">{draftError}</p>}
 
             <label htmlFor="reply-draft" className="sr-only">답장 초안</label>
-            <Textarea 
+            <Textarea
               id="reply-draft"
               aria-label="답장 초안"
               value={draft}
@@ -575,7 +579,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               placeholder="답장 초안을 작성하거나 판단 보조로 초안을 생성하세요..."
               className="min-h-[150px] rounded-2xl border-purple-500/20 bg-background/70"
             />
-            
+
             <div className="flex items-center justify-between">
               <div>
                 {sendStatus && (
@@ -586,8 +590,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               </div>
               <div className="flex gap-2">
                 {draft && (
-                  <Button 
-                    onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }} 
+                  <Button
+                    onClick={() => { setDraft(''); setSendStatus(null); setDraftError(null); }}
                     variant="ghost"
                     size="sm"
                     className="h-9 rounded-xl"
@@ -595,8 +599,8 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     지우기
                   </Button>
                 )}
-                <Button 
-                  onClick={handleSendReply} 
+                <Button
+                  onClick={handleSendReply}
                   disabled={isSending || !draft}
                   aria-busy={isSending}
                   size="sm"
