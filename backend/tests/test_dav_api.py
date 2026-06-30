@@ -143,7 +143,6 @@ def test_dav_owner_parser_rejects_double_encoded_traversal():
 def test_dav_owner_parser_rejects_excessive_url_encoding_depth():
     import pytest
     from fastapi import HTTPException
-    import urllib.parse
 
     encoded_path = "%2e%2e/projects"
     for _ in range(101):
