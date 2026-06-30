@@ -364,7 +364,6 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert "id" not in data["prompt_cards"][0]
     assert data["workflow_cards"][0]["state_code"] == "needs_provider"
 
-
     assert data["evaluation_metrics"][1]["score_value"] == 0
     assert data["run_events"][0]["evidence_source"] == "api.llm_providers"
     assert "credential material" not in response.text
@@ -479,6 +478,7 @@ def test_ai_hub_workflow_api_requires_signed_session():
         yield session
 
     app.dependency_overrides[get_db] = scoped_db
+    app.dependency_overrides[get_readonly_db] = scoped_db
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             response = client.post(
@@ -528,6 +528,7 @@ def test_ai_hub_surface_rejects_public_identity_headers_without_signed_session()
         yield session
 
     app.dependency_overrides[get_db] = scoped_db
+    app.dependency_overrides[get_readonly_db] = scoped_db
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
             response = client.get(
@@ -674,6 +675,7 @@ async def test_ai_hub_surface_postgres_smoke_uses_signed_scope():
         )
     )
     app.dependency_overrides[get_db] = override_real_db
+    app.dependency_overrides[get_readonly_db] = override_real_db
     try:
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(
