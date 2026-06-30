@@ -438,7 +438,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                     type="button"
                     aria-label="홈에서 보낸 메일 미답변 팔로업 작업 생성"
                     disabled={loading || pendingReplyCount === 0 || replySlaStatus === 'loading'}
-                    aria-busy={loading || replySlaStatus === 'loading'}
                     onClick={() => void handleReplySlaEscalation()}
                     className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
