@@ -140,6 +140,23 @@ def test_dav_owner_parser_rejects_double_encoded_traversal():
     assert owner_user_id is None
 
 
+def test_dav_normalization_infinite_loop_prevention(monkeypatch):
+    from fastapi import HTTPException
+    from api.dav import _normalize_dav_authorization_path
+
+    def fake_unquote(path):
+        return f"{path}_unquoted"
+
+    monkeypatch.setattr("api.dav.unquote", fake_unquote)
+
+    import pytest
+    with pytest.raises(HTTPException) as excinfo:
+        _normalize_dav_authorization_path("some/path")
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "Path too deeply encoded"
+
+
 def test_dav_rejects_double_encoded_traversal(dev_auth_dependency_overrides):
     with TestClient(app) as client:
         response = client.request(

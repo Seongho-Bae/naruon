@@ -75,3 +75,8 @@
 **Vulnerability:** Attackers could inject arbitrary SMTP commands (e.g. MAIL FROM) using CRLF (\r\n) sequences in email subjects or recipients because `^[^\r\n]*$` validation in Pydantic wasn't catching all edge cases correctly. Attackers could also bypass file upload validations by providing double extensions (e.g., `malicious.exe.eml`).
 **Learning:** Pydantic regex patterns might fall short for strict network protocol inputs like SMTP headers if improperly formulated or bypassed. Simple `.endswith()` checks for file uploads fail to prevent embedded dangerous extensions.
 **Prevention:** Always use `@field_validator` with explicit `mode="before"` string matching for `chr(10)` and `chr(13)` across all user-controlled email header fields (to, subject, in_reply_to, references). Always tokenize uploaded filenames via `.split(".")` and reject if any segment matches a known dangerous extension (e.g., `.exe`, `.sh`).
+
+## 2026-06-30 - [Algorithmic Complexity DoS via unquote Unbounded Loops]
+**Vulnerability:** The `_normalize_dav_authorization_path` function in `backend/api/dav.py` used an unbounded `while True:` loop to repeatedly decode URL-encoded paths via `urllib.parse.unquote` until stabilization, opening a vector for algorithmic complexity Denial of Service (DoS) if an attacker provided an overly nested or infinitely recursive encoding payload.
+**Learning:** Unbounded loops parsing untrusted inputs, even standard library functions like `unquote`, can be abused to consume excessive CPU or cause infinite loops if the input is maliciously crafted.
+**Prevention:** Replace unbounded `while True:` decode loops with strictly bounded loops (e.g., `for _ in range(100):`) and explicitly raise exceptions (like `HTTPException`) if the limit is exceeded.
