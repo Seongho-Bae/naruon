@@ -1,3 +1,4 @@
+"""LLM API routes."""
 import json
 
 from fastapi import APIRouter, HTTPException
@@ -30,26 +31,30 @@ LLM_DRAFT_SYSTEM_INSTRUCTION = (
 
 
 class SummarizeRequest(BaseModel):
+    """Request model for email summarization."""
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
 
 
 class DraftRequest(BaseModel):
+    """Request model for drafting an email reply."""
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
     instruction: str = Field(min_length=1, max_length=LLM_DRAFT_INSTRUCTION_MAX_CHARS)
 
 
+
 class TranslateRequest(BaseModel):
+    """Request model for email translation."""
     model_config = ConfigDict(extra="forbid")
 
     email_body: str = Field(min_length=1, max_length=LLM_EMAIL_BODY_MAX_CHARS)
     target_language: str = Field(min_length=1, max_length=50, default="Korean")
 
-
-def _render_draft_reply_prompt(request: DraftRequest) -> str:
+def _render_draft_reply_prompt(
+request: DraftRequest) -> str:
     """Encode untrusted draft inputs into delimited JSON blocks before LLM use."""
     instruction_json = json.dumps({"instruction": request.instruction})
     email_json = json.dumps({"email_body": request.email_body})
@@ -70,6 +75,7 @@ async def summarize_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    """Endpoint for summarizing an email."""
     if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or auth_context.user_id
@@ -111,6 +117,7 @@ async def draft_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    """Endpoint for drafting a reply."""
     if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or auth_context.user_id
@@ -145,7 +152,6 @@ async def draft_endpoint(
             detail="An internal server error occurred while processing the request.",
         )
 
-
 @router.post("/translate")
 async def translate_endpoint(
     request: TranslateRequest,
@@ -153,6 +159,7 @@ async def translate_endpoint(
     db: AsyncSession = Depends(get_db),
     auth_context: AuthContext = Depends(get_auth_context),
 ):
+    """Translate an email body to a target language."""
     if user_id and user_id != auth_context.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     target_user_id = user_id or auth_context.user_id
