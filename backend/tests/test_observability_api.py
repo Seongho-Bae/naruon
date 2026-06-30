@@ -516,6 +516,27 @@ async def test_operational_signals_real_postgres_connector_history_smoke():
             await conn.execute(
                 text(
                     """
+                    CREATE TABLE IF NOT EXISTS provider_writeback_retry_items (
+                        retry_item_uid TEXT PRIMARY KEY,
+                        organization_id TEXT NOT NULL,
+                        workspace_id TEXT NOT NULL,
+                        source_uid TEXT NOT NULL,
+                        command_action TEXT NOT NULL,
+                        command_payload_encrypted TEXT,
+                        retry_state TEXT NOT NULL,
+                        last_error_code TEXT,
+                        runner_request_uid TEXT,
+                        attempt_count INTEGER NOT NULL,
+                        next_retry_at TIMESTAMPTZ,
+                        created_at TIMESTAMPTZ NOT NULL,
+                        updated_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+            )
+            await conn.execute(
+                text(
+                    """
                     CREATE TABLE IF NOT EXISTS connector_signal_events (
                         event_uid VARCHAR PRIMARY KEY,
                         organization_id VARCHAR NOT NULL,
