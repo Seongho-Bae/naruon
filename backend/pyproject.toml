@@ -3,3 +3,21 @@ name = "naruon-backend"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = []
+
+[tool.coverage.run]
+source = ["core"]
+omit = [
+    "tests/*",
+    "alembic/*",
+]
+
+[tool.coverage.report]
+include = [
+    "core/version.py",
+]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
