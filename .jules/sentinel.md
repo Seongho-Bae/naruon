@@ -70,7 +70,18 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
-## 2026-06-27 - Disable Environment Variable Trust in httpx Client
-**Vulnerability:** The `_default_http_client` in `backend/runner/local_dav_adapters.py` instantiated an `httpx.AsyncClient` without explicitly passing `trust_env=False`. This meant it defaulted to trusting environment variables (like `HTTP_PROXY` and `HTTPS_PROXY`), which could potentially be abused to route application traffic through untrusted proxy servers or leak credentials.
-**Learning:** External libraries like `httpx` and `requests` often trust proxy environment variables by default, which can lead to SSRF-like behavior or unintended traffic routing in unhardened execution environments. Always explicitly disable environment trust for HTTP clients handling sensitive or backend-internal requests unless proxying is a specific design requirement.
-**Prevention:** Instantiating HTTP clients should always explicitly set `trust_env=False` to harden the application against environmental manipulation and ensure predictable network routing.
+
+## 2026-06-27 - Disable Environment Variable Trust in HTTP Clients
+**Vulnerability:** The default DAV HTTP client did not explicitly disable proxy/environment variable trust.
+**Learning:** HTTP client libraries may route requests through `HTTP_PROXY` or `HTTPS_PROXY` from the environment unless configured otherwise.
+**Prevention:** Instantiate backend-internal HTTP clients with `trust_env=False` unless proxy use is a deliberate, reviewed design.
+
+## 2026-06-27 - Information Disclosure in Version File Error Handling
+**Vulnerability:** The error message generated when the `VERSION` file was missing included absolute paths, exposing the internal directory structure.
+**Learning:** Error messages should never reveal internal implementation details or server-side paths, as they can assist attackers in further exploitation.
+**Prevention:** Avoid interpolating absolute paths or system details into exceptions that might be logged or surfaced; use generic error messages instead.
+
+## 2024-06-25 - [Fix Email SMTP CRLF Injection & Double Extension Upload]
+**Vulnerability:** Attackers could inject arbitrary SMTP commands (e.g. MAIL FROM) using CRLF (\r\n) sequences in email subjects or recipients because `^[^\r\n]*$` validation in Pydantic wasn't catching all edge cases correctly. Attackers could also bypass file upload validations by providing double extensions (e.g., `malicious.exe.eml`).
+**Learning:** Pydantic regex patterns might fall short for strict network protocol inputs like SMTP headers if improperly formulated or bypassed. Simple `.endswith()` checks for file uploads fail to prevent embedded dangerous extensions.
+**Prevention:** Always use `@field_validator` with explicit `mode="before"` string matching for `chr(10)` and `chr(13)` across all user-controlled email header fields (to, subject, in_reply_to, references). Always tokenize uploaded filenames via `.split(".")` and reject if any segment matches a known dangerous extension (e.g., `.exe`, `.sh`).
