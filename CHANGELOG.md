@@ -11,6 +11,7 @@
 
 ### 보안 패치 (Security)
 
+- `LocalDavAdapters`의 기본 `httpx.AsyncClient`가 프록시 관련 환경 변수를 신뢰하지 않도록 `trust_env=False`를 명시해 의도하지 않은 프록시 경유를 방지했습니다.
 - (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.
 - **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
 - **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.
