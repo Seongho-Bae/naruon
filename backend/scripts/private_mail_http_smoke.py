@@ -302,6 +302,7 @@ def _request(
     body: bytes | None = None,
     content_type: str | None = None,
     timeout: float = 120.0,
+    use_cookie_only: bool = False,
 ) -> tuple[int, bytes]:
     parsed = urlsplit(base_url)
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
@@ -309,11 +310,12 @@ def _request(
     cls = http.client.HTTPSConnection if parsed.scheme == "https" else http.client.HTTPConnection
     conn = cls(parsed.hostname, parsed.port, timeout=timeout)
     headers = {
-        "Authorization": f"Bearer {token}",
         "Cookie": f"{SESSION_COOKIE_NAME}={token}",
         "Origin": base_url,
         "Referer": f"{base_url}/",
     }
+    if not use_cookie_only:
+        headers["Authorization"] = f"Bearer {token}"
     if content_type:
         headers["Content-Type"] = content_type
     try:
@@ -389,6 +391,7 @@ def _request_json_with_retry(
     timeout: float = 120.0,
     body: bytes | None = None,
     content_type: str | None = None,
+    use_cookie_only: bool = False,
 ) -> dict[str, object]:
     _ensure_positive_retry_budget(attempts, "retry-attempts")
     for attempt in range(attempts):
@@ -400,6 +403,7 @@ def _request_json_with_retry(
                 path,
                 body=body,
                 content_type=content_type,
+                use_cookie_only=use_cookie_only,
                 timeout=timeout,
             )
             return _json_or_empty(status, raw)
@@ -475,6 +479,7 @@ def _get_json_with_retry(
     attempts: int,
     delay_seconds: float,
     timeout: float = 120.0,
+    use_cookie_only: bool = False,
 ) -> dict[str, object]:
     return _request_json_with_retry(
         base_url,
@@ -484,7 +489,42 @@ def _get_json_with_retry(
         attempts=attempts,
         delay_seconds=delay_seconds,
         timeout=timeout,
+        use_cookie_only=use_cookie_only,
     )
+
+
+def _fetch_inbox_snapshot(
+    base_url: str,
+    token: str,
+    *,
+    limit: int,
+    min_count: int,
+    attempts: int,
+    use_cookie_only: bool = False,
+    delay_seconds: float,
+    timeout: float = 120.0,
+) -> tuple[dict[str, object], int]:
+    """Fetch /api/emails repeatedly until the minimum expected count is observed."""
+    last_data: dict[str, object] = {}
+    min_count = max(0, min_count)
+    for attempt in range(attempts):
+        data = _get_json_with_retry(
+            base_url,
+            token,
+            f"/api/emails?limit={limit}",
+            attempts=1,
+            delay_seconds=0.0,
+            timeout=timeout,
+            use_cookie_only=use_cookie_only,
+        )
+        emails = data.get("emails")
+        count = len(emails) if isinstance(emails, list) else 0
+        last_data = data
+        if count >= min_count or attempt == attempts - 1:
+            return data, count
+        if delay_seconds > 0:
+            time.sleep(delay_seconds)
+    return last_data, 0
 
 
 def _check_frontend_session(base_url: str, token: str) -> dict[str, object] | None:
@@ -620,6 +660,11 @@ def main() -> None:
         type=float,
         default=SEARCH_RETRY_DEFAULT_DELAY_SECONDS,
     )
+    parser.add_argument(
+        "--require-browser-visible",
+        action="store_true",
+        help="Require browser-proxied inbox visibility check after import",
+    )
     parser.add_argument("--max-parse-bytes", type=int, default=2_000_000)
     parser.add_argument("--progress-every", type=int, default=0)
     args = parser.parse_args()
@@ -673,31 +718,49 @@ def main() -> None:
                 if isinstance(item, dict) and item.get("reason_code"):
                     reasons[str(item["reason_code"])] += 1
 
-        inbox = _get_json_with_retry(
+        expected_min_count = totals["imported"]
+        api_limit = max(1, min(200, expected_min_count if expected_min_count else 1))
+
+        api_inbox, email_count = _fetch_inbox_snapshot(
             api_base_url,
             token,
-            "/api/emails?limit=1",
-            attempts=1,
-            delay_seconds=0.0,
+            limit=api_limit,
+            min_count=expected_min_count,
+            attempts=args.inbox_retry_attempts if expected_min_count > 0 else 1,
+            delay_seconds=args.inbox_retry_delay_seconds if expected_min_count > 0 else 0.0,
             timeout=120.0,
         )
-        if totals["imported"] > 0:
-            expected_min_count = totals["imported"]
-            for _ in range(args.inbox_retry_attempts - 1):
-                email_count = len(inbox.get("emails", [])) if isinstance(inbox.get("emails"), list) else 0
-                if email_count >= expected_min_count:
-                    break
-                if args.inbox_retry_delay_seconds > 0:
-                    time.sleep(args.inbox_retry_delay_seconds)
-                inbox = _get_json_with_retry(
-                    api_base_url,
-                    token,
-                    "/api/emails?limit=1",
-                    attempts=1,
-                    delay_seconds=0.0,
-                    timeout=120.0,
-                )
-        email_count = len(inbox.get("emails", []))
+        frontend_inbox_count = 0
+        if args.require_browser_visible:
+            _, frontend_inbox_count = _fetch_inbox_snapshot(
+                frontend_base_url,
+                token,
+                limit=api_limit,
+                min_count=expected_min_count,
+                use_cookie_only=True,
+                attempts=args.inbox_retry_attempts,
+                delay_seconds=args.inbox_retry_delay_seconds,
+                timeout=120.0,
+            )
+        elif frontend_base_url.rstrip("/") != api_base_url.rstrip("/"):
+            _, frontend_inbox_count = _fetch_inbox_snapshot(
+                frontend_base_url,
+                token,
+                limit=api_limit,
+                min_count=0,
+                attempts=args.inbox_retry_attempts,
+                delay_seconds=args.inbox_retry_delay_seconds,
+                timeout=120.0,
+            )
+
+        if (
+            args.require_browser_visible
+            and expected_min_count > 0
+            and frontend_inbox_count < expected_min_count
+        ):
+            raise SystemExit(
+                f"browser inbox not reflecting import yet: imported={totals['imported']} frontend_inbox_count={frontend_inbox_count}"
+            )
 
         search_counts: dict[str, int] = {}
         first_result_id = None
@@ -731,7 +794,11 @@ def main() -> None:
         draft_status = "skipped"
         target_id = first_result_id
         if target_id is None and email_count:
-            target_id = inbox["emails"][0]["id"]
+            first = api_inbox.get("emails", [])
+            if isinstance(first, list) and first:
+                candidate = first[0]
+                if isinstance(candidate, dict):
+                    target_id = candidate.get("id")
         if args.llm_smoke and target_id is not None:
             status, raw = _request(api_base_url, token, "GET", f"/api/emails/{target_id}")
             detail = _json_or_empty(status, raw)
@@ -764,6 +831,7 @@ def main() -> None:
             f"selected={len(files)} imported={totals['imported']} "
             f"skipped={totals['skipped']} failed={totals['failed']} "
             f"attachments={totals['attachments']} inbox_visible={email_count} "
+            f"frontend_inbox_visible={frontend_inbox_count} "
             f"search_counts={search_counts} reason_counts={dict(reasons)} "
             f"llm={llm_status} draft={draft_status}"
         )

@@ -253,6 +253,7 @@ python3 backend/scripts/private_mail_http_smoke.py \
   --match-mode all-terms \
   --limit 20 \
   --batch-size 6 \
+  --require-browser-visible \
   --llm-smoke \
   --print-session-token
 ```
@@ -262,6 +263,8 @@ python3 backend/scripts/private_mail_http_smoke.py \
 `naruon_session` 쿠키가 갱신되어 API로 임포트한 메일이 브라우저와 동일 세션에서 보입니다.
 `session_check=ok` 로그는 세션 클레임이 브라우저에서 확인되었음을 뜻하고,
 `session_check=failed(...)`는 토큰 검증/클레임 파싱 문제가 있음을 뜻합니다.
+`--require-browser-visible`은 동일 토큰을 `Cookie: naruon_session=...`로 주입해
+`/api/emails` 응답을 조회해 브라우저 프록시 경로까지 반영 확인이 되도록 합니다.
 
 동기화 지연이 큰 환경에서는 재시도 옵션을 조정할 수 있습니다.
 
@@ -291,6 +294,11 @@ podman system connection ls
 
 # MLX(OpenAI-compatible) 엔드포인트 노출 확인
 curl -sf http://127.0.0.1:11434/v1/models | head
+
+# 기존 웹 서비스(Nginx/프록시)가 3000/8000/11434를 가로채고 있지 않은지 확인
+lsof -iTCP:3000 -sTCP:LISTEN
+lsof -iTCP:8000 -sTCP:LISTEN
+lsof -iTCP:11434 -sTCP:LISTEN
 ```
 
 백엔드 API를 바로 확인하려면(필요 시):

@@ -215,6 +215,94 @@ def test_post_json_with_retry_raises_network_error_after_retries(monkeypatch):
     assert len(calls) == 2
 
 
+def test_fetch_inbox_snapshot_retries_until_minimum(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+    ) -> dict[str, object]:
+        calls.append((base_url, path))
+        if len(calls) == 1:
+            return {"emails": []}
+        return {"emails": [{"id": "a"}, {"id": "b"}]}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    data, count = smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        limit=10,
+        min_count=2,
+        attempts=3,
+        delay_seconds=0.0,
+    )
+    assert count == 2
+    assert isinstance(data.get("emails"), list)
+    assert len(calls) == 2
+
+
+def test_fetch_inbox_snapshot_does_not_wait_when_min_count_is_zero(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        timeout: float = 120.0,
+    ) -> dict[str, object]:
+        calls.append((base_url, path))
+        return {"emails": []}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    _, count = smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:8000",
+        "token",
+        limit=10,
+        min_count=0,
+        attempts=3,
+        delay_seconds=0.0,
+    )
+    assert count == 0
+    assert len(calls) == 1
+
+
+def test_fetch_inbox_snapshot_uses_cookie_only_mode_when_requested(monkeypatch):
+    calls: list[tuple[str, bool, str]] = []
+
+    def fake_get_json_with_retry(
+        base_url: str,
+        token: str,
+        path: str,
+        *,
+        attempts: int,
+        delay_seconds: float,
+        use_cookie_only: bool = False,
+        timeout: float = 120.0,
+    ) -> dict[str, object]:
+        calls.append((base_url, use_cookie_only, path))
+        return {"emails": []}
+
+    monkeypatch.setattr(smoke, "_get_json_with_retry", fake_get_json_with_retry)
+    smoke._fetch_inbox_snapshot(
+        "http://127.0.0.1:3000",
+        "token",
+        limit=10,
+        min_count=0,
+        use_cookie_only=True,
+        attempts=1,
+        delay_seconds=0.0,
+    )
+    assert calls == [("http://127.0.0.1:3000", True, "/api/emails?limit=10")]
+
+
 def test_check_frontend_session_skips_on_missing_frontend(monkeypatch):
     monkeypatch.setattr(
         smoke,
