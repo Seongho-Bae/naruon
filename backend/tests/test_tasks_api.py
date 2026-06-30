@@ -690,6 +690,76 @@ def test_reply_sla_escalation_bulk_fetches_nested_conflicts(auth_client):
     )
 
 
+def test_reply_sla_escalation_fallback_batches_new_task_flushes(auth_client):
+    class FlushCountingTaskSession(MockTaskSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.commit_attempts = 0
+            self.flush_attempts = 0
+
+        async def commit(self):
+            self.commit_attempts += 1
+            if self.commit_attempts == 1:
+                raise IntegrityError("batch reply_sla conflict", {}, None)
+
+        async def rollback(self):
+            self.tasks = [
+                task
+                for task in self.tasks
+                if task.task_uid == "opaque-existing-batch-sla"
+            ]
+
+        async def flush(self):
+            self.flush_attempts += 1
+
+    flush_session = FlushCountingTaskSession()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    for days_old, email_id in ((5, 61), (4, 62), (3, 63)):
+        flush_session.emails[email_id] = make_email(
+            email_id=email_id,
+            message_id=f"<batch-sla-{email_id}@example.com>",
+            thread_id=f"<thread-batch-sla-{email_id}>",
+            sender="alice@example.com",
+            recipients="vendor@example.com",
+            subject=f"Batch SLA follow-up {email_id}",
+            body="Please reply by tomorrow.",
+            date=now - datetime.timedelta(days=days_old),
+        )
+    flush_session.tasks.append(
+        TicketTask(
+            id=1,
+            task_uid="opaque-existing-batch-sla",
+            user_id="alice",
+            organization_id="org-acme",
+            title="예전 배치 SLA 작업",
+            status="open",
+            priority="normal",
+            source_type="reply_sla",
+            related_email_id=62,
+            related_thread_id="old-thread",
+            created_at=now - datetime.timedelta(days=2),
+            updated_at=now - datetime.timedelta(days=2),
+        )
+    )
+    app.dependency_overrides[get_db] = lambda: flush_session
+
+    response = auth_client.post(
+        "/api/tasks/reply-sla-escalations",
+        json={"overdue_hours": 48},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["created"] == 2
+    assert [task["source_email_id"] for task in body["tasks"]] == [
+        "<batch-sla-61@example.com>",
+        "<batch-sla-62@example.com>",
+        "<batch-sla-63@example.com>",
+    ]
+    assert flush_session.commit_attempts == 2
+    assert flush_session.flush_attempts == 1
+
+
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_reply_sla_escalation_real_postgres_smoke():

@@ -1,8 +1,5 @@
 ## [Unreleased]
 
-### 보안
-- Scorecard 보안 룰을 만족시키기 위해 `pr-review-merge-scheduler.yml` 워크플로우에 `permissions: contents: read`을 명시하여 최소 권한을 부여했습니다.
-
 ## [0.14.4] - 2026-06-18
 
 ### 추가
