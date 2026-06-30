@@ -1,12 +1,6 @@
 import pytest
 from fastapi import HTTPException
-from tests.conftest import (
-    _derive_test_role,
-    _derive_workspace_id,
-    _normalize_header_value,
-    _parse_group_ids,
-    dev_auth_dependency_overrides,
-)
+from tests.conftest import _parse_group_ids, _derive_test_role, _derive_workspace_id, _normalize_header_value
 
 def test_parse_group_ids_empty():
     assert _parse_group_ids("") == ()
@@ -58,11 +52,12 @@ def test_derive_workspace_id_org():
     assert _derive_workspace_id("user1", "org1") == "workspace-org1"
 
 def test_dev_auth_dependency_overrides_cleanup():
+    import tests.conftest as mod
     from main import app
     from api.auth import get_auth_context, get_current_user
 
     # We call the underlying generator
-    gen = dev_auth_dependency_overrides.__wrapped__()
+    gen = mod.dev_auth_dependency_overrides.__wrapped__()
     next(gen)
 
     assert get_auth_context in app.dependency_overrides
