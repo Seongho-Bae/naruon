@@ -130,6 +130,7 @@ describe("PromptStudioPage", () => {
     });
 
     expect(getButton(page, "테스트 중...").disabled).toBe(true);
+    expect(getButton(page, "테스트 중...").getAttribute("aria-busy")).toBe("true");
     expect(page.querySelector("[data-testid='loader']")).not.toBeNull();
 
     await act(async () => {
@@ -139,6 +140,7 @@ describe("PromptStudioPage", () => {
     await flushAsyncWork();
 
     expect(getButton(page, "실행 (Test)").disabled).toBe(false);
+    expect(getButton(page, "실행 (Test)").getAttribute("aria-busy")).toBe("false");
     expect(page.textContent).toContain("맥락 종합 결과");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/prompts/test",
@@ -166,6 +168,7 @@ describe("PromptStudioPage", () => {
     });
 
     expect(getButton(page, "저장 중...").disabled).toBe(true);
+    expect(getButton(page, "저장 중...").getAttribute("aria-busy")).toBe("true");
     expect(page.querySelector("[data-testid='loader']")).not.toBeNull();
 
     await act(async () => {
@@ -175,6 +178,7 @@ describe("PromptStudioPage", () => {
     await flushAsyncWork();
 
     expect(getButton(page, "프롬프트 저장 (Save)").disabled).toBe(false);
+    expect(getButton(page, "프롬프트 저장 (Save)").getAttribute("aria-busy")).toBe("false");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/prompts",
       expect.objectContaining({

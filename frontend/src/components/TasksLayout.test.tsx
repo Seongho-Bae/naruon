@@ -95,4 +95,65 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("관련 메일 열기");
     expect(container.textContent).toContain("거래처 회신 준비");
   });
+
+  it("filters tasks through the deferred search query", async () => {
+    const tasks = [
+      {
+        id: "task-alpha",
+        title: "Alpha Task",
+        status: "open",
+        priority: "normal",
+        source_type: "email",
+        source_email_id: null,
+        related_thread_id: null,
+        updated_at: "2026-06-18T05:00:00Z",
+      },
+      {
+        id: "task-beta",
+        title: "Beta Task",
+        status: "in_progress",
+        priority: "high",
+        source_type: "calendar",
+        source_email_id: null,
+        related_thread_id: null,
+        updated_at: "2026-06-18T06:00:00Z",
+      },
+    ];
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/tasks")) return Promise.resolve(jsonResponse(tasks));
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    await act(async () => {
+      root?.render(<TasksLayout />);
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain("Alpha Task");
+    expect(container.textContent).toContain("Beta Task");
+
+    const searchInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="작업 맥락 검색"]',
+    );
+    expect(searchInput).not.toBeNull();
+
+    await act(async () => {
+      const setInputValue = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setInputValue?.call(searchInput, "Beta");
+      searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flushAsyncWork();
+
+    expect(container.textContent).not.toContain("Alpha Task");
+    expect(container.textContent).toContain("Beta Task");
+  });
 });
