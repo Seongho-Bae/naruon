@@ -1,28 +1,4 @@
 ## [Unreleased]
-### 추가
-- `/api/tools`와 `/tools` 화면을 추가해 Naruon 워크스페이스에서 사용할 수 있는 분석/실행 도구 목록을 확인할 수 있게 했습니다.
-
-### UI/UX 개선
-- `EmailDetail`, `CalendarLayout`, `DataLayout`의 비활성화된 버튼에 상태를 설명하는 `title` 툴팁을 추가했습니다.
-- `CalendarLayout`, `DataLayout`, `ProjectsLayout`, `SettingsLayout`의 기본 버튼에 `focus-visible` 링을 추가해 키보드 포커스 가시성을 높였습니다.
-- 메일/검색/작업 검색 입력을 `type="search"`로 전환하고 WebKit 기본 clear 버튼을 숨겨 모바일 키보드와 커스텀 clear 버튼 동작을 일관화했습니다.
-- `CalendarLayout`의 성공 상태에서 기술적 세부 정보 대신 사용자 친화적인 메시지를 표시하도록 개선하여 불필요한 정보 노출을 방지했습니다.
-- `CalendarLayout`의 일정 쓰기(Writeback) 액션 버튼들에 로딩 스피너(`Loader2`)를 추가하여 비동기 작업 시 즉각적인 시각적 피드백을 제공합니다.
-- Prompt Studio의 비동기 작업 버튼('실행', '프롬프트 저장')이 로딩 중일 때 `aria-busy` 속성을 가지도록 개선하여 스크린 리더 접근성을 향상했습니다.
-
-### 성능 개선 (Performance)
-
-- `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
-
-### 보안 패치 (Security)
-
-- `LocalDavAdapters`의 기본 `httpx.AsyncClient`가 프록시 관련 환경 변수를 신뢰하지 않도록 `trust_env=False`를 명시해 의도하지 않은 프록시 경유를 방지했습니다.
-- (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.
-- **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
-- **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.
-
-### 수정
-- Next.js의 기본 `X-Powered-By` 응답 헤더를 비활성화하여 기술 스택 정보가 노출되는 취약점(Information Disclosure)을 완화했습니다.
 
 ### 보안
 - 브라우저 패스워드 관리자가 API 키나 SMTP/IMAP 외부 설정 비밀번호를 잘못된 애플리케이션 계정 정보로 자동 완성하거나 저장하라고 묻는 현상을 방지하기 위해 모든 민감한 설정 입력 필드에 `autoComplete="new-password"` 속성을 추가했습니다.

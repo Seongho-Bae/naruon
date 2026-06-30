@@ -14,7 +14,7 @@ vi.mock("vis-network", () => ({
 
 import { Network } from "vis-network";
 
-import RelationContext from "./RelationContext";
+import NetworkGraph from "./NetworkGraph";
 
 function jsonResponse(body: unknown) {
   return {
@@ -32,7 +32,7 @@ async function flushAsyncWork() {
   }
 }
 
-describe("RelationContext", () => {
+describe("NetworkGraph", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
   let resizeObserverCallback: ResizeObserverCallback | null = null;
@@ -53,13 +53,13 @@ describe("RelationContext", () => {
     root = createRoot(container);
 
     await act(async () => {
-      root?.render(<RelationContext />);
+      root?.render(<NetworkGraph />);
     });
   }
 
   function getMountedContainer(): HTMLDivElement {
     if (!container) {
-      throw new Error("RelationContext test container was not mounted.");
+      throw new Error("NetworkGraph test container was not mounted.");
     }
     return container;
   }

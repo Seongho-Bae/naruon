@@ -1,10 +1,7 @@
 import datetime
 
 from db.models import Email
-from services.reply_tracking_service import (
-    detect_reply_tracking,
-    thread_reply_candidate,
-)
+from services.reply_tracking_service import thread_reply_candidate, detect_reply_tracking
 
 
 USER_ADDRESSES = {"me@example.com"}
@@ -118,7 +115,6 @@ def test_thread_reply_candidate_preserves_strict_later_reply_boundary():
 
 def test_configured_email_addresses_handles_none():
     from services.reply_tracking_service import configured_email_addresses
-
     assert configured_email_addresses(None) == set()
 
 
@@ -134,7 +130,6 @@ def test_thread_reply_candidate_returns_none_when_no_user_addresses():
 
 def test_thread_requires_reply_returns_true_when_candidate_exists():
     from services.reply_tracking_service import thread_requires_reply
-
     sent_message = make_email(
         "sent_needs_reply",
         sender="me@example.com",
@@ -146,7 +141,6 @@ def test_thread_requires_reply_returns_true_when_candidate_exists():
 
 def test_thread_requires_reply_returns_false_when_no_candidate():
     from services.reply_tracking_service import thread_requires_reply
-
     sent_message = make_email(
         "sent_needs_reply",
         sender="me@example.com",
@@ -160,42 +154,10 @@ def test_thread_requires_reply_returns_false_when_no_candidate():
         minutes=1,
         body="I will handle it.",
     )
-    assert (
-        thread_requires_reply([sent_message, later_external_reply], USER_ADDRESSES)
-        is False
-    )
-
-
-def test_thread_reply_candidate_tie_order_consistent_across_modes():
-    sent_a = make_email(
-        "sent_a",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=0,
-    )
-    sent_a.id = 1
-    sent_b = make_email(
-        "sent_b",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=0,
-    )
-    sent_b.id = 2
-
-    candidate_sorted = thread_reply_candidate(
-        [sent_a, sent_b], USER_ADDRESSES, is_chronological=False
-    )
-    candidate_reversed = thread_reply_candidate(
-        [sent_a, sent_b], USER_ADDRESSES, is_chronological=True
-    )
-
-    assert candidate_sorted is candidate_reversed
+    assert thread_requires_reply([sent_message, later_external_reply], USER_ADDRESSES) is False
 
 def test_detect_reply_tracking_please_reply():
-    assert (
-        detect_reply_tracking("This is an important message, please reply soon.")
-        is True
-    )
+    assert detect_reply_tracking("This is an important message, please reply soon.") is True
 
 def test_detect_reply_tracking_question_mark():
     assert detect_reply_tracking("How are you doing today?") is True
@@ -211,35 +173,3 @@ def test_detect_reply_tracking_no_match():
 def test_detect_reply_tracking_empty_body():
     assert detect_reply_tracking(None) is False
     assert detect_reply_tracking("") is False
-
-
-def test_thread_reply_candidate_is_chronological_optimization():
-    older_sent = make_email(
-        "sent_older",
-        sender="Me <me@example.com>",
-        recipients="client@example.com",
-        minutes=60,
-        body="Any update?",
-    )
-    external_reply = make_email(
-        "reply",
-        sender="client@example.com",
-        recipients="Me <me@example.com>",
-        minutes=30,
-        body="Yes, here it is.",
-    )
-    latest_sent = make_email(
-        "sent_latest",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=10,
-        body="please reply",
-    )
-
-    candidate = thread_reply_candidate(
-        [latest_sent, external_reply, older_sent],
-        USER_ADDRESSES,
-        is_chronological=True,
-    )
-
-    assert candidate is older_sent
