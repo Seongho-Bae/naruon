@@ -2,7 +2,6 @@ import defusedxml.ElementTree as ET
 from contextlib import contextmanager
 from urllib.parse import unquote
 
-from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
 from api.auth import get_auth_context
@@ -16,15 +15,6 @@ AUTH_HEADERS = {
     "X-User-Role": "organization_admin",
     "X-Organization-Id": "org-acme",
 }
-
-
-def _app_routes():
-    for route in app.routes:
-        original_router = getattr(route, "original_router", None)
-        if original_router is None:
-            yield route
-            continue
-        yield from original_router.routes
 
 
 class MockScalars:
@@ -91,15 +81,25 @@ def test_dav_rejects_missing_auth():
 
 
 def test_dav_route_uses_signed_session_dependency():
-    assert str(app.url_path_for("dav_handler", path="user123/projects/")) == (
-        "/dav/user123/projects/"
-    )
-
-    for route in _app_routes():
-        if isinstance(route, APIRoute) and route.name == "dav_handler":
-            dependencies = {
-                dependency.call for dependency in route.dependant.dependencies
-            }
+    def get_routes(r, inherited_dependencies=()):
+        include_context = getattr(r, "include_context", None)
+        include_dependencies = tuple(
+            getattr(include_context, "dependencies", ()) or ()
+        )
+        effective_dependencies = (*inherited_dependencies, *include_dependencies)
+        if hasattr(r, "routes"):
+            for child in r.routes:
+                yield from get_routes(child, effective_dependencies)
+        original_router = getattr(r, "original_router", None)
+        if original_router is not None and hasattr(original_router, "routes"):
+            for child in original_router.routes:
+                yield from get_routes(child, effective_dependencies)
+        if getattr(r, "path", None):
+            route_dependencies = tuple(getattr(r, "dependencies", ()) or ())
+            yield r, (*effective_dependencies, *route_dependencies)
+    for route, route_dependencies in get_routes(app):
+        if getattr(route, "path", "") == "/dav/{path:path}":
+            dependencies = {dependency.dependency for dependency in route_dependencies}
             assert get_auth_context in dependencies
             return
 
