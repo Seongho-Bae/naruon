@@ -676,7 +676,6 @@ export function DataLayout() {
                           key={account.source_id}
                           type="button"
                           disabled={!account.writeback_enabled}
-                          title={!account.writeback_enabled ? '쓰기 권한이 없는 계정입니다' : undefined}
                           aria-pressed={accountSelected}
                           onClick={() => setSelectedWebdavSourceId(account.source_id)}
                           className={`flex min-w-0 items-start gap-2 rounded-lg border p-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-70 ${
@@ -814,42 +813,27 @@ export function DataLayout() {
                         type="button"
                         onClick={() => void requestDocumentAction('reparse')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <RefreshCw className="size-4" />
-                        )}
+                        <RefreshCw className="size-4" />
                         재파싱 실행
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('embedding-regeneration-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Database className="size-4" />
-                        )}
+                        <Database className="size-4" />
                         임베딩 재생성 의도
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('hwp-conversion-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <FileText className="size-4" />
-                        )}
+                        <FileText className="size-4" />
                         HWP 변환 의도
                       </button>
                       <button
@@ -859,11 +843,7 @@ export function DataLayout() {
                         aria-busy={isDocumentActionLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? (
-                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        ) : (
-                          <Server className="size-4" />
-                        )}
+                        <Server className="size-4" />
                         WebDAV 문서 실행 요청
                       </button>
                     </div>
@@ -1217,10 +1197,10 @@ export function DataLayout() {
                       {getSurfaceStatusLabel(check.status_code)}
                     </span>
                     <div className="mt-4 flex gap-2 justify-end border-t border-border pt-3">
-                      <button type="button" className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
+                      <button type="button" className="rounded bg-secondary px-3 py-1.5 text-xs font-bold text-secondary-foreground hover:bg-secondary/80">
                         품질 점검
                       </button>
-                      <button type="button" className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 border border-red-200">
+                      <button type="button" className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 border border-red-200">
                         격리
                       </button>
                     </div>

@@ -11,7 +11,6 @@ from services.email_import_service import (
     EMBEDDING_DIMENSION,
     EmailImportEmbeddingProvider,
     _generate_import_embeddings,
-    _owner_import_quota_lock_key,
 )
 
 
@@ -26,7 +25,7 @@ from services.email_import_service import (
         ("/", "upload"),
         (".", "upload"),
         ("..", "upload"),
-        ("/tmp/..", "upload"),  # nosec B108
+        ("/tmp/..", "upload"),
     ]
 )
 def test_safe_upload_filename(input_name, expected):
@@ -54,23 +53,6 @@ def test_safe_upload_filename(input_name, expected):
 )
 def test_safe_item_filename(upload_name, eml_path, expected):
     assert email_import_module._safe_item_filename(upload_name, eml_path) == expected
-
-
-def test_owner_import_quota_lock_key_is_postgres_text_safe():
-    key = _owner_import_quota_lock_key(
-        user_id="testuser",
-        organization_id="org-acme",
-    )
-
-    assert "\x00" not in key
-    assert key == _owner_import_quota_lock_key(
-        user_id="testuser",
-        organization_id="org-acme",
-    )
-    assert key != _owner_import_quota_lock_key(
-        user_id="testuser-2",
-        organization_id="org-acme",
-    )
 
 
 @pytest.mark.asyncio

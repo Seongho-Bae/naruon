@@ -6,8 +6,6 @@ from urllib.parse import quote, urlsplit, urlunsplit
 
 import httpx
 
-from runner.utils.dispatch import dispatch_error
-
 
 @dataclass(frozen=True)
 class LocalDavSourceConfig:
@@ -48,7 +46,7 @@ class LocalDavAdapters:
         )
 
     def _default_http_client(self):
-        return httpx.AsyncClient(follow_redirects=False, timeout=60, trust_env=False)
+        return httpx.AsyncClient(follow_redirects=False, timeout=60)
 
     async def _put(
         self,
@@ -59,30 +57,28 @@ class LocalDavAdapters:
     ) -> dict[str, Any]:
         source = self._source_for_payload(payload, protocol)
         if source is None:
-            return dispatch_error("source_not_configured")
+            return self._error("source_not_configured")
         if not source.writeback_enabled:
-            return dispatch_error("source_writeback_disabled")
+            return self._error("source_writeback_disabled")
 
         if_match = self._payload_text(payload, "if_match")
         if if_match is None:
-            return dispatch_error("missing_if_match")
+            return self._error("missing_if_match")
 
         target_path = self._safe_target_path(payload.get("target_path"))
         if target_path is None:
-            return dispatch_error("invalid_target_path")
+            return self._error("invalid_target_path")
 
         content = self._payload_content(payload.get("content"))
         if content is None:
-            return dispatch_error("invalid_payload")
+            return self._error("invalid_payload")
 
         try:
             target_url = self._target_url(source.base_url, target_path)
         except ValueError as exc:
-            return dispatch_error(str(exc))
+            return self._error(str(exc))
 
-        content_type = (
-            self._payload_text(payload, "content_type") or default_content_type
-        )
+        content_type = self._payload_text(payload, "content_type") or default_content_type
         headers = {"Content-Type": content_type, "If-Match": if_match}
         auth = (
             (source.username, source.password or "")
@@ -99,7 +95,7 @@ class LocalDavAdapters:
                     auth=auth,
                 )
         except httpx.HTTPError:
-            return dispatch_error("provider_request_failed")
+            return self._error("provider_request_failed")
 
         return self._result_from_response(response)
 
@@ -138,9 +134,7 @@ class LocalDavAdapters:
         segments = [segment for segment in raw_path.split("/") if segment]
         if not segments or any(segment in {".", ".."} for segment in segments):
             return None
-        return "/" + "/".join(
-            quote(segment, safe="@:$&'()*+,;=-._~") for segment in segments
-        )
+        return "/" + "/".join(quote(segment, safe="@:$&'()*+,;=-._~") for segment in segments)
 
     def _target_url(self, base_url: str, target_path: str) -> str:
         parsed = urlsplit(base_url)
@@ -218,6 +212,14 @@ class LocalDavAdapters:
                 "provider_write_executed": False,
                 "provider_status": status_code,
             }
-        result = dispatch_error("provider_write_failed")
+        result = self._error("provider_write_failed")
         result["provider_status"] = status_code
         return result
+
+    def _error(self, error_code: str) -> dict[str, Any]:
+        return {
+            "status": "error",
+            "error": error_code,
+            "error_code": error_code,
+            "provider_write_executed": False,
+        }
