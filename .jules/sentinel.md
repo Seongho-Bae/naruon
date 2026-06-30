@@ -55,6 +55,12 @@
 **Vulnerability:** The API proxy's `sameOriginStateChangingRequest` function previously allowed state-changing requests if both `sec-fetch-site` and `origin` headers were missing, creating a potential CSRF vector if an attacker suppressed the Origin header.
 **Learning:** Default-allow fallbacks for missing security metadata can silently bypass critical protections, especially when relying solely on cookie-based authentication.
 **Prevention:** Always fail securely by defaulting to `false` when required origin/referer security metadata is absent, ensuring strict enforcement for state-changing operations.
+
+## 2025-02-24 - [DAV Log Injection Vulnerability]
+**Vulnerability:** A log injection vulnerability existed in the `/dav/{path:path}` endpoint where `path` was logged via `repr(path)[1:-1]` but could still contain unescaped or malicious sequences when concatenated into log formats.
+**Learning:** Although `repr()` escapes many control characters, relying on it alone for user-controlled strings meant for logs may not be sufficiently robust against all logging systems or terminal emulators if specific sequences slip through or if a standard sanitization function exists in the codebase.
+**Prevention:** Always use the centralized `_sanitize_log_value` (or equivalent) when logging untrusted input, even if `repr()` is also used, to ensure consistent and safe stripping of CR/LF characters.
+
 ## 2026-06-24 - Prevent URL-Encoded and Windows Path Traversal Bypass
 
 **Vulnerability:** Path traversal in `_dav_path_owner_user_id` could be bypassed using doubly URL-encoded sequences (for example, `%252e%252e%252f`) and Windows-style backslashes.
@@ -70,7 +76,12 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
-## 2024-05-29 - Missing Cache-Control Headers in API Responses
-**Vulnerability:** FastAPIs responses containing sensitive user data (like emails, settings, or authentication context) lacked `Cache-Control: no-store` headers, meaning intermediate proxies or browsers might cache the sensitive information.
-**Learning:** Even with strict CORS and CSP headers, standard security headers must also disable caching for APIs dealing with authenticated/sensitive data to prevent unintended data leakage.
-**Prevention:** Ensure `response.headers["Cache-Control"] = "no-store"` is set globally on all state-changing or sensitive API routes (e.g., via a global middleware like `add_security_headers`).
+## 2026-06-27 - Information Disclosure in Version File Error Handling
+**Vulnerability:** The error message generated when the `VERSION` file was missing included absolute paths, exposing the internal directory structure.
+**Learning:** Error messages should never reveal internal implementation details or server-side paths, as they can assist attackers in further exploitation.
+**Prevention:** Avoid interpolating absolute paths or system details into exceptions that might be logged or surfaced; use generic error messages instead.
+
+## 2024-06-25 - [Fix Email SMTP CRLF Injection & Double Extension Upload]
+**Vulnerability:** Attackers could inject arbitrary SMTP commands (e.g. MAIL FROM) using CRLF (\r\n) sequences in email subjects or recipients because `^[^\r\n]*$` validation in Pydantic wasn't catching all edge cases correctly. Attackers could also bypass file upload validations by providing double extensions (e.g., `malicious.exe.eml`).
+**Learning:** Pydantic regex patterns might fall short for strict network protocol inputs like SMTP headers if improperly formulated or bypassed. Simple `.endswith()` checks for file uploads fail to prevent embedded dangerous extensions.
+**Prevention:** Always use `@field_validator` with explicit `mode="before"` string matching for `chr(10)` and `chr(13)` across all user-controlled email header fields (to, subject, in_reply_to, references). Always tokenize uploaded filenames via `.split(".")` and reject if any segment matches a known dangerous extension (e.g., `.exe`, `.sh`).
