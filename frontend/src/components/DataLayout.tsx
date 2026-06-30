@@ -44,6 +44,7 @@ type UniqueThreadIntentResponse = {
 type UniqueThreadStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 type EmailImportStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
 type DocumentActionStatus = 'idle' | 'loading' | 'success' | 'auth' | 'error';
+type DocumentActionName = 'reparse' | 'embedding-regeneration-intent' | 'hwp-conversion-intent' | 'webdav-materialization-intent';
 
 type DataSurfaceStatus = 'loading' | 'ready' | 'error';
 
@@ -300,6 +301,7 @@ export function DataLayout() {
   const [emailImportFiles, setEmailImportFiles] = useState<File[]>([]);
   const [documentActionStatus, setDocumentActionStatus] = useState<DocumentActionStatus>('idle');
   const [documentActionResult, setDocumentActionResult] = useState<DataDocumentActionResponse | null>(null);
+  const [pendingDocumentAction, setPendingDocumentAction] = useState<DocumentActionName | null>(null);
   const [documentUploadFiles, setDocumentUploadFiles] = useState<File[]>([]);
   const [dataSurfaceStatus, setDataSurfaceStatus] = useState<DataSurfaceStatus>('loading');
   const [dataQualitySurface, setDataQualitySurface] = useState<DataQualitySurfaceResponse | null>(null);
@@ -449,6 +451,7 @@ export function DataLayout() {
 
     setDocumentActionStatus('loading');
     setDocumentActionResult(null);
+    setPendingDocumentAction(null);
     try {
       const documentType = getDocumentTypeForFile(file);
       if (!isTextDocumentUploadType(documentType)) {
@@ -473,9 +476,7 @@ export function DataLayout() {
     }
   }, [documentUploadFiles, loadDataQualitySurface]);
 
-  const requestDocumentAction = useCallback(async (
-    action: 'reparse' | 'embedding-regeneration-intent' | 'hwp-conversion-intent' | 'webdav-materialization-intent',
-  ) => {
+  const requestDocumentAction = useCallback(async (action: DocumentActionName) => {
     const asset = dataQualitySurface?.repository_assets.find((candidate) => (
       candidate.asset_key === selectedRepositoryAssetKey
     )) ?? dataQualitySurface?.repository_assets[0] ?? null;
@@ -493,6 +494,7 @@ export function DataLayout() {
 
     setDocumentActionStatus('loading');
     setDocumentActionResult(null);
+    setPendingDocumentAction(action);
     try {
       const result = await apiClient.post<DataDocumentActionResponse>(
         `/api/data/documents/${encodeURIComponent(asset.asset_key)}/${action}`,
@@ -506,6 +508,8 @@ export function DataLayout() {
     } catch (error: unknown) {
       const status = getApiErrorStatus(error);
       setDocumentActionStatus(status === 401 || status === 403 ? 'auth' : 'error');
+    } finally {
+      setPendingDocumentAction(null);
     }
   }, [
     dataQualitySurface,
@@ -522,6 +526,10 @@ export function DataLayout() {
   const isUniqueThreadLoading = uniqueThreadStatus === 'loading';
   const isEmailImportLoading = emailImportStatus === 'loading';
   const isDocumentActionLoading = documentActionStatus === 'loading';
+  const isReparseLoading = isDocumentActionLoading && pendingDocumentAction === 'reparse';
+  const isEmbeddingIntentLoading = isDocumentActionLoading && pendingDocumentAction === 'embedding-regeneration-intent';
+  const isHwpIntentLoading = isDocumentActionLoading && pendingDocumentAction === 'hwp-conversion-intent';
+  const isWebdavMaterializationLoading = isDocumentActionLoading && pendingDocumentAction === 'webdav-materialization-intent';
   const selectedWebdavAccount = webdavAccounts.find((account) => (
     account.source_id === selectedWebdavSourceId && account.writeback_enabled
   )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
@@ -813,41 +821,41 @@ export function DataLayout() {
                         type="button"
                         onClick={() => void requestDocumentAction('reparse')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
+                        aria-busy={isReparseLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" />}
-                        {isDocumentActionLoading ? '처리 중' : '재파싱 실행'}
+                        {isReparseLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="size-4" />}
+                        {isReparseLoading ? '처리 중' : '재파싱 실행'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('embedding-regeneration-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
+                        aria-busy={isEmbeddingIntentLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Database className="size-4" />}
-                        {isDocumentActionLoading ? '처리 중' : '임베딩 재생성 의도'}
+                        {isEmbeddingIntentLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Database className="size-4" />}
+                        {isEmbeddingIntentLoading ? '처리 중' : '임베딩 재생성 의도'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('hwp-conversion-intent')}
                         disabled={isDocumentActionLoading}
-                        aria-busy={isDocumentActionLoading}
+                        aria-busy={isHwpIntentLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-bold text-foreground hover:bg-secondary disabled:cursor-wait disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileText className="size-4" />}
-                        {isDocumentActionLoading ? '처리 중' : 'HWP 변환 의도'}
+                        {isHwpIntentLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <FileText className="size-4" />}
+                        {isHwpIntentLoading ? '처리 중' : 'HWP 변환 의도'}
                       </button>
                       <button
                         type="button"
                         onClick={() => void requestDocumentAction('webdav-materialization-intent')}
                         disabled={isDocumentActionLoading || !selectedWebdavAccount || selectedWorkspaceDocument.state_code !== 'ready'}
-                        aria-busy={isDocumentActionLoading}
+                        aria-busy={isWebdavMaterializationLoading}
                         className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        {isDocumentActionLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Server className="size-4" />}
-                        {isDocumentActionLoading ? '실행 중' : 'WebDAV 문서 실행 요청'}
+                        {isWebdavMaterializationLoading ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Server className="size-4" />}
+                        {isWebdavMaterializationLoading ? '실행 중' : 'WebDAV 문서 실행 요청'}
                       </button>
                     </div>
                   )}
