@@ -8,7 +8,6 @@ import time
 
 import pytest
 from fastapi import WebSocketException, status
-from fastapi.routing import APIWebSocketRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 from starlette.websockets import WebSocketDisconnect
@@ -186,9 +185,25 @@ def test_runner_ws_rejects_missing_auth():
 
 
 def test_runner_ws_route_uses_signed_session_dependency():
-    for route in app.routes:
-        if isinstance(route, APIWebSocketRoute) and route.path == "/ws/runner/{token}":
-            dependencies = {dependency.dependency for dependency in route.dependencies}
+    def get_routes(r, inherited_dependencies=()):
+        include_context = getattr(r, "include_context", None)
+        include_dependencies = tuple(
+            getattr(include_context, "dependencies", ()) or ()
+        )
+        effective_dependencies = (*inherited_dependencies, *include_dependencies)
+        if hasattr(r, "routes"):
+            for child in r.routes:
+                yield from get_routes(child, effective_dependencies)
+        original_router = getattr(r, "original_router", None)
+        if original_router is not None and hasattr(original_router, "routes"):
+            for child in original_router.routes:
+                yield from get_routes(child, effective_dependencies)
+        if getattr(r, "path", None):
+            route_dependencies = tuple(getattr(r, "dependencies", ()) or ())
+            yield r, (*effective_dependencies, *route_dependencies)
+    for route, route_dependencies in get_routes(app):
+        if getattr(route, "path", "") == "/ws/runner/{token}":
+            dependencies = {dependency.dependency for dependency in route_dependencies}
             assert get_auth_context in dependencies
             return
 

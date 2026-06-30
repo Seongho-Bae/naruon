@@ -1,4 +1,3 @@
-from http.client import HTTPSConnection
 import hashlib
 import json
 import logging
@@ -7,12 +6,13 @@ import socket
 import ssl
 import time
 from dataclasses import dataclass, field
+from http.client import HTTPSConnection
 from typing import Annotated, Any, Literal, cast
 from urllib.parse import urlsplit
 
 import jwt
-from jwt import PyJWKClient
 from fastapi import Depends, Header, HTTPException
+from jwt import PyJWKClient
 
 from core.config import settings, validate_auth_session_hmac_secret_value
 from core.url_validation import (
@@ -248,27 +248,35 @@ def _decode_cached_oidc_session_payload(token: str) -> dict[str, Any]:
     header = _oidc_unverified_header(token)
     key_id = header["kid"].strip()
 
+    target_key = None
     for signing_key in _cached_oidc_signing_keys:
-        try:
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=OIDC_ALLOWED_ALGORITHMS,
-                audience=settings.OIDC_CLIENT_ID,
-                issuer=settings.OIDC_ISSUER_URL,
-                options={
-                    "require": JWT_DECODE_REQUIRED_CLAIMS,
-                    "verify_signature": True,
-                },
-            )
-        except jwt.PyJWTError:
-            continue
         if getattr(signing_key, "key_id", None) != key_id:
-            raise _authentication_error()
-        if not isinstance(payload, dict):
-            raise _authentication_error()
-        return payload
-    raise _authentication_error()
+            continue
+        target_key = signing_key
+        break
+
+    verification_key = getattr(target_key, "key", None)
+    if verification_key is None or not hasattr(verification_key, "public_numbers"):
+        raise _authentication_error()
+
+    try:
+        payload = jwt.decode(
+            token,
+            verification_key,
+            algorithms=OIDC_ALLOWED_ALGORITHMS,
+            audience=settings.OIDC_CLIENT_ID,
+            issuer=settings.OIDC_ISSUER_URL,
+            options={
+                "require": JWT_DECODE_REQUIRED_CLAIMS,
+                "verify_signature": True,
+            },
+        )
+    except jwt.PyJWTError:
+        raise _authentication_error() from None
+
+    if not isinstance(payload, dict):
+        raise _authentication_error()
+    return payload
 
 
 def _reject_unsupported_critical_headers(header: dict[str, Any]) -> None:
