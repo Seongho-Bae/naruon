@@ -3,6 +3,10 @@
 - `CalendarLayout`의 성공 상태에서 기술적 세부 정보 대신 사용자 친화적인 메시지를 표시하도록 개선하여 불필요한 정보 노출을 방지했습니다.
 - `CalendarLayout`의 일정 쓰기(Writeback) 액션 버튼들에 로딩 스피너(`Loader2`)를 추가하여 비동기 작업 시 즉각적인 시각적 피드백을 제공합니다.
 
+### 코드 건강성 개선 (Code Health)
+
+- `backend/tests/test_release_governance.py`의 복잡한 Strix 실패 체크 리뷰 테스트를 명확한 작은 테스트 단위로 분리하여 유지보수성을 개선했습니다.
+
 ### 성능 개선 (Performance)
 
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
@@ -2594,8 +2598,3 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
-
-## [Unreleased]
-
-### 변경됨 (Changed)
-- `backend/tests/test_release_governance.py`에 있는 복잡하고 긴 테스트 함수(`test_opencode_strix_failed_check_review_model_before_title_attributed_correctly`)를 공통 셋업 헬퍼 함수(`_setup_model_before_title_evidence`)와 3개의 명확하고 작은 테스트 함수로 분리하여 코드의 유지보수성과 가독성을 향상시켰습니다.
