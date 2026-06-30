@@ -75,3 +75,13 @@
 **Vulnerability:** Found an instance of `shutil.which("bash")` being called directly inside a `subprocess.run` block rather than using the centralized `_bash_executable()` helper in `backend/tests/test_release_governance.py`. This could potentially mask issues if `shutil.which` returns `None` and triggers Bandit B607/B603.
 **Learning:** Reusing shared, safe helper functions like `_bash_executable()` ensures that external command execution is always bound to absolute paths and handles `None` cases properly, mitigating path injection risks.
 **Prevention:** Always refactor redundant `subprocess.run` blocks to use established helper methods that enforce absolute paths and perform necessary existence assertions.
+
+## 2026-06-27 - Information Disclosure in Version File Error Handling
+**Vulnerability:** The error message generated when the `VERSION` file was missing included absolute paths, exposing the internal directory structure.
+**Learning:** Error messages should never reveal internal implementation details or server-side paths, as they can assist attackers in further exploitation.
+**Prevention:** Avoid interpolating absolute paths or system details into exceptions that might be logged or surfaced; use generic error messages instead.
+
+## 2024-06-25 - [Fix Email SMTP CRLF Injection & Double Extension Upload]
+**Vulnerability:** Attackers could inject arbitrary SMTP commands (e.g. MAIL FROM) using CRLF (\r\n) sequences in email subjects or recipients because `^[^\r\n]*$` validation in Pydantic wasn't catching all edge cases correctly. Attackers could also bypass file upload validations by providing double extensions (e.g., `malicious.exe.eml`).
+**Learning:** Pydantic regex patterns might fall short for strict network protocol inputs like SMTP headers if improperly formulated or bypassed. Simple `.endswith()` checks for file uploads fail to prevent embedded dangerous extensions.
+**Prevention:** Always use `@field_validator` with explicit `mode="before"` string matching for `chr(10)` and `chr(13)` across all user-controlled email header fields (to, subject, in_reply_to, references). Always tokenize uploaded filenames via `.split(".")` and reject if any segment matches a known dangerous extension (e.g., `.exe`, `.sh`).
