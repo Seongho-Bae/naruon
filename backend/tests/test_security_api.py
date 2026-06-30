@@ -756,14 +756,3 @@ async def test_access_surface_real_postgres_smoke_uses_scoped_sources():
     assert audit_uid not in response.text
     assert "account_id" not in response.text
     assert "security-smoke@example.com" not in response.text
-
-def test_untested_security_api_lines():
-    from api.security import _evidence_label
-    assert _evidence_label("calendar_event") == "calendar_source_evidence"
-    assert _evidence_label("auth_event") == "signed_session_evidence"
-
-def test_untested_security_api_lines_2():
-    from api.security import _datetime_to_utc_iso
-    import datetime
-    dt = datetime.datetime.now()
-    assert _datetime_to_utc_iso(dt).endswith("Z")

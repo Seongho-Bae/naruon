@@ -1,3 +1,6 @@
+[tool.uv.workspace]
+members = ["backend"]
+
 [tool.pytest.ini_options]
 testpaths = ["backend"]
 pythonpath = ["backend"]

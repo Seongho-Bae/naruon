@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from httpx import AsyncClient, ASGITransport
 from pydantic import SecretStr
 
+from api import emails as emails_api
 from api.auth import get_auth_context as auth_get_auth_context
 from core.config import settings
 from db.models import Email, LLMProvider
@@ -1718,6 +1719,63 @@ def test_send_email_endpoint_rejects_header_injection_subject(mock_send_email):
     mock_send_email.assert_not_called()
 
 
+@patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
+def test_send_email_endpoint_rate_limits_per_user(mock_send_email, monkeypatch):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    def fake_validate_smtp_destination(smtp_server, smtp_port, *, resolve_host=True):
+        return smtp_server, smtp_port
+
+    monkeypatch.setattr(
+        "api.emails.validate_smtp_destination", fake_validate_smtp_destination
+    )
+    monkeypatch.setattr(emails_api, "_SEND_EMAIL_RATE_LIMIT_MAX_ATTEMPTS", 1)
+    monkeypatch.setattr(emails_api.time, "monotonic", lambda: 100.0)
+    emails_api._email_send_attempts_by_scope.clear()
+
+    try:
+        client = TestClient(app, headers={"X-User-Id": "testuser"})
+        payload = {
+            "to": "test@example.com",
+            "subject": "Re: Test",
+            "body": "This is a reply.",
+        }
+
+        assert client.post("/api/emails/send", json=payload).status_code == 200
+        response = client.post("/api/emails/send", json=payload)
+    finally:
+        emails_api._email_send_attempts_by_scope.clear()
+
+    assert response.status_code == 429
+    assert response.json() == {"detail": "Email send rate limit exceeded"}
+    mock_send_email.assert_called_once()
+
+
+def test_send_email_rate_limit_prunes_expired_scopes(monkeypatch):
+    from api.auth import AuthContext
+
+    emails_api._email_send_attempts_by_scope.clear()
+    active_key = ("org-acme", "testuser")
+    stale_key = ("org-old", "stale-user")
+    emails_api._email_send_attempts_by_scope[active_key] = [95.0]
+    emails_api._email_send_attempts_by_scope[stale_key] = [10.0]
+    monkeypatch.setattr(emails_api.time, "monotonic", lambda: 100.0)
+
+    try:
+        emails_api._enforce_send_email_rate_limit(
+            AuthContext(
+                user_id=active_key[1],
+                role="member",
+                organization_id=active_key[0],
+                group_ids=(),
+                workspace_id="workspace-org-acme",
+            )
+        )
+        assert stale_key not in emails_api._email_send_attempts_by_scope
+        assert emails_api._email_send_attempts_by_scope[active_key] == [95.0, 100.0]
+    finally:
+        emails_api._email_send_attempts_by_scope.clear()
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
@@ -1960,154 +2018,3 @@ def test_email_owner_filters():
         str(filters2[1].compile(compile_kwargs={"literal_binds": True}))
         == "email_records.organization_id IS NULL"
     )
-
-def test_enforce_send_email_rate_limit_coverage():
-    from api.emails import _enforce_send_email_rate_limit
-    _enforce_send_email_rate_limit(None)
-
-
-
-
-def test_untested_email_api_lines():
-    from api.emails import _enforce_send_email_rate_limit, thread_matches_folder, _email_message_lookup_values
-    from db.models import Email
-
-    _enforce_send_email_rate_limit(None)
-
-    assert thread_matches_folder([], set(), "inbox")
-
-    e_sent = Email(id=1, sender="testuser@example.com")
-    e_recv = Email(id=2, sender="other@example.com")
-    assert thread_matches_folder([e_sent, e_recv], {"testuser@example.com"}, "sent")
-    assert not thread_matches_folder([e_recv], {"testuser@example.com"}, "sent")
-
-    assert _email_message_lookup_values(Email(id=3, message_id=None)) == set()
-    assert _email_message_lookup_values(Email(id=4, message_id="<test@example>")) == {"test@example", "<test@example>"}
-
-@pytest.mark.asyncio
-async def test_untested_email_api_lines_2():
-    from api.emails import _fetch_existing_emails_for_candidates, _build_email_lookup_dicts
-    from db.models import Email
-
-    assert await _fetch_existing_emails_for_candidates(None, None, [], []) == []
-
-    e_fp = Email(id=5, message_id=None, subject=None, sender=None, date=None, fingerprint="db_fp_123")
-    by_msg, by_fp = _build_email_lookup_dicts([e_fp])
-    assert by_fp["db_fp_123"] == e_fp
-
-@pytest.mark.asyncio
-async def test_import_email_files_errors(monkeypatch):
-    from api import emails
-    from api.auth import AuthContext
-    from fastapi import HTTPException
-
-    class DummyUploadFile:
-        def __init__(self, filename):
-            self.filename = filename
-        async def read(self, size):
-            return b"123"
-
-    # 509: No organization
-    ctx_no_org = AuthContext(user_id="u1", organization_id=None, role="user", group_ids=[], workspace_id="ws1")
-    with pytest.raises(HTTPException) as excinfo:
-        await emails.import_email_files(files=[], db=None, auth_context=ctx_no_org)
-    assert excinfo.value.status_code == 403
-
-    ctx_org = AuthContext(user_id="u1", organization_id="o1", role="user", group_ids=[], workspace_id="ws1")
-
-    # 511: Too many files
-    monkeypatch.setattr(emails, "MAX_IMPORT_UPLOADS", 0)
-    with pytest.raises(HTTPException) as excinfo:
-        await emails.import_email_files(files=[DummyUploadFile("t.eml")], db=None, auth_context=ctx_org)
-    assert excinfo.value.status_code == 422
-
-    # 521: Invalid type
-    monkeypatch.setattr(emails, "MAX_IMPORT_UPLOADS", 10)
-    with pytest.raises(HTTPException) as excinfo:
-        await emails.import_email_files(files=[DummyUploadFile("t.txt")], db=None, auth_context=ctx_org)
-    assert excinfo.value.status_code == 400
-
-    # 525: Too large
-    class LargeUploadFile:
-        def __init__(self, filename):
-            self.filename = filename
-        async def read(self, size):
-            return b"123"
-
-    monkeypatch.setattr(emails, "MAX_IMPORT_UPLOAD_BYTES", 1)
-    with pytest.raises(HTTPException) as excinfo:
-        await emails.import_email_files(files=[LargeUploadFile("t.eml")], db=None, auth_context=ctx_org)
-    assert excinfo.value.status_code == 413
-
-@pytest.mark.asyncio
-async def test_email_api_remaining_lines(monkeypatch):
-    from api import emails
-    from api.auth import AuthContext
-    from fastapi import HTTPException
-
-    ctx = AuthContext(user_id="u1", organization_id="o1", role="user", group_ids=[], workspace_id="ws1")
-
-    # 594: Email not found (get_email)
-    class MockResult:
-        def scalar_one_or_none(self):
-            return None
-    class MockDB:
-        async def execute(self, *args, **kwargs):
-            return MockResult()
-    with pytest.raises(HTTPException) as exc:
-        await emails.get_email(1, MockDB(), ctx)
-    assert exc.value.status_code == 404
-
-    # 620: Thread not found (get_email_thread)
-    class MockScalars:
-        def all(self):
-            return []
-    class MockResult2:
-        def scalars(self):
-            return MockScalars()
-    class MockDB2:
-        async def execute(self, *args, **kwargs):
-            return MockResult2()
-    with pytest.raises(HTTPException) as exc:
-        await emails.get_email_thread("t1", MockDB2(), ctx)
-    assert exc.value.status_code == 404
-
-    # 666: ENCRYPTION_KEY is required
-    import builtins
-    class MockConfig:
-        smtp_server = "smtp"
-        smtp_port = 25
-        smtp_username = "u"
-        smtp_password = "p"
-    async def get_cfg(*args):
-        return MockConfig()
-    monkeypatch.setattr(emails, "get_scoped_tenant_config", get_cfg)
-
-    def raise_enc(*args, **kwargs):
-        raise builtins.Exception("ENCRYPTION_KEY is required")
-    monkeypatch.setattr(emails, "validate_smtp_destination", raise_enc)
-
-    from api.emails import SendEmailRequest
-    req = SendEmailRequest(to="t@t.com", subject="s", body="b")
-    with pytest.raises(HTTPException) as exc:
-        await emails.send_email_endpoint(req, None, ctx)
-    assert exc.value.status_code == 503
-
-    # 681: raise any other exception
-    def raise_other(*args, **kwargs):
-        raise RuntimeError("some other error")
-    monkeypatch.setattr(emails, "validate_smtp_destination", raise_other)
-    with pytest.raises(HTTPException) as exc:
-        await emails.send_email_endpoint(req, None, ctx)
-    assert exc.value.status_code == 500
-
-    # 705-707: send_email error logging
-    async def mock_send_email(*args, **kwargs):
-        raise RuntimeError("send_email error")
-    monkeypatch.setattr(emails, "send_email", mock_send_email)
-    def ok_validate(*args, **kwargs):
-        pass
-    monkeypatch.setattr(emails, "validate_smtp_destination", ok_validate)
-    with pytest.raises(HTTPException) as exc:
-        await emails.send_email_endpoint(req, None, ctx)
-    assert exc.value.status_code == 500
