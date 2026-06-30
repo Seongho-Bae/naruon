@@ -200,7 +200,7 @@ describe("EmailDetail", () => {
         if (url.endsWith("/api/emails/thread/thread-a")) return threadAResponse.promise;
         if (url.endsWith("/api/emails/thread/thread-b")) return threadBResponse.promise;
         if (url.endsWith("/api/llm/summarize")) {
-          return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+          return Promise.resolve(jsonResponse({ summary: "종합", todos: [] }));
         }
         throw new Error(`Unexpected fetch: ${url}`);
       });
@@ -411,7 +411,7 @@ describe("EmailDetail", () => {
       if (url.endsWith("/api/emails/3")) return standaloneEmailResponse.promise;
       if (url.endsWith("/api/emails/thread/thread-a")) return threadResponse.promise;
       if (url.endsWith("/api/llm/summarize")) {
-        return Promise.resolve(jsonResponse({ summary: "Summary", todos: [] }));
+        return Promise.resolve(jsonResponse({ summary: "종합", todos: [] }));
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });
@@ -495,7 +495,7 @@ describe("EmailDetail", () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain("맥락 종합");
-    expect(container.textContent).toContain("AI 생성");
+    expect(container.textContent).toContain("판단 보조 생성");
     expect(container.textContent).toContain("실행 항목");
     expect(container.textContent).toContain("신뢰도 91%");
     expect(container.textContent).not.toContain("AI Generated");

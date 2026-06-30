@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Loader2, MessagesSquare } from "lucide-react";
+import DOMPurify from "dompurify";
 import { DecisionPointCard } from "@/components/DecisionPointCard";
 import {
   buildThreadUrl,
@@ -364,7 +365,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
             icon={<span aria-hidden="true">✦</span>}
             loading={!llmData && !llmError}
             error={llmError}
-            provenance={llmData?.provenance || "AI 생성"}
+            provenance={llmData?.provenance || "판단 보조 생성"}
             confidence={confidencePercent}
           >
             {llmData ? (
@@ -401,7 +402,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "동기화 중" : "일정 반영"}
+                    {isSyncing ? "일정 반영 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
@@ -484,7 +485,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     </div>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(toMailBodyText(msg.body)) }}></div>
                 </div>
               ))}
             </div>
@@ -495,10 +496,10 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
           <DecisionPointCard title="답장 초안" provenance="사용자 확인 필요">
             <div className="flex flex-col sm:flex-row sm:items-end gap-2 justify-between">
               <div className="space-y-1.5 flex-1 max-w-sm">
-                <label htmlFor="reply-instruction" className="sr-only">AI 답장 지시</label>
+                <label htmlFor="reply-instruction" className="sr-only">답장 초안 지시</label>
                 <Input
                   id="reply-instruction"
-                  aria-label="AI 답장 지시"
+                  aria-label="답장 초안 지시"
                   value={instruction}
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder="예: 정중하게 답장해줘"
@@ -514,7 +515,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 className="h-10 rounded-xl border-purple-500/30 px-4 text-purple-700 hover:bg-purple-500/10"
               >
                 {isDrafting && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                {isDrafting ? "초안 작성 중" : "AI 답장 초안"}
+                {isDrafting ? "초안 작성 중" : "답장 초안 생성"}
               </Button>
             </div>
             
@@ -526,7 +527,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               aria-label="답장 초안"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="답장 초안을 작성하거나 AI 초안을 생성하세요..."
+              placeholder="답장 초안을 작성하거나 판단 보조로 초안을 생성하세요..."
               className="min-h-[150px] rounded-2xl border-purple-500/20 bg-background/70"
             />
             
