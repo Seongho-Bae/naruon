@@ -81,6 +81,10 @@
 ## 2026-06-24 - Defer large SQLAlchemy vector payloads
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
+## 2026-06-25 - 루프 내 딕셔너리 조회 시 불필요한 기본값 생성 방지
+**Learning:** 빈번하게 실행되는 루프 내에서 `dict.get(key, default_factory())`를 사용하면, 키의 존재 여부와 무관하게 매번 `default_factory`(예: `set()`)가 평가되어 불필요한 메모리 할당 및 가비지 컬렉션 부하를 유발합니다. 또한 단순 존재 여부만 확인할 때 `.get(key, False)`를 사용하면 내부적으로 오버헤드가 발생합니다.
+**Action:** 루프 내에서 키를 조회할 때, 키가 존재함이 보장된다면 `dict[key]`를 직접 사용하십시오. 값의 진위 여부가 아닌 키의 존재 여부만 검사할 때는 `.get(key, False)` 대신 `in` 연산자(예: `key in dict`)를 사용하십시오.
+
 ## 2026-06-25 - [Optimize Email Grouping]
 **Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
 **Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
@@ -92,3 +96,7 @@
 ## 2026-06-28 - Terminology Alignment in End-to-End Tests
 **Learning:** When UI terminology rules change, end-to-end tests relying on exact text matches (like `getByRole('button', { name: 'AI 답장 초안' })` or `getByText('2개 실행 항목')`) will fail. Moreover, some UI elements render dynamic list structures rather than aggregated summary strings, meaning exact assertions on previously aggregated strings must be updated to reflect the new DOM structure.
 **Action:** When updating application UI terminology to match a specification, systematically audit and update all corresponding string literals, aria-labels, and assertions in both unit and E2E tests using search tools. For dynamic data mapped into lists, adjust test assertions to verify the presence of individual mapped items rather than outdated summary counters.
+
+## 2026-06-25 - Avoid redundant default argument allocations in dict.get()
+**Learning:** In Python, default arguments in functions like `dict.get(key, set())` or `dict.get(key, [])` are eagerly evaluated on every loop iteration, regardless of whether the key exists. Inside a tight loop (such as iterating over large lists of candidates or emails), this leads to continuous, unnecessary memory allocations and garbage collection overhead.
+**Action:** When performing dictionary lookups in tight loops, avoid passing dynamic default instances. Instead, use a conditional check: `val = my_dict.get(key); if val: ...` to safely handle missing keys without redundant object creation.

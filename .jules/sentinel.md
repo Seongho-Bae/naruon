@@ -70,6 +70,22 @@
 **Vulnerability:** Session metadata validation skipped explicit issuer (`iss`) and audience (`aud`) checks whenever OIDC was globally configured, rather than checking claims against the verifier that actually accepted the token.
 **Learning:** Security validation functions must use contextual verifier evidence instead of assuming that a global configuration flag describes the token path.
 **Prevention:** Pass the session verifier into metadata validation, fail closed when OIDC issuer/client configuration is incomplete, and normalize OIDC audiences before checking membership.
+
+## 2026-06-25 - Incorrect UI Terminology Handling in Tests
+**Vulnerability:** UI terminology mapping rules were not properly reflected in `EmailDetail.test.tsx`, meaning the test was passing incorrect english keywords like "Summary" and "Tasks" that shouldn't be exposed on the frontend.
+**Learning:** We need to keep our assertions in sync with terminology rules from `AGENTS.md` and `docs/ui-ux/naruon-ui-ux-mapping.md`, replacing English terms with their Korean counterparts in assertions. Additionally, when writing new test cases, avoid copying existing state variables (like `container` and `root`) in testing files, and use the correct mocking setup. Ensure proper clean up for tests.
+**Prevention:** Always verify terminology rules by running `grep` before committing changes to React components and related unit tests, enforcing localized text definitions.
+
+## 2026-06-25 - [Fix Subprocess Path Execution Vulnerability in Tests]
+**Vulnerability:** Found an instance of `shutil.which("bash")` being called directly inside a `subprocess.run` block rather than using the centralized `_bash_executable()` helper in `backend/tests/test_release_governance.py`. This could potentially mask issues if `shutil.which` returns `None` and triggers Bandit B607/B603.
+**Learning:** Reusing shared, safe helper functions like `_bash_executable()` ensures that external command execution is always bound to absolute paths and handles `None` cases properly, mitigating path injection risks.
+**Prevention:** Always refactor redundant `subprocess.run` blocks to use established helper methods that enforce absolute paths and perform necessary existence assertions.
+
+## 2026-06-25 - [DAV Authorization Path Denial of Service]
+**Vulnerability:** Unbounded `while True` loop in `_normalize_dav_authorization_path` during URL decoding could potentially lead to algorithmic complexity or infinite loop DoS if an unquote edge case prevented string convergence.
+**Learning:** Although `unquote` generally guarantees termination (as the string length strictly decreases or stays the same), relying on external library invariants for loop termination without explicit bounds is poor security hygiene. Furthermore, simulating edge cases using objects fails because C-extensions validate parameter types.
+**Prevention:** To mitigate algorithmic complexity (DoS) vulnerabilities when parsing inputs via `urllib.parse.unquote`, replace unbounded `while True:` decode loops with strictly bounded loops (e.g., `for _ in range(100):`) and explicitly raise exceptions (like `HTTPException`) if the limit is exceeded. When testing iteration limits or potential infinite loops involving `urllib.parse.unquote` in pytest, use `monkeypatch.setattr(module_name, "unquote", fake_unquote_function)` rather than attempting to pass fake Python objects (which are often ignored or converted by standard library C-extensions).
+
 ## 2026-06-27 - Information Disclosure in Version File Error Handling
 **Vulnerability:** The error message generated when the `VERSION` file was missing included absolute paths, exposing the internal directory structure.
 **Learning:** Error messages should never reveal internal implementation details or server-side paths, as they can assist attackers in further exploitation.

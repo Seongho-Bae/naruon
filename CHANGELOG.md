@@ -11,6 +11,7 @@
 ### 보안 패치 (Security)
 
 - (백엔드) 버전 정보를 읽어올 때 `VERSION` 파일이 없는 경우, 에러 메시지에서 애플리케이션의 내부 디렉토리 경로가 노출되는 취약점(Information Disclosure)을 수정했습니다.
+- release governance 테스트 계약에서 부분 실행 경로 기반 `subprocess.run` 경로를 제거해 테스트 보안 점검이 절대 경로 기반 실행 계약과 어긋나지 않도록 정리했습니다.
 - **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
 - **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.
 
@@ -18,6 +19,9 @@
 
 - 백엔드에 다국어 이메일 본문을 번역할 수 있는 LLM 기반 `POST /api/llm/translate` 엔드포인트를 추가했습니다.
 - 프론트엔드의 이메일 상세 정보 뷰(`EmailDetail.tsx`)에 메일 원문을 한국어로 번역하는 '번역' 액션 버튼 및 번역 결과 UI를 추가했습니다.
+
+### 성능 개선
+- O(N)의 set() 객체 생성을 발생시키던 `candidate_lookups.get`의 기본 인자 평가를 조건문으로 대체하여 `_find_matches_for_candidates`의 성능을 개선했습니다.
 
 ## [0.14.4] - 2026-06-18
 

@@ -220,10 +220,10 @@ export function EmailList({
               placeholder="메일, 사람, 키워드 맥락 검색..."
               value={searchQuery}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
-              type="text"
+              type="search"
               inputMode="search"
               role="searchbox"
-              className="h-10 rounded-xl border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
+              className="h-10 rounded-xl [&::-webkit-search-cancel-button]:hidden border-input bg-background/80 pl-9 pr-9 shadow-inner shadow-slate-950/[0.02]"
             />
             {searchQuery && (
               <button
@@ -253,23 +253,9 @@ export function EmailList({
           ) : error ? (
             <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</div>
           ) : emails.length === 0 ? (
-            <div role="status" aria-live="polite" className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-background/70 p-8 text-center text-sm text-muted-foreground">
-              <p className="font-bold text-foreground">{searchQuery ? '검색 결과가 없습니다' : folderCopy.emptyTitle}</p>
-              <p className="mt-1 max-w-[200px] text-xs leading-5">{searchQuery ? '다른 검색어를 입력하거나 검색을 초기화해보세요.' : folderCopy.emptyBody}</p>
-              {searchQuery && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSearchQuery("");
-                    void fetchEmails("");
-                    searchInputRef.current?.focus();
-                  }}
-                  className="mt-4 h-8 text-xs bg-background"
-                >
-                  검색어 초기화
-                </Button>
-              )}
+            <div className="rounded-2xl border border-dashed border-border bg-background/70 p-5 text-sm text-muted-foreground">
+              <p className="font-bold text-foreground">{folderCopy.emptyTitle}</p>
+              <p className="mt-1 text-xs leading-5">{folderCopy.emptyBody}</p>
             </div>
           ) : (
             emails.map((email: EmailItem) => (
