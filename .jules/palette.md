@@ -58,3 +58,7 @@
 ## 2024-05-24 - Ensure error messages use role="alert"
 **Learning:** Dynamically rendered error messages (like capture failure states) need a `role="alert"` attribute so that screen readers announce them immediately when they appear in the DOM.
 **Action:** Always add `role="alert"` to `<p>` or `<div>` elements that render temporary or state-driven error text, particularly when it occurs asynchronously outside of standard form validation.
+
+## 2024-05-25 - Replace raw text icons with standard accessible icons
+**Learning:** Using raw text characters like `×` for close buttons can lead to screen reader mispronunciation (e.g., "times" or "multiply"). It also creates visual inconsistencies across the app where other close buttons use the standard SVG icon.
+**Action:** When a button is icon-only and has a clear `aria-label`, always use the standard SVG icon (e.g., `<X className="size-4" aria-hidden="true" />` from Lucide) with `aria-hidden="true"` rather than a literal text character.
