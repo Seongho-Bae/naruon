@@ -165,33 +165,23 @@ leave `base_url` unset.
 
 ## CI security boundary
 
-The Strix workflow treats pull request code as untrusted whenever repository
-secrets are available. Privileged PR scans run from `pull_request_target`,
-materialize only trusted base content for workflow scripts and dependencies via
-the GitHub API, fetch the pull request head as Git objects, and copy changed
-PR-head blobs into temporary scan scopes before invoking Strix. When a changed
-file is also included as backend context for another batch, the scope still uses
-the PR-head blob rather than trusted-base content, so a security fix is not
-re-scanned against stale vulnerable context. Do not checkout or execute pull
-request branch scripts in the privileged Strix job.
+OpenCode Review, Strix Security Scan, and PR Review Merge Scheduler are supplied
+by the ContextualWisdomLab central required workflows in
+`ContextualWisdomLab/.github`; this repository does not carry repo-local copies
+of those workflows or their dedicated support scripts. The central Strix
+workflow treats pull request code as untrusted whenever repository secrets are
+available: privileged PR scans run from trusted workflow code, fetch the pull
+request head as Git objects, and copy PR-head blobs into temporary scan scopes
+before invoking Strix. Changed PR-head files must be scanned as PR-head data,
+not replaced with trusted-base content.
 
-The gate fails closed when a changed PR-head blob cannot be validated or copied;
-it must never fall back to scanning trusted-base content for a modified PR path.
-Pull request scans present the generated PR-head scope to Strix in one
-whole-context invocation, rather than splitting changed files into separate
-scanner runs. Strix remains a required Medium-or-higher gate. The workflow
-defaults to GitHub Models with
-`models: read`, the workflow `github.token`, `STRIX_LLM=openai/openai/gpt-4.1`,
-and `LLM_API_BASE_FILE` pointing at a trusted file containing
-`https://models.github.ai/inference`, while keeping the token and API base
-isolated to trusted input files and the Strix child-process environment. Legacy
-`STRIX_LLM` secrets do not override PR, push, or scheduled
-Strix defaults; explicit Vertex and direct OpenAI routes remain supported only
-through manual `workflow_dispatch` `strix_llm` selections and their
-provider-scoped credential paths. Provider infrastructure errors still fail
-closed.
-Merge-gate governance for Strix, CodeRabbit, and required review evidence is
-documented in `docs/development/merge-gate-policy.md`.
+The central gate fails closed when PR-head evidence cannot be validated, keeps
+Medium-or-higher Strix findings required, and owns model routing, fallback,
+reasoning-effort, failed-check explanation, branch update, auto-merge, and
+OpenCode review behavior. Naruon documents the required behavior but does not
+duplicate the central workflow implementation. Merge-gate governance for Strix,
+CodeRabbit, OpenCode, and required review evidence is documented in
+`docs/development/merge-gate-policy.md`.
 
 ## Release and operations boundary
 
