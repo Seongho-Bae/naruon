@@ -139,6 +139,7 @@ describe("CalendarPage", () => {
       expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
+        "X-Naruon-CSRF-Intent": "calendar-writeback",
       }));
       expect(init?.headers).not.toHaveProperty("Authorization");
       const requestHeaders = init?.headers as Record<string, string>;
@@ -215,6 +216,7 @@ describe("CalendarPage", () => {
       expect(init?.credentials).toBe("same-origin");
       expect(init?.headers).toEqual(expect.objectContaining({
         "Content-Type": "application/json",
+        "X-Naruon-CSRF-Intent": "calendar-writeback",
       }));
       expect(init?.headers).not.toHaveProperty("Authorization");
       expect(JSON.parse(String(init?.body))).toEqual({
@@ -282,6 +284,7 @@ describe("CalendarPage", () => {
       expect(init?.method).toBe("POST");
       expect(init?.credentials).toBe("same-origin");
       const requestHeaders = init?.headers as Record<string, string>;
+      expect(requestHeaders["X-Naruon-CSRF-Intent"]).toBe("calendar-writeback");
       const normalizedHeaderNames = new Set(Object.keys(requestHeaders).map((headerName) => headerName.toLowerCase()));
       for (const publicHeader of [
         "x-user-id",

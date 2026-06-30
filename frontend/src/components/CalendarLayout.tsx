@@ -137,6 +137,10 @@ function getEtagLabel(value: string | null) {
   return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
 }
 
+const calendarWritebackIntentHeaders = {
+  'X-Naruon-CSRF-Intent': 'calendar-writeback',
+};
+
 
 
 
@@ -239,6 +243,8 @@ export function CalendarLayout() {
         // Non-sensitive UUID reference
         ...(selectedWritebackSource ? { ['target_source_id']: selectedWritebackSource.source_id } : {}),
         ...(executeProvider ? { execute_provider: true } : {}),
+      }, {
+        headers: calendarWritebackIntentHeaders,
       });
       setWritebackResult(result);
       setWritebackStatus('success');
