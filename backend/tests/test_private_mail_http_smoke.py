@@ -33,6 +33,27 @@ def test_selected_upload_files_reads_emlx_inside_zip(tmp_path, monkeypatch):
     assert selected[0].read_bytes() == raw
 
 
+def test_selected_upload_files_creates_default_cache_path(tmp_path, monkeypatch):
+    raw = b"Subject: alpha query\r\n\r\nbody"
+    mail_file = tmp_path / "message.eml"
+    mail_file.write_bytes(raw)
+    monkeypatch.delenv("NARUON_PRIVATE_MAIL_CACHE", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+
+    selected = smoke._selected_upload_files(
+        tmp_path,
+        ["query"],
+        1,
+        max_parse_bytes=1000,
+        match_mode="exact",
+        progress_every=0,
+    )
+
+    assert [p.name for p in selected] == ["hit_001.eml"]
+    assert selected[0].exists()
+    assert (tmp_path / "home" / ".cache" / "naruon" / "private-mail-upload-cache").exists()
+
+
 def test_large_message_match_uses_header_probe_without_full_parse(monkeypatch):
     raw = b"Subject: needle\r\n\r\n" + (b"x" * 128)
 

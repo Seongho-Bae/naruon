@@ -277,7 +277,7 @@ def _selected_upload_files(
                 str(Path.home() / ".cache" / "naruon" / "private-mail-upload-cache"),
             )
         )
-        final_dir.mkdir(mode=0o700, exist_ok=True)
+        final_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         for old_hit in final_dir.glob("hit_*.eml"):
             old_hit.unlink()
         for index, path in enumerate(selected, start=1):
