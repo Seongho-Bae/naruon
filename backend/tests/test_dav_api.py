@@ -1,11 +1,14 @@
 import defusedxml.ElementTree as ET
+import pytest
 from contextlib import contextmanager
 from urllib.parse import unquote
 
+from fastapi import HTTPException
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from api import dav as dav_api
 from api.auth import get_auth_context
-from api.dav import _dav_path_owner_user_id
 from db.models import ProjectFolder
 from db.session import get_db
 from main import app
@@ -81,14 +84,8 @@ def test_dav_rejects_missing_auth():
 
 
 def test_dav_route_uses_signed_session_dependency():
-    def get_routes(r):
-        if hasattr(r, "routes"):
-            for child in r.routes:
-                yield from get_routes(child)
-        else:
-            yield r
-    for route in get_routes(app):
-        if getattr(route, "path", "") == "/dav/{path:path}":
+    for route in app.routes:
+        if isinstance(route, APIRoute) and route.path == "/dav/{path:path}":
             dependencies = {dependency.dependency for dependency in route.dependencies}
             assert get_auth_context in dependencies
             return
@@ -122,7 +119,7 @@ def test_dav_rejects_path_traversal(dev_auth_dependency_overrides):
 
 
 def test_dav_owner_parser_rejects_backslash_traversal():
-    owner_user_id = _dav_path_owner_user_id("user123/..\\other-user/projects")
+    owner_user_id = dav_api._dav_path_owner_user_id("user123/..\\other-user/projects")
 
     assert owner_user_id is None
 
@@ -138,11 +135,24 @@ def test_dav_rejects_backslash_traversal(dev_auth_dependency_overrides):
 
 
 def test_dav_owner_parser_rejects_double_encoded_traversal():
-    owner_user_id = _dav_path_owner_user_id(
+    owner_user_id = dav_api._dav_path_owner_user_id(
         "user123/%252e%252e%252fother-user/projects"
     )
 
     assert owner_user_id is None
+
+
+def test_dav_normalization_exceeds_limit(dev_auth_dependency_overrides, monkeypatch):
+    def fake_unquote(string, *args, **kwargs):
+        return string + "%"
+
+    monkeypatch.setattr(dav_api, "unquote", fake_unquote)
+
+    with pytest.raises(HTTPException) as exc:
+        dav_api._normalize_dav_authorization_path("test")
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "DAV path decoding limit exceeded"
 
 
 def test_dav_rejects_double_encoded_traversal(dev_auth_dependency_overrides):
@@ -281,7 +291,6 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
     from fastapi import Request
 
     from api.auth import AuthContext
-    from api.dav import dav_handler
 
     caplog.set_level(logging.INFO, logger="api.dav")
     malicious_path = "user123/projects/test%1B%5B31minjected%0A%0D"
@@ -298,7 +307,7 @@ def test_dav_log_injection_prevention(dev_auth_dependency_overrides, caplog):
             group_ids=[],
             workspace_id="workspace-org-acme",
         )
-        await dav_handler(
+        await dav_api.dav_handler(
             request=req,
             path=unquote(malicious_path),
             auth_context=auth_context,

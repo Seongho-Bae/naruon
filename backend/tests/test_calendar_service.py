@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch, MagicMock
 from services.calendar_service import create_calendar_event, create_calendar_events_batch
-from services.exceptions import CalendarServiceError, UnsafeCalendarActionItemError
+from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 
 def _server_owned_google_credentials() -> dict[str, str]:
@@ -35,7 +35,7 @@ async def test_create_calendar_event_rejects_unsafe_summary_before_google_build(
     unsafe_summary,
 ):
     with patch("services.calendar_service.build") as mock_build:
-        with pytest.raises(UnsafeCalendarActionItemError, match="Unsafe calendar action item text"):
+        with pytest.raises(UnsafeCalendarTodoError, match="Unsafe calendar todo text"):
             await create_calendar_event(unsafe_summary, {"token": "dummy"})
 
         mock_build.assert_not_called()
@@ -197,7 +197,7 @@ async def test_create_calendar_events_batch_chunks_large_batches(
 @pytest.mark.asyncio
 async def test_create_calendar_events_batch_rejects_unsafe_summary_before_google_build():
     with patch("services.calendar_service.build") as mock_build:
-        with pytest.raises(UnsafeCalendarActionItemError, match="Unsafe calendar action item text"):
+        with pytest.raises(UnsafeCalendarTodoError, match="Unsafe calendar todo text"):
             await create_calendar_events_batch(
                 ["Buy milk", "<script>alert(1)</script>"],
                 _server_owned_google_credentials(),

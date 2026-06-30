@@ -168,36 +168,12 @@ def test_backend_runtime_toolchain_uses_image_scan_clean_security_pins() -> None
     assert "opentelemetry-instrumentation-fastapi==0.63b1" in requirements
 
 
-def test_review_security_workflow_bundle_is_centralized() -> None:
-    policy = read_repo_text("docs/development/merge-gate-policy.md")
-    readme = read_repo_text("README.md")
-    agents = read_repo_text("AGENTS.md")
-    delegated_paths = [
-        ".github/workflows/opencode-review.yml",
-        ".github/workflows/strix.yml",
-        ".github/workflows/strix-selftest.yml",
-        "requirements-strix-ci.txt",
-        "scripts/ci/collect_failed_check_evidence.sh",
-        "scripts/ci/emit_opencode_failed_check_fallback_findings.sh",
-        "scripts/ci/opencode_review_approve_gate.sh",
-        "scripts/ci/opencode_review_normalize_output.py",
-        "scripts/ci/pr_review_merge_scheduler.py",
-        "scripts/ci/strix_model_utils.sh",
-        "scripts/ci/strix_quick_gate.sh",
-        "scripts/ci/test_strix_quick_gate.sh",
-        "scripts/ci/validate_opencode_failed_check_review.sh",
-    ]
+def test_strix_ci_requirements_use_security_quality_clean_pins() -> None:
+    strix_ci_requirements = read_repo_text("requirements-strix-ci.txt")
 
-    for relative_path in delegated_paths:
-        assert not (REPO_ROOT / relative_path).exists(), relative_path
-
-    assert "ContextualWisdomLab/.github" in policy
-    assert "Required OpenCode Review" in policy
-    assert "Strix Security Scan" in policy
-    assert "PR Review Merge Scheduler" in policy
-    assert "github-actions[bot]" in policy
-    assert "central required workflows" in readme
-    assert "central required workflows" in agents
+    assert "strix-agent==1.0.4" in strix_ci_requirements
+    assert "cryptography==49.0.0" in strix_ci_requirements
+    assert "python-multipart==0.0.32" in strix_ci_requirements
 
 
 def test_changelog_follows_keep_a_changelog_for_initial_korean_release() -> None:
@@ -446,15 +422,47 @@ def test_scorecard_sarif_normalizer_preserves_branch_protection_category(
     assert branch_protection_run["results"] == []
 
 
-def test_opencode_and_strix_contracts_are_documented_as_central_required_workflows() -> None:
-    policy = read_repo_text("docs/development/merge-gate-policy.md")
+def test_review_automation_uses_central_required_workflows_without_local_copies() -> None:
+    readme = read_repo_text("README.md")
+    normalized_readme = " ".join(readme.split())
+    architecture = read_repo_text("ARCHITECTURE.md")
+    security = read_repo_text("SECURITY.md")
+    normalized_security = " ".join(security.split())
 
-    assert "OpenCode observes and reviews current-head evidence" in policy
-    assert "Failed GitHub Checks are explained by the central OpenCode workflow" in policy
-    assert "Strix Security Scan is supplied by the organization required workflow" in policy
-    assert "repo-local `.github/workflows/opencode-review.yml`" in policy
-    assert "repo-local `.github/workflows/strix.yml`" in policy
-    assert "repo-local Strix quick-gate scripts" in policy
+    central_workflow_paths = [
+        ".github/workflows/opencode-review.yml",
+        ".github/workflows/pr-review-merge-scheduler.yml",
+        ".github/workflows/strix-selftest.yml",
+        ".github/workflows/strix.yml",
+    ]
+    central_script_paths = [
+        "scripts/ci/collect_failed_check_evidence.sh",
+        "scripts/ci/emit_opencode_failed_check_fallback_findings.sh",
+        "scripts/ci/opencode_review_approve_gate.sh",
+        "scripts/ci/opencode_review_normalize_output.py",
+        "scripts/ci/pr_review_merge_scheduler.py",
+        "scripts/ci/strix_model_utils.sh",
+        "scripts/ci/strix_quick_gate.sh",
+        "scripts/ci/test_strix_quick_gate.sh",
+        "scripts/ci/validate_opencode_failed_check_review.sh",
+    ]
+
+    for relative_path in central_workflow_paths + central_script_paths:
+        assert not (REPO_ROOT / relative_path).exists(), (
+            f"central review automation must not be copied locally: {relative_path}"
+        )
+
+    assert "ContextualWisdomLab central required workflows" in normalized_readme
+    assert "This repository does not carry repo-local" in normalized_readme
+    assert "OpenCode, Strix, or merge-scheduler workflow copies" in normalized_readme
+    assert (
+        "branch updates, auto-merge, and mechanical merge actions"
+        in normalized_readme
+    )
+    assert "central required workflows" in architecture
+    assert "ContextualWisdomLab/.github" in architecture
+    assert "central required workflow" in normalized_security
+    assert "openai/openai/gpt-4.1" not in architecture
 
 
 def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushes() -> (
@@ -480,15 +488,6 @@ def test_app_ci_runs_backend_and_frontend_checks_without_duplicate_release_pushe
     push_block = workflow.split("push:", 1)[1].split("pull_request:", 1)[0]
     assert "master" in push_block
     assert "release/**" not in push_block
-
-
-def test_pr_review_merge_scheduler_is_centralized() -> None:
-    policy = read_repo_text("docs/development/merge-gate-policy.md")
-
-    assert not (WORKFLOW_DIR / "pr-review-merge-scheduler.yml").exists()
-    assert "ContextualWisdomLab/.github" in policy
-    assert "PR Review Merge Scheduler" in policy
-    assert "github-actions[bot]" in policy
 
 
 def test_docker_publish_validates_pr_images_and_publishes_semver_images_only_on_tags() -> (
@@ -801,19 +800,6 @@ def test_compose_log_scanner_allows_nginx_stderr_startup_notices() -> None:
     )
     assert not unexpected, f"Unexpected lines found: {unexpected}"
     assert len(allowed) == 7, f"Expected 7 allowed lines, got {len(allowed)}"
-
-
-def test_local_pr_governance_remains_metadata_only_after_review_centralization() -> None:
-    workflow = read_repo_text(".github/workflows/pr-governance.yml")
-    gate_script = read_repo_text("scripts/ci/pr_governance_gate.sh")
-    combined = f"{workflow}\n{gate_script}"
-
-    assert "pull_request_target:" in workflow
-    assert "Strix Security Scan" in workflow
-    assert "CodeRabbit" in gate_script or "coderabbit" in gate_script
-    assert "gh pr merge" not in gate_script
-    assert "--match-head-commit" not in gate_script
-    assert "actions/checkout" not in combined
 
 
 def test_pr_governance_uses_metadata_only_events_without_checkout_or_admin_merge() -> (

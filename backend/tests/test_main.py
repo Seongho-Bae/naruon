@@ -20,6 +20,7 @@ def test_root_response_has_security_headers():
     assert response.headers["strict-transport-security"] == (
         "max-age=31536000; includeSubDomains"
     )
+    assert response.headers["cache-control"] == "no-store"
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
