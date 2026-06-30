@@ -73,8 +73,10 @@ def detect_reply_tracking(body: str | None) -> bool:
     """
     Detects if the user sent an email that expects a reply.
     """
-    body_str = str(body or "").lower()
-    return "please reply" in body_str or "?" in body_str
+    if not body:
+        return False
+    body_str = str(body)
+    return "?" in body_str or "please reply" in body_str.lower()
 
 
 def thread_reply_candidate(
