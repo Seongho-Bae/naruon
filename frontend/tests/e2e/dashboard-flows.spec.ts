@@ -11,6 +11,7 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
   await page.getByRole('button', { name: /김지현 PM/ }).click();
 
   await expect(page.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '실행 항목' })).toBeVisible();
   await expect(page.getByText('리소스 배정 검토 회의')).toBeVisible();
   await expect(page.getByText('마케팅 캠페인 오프')).toBeVisible();
   await expect(page.getByText('2개 메시지').nth(1)).toBeVisible();
