@@ -369,8 +369,13 @@ def _cleanup_private_cache(files: list[Path]) -> None:
     for path in files:
         try:
             path.unlink()
+        except FileNotFoundError:
+            continue
         except OSError:
-            pass
+            print(
+                f"warning: failed to remove private cache file: {path}",
+                file=sys.stderr,
+            )
 
 
 def _print_session_sync_hints(base_url: str, token: str, *, enabled: bool) -> None:
