@@ -21,7 +21,7 @@ import Link from "next/link";
 
 import { apiClient } from "@/lib/api-client";
 
-const NetworkGraph = dynamic(() => import("@/components/NetworkGraph"), {
+const RelationContext = dynamic(() => import("@/components/RelationContext"), {
   ssr: false,
 });
 
@@ -792,7 +792,7 @@ export function SearchLayout() {
                       관계 맥락
                     </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
-                      <NetworkGraph />
+                      <RelationContext />
                     </div>
                   </section>
 
