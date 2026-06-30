@@ -913,8 +913,8 @@ def test_strix_workflow_uses_github_models_default_and_narrow_warning_filter() -
     assert 'STRIX_FAIL_ON_PROVIDER_SIGNAL: "1"' in workflow
     assert 'STRIX_VERTEX_FALLBACK_MODELS: ""' in workflow
     assert (
-        "github_models/deepseek/deepseek-r1-0528 "
-        "github_models/deepseek/deepseek-v3-0324"
+        "openai/deepseek/deepseek-r1-0528 "
+        "openai/deepseek/deepseek-v3-0324"
     ) in workflow
     assert (
         "vertex_ai/gemini-3.1-pro-preview-customtools | vertex_ai/gemini-2.5-flash"
