@@ -123,6 +123,7 @@ def evaluate_access(request: AccessRequest, resource: ResourcePolicy) -> AccessD
 
     owns_resource = request.user_id == resource.owner_id
     has_delegation = request.user_id in resource.delegated_user_ids
+
     if not owns_resource and not has_delegation:
         return AccessDecision(allowed=False, reason="ownership_denied")
 
