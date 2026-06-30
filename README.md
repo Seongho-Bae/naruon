@@ -163,7 +163,7 @@ curl -s http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
-### Apple Silicon / MLX local path (임시 API 모델 서버 사용)
+### Apple Silicon / MLX local path (OS별 로컬 API 모델 서버 사용)
 
 기본 `docker-compose.yml`는 Linux Ollama 컨테이너를 그대로 유지합니다. Apple Silicon
 로컬 실 테스트(또는 외부 MLX/OpenAI-compatible 서비스)만 분리하려면 오버라이드 파일을 붙여 실행합니다.
@@ -171,7 +171,7 @@ python3 -m webbrowser http://localhost:3000
 ```bash
 cp .env .env.mlx
 
-# 기존 보안값은 그대로 두고, Apple 경로 임시값만 오버라이드
+# 기존 보안값은 그대로 두고, 로컬 모델 경로만 오버라이드
 cat >> .env.mlx <<'EOF'
 ALLOWED_LLM_BASE_URL_HOSTS=localhost,127.0.0.1,host.docker.internal
 ALLOW_LOCAL_LLM_PROVIDERS=true
@@ -185,7 +185,12 @@ NARUON_BACKEND_HOST_PORT=127.0.0.1:8000
 EOF
 
 # 로컬에서만 쓰는 compose 오버라이드는 파일에 커밋하지 않습니다.
-cat > /tmp/docker-compose.mlx.yml <<'EOF'
+# Docker Desktop(macOS)은 host.docker.internal을 기본 제공하고,
+# Linux Docker Engine은 host-gateway 매핑을 명시합니다.
+mlx_compose_override="$(mktemp "${TMPDIR:-/tmp}/docker-compose.mlx.XXXXXX.yml")"
+case "$(uname -s)" in
+  Linux)
+    cat > "$mlx_compose_override" <<'EOF'
 services:
   backend:
     environment:
@@ -204,9 +209,30 @@ services:
     ports:
       - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
 EOF
+    ;;
+  Darwin|*)
+    cat > "$mlx_compose_override" <<'EOF'
+services:
+  backend:
+    environment:
+      ALLOW_LOCAL_LLM_PROVIDERS: "true"
+      ALLOWED_LLM_BASE_URL_HOSTS: ${NARUON_MLX_ALLOWED_LLM_BASE_URL_HOSTS:-localhost,127.0.0.1,host.docker.internal}
+      OPENAI_API_KEY: ${NARUON_MLX_OPENAI_API_KEY:-mlx}
+      OPENAI_BASE_URL: ${NARUON_MLX_BASE_URL:-http://host.docker.internal:11434/v1}
+      OPENAI_EMBEDDING_MODEL: ${NARUON_MLX_EMBEDDING_MODEL:-embeddinggemma}
+      OPENAI_MODEL: ${NARUON_MLX_LLM_MODEL:-gemma4:e2b-it-qat}
+    ports:
+      - "${NARUON_BACKEND_HOST_PORT:-127.0.0.1:8000}:8000"
+
+  frontend:
+    ports:
+      - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
+EOF
+    ;;
+esac
 
 NARUON_ENV_FILE=.env.mlx \
-docker compose --env-file .env.mlx -f docker-compose.yml -f /tmp/docker-compose.mlx.yml up -d --build
+docker compose --env-file .env.mlx -f docker-compose.yml -f "$mlx_compose_override" up -d --build
 ```
 
 실 메일 임포트 + 요약/초안 검증:
@@ -217,8 +243,8 @@ python3 backend/scripts/private_mail_http_smoke.py \
   --mail-dir "/Users/seonghobae/Library/Mobile Documents/com~apple~CloudDocs/Downloads/mail" \
   --base-url http://127.0.0.1:3000 \
   --session-secret "$AUTH_SESSION_HMAC_SECRET" \
-  --query "중공업 전력PU 회의록" \
-  --query "중공업 기전PU 회의록" \
+  --query "<REDACTED_MAIL_QUERY_1>" \
+  --query "<REDACTED_MAIL_QUERY_2>" \
   --limit 20 \
   --batch-size 6 \
   --llm-smoke \
