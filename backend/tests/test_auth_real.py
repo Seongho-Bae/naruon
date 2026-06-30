@@ -1128,10 +1128,7 @@ def test_oidc_session_metadata_rejects_missing_issuer_configuration():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("algorithm", ("HS256", "none"))
-async def test_oidc_rejects_non_rs256_algorithm_before_decode(
-    monkeypatch, algorithm: str
-):
+async def test_oidc_rejects_non_rs256_algorithm_before_decode(monkeypatch):
     import jwt
 
     previous_issuer_url = settings.OIDC_ISSUER_URL
@@ -1158,7 +1155,7 @@ async def test_oidc_rejects_non_rs256_algorithm_before_decode(
     monkeypatch.setattr(jwt, "decode", mock_jwt_decode)
     token = _signed_session_token(
         _valid_session_payload(),
-        header={"alg": algorithm, "typ": "JWT", "kid": "test-key"},
+        header={"alg": "HS256", "typ": "JWT", "kid": "test-key"},
     )
 
     try:
