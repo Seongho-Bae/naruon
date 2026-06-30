@@ -1,9 +1,11 @@
 import asyncio
 import logging
 import poplib
+
 from sqlalchemy import select
-from db.session import AsyncSessionLocal
+
 from db.models import TenantConfig
+from db.session import AsyncSessionLocal
 from services.email_client import validate_pop3_destination
 from services.email_parser import parse_eml_bytes
 from services.exceptions import EmailParseError
@@ -57,16 +59,18 @@ class Pop3SyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(TenantConfig).where(TenantConfig.pop3_server.isnot(None)))
+            result = await session.execute(
+                select(TenantConfig).where(TenantConfig.pop3_server.isnot(None))
+            )
             configs = result.scalars().all()
-            
+
         semaphore = asyncio.Semaphore(10)
         tasks = []
         for config in configs:
             if not config.pop3_server or not config.pop3_port:
                 continue
             tasks.append(self._sync_tenant(config, semaphore))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -195,7 +199,5 @@ class Pop3SyncWorker:
 
     def _bytes_line(self, line: bytes | str) -> bytes:
         return (
-            line
-            if isinstance(line, bytes)
-            else line.encode("utf-8", errors="replace")
+            line if isinstance(line, bytes) else line.encode("utf-8", errors="replace")
         )

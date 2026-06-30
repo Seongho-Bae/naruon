@@ -1,7 +1,7 @@
 import asyncio
 import ipaddress
-from dataclasses import dataclass
 import socket
+from dataclasses import dataclass
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 import httpcore

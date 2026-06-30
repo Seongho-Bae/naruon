@@ -5,8 +5,9 @@ Revises: 0001_initial_control_plane
 Create Date: 2026-06-15 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0002_provider_retry_queue"
 down_revision = "0001_initial_control_plane"
@@ -58,7 +59,9 @@ def downgrade() -> None:
 
 
 def _provider_writeback_retry_index_names() -> list[str]:
-    return [index_name for index_name, _column_names in _provider_writeback_retry_indexes()]
+    return [
+        index_name for index_name, _column_names in _provider_writeback_retry_indexes()
+    ]
 
 
 def _provider_writeback_retry_indexes() -> list[tuple[str, list[str]]]:

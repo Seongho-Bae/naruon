@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 import hashlib
+from datetime import datetime, timezone
 from typing import Literal, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
 from api.auth import AuthContext, get_auth_context, is_admin_role
-from api.common.scopes import connector_scope_statement
 from api.runner_ws import manager as runner_manager
 from core.config import settings
 from db.models import (
@@ -373,6 +372,20 @@ def _email_scope_filter(auth_context: AuthContext) -> EmailScopeFilter:
     return (Email.user_id == auth_context.user_id, organization_filter)
 
 
+def _connector_scope_statement(auth_context: AuthContext):
+    if auth_context.organization_id is None:
+        return None
+    return (
+        select(ConnectorSignalEvent)
+        .where(
+            ConnectorSignalEvent.organization_id == auth_context.organization_id,
+            ConnectorSignalEvent.workspace_id == auth_context.workspace_id,
+        )
+        .order_by(ConnectorSignalEvent.observed_at.desc())
+        .limit(8)
+    )
+
+
 async def _scoped_rows(db: AsyncSession, statement):
     result = await db.execute(statement)
     return list(result.scalars().all())
@@ -668,103 +681,6 @@ def _embedding_collections(
     ]
 
 
-def _check_thread_id_integrity(
-    email_count: int, missing_thread_count: int
-) -> DataQualityCheck:
-    return DataQualityCheck(
-        check_key="thread_id_integrity",
-        display_name="Thread id integrity",
-        status_code=_quality_status(email_count, missing_thread_count),
-        issue_count=missing_thread_count,
-        total_count=email_count,
-        evidence_source="emails.thread_id",
-        detail_text=_quality_detail(
-            total_count=email_count,
-            issue_count=missing_thread_count,
-            ready_text="All scoped emails have canonical thread ids.",
-            empty_text="No scoped emails are available yet.",
-            issue_text="Some scoped emails need canonical thread ids.",
-        ),
-        provider_write_executed=False,
-    )
-
-
-def _check_dedupe_fingerprint(
-    email_count: int, missing_fingerprint_count: int
-) -> DataQualityCheck:
-    return DataQualityCheck(
-        check_key="dedupe_fingerprint",
-        display_name="Dedupe fingerprint",
-        status_code=_quality_status(email_count, missing_fingerprint_count),
-        issue_count=missing_fingerprint_count,
-        total_count=email_count,
-        evidence_source="emails.fingerprint",
-        detail_text=_quality_detail(
-            total_count=email_count,
-            issue_count=missing_fingerprint_count,
-            ready_text="All scoped emails have duplicate-detection fingerprints.",
-            empty_text="No scoped emails are available yet.",
-            issue_text="Some scoped emails need duplicate-detection fingerprints.",
-        ),
-        provider_write_executed=False,
-    )
-
-
-def _check_attachment_content(
-    attachment_count: int, blank_attachment_count: int
-) -> DataQualityCheck:
-    return DataQualityCheck(
-        check_key="attachment_content",
-        display_name="Attachment content",
-        status_code=_quality_status(attachment_count, blank_attachment_count),
-        issue_count=blank_attachment_count,
-        total_count=attachment_count,
-        evidence_source="attachments.content",
-        detail_text=_quality_detail(
-            total_count=attachment_count,
-            issue_count=blank_attachment_count,
-            ready_text="All scoped attachments have extracted content.",
-            empty_text="No scoped attachments are available yet.",
-            issue_text="Some scoped attachments need extracted content.",
-        ),
-        provider_write_executed=False,
-    )
-
-
-def _check_source_registry_coverage(source_count: int) -> DataQualityCheck:
-    return DataQualityCheck(
-        check_key="source_registry",
-        display_name="Source registry coverage",
-        status_code="pass" if source_count > 0 else "pending",
-        issue_count=0 if source_count > 0 else 1,
-        total_count=max(1, source_count),
-        evidence_source="webdav_accounts, project_folders",
-        detail_text=(
-            "Customer-owned repositories are visible."
-            if source_count > 0
-            else "No customer-owned repositories are visible yet."
-        ),
-        provider_write_executed=False,
-    )
-
-
-def _check_connector_signal_coverage(connector_event_count: int) -> DataQualityCheck:
-    return DataQualityCheck(
-        check_key="connector_signal",
-        display_name="Connector signal coverage",
-        status_code="pass" if connector_event_count > 0 else "pending",
-        issue_count=0 if connector_event_count > 0 else 1,
-        total_count=max(1, connector_event_count),
-        evidence_source="connector_signal_events",
-        detail_text=(
-            "Connector evidence is visible for this workspace."
-            if connector_event_count > 0
-            else "Connector jobs have not emitted workspace evidence yet."
-        ),
-        provider_write_executed=False,
-    )
-
-
 def _quality_checks(
     *,
     email_count: int,
@@ -776,20 +692,82 @@ def _quality_checks(
     connector_event_count: int,
 ) -> list[DataQualityCheck]:
     return [
-        _check_thread_id_integrity(
-            email_count=email_count,
-            missing_thread_count=missing_thread_count,
+        DataQualityCheck(
+            check_key="thread_id_integrity",
+            display_name="Thread id integrity",
+            status_code=_quality_status(email_count, missing_thread_count),
+            issue_count=missing_thread_count,
+            total_count=email_count,
+            evidence_source="emails.thread_id",
+            detail_text=_quality_detail(
+                total_count=email_count,
+                issue_count=missing_thread_count,
+                ready_text="All scoped emails have canonical thread ids.",
+                empty_text="No scoped emails are available yet.",
+                issue_text="Some scoped emails need canonical thread ids.",
+            ),
+            provider_write_executed=False,
         ),
-        _check_dedupe_fingerprint(
-            email_count=email_count,
-            missing_fingerprint_count=missing_fingerprint_count,
+        DataQualityCheck(
+            check_key="dedupe_fingerprint",
+            display_name="Dedupe fingerprint",
+            status_code=_quality_status(email_count, missing_fingerprint_count),
+            issue_count=missing_fingerprint_count,
+            total_count=email_count,
+            evidence_source="emails.fingerprint",
+            detail_text=_quality_detail(
+                total_count=email_count,
+                issue_count=missing_fingerprint_count,
+                ready_text="All scoped emails have duplicate-detection fingerprints.",
+                empty_text="No scoped emails are available yet.",
+                issue_text="Some scoped emails need duplicate-detection fingerprints.",
+            ),
+            provider_write_executed=False,
         ),
-        _check_attachment_content(
-            attachment_count=attachment_count,
-            blank_attachment_count=blank_attachment_count,
+        DataQualityCheck(
+            check_key="attachment_content",
+            display_name="Attachment content",
+            status_code=_quality_status(attachment_count, blank_attachment_count),
+            issue_count=blank_attachment_count,
+            total_count=attachment_count,
+            evidence_source="attachments.content",
+            detail_text=_quality_detail(
+                total_count=attachment_count,
+                issue_count=blank_attachment_count,
+                ready_text="All scoped attachments have extracted content.",
+                empty_text="No scoped attachments are available yet.",
+                issue_text="Some scoped attachments need extracted content.",
+            ),
+            provider_write_executed=False,
         ),
-        _check_source_registry_coverage(source_count),
-        _check_connector_signal_coverage(connector_event_count),
+        DataQualityCheck(
+            check_key="source_registry",
+            display_name="Source registry coverage",
+            status_code="pass" if source_count > 0 else "pending",
+            issue_count=0 if source_count > 0 else 1,
+            total_count=max(1, source_count),
+            evidence_source="webdav_accounts, project_folders",
+            detail_text=(
+                "Customer-owned repositories are visible."
+                if source_count > 0
+                else "No customer-owned repositories are visible yet."
+            ),
+            provider_write_executed=False,
+        ),
+        DataQualityCheck(
+            check_key="connector_signal",
+            display_name="Connector signal coverage",
+            status_code="pass" if connector_event_count > 0 else "pending",
+            issue_count=0 if connector_event_count > 0 else 1,
+            total_count=max(1, connector_event_count),
+            evidence_source="connector_signal_events",
+            detail_text=(
+                "Connector evidence is visible for this workspace."
+                if connector_event_count > 0
+                else "Connector jobs have not emitted workspace evidence yet."
+            ),
+            provider_write_executed=False,
+        ),
     ]
 
 
@@ -999,16 +977,6 @@ async def _get_attachment_assets(
     return list(attachment_asset_result.all())
 
 
-async def _get_connector_events(
-    db: AsyncSession,
-    auth_context: AuthContext,
-) -> list[ConnectorSignalEvent]:
-    connector_statement = connector_scope_statement(auth_context)
-    if connector_statement is None:
-        return []
-    return await _scoped_rows(db, connector_statement)
-
-
 @router.get("/quality-surface", response_model=DataQualitySurfaceResponse)
 async def get_data_quality_surface(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -1047,7 +1015,11 @@ async def get_data_quality_surface(
     blank_attachment_count = attachment_stats.blank_content_count
     embedded_attachment_count = attachment_stats.embedded_count
 
-    connector_events = await _get_connector_events(db, auth_context)
+    connector_statement = _connector_scope_statement(auth_context)
+    connector_events: list[ConnectorSignalEvent] = []
+    if connector_statement is not None:
+        connector_events = await _scoped_rows(db, connector_statement)
+
     attachment_asset_rows = await _get_attachment_assets(db, email_scope)
 
     source_count = len(webdav_accounts) + len(project_folders)

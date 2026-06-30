@@ -6,7 +6,6 @@ from services.reply_tracking_service import (
     thread_reply_candidate,
 )
 
-
 USER_ADDRESSES = {"me@example.com"}
 BASE_TIME = datetime.datetime(2026, 5, 28, 9, 0, tzinfo=datetime.timezone.utc)
 
@@ -166,80 +165,30 @@ def test_thread_requires_reply_returns_false_when_no_candidate():
     )
 
 
-def test_thread_reply_candidate_tie_order_consistent_across_modes():
-    sent_a = make_email(
-        "sent_a",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=0,
-    )
-    sent_a.id = 1
-    sent_b = make_email(
-        "sent_b",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=0,
-    )
-    sent_b.id = 2
-
-    candidate_sorted = thread_reply_candidate(
-        [sent_a, sent_b], USER_ADDRESSES, is_chronological=False
-    )
-    candidate_reversed = thread_reply_candidate(
-        [sent_a, sent_b], USER_ADDRESSES, is_chronological=True
-    )
-
-    assert candidate_sorted is candidate_reversed
-
 def test_detect_reply_tracking_please_reply():
     assert (
         detect_reply_tracking("This is an important message, please reply soon.")
         is True
     )
 
+
 def test_detect_reply_tracking_question_mark():
     assert detect_reply_tracking("How are you doing today?") is True
+
 
 def test_detect_reply_tracking_case_insensitive():
     assert detect_reply_tracking("Please Reply to this email.") is True
 
+
 def test_detect_reply_tracking_no_match():
-    assert detect_reply_tracking(
-        "This is a standard statement without any tracking triggers."
-    ) is False
+    assert (
+        detect_reply_tracking(
+            "This is a standard statement without any tracking triggers."
+        )
+        is False
+    )
+
 
 def test_detect_reply_tracking_empty_body():
     assert detect_reply_tracking(None) is False
     assert detect_reply_tracking("") is False
-
-
-def test_thread_reply_candidate_is_chronological_optimization():
-    older_sent = make_email(
-        "sent_older",
-        sender="Me <me@example.com>",
-        recipients="client@example.com",
-        minutes=60,
-        body="Any update?",
-    )
-    external_reply = make_email(
-        "reply",
-        sender="client@example.com",
-        recipients="Me <me@example.com>",
-        minutes=30,
-        body="Yes, here it is.",
-    )
-    latest_sent = make_email(
-        "sent_latest",
-        sender="me@example.com",
-        recipients="client@example.com",
-        minutes=10,
-        body="please reply",
-    )
-
-    candidate = thread_reply_candidate(
-        [latest_sent, external_reply, older_sent],
-        USER_ADDRESSES,
-        is_chronological=True,
-    )
-
-    assert candidate is older_sent

@@ -1,5 +1,7 @@
-import pytest
 import datetime
+
+import pytest
+
 from api.emails import EmailListItem
 from db.models import Email, TenantConfig
 

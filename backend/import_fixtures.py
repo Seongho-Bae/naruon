@@ -1,10 +1,13 @@
 import asyncio
-import sys
 import logging
+import os
+import sys
 from pathlib import Path
 
+from sqlalchemy import select
+
+from db.models import Attachment, Email
 from db.session import AsyncSessionLocal
-from db.models import Email, Attachment
 from services.email_parser import parse_eml
 from services.embedding import (
     STORAGE_EMBEDDING_DIMENSION,
@@ -12,8 +15,6 @@ from services.embedding import (
     generate_embeddings,
 )
 from services.threading_service import assign_thread_id
-import os
-from sqlalchemy import select
 
 EMBEDDING_DIMENSION = STORAGE_EMBEDDING_DIMENSION
 IMPORT_USER_ID = os.environ.get("NARUON_IMPORT_USER_ID", "default")
@@ -94,7 +95,9 @@ async def import_eml_file(session, eml_file: Path) -> bool:
                 )
             )
         except Exception as e:
-            logger.error(f"Failed to generate embedding for attachment {att['filename']}: {e}")
+            logger.error(
+                f"Failed to generate embedding for attachment {att['filename']}: {e}"
+            )
 
     session.add(email_obj)
     try:

@@ -13,7 +13,7 @@ import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-wor
 import { toSafeReactText } from '@/lib/safe-text';
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
 import { MobileCalendarPanel, MobileSearchPanel } from '@/components/mobile-workspace-panels';
-const RelationContext = dynamic(() => import('@/components/RelationContext'), { ssr: false });
+const NetworkGraph = dynamic(() => import('@/components/NetworkGraph'), { ssr: false });
 
 type WorkspaceActionCommand = { id: number; action: string; target: 'desktop' | 'tablet'; modeVersion: number };
 type MobileActionCommand = { id: number; action: string; modeVersion: number };
@@ -438,7 +438,6 @@ function StartupDashboard({ onOpenView }: { onOpenView: (view: WorkspaceStartupV
                     type="button"
                     aria-label="홈에서 보낸 메일 미답변 팔로업 작업 생성"
                     disabled={loading || pendingReplyCount === 0 || replySlaStatus === 'loading'}
-                    aria-busy={loading || replySlaStatus === 'loading'}
                     onClick={() => void handleReplySlaEscalation()}
                     className="text-xs font-semibold text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
@@ -883,7 +882,7 @@ export function WorkspaceHome({
                 </div>
               </div>
               <div className="flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <RelationContext />
+                <NetworkGraph />
               </div>
             </div>
           </ResizablePanel>
@@ -917,7 +916,7 @@ export function WorkspaceHome({
             <div className="border-t border-border/70 p-4">
               <p className="mb-3 text-xs font-semibold text-muted-foreground">맥락 그래프는 필요할 때 펼쳐서 확인합니다.</p>
               <div className="h-80 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-                <RelationContext />
+                <NetworkGraph />
               </div>
             </div>
           </details>
@@ -983,7 +982,7 @@ export function WorkspaceHome({
               </div>
             </div>
             <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-              {effectiveMobileView === 'actions' && <RelationContext />}
+              {effectiveMobileView === 'actions' && <NetworkGraph />}
             </div>
           </section>
           <section

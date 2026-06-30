@@ -1,17 +1,17 @@
 import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from core.config import settings
 from core.exceptions import LLMServiceError
 from services import llm_provider_urls as provider_urls
 from services.llm_service import (
-    extract_todos_and_summary,
-    draft_reply,
-    ExtractionResult,
     OLLAMA_DRAFT_REPLY_MAX_TOKENS,
     OLLAMA_NATIVE_CHAT_TIMEOUT_SECONDS,
+    ExtractionResult,
+    draft_reply,
+    extract_todos_and_summary,
 )
 
 
@@ -32,16 +32,22 @@ def test_extraction_result_confidence_is_optional_and_bounded():
     omitted = ExtractionResult(summary="Test summary", todos=[])
     assert omitted.confidence is None
 
-    assert ExtractionResult(
-        summary="Test summary",
-        todos=[],
-        confidence=0,
-    ).confidence == 0
-    assert ExtractionResult(
-        summary="Test summary",
-        todos=[],
-        confidence=100,
-    ).confidence == 100
+    assert (
+        ExtractionResult(
+            summary="Test summary",
+            todos=[],
+            confidence=0,
+        ).confidence
+        == 0
+    )
+    assert (
+        ExtractionResult(
+            summary="Test summary",
+            todos=[],
+            confidence=100,
+        ).confidence
+        == 100
+    )
 
     with pytest.raises(ValueError):
         ExtractionResult(summary="Test summary", todos=[], confidence=101)
@@ -197,7 +203,9 @@ async def test_extract_todos_and_summary_success(mock_openai):
     # Setup mock response
     mock_response = MagicMock()
     mock_message = MagicMock()
-    mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
+    mock_message.parsed = ExtractionResult(
+        summary="Test summary", todos=["Task 1"], confidence=90
+    )
     mock_choice = MagicMock()
     mock_choice.message = mock_message
     mock_response.choices = [mock_choice]
@@ -273,7 +281,9 @@ async def test_extract_todos_and_summary_disables_redirect_following_for_custom_
         mock_client.close = AsyncMock()
         mock_response = MagicMock()
         mock_message = MagicMock()
-        mock_message.parsed = ExtractionResult(summary="Test summary", todos=["Task 1"], confidence=90)
+        mock_message.parsed = ExtractionResult(
+            summary="Test summary", todos=["Task 1"], confidence=90
+        )
         mock_choice = MagicMock()
         mock_choice.message = mock_message
         mock_response.choices = [mock_choice]
@@ -357,9 +367,11 @@ def test_normalize_llm_provider_base_url_handles_local_development_hosts():
     assert provider_urls._normalize_llm_provider_base_url(
         "HTTP://LOCALHOST:11434/v1"
     ) == ("http://localhost:11434/v1", "localhost", 11434)
-    assert provider_urls._normalize_llm_provider_base_url(
-        "http://[::1]:11434/v1"
-    ) == ("http://[::1]:11434/v1", "::1", 11434)
+    assert provider_urls._normalize_llm_provider_base_url("http://[::1]:11434/v1") == (
+        "http://[::1]:11434/v1",
+        "::1",
+        11434,
+    )
 
 
 @pytest.mark.parametrize(

@@ -1,13 +1,14 @@
+import asyncio
 import os
 import zipfile
-import pytest
-import asyncio
-import services.archive as archive_module
 
+import pytest
+
+import services.archive as archive_module
 from services.exceptions import (
-    InvalidArchiveError,
-    ArchiveSizeExceededError,
     ArchiveFileCountExceededError,
+    ArchiveSizeExceededError,
+    InvalidArchiveError,
 )
 
 
@@ -133,7 +134,9 @@ def test_extract_backup_async(tmp_path):
         z.writestr("test.eml", b"Subject: Test Email")
 
     out_dir = tmp_path / "output"
-    extracted_files = asyncio.run(archive_module.extract_backup_async(zip_path, out_dir))
+    extracted_files = asyncio.run(
+        archive_module.extract_backup_async(zip_path, out_dir)
+    )
 
     assert len(extracted_files) == 1
     assert extracted_files[0].name == "test.eml"

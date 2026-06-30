@@ -5,10 +5,9 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from core.config import settings
-from db.models import Base
-from scripts.bootstrap_db import schema_backfill_sql
 from db.models import (
     AgentRunRecord,
+    Base,
     CalendarWritebackSource,
     ConnectorSignalEvent,
     Email,
@@ -21,6 +20,7 @@ from db.models import (
     WebdavAccount,
     WorkflowDefinition,
 )
+from scripts.bootstrap_db import schema_backfill_sql
 
 
 def _get_schema_statements(monkeypatch):
@@ -204,13 +204,11 @@ def test_schema_backfill_adds_prompt_template_scope_columns_and_indexes(monkeypa
         for statement in statements
     )
     assert any(
-        "alter table prompt_templates alter column prompt_uid set not null"
-        in statement
+        "alter table prompt_templates alter column prompt_uid set not null" in statement
         for statement in statements
     )
     assert any(
-        "create unique index if not exists uq_prompt_templates_prompt_uid"
-        in statement
+        "create unique index if not exists uq_prompt_templates_prompt_uid" in statement
         for statement in statements
     )
     assert any(
@@ -298,8 +296,7 @@ def test_schema_backfill_creates_ai_hub_workflow_tables(monkeypatch):
         "ix_agent_run_records_scope_time" in statement for statement in statements
     )
     assert any(
-        "ix_agent_run_records_workflow_uid" in statement
-        and "workflow_uid" in statement
+        "ix_agent_run_records_workflow_uid" in statement and "workflow_uid" in statement
         for statement in statements
     )
     assert any(

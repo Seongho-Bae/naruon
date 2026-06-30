@@ -21,9 +21,7 @@ def test_backend_dockerfile_suppresses_pip_root_warning():
 
 def test_backend_dockerfile_runtime_stages_run_as_non_root_user():
     dockerfile = (REPO_ROOT / "Dockerfile").read_text()
-    backend_cmd = (
-        'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
-    )
+    backend_cmd = 'CMD ["python", "scripts/start_backend.py", "--host", "0.0.0.0", "--port", "8000"]'
     combined_cmd = 'CMD ["/app/scripts/docker_entrypoint.sh"]'
 
     assert "useradd --system --create-home --home-dir /home/appuser" in dockerfile
@@ -45,8 +43,7 @@ def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
 
     assert (
         "FROM ollama/ollama@sha256:"
-        "bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee"
-        in dockerfile
+        "bfc9c6d53cc6989aa5131a6fde6b162b2802d4d337657f3253b5f69579bddeee" in dockerfile
     )
     assert "FROM ollama/ollama:latest\n" not in dockerfile
     assert "ENV OLLAMA_MODELS=/usr/share/ollama/.ollama/models" in dockerfile
@@ -62,9 +59,7 @@ def test_ollama_dockerfile_keeps_pulled_models_available_to_runtime_user():
         "ollama pull embeddinggemma"
     )
     assert "ollama list | grep -E '^gemma4:e2b-it-qat[[:space:]]'" in dockerfile
-    assert (
-        "ollama list | grep -E '^embeddinggemma(:|[[:space:]])'" in dockerfile
-    )
+    assert "ollama list | grep -E '^embeddinggemma(:|[[:space:]])'" in dockerfile
     assert "chown -R ollama:ollama /usr/share/ollama/.ollama" in dockerfile
     assert dockerfile.rfind("USER ollama") > dockerfile.rfind(
         "chown -R ollama:ollama /usr/share/ollama/.ollama"
@@ -130,15 +125,15 @@ def test_compose_externalizes_postgres_credentials():
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
     compose_without_runtime_preflights = (
         compose.replace(
-            '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}',
+            "$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}",
             "",
         )
         .replace(
-            '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}',
+            "$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}",
             "",
         )
         .replace(
-            '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}',
+            "$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}",
             "",
         )
     )
@@ -152,18 +147,27 @@ def test_compose_externalizes_postgres_credentials():
     assert "POSTGRES_PASSWORD:-postgres" not in compose
     assert "${POSTGRES_PASSWORD" in compose
     assert "${POSTGRES_PASSWORD:?" not in compose_without_runtime_preflights
-    assert '$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}' in compose
+    assert (
+        "$${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env before running Docker Compose}"
+        in compose
+    )
     assert "127.0.0.1:15432:5432" in compose
     assert "AUTH_SESSION_HMAC_SECRET" in compose
     assert "AUTH_SESSION_HMAC_SECRET: ${AUTH_SESSION_HMAC_SECRET}" in compose
     assert "- AUTH_SESSION_HMAC_SECRET" not in compose
     assert "${AUTH_SESSION_HMAC_SECRET:?" not in compose_without_runtime_preflights
-    assert '$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}' in compose
+    assert (
+        "$${AUTH_SESSION_HMAC_SECRET:?Set AUTH_SESSION_HMAC_SECRET in .env before running Docker Compose}"
+        in compose
+    )
     assert "ENCRYPTION_KEY" in compose
     assert "ENCRYPTION_KEY: ${ENCRYPTION_KEY}" in compose
     assert "- ENCRYPTION_KEY" not in compose
     assert "${ENCRYPTION_KEY:?" not in compose_without_runtime_preflights
-    assert '$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}' in compose
+    assert (
+        "$${ENCRYPTION_KEY:?Set ENCRYPTION_KEY in .env before running Docker Compose}"
+        in compose
+    )
 
 
 def test_compose_allows_only_the_local_ollama_provider_host():
@@ -174,7 +178,9 @@ def test_compose_allows_only_the_local_ollama_provider_host():
         normalized_lines = {
             line.strip().removeprefix("- ").strip() for line in compose.splitlines()
         }
-        return any(expected_line in normalized_lines for expected_line in expected_lines)
+        return any(
+            expected_line in normalized_lines for expected_line in expected_lines
+        )
 
     assert not has_exact_compose_line(
         "ALLOWED_LLM_BASE_URL_HOSTS=ollama,evil.example",

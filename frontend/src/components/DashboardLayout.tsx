@@ -24,9 +24,8 @@ import {
   Settings,
   ShieldCheck,
   UserCircle,
-  Wrench,
   X
-} from 'lucide-react';
+, Wrench} from 'lucide-react';
 
 import { setMobileWorkspaceView, useMobileWorkspaceView } from '@/lib/mobile-workspace';
 import { setWorkspaceStartupView, useWorkspaceStartupView, type WorkspaceStartupView } from '@/lib/workspace-preferences';
@@ -366,13 +365,13 @@ export function DashboardLayout({
             <input
               id="global-search-input"
               ref={globalSearchInputRef}
-              className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 bg-transparent pr-8 outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
               inputMode="search"
               role="searchbox"
               value={globalSearchQuery}
               onChange={(event) => setGlobalSearchQuery(event.target.value)}
               placeholder="맥락, 사람, 파일, 판단 포인트 맥락 검색..."
-              type="text"
+              type="search"
             />
             {globalSearchQuery ? (
               <button
@@ -483,7 +482,7 @@ export function DashboardLayout({
             onClick={closeMobileWorkspaceMenu}
             className="grid size-10 place-items-center rounded-2xl border border-border bg-background text-sm font-black text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
-            <X className="size-4" aria-hidden="true" />
+            ×
           </button>
         </div>
         <div className="space-y-4">

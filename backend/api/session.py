@@ -3,7 +3,6 @@ from pydantic import BaseModel
 
 from api.auth import AuthContext, get_auth_context
 
-
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 

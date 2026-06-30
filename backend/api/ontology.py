@@ -1,14 +1,14 @@
 import email.utils as email_utils
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel, Field
 from typing import List
 
-from db.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.auth import AuthContext, get_auth_context
 from db.models import Email, SenderRelationship
-from api.auth import get_auth_context, AuthContext
+from db.session import get_db
 from services.ontology_service import RelationshipData, ontology_service
 from services.text_safety import strip_html_markup
 from services.threading_service import normalize_message_id
@@ -45,6 +45,15 @@ class RelationshipCaptureRequest(BaseModel):
     source_message_id: str = Field(
         min_length=1, max_length=512, pattern=SOURCE_IDENTIFIER_PATTERN
     )
+
+
+def _email_owner_filters(auth_ctx: AuthContext):
+    organization_filter = (
+        Email.organization_id == auth_ctx.organization_id
+        if auth_ctx.organization_id is not None
+        else Email.organization_id.is_(None)
+    )
+    return (Email.user_id == auth_ctx.user_id, organization_filter)
 
 
 def _canonical_thread_id(email_row: Email) -> str:
@@ -179,7 +188,7 @@ async def capture_relationship_from_source(
 ):
     result = await db.execute(
         select(Email).where(
-            *Email.owner_filters(auth_ctx.user_id, auth_ctx.organization_id),
+            *_email_owner_filters(auth_ctx),
             Email.message_id == req.source_message_id,
         )
     )

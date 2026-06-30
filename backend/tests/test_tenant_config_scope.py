@@ -1,5 +1,6 @@
 from services.tenant_config_scope import tenant_config_owner_filters
 
+
 def test_tenant_config_owner_filters_with_org():
     """Test generating filters when an organization_id is provided"""
     user_id = "user1"
@@ -16,6 +17,7 @@ def test_tenant_config_owner_filters_with_org():
     # Verify org_filter: TenantConfig.organization_id == org_id
     assert str(org_filter.left) == "tenant_configs.organization_id"
     assert org_filter.right.value == org_id
+
 
 def test_tenant_config_owner_filters_without_org():
     """Test generating filters when organization_id is None"""

@@ -1,16 +1,11 @@
 /* @vitest-environment jsdom */
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import ToolsPage from "./page";
 
 vi.mock("next/link", () => ({
   default: ({ children, href, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) => <a href={href} {...props}>{children}</a>,
-}));
-
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/tools",
-  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock("lucide-react", () => ({
@@ -82,23 +77,10 @@ describe("ToolsPage", () => {
   let root: Root | null = null;
   let container: HTMLDivElement | null = null;
 
-  afterEach(() => {
-    if (root) {
-      act(() => root?.unmount());
-    }
-    root = null;
-    container?.remove();
-    container = null;
-    vi.unstubAllGlobals();
-  });
-
   it("renders tools correctly with category", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => jsonResponse([
-        { name: "테스트 도구", description: "설명입니다.", category: "테스트 카테고리" },
-      ])),
-    );
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse([
+      { name: "테스트 도구", description: "설명입니다.", category: "테스트 카테고리" }
+    ])));
 
     container = document.createElement("div");
     document.body.appendChild(container);

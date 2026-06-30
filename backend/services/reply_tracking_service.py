@@ -1,14 +1,15 @@
-import logging
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from db.models import Email, TenantConfig
-from services.tenant_config_scope import get_scoped_tenant_config
-
-from services.threading_service import normalize_message_id
 import datetime
 import email.utils as email_utils
-from functools import lru_cache
+import logging
 from collections import defaultdict
+from functools import lru_cache
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import Email, TenantConfig
+from services.tenant_config_scope import get_scoped_tenant_config
+from services.threading_service import normalize_message_id
 
 logger = logging.getLogger(__name__)
 
@@ -78,20 +79,12 @@ def detect_reply_tracking(body: str | None) -> bool:
 
 
 def thread_reply_candidate(
-    thread_messages: list[Email],
-    user_addresses: set[str],
-    is_chronological: bool = False,
+    thread_messages: list[Email], user_addresses: set[str]
 ) -> Email | None:
     if not user_addresses:
         return None
 
-    ordered_messages = (
-        reversed(thread_messages)
-        if is_chronological
-        else sorted(
-            thread_messages, key=lambda item: (item.date, item.id or 0), reverse=True
-        )
-    )
+    ordered_messages = sorted(thread_messages, key=lambda item: item.date, reverse=True)
 
     latest_external_date = None
     for message in ordered_messages:
@@ -153,7 +146,7 @@ async def check_missing_replies(
             organization_filter,
             Email.date > recent_limit,
         )
-        .order_by(Email.date.asc(), Email.id.asc())
+        .order_by(Email.date.asc())
     )
     result = await session.execute(stmt)
     emails = result.scalars().all()
@@ -166,9 +159,7 @@ async def check_missing_replies(
 
     flagged = []
     for thread_messages in threads.values():
-        candidate = thread_reply_candidate(
-            thread_messages, user_addresses, is_chronological=True
-        )
+        candidate = thread_reply_candidate(thread_messages, user_addresses)
         if candidate is not None:
             flagged.append(candidate)
 

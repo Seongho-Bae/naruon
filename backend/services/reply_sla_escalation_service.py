@@ -58,10 +58,7 @@ def _email_date_utc(email: Email) -> datetime.datetime:
 
 
 async def _fetch_existing_tasks_by_email(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    email_ids: list[int]
+    db: AsyncSession, user_id: str, organization_id: str | None, email_ids: list[int]
 ) -> dict[int, TicketTask]:
     result = await db.execute(
         select(TicketTask)
@@ -111,7 +108,7 @@ async def _refresh_escalated_tasks(
     user_id: str,
     organization_id: str | None,
     email_ids: list[int],
-    escalated_tasks: list[tuple[TicketTask, str | None]]
+    escalated_tasks: list[tuple[TicketTask, str | None]],
 ) -> None:
     refreshed_tasks_by_email = await _fetch_existing_tasks_by_email(
         db, user_id, organization_id, email_ids
@@ -178,7 +175,6 @@ async def _process_fallback_escalation(
 
     fallback_entries: list[tuple[Email, TicketTask | None]] = []
     conflicted_email_ids: list[int] = []
-    new_tasks: list[tuple[int, Email, TicketTask]] = []
 
     for email in overdue_replies:
         if email.id in existing_tasks_by_email:
@@ -186,28 +182,15 @@ async def _process_fallback_escalation(
             _update_task_for_escalation(task, email, now)
         else:
             task = _create_task_for_escalation(user_id, organization_id, email)
-            new_tasks.append((len(fallback_entries), email, task))
-        fallback_entries.append((email, task))
-
-    if new_tasks:
-        try:
-            async with db.begin_nested():
-                for _, _, task in new_tasks:
+            try:
+                async with db.begin_nested():
                     db.add(task)
-                await db.flush()
-            created_count += len(new_tasks)
-        except IntegrityError:
-            for index, email, task in new_tasks:
-                task_or_none: TicketTask | None = task
-                try:
-                    async with db.begin_nested():
-                        db.add(task)
-                        await db.flush()
-                    created_count += 1
-                except IntegrityError:
-                    conflicted_email_ids.append(email.id)
-                    task_or_none = None
-                fallback_entries[index] = (email, task_or_none)
+                    await db.flush()
+                created_count += 1
+            except IntegrityError:
+                conflicted_email_ids.append(email.id)
+                task = None
+        fallback_entries.append((email, task))
 
     if conflicted_email_ids:
         conflicted_tasks_by_email = await _fetch_existing_tasks_by_email(
@@ -229,9 +212,7 @@ async def _process_fallback_escalation(
             fallback_entries[index] = (email, task)
 
     escalated_tasks.extend(
-        (task, email.message_id)
-        for email, task in fallback_entries
-        if task is not None
+        (task, email.message_id) for email, task in fallback_entries if task is not None
     )
 
     if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):

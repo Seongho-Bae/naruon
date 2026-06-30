@@ -1,8 +1,10 @@
 import logging
-from dataclasses import dataclass
 from collections.abc import Iterable
+from dataclasses import dataclass
 from typing import Any, Dict
+
 from sqlalchemy import select
+
 from db.models import Email, SenderRelationship
 from services.email_service import process_self_to_self
 from services.knowledge_extractor import extract_knowledge_from_self_sent

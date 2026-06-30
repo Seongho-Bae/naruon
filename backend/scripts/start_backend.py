@@ -11,7 +11,10 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from core.runtime_secrets import validate_auth_session_hmac_secret_value  # noqa: E402
-from core.url_validation import parse_allowed_hosts, validate_https_url_host  # noqa: E402
+from core.url_validation import (  # noqa: E402
+    parse_allowed_hosts,
+    validate_https_url_host,
+)
 
 DEFAULT_SERVER_HOST = "127.0.0.1"
 DEFAULT_SERVER_PORT = 8000
@@ -63,7 +66,9 @@ def validate_runtime_settings() -> list[str]:
     messages: list[str] = []
 
     missing_settings = [
-        setting_name for setting_name in REQUIRED_SETTINGS if not values.get(setting_name)
+        setting_name
+        for setting_name in REQUIRED_SETTINGS
+        if not values.get(setting_name)
     ]
     if missing_settings:
         checked = ", ".join(str(path) for path in checked_paths)

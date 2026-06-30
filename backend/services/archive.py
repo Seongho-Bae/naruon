@@ -3,9 +3,9 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from .exceptions import (
-    InvalidArchiveError,
-    ArchiveSizeExceededError,
     ArchiveFileCountExceededError,
+    ArchiveSizeExceededError,
+    InvalidArchiveError,
 )
 
 MAX_EXTRACT_SIZE = 10 * 1024 * 1024 * 1024  # 10 GB
