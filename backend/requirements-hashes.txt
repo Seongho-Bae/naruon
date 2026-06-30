@@ -1097,6 +1097,7 @@ pydantic==2.13.4 \
     #   openai
     #   pydantic-settings
 pydantic-core==2.46.4 \
+    --hash=sha256:23ace664830ee0bfe014a0c7bc248b1f7f25ed7ad103852c317624a1083af462 \
     --hash=sha256:7a5f930472650a82629163023e630d160863fce524c616f4e5186e5de9d9a49b \
     --hash=sha256:ce5c1d2a8b27468f433ca974829c44060b8097eedc39933e3c206a90ee49c4a9
     # via pydantic
