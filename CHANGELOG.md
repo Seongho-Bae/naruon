@@ -1,5 +1,6 @@
 ## [Unreleased]
 ### UI/UX 개선
+- `EmailDetail`, `CalendarLayout`, `DataLayout`의 비활성화된 버튼에 상태를 설명하는 `title` 툴팁을 추가했습니다.
 - `CalendarLayout`, `DataLayout`, `ProjectsLayout`, `SettingsLayout`의 기본 버튼에 `focus-visible` 링을 추가해 키보드 포커스 가시성을 높였습니다.
 - 메일/검색/작업 검색 입력을 `type="search"`로 전환하고 WebKit 기본 clear 버튼을 숨겨 모바일 키보드와 커스텀 clear 버튼 동작을 일관화했습니다.
 - `CalendarLayout`의 성공 상태에서 기술적 세부 정보 대신 사용자 친화적인 메시지를 표시하도록 개선하여 불필요한 정보 노출을 방지했습니다.
