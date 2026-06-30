@@ -14,8 +14,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/dav", tags=["dav"])
 
 
+def _normalize_dav_authorization_path(path: str) -> str:
+    normalized_path = path.replace("\\", "/")
+    while True:
+        decoded_path = unquote(normalized_path).replace("\\", "/")
+        if decoded_path == normalized_path:
+            return normalized_path
+        normalized_path = decoded_path
+
+
 def _dav_path_owner_user_id(path: str) -> str | None:
-    if ".." in path.split("/") or ".." in unquote(path).split("/"):
+    path = _normalize_dav_authorization_path(path)
+    if any(segment in {".", ".."} for segment in path.split("/")):
         return None
     normalized_path = path.strip("/")
     if not normalized_path:
