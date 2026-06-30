@@ -96,7 +96,8 @@ def test_strip_emlx_prefix(raw, expected):
 def test_post_json_with_retry_retries_transient_statuses(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         if len(calls) == 1:
             return 503, b"retry-later"
@@ -122,7 +123,8 @@ def test_post_json_with_retry_retries_transient_statuses(monkeypatch):
 def test_post_json_with_retry_stops_on_non_transient_status(monkeypatch):
     calls = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         return 401, b"unauthorized"
 
@@ -149,7 +151,8 @@ def test_json_or_empty_raises_bad_response_for_html_payload():
 def test_request_json_with_retry_no_retry_after_bad_response(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         return 200, b"<html></html>"
 
@@ -171,7 +174,8 @@ def test_request_json_with_retry_no_retry_after_bad_response(monkeypatch):
 def test_post_json_with_retry_retries_network_error(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         if len(calls) == 1:
             raise smoke._RequestNetworkError("connection refused")
@@ -196,7 +200,8 @@ def test_post_json_with_retry_retries_network_error(monkeypatch):
 def test_post_json_with_retry_raises_network_error_after_retries(monkeypatch):
     calls: list[tuple[str, str]] = []
 
-    def fake_request(base_url, token, method, path, *, body=None, content_type=None, timeout=120.0):
+    def fake_request(*args, **_unused):
+        method, path = args[2], args[3]
         calls.append((method, path))
         raise smoke._RequestNetworkError("connection refused")
 
@@ -227,6 +232,7 @@ def test_fetch_inbox_snapshot_retries_until_minimum(monkeypatch):
         attempts: int,
         delay_seconds: float,
         timeout: float = 120.0,
+        **_unused,
     ) -> dict[str, object]:
         calls.append((base_url, path))
         if len(calls) == 1:
@@ -258,6 +264,7 @@ def test_fetch_inbox_snapshot_does_not_wait_when_min_count_is_zero(monkeypatch):
         attempts: int,
         delay_seconds: float,
         timeout: float = 120.0,
+        **_unused,
     ) -> dict[str, object]:
         calls.append((base_url, path))
         return {"emails": []}
