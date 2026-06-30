@@ -2,7 +2,7 @@ import asyncio
 import datetime
 import unicodedata
 
-from .exceptions import CalendarServiceError, UnsafeCalendarActionItemError
+from .exceptions import CalendarServiceError, UnsafeCalendarTodoError
 
 MAX_CALENDAR_TODO_LENGTH = 500
 UNSAFE_CALENDAR_TODO_SEQUENCES = ("<", ">", "`", "$(", "${")
@@ -45,11 +45,11 @@ def validate_calendar_todo_text(todo_text: str) -> str:
     """Validate user-authored calendar text before external writeback."""
     normalized = todo_text.strip()
     if not normalized or len(normalized) > MAX_CALENDAR_TODO_LENGTH:
-        raise UnsafeCalendarActionItemError("Unsafe calendar action item text")
+        raise UnsafeCalendarTodoError("Unsafe calendar todo text")
     if any(unicodedata.category(character) == "Cc" for character in normalized):
-        raise UnsafeCalendarActionItemError("Unsafe calendar action item text")
+        raise UnsafeCalendarTodoError("Unsafe calendar todo text")
     if any(sequence in normalized for sequence in UNSAFE_CALENDAR_TODO_SEQUENCES):
-        raise UnsafeCalendarActionItemError("Unsafe calendar action item text")
+        raise UnsafeCalendarTodoError("Unsafe calendar todo text")
     return normalized
 
 
@@ -100,7 +100,7 @@ async def create_calendar_event(todo_text: str, user_token: dict) -> dict:
         request = service.events().insert(calendarId="primary", body=event)
         created_event = await asyncio.to_thread(request.execute)
         return created_event
-    except UnsafeCalendarActionItemError:
+    except UnsafeCalendarTodoError:
         raise
     except CalendarServiceError:
         raise
@@ -164,7 +164,7 @@ async def create_calendar_events_batch(todo_texts: list[str], user_token: dict) 
             chunk = safe_todo_texts[start : start + GOOGLE_CALENDAR_BATCH_MAX_REQUESTS]
             created_events.extend(await _execute_calendar_event_batch(service, chunk, now))
         return created_events
-    except UnsafeCalendarActionItemError:
+    except UnsafeCalendarTodoError:
         raise
     except CalendarServiceError:
         raise
