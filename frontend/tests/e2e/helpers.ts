@@ -134,7 +134,7 @@ const calendarCandidate = {
 const aiHubPrompts = [
   { id: 101, title: '의사결정 로그 맥락 종합', description: '출시 일정과 파트너 리스크를 함께 검토합니다.' },
   { id: 102, title: '계약 리스크 점검', description: '계약서, 첨부, 메일 스레드를 판단 포인트로 정리합니다.' },
-  { id: 103, title: '후속 실행 항목', description: '답장, 일정, 할 일을 담당자별 실행 흐름으로 나눕니다.' },
+  { id: 103, title: '후속 실행 항목', description: '답장, 일정, 실행 항목을 담당자별 실행 흐름으로 나눕니다.' },
 ];
 
 const aiHubSurface = {
