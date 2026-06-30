@@ -24,6 +24,7 @@ import {
   Settings,
   ShieldCheck,
   UserCircle,
+  Wrench,
   X
 } from 'lucide-react';
 
@@ -53,6 +54,7 @@ const primaryNavItems = [
   { label: '프로젝트', href: '/projects', icon: Briefcase },
   { label: '맥락 검색', href: '/search', icon: Search },
   { label: 'AI 허브', href: '/ai-hub', icon: Sparkles },
+  { label: '도구 목록', href: '/tools', icon: Wrench },
   { label: '데이터', href: '/data', icon: Database },
   { label: '보안', href: '/security', icon: ShieldCheck },
   { label: '설정', href: '/settings', icon: Settings },
