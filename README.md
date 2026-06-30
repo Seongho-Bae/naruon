@@ -184,8 +184,29 @@ NARUON_FRONTEND_HOST_PORT=127.0.0.1:3000
 NARUON_BACKEND_HOST_PORT=127.0.0.1:8000
 EOF
 
+# 로컬에서만 쓰는 compose 오버라이드는 파일에 커밋하지 않습니다.
+cat > /tmp/docker-compose.mlx.yml <<'EOF'
+services:
+  backend:
+    environment:
+      ALLOW_LOCAL_LLM_PROVIDERS: "true"
+      ALLOWED_LLM_BASE_URL_HOSTS: ${NARUON_MLX_ALLOWED_LLM_BASE_URL_HOSTS:-localhost,127.0.0.1,host.docker.internal}
+      OPENAI_API_KEY: ${NARUON_MLX_OPENAI_API_KEY:-mlx}
+      OPENAI_BASE_URL: ${NARUON_MLX_BASE_URL:-http://host.docker.internal:11434/v1}
+      OPENAI_EMBEDDING_MODEL: ${NARUON_MLX_EMBEDDING_MODEL:-embeddinggemma}
+      OPENAI_MODEL: ${NARUON_MLX_LLM_MODEL:-gemma4:e2b-it-qat}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${NARUON_BACKEND_HOST_PORT:-127.0.0.1:8000}:8000"
+
+  frontend:
+    ports:
+      - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
+EOF
+
 NARUON_ENV_FILE=.env.mlx \
-docker compose --env-file .env.mlx -f docker-compose.yml -f docker-compose.mlx.yml up -d --build
+docker compose --env-file .env.mlx -f docker-compose.yml -f /tmp/docker-compose.mlx.yml up -d --build
 ```
 
 실 메일 임포트 + 요약/초안 검증:
