@@ -194,7 +194,11 @@ describe("CalendarPage", () => {
     });
     await flushAsyncWork();
 
-    expect(container.textContent).toContain("요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.");
+    expect(container.textContent).toContain("고객 원본 계정 반영");
+    expect(container.textContent).toContain("CalDAV 원본 선택됨");
+    expect(container.textContent).toContain("선택한 일정 원본");
+    expect(container.textContent).toContain("감사 근거");
+    expect(container.textContent).toContain("기록됨");
     expect(container.textContent).not.toContain("customer_owned");
     expect(container.textContent).not.toContain("caldav-primary");
     expect(container.textContent).not.toContain("calendar.writeback_intent.created");
@@ -262,7 +266,7 @@ describe("CalendarPage", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("일정 원본 2");
-    expect(container.textContent).toContain("요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.");
+    expect(container.textContent).toContain("선택한 일정 원본");
     expect(container.textContent).not.toContain("caldav-team");
     expect(container.textContent).not.toContain("Team CalDAV");
   });
@@ -336,7 +340,9 @@ describe("CalendarPage", () => {
     await flushAsyncWork();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(container.textContent).toContain("요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.");
+    expect(container.textContent).toContain("커넥터 실행 요청 접수");
+    expect(container.textContent).toContain("If-Match 필요");
+    expect(container.textContent).toContain("재시도 대기");
     expect(container.textContent).not.toContain("runner-request-1");
     expect(container.textContent).not.toContain("retry-item-1");
     expect(container.textContent).not.toContain("calendar.writeback.dispatch_failed");

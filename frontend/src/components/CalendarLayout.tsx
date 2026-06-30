@@ -136,9 +136,26 @@ function getEtagLabel(value: string | null) {
   return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
 }
 
+function getIntentProtocolLabel(protocol: string) {
+  return `${getProtocolLabel(protocol)} 선택됨`;
+}
 
+function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_mode']) {
+  return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
+}
 
+function getProviderExecutionLabel(result: CalendarWritebackIntentResponse) {
+  if (result.provider_write_executed) return '외부 원본 쓰기 완료';
+  if (result.retry_item_uid || result.status === 'queued') return '커넥터 실행 요청 접수';
+  if (result.error_code) return '커넥터 실행 실패';
+  return '의도만 기록';
+}
 
+function getProviderRetryLabel(result: CalendarWritebackIntentResponse) {
+  if (result.retry_item_uid || result.status === 'queued') return '재시도 대기';
+  if (result.provider_write_executed) return '재시도 없음';
+  return '실행 요청 없음';
+}
 
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
@@ -436,7 +453,36 @@ export function CalendarLayout() {
                 <p className="font-bold text-red-700">일정 반영 의도 점검에 실패했습니다.</p>
               )}
               {writebackStatus === 'success' && writebackResult && (
-                <div className="text-sm font-bold text-green-700 bg-green-50 border border-green-200 p-4 rounded-lg">요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.</div>
+                <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
+                  <div>
+                    <dt className="font-black text-muted-foreground">반영 방식</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">원본 종류</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">대상 원본</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">충돌 검사</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">감사 근거</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">커넥터 실행</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-black text-muted-foreground">재시도 상태</dt>
+                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
+                  </div>
+                </dl>
               )}
             </div>
           </section>

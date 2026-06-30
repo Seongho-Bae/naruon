@@ -135,7 +135,7 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("Alpha Task");
     expect(container.textContent).toContain("Beta Task");
 
-    const searchInput = container.querySelector<HTMLInputElement>("input[role='searchbox']");
+    const searchInput = container.querySelector<HTMLInputElement>("input[type='search']");
     expect(searchInput).not.toBeNull();
 
     // Type "Beta"
