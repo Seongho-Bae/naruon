@@ -372,6 +372,29 @@ def _cleanup_private_cache(files: list[Path]) -> None:
             pass
 
 
+def _print_session_sync_hints(base_url: str, token: str, *, enabled: bool) -> None:
+    if not enabled:
+        return
+
+    print(
+        "session_token="
+        + token,
+    )
+    print("브라우저 동일 세션 동기화 방법:")
+    print(
+        "  1) 브라우저에서 NARUON 앱(origin)으로 접속한 뒤, 개발자 콘솔에서 아래 한 줄 실행:",
+    )
+    print(
+        "     await fetch('/auth/session', {method:'POST', credentials:'same-origin', "
+        "headers:{'content-type':'application/json'}, body: JSON.stringify({access_token: '"
+        + token
+        + "'})});",
+    )
+    safe_origin = base_url.rstrip("/")
+    print(f"     (요청 대상: {safe_origin}/auth/session)")
+    print("  2) 새로고침 후 /mail 또는 /api/emails로 임포트 반영 및 표시 여부 확인")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mail-dir", required=True, type=Path)
@@ -382,6 +405,7 @@ def main() -> None:
     parser.add_argument("--query", action="append", default=[])
     parser.add_argument("--match-mode", choices=["exact", "all-terms"], default="exact")
     parser.add_argument("--llm-smoke", action="store_true")
+    parser.add_argument("--print-session-token", action="store_true")
     parser.add_argument("--max-parse-bytes", type=int, default=2_000_000)
     parser.add_argument("--progress-every", type=int, default=0)
     args = parser.parse_args()
@@ -486,6 +510,11 @@ def main() -> None:
             f"attachments={totals['attachments']} inbox_visible={email_count} "
             f"search_counts={search_counts} reason_counts={dict(reasons)} "
             f"llm={llm_status} draft={draft_status}"
+        )
+        _print_session_sync_hints(
+            args.base_url,
+            token,
+            enabled=args.print_session_token,
         )
     finally:
         _cleanup_private_cache(files)

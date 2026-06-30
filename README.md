@@ -163,6 +163,51 @@ curl -s http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
+### Apple Silicon / MLX local path (임시 API 모델 서버 사용)
+
+기본 `docker-compose.yml`는 Linux Ollama 컨테이너를 그대로 유지합니다. Apple Silicon
+로컬 실 테스트(또는 외부 MLX/OpenAI-compatible 서비스)만 분리하려면 오버라이드 파일을 붙여 실행합니다.
+
+```bash
+cp .env .env.mlx
+
+# 기존 보안값은 그대로 두고, Apple 경로 임시값만 오버라이드
+cat >> .env.mlx <<'EOF'
+ALLOWED_LLM_BASE_URL_HOSTS=localhost,127.0.0.1,host.docker.internal
+ALLOW_LOCAL_LLM_PROVIDERS=true
+OPENAI_API_KEY=mlx
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1
+OPENAI_EMBEDDING_MODEL=embeddinggemma
+OPENAI_MODEL=gemma4:e2b-it-qat
+# 포트 충돌이 있으면 아래 두 값으로 변경
+NARUON_FRONTEND_HOST_PORT=127.0.0.1:3000
+NARUON_BACKEND_HOST_PORT=127.0.0.1:8000
+EOF
+
+NARUON_ENV_FILE=.env.mlx \
+docker compose --env-file .env.mlx -f docker-compose.yml -f docker-compose.mlx.yml up -d --build
+```
+
+실 메일 임포트 + 요약/초안 검증:
+
+```bash
+AUTH_SESSION_HMAC_SECRET="$(grep -E '^AUTH_SESSION_HMAC_SECRET=' .env | cut -d= -f2-)"
+python3 backend/scripts/private_mail_http_smoke.py \
+  --mail-dir "/Users/seonghobae/Library/Mobile Documents/com~apple~CloudDocs/Downloads/mail" \
+  --base-url http://127.0.0.1:3000 \
+  --session-secret "$AUTH_SESSION_HMAC_SECRET" \
+  --query "중공업 전력PU 회의록" \
+  --query "중공업 기전PU 회의록" \
+  --limit 20 \
+  --batch-size 6 \
+  --llm-smoke \
+  --print-session-token
+```
+
+`--print-session-token`이 켜진 경우 스크립트가 같은 토큰을 브라우저로 전파하는
+`/auth/session` 호출 예시를 출력합니다. 위 출력의 JS 한 줄을 앱 콘솔에서 실행하면
+`naruon_session` 쿠키가 갱신되어 API로 임포트한 메일이 브라우저와 동일 세션에서 보입니다.
+
 What you should see: the fixture import loads a three-message `Quarterly plan`
 conversation. `/api/emails` returns one threaded inbox item with `reply_count`
 greater than 1, and the frontend shows conversation history oldest to newest.
