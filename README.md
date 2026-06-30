@@ -169,6 +169,8 @@ python3 -m webbrowser http://localhost:3000
 로컬 실 테스트(또는 외부 MLX/OpenAI-compatible 서비스)만 분리하려면 임시 오버라이드 파일을 붙여 실행합니다.
 
 ```bash
+# 다음 블록은 로컬 실사용 검증용 샘플입니다. 민감한 쿼리로 대체할 수 있지만,
+# 현재 실검증에서는 아래 두 키워드로 테스트합니다.
 cat > .env.mlx <<'EOF'
 
 # 기존 보안값은 그대로 두고, 로컬 모델 경로만 오버라이드
@@ -190,13 +192,11 @@ NARUON_MLX_EMBEDDING_MODEL=embeddinggemma
 NARUON_MLX_LLM_MODEL=gemma4:e2b-it-qat
 EOF
 
-# 로컬에서만 쓰는 compose 오버라이드는 파일에 커밋하지 않습니다.
-# Docker Desktop(macOS)은 host.docker.internal을 기본 제공하고,
-# Linux Docker Engine은 host-gateway 매핑을 명시합니다.
+# 로컬에서만 쓰는 compose 오버라이드는 임시 파일로 만들고 커밋하지 않습니다.
+# OS 분기 없이 환경변수 하나로 host.docker.internal 매핑을 제어합니다.
+# Linux에서 host-gateway가 필요한 환경이면 .env.mlx에서 NARUON_MLX_EXTRA_HOSTS를 덮어씁니다.
 mlx_compose_override="$(mktemp "${TMPDIR:-/tmp}/docker-compose.mlx.XXXXXX.yml")"
-case "$(uname -s)" in
-  Linux)
-    cat > "$mlx_compose_override" <<'EOF'
+cat > "$mlx_compose_override" <<'EOF'
 services:
   backend:
     environment:
@@ -207,35 +207,13 @@ services:
       OPENAI_EMBEDDING_MODEL: ${NARUON_MLX_EMBEDDING_MODEL:-embeddinggemma}
       OPENAI_MODEL: ${NARUON_MLX_LLM_MODEL:-gemma4:e2b-it-qat}
     extra_hosts:
-      - "host.docker.internal:${NARUON_MLX_EXTRA_HOSTS:-host-gateway}"
+      - "host.docker.internal:${NARUON_MLX_EXTRA_HOSTS:-host.docker.internal}"
     ports:
       - "${NARUON_BACKEND_HOST_PORT:-127.0.0.1:8000}:8000"
-
   frontend:
     ports:
       - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
 EOF
-    ;;
-  Darwin|*)
-    cat > "$mlx_compose_override" <<'EOF'
-services:
-  backend:
-    environment:
-      ALLOW_LOCAL_LLM_PROVIDERS: "true"
-      ALLOWED_LLM_BASE_URL_HOSTS: ${NARUON_MLX_ALLOWED_LLM_BASE_URL_HOSTS:-localhost,127.0.0.1,host.docker.internal}
-      OPENAI_API_KEY: ${NARUON_MLX_OPENAI_API_KEY:-mlx}
-      OPENAI_BASE_URL: ${NARUON_MLX_BASE_URL:-http://host.docker.internal:11434/v1}
-      OPENAI_EMBEDDING_MODEL: ${NARUON_MLX_EMBEDDING_MODEL:-embeddinggemma}
-      OPENAI_MODEL: ${NARUON_MLX_LLM_MODEL:-gemma4:e2b-it-qat}
-    ports:
-      - "${NARUON_BACKEND_HOST_PORT:-127.0.0.1:8000}:8000"
-
-  frontend:
-    ports:
-      - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
-EOF
-    ;;
-esac
 
 NARUON_ENV_FILE=.env.mlx \
 docker compose --env-file .env.mlx -f docker-compose.yml -f "$mlx_compose_override" up -d --build
@@ -244,6 +222,7 @@ docker compose --env-file .env.mlx -f docker-compose.yml -f "$mlx_compose_overri
 실 메일 임포트 + 요약/초안 검증:
 
 ```bash
+# 아래 두 --query는 실 사용자 공개 테스트 키워드입니다.
 AUTH_SESSION_HMAC_SECRET="$(grep -E '^AUTH_SESSION_HMAC_SECRET=' .env | cut -d= -f2-)"
 python3 backend/scripts/private_mail_http_smoke.py \
   --mail-dir "/Users/seonghobae/Library/Mobile Documents/com~apple~CloudDocs/Downloads/mail" \
@@ -273,6 +252,7 @@ python3 backend/scripts/private_mail_http_smoke.py \
 
 ```bash
 curl -s http://127.0.0.1:3000/api/emails?limit=10
+# 아래는 동일 샘플로 API 직접 점검하는 예시입니다.
 curl -s -X POST http://127.0.0.1:3000/api/search \
   -H 'Content-Type: application/json' \
   -d '{"query": "중공업 전력PU 회의록", "limit": 3}'
