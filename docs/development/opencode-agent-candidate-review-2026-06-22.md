@@ -69,7 +69,8 @@ The rejected part is the toolchain, not the useful ideas:
 
 ## Verification hooks
 
-`scripts/ci/test_strix_quick_gate.sh` asserts the durable contracts that matter:
+The central `ContextualWisdomLab/.github` workflow and script tests assert the
+durable contracts that matter:
 
 - CodeGraph initialization and CodeGraph MCP prompt usage.
 - Candidate-derived prompt constraints for CodeGraph, Ponytail, im-not-ai, and

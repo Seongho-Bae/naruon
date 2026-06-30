@@ -38,6 +38,9 @@ private report is resolved.
 ## Strix Security Scan
 
 - **Strix Security Scan:** Medium 이상 모두 수정 (Medium 까지는 한국 법령이 요구하는 강제 사항이 포함되어 있음)
+- Strix Security Scan은 `ContextualWisdomLab/.github`의 central required
+  workflow가 제공합니다. 이 저장소는 repo-local Strix workflow나 전용 gate
+  script를 복제하지 않습니다.
 - Pull request scans that need repository secrets must use trusted-base
   `pull_request_target` execution: workflow scripts and dependencies come from
   GitHub API-materialized base commit content, while pull request head files are
