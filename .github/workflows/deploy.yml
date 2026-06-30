@@ -2,6 +2,9 @@ name: Deploy to AKS
 
 on:
   workflow_call:
+    secrets:
+      AKS_KUBECONFIG:
+        required: true
 
 permissions:
   contents: read

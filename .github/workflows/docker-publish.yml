@@ -344,4 +344,5 @@ jobs:
       startsWith(github.ref, 'refs/tags/v') &&
       needs.deploy_preflight.outputs.aks_kubeconfig_configured == 'true'
     uses: ./.github/workflows/deploy.yml
-    secrets: inherit
+    secrets:
+      AKS_KUBECONFIG: ${{ secrets.AKS_KUBECONFIG }}
