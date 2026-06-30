@@ -55,12 +55,6 @@
 **Vulnerability:** The API proxy's `sameOriginStateChangingRequest` function previously allowed state-changing requests if both `sec-fetch-site` and `origin` headers were missing, creating a potential CSRF vector if an attacker suppressed the Origin header.
 **Learning:** Default-allow fallbacks for missing security metadata can silently bypass critical protections, especially when relying solely on cookie-based authentication.
 **Prevention:** Always fail securely by defaulting to `false` when required origin/referer security metadata is absent, ensuring strict enforcement for state-changing operations.
-
-## 2025-02-24 - [DAV Log Injection Vulnerability]
-**Vulnerability:** A log injection vulnerability existed in the `/dav/{path:path}` endpoint where `path` was logged via `repr(path)[1:-1]` but could still contain unescaped or malicious sequences when concatenated into log formats.
-**Learning:** Although `repr()` escapes many control characters, relying on it alone for user-controlled strings meant for logs may not be sufficiently robust against all logging systems or terminal emulators if specific sequences slip through or if a standard sanitization function exists in the codebase.
-**Prevention:** Always use the centralized `_sanitize_log_value` (or equivalent) when logging untrusted input, even if `repr()` is also used, to ensure consistent and safe stripping of CR/LF characters.
-
 ## 2026-06-24 - Prevent URL-Encoded and Windows Path Traversal Bypass
 
 **Vulnerability:** Path traversal in `_dav_path_owner_user_id` could be bypassed using doubly URL-encoded sequences (for example, `%252e%252e%252f`) and Windows-style backslashes.

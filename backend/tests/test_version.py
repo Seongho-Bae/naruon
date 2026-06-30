@@ -32,5 +32,5 @@ def test_get_release_version_failure(tmp_path, monkeypatch):
         lambda: (missing_candidate,),
     )
 
-    with pytest.raises(RuntimeError, match="release VERSION file is missing"):
+    with pytest.raises(RuntimeError, match="release VERSION file is missing; checked:"):
         get_release_version()

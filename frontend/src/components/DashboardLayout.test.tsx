@@ -7,28 +7,6 @@ vi.mock("next/navigation", () => ({
   usePathname: () => window.location.pathname,
   useSearchParams: () => new URLSearchParams(window.location.search),
 }));
-vi.mock("lucide-react", () => ({
-  Bell: () => <svg aria-hidden="true" />,
-  Briefcase: () => <svg aria-hidden="true" />,
-  CalendarDays: () => <svg aria-hidden="true" />,
-  CheckCircle2: () => <svg aria-hidden="true" />,
-  Database: () => <svg aria-hidden="true" />,
-  FileText: () => <svg aria-hidden="true" />,
-  HelpCircle: () => <svg aria-hidden="true" />,
-  Home: () => <svg aria-hidden="true" />,
-  Inbox: () => <svg aria-hidden="true" />,
-  Menu: () => <svg aria-hidden="true" />,
-  PenLine: () => <svg aria-hidden="true" />,
-  Search: () => <svg aria-hidden="true" />,
-  Send: () => <svg aria-hidden="true" />,
-  Sparkles: () => <svg aria-hidden="true" />,
-  Star: () => <svg aria-hidden="true" />,
-  MoreHorizontal: () => <svg aria-hidden="true" />,
-  Settings: () => <svg aria-hidden="true" />,
-  ShieldCheck: () => <svg aria-hidden="true" />,
-  UserCircle: () => <svg aria-hidden="true" />,
-  X: () => <svg aria-hidden="true" />
-}));
 
 import { DashboardLayout } from "./DashboardLayout";
 
@@ -114,7 +92,7 @@ describe("DashboardLayout", () => {
     expect(main).not.toBeNull();
     expect(skipLink).not.toBeNull();
     expect(logo?.getAttribute("src")).toBe("/brand/naruon-symbol.svg");
-    expect(globalSearchInput?.getAttribute("type")).toBe("text");
+    expect(globalSearchInput?.getAttribute("type")).toBe("search");
     expect(globalSearchInput?.getAttribute("inputmode")).toBe("search");
     expect(globalSearchInput?.getAttribute("role")).toBe("searchbox");
     expect(headerActionButtons).toEqual(["일정 반영", "답장 초안", "실행 항목 생성"]);
@@ -244,7 +222,7 @@ describe("DashboardLayout", () => {
 
     const input = container.querySelector<HTMLInputElement>("#global-search-input");
     expect(input).not.toBeNull();
-    expect(input?.getAttribute("type")).toBe("text");
+    expect(input?.getAttribute("type")).toBe("search");
     expect(input?.getAttribute("inputmode")).toBe("search");
     expect(input?.getAttribute("role")).toBe("searchbox");
 
