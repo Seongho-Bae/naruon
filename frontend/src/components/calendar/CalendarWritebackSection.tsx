@@ -1,4 +1,5 @@
 import React from 'react';
+import { Loader2 } from 'lucide-react';
 import { CalendarWritebackSource, CalendarWritebackIntentResponse, WritebackStatus } from './types';
 import { getCalendarSourceLabel, getProtocolLabel, getCapabilityLabel, getEtagLabel, getWritebackModeLabel, getIntentProtocolLabel, getProviderExecutionLabel, getProviderRetryLabel } from './helpers';
 
@@ -46,8 +47,9 @@ export function CalendarWritebackSection({
             onClick={() => void requestWritebackIntent('create')}
             disabled={isWritebackActionDisabled}
             aria-busy={isWritebackLoading}
-            className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
           >
+            {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             새 일정 intent 점검
           </button>
           <button
@@ -55,8 +57,9 @@ export function CalendarWritebackSection({
             onClick={() => void requestWritebackIntent('update')}
             disabled={isWritebackActionDisabled}
             aria-busy={isWritebackLoading}
-            className="rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
+            {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             ETag 업데이트 점검
           </button>
           <button
@@ -64,8 +67,9 @@ export function CalendarWritebackSection({
             onClick={() => void requestWritebackIntent('update', true)}
             disabled={isProviderExecutionDisabled}
             aria-busy={isWritebackLoading}
-            className="rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           >
+            {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
             ETag 실행 요청
           </button>
         </div>
@@ -143,36 +147,39 @@ export function CalendarWritebackSection({
           <p className="font-bold text-red-700">일정 반영 의도 점검에 실패했습니다.</p>
         )}
         {writebackStatus === 'success' && writebackResult && (
-          <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
-            <div>
-              <dt className="font-black text-muted-foreground">반영 방식</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">원본 종류</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">대상 원본</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">충돌 검사</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">감사 근거</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">커넥터 실행</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
-            </div>
-            <div>
-              <dt className="font-black text-muted-foreground">재시도 상태</dt>
-              <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
-            </div>
-          </dl>
+          <div className="space-y-3">
+            <p className="font-bold text-green-700">요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.</p>
+            <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
+              <div>
+                <dt className="font-black text-muted-foreground">반영 방식</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">원본 종류</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">대상 원본</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">충돌 검사</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">감사 근거</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">커넥터 실행</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
+              </div>
+              <div>
+                <dt className="font-black text-muted-foreground">재시도 상태</dt>
+                <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
+              </div>
+            </dl>
+          </div>
         )}
       </div>
     </section>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock, Video, Users, CalendarDays, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toSafeReactText } from '@/lib/safe-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function CalendarSidebarRight({ selectedDetailEvent }: { selectedDetailEvent: Record<string, any> | null }) {
@@ -9,7 +10,7 @@ export function CalendarSidebarRight({ selectedDetailEvent }: { selectedDetailEv
       <div className="flex items-center justify-between">
         <div className="flex gap-2">
           <span className={`rounded-md px-2 py-1 text-xs font-bold ${selectedDetailEvent?.badgeClassName ?? 'bg-secondary text-muted-foreground'}`}>
-            {selectedDetailEvent ? `★ ${selectedDetailEvent.badgeLabel}` : '선택 없음'}
+            {selectedDetailEvent ? `★ ${toSafeReactText(selectedDetailEvent.badgeLabel)}` : '선택 없음'}
           </span>
           <span className="rounded-md bg-secondary px-2 py-1 text-xs font-bold text-muted-foreground">공개</span>
         </div>
@@ -21,23 +22,23 @@ export function CalendarSidebarRight({ selectedDetailEvent }: { selectedDetailEv
       <div className="mt-6">
         <div className="flex items-center gap-3">
           <div className={`size-4 rounded-full ${selectedDetailEvent?.dotClassName ?? 'bg-muted'}`}></div>
-          <h2 className="text-xl font-bold">{selectedDetailEvent ? `${selectedDetailEvent.title} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
+          <h2 className="text-xl font-bold">{selectedDetailEvent ? `${toSafeReactText(selectedDetailEvent.title)} (Naruon 2.0)` : '표시 중인 일정 없음'}</h2>
         </div>
-        <p className="mt-2 text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.'}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description, '왼쪽 캘린더 목록에서 하나 이상의 캘린더를 표시하세요.')}</p>
       </div>
 
       <div className="mt-6 space-y-5">
         <div className="flex gap-3">
           <Clock className="size-5 text-muted-foreground shrink-0" />
           <div>
-            <p className="text-sm font-semibold">2026.05.23 (목) {selectedDetailEvent?.time ?? '--:--'} - 11:00</p>
-            <p className="text-xs text-muted-foreground">{selectedDetailEvent?.duration ?? '일정 없음'}</p>
+            <p className="text-sm font-semibold">2026.05.23 (목) {toSafeReactText(selectedDetailEvent?.time, '--:--')} - 11:00</p>
+            <p className="text-xs text-muted-foreground">{toSafeReactText(selectedDetailEvent?.duration, '일정 없음')}</p>
           </div>
         </div>
         <div className="flex gap-3 items-center">
           <Video className="size-5 text-muted-foreground shrink-0" />
-          <p className="text-sm font-semibold">{selectedDetailEvent?.location ?? '장소 없음'}</p>
-          <button type="button" aria-label={`${selectedDetailEvent?.location ?? '장소'} 위치 보기`} className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
+          <p className="text-sm font-semibold">{toSafeReactText(selectedDetailEvent?.location, '장소 없음')}</p>
+          <button type="button" aria-label={`${toSafeReactText(selectedDetailEvent?.location, '장소')} 위치 보기`} className="text-xs text-primary font-semibold ml-auto hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">위치 보기</button>
         </div>
         <div className="flex gap-3 items-start">
           <Users className="size-5 text-muted-foreground shrink-0" />
@@ -55,7 +56,7 @@ export function CalendarSidebarRight({ selectedDetailEvent }: { selectedDetailEv
           <CalendarDays className="size-5 text-muted-foreground shrink-0" />
           <div>
             <p className="text-sm font-semibold mb-1">설명</p>
-            <p className="text-sm text-muted-foreground">{selectedDetailEvent?.description ?? '표시할 일정 설명이 없습니다.'}</p>
+              <p className="text-sm text-muted-foreground">{toSafeReactText(selectedDetailEvent?.description, '표시할 일정 설명이 없습니다.')}</p>
           </div>
         </div>
         <div className="flex gap-3 items-start">
