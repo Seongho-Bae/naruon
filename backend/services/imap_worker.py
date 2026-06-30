@@ -145,15 +145,19 @@ class ImapSyncWorker:
 
     async def _sync(self):
         async with AsyncSessionLocal() as session:
-            result = await session.execute(select(TenantConfig).options(selectinload('*')).where(TenantConfig.imap_server.isnot(None)))
+            result = await session.execute(
+                select(TenantConfig)
+                .options(selectinload("*"))
+                .where(TenantConfig.imap_server.isnot(None))
+            )
             configs = result.scalars().all()
-            
+
         tasks = []
         for config in configs:
             if not config.imap_server or not config.imap_port:
                 continue
             tasks.append(self._sync_tenant(config))
-            
+
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 

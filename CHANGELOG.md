@@ -30,6 +30,7 @@
 - Reply SLA scheduler가 이미 조회한 `TenantConfig`를 하위 reply tracking 경로로 전달해 mailbox owner별 tenant config 재조회 N+1 쿼리를 제거했습니다.
 - `sync_webdav_folders`가 WebDAV 계정 유효성 검증과 로깅에 필요한 `server_url`, `source_uid` 컬럼만 조회하도록 개선하여 불필요한 ORM 객체 로드와 암호화 필드 처리를 줄였습니다.
 - Reply SLA fallback 에스컬레이션에서 bulk insert 충돌 시 기존 task를 한 번에 조회해 중복 항목을 제거하고 남은 task를 재차 bulk insert하도록 개선하여 N+1 insert 재시도 병목을 줄였습니다.
+- `ImapSyncWorker`에서 `TenantConfig` 로드 시 발생할 수 있는 N+1 Lazy Loading 문제를 방지하기 위해 `selectinload('*')` 옵션을 쿼리에 추가했습니다.
 
 ### 보안 패치 (Security)
 
@@ -47,10 +48,6 @@
 
 ### 성능 개선
 - O(N)의 set() 객체 생성을 발생시키던 `candidate_lookups.get`의 기본 인자 평가를 조건문으로 대체하여 `_find_matches_for_candidates`의 성능을 개선했습니다.
-
-### 성능 개선
-
-- `ImapSyncWorker`에서 `TenantConfig` 로드 시 발생할 수 있는 N+1 Lazy Loading 문제를 방지하기 위해 `selectinload('*')` 옵션을 쿼리에 추가했습니다.
 
 ## [0.14.4] - 2026-06-18
 
@@ -2634,13 +2631,3 @@
 - `POSTGRES_PASSWORD=change-me-local-only docker compose up -d --build`
 - `python scripts/check_compose_logs.py --compose-log-file <captured-log-file>`
 - `docker compose down`
-
-## [Unreleased]
-
-### 성능 개선
-
-- `ImapSyncWorker`에서 `TenantConfig` 로드 시 발생할 수 있는 N+1 Lazy Loading 문제를 방지하기 위해 `selectinload('*')` 옵션을 쿼리에 추가했습니다.
-
-### 성능 개선
-
-- `ImapSyncWorker`에서 `TenantConfig` 로드 시 발생할 수 있는 N+1 Lazy Loading 문제를 방지하기 위해 `selectinload('*')` 옵션을 쿼리에 추가했습니다.
