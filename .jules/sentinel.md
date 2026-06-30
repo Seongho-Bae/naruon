@@ -76,6 +76,11 @@
 **Learning:** Reusing shared, safe helper functions like `_bash_executable()` ensures that external command execution is always bound to absolute paths and handles `None` cases properly, mitigating path injection risks.
 **Prevention:** Always refactor redundant `subprocess.run` blocks to use established helper methods that enforce absolute paths and perform necessary existence assertions.
 
+## 2026-06-25 - [DAV Authorization Path Denial of Service]
+**Vulnerability:** Unbounded `while True` loop in `_normalize_dav_authorization_path` during URL decoding could potentially lead to algorithmic complexity or infinite loop DoS if an unquote edge case prevented string convergence.
+**Learning:** Although `unquote` generally guarantees termination (as the string length strictly decreases or stays the same), relying on external library invariants for loop termination without explicit bounds is poor security hygiene. Furthermore, simulating edge cases using objects fails because C-extensions validate parameter types.
+**Prevention:** To mitigate algorithmic complexity (DoS) vulnerabilities when parsing inputs via `urllib.parse.unquote`, replace unbounded `while True:` decode loops with strictly bounded loops (e.g., `for _ in range(100):`) and explicitly raise exceptions (like `HTTPException`) if the limit is exceeded. When testing iteration limits or potential infinite loops involving `urllib.parse.unquote` in pytest, use `monkeypatch.setattr(module_name, "unquote", fake_unquote_function)` rather than attempting to pass fake Python objects (which are often ignored or converted by standard library C-extensions).
+
 ## 2026-06-27 - Information Disclosure in Version File Error Handling
 **Vulnerability:** The error message generated when the `VERSION` file was missing included absolute paths, exposing the internal directory structure.
 **Learning:** Error messages should never reveal internal implementation details or server-side paths, as they can assist attackers in further exploitation.
