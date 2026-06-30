@@ -52,6 +52,26 @@ def stub_dav_dns(monkeypatch):
     )
 
 
+def test_default_http_client_does_not_trust_proxy_environment(monkeypatch):
+    captured_kwargs = {}
+
+    class SpyAsyncClient:
+        def __init__(self, **kwargs):
+            captured_kwargs.update(kwargs)
+
+    monkeypatch.setattr(
+        "runner.local_dav_adapters.httpx.AsyncClient",
+        SpyAsyncClient,
+    )
+    adapters = LocalDavAdapters([])
+
+    adapters._default_http_client()
+
+    assert captured_kwargs["follow_redirects"] is False
+    assert captured_kwargs["timeout"] == 60
+    assert captured_kwargs["trust_env"] is False
+
+
 @pytest.mark.asyncio
 async def test_webdav_adapter_puts_content_with_if_match():
     fake_client = FakeDavClient(
