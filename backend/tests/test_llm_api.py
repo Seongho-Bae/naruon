@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, patch
+from core.exceptions import LLMServiceError
 from fastapi.testclient import TestClient
 from api import llm
 from db.models import LLMProvider
@@ -378,7 +379,6 @@ def test_translate_wrong_user_returns_403(mock_translate, client):
     assert resp.json() == {"detail": "Not authorized"}
 import pytest
 from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
 
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 def test_summarize_generic_error_returns_500(mock_extract, client):
@@ -403,7 +403,6 @@ def test_draft_generic_error_returns_500(mock_draft, client):
     assert resp.json() == {"detail": "An internal server error occurred while processing the request."}
 import pytest
 from unittest.mock import AsyncMock, patch
-from fastapi.testclient import TestClient
 
 @patch("api.llm.extract_todos_and_summary", new_callable=AsyncMock)
 def test_summarize_http_exception(mock_extract, client):
@@ -437,3 +436,37 @@ def test_translate_http_exception(mock_translate, client):
         json={"email_body": "test email", "target_language": "Korean"},
     )
     assert resp.status_code == 400
+
+@pytest.mark.asyncio
+@patch("api.llm.extract_todos_and_summary", side_effect=LLMServiceError("Service down"))
+def test_summarize_llm_service_error(mock_extract, client):
+    resp = client.post("/api/llm/summarize", json={"email_body": "test"})
+    assert resp.status_code == 500
+
+@pytest.mark.asyncio
+@patch("api.llm.extract_todos_and_summary", side_effect=Exception("Unknown"))
+def test_summarize_unknown_error(mock_extract, client):
+    resp = client.post("/api/llm/summarize", json={"email_body": "test"})
+    assert resp.status_code == 500
+
+@pytest.mark.asyncio
+@patch("api.llm.draft_reply", side_effect=LLMServiceError("Service down"))
+def test_draft_llm_service_error(mock_draft, client):
+    resp = client.post("/api/llm/draft", json={"email_body": "test", "instruction": "reply"})
+    assert resp.status_code == 500
+
+@pytest.mark.asyncio
+@patch("api.llm.draft_reply", side_effect=Exception("Unknown"))
+def test_draft_unknown_error(mock_draft, client):
+    resp = client.post("/api/llm/draft", json={"email_body": "test", "instruction": "reply"})
+    assert resp.status_code == 500
+
+def test_summarize_unauthorized():
+    with TestClient(app, headers={"X-User-Id": "testuser"}) as test_client:
+        resp = test_client.post("/api/llm/summarize?user_id=otheruser", json={"email_body": "test email"})
+        assert resp.status_code == 403
+
+def test_draft_unauthorized():
+    with TestClient(app, headers={"X-User-Id": "testuser"}) as test_client:
+        resp = test_client.post("/api/llm/draft?user_id=otheruser", json={"email_body": "test email", "instruction": "reply"})
+        assert resp.status_code == 403
