@@ -73,27 +73,17 @@ def detect_reply_tracking(body: str | None) -> bool:
     """
     Detects if the user sent an email that expects a reply.
     """
-    if not body:
-        return False
-    body_str = str(body)
-    return "?" in body_str or "please reply" in body_str.lower()
+    body_str = str(body or "").lower()
+    return "please reply" in body_str or "?" in body_str
 
 
 def thread_reply_candidate(
-    thread_messages: list[Email],
-    user_addresses: set[str],
-    is_chronological: bool = False,
+    thread_messages: list[Email], user_addresses: set[str]
 ) -> Email | None:
     if not user_addresses:
         return None
 
-    ordered_messages = (
-        reversed(thread_messages)
-        if is_chronological
-        else sorted(
-            thread_messages, key=lambda item: (item.date, item.id or 0), reverse=True
-        )
-    )
+    ordered_messages = sorted(thread_messages, key=lambda item: item.date, reverse=True)
 
     latest_external_date = None
     for message in ordered_messages:
@@ -155,7 +145,7 @@ async def check_missing_replies(
             organization_filter,
             Email.date > recent_limit,
         )
-        .order_by(Email.date.asc(), Email.id.asc())
+        .order_by(Email.date.asc())
     )
     result = await session.execute(stmt)
     emails = result.scalars().all()
@@ -168,9 +158,7 @@ async def check_missing_replies(
 
     flagged = []
     for thread_messages in threads.values():
-        candidate = thread_reply_candidate(
-            thread_messages, user_addresses, is_chronological=True
-        )
+        candidate = thread_reply_candidate(thread_messages, user_addresses)
         if candidate is not None:
             flagged.append(candidate)
 

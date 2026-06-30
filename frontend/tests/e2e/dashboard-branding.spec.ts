@@ -1518,7 +1518,7 @@ for (const viewport of [
     await expect(page.getByRole('region', { name: '맥락 종합' })).toBeVisible();
     await expect(page.getByRole('region', { name: '판단 포인트' })).toBeVisible();
     await expect(page.getByRole('region', { name: '실행 항목' })).toBeVisible();
-    await expect(page.getByText('오늘의 핵심 맥락 종합')).toHaveCount(0);
+    await expect(page.getByText('최근 AI 요약')).toHaveCount(0);
     await expect(page.getByText('설명 없음')).toHaveCount(0);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);

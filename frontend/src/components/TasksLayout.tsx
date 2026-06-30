@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Filter, User, CalendarDays, Inbox, AlertCircle, X } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -161,7 +161,6 @@ export function TasksLayout() {
   const [replySlaStatus, setReplySlaStatus] = useState<ReplySlaStatus>('idle');
   const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
   const [taskSearch, setTaskSearch] = useState('');
-  const deferredTaskSearch = useDeferredValue(taskSearch);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const taskSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -254,14 +253,14 @@ export function TasksLayout() {
   };
 
   const filteredTicketTasks = useMemo(() => {
-    const normalizedQuery = deferredTaskSearch.trim().toLowerCase();
+    const normalizedQuery = taskSearch.trim().toLowerCase();
     return ticketTasks.filter((task) => {
       if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
       if (!normalizedQuery) return true;
       const searchable = `${safeTaskTitle(task.title)} ${getTaskSourceLabel(task.source_type)} ${taskStatusLabels[task.status]} ${taskPriorityLabels[task.priority]}`.toLowerCase();
       return searchable.includes(normalizedQuery);
     });
-  }, [deferredTaskSearch, priorityFilter, ticketTasks]);
+  }, [priorityFilter, taskSearch, ticketTasks]);
 
   const liveBoardCounts = useMemo(() => {
     return filteredTicketTasks.reduce<Record<TicketTask['status'], number>>(
@@ -327,14 +326,14 @@ export function TasksLayout() {
             <input
               ref={taskSearchInputRef}
               id="task-search-input"
-              type="text"
+              type="search"
               inputMode="search"
               role="searchbox"
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="작업 맥락 검색..."
               aria-label="작업 맥락 검색"
-              className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64"
+              className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64 [&::-webkit-search-cancel-button]:hidden"
             />
             {taskSearch.length > 0 && (
               <button
@@ -411,7 +410,6 @@ export function TasksLayout() {
                 type="button"
                 aria-label="보낸 메일 미답변 팔로업 작업 생성"
                 disabled={replySlaStatus === 'loading'}
-                aria-busy={replySlaStatus === 'loading'}
                 onClick={() => void handleReplySlaEscalation()}
                 className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
               >
@@ -514,7 +512,6 @@ export function TasksLayout() {
                             type="button"
                             aria-label={`${displayTitle} WebDAV 지식 노트 의도 생성`}
                             disabled={currentKnowledgeIntent.state === 'loading'}
-                            aria-busy={currentKnowledgeIntent.state === 'loading'}
                             onClick={() => void handleKnowledgeIntentCreate(task.id)}
                             className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
                           >
@@ -525,7 +522,6 @@ export function TasksLayout() {
                             type="button"
                             aria-label={`${displayTitle} WebDAV 지식 노트 실행 요청`}
                             disabled={currentKnowledgeIntent.state === 'loading'}
-                            aria-busy={currentKnowledgeIntent.state === 'loading'}
                             onClick={() => void handleKnowledgeIntentCreate(task.id, true)}
                             className="rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/15 disabled:cursor-wait disabled:opacity-70"
                           >

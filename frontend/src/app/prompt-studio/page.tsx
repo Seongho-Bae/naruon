@@ -112,7 +112,7 @@ export default function PromptStudioPage() {
             value={testVariable} 
             onChange={e => setTestVariable(e.target.value)} 
           />
-          <Button onClick={handleTest} disabled={testing} aria-busy={testing} className="w-full">
+          <Button onClick={handleTest} disabled={testing} className="w-full">
             {testing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <Play className="w-4 h-4 mr-2" aria-hidden="true" />}
             {testing ? '테스트 중...' : '실행 (Test)'}
           </Button>
@@ -122,7 +122,7 @@ export default function PromptStudioPage() {
           <div className="p-4 bg-secondary/30 rounded-lg min-h-[100px] text-sm whitespace-pre-wrap border border-border">
             {testResult || '실행 결과가 여기에 표시됩니다.'}
           </div>
-          <Button onClick={handleSave} disabled={saving} aria-busy={saving} variant="secondary" className="w-full">
+          <Button onClick={handleSave} disabled={saving} variant="secondary" className="w-full">
             {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" /> : <Save className="w-4 h-4 mr-2" aria-hidden="true" />}
             {saving ? '저장 중...' : '프롬프트 저장 (Save)'}
           </Button>
