@@ -107,7 +107,7 @@ function sanitizeNetworkData(data: NetworkData): NormalizedNetworkData {
 
 import { apiClient } from '@/lib/api-client';
 
-export default function NetworkGraph() {
+export default function RelationContext() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -124,7 +124,7 @@ export default function NetworkGraph() {
         setLoading(false);
       })
       .catch((err) => {
-        console.error('Failed to load network graph:', err);
+        console.error('Failed to load relation graph:', err);
         setError('관계 맥락을 불러오지 못했습니다.');
         setLoading(false);
       });
