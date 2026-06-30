@@ -35,6 +35,7 @@ function positiveIntegerFromEnv(name: string, fallback: number) {
 const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1', 'localhost', '169.254.23.164'],
   devIndicators: false,
+  poweredByHeader: false,
   outputFileTracingRoot: __dirname,
   experimental: {
     // Best-effort local guard only: CI/Docker/runner CPU limits remain authoritative.

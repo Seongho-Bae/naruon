@@ -1,3 +1,8 @@
+## 2026-06-26 - Information Disclosure via X-Powered-By Header
+**Vulnerability:** Next.js exposes the `X-Powered-By: Next.js` HTTP header by default, disclosing implementation details.
+**Learning:** The frontend configuration did not explicitly disable this default header through `poweredByHeader`.
+**Prevention:** Set `poweredByHeader: false` in `next.config.ts` to reduce unnecessary technology stack disclosure.
+
 ## 2024-05-24 - Overly Permissive CORS Policy
 
 **Vulnerability:** The CORS configuration in FastAPI allowed wildcards (`*`) for `allow_methods` and `allow_headers`.

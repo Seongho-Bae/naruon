@@ -17,6 +17,9 @@
 - **CRLF 인젝션 방지:** 이메일 전송 API(`POST /api/emails/send`)의 `subject`, `to`, `in_reply_to`, `references` 파라미터에서 개행 문자(`\r`, `\n`)를 차단하는 엄격한 Pydantic 검증 로직을 추가하여 SMTP 명령 인젝션 취약점을 해결했습니다.
 - **이중 확장자 검증:** 이메일 파일 업로드 API(`POST /api/emails/import-files`)에서 `.exe.eml` 등 악성 이중 확장자 파일이 업로드되는 것을 방지하도록 확장자 검증 로직을 강화했습니다.
 
+### 수정
+- Next.js의 기본 `X-Powered-By` 응답 헤더를 비활성화하여 기술 스택 정보가 노출되는 취약점(Information Disclosure)을 완화했습니다.
+
 ## [0.14.4] - 2026-06-18
 
 ### 추가
