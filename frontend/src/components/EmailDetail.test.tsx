@@ -498,8 +498,8 @@ describe("EmailDetail", () => {
     expect(container.textContent).toContain("판단 보조 생성");
     expect(container.textContent).toContain("실행 항목");
     expect(container.textContent).toContain("신뢰도 91%");
-    expect(container.textContent).not.toContain("AI 생성");
-    expect(container.textContent).not.toContain("작업");
+    expect(container.textContent).not.toContain("AI Generated");
+    expect(container.textContent).not.toContain("Tasks");
   });
 
   it("runs a requested reply draft command for the selected email", async () => {
