@@ -1,5 +1,5 @@
-import base64
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -214,7 +214,9 @@ def test_runner_ws_accepts_signed_session_and_registered_token(monkeypatch):
             assert snapshot.active_connection_count == 1
             assert snapshot.last_seen_at is not None
             assert snapshot.last_disconnect_at is None
-            assert "nrn_registered-token" not in str(runner_ws.manager.connection_records)
+            assert "nrn_registered-token" not in str(
+                runner_ws.manager.connection_records
+            )
 
     snapshot = runner_ws.manager.snapshot("org-acme", "workspace-org-acme")
     assert snapshot.connection_state == "not_connected"
@@ -263,9 +265,7 @@ async def test_runner_manager_records_durable_signal_events(monkeypatch):
         "heartbeat",
         "disconnected",
     ]
-    assert {event["signal_key"] for event in recorded_events} == {
-        "connector_heartbeat"
-    }
+    assert {event["signal_key"] for event in recorded_events} == {"connector_heartbeat"}
     assert all(event["organization_id"] == "org-acme" for event in recorded_events)
     assert all(
         event["workspace_id"] == "workspace-org-acme" for event in recorded_events
@@ -468,7 +468,9 @@ async def test_runner_manager_dispatch_fails_closed_without_active_runner(monkey
 
 
 @pytest.mark.asyncio
-async def test_runner_manager_schedules_retry_when_runner_response_times_out(monkeypatch):
+async def test_runner_manager_schedules_retry_when_runner_response_times_out(
+    monkeypatch,
+):
     scheduled_retries: list[dict[str, object]] = []
 
     async def capture_provider_writeback_retry(**retry):

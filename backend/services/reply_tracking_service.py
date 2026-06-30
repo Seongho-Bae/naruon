@@ -1,14 +1,15 @@
-import logging
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from db.models import Email, TenantConfig
-from services.tenant_config_scope import get_scoped_tenant_config
-
-from services.threading_service import normalize_message_id
 import datetime
 import email.utils as email_utils
-from functools import lru_cache
+import logging
 from collections import defaultdict
+from functools import lru_cache
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models import Email, TenantConfig
+from services.tenant_config_scope import get_scoped_tenant_config
+from services.threading_service import normalize_message_id
 
 logger = logging.getLogger(__name__)
 

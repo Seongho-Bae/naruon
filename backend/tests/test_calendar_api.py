@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import patch, AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import asyncpg
 import httpx
@@ -169,7 +169,9 @@ def test_calendar_sync_uses_server_authoritative_calendar_credentials(mock_creat
 
 
 @patch("api.calendar.create_calendar_event", new_callable=AsyncMock)
-def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override, caplog):
+def test_calendar_sync_endpoint_error(
+    mock_create, calendar_user_token_override, caplog
+):
     mock_create.side_effect = CalendarServiceError("Mocked error")
     calendar_user_token_override(_server_owned_google_credentials())
 
@@ -180,7 +182,9 @@ def test_calendar_sync_endpoint_error(mock_create, calendar_user_token_override,
         )
 
     assert response.status_code == 500
-    assert response.json() == {"detail": "An internal server error occurred while communicating with the calendar service"}
+    assert response.json() == {
+        "detail": "An internal server error occurred while communicating with the calendar service"
+    }
     assert "Calendar service error during sync_todos" in caplog.text
     assert "Mocked error" not in caplog.text
 
@@ -630,7 +634,7 @@ def test_calendar_writeback_targeted_authorization_hides_source_existence(
                 capabilities=["read", "write", "etag"],
                 writeback_enabled=True,
                 etag="cross-org-etag",
-            )
+            ),
         ]
     )
 
@@ -702,7 +706,6 @@ def test_calendar_writeback_rejects_org_admin_cross_user_targeting(
     )
 
     assert response.status_code == 403
-
 
 
 def test_calendar_writeback_rejects_system_admin_targeting_cross_org_source(

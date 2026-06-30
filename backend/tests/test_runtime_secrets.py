@@ -1,8 +1,9 @@
 import pytest
+
 from core.runtime_secrets import (
-    validate_auth_session_hmac_secret_value,
     _KNOWN_PUBLIC_AUTH_SESSION_HMAC_SECRETS,
     _LOW_ENTROPY_PLACEHOLDER_TERMS,
+    validate_auth_session_hmac_secret_value,
 )
 
 

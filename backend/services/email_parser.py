@@ -1,10 +1,10 @@
+import datetime
 from email import message_from_binary_file, message_from_bytes, policy
 from email.message import Message
+from email.utils import formataddr, getaddresses, parsedate_to_datetime
 from pathlib import Path
-import datetime
-from email.utils import formataddr, getaddresses
-from email.utils import parsedate_to_datetime
 from typing import TypedDict
+
 from .exceptions import EmailParseError
 from .text_safety import strip_html_markup
 

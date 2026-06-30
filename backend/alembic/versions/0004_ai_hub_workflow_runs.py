@@ -5,8 +5,9 @@ Revises: 0003_prompt_template_scope
 Create Date: 2026-06-21 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0004_ai_hub_workflow_runs"
 down_revision = "0003_prompt_template_scope"
@@ -74,9 +75,7 @@ def downgrade() -> None:
         op.drop_table(_RUN_TABLE)
 
     if inspector.has_table(_WORKFLOW_TABLE):
-        for index_name, _column_names in reversed(
-            _ai_hub_indexes()[_WORKFLOW_TABLE]
-        ):
+        for index_name, _column_names in reversed(_ai_hub_indexes()[_WORKFLOW_TABLE]):
             op.drop_index(index_name, table_name=_WORKFLOW_TABLE, if_exists=True)
         op.drop_table(_WORKFLOW_TABLE)
 

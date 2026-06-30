@@ -13,6 +13,7 @@ from api.auth import (
     get_auth_context,
     is_admin_role,
 )
+from core.config import settings
 from db.models import (
     CalendarWritebackSource,
     ConnectorSignalEvent,
@@ -20,7 +21,6 @@ from db.models import (
     WebdavAccount,
 )
 from db.session import get_db
-from core.config import settings
 from services.access_policy import AccessRequest, ResourcePolicy, evaluate_access
 
 router = APIRouter(prefix="/api/security", tags=["security"])
@@ -124,10 +124,7 @@ def _evidence_label(evidence_source: str) -> str:
 
 
 def _can_read_org_scope(auth_context: AuthContext) -> bool:
-    return (
-        is_admin_role(auth_context.role)
-        and auth_context.organization_id is not None
-    )
+    return is_admin_role(auth_context.role) and auth_context.organization_id is not None
 
 
 def _webdav_scope_statement(auth_context: AuthContext):
@@ -292,7 +289,9 @@ def _webdav_source(
         source_type="webdav_repository",
         source_label="WebDAV repository",
         scope_kind=_scope_kind(account.organization_id),
-        capabilities=["read", "write", "etag"] if account.writeback_enabled else ["read"],
+        capabilities=["read", "write", "etag"]
+        if account.writeback_enabled
+        else ["read"],
         writeback_enabled=bool(account.writeback_enabled),
         policy_decision=decision,
         last_observed_at=_datetime_to_utc_iso(account.created_at),

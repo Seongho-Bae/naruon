@@ -1,9 +1,10 @@
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List
 
-from api.auth import get_auth_context, AuthContext
+from api.auth import AuthContext, get_auth_context
 from api.runner_ws import manager as runner_manager
 from db.session import get_db
 from services.webdav_service import webdav_service
@@ -17,11 +18,13 @@ WEB_DAV_ERROR_STATUS_CODES = {
     "webdav_account_not_found": 422,
 }
 
+
 class WebdavAccountResponse(BaseModel):
     source_id: str
     display_label: str
     writeback_enabled: bool
     etag: str | None = None
+
 
 class ProjectFolderResponse(BaseModel):
     folder_uid: str
@@ -30,10 +33,12 @@ class ProjectFolderResponse(BaseModel):
     owner_user_id: str
     organization_id: str | None
 
+
 class WritebackIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_source_id: str | None = None
+
 
 class WritebackIntentResponse(BaseModel):
     intent: str
@@ -45,12 +50,14 @@ class WritebackIntentResponse(BaseModel):
     status: str | None = None
     message: str | None = None
 
+
 class KnowledgeMaterializationIntentRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     source_task_id: str
     target_source_id: str | None = None
     execute_provider: bool = False
+
 
 class KnowledgeMaterializationIntentResponse(BaseModel):
     intent: str
@@ -72,6 +79,7 @@ class KnowledgeMaterializationIntentResponse(BaseModel):
     error_code: str | None = None
     retry_item_uid: str | None = None
 
+
 @router.get("/accounts", response_model=List[WebdavAccountResponse])
 async def get_webdav_accounts(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -85,6 +93,7 @@ async def get_webdav_accounts(
         auth_context.workspace_id,
     )
 
+
 @router.get("/folders", response_model=List[ProjectFolderResponse])
 async def get_project_folders(
     auth_context: AuthContext = Depends(get_auth_context),
@@ -96,6 +105,7 @@ async def get_project_folders(
         user_id,
         auth_context.organization_id,
     )
+
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)
 async def get_webdav_writeback_intent(
@@ -114,6 +124,7 @@ async def get_webdav_writeback_intent(
     if result.get("status") == "error":
         raise HTTPException(status_code=422, detail=result.get("message"))
     return WritebackIntentResponse(**result)
+
 
 @router.post(
     "/knowledge-materialization-intent",

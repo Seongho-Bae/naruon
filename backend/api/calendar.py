@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.auth import (
     AuthContext,
     get_auth_context,
@@ -312,17 +313,24 @@ async def sync_todos(
         )
     try:
         safe_todos = [validate_calendar_todo_text(todo) for todo in request.todos]
-        coros = [create_calendar_event(safe_todo, user_token) for safe_todo in safe_todos]
+        coros = [
+            create_calendar_event(safe_todo, user_token) for safe_todo in safe_todos
+        ]
         results = await asyncio.gather(*coros)
         return {"synced": len(results), "events": list(results)}
     except UnsafeCalendarTodoError:
-        raise HTTPException(status_code=422, detail="Invalid or unsafe calendar todo text")
+        raise HTTPException(
+            status_code=422, detail="Invalid or unsafe calendar todo text"
+        )
     except CalendarServiceError as e:
         logger.warning(
             "Calendar service error during sync_todos",
             extra={"error_type": type(e).__name__},
         )
-        raise HTTPException(status_code=500, detail="An internal server error occurred while communicating with the calendar service")
+        raise HTTPException(
+            status_code=500,
+            detail="An internal server error occurred while communicating with the calendar service",
+        )
 
 
 @router.post("/writeback-intent", response_model=WritebackIntentResponse)

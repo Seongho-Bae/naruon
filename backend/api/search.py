@@ -1,13 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException
 import datetime
 import logging
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy import func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, union_all
-from db.session import get_db, get_readonly_db
-from db.models import Email, Attachment
-from services.embedding import STORAGE_EMBEDDING_DIMENSION, fit_embedding_vector, generate_embeddings
+
 from api.auth import AuthContext, get_auth_context
+from db.models import Attachment, Email
+from db.session import get_db, get_readonly_db
+from services.embedding import (
+    STORAGE_EMBEDDING_DIMENSION,
+    fit_embedding_vector,
+    generate_embeddings,
+)
 from services.exceptions import EmbeddingGenerationError
 from services.llm_provider_selection import resolve_runtime_llm_provider
 

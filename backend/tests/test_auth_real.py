@@ -12,17 +12,18 @@ from fastapi import HTTPException
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+
 from api.auth import (
-    is_tenant_admin_role,
-    is_admin_role,
-    AuthContext,
     OIDC_ALLOWED_ALGORITHMS,
     SESSION_ALLOWED_ALGORITHMS,
     SESSION_AUTH_RATE_LIMIT_MAX_FAILURES,
+    AuthContext,
     _session_auth_failure_buckets,
     ensure_organization_access,
     get_auth_context,
     get_current_user,
+    is_admin_role,
+    is_tenant_admin_role,
 )
 from core.config import settings
 from db.session import get_db

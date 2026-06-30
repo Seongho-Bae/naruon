@@ -363,7 +363,6 @@ def test_ai_hub_surface_uses_signed_source_evidence():
     assert "id" not in data["prompt_cards"][0]
     assert data["workflow_cards"][0]["state_code"] == "needs_provider"
 
-
     assert data["evaluation_metrics"][1]["score_value"] == 0
     assert data["run_events"][0]["evidence_source"] == "api.llm_providers"
     assert "credential material" not in response.text

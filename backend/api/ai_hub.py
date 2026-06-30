@@ -491,13 +491,11 @@ async def get_ai_hub_surface(
         if provider.is_active and is_llm_provider_configured(provider)
     )
     workflow_cards = [
-        _workflow_card_from_definition(workflow)
-        for workflow in workflow_definitions
+        _workflow_card_from_definition(workflow) for workflow in workflow_definitions
     ] or _workflow_cards(prompt_cards, active_provider_count)
     agent_cards = [_agent_card(provider) for provider in providers]
     run_events = [
-        _run_event_from_record(run_record)
-        for run_record in agent_run_records
+        _run_event_from_record(run_record) for run_record in agent_run_records
     ] or _run_events(prompts, audit_events)
     readiness_score = _score(
         active_provider_count,

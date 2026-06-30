@@ -50,9 +50,13 @@ def _connector_manifest() -> dict[str, object]:
     }
 
 
-def _check_org_admin(auth_context: AuthContext = Depends(get_auth_context)) -> AuthContext:
+def _check_org_admin(
+    auth_context: AuthContext = Depends(get_auth_context),
+) -> AuthContext:
     if not is_admin_role(auth_context.role):
-        raise HTTPException(status_code=403, detail="Organization admin access required")
+        raise HTTPException(
+            status_code=403, detail="Organization admin access required"
+        )
     if is_tenant_admin_role(auth_context.role) and not auth_context.organization_id:
         raise HTTPException(status_code=403, detail="Organization scope is required")
     return auth_context
@@ -78,7 +82,9 @@ async def get_runner_config(
     organization_id = _get_target_organization_id(auth_context)
     workspace_id = f"workspace-{organization_id}"
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.organization_id == organization_id)
+        select(WorkspaceRunnerConfig).where(
+            WorkspaceRunnerConfig.organization_id == organization_id
+        )
     )
     config = result.scalar_one_or_none()
 
@@ -117,7 +123,9 @@ async def rotate_runner_token(
     organization_id = _get_target_organization_id(auth_context)
     workspace_id = f"workspace-{organization_id}"
     result = await db.execute(
-        select(WorkspaceRunnerConfig).where(WorkspaceRunnerConfig.organization_id == organization_id)
+        select(WorkspaceRunnerConfig).where(
+            WorkspaceRunnerConfig.organization_id == organization_id
+        )
     )
     config = result.scalar_one_or_none()
 

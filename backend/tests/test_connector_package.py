@@ -10,6 +10,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from connector import main as connector_main  # noqa: E402
+
 from runner.connector import SelfHostedConnector, _log_safe_ws_url  # noqa: E402
 
 

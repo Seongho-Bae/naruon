@@ -6,8 +6,9 @@ from cryptography.fernet import Fernet
 from pydantic import SecretStr
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
-from db.models import EncryptedString, TenantConfig, get_fernet
+
 from core.config import settings
+from db.models import EncryptedString, TenantConfig, get_fernet
 
 TEST_OPENAI_KEY = os.environ.get("TEST_OPENAI_KEY", "dummy-openai-key")
 TEST_IMAP_PASSWORD = os.environ.get("TEST_IMAP_PASSWORD", "dummy-imap-password")

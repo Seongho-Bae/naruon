@@ -7,12 +7,12 @@ workflow governance before a release branch can land.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
+import shutil
 import subprocess
 import sys
-import importlib.util
-import shutil
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -500,8 +500,7 @@ def test_pr_review_merge_scheduler_uses_minimal_token_permissions() -> None:
         "      actions: read\n"
         "      checks: read\n"
         "      contents: read\n"
-        "      pull-requests: write"
-        in workflow
+        "      pull-requests: write" in workflow
     )
     assert "actions: write" not in workflow
     assert "contents: write" not in workflow

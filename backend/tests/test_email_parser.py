@@ -1,10 +1,11 @@
-import tempfile
-import os
 import datetime
+import os
+import tempfile
 from unittest.mock import patch
 
 import pytest
-from services.email_parser import parse_eml, _sanitize_nul
+
+from services.email_parser import _sanitize_nul, parse_eml
 from services.exceptions import EmailParseError
 
 
@@ -236,6 +237,7 @@ Test"""
     finally:
         os.unlink(temp_path)
 
+
 def test_parse_eml_mocked_oserror():
     with patch("builtins.open", side_effect=OSError("Mocked OS Error")):
         with pytest.raises(
@@ -267,6 +269,7 @@ def test_sanitize_nul():
     assert _sanitize_nul(12.3) == "12.3"
     assert _sanitize_nul(True) == "True"
 
+
 def test_sanitize_display_text():
     from services.email_parser import _sanitize_display_text
 
@@ -279,7 +282,10 @@ def test_sanitize_display_text():
     # Strings with HTML tags
     assert _sanitize_display_text("<b>hello</b> world") == "hello world"
     assert _sanitize_display_text("<script>alert('xss')</script>") == ""
-    assert _sanitize_display_text("hello <img src=x onerror=alert(1)>world") == "hello world"
+    assert (
+        _sanitize_display_text("hello <img src=x onerror=alert(1)>world")
+        == "hello world"
+    )
 
     # Strings combining NUL and HTML
     assert _sanitize_display_text("<b>hello\x00</b>") == "hello"

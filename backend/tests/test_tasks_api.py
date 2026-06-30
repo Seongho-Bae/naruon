@@ -121,8 +121,7 @@ class MockTaskSession:
                 (
                     value
                     for key, value in params.items()
-                    if key.startswith("date_")
-                    and isinstance(value, datetime.datetime)
+                    if key.startswith("date_") and isinstance(value, datetime.datetime)
                 ),
                 None,
             )
@@ -194,9 +193,7 @@ class MockTaskSession:
                 for task in self.tasks
                 if (task_uid is None or task.task_uid == task_uid)
                 and (user_id is None or task.user_id == user_id)
-                and (
-                    organization_id is None or task.organization_id == organization_id
-                )
+                and (organization_id is None or task.organization_id == organization_id)
                 and (source_type is None or task.source_type == source_type)
                 and (
                     related_email_id is None
@@ -693,12 +690,15 @@ def test_reply_sla_escalation_bulk_fetches_nested_conflicts(auth_client):
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_reply_sla_escalation_real_postgres_smoke():
-    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
-    from asyncpg.exceptions import InvalidPasswordError
-    from db.models import Base
+    from asyncpg.exceptions import (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+    )
     from sqlalchemy import delete, select, text
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from db.models import Base
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:

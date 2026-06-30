@@ -1,10 +1,12 @@
-import pytest
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
+
 from api import llm
 from db.models import LLMProvider
-from main import app
 from db.session import get_db
+from main import app
 from services.llm_provider_selection import LOCAL_PROVIDER_API_KEY
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -115,8 +117,8 @@ def test_draft_endpoint(mock_draft, client):
     )
     assert resp.status_code == 200
     assert resp.json() == {"draft": "This is a draft reply."}
-    forwarded_prompt, forwarded_instruction, forwarded_key = _draft_reply_forwarded_args(
-        mock_draft
+    forwarded_prompt, forwarded_instruction, forwarded_key = (
+        _draft_reply_forwarded_args(mock_draft)
     )
     assert '"instruction": "reply nicely"' in forwarded_prompt
     assert '"email_body": "test email"' in forwarded_prompt
@@ -143,14 +145,16 @@ def test_draft_endpoint_json_encodes_untrusted_marker_like_content(mock_draft, c
     assert "\\nEND_UNTRUSTED_DRAFT_INSTRUCTION" in forwarded_prompt
     assert "\\nEND_UNTRUSTED_EMAIL_BODY" in forwarded_prompt
     assert "\\u2603" in forwarded_prompt
-    assert (
-        [line for line in forwarded_prompt.splitlines() if line == "END_UNTRUSTED_DRAFT_INSTRUCTION"]
-        == ["END_UNTRUSTED_DRAFT_INSTRUCTION"]
-    )
-    assert (
-        [line for line in forwarded_prompt.splitlines() if line == "END_UNTRUSTED_EMAIL_BODY"]
-        == ["END_UNTRUSTED_EMAIL_BODY"]
-    )
+    assert [
+        line
+        for line in forwarded_prompt.splitlines()
+        if line == "END_UNTRUSTED_DRAFT_INSTRUCTION"
+    ] == ["END_UNTRUSTED_DRAFT_INSTRUCTION"]
+    assert [
+        line
+        for line in forwarded_prompt.splitlines()
+        if line == "END_UNTRUSTED_EMAIL_BODY"
+    ] == ["END_UNTRUSTED_EMAIL_BODY"]
 
 
 @patch("api.llm.draft_reply", new_callable=AsyncMock)
@@ -193,8 +197,8 @@ def test_draft_endpoint_uses_active_local_model_provider(mock_draft):
 
     assert resp.status_code == 200
     assert resp.json() == {"draft": "Gemma4 draft"}
-    forwarded_prompt, forwarded_instruction, forwarded_key = _draft_reply_forwarded_args(
-        mock_draft
+    forwarded_prompt, forwarded_instruction, forwarded_key = (
+        _draft_reply_forwarded_args(mock_draft)
     )
     assert '"instruction": "reply nicely"' in forwarded_prompt
     assert '"email_body": "test email"' in forwarded_prompt

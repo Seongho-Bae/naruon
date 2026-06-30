@@ -1,13 +1,14 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from api.prompts import PromptTestRequest
-from unittest.mock import AsyncMock, MagicMock, patch
 
+from api.prompts import PromptTestRequest
 from core.config import settings
-from main import app
 from db.models import LLMProvider, PromptTemplate
 from db.session import get_db
+from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -170,6 +171,7 @@ def test_prompt_crud_validation(auth_client):
         },
     )
     assert resp.status_code == 422
+
 
 def test_prompt_crud(auth_client):
     # Create
@@ -511,10 +513,10 @@ async def test_execute_prompt_with_llm_disables_redirect_following_for_custom_ba
 
 def test_prompt_test_request_valid_variables():
     request = PromptTestRequest(
-        content="Hello {{name}}",
-        variables={"name": "Alice", "valid_var_123": "value"}
+        content="Hello {{name}}", variables={"name": "Alice", "valid_var_123": "value"}
     )
     assert request.variables == {"name": "Alice", "valid_var_123": "value"}
+
 
 def test_prompt_test_request_too_many_variables():
     variables = {f"var_{i}": "value" for i in range(21)}
@@ -522,16 +524,21 @@ def test_prompt_test_request_too_many_variables():
         PromptTestRequest(content="Hello", variables=variables)
     assert "Too many prompt variables" in str(exc_info.value)
 
-@pytest.mark.parametrize("invalid_name", [
-    "1invalid",  # Starts with a number
-    "in-valid",  # Contains a hyphen
-    "in valid",  # Contains a space
-    "a" * 65     # Too long (max 64)
-])
+
+@pytest.mark.parametrize(
+    "invalid_name",
+    [
+        "1invalid",  # Starts with a number
+        "in-valid",  # Contains a hyphen
+        "in valid",  # Contains a space
+        "a" * 65,  # Too long (max 64)
+    ],
+)
 def test_prompt_test_request_invalid_variable_names(invalid_name):
     with pytest.raises(ValidationError) as exc_info:
         PromptTestRequest(content="Hello", variables={invalid_name: "value"})
     assert "Invalid prompt variable name" in str(exc_info.value)
+
 
 def test_prompt_test_request_variable_value_too_long():
     long_value = "x" * 2001

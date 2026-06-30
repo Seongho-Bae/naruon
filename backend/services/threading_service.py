@@ -1,17 +1,18 @@
-import uuid
+import hashlib
 import re
-from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import Email
 from services.email_parser import EmailData
-
-
-import hashlib
 
 # ⚡ Bolt Optimization: Pre-compile reference extraction regex
 # Impact: Eliminates redundant inline compilation/caching overhead during repetitive
 # email header processing, yielding a measurable speedup when handling long reference lists.
 REFERENCE_PATTERN = re.compile(r"<([^>]+)>")
+
 
 def generate_email_fingerprint(
     subject: str | None,

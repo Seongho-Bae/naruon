@@ -1,5 +1,7 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
+
 from services.calendar_service import create_calendar_event
 from services.exceptions import CalendarServiceError, UnsafeCalendarTodoError
 

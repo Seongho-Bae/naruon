@@ -1,5 +1,6 @@
 import datetime
-from services.calendar_sync import generate_ics_from_task, CalendarTask
+
+from services.calendar_sync import CalendarTask, generate_ics_from_task
 
 
 def test_generate_ics_from_task():

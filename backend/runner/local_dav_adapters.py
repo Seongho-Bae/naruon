@@ -78,7 +78,9 @@ class LocalDavAdapters:
         except ValueError as exc:
             return self._error(str(exc))
 
-        content_type = self._payload_text(payload, "content_type") or default_content_type
+        content_type = (
+            self._payload_text(payload, "content_type") or default_content_type
+        )
         headers = {"Content-Type": content_type, "If-Match": if_match}
         auth = (
             (source.username, source.password or "")
@@ -134,7 +136,9 @@ class LocalDavAdapters:
         segments = [segment for segment in raw_path.split("/") if segment]
         if not segments or any(segment in {".", ".."} for segment in segments):
             return None
-        return "/" + "/".join(quote(segment, safe="@:$&'()*+,;=-._~") for segment in segments)
+        return "/" + "/".join(
+            quote(segment, safe="@:$&'()*+,;=-._~") for segment in segments
+        )
 
     def _target_url(self, base_url: str, target_path: str) -> str:
         parsed = urlsplit(base_url)

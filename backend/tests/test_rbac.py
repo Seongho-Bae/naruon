@@ -1,5 +1,6 @@
 from core.rbac import check_tenant_access
 
+
 def test_check_tenant_access_hierarchy():
     """Test that higher privileges can access resources requiring lower privileges."""
     assert check_tenant_access("system_admin", "member") is True
@@ -8,6 +9,7 @@ def test_check_tenant_access_hierarchy():
     assert check_tenant_access("tenant_admin", "member") is True
     assert check_tenant_access("organization_admin", "group_admin") is True
     assert check_tenant_access("group_admin", "member") is True
+
 
 def test_check_tenant_access_equality():
     """Test that users can access resources requiring their exact role."""
@@ -18,6 +20,7 @@ def test_check_tenant_access_equality():
     assert check_tenant_access("system_admin", "system_admin") is True
     assert check_tenant_access("platform_admin", "platform_admin") is True
 
+
 def test_check_tenant_access_insufficient_privilege():
     """Test that lower privileges cannot access resources requiring higher privileges."""
     assert check_tenant_access("member", "system_admin") is False
@@ -25,6 +28,7 @@ def test_check_tenant_access_insufficient_privilege():
     assert check_tenant_access("group_admin", "tenant_admin") is False
     assert check_tenant_access("tenant_admin", "system_admin") is False
     assert check_tenant_access("organization_admin", "platform_admin") is False
+
 
 def test_check_tenant_access_equivalent_roles():
     """Test roles that share the same level in the hierarchy."""
@@ -35,6 +39,7 @@ def test_check_tenant_access_equivalent_roles():
     # level 3
     assert check_tenant_access("system_admin", "platform_admin") is True
     assert check_tenant_access("platform_admin", "system_admin") is True
+
 
 def test_check_tenant_access_invalid_roles():
     """Test behavior when invalid roles are provided."""

@@ -1,6 +1,5 @@
-
-from datetime import datetime, timezone
 import hashlib
+from datetime import datetime, timezone
 from typing import Literal, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -282,7 +281,9 @@ def _document_webdav_materialization_response(
     }
 
 
-def _document_webdav_runner_command(document: Document, intent_result: dict) -> dict[str, object]:
+def _document_webdav_runner_command(
+    document: Document, intent_result: dict
+) -> dict[str, object]:
     return {
         "action": "write_webdav",
         "account": intent_result["source_id"],
@@ -793,7 +794,9 @@ async def upload_data_document(
     )
 
 
-@router.post("/documents/{document_id}/reparse", response_model=DataDocumentActionResponse)
+@router.post(
+    "/documents/{document_id}/reparse", response_model=DataDocumentActionResponse
+)
 async def reparse_data_document(
     document_id: str,
     auth_context: AuthContext = Depends(get_auth_context),
@@ -879,7 +882,9 @@ async def create_document_webdav_materialization_intent(
             str(source_result.get("error_code") or ""),
             422,
         )
-        raise HTTPException(status_code=status_code, detail=source_result.get("message"))
+        raise HTTPException(
+            status_code=status_code, detail=source_result.get("message")
+        )
 
     result = _document_webdav_materialization_response(document, source_result)
     if request.execute_provider:

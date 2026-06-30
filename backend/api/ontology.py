@@ -1,14 +1,14 @@
 import email.utils as email_utils
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel, Field
 from typing import List
 
-from db.session import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.auth import AuthContext, get_auth_context
 from db.models import Email, SenderRelationship
-from api.auth import get_auth_context, AuthContext
+from db.session import get_db
 from services.ontology_service import RelationshipData, ontology_service
 from services.text_safety import strip_html_markup
 from services.threading_service import normalize_message_id

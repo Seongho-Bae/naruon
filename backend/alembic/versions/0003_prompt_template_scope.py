@@ -5,8 +5,9 @@ Revises: 0002_provider_retry_queue
 Create Date: 2026-06-21 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0003_prompt_template_scope"
 down_revision = "0002_provider_retry_queue"
@@ -21,7 +22,9 @@ def upgrade() -> None:
 
     column_names = {column["name"] for column in inspector.get_columns(_PROMPT_TABLE)}
     if "prompt_uid" not in column_names:
-        op.add_column(_PROMPT_TABLE, sa.Column("prompt_uid", sa.String(), nullable=True))
+        op.add_column(
+            _PROMPT_TABLE, sa.Column("prompt_uid", sa.String(), nullable=True)
+        )
     if "organization_id" not in column_names:
         op.add_column(
             _PROMPT_TABLE,

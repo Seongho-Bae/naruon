@@ -58,10 +58,7 @@ def _email_date_utc(email: Email) -> datetime.datetime:
 
 
 async def _fetch_existing_tasks_by_email(
-    db: AsyncSession,
-    user_id: str,
-    organization_id: str | None,
-    email_ids: list[int]
+    db: AsyncSession, user_id: str, organization_id: str | None, email_ids: list[int]
 ) -> dict[int, TicketTask]:
     result = await db.execute(
         select(TicketTask)
@@ -111,7 +108,7 @@ async def _refresh_escalated_tasks(
     user_id: str,
     organization_id: str | None,
     email_ids: list[int],
-    escalated_tasks: list[tuple[TicketTask, str | None]]
+    escalated_tasks: list[tuple[TicketTask, str | None]],
 ) -> None:
     refreshed_tasks_by_email = await _fetch_existing_tasks_by_email(
         db, user_id, organization_id, email_ids
@@ -215,9 +212,7 @@ async def _process_fallback_escalation(
             fallback_entries[index] = (email, task)
 
     escalated_tasks.extend(
-        (task, email.message_id)
-        for email, task in fallback_entries
-        if task is not None
+        (task, email.message_id) for email, task in fallback_entries if task is not None
     )
 
     if created_count > 0 or any(t.status != "done" for t, _ in escalated_tasks):

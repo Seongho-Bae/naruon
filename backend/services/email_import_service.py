@@ -1,12 +1,12 @@
 import asyncio
 import datetime
-from email import policy as email_policy
 import hashlib
 import logging
 import mailbox
 import os
 import stat
 from dataclasses import dataclass, field
+from email import policy as email_policy
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal

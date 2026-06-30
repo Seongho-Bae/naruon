@@ -37,11 +37,14 @@ class MockTenantConfig:
         self.oauth_client_secret = None
         self.oauth_redirect_uri = None
 
+
 class MockResult:
     def __init__(self, config=None):
         self.config = config
+
     def scalar_one_or_none(self):
         return self.config
+
 
 class MockSession:
     def __init__(self):
@@ -67,6 +70,7 @@ class MockSession:
 
     async def refresh(self, obj):
         pass
+
 
 async def override_get_db():
     yield MockSession()
@@ -142,6 +146,7 @@ def client(dev_auth_dependency_overrides):
     with TestClient(app, headers={"X-User-Id": "testuser"}) as c:
         yield c
     app.dependency_overrides.clear()
+
 
 def test_get_and_update_tenant_config(client: TestClient, monkeypatch):
     monkeypatch.setattr(

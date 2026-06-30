@@ -6,8 +6,9 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 from pydantic import SecretStr
-from main import app
+
 from db.session import get_db
+from main import app
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
 
@@ -441,9 +442,18 @@ def test_tenant_config_rejects_unsafe_pop3_port(client, monkeypatch):
 
 @pytest.mark.parametrize(
     "permitted_role",
-    ("system_admin", "platform_admin", "tenant_admin", "organization_admin", "group_admin", "member"),
+    (
+        "system_admin",
+        "platform_admin",
+        "tenant_admin",
+        "organization_admin",
+        "group_admin",
+        "member",
+    ),
 )
-def test_tenant_config_get_returns_own_config_for_permitted_role(client, permitted_role):
+def test_tenant_config_get_returns_own_config_for_permitted_role(
+    client, permitted_role
+):
     # GET /api/config enforces RBAC through ensure_mailbox_config_self_access and
     # always returns the authenticated session user's own config (no user_id parameter).
     response = client.get(
@@ -515,13 +525,16 @@ def test_global_config_allows_admin(client, admin_role):
 @pytest.mark.postgres
 @pytest.mark.asyncio
 async def test_create_read_pop3_postgres_smoke(monkeypatch):
-    from asyncpg.exceptions import InvalidAuthorizationSpecificationError
-    from asyncpg.exceptions import InvalidPasswordError
-    from core.config import settings
-    from db.models import Base
+    from asyncpg.exceptions import (
+        InvalidAuthorizationSpecificationError,
+        InvalidPasswordError,
+    )
     from sqlalchemy import text
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from core.config import settings
+    from db.models import Base
 
     def fake_validate_pop3_destination(host, port, *, resolve_host=True):
         return host, port

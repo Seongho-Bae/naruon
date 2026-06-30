@@ -14,11 +14,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from core.config import settings
-from main import app
 from api.auth import get_auth_context, get_current_user
+from core.config import settings
 from db.models import TicketTask
 from db.session import get_db
+from main import app
 from services.webdav_service import WebDavService, webdav_service
 
 pytestmark = pytest.mark.usefixtures("dev_auth_dependency_overrides")
@@ -60,36 +60,45 @@ def _valid_session_payload(**overrides: object) -> dict[str, object]:
     payload.update(overrides)
     return payload
 
+
 @pytest.fixture(autouse=True)
 def stub_webdav_service(monkeypatch):
     async def fake_accounts(db, user_id, organization_id=None, workspace_id=None):
         del organization_id, workspace_id
-        return [
-            {
-                "source_id": "webdav_src_demo_primary",
-                "display_label": "WebDAV source webdav_src_demo_primary",
-                "writeback_enabled": True,
-                "etag": "etag-webdav-demo-primary",
-            }
-        ] if user_id == "alice" else []
+        return (
+            [
+                {
+                    "source_id": "webdav_src_demo_primary",
+                    "display_label": "WebDAV source webdav_src_demo_primary",
+                    "writeback_enabled": True,
+                    "etag": "etag-webdav-demo-primary",
+                }
+            ]
+            if user_id == "alice"
+            else []
+        )
 
     async def fake_folders(db, user_id, organization_id=None):
-        return [
-            {
-                "folder_uid": "webdav_folder_demo_roadmap",
-                "project_name": "Naruon Roadmap 2026",
-                "webdav_path": "/Projects/Naruon_Roadmap_2026",
-                "owner_user_id": "alice",
-                "organization_id": "org-acme",
-            },
-            {
-                "folder_uid": "webdav_folder_demo_marketing",
-                "project_name": "Marketing Assets",
-                "webdav_path": "/Projects/Marketing_Assets",
-                "owner_user_id": "alice",
-                "organization_id": "org-acme",
-            },
-        ] if user_id == "alice" and organization_id == "org-acme" else []
+        return (
+            [
+                {
+                    "folder_uid": "webdav_folder_demo_roadmap",
+                    "project_name": "Naruon Roadmap 2026",
+                    "webdav_path": "/Projects/Naruon_Roadmap_2026",
+                    "owner_user_id": "alice",
+                    "organization_id": "org-acme",
+                },
+                {
+                    "folder_uid": "webdav_folder_demo_marketing",
+                    "project_name": "Marketing Assets",
+                    "webdav_path": "/Projects/Marketing_Assets",
+                    "owner_user_id": "alice",
+                    "organization_id": "org-acme",
+                },
+            ]
+            if user_id == "alice" and organization_id == "org-acme"
+            else []
+        )
 
     async def fake_intent(
         db,
@@ -162,6 +171,7 @@ def stub_webdav_service(monkeypatch):
         "determine_knowledge_materialization_intent_from_db",
         fake_knowledge_intent,
     )
+
 
 @pytest.fixture
 def auth_client():
@@ -246,6 +256,7 @@ def test_webdav_routes_reject_public_identity_headers_without_signed_session():
     assert response.status_code == 401
     assert response.json()["detail"] == "Authentication required"
 
+
 def test_get_project_folders(auth_client):
     response = auth_client.get("/api/webdav/folders")
     assert response.status_code == 200, response.text
@@ -257,6 +268,7 @@ def test_get_project_folders(auth_client):
     assert body[0]["organization_id"] == "org-acme"
     assert body[1]["project_name"] == "Marketing Assets"
     assert "folder_id" not in body[0]
+
 
 def test_get_webdav_writeback_intent(auth_client):
     response = auth_client.post("/api/webdav/writeback-intent", json={})
@@ -563,7 +575,9 @@ async def test_knowledge_materialization_execute_provider_dispatches_runner(
             "etag": "etag-after-write",
         }
 
-    monkeypatch.setattr("api.webdav.runner_manager.dispatch_command", fake_dispatch_command)
+    monkeypatch.setattr(
+        "api.webdav.runner_manager.dispatch_command", fake_dispatch_command
+    )
     response = auth_client.post(
         "/api/webdav/knowledge-materialization-intent",
         json={
@@ -616,7 +630,9 @@ async def test_knowledge_materialization_execute_provider_returns_retry_item(
             "retry_item_uid": "provider_retry_webdav_1",
         }
 
-    monkeypatch.setattr("api.webdav.runner_manager.dispatch_command", fake_dispatch_command)
+    monkeypatch.setattr(
+        "api.webdav.runner_manager.dispatch_command", fake_dispatch_command
+    )
 
     response = auth_client.post(
         "/api/webdav/knowledge-materialization-intent",
@@ -789,7 +805,9 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = override_real_db
     token = _signed_session_token(
-        _valid_session_payload(sub=user_id, org="org-acme", workspace="workspace-org-acme")
+        _valid_session_payload(
+            sub=user_id, org="org-acme", workspace="workspace-org-acme"
+        )
     )
     try:
         transport = httpx.ASGITransport(app=app)
@@ -809,10 +827,7 @@ async def test_webdav_writeback_intent_real_postgres_smoke(monkeypatch):
         app.dependency_overrides.pop(get_db, None)
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "DELETE FROM webdav_accounts "
-                    "WHERE source_uid = :source_uid"
-                ),
+                text("DELETE FROM webdav_accounts WHERE source_uid = :source_uid"),
                 {"source_uid": source_uid},
             )
         await engine.dispose()
@@ -977,7 +992,9 @@ async def test_webdav_folders_real_postgres_uses_opaque_folder_uid(monkeypatch):
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = override_real_db
     token = _signed_session_token(
-        _valid_session_payload(sub=user_id, org="org-acme", workspace="workspace-org-acme")
+        _valid_session_payload(
+            sub=user_id, org="org-acme", workspace="workspace-org-acme"
+        )
     )
     try:
         transport = httpx.ASGITransport(app=app)
@@ -1264,7 +1281,9 @@ async def test_knowledge_materialization_intent_real_postgres_endpoint_smoke(
     settings.AUTH_SESSION_HMAC_SECRET = SecretStr(TEST_SESSION_HMAC_SECRET)
     app.dependency_overrides[get_db] = override_real_db
     token = _signed_session_token(
-        _valid_session_payload(sub=user_id, org="org-acme", workspace="workspace-org-acme")
+        _valid_session_payload(
+            sub=user_id, org="org-acme", workspace="workspace-org-acme"
+        )
     )
     try:
         transport = httpx.ASGITransport(app=app)

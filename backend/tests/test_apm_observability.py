@@ -2,6 +2,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).parent.parent.parent
 
+
 def test_observability_compose_file_exists():
     assert (ROOT_DIR / "docker-compose.infra.yml").exists()
 
@@ -15,8 +16,9 @@ def test_observability_provisioning_exists():
 
 
 def test_backend_metrics_endpoint_is_disabled_by_default():
-    from main import app
     from fastapi.testclient import TestClient
+
+    from main import app
 
     with TestClient(app) as client:
         response = client.get("/metrics")
@@ -46,6 +48,7 @@ def test_open_telemetry_setup_is_centralized_and_opt_in_by_default():
 
 def test_telemetry_does_not_instrument_without_explicit_endpoint(monkeypatch):
     from fastapi import FastAPI
+
     from core import telemetry
 
     app = FastAPI()

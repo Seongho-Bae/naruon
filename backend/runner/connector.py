@@ -62,7 +62,7 @@ class SelfHostedConnector:
         self.caldav_write_handler = caldav_write_handler
         self.connection = None
         self.is_connected = False
-        
+
     async def connect(self):
         if websockets is None:
             logger.error("websockets library is not installed. Runner cannot start.")
@@ -70,7 +70,9 @@ class SelfHostedConnector:
 
         headers = {"Authorization": f"Bearer {self.token}"}
         try:
-            self.connection = await websockets.connect(self.target_ws_url, additional_headers=headers)
+            self.connection = await websockets.connect(
+                self.target_ws_url, additional_headers=headers
+            )
             self.is_connected = True
             logger.info(
                 "Connected to Naruon Gateway at %s",
@@ -91,7 +93,9 @@ class SelfHostedConnector:
                 logger.exception(f"Failed to connect to Naruon Gateway: {e}")
             else:
                 self.is_connected = False
-                logger.exception(f"Failed to connect to Naruon Gateway with unexpected error: {e}")
+                logger.exception(
+                    f"Failed to connect to Naruon Gateway with unexpected error: {e}"
+                )
 
     async def _listen_loop(self):
         if not self.connection:
@@ -106,7 +110,7 @@ class SelfHostedConnector:
             else:
                 logger.warning(f"Connection loop ended: {e}")
             self.is_connected = False
-            
+
     async def handle_message(self, message: str | bytes):
         # Dispatch message to internal SMTP/IMAP proxy handlers
         logger.debug("Received instruction from gateway.")
@@ -114,20 +118,24 @@ class SelfHostedConnector:
             payload = json.loads(message)
         except json.JSONDecodeError:
             logger.error("Failed to decode message from gateway.")
-            await self.send_response({
-                "status": "error",
-                "action": None,
-                "error": "invalid json",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": None,
+                    "error": "invalid json",
+                }
+            )
             return
 
         if not isinstance(payload, dict):
             logger.error("Gateway instruction payload must be an object.")
-            await self.send_response({
-                "status": "error",
-                "action": None,
-                "error": "invalid payload",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": None,
+                    "error": "invalid payload",
+                }
+            )
             return
 
         action = payload.get("action")
@@ -141,20 +149,24 @@ class SelfHostedConnector:
             await self._handle_write_caldav(payload)
         else:
             logger.info("Unknown action received.")
-            await self.send_response({
-                "status": "error",
-                "action": action if isinstance(action, str) else None,
-                "error": "unknown action",
-            })
-            
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": action if isinstance(action, str) else None,
+                    "error": "unknown action",
+                }
+            )
+
     async def _handle_fetch_imap(self, payload: Dict[str, Any]):
         if _get_account_name(payload) is None:
             logger.error("IMAP fetch instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "fetch_imap",
-                "error": "missing account",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": "fetch_imap",
+                    "error": "missing account",
+                }
+            )
             return
         logger.info("Dispatching local IMAP fetch adapter for configured account.")
         await self._execute_local_adapter(
@@ -163,15 +175,17 @@ class SelfHostedConnector:
             payload=payload,
             handler=self.imap_fetch_handler,
         )
-        
+
     async def _handle_send_smtp(self, payload: Dict[str, Any]):
         if _get_account_name(payload) is None:
             logger.error("SMTP send instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "send_smtp",
-                "error": "missing account",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": "send_smtp",
+                    "error": "missing account",
+                }
+            )
             return
         logger.info("Dispatching local SMTP send adapter for configured account.")
         await self._execute_local_adapter(
@@ -184,11 +198,13 @@ class SelfHostedConnector:
     async def _handle_write_webdav(self, payload: Dict[str, Any]):
         if _get_account_name(payload) is None:
             logger.error("WebDAV write instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "write_webdav",
-                "error": "missing account",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": "write_webdav",
+                    "error": "missing account",
+                }
+            )
             return
         logger.info("Dispatching local WebDAV write adapter for configured account.")
         await self._execute_local_adapter(
@@ -201,11 +217,13 @@ class SelfHostedConnector:
     async def _handle_write_caldav(self, payload: Dict[str, Any]):
         if _get_account_name(payload) is None:
             logger.error("CalDAV write instruction is missing account.")
-            await self.send_response({
-                "status": "error",
-                "action": "write_caldav",
-                "error": "missing account",
-            })
+            await self.send_response(
+                {
+                    "status": "error",
+                    "action": "write_caldav",
+                    "error": "missing account",
+                }
+            )
             return
         logger.info("Dispatching local CalDAV write adapter for configured account.")
         await self._execute_local_adapter(
@@ -255,7 +273,9 @@ class SelfHostedConnector:
             return
 
         status_value = adapter_result.get("status", "success")
-        response["status"] = status_value if isinstance(status_value, str) else "success"
+        response["status"] = (
+            status_value if isinstance(status_value, str) else "success"
+        )
         response["provider_write_executed"] = bool(
             adapter_result.get("provider_write_executed", False)
         )
@@ -275,6 +295,7 @@ class SelfHostedConnector:
     async def send_response(self, response: Dict[str, Any]):
         if self.is_connected and self.connection:
             await self.connection.send(json.dumps(response))
+
 
 if __name__ == "__main__":
     # Example usage for local bootstrap

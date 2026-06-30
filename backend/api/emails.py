@@ -1,28 +1,24 @@
+import datetime
+import logging
+import time
 from collections import defaultdict
 from threading import Lock
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
-from db.session import get_db
-from db.models import Email
-from pydantic import BaseModel, EmailStr, Field
-import datetime
-import time
 from typing import Literal
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.auth import AuthContext, get_auth_context
+from db.models import Email
+from db.session import get_db
 from services.email_client import (
     EmailMessageParams,
     SmtpConfig,
     send_email,
     validate_smtp_destination,
 )
-from services.reply_tracking_service import (
-    check_missing_replies,
-    configured_email_addresses,
-    message_is_from_user,
-    message_is_self_sent,
-    thread_requires_reply,
-)
-from services.threading_service import normalize_message_id
 from services.email_dedupe_service import (
     EmailDedupeCandidate,
     candidate_message_lookup_values,
@@ -30,19 +26,25 @@ from services.email_dedupe_service import (
     email_strong_fingerprint,
 )
 from services.email_import_service import (
-    EmailImportEmbeddingProvider,
-    EmailImportQuotaExceeded,
     MAX_IMPORT_UPLOAD_BYTES,
     MAX_IMPORT_UPLOADS,
+    EmailImportEmbeddingProvider,
     EmailImportItemStatus,
+    EmailImportQuotaExceeded,
     EmailImportUpload,
     import_email_uploads,
 )
 from services.llm_provider_selection import resolve_runtime_llm_provider
-from services.text_safety import strip_html_markup
-import logging
-from api.auth import AuthContext, get_auth_context
+from services.reply_tracking_service import (
+    check_missing_replies,
+    configured_email_addresses,
+    message_is_from_user,
+    message_is_self_sent,
+    thread_requires_reply,
+)
 from services.tenant_config_scope import get_scoped_tenant_config
+from services.text_safety import strip_html_markup
+from services.threading_service import normalize_message_id
 
 logger = logging.getLogger(__name__)
 

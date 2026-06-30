@@ -3,10 +3,10 @@ import hashlib
 import hmac
 import json
 import logging
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
-import uuid
 
 from fastapi import (
     APIRouter,
@@ -251,11 +251,15 @@ class ConnectionManager:
             if candidate
         ]
         if active_records:
-            last_seen_candidates.extend(record.connected_at for record in active_records)
+            last_seen_candidates.extend(
+                record.connected_at for record in active_records
+            )
         last_seen_at = max(last_seen_candidates) if last_seen_candidates else None
         return RunnerConnectionSnapshot(
             organization_id=organization_id,
-            workspace_id=active_records[0].workspace_id if active_records else workspace_id,
+            workspace_id=active_records[0].workspace_id
+            if active_records
+            else workspace_id,
             connection_state="connected" if active_count else "not_connected",
             active_connection_count=active_count,
             last_seen_at=last_seen_at,

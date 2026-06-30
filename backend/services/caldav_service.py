@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any
+from typing import Any, Dict
 from urllib.parse import urlsplit, urlunsplit
 
 logger = logging.getLogger(__name__)
@@ -12,18 +12,20 @@ def _log_safe_url(raw_url: str) -> str:
         host = f"{host}:{parsed.port}"
     return urlunsplit((parsed.scheme, host, parsed.path, "", ""))
 
+
 async def sync_caldav_accounts(session, user_id: str):
     """
     Fetch and store events locally for all CalDAV accounts of the user.
     """
-    from db.models import CaldavAccount
     from sqlalchemy import select
-    
+
+    from db.models import CaldavAccount
+
     logger.info(f"Syncing CalDAV accounts for user {user_id}")
     stmt = select(CaldavAccount).where(CaldavAccount.user_id == user_id)
     result = await session.execute(stmt)
     accounts = result.scalars().all()
-    
+
     total_parsed = 0
     for account in accounts:
         # Pseudo implementation to parse events for each account
@@ -32,15 +34,16 @@ async def sync_caldav_accounts(session, user_id: str):
             account.id,
             _log_safe_url(account.server_url),
         )
-        total_parsed += 0 # Placeholder
-        
+        total_parsed += 0  # Placeholder
+
     logger.info(f"Parsed {total_parsed} events for user {user_id}")
     return True
+
 
 class CalDavService:
     def __init__(self):
         pass
-        
+
     def determine_writeback_target(
         self,
         task_context: Dict[str, Any],
@@ -63,9 +66,10 @@ class CalDavService:
                 account_domain = str(account.get("domain", "")).lower().strip()
                 if account_domain and source_domain == account_domain:
                     return account["source_id"]
-                
+
         if eligible_sources:
             return eligible_sources[0]["source_id"]
         return None
+
 
 caldav_service = CalDavService()
