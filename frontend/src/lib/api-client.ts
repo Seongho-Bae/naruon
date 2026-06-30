@@ -28,17 +28,13 @@ export class ApiClient {
   private getHeaders(init?: RequestInit): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
-      'x-naruon-csrf-protection': '1', // Triggers CORS preflight to satisfy strict Strix missing-CSRF checks
       ...this.getSafeCallerHeaders(init?.headers),
     };
     return headers;
   }
 
   private getFormHeaders(init?: RequestInit): HeadersInit {
-    const headers: Record<string, string> = {
-      'x-naruon-csrf-protection': '1', // Triggers CORS preflight to satisfy strict Strix missing-CSRF checks
-      ...this.getSafeCallerHeaders(init?.headers),
-    };
+    const headers: Record<string, string> = this.getSafeCallerHeaders(init?.headers);
     Object.keys(headers).forEach((name) => {
       if (name.toLowerCase() === 'content-type') {
         delete headers[name];
