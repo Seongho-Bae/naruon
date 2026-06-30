@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/api", tags=["tools"])
+router = APIRouter()
 
 
 class ToolInfo(BaseModel):
