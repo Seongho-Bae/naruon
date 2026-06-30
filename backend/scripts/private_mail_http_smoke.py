@@ -125,7 +125,7 @@ def _message_text(raw: bytes, max_parse_bytes: int) -> str:
                 continue
             try:
                 content = part.get_content()
-            except Exception:
+            except (LookupError, ValueError, UnicodeError):
                 continue
             if isinstance(content, str):
                 parts.append(content)
@@ -273,7 +273,8 @@ def _selected_upload_files(
         persistent: list[Path] = []
         final_dir = Path(
             os.environ.get(
-                "NARUON_PRIVATE_MAIL_CACHE", "/tmp/naruon-private-mail-upload-cache"
+                "NARUON_PRIVATE_MAIL_CACHE",
+                str(Path.home() / ".cache" / "naruon" / "private-mail-upload-cache"),
             )
         )
         final_dir.mkdir(mode=0o700, exist_ok=True)
