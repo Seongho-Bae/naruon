@@ -82,15 +82,22 @@
 **Learning:** Mapping large `Vector(1536)` embedding columns as eager default loads inflates row payloads and network transfer for routine list/detail queries that do not need the vector values.
 **Action:** Mark large embedding columns with `deferred=True` when callers rarely need them by default, and use explicit undefer/loading options only in code paths that intentionally consume embeddings. Avoid describing this as an N+1 fix; deferred columns can create extra SELECTs if accessed later in a loop.
 
-## 2026-06-25 - Avoid O(N log N) sorting for early candidate tracking in tight loops
-**Learning:** `thread_reply_candidate` previously sorted entire email threads to find the latest valid candidate message and latest external date. Sorting requires $O(N \log N)$ operations and unnecessary memory allocation, which degrades performance across thousands of threads despite Python's fast sorting capabilities. It was refactored into a single linear $O(N)$ traversal over the elements keeping track of the latest matching criteria.
-**Action:** When finding extremes (max/min by date, latest items fulfilling a condition) in an array, evaluate candidates linearly inside a single pass rather than running an unbounded sort.
+## 2026-06-25 - Use semantic search inputs for mobile keyboard optimization
+**Learning:** Search boxes using `type="text"` with `inputMode="search"` miss native search input behavior on some browsers and mobile keyboards. WebKit also renders a native clear affordance for `type="search"` that can overlap custom clear buttons.
+**Action:** Use `type="search"` for semantic search fields and hide WebKit's native cancel button when the UI supplies its own clear control.
 
-## 2026-06-25 - Use type="search" for Semantic HTML and Mobile Optimization
-**Learning:** For search inputs across the frontend (`SearchLayout.tsx`, `TasksLayout.tsx`, `EmailList.tsx`), `type="text"` with `inputMode="search"` does not trigger the correct native browser styling and mobile keyboard states (like a specific "Search" button on the virtual keyboard). We need to properly define the semantic type as `type="search"`. Additionally, when using `type="search"`, WebKit-based browsers inject a native clear button (an 'X' inside the input) that overlays custom React-based clear buttons.
-**Action:** When implementing search fields, always use `type="search"`. To hide the native browser clear button (which prevents double 'X' buttons when using custom React clear logic), apply the tailwind class `[&::-webkit-search-cancel-button]:hidden` to the input element.
+## 2026-06-25 - 루프 내 딕셔너리 조회 시 불필요한 기본값 생성 방지
+**Learning:** 빈번하게 실행되는 루프 내에서 `dict.get(key, default_factory())`를 사용하면, 키의 존재 여부와 무관하게 매번 `default_factory`(예: `set()`)가 평가되어 불필요한 메모리 할당 및 가비지 컬렉션 부하를 유발합니다. 또한 단순 존재 여부만 확인할 때 `.get(key, False)`를 사용하면 내부적으로 오버헤드가 발생합니다.
+**Action:** 루프 내에서 키를 조회할 때, 키가 존재함이 보장된다면 `dict[key]`를 직접 사용하십시오. 값의 진위 여부가 아닌 키의 존재 여부만 검사할 때는 `.get(key, False)` 대신 `in` 연산자(예: `key in dict`)를 사용하십시오.
 
-## 2026-06-25 - Avoid JWT Algorithm Confusion Attacks
-**Vulnerability:** The authentication module was vulnerable to an algorithm confusion attack where an attacker could bypass signature verification by crafting a JWT token and setting the 'alg' header to 'none'.
-**Learning:** The JWT validation function did not explicitly reject the 'none' algorithm. This allows an attacker to supply a forged token without a valid signature, potentially gaining unauthorized access.
-**Prevention:** Explicitly check for and reject the 'none' algorithm (e.g. `if header.get("alg") == "none":`) during initial JWT header inspection.
+## 2026-06-25 - [Optimize Email Grouping]
+**Learning:** In Python 3.7+, `dict` guarantees insertion order. By avoiding list reversal and maintaining newest-to-oldest iteration, we can exploit dictionary insertion to inherently order our `group_keys` newest-to-oldest natively, avoiding a costly O(N log N) secondary sort on values.
+**Action:** Always verify if Python's dictionary insertion order can be exploited to build natively sorted results from pre-sorted database records, eliminating intermediate reversing and sorting overheads.
+
+## 2026-06-25 - Use Read Replica for Backend Dashboards
+**Learning:** High-traffic backend dashboards pulling read-heavy analytics (like workflows, agent runs, and surfaces in `backend/api/ai_hub.py`) needlessly bottleneck the primary database when scaling. Because real-time consistency on historical audit/run records isn't critical, using `get_readonly_db` directly mitigates primary database load effectively.
+**Action:** Default to `get_readonly_db` for GET endpoints that do analytical queries or display aggregate historical state instead of tracking writes.
+
+## 2026-06-28 - Terminology Alignment in End-to-End Tests
+**Learning:** When UI terminology rules change, end-to-end tests relying on exact text matches (like `getByRole('button', { name: 'AI 답장 초안' })` or `getByText('2개 실행 항목')`) will fail. Moreover, some UI elements render dynamic list structures rather than aggregated summary strings, meaning exact assertions on previously aggregated strings must be updated to reflect the new DOM structure.
+**Action:** When updating application UI terminology to match a specification, systematically audit and update all corresponding string literals, aria-labels, and assertions in both unit and E2E tests using search tools. For dynamic data mapped into lists, adjust test assertions to verify the presence of individual mapped items rather than outdated summary counters.

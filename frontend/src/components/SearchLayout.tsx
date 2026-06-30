@@ -21,7 +21,7 @@ import Link from "next/link";
 
 import { apiClient } from "@/lib/api-client";
 
-const NetworkGraph = dynamic(() => import("@/components/NetworkGraph"), {
+const RelationContext = dynamic(() => import("@/components/RelationContext"), {
   ssr: false,
 });
 
@@ -188,7 +188,7 @@ function SenderDagPanel({
           </div>
         ) : null}
         {captureStatus === "error" ? (
-          <p className="mt-2 text-xs font-bold text-destructive">
+          <p role="alert" className="mt-2 text-xs font-bold text-destructive">
             발신자 관계 캡처에 실패했습니다.
           </p>
         ) : null}
@@ -792,7 +792,7 @@ export function SearchLayout() {
                       관계 맥락
                     </h4>
                     <div className="relative min-h-[320px] flex-1 overflow-hidden rounded-lg border border-border bg-background shadow-inner">
-                      <NetworkGraph />
+                      <RelationContext />
                     </div>
                   </section>
 

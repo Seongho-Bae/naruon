@@ -78,28 +78,37 @@ def detect_reply_tracking(body: str | None) -> bool:
 
 
 def thread_reply_candidate(
-    thread_messages: list[Email], user_addresses: set[str]
+    thread_messages: list[Email],
+    user_addresses: set[str],
+    is_chronological: bool = False,
 ) -> Email | None:
     if not user_addresses:
         return None
 
-    # ⚡ Bolt: Find candidate and latest external date in O(N) without sorting.
-    latest_external_date = None
-    latest_candidate: Email | None = None
+    ordered_messages = (
+        reversed(thread_messages)
+        if is_chronological
+        else sorted(
+            thread_messages, key=lambda item: (item.date, item.id or 0), reverse=True
+        )
+    )
 
-    for message in thread_messages:
+    latest_external_date = None
+    for message in ordered_messages:
         is_from_user = message_is_from_user(message, user_addresses)
 
         if not is_from_user:
             if latest_external_date is None or message.date > latest_external_date:
                 latest_external_date = message.date
-        elif not message_is_self_sent(message, user_addresses):
-            if (latest_candidate is None or message.date > latest_candidate.date) and detect_reply_tracking(message.body):
-                latest_candidate = message
+            continue
 
-    if latest_candidate is not None:
-        if latest_external_date is None or latest_candidate.date >= latest_external_date:
-            return latest_candidate
+        if is_from_user and not message_is_self_sent(message, user_addresses):
+            has_later_external_reply = (
+                latest_external_date is not None and latest_external_date > message.date
+            )
+            if not has_later_external_reply:
+                if detect_reply_tracking(message.body):
+                    return message
 
     return None
 
@@ -144,7 +153,7 @@ async def check_missing_replies(
             organization_filter,
             Email.date > recent_limit,
         )
-        .order_by(Email.date.asc())
+        .order_by(Email.date.asc(), Email.id.asc())
     )
     result = await session.execute(stmt)
     emails = result.scalars().all()
@@ -157,7 +166,9 @@ async def check_missing_replies(
 
     flagged = []
     for thread_messages in threads.values():
-        candidate = thread_reply_candidate(thread_messages, user_addresses)
+        candidate = thread_reply_candidate(
+            thread_messages, user_addresses, is_chronological=True
+        )
         if candidate is not None:
             flagged.append(candidate)
 

@@ -1699,6 +1699,26 @@ def test_send_email_endpoint(mock_send_email, monkeypatch):
     )
 
 
+@patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
+def test_send_email_endpoint_rejects_header_injection_subject(mock_send_email):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    client = TestClient(app, headers={"X-User-Id": "testuser"})
+
+    response = client.post(
+        "/api/emails/send",
+        json={
+            "to": "test@example.com",
+            "subject": "Re: Test\r\nBcc: attacker@example.com",
+            "body": "This is a reply.",
+        },
+    )
+
+    assert response.status_code == 422
+    mock_send_email.assert_not_called()
+
+
 @patch("api.emails.send_email", return_value={"status": "sent", "simulated": False})
 def test_send_email_endpoint_rate_limits_per_user(mock_send_email, monkeypatch):
     from fastapi.testclient import TestClient
@@ -1730,6 +1750,32 @@ def test_send_email_endpoint_rate_limits_per_user(mock_send_email, monkeypatch):
     assert response.status_code == 429
     assert response.json() == {"detail": "Email send rate limit exceeded"}
     mock_send_email.assert_called_once()
+
+
+def test_send_email_rate_limit_prunes_expired_scopes(monkeypatch):
+    from api.auth import AuthContext
+
+    emails_api._email_send_attempts_by_scope.clear()
+    active_key = ("org-acme", "testuser")
+    stale_key = ("org-old", "stale-user")
+    emails_api._email_send_attempts_by_scope[active_key] = [95.0]
+    emails_api._email_send_attempts_by_scope[stale_key] = [10.0]
+    monkeypatch.setattr(emails_api.time, "monotonic", lambda: 100.0)
+
+    try:
+        emails_api._enforce_send_email_rate_limit(
+            AuthContext(
+                user_id=active_key[1],
+                role="member",
+                organization_id=active_key[0],
+                group_ids=(),
+                workspace_id="workspace-org-acme",
+            )
+        )
+        assert stale_key not in emails_api._email_send_attempts_by_scope
+        assert emails_api._email_send_attempts_by_scope[active_key] == [95.0, 100.0]
+    finally:
+        emails_api._email_send_attempts_by_scope.clear()
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})
