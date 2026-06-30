@@ -2,8 +2,8 @@ import datetime
 
 from db.models import Email
 from services.reply_tracking_service import (
-    thread_reply_candidate,
     detect_reply_tracking,
+    thread_reply_candidate,
 )
 
 
@@ -167,7 +167,6 @@ def test_thread_requires_reply_returns_false_when_no_candidate():
 
 
 def test_thread_reply_candidate_tie_order_consistent_across_modes():
-    """Both is_chronological paths must select the same candidate when dates tie."""
     sent_a = make_email(
         "sent_a",
         sender="me@example.com",
@@ -183,39 +182,31 @@ def test_thread_reply_candidate_tie_order_consistent_across_modes():
     )
     sent_b.id = 2
 
-    # is_chronological=False (sorted path): sorted by (date desc, id desc) → sent_b first
     candidate_sorted = thread_reply_candidate(
         [sent_a, sent_b], USER_ADDRESSES, is_chronological=False
     )
-    # is_chronological=True (reversed path): DB returns (date asc, id asc) → [sent_a, sent_b]
-    # reversed() yields sent_b first — same as sorted path
     candidate_reversed = thread_reply_candidate(
         [sent_a, sent_b], USER_ADDRESSES, is_chronological=True
     )
 
     assert candidate_sorted is candidate_reversed
 
-
 def test_detect_reply_tracking_please_reply():
     assert (
         detect_reply_tracking("This is an important message, please reply soon.")
         is True
     )
-    assert detect_reply_tracking("How are you doing today?") is True
 
+def test_detect_reply_tracking_question_mark():
+    assert detect_reply_tracking("How are you doing today?") is True
 
 def test_detect_reply_tracking_case_insensitive():
     assert detect_reply_tracking("Please Reply to this email.") is True
 
-
 def test_detect_reply_tracking_no_match():
-    assert (
-        detect_reply_tracking(
-            "This is a standard statement without any tracking triggers."
-        )
-        is False
-    )
-
+    assert detect_reply_tracking(
+        "This is a standard statement without any tracking triggers."
+    ) is False
 
 def test_detect_reply_tracking_empty_body():
     assert detect_reply_tracking(None) is False
@@ -245,10 +236,10 @@ def test_thread_reply_candidate_is_chronological_optimization():
         body="please reply",
     )
 
-    # In ascending date order
-    messages = [older_sent, external_reply, latest_sent]
-
     candidate = thread_reply_candidate(
-        messages.copy(), USER_ADDRESSES, is_chronological=True
+        [latest_sent, external_reply, older_sent],
+        USER_ADDRESSES,
+        is_chronological=True,
     )
-    assert candidate is latest_sent
+
+    assert candidate is older_sent

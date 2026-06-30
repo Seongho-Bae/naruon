@@ -73,7 +73,7 @@ describe("DashboardLayout", () => {
     const banner = container.querySelector('header[aria-label="Naruon workspace header"]');
     const primaryNav = container.querySelector('nav[aria-label="Primary workspace navigation"]');
     const mobileNav = container.querySelector('nav[aria-label="Mobile workspace sections"]');
-    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="AI 빠른 실행"]');
+    const mobileQuickActionButton = container.querySelector<HTMLButtonElement>('button[aria-label="판단 보조 빠른 실행"]');
     const mobileMenuButton = container.querySelector<HTMLButtonElement>('button[aria-label="워크스페이스 메뉴 열기"]');
     const mobileNavLinks = Array.from(mobileNav?.querySelectorAll('a') ?? []).map(
       (link) => link.textContent,
@@ -108,7 +108,7 @@ describe("DashboardLayout", () => {
     expect(mobileMenuButton?.getAttribute("aria-controls")).toBe("mobile-workspace-menu");
     expect(mobileNavLinks).toEqual(["받은편지함", "맥락 검색", "일정", "더보기"]);
     expect(mobileQuickActionButton).not.toBeNull();
-    expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-ai-action-menu");
+    expect(mobileQuickActionButton?.getAttribute("popovertarget")).toBe("mobile-judgment-assist-action-menu");
     expect(mobileQuickActionButton?.getAttribute("aria-haspopup")).toBe("dialog");
     expect(container.textContent).not.toContain("준비 중");
     expect(main).not.toBeNull();
@@ -209,7 +209,7 @@ describe("DashboardLayout", () => {
       mobileQuickActionButton?.click();
     });
 
-    expect(container.querySelector('#mobile-ai-action-menu')?.textContent ?? "").toContain("답장 초안");
+    expect(container.querySelector('#mobile-judgment-assist-action-menu')?.textContent ?? "").toContain("답장 초안");
 
     act(() => {
       container?.querySelector<HTMLButtonElement>('button[data-mobile-quick-action="create-task"]')?.click();

@@ -85,8 +85,6 @@ def thread_reply_candidate(
     if not user_addresses:
         return None
 
-    # ⚡ Bolt: If the database implicitly returned results chronologically (`is_chronological=True`),
-    # iterating over the array backwards avoids O(N log N) `sorted()` overhead.
     ordered_messages = (
         reversed(thread_messages)
         if is_chronological
