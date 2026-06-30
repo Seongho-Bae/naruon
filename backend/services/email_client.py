@@ -412,9 +412,21 @@ class _PinnedImplicitTlsSMTP(aiosmtplib.SMTP):
 
     def __init__(self, *, tls_server_hostname: str, **kwargs):
         self._tls_server_hostname = tls_server_hostname
-        if kwargs.get("sock") is not None:
-            kwargs["hostname"] = None
-            kwargs["port"] = None
+        if kwargs.get("sock") is not None and kwargs.get("use_tls"):
+            tls_kwargs = {
+                **kwargs,
+                "hostname": kwargs.get("hostname") or tls_server_hostname,
+                "port": None,
+            }
+            try:
+                super().__init__(**tls_kwargs)
+                return
+            except ValueError as exc:
+                if "socket option is not compatible with hostname" not in str(exc):
+                    raise
+                kwargs = {**kwargs, "hostname": None, "port": None}
+        elif kwargs.get("sock") is not None:
+            kwargs = {**kwargs, "port": None}
         super().__init__(**kwargs)
 
     async def _create_connection(self, timeout: float | None):
