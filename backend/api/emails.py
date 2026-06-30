@@ -318,7 +318,7 @@ async def get_emails(
         sorted_groups = [
             email
             for group_key, email in grouped.items()
-            if has_sent_message.get(group_key, False)
+            if group_key in has_sent_message
         ][:limit]
     else:
         sorted_groups = list(grouped.values())[:limit]
@@ -456,7 +456,7 @@ def _find_matches_for_candidates(
         match_reason: Literal["message_id", "fingerprint"] | None = None
         dedupe_key: str | None = None
 
-        for lookup_value in candidate_lookups.get(candidate.candidate_key, set()):
+        for lookup_value in candidate_lookups[candidate.candidate_key]:
             if lookup_value in by_message_id:
                 matched_email = by_message_id[lookup_value]
                 match_reason = "message_id"
