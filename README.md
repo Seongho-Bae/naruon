@@ -163,6 +163,103 @@ curl -s http://localhost:8000/api/emails
 python3 -m webbrowser http://localhost:3000
 ```
 
+### Apple Silicon / MLX local path (OS별 로컬 API 모델 서버 사용)
+
+기본 `docker-compose.yml`는 Linux Ollama 컨테이너를 그대로 유지합니다. Apple Silicon
+로컬 실 테스트(또는 외부 MLX/OpenAI-compatible 서비스)만 분리하려면 임시 오버라이드 파일을 붙여 실행합니다.
+
+```bash
+# 다음 블록은 로컬 실사용 검증용 샘플입니다. 민감한 쿼리로 대체할 수 있지만,
+# 현재 실검증에서는 아래 두 키워드로 테스트합니다.
+cat > .env.mlx <<'EOF'
+
+# 기존 보안값은 그대로 두고, 로컬 모델 경로만 오버라이드
+OPENAI_API_KEY=mlx
+ALLOWED_LLM_BASE_URL_HOSTS=localhost,127.0.0.1,host.docker.internal
+ALLOW_LOCAL_LLM_PROVIDERS=true
+OPENAI_BASE_URL=http://host.docker.internal:11434/v1
+OPENAI_EMBEDDING_MODEL=embeddinggemma
+OPENAI_MODEL=gemma4:e2b-it-qat
+# 포트 충돌이 있으면 아래 두 값으로 변경
+NARUON_FRONTEND_HOST_PORT=127.0.0.1:3000
+NARUON_BACKEND_HOST_PORT=127.0.0.1:8000
+# Linux에서만 host-gateway가 필요합니다.
+NARUON_MLX_EXTRA_HOSTS=host-gateway
+NARUON_MLX_ALLOWED_LLM_BASE_URL_HOSTS=localhost,127.0.0.1,host.docker.internal
+NARUON_MLX_OPENAI_API_KEY=mlx
+NARUON_MLX_BASE_URL=http://host.docker.internal:11434/v1
+NARUON_MLX_EMBEDDING_MODEL=embeddinggemma
+NARUON_MLX_LLM_MODEL=gemma4:e2b-it-qat
+EOF
+
+# 로컬에서만 쓰는 compose 오버라이드는 임시 파일로 만들고 커밋하지 않습니다.
+# OS 분기 없이 환경변수 하나로 host.docker.internal 매핑을 제어합니다.
+# Linux에서 host-gateway가 필요한 환경이면 .env.mlx에서 NARUON_MLX_EXTRA_HOSTS를 덮어씁니다.
+mlx_compose_override="$(mktemp "${TMPDIR:-/tmp}/docker-compose.mlx.XXXXXX.yml")"
+cat > "$mlx_compose_override" <<'EOF'
+services:
+  backend:
+    environment:
+      ALLOW_LOCAL_LLM_PROVIDERS: "true"
+      ALLOWED_LLM_BASE_URL_HOSTS: ${NARUON_MLX_ALLOWED_LLM_BASE_URL_HOSTS:-localhost,127.0.0.1,host.docker.internal}
+      OPENAI_API_KEY: ${NARUON_MLX_OPENAI_API_KEY:-mlx}
+      OPENAI_BASE_URL: ${NARUON_MLX_BASE_URL:-http://host.docker.internal:11434/v1}
+      OPENAI_EMBEDDING_MODEL: ${NARUON_MLX_EMBEDDING_MODEL:-embeddinggemma}
+      OPENAI_MODEL: ${NARUON_MLX_LLM_MODEL:-gemma4:e2b-it-qat}
+    extra_hosts:
+      - "host.docker.internal:${NARUON_MLX_EXTRA_HOSTS:-host.docker.internal}"
+    ports:
+      - "${NARUON_BACKEND_HOST_PORT:-127.0.0.1:8000}:8000"
+  frontend:
+    ports:
+      - "${NARUON_FRONTEND_HOST_PORT:-127.0.0.1:3000}:3000"
+EOF
+
+NARUON_ENV_FILE=.env.mlx \
+docker compose --env-file .env.mlx -f docker-compose.yml -f "$mlx_compose_override" up -d --build
+```
+
+실 메일 임포트 + 요약/초안 검증:
+
+```bash
+# 아래 두 --query는 실 사용자 공개 테스트 키워드입니다.
+AUTH_SESSION_HMAC_SECRET="$(grep -E '^AUTH_SESSION_HMAC_SECRET=' .env | cut -d= -f2-)"
+python3 backend/scripts/private_mail_http_smoke.py \
+  --mail-dir "/Users/seonghobae/Library/Mobile Documents/com~apple~CloudDocs/Downloads/mail" \
+  --base-url http://127.0.0.1:3000 \
+  --session-secret "$AUTH_SESSION_HMAC_SECRET" \
+  --query "중공업 전력PU 회의록" \
+  --query "중공업 기전PU 회의록" \
+  --limit 20 \
+  --batch-size 6 \
+  --llm-smoke \
+  --print-session-token
+```
+
+`--print-session-token`이 켜진 경우 스크립트가 같은 토큰을 브라우저로 전파하는
+`/auth/session` 호출 예시를 출력합니다. 위 출력의 JS 한 줄을 앱 콘솔에서 실행하면
+`naruon_session` 쿠키가 갱신되어 API로 임포트한 메일이 브라우저와 동일 세션에서 보입니다.
+
+실제 브라우저 검증 순서:
+
+1) 브라우저에서 `http://127.0.0.1:3000` 접속 후 `"/mail"`로 이동
+2) 방금 입력한 키워드 중 하나로 검색
+3) 결과 목록에서 임포트된 메일을 열어 상세가 정상 표시되는지 확인
+4) `--llm-smoke` 출력에서 `llm=ok`와 `draft=ok`가 있으면 요약/초안 API 응답도 정상
+   - 브라우저에서 동일 이메일을 선택한 뒤 LLM 요약/초안 버튼 동작 확인
+
+백엔드 API를 바로 확인하려면(필요 시):
+
+```bash
+curl -s http://127.0.0.1:3000/api/emails?limit=10
+# 아래는 동일 샘플로 API 직접 점검하는 예시입니다.
+curl -s -X POST http://127.0.0.1:3000/api/search \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "중공업 전력PU 회의록", "limit": 3}'
+```
+
+세션이 다르게 보이면 `/auth/session` 동기화 콘솔 코드를 다시 실행한 뒤 새로고침 합니다.
+
 What you should see: the fixture import loads a three-message `Quarterly plan`
 conversation. `/api/emails` returns one threaded inbox item with `reply_count`
 greater than 1, and the frontend shows conversation history oldest to newest.

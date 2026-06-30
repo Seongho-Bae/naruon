@@ -1176,16 +1176,19 @@ async def test_import_email_files_serializes_quota_with_postgres_owner_lock(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
+    owner_key = hashlib.sha256(
+        f"{len('testuser')}:testuser{len('org-acme')}:org-acme".encode()
+    ).hexdigest()
     assert "hashtext(:namespace_key)" in advisory_queries[0]
     assert ":owner_key" in advisory_queries[0]
     assert advisory_query_params(session) == [
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": "testuser\x00org-acme",
+            "owner_key": owner_key,
         },
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": "testuser\x00org-acme",
+            "owner_key": owner_key,
         },
     ]
 
@@ -1241,14 +1244,17 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
+    owner_key = hashlib.sha256(
+        f"{len('testuser')}:testuser{len('org-acme')}:org-acme".encode()
+    ).hexdigest()
     assert advisory_query_params(session) == [
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": "testuser\x00org-acme",
+            "owner_key": owner_key,
         },
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": "testuser\x00org-acme",
+            "owner_key": owner_key,
         },
     ]
 
