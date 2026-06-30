@@ -140,6 +140,22 @@ def test_dav_owner_parser_rejects_double_encoded_traversal():
     assert owner_user_id is None
 
 
+def test_dav_owner_parser_rejects_excessive_url_encoding_depth():
+    import pytest
+    from fastapi import HTTPException
+    import urllib.parse
+
+    encoded_path = "%2e%2e/projects"
+    for _ in range(101):
+        encoded_path = encoded_path.replace("%", "%25")
+
+    with pytest.raises(HTTPException) as exc_info:
+        _dav_path_owner_user_id(encoded_path)
+
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == "Path encoding too deep"
+
+
 def test_dav_rejects_double_encoded_traversal(dev_auth_dependency_overrides):
     with TestClient(app) as client:
         response = client.request(
