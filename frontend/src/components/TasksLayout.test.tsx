@@ -27,7 +27,7 @@ async function flushAsyncWork() {
   for (let index = 0; index < 5; index += 1) {
     await act(async () => {
       await Promise.resolve();
-      await new Promise((resolve) => setTimeout(resolve, 10)); // increased timeout for useDeferredValue to settle
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
   }
 }
@@ -96,26 +96,29 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("거래처 회신 준비");
   });
 
-  it("filters tasks using search input and uses deferred value", async () => {
+  it("filters tasks through the deferred search query", async () => {
     const tasks = [
       {
-        id: "task-1",
+        id: "task-alpha",
         title: "Alpha Task",
         status: "open",
         priority: "normal",
         source_type: "email",
+        source_email_id: null,
+        related_thread_id: null,
         updated_at: "2026-06-18T05:00:00Z",
       },
       {
-        id: "task-2",
+        id: "task-beta",
         title: "Beta Task",
         status: "in_progress",
         priority: "high",
         source_type: "calendar",
+        source_email_id: null,
+        related_thread_id: null,
         updated_at: "2026-06-18T06:00:00Z",
-      }
+      },
     ];
-
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/api/tasks")) return Promise.resolve(jsonResponse(tasks));
@@ -135,23 +138,19 @@ describe("TasksLayout", () => {
     expect(container.textContent).toContain("Alpha Task");
     expect(container.textContent).toContain("Beta Task");
 
-    const searchInput = container.querySelector<HTMLInputElement>("input[type='search']");
+    const searchInput = container.querySelector<HTMLInputElement>(
+      'input[aria-label="작업 맥락 검색"]',
+    );
     expect(searchInput).not.toBeNull();
 
-    // Type "Beta"
     await act(async () => {
-      if (searchInput) {
-        // use fireEvent/dispatchEvent pattern properly for react 19
-        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-          window.HTMLInputElement.prototype,
-          "value"
-        )?.set;
-        nativeInputValueSetter?.call(searchInput, "Beta");
-        searchInput.dispatchEvent(new Event("input", { bubbles: true }));
-      }
+      const setInputValue = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )?.set;
+      setInputValue?.call(searchInput, "Beta");
+      searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
     });
-
-    // Defer
     await flushAsyncWork();
 
     expect(container.textContent).not.toContain("Alpha Task");

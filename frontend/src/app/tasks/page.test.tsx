@@ -95,7 +95,7 @@ describe("TasksPage", () => {
       },
       {
         id: "task-webdav-markup",
-        title: "<img src=x onerror=alert(1)>문서 원본 검토",
+        title: "<script>문서 원본 검토</script>",
         status: "blocked",
         priority: "normal",
         source_type: "webdav",
@@ -137,7 +137,7 @@ describe("TasksPage", () => {
 
     const taskSearchInput = container.querySelector<HTMLInputElement>('input[aria-label="작업 맥락 검색"]');
     expect(taskSearchInput).not.toBeNull();
-    expect(taskSearchInput?.type).toBe("search");
+    expect(taskSearchInput?.type).toBe("text");
     expect(taskSearchInput?.inputMode).toBe("search");
     expect(taskSearchInput?.getAttribute("role")).toBe("searchbox");
     await act(async () => {

@@ -2,7 +2,6 @@
 
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Filter, User, CalendarDays, Inbox, AlertCircle, X } from 'lucide-react';
-import DOMPurify from 'dompurify';
 
 import { apiClient } from '@/lib/api-client';
 import { toSafeReactText } from '@/lib/safe-text';
@@ -87,8 +86,9 @@ function getApiErrorStatus(error: unknown) {
 }
 
 function safeTaskTitle(title: string) {
-  const cleanTitle = DOMPurify.sanitize(title, { ALLOWED_TAGS: [], KEEP_CONTENT: true }).replace(/<[^>]*>?/gm, '');
-  const displayTitle = toSafeReactText(cleanTitle, '제목 없는 작업')
+  const displayTitle = toSafeReactText(title, '제목 없는 작업')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[<>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
   return displayTitle || '제목 없는 작업';
@@ -161,8 +161,6 @@ export function TasksLayout() {
   const [replySlaStatus, setReplySlaStatus] = useState<ReplySlaStatus>('idle');
   const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
   const [taskSearch, setTaskSearch] = useState('');
-  // ⚡ Bolt: Defer the search query to prevent blocking the main thread while typing.
-  // The filtering operation can be expensive for large task lists.
   const deferredTaskSearch = useDeferredValue(taskSearch);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const taskSearchInputRef = useRef<HTMLInputElement>(null);
@@ -263,7 +261,7 @@ export function TasksLayout() {
       const searchable = `${safeTaskTitle(task.title)} ${getTaskSourceLabel(task.source_type)} ${taskStatusLabels[task.status]} ${taskPriorityLabels[task.priority]}`.toLowerCase();
       return searchable.includes(normalizedQuery);
     });
-  }, [priorityFilter, deferredTaskSearch, ticketTasks]);
+  }, [deferredTaskSearch, priorityFilter, ticketTasks]);
 
   const liveBoardCounts = useMemo(() => {
     return filteredTicketTasks.reduce<Record<TicketTask['status'], number>>(
@@ -329,14 +327,14 @@ export function TasksLayout() {
             <input
               ref={taskSearchInputRef}
               id="task-search-input"
-              type="search"
+              type="text"
               inputMode="search"
               role="searchbox"
               value={taskSearch}
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="작업 맥락 검색..."
               aria-label="작업 맥락 검색"
-              className="h-9 w-full [&::-webkit-search-cancel-button]:hidden rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64"
+              className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64"
             />
             {taskSearch.length > 0 && (
               <button
