@@ -538,12 +538,20 @@ export function DataLayout() {
       account.source_id === selectedWebdavSourceId && account.writeback_enabled
     )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null;
     const repositories = dataQualitySurface?.repositories ?? [];
-    const emailRepository = repositories.find((repository) => repository.repository_type === 'email_repository');
-    const attachmentRepository = repositories.find((repository) => repository.repository_type === 'attachment_repository');
-    const embeddingStage = dataQualitySurface?.pipeline_stages.find((stage) => stage.stage_key === 'embedding_inventory');
+    const emailRepository = repositories.find(
+      (repository) => repository.repository_type === 'email_repository',
+    );
+    const attachmentRepository = repositories.find(
+      (repository) => repository.repository_type === 'attachment_repository',
+    );
+    const embeddingStage = dataQualitySurface?.pipeline_stages.find(
+      (stage) => stage.stage_key === 'embedding_inventory',
+    );
     const connectorEvents = dataQualitySurface?.connector_events ?? [];
     const repositoryAssets = dataQualitySurface?.repository_assets ?? [];
-    const selectedRepositoryAsset = repositoryAssets.find((asset) => asset.asset_key === selectedRepositoryAssetKey)
+    const selectedRepositoryAsset = repositoryAssets.find(
+      (asset) => asset.asset_key === selectedRepositoryAssetKey,
+    )
       ?? repositoryAssets[0]
       ?? null;
     const selectedWorkspaceDocument = selectedRepositoryAsset?.asset_type === 'workspace_document'
@@ -564,7 +572,7 @@ export function DataLayout() {
     webdavAccounts,
     selectedWebdavSourceId,
     dataQualitySurface,
-    selectedRepositoryAssetKey
+    selectedRepositoryAssetKey,
   ]);
 
   return (
