@@ -233,6 +233,54 @@ def test_dav_propfind_empty_projects_returns_empty_multistatus(
     assert session.params[-1]["organization_id_1"] == "org-acme"
 
 
+def test_dav_propfind_invalid_collection(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request(
+            "PROPFIND",
+            "/dav/user123/invalid_collection/",
+            headers={**AUTH_HEADERS, "Depth": "1"},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "DAV collection not found"
+
+
+def test_dav_propfind_project_folder_not_found_extra_segments(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request(
+            "PROPFIND",
+            "/dav/user123/projects/folder/extra/",
+            headers={**AUTH_HEADERS, "Depth": "1"},
+        )
+    assert response.status_code == 404
+    assert response.json()["detail"] == "DAV project folder not found"
+
+
+def test_dav_propfind_depth_0_returns_projects_collection(dev_auth_dependency_overrides):
+    session = MockDavSession([])
+    with TestClient(app) as client:
+        with dav_db_override(session):
+            response = client.request(
+                "PROPFIND",
+                "/dav/user123/projects/",
+                headers={**AUTH_HEADERS, "Depth": "0"},
+            )
+    assert response.status_code == 207
+    root = ET.fromstring(response.text)
+    hrefs = [node.text for node in root.findall(".//{DAV:}href")]
+    assert "/api/dav/user123/projects/" in hrefs
+
+
+def test_dav_handler_returns_501_for_unsupported_methods(dev_auth_dependency_overrides):
+    with TestClient(app) as client:
+        response = client.request(
+            "GET",
+            "/dav/user123/projects/",
+            headers=AUTH_HEADERS,
+        )
+    assert response.status_code == 501
+    assert response.text == "Not Implemented"
+
+
 def test_dav_propfind_missing_folder_uid_returns_404(dev_auth_dependency_overrides):
     session = MockDavSession([])
     with TestClient(app) as client:
