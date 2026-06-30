@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, Search, Filter, User, CalendarDays, Inbox, AlertCircle, X } from 'lucide-react';
 
 import { apiClient } from '@/lib/api-client';
@@ -161,7 +161,6 @@ export function TasksLayout() {
   const [replySlaStatus, setReplySlaStatus] = useState<ReplySlaStatus>('idle');
   const [knowledgeIntentByTask, setKnowledgeIntentByTask] = useState<Record<string, KnowledgeIntentEntry>>({});
   const [taskSearch, setTaskSearch] = useState('');
-  const deferredTaskSearch = useDeferredValue(taskSearch);
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const taskSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -254,14 +253,14 @@ export function TasksLayout() {
   };
 
   const filteredTicketTasks = useMemo(() => {
-    const normalizedQuery = deferredTaskSearch.trim().toLowerCase();
+    const normalizedQuery = taskSearch.trim().toLowerCase();
     return ticketTasks.filter((task) => {
       if (priorityFilter !== 'all' && task.priority !== priorityFilter) return false;
       if (!normalizedQuery) return true;
       const searchable = `${safeTaskTitle(task.title)} ${getTaskSourceLabel(task.source_type)} ${taskStatusLabels[task.status]} ${taskPriorityLabels[task.priority]}`.toLowerCase();
       return searchable.includes(normalizedQuery);
     });
-  }, [deferredTaskSearch, priorityFilter, ticketTasks]);
+  }, [priorityFilter, taskSearch, ticketTasks]);
 
   const liveBoardCounts = useMemo(() => {
     return filteredTicketTasks.reduce<Record<TicketTask['status'], number>>(
@@ -334,7 +333,7 @@ export function TasksLayout() {
               onChange={(event) => setTaskSearch(event.target.value)}
               placeholder="작업 맥락 검색..."
               aria-label="작업 맥락 검색"
-              className="h-9 w-full rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64 [&::-webkit-search-cancel-button]:hidden"
+              className="h-9 w-full [&::-webkit-search-cancel-button]:hidden rounded-md border border-border bg-background pl-9 pr-9 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary sm:w-64"
             />
             {taskSearch.length > 0 && (
               <button

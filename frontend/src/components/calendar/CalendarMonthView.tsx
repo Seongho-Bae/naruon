@@ -1,5 +1,4 @@
 import React from 'react';
-import { toSafeReactText } from '@/lib/safe-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function CalendarMonthView({ visibleMonthEvents }: { visibleMonthEvents: Record<string, any>[] }) {
@@ -17,7 +16,7 @@ export function CalendarMonthView({ visibleMonthEvents }: { visibleMonthEvents: 
               <span className={`text-sm font-semibold ${i % 7 === 0 ? 'text-red-500' : i % 7 === 6 ? 'text-blue-500' : 'text-muted-foreground'}`}>{i < 31 ? i + 1 : ''}</span>
               {dayEvents.map((event) => (
                 <div key={event.id} className={`mt-1 rounded px-1.5 py-1 text-[10px] font-semibold leading-tight sm:px-2 sm:text-xs ${event.monthClassName}`}>
-                  {toSafeReactText(event.time)}<span className="hidden sm:inline"> {toSafeReactText(event.title)}</span>
+                  {event.time}<span className="hidden sm:inline"> {event.title}</span>
                 </div>
               ))}
             </div>

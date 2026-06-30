@@ -1,5 +1,4 @@
 import React from 'react';
-import { toSafeReactText } from '@/lib/safe-text';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function CalendarWeekView({ visibleWeekEvents }: { visibleWeekEvents: Record<string, any>[] }) {
@@ -9,9 +8,9 @@ export function CalendarWeekView({ visibleWeekEvents }: { visibleWeekEvents: Rec
       <div className="mt-4 grid gap-3 md:grid-cols-5">
         {visibleWeekEvents.map((event) => (
           <article key={event.id} className="rounded-xl border border-border bg-background p-4">
-            <p className="text-xs font-black text-primary">{toSafeReactText(event.day)}</p>
-            <h4 className="mt-2 text-sm font-bold">{toSafeReactText(event.title)}</h4>
-            <p className="mt-2 text-xs font-semibold text-muted-foreground">{toSafeReactText(event.source)}</p>
+            <p className="text-xs font-black text-primary">{event.day}</p>
+            <h4 className="mt-2 text-sm font-bold">{event.title}</h4>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">{event.source}</p>
           </article>
         ))}
         {visibleWeekEvents.length === 0 && (

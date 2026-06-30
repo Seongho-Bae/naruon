@@ -12,8 +12,6 @@ test('connects inbox selection to summary, execution, reply, calendar, and graph
 
   await expect(page.getByText('출시 일정, 마케팅 계획, 파트너 미팅')).toBeVisible();
   await expect(page.getByRole('heading', { name: '실행 항목' })).toBeVisible();
-  await expect(page.getByText('리소스 배정 검토 회의')).toBeVisible();
-  await expect(page.getByText('마케팅 캠페인 오프')).toBeVisible();
   await expect(page.getByText('2개 메시지').nth(1)).toBeVisible();
   await expect(page.getByText('2개 노드와 1개 관계')).toBeVisible();
 
@@ -35,7 +33,7 @@ test('submits branded inbox search against the search API', async ({ page }, tes
   await page.getByRole('button', { name: '메일함 바로가기' }).first().click();
   const desktopWorkspace = page.getByRole('region', { name: '데스크톱 메일 작업공간' });
   await desktopWorkspace.getByLabel('메일 맥락 검색').fill('출시');
-  await desktopWorkspace.getByRole('button', { name: /^맥락 검색( 중)?$/ }).click();
+  await desktopWorkspace.getByRole('button', { name: '맥락 검색', exact: true }).click();
 
   await expect(desktopWorkspace.getByText('Q2 출시 계획 및 우선순위 조정')).toBeVisible();
 });

@@ -175,11 +175,6 @@ def _session_uses_postgresql(session: AsyncSession) -> bool:
     return getattr(getattr(bind, "dialect", None), "name", None) == "postgresql"
 
 
-def _owner_import_quota_lock_key(*, user_id: str, organization_id: str) -> str:
-    raw_key = f"{len(user_id)}:{user_id}{len(organization_id)}:{organization_id}"
-    return hashlib.sha256(raw_key.encode()).hexdigest()
-
-
 async def _acquire_owner_import_quota_lock(
     session: AsyncSession, *, user_id: str, organization_id: str
 ) -> bool:
@@ -187,10 +182,7 @@ async def _acquire_owner_import_quota_lock(
         return False
     lock_params = {
         "namespace_key": EMAIL_IMPORT_QUOTA_LOCK_NAMESPACE,
-        "owner_key": _owner_import_quota_lock_key(
-            user_id=user_id,
-            organization_id=organization_id,
-        ),
+        "owner_key": f"{user_id}\x00{organization_id}",
     }
     await session.execute(
         select(
@@ -209,10 +201,7 @@ async def _release_owner_import_quota_lock(
 ) -> None:
     lock_params = {
         "namespace_key": EMAIL_IMPORT_QUOTA_LOCK_NAMESPACE,
-        "owner_key": _owner_import_quota_lock_key(
-            user_id=user_id,
-            organization_id=organization_id,
-        ),
+        "owner_key": f"{user_id}\x00{organization_id}",
     }
     await session.execute(
         select(

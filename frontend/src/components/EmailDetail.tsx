@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Loader2, MessagesSquare } from "lucide-react";
-import DOMPurify from "dompurify";
 import { DecisionPointCard } from "@/components/DecisionPointCard";
 import {
   buildThreadUrl,
@@ -402,7 +401,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     className="h-9 rounded-xl bg-emerald-600 px-4 text-white hover:bg-emerald-700"
                   >
                     {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />}
-                    {isSyncing ? "일정 반영 중" : "일정 반영"}
+                    {isSyncing ? "동기화 중" : "일정 반영"}
                   </Button>
                 )}
                 {llmData.todos.length > 0 && (
@@ -485,7 +484,7 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                     </div>
                   </div>
                   {msg.id === email.id && <Badge variant="outline" className="mb-2 border-primary/30 text-[10px] text-primary">선택된 메시지</Badge>}
-                  <div className="text-sm leading-6 whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(toMailBodyText(msg.body)) }}></div>
+                  <div className="text-sm leading-6 whitespace-pre-wrap">{toMailBodyText(msg.body)}</div>
                 </div>
               ))}
             </div>
@@ -509,7 +508,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
               <Button 
                 onClick={handleDraftReply} 
                 disabled={isDrafting || !instruction}
-                title={!instruction ? '답장 지시를 입력해주세요' : undefined}
                 aria-busy={isDrafting}
                 variant="outline"
                 size="sm"
@@ -554,7 +552,6 @@ export function EmailDetail({ emailId, actionCommand = null }: { emailId: number
                 <Button 
                   onClick={handleSendReply} 
                   disabled={isSending || !draft}
-                  title={!draft ? '작성된 초안이 없습니다' : undefined}
                   aria-busy={isSending}
                   size="sm"
                   className="h-9 rounded-xl px-4"

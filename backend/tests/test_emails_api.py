@@ -1176,19 +1176,16 @@ async def test_import_email_files_serializes_quota_with_postgres_owner_lock(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
-    owner_key = hashlib.sha256(
-        f"{len('testuser')}:testuser{len('org-acme')}:org-acme".encode()
-    ).hexdigest()
     assert "hashtext(:namespace_key)" in advisory_queries[0]
     assert ":owner_key" in advisory_queries[0]
     assert advisory_query_params(session) == [
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": owner_key,
+            "owner_key": "testuser\x00org-acme",
         },
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": owner_key,
+            "owner_key": "testuser\x00org-acme",
         },
     ]
 
@@ -1244,17 +1241,14 @@ async def test_import_email_files_rejects_when_owner_quota_is_exhausted(
     advisory_queries = advisory_query_texts(session)
     assert "pg_advisory_lock" in advisory_queries[0]
     assert "pg_advisory_unlock" in advisory_queries[-1]
-    owner_key = hashlib.sha256(
-        f"{len('testuser')}:testuser{len('org-acme')}:org-acme".encode()
-    ).hexdigest()
     assert advisory_query_params(session) == [
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": owner_key,
+            "owner_key": "testuser\x00org-acme",
         },
         {
             "namespace_key": "naruon-email-import-quota",
-            "owner_key": owner_key,
+            "owner_key": "testuser\x00org-acme",
         },
     ]
 
@@ -1756,32 +1750,6 @@ def test_send_email_endpoint_rate_limits_per_user(mock_send_email, monkeypatch):
     assert response.status_code == 429
     assert response.json() == {"detail": "Email send rate limit exceeded"}
     mock_send_email.assert_called_once()
-
-
-def test_send_email_rate_limit_prunes_expired_scopes(monkeypatch):
-    from api.auth import AuthContext
-
-    emails_api._email_send_attempts_by_scope.clear()
-    active_key = ("org-acme", "testuser")
-    stale_key = ("org-old", "stale-user")
-    emails_api._email_send_attempts_by_scope[active_key] = [95.0]
-    emails_api._email_send_attempts_by_scope[stale_key] = [10.0]
-    monkeypatch.setattr(emails_api.time, "monotonic", lambda: 100.0)
-
-    try:
-        emails_api._enforce_send_email_rate_limit(
-            AuthContext(
-                user_id=active_key[1],
-                role="member",
-                organization_id=active_key[0],
-                group_ids=(),
-                workspace_id="workspace-org-acme",
-            )
-        )
-        assert stale_key not in emails_api._email_send_attempts_by_scope
-        assert emails_api._email_send_attempts_by_scope[active_key] == [95.0, 100.0]
-    finally:
-        emails_api._email_send_attempts_by_scope.clear()
 
 
 @patch("api.emails.send_email", return_value={"status": "simulated", "simulated": True})

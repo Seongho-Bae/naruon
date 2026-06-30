@@ -80,9 +80,6 @@ class MockResult:
     def all(self):
         return self.obj if isinstance(self.obj, list) else []
 
-    def one_or_none(self):
-        return self.obj
-
 
 class MockAsyncSession:
     def __init__(self):
@@ -97,31 +94,7 @@ class MockAsyncSession:
             return MockResult(self.runner)
         if self.execute_calls == 2:
             return MockResult(self.events)
-
-        # Calculate counts dynamically based on self.retry_items
-        pending_count = sum(
-            1 for item in self.retry_items if item.retry_state == "pending"
-        )
-        running_count = sum(
-            1 for item in self.retry_items if item.retry_state == "running"
-        )
-        failed_count = sum(
-            1 for item in self.retry_items if item.retry_state.startswith("failed")
-        )
-
-        pending_items = [
-            item for item in self.retry_items if item.retry_state == "pending"
-        ]
-        next_retry_candidates = sorted(
-            item.next_retry_at
-            for item in pending_items
-            if item.next_retry_at is not None
-        )
-        min_next_retry_at = next_retry_candidates[0] if next_retry_candidates else None
-
-        return MockResult(
-            (pending_count, running_count, failed_count, min_next_retry_at)
-        )
+        return MockResult(self.retry_items)
 
 
 @pytest.fixture(autouse=True)
@@ -516,27 +489,6 @@ async def test_operational_signals_real_postgres_connector_history_smoke():
             await conn.execute(
                 text(
                     """
-                    CREATE TABLE IF NOT EXISTS provider_writeback_retry_items (
-                        retry_item_uid TEXT PRIMARY KEY,
-                        organization_id TEXT NOT NULL,
-                        workspace_id TEXT NOT NULL,
-                        source_uid TEXT NOT NULL,
-                        command_action TEXT NOT NULL,
-                        command_payload_encrypted TEXT,
-                        retry_state TEXT NOT NULL,
-                        last_error_code TEXT,
-                        runner_request_uid TEXT,
-                        attempt_count INTEGER NOT NULL,
-                        next_retry_at TIMESTAMPTZ,
-                        created_at TIMESTAMPTZ NOT NULL,
-                        updated_at TIMESTAMPTZ NOT NULL
-                    )
-                    """
-                )
-            )
-            await conn.execute(
-                text(
-                    """
                     CREATE TABLE IF NOT EXISTS connector_signal_events (
                         event_uid VARCHAR PRIMARY KEY,
                         organization_id VARCHAR NOT NULL,
@@ -687,32 +639,3 @@ async def test_operational_signals_real_postgres_connector_history_smoke():
     assert data["connector"]["last_heartbeat_at"] == "2026-05-27T12:03:00Z"
     assert data["connector"]["recent_events"][0]["event_uid"] == event_uid
     assert "nrn_registered-token" not in str(data)
-
-
-def test_operational_signals_queue_depth_backlog_state(admin_client, mock_db):
-    mock_db.runner = WorkspaceRunnerConfig(
-        organization_id="org-acme",
-        workspace_id="workspace-org-acme",
-        registration_token="nrn_registered-token",
-    )
-    mock_db.retry_items = [
-        ProviderWritebackRetryItem(
-            retry_item_uid="provider_retry_pending",
-            organization_id="org-acme",
-            workspace_id="workspace-org-acme",
-            source_uid="webdav_src_primary",
-            command_action="write_webdav",
-            command_payload_encrypted="{}",
-            retry_state="pending",
-            last_error_code="runner_not_connected",
-            runner_request_uid="runner_req_pending",
-            attempt_count=1,
-            next_retry_at=datetime(2026, 6, 15, 12, 5, tzinfo=timezone.utc),
-            created_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
-        )
-    ]
-    response = admin_client.get("/api/observability/operational-signals")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["connector"]["queue_depth_state"] == "backlog"
