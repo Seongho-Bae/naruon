@@ -7,6 +7,7 @@
 ### 성능 개선 (Performance)
 
 - `get_emails` API 응답 속도 개선. Python 3.7+ 이상의 딕셔너리 삽입 순서 보장 특성을 활용하여, 불필요한 배열 뒤집기(`reverse()`)와 2차 정렬(`O(N log N)`) 작업을 제거하였습니다. 이를 통해 API 응답 속도와 메모리 사용량을 최적화했습니다.
+- DataLayout의 WebDAV 계정, repository, asset 선택 계산을 `useMemo`로 메모이즈해 렌더링 중 반복 배열 탐색을 줄였습니다.
 
 ### 보안 패치 (Security)
 

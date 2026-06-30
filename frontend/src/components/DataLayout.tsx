@@ -528,7 +528,10 @@ export function DataLayout() {
     )) ?? webdavAccounts.find((account) => account.writeback_enabled) ?? null
   ), [webdavAccounts, selectedWebdavSourceId]);
 
-  const repositories = useMemo(() => dataQualitySurface?.repositories ?? [], [dataQualitySurface?.repositories]);
+  const repositories = useMemo(
+    () => dataQualitySurface?.repositories ?? [],
+    [dataQualitySurface],
+  );
 
   const emailRepository = useMemo(() => (
     repositories.find((repository) => repository.repository_type === 'email_repository')
@@ -538,12 +541,21 @@ export function DataLayout() {
     repositories.find((repository) => repository.repository_type === 'attachment_repository')
   ), [repositories]);
 
-  const embeddingStage = useMemo(() => (
-    dataQualitySurface?.pipeline_stages.find((stage) => stage.stage_key === 'embedding_inventory')
-  ), [dataQualitySurface?.pipeline_stages]);
+  const embeddingStage = useMemo(
+    () => dataQualitySurface?.pipeline_stages.find(
+      (stage) => stage.stage_key === 'embedding_inventory',
+    ),
+    [dataQualitySurface],
+  );
 
-  const connectorEvents = useMemo(() => dataQualitySurface?.connector_events ?? [], [dataQualitySurface?.connector_events]);
-  const repositoryAssets = useMemo(() => dataQualitySurface?.repository_assets ?? [], [dataQualitySurface?.repository_assets]);
+  const connectorEvents = useMemo(
+    () => dataQualitySurface?.connector_events ?? [],
+    [dataQualitySurface],
+  );
+  const repositoryAssets = useMemo(
+    () => dataQualitySurface?.repository_assets ?? [],
+    [dataQualitySurface],
+  );
 
   const selectedRepositoryAsset = useMemo(() => (
     repositoryAssets.find((asset) => asset.asset_key === selectedRepositoryAssetKey)
