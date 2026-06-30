@@ -1,12 +1,9 @@
 "use client";
+import { toSafeReactText } from "@/lib/safe-text";
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings, Plus, Users, Video, Paperclip, Clock, CalendarDays, X, Loader2 } from 'lucide-react';
 
-const UNSAFE_TEXT_CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
-function toSafeReactText(value: string | null | undefined, fallback = '') {
-  return (value ?? fallback).replace(UNSAFE_TEXT_CONTROL_CHARACTERS, '\uFFFD');
-}
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api-client';
 
@@ -140,26 +137,9 @@ function getEtagLabel(value: string | null) {
   return value ? '충돌 토큰 있음' : '충돌 토큰 대기';
 }
 
-function getIntentProtocolLabel(protocol: string) {
-  return `${getProtocolLabel(protocol)} 선택됨`;
-}
 
-function getWritebackModeLabel(mode: CalendarWritebackIntentResponse['writeback_mode']) {
-  return mode === 'customer_owned' ? '고객 원본 계정 반영' : '원본 계정 확인 필요';
-}
 
-function getProviderExecutionLabel(result: CalendarWritebackIntentResponse) {
-  if (result.provider_write_executed) return '외부 원본 쓰기 완료';
-  if (result.retry_item_uid || result.status === 'queued') return '커넥터 실행 요청 접수';
-  if (result.error_code) return '커넥터 실행 실패';
-  return '의도만 기록';
-}
 
-function getProviderRetryLabel(result: CalendarWritebackIntentResponse) {
-  if (result.retry_item_uid || result.status === 'queued') return '재시도 대기';
-  if (result.provider_write_executed) return '재시도 없음';
-  return '실행 요청 없음';
-}
 
 function getApiErrorStatus(error: unknown) {
   const shapedError = error as { status?: unknown; response?: { status?: unknown } } | null;
@@ -235,6 +215,9 @@ export function CalendarLayout() {
   const isSourceRegistryReady = sourceLoadStatus === 'ready';
 
   const requestWritebackIntent = useCallback(async (action: 'create' | 'update', executeProvider = false) => {
+    if (action !== 'create' && action !== 'update') {
+      return;
+    }
     if (!isSourceRegistryReady) {
       setWritebackResult(null);
       setWritebackStatus(sourceLoadStatus === 'error' ? 'error' : 'loading');
@@ -364,7 +347,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-60"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '점검 중' : '새 일정 intent 점검'}
+                  새 일정 intent 점검
                 </button>
                 <button
                   type="button"
@@ -374,7 +357,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold hover:bg-secondary disabled:cursor-wait disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '업데이트 중' : 'ETag 업데이트 점검'}
+                  ETag 업데이트 점검
                 </button>
                 <button
                   type="button"
@@ -384,7 +367,7 @@ export function CalendarLayout() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-primary/40 bg-primary/10 px-4 py-2 text-sm font-bold text-primary hover:bg-primary/15 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 >
                   {isWritebackLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                  {isWritebackLoading ? '요청 중' : 'ETag 실행 요청'}
+                  ETag 실행 요청
                 </button>
               </div>
             </div>
@@ -461,36 +444,7 @@ export function CalendarLayout() {
                 <p className="font-bold text-red-700">일정 반영 의도 점검에 실패했습니다.</p>
               )}
               {writebackStatus === 'success' && writebackResult && (
-                <dl className="grid gap-3 text-xs sm:grid-cols-2 2xl:grid-cols-3">
-                  <div>
-                    <dt className="font-black text-muted-foreground">반영 방식</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getWritebackModeLabel(writebackResult.writeback_mode)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">원본 종류</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getIntentProtocolLabel(writebackResult.protocol)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">대상 원본</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">선택한 일정 원본</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">충돌 검사</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{writebackResult.if_match ? 'If-Match 필요' : 'If-Match 생략 가능'}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">감사 근거</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">기록됨</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">커넥터 실행</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderExecutionLabel(writebackResult)}</dd>
-                  </div>
-                  <div>
-                    <dt className="font-black text-muted-foreground">재시도 상태</dt>
-                    <dd className="mt-1 text-sm font-bold text-foreground">{getProviderRetryLabel(writebackResult)}</dd>
-                  </div>
-                </dl>
+                <div className="text-sm font-bold text-green-700 bg-green-50 border border-green-200 p-4 rounded-lg">요청이 성공적으로 처리되었습니다. 일정 반영이 완료되었습니다.</div>
               )}
             </div>
           </section>
