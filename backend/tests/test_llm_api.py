@@ -437,25 +437,21 @@ def test_translate_http_exception(mock_translate, client):
     )
     assert resp.status_code == 400
 
-@pytest.mark.asyncio
 @patch("api.llm.extract_todos_and_summary", side_effect=LLMServiceError("Service down"))
 def test_summarize_llm_service_error(mock_extract, client):
     resp = client.post("/api/llm/summarize", json={"email_body": "test"})
     assert resp.status_code == 500
 
-@pytest.mark.asyncio
 @patch("api.llm.extract_todos_and_summary", side_effect=Exception("Unknown"))
 def test_summarize_unknown_error(mock_extract, client):
     resp = client.post("/api/llm/summarize", json={"email_body": "test"})
     assert resp.status_code == 500
 
-@pytest.mark.asyncio
 @patch("api.llm.draft_reply", side_effect=LLMServiceError("Service down"))
 def test_draft_llm_service_error(mock_draft, client):
     resp = client.post("/api/llm/draft", json={"email_body": "test", "instruction": "reply"})
     assert resp.status_code == 500
 
-@pytest.mark.asyncio
 @patch("api.llm.draft_reply", side_effect=Exception("Unknown"))
 def test_draft_unknown_error(mock_draft, client):
     resp = client.post("/api/llm/draft", json={"email_body": "test", "instruction": "reply"})
