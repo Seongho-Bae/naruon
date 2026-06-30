@@ -96,3 +96,7 @@
 ## 2026-06-28 - Terminology Alignment in End-to-End Tests
 **Learning:** When UI terminology rules change, end-to-end tests relying on exact text matches (like `getByRole('button', { name: 'AI 답장 초안' })` or `getByText('2개 실행 항목')`) will fail. Moreover, some UI elements render dynamic list structures rather than aggregated summary strings, meaning exact assertions on previously aggregated strings must be updated to reflect the new DOM structure.
 **Action:** When updating application UI terminology to match a specification, systematically audit and update all corresponding string literals, aria-labels, and assertions in both unit and E2E tests using search tools. For dynamic data mapped into lists, adjust test assertions to verify the presence of individual mapped items rather than outdated summary counters.
+
+## 2026-06-25 - Avoid redundant default argument allocations in dict.get()
+**Learning:** In Python, default arguments in functions like `dict.get(key, set())` or `dict.get(key, [])` are eagerly evaluated on every loop iteration, regardless of whether the key exists. Inside a tight loop (such as iterating over large lists of candidates or emails), this leads to continuous, unnecessary memory allocations and garbage collection overhead.
+**Action:** When performing dictionary lookups in tight loops, avoid passing dynamic default instances. Instead, use a conditional check: `val = my_dict.get(key); if val: ...` to safely handle missing keys without redundant object creation.

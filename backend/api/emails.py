@@ -456,6 +456,9 @@ def _find_matches_for_candidates(
         match_reason: Literal["message_id", "fingerprint"] | None = None
         dedupe_key: str | None = None
 
+        # ⚡ Bolt: Fetch explicitly and iterate only if found.
+        # This avoids continuously instantiating an empty set() via .get(..., set())
+        # inside a tight loop which adds severe memory and garbage collection overhead.
         lookups = candidate_lookups.get(candidate.candidate_key)
         if lookups:
             for lookup_value in lookups:

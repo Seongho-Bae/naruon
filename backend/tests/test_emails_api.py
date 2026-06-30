@@ -2019,7 +2019,6 @@ def test_email_owner_filters():
         == "email_records.organization_id IS NULL"
     )
 
-
 def test_find_matches_for_candidates_perf_optim_handles_missing_lookups():
     """
     Test to guarantee 100% coverage on the bolt performance optimization in
@@ -2036,7 +2035,7 @@ def test_find_matches_for_candidates_perf_optim_handles_missing_lookups():
         sender="test@test.com",
         recipients="test2@test.com",
         subject="Subject",
-        body="Body",
+        body="Body"
     )
 
     candidates = [candidate]
